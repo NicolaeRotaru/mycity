@@ -46,7 +46,7 @@ type Pagina = {
 
 const PAGINE: Pagina[] = [
   { nome: 'rimesse contanti', file: 'app/admin/cod-remittance/page.tsx', vuoto: 'Nessuna rimessa COD in attesa', numeri: 'totale da rimettere', tabella: 'orders' },
-  { nome: 'bonifici ai negozi', file: 'app/admin/payouts/page.tsx', vuoto: 'Nessun payout da riconciliare', numeri: 'Da pagare (pronto)', tabella: 'orders' },
+  { nome: 'bonifici ai negozi', file: 'app/admin/payouts/page.tsx', vuoto: 'Nessun payout da riconciliare', numeri: 'Contanti da versare', tabella: 'orders' },
   { nome: 'reclami', file: 'app/admin/disputes/page.tsx', vuoto: 'Nessun reclamo in questo stato', tabella: 'disputes' },
   { nome: 'assistenza', file: 'app/admin/support/page.tsx', vuoto: 'Nessun messaggio in questo stato', tabella: 'contact_messages' },
   { nome: 'prodotti', file: 'app/admin/products/page.tsx', vuoto: '0 di 0', tabella: 'products' },

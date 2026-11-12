@@ -73,13 +73,15 @@ export default function SellerOnboardingChecklist() {
           id: 'name',
           label: 'Imposta nome e descrizione',
           done: !!p?.store_name && p.store_name.length > 2,
-          href: '/seller/profile',
+          // R11-014 — nome, descrizione e logo stanno in «Costruisci il sito» → Dettagli negozio,
+          // non nel profilo (che ha solo contatti e orari): il link portava dove i campi non ci sono.
+          href: '/seller/site?details=1',
         },
         {
           id: 'logo',
           label: 'Carica logo del negozio',
           done: !!p?.store_logo,
-          href: '/seller/profile',
+          href: '/seller/site?details=1',
         },
         {
           id: 'address',

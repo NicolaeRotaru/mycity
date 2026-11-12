@@ -530,8 +530,8 @@ export interface Database {
       conversations: {
         Row: {
           id: string;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id: string | null;
+          seller_id: string | null;
           last_message_at: string;
           last_message_preview: string | null;
           buyer_unread_count: number;
@@ -540,8 +540,8 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           last_message_at?: string;
           last_message_preview?: string | null;
           buyer_unread_count?: number;
@@ -550,8 +550,8 @@ export interface Database {
         };
         Update: {
           id?: string;
-          buyer_id?: string;
-          seller_id?: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           last_message_at?: string;
           last_message_preview?: string | null;
           buyer_unread_count?: number;
@@ -693,7 +693,7 @@ export interface Database {
         Row: {
           id: string;
           order_id: string;
-          opener_id: string;
+          opener_id: string | null;
           against_id: string | null;
           reason: string;
           description: string;
@@ -707,7 +707,7 @@ export interface Database {
         Insert: {
           id?: string;
           order_id: string;
-          opener_id: string;
+          opener_id?: string | null;
           against_id?: string | null;
           reason: string;
           description: string;
@@ -721,7 +721,7 @@ export interface Database {
         Update: {
           id?: string;
           order_id?: string;
-          opener_id?: string;
+          opener_id?: string | null;
           against_id?: string | null;
           reason?: string;
           description?: string;
@@ -1349,7 +1349,7 @@ export interface Database {
           delivery_notes: string | null;
           delivery_lat: number | null;
           delivery_lng: number | null;
-          shipping_cost: number | null;
+          shipping_cost: number;
           rider_lat: number | null;
           rider_lng: number | null;
           rider_position_updated_at: string | null;
@@ -1403,6 +1403,7 @@ export interface Database {
           rider_payout_claimed_at: string | null;
           stock_restored_at: string | null;
           coupon_released_at: string | null;
+          payout_manual_ref: string | null;
         };
         Insert: {
           id?: string;
@@ -1421,7 +1422,7 @@ export interface Database {
           delivery_notes?: string | null;
           delivery_lat?: number | null;
           delivery_lng?: number | null;
-          shipping_cost?: number | null;
+          shipping_cost?: number;
           rider_lat?: number | null;
           rider_lng?: number | null;
           rider_position_updated_at?: string | null;
@@ -1475,6 +1476,7 @@ export interface Database {
           rider_payout_claimed_at?: string | null;
           stock_restored_at?: string | null;
           coupon_released_at?: string | null;
+          payout_manual_ref?: string | null;
         };
         Update: {
           id?: string;
@@ -1493,7 +1495,7 @@ export interface Database {
           delivery_notes?: string | null;
           delivery_lat?: number | null;
           delivery_lng?: number | null;
-          shipping_cost?: number | null;
+          shipping_cost?: number;
           rider_lat?: number | null;
           rider_lng?: number | null;
           rider_position_updated_at?: string | null;
@@ -1547,6 +1549,7 @@ export interface Database {
           rider_payout_claimed_at?: string | null;
           stock_restored_at?: string | null;
           coupon_released_at?: string | null;
+          payout_manual_ref?: string | null;
         };
         Relationships: [];
       };
@@ -2214,7 +2217,7 @@ export interface Database {
         Row: {
           id: string;
           referrer_id: string;
-          referred_id: string;
+          referred_id: string | null;
           reward_amount: number;
           rewarded: boolean | null;
           rewarded_at: string | null;
@@ -2228,7 +2231,7 @@ export interface Database {
         Insert: {
           id?: string;
           referrer_id: string;
-          referred_id: string;
+          referred_id?: string | null;
           reward_amount?: number;
           rewarded?: boolean | null;
           rewarded_at?: string | null;
@@ -2242,7 +2245,7 @@ export interface Database {
         Update: {
           id?: string;
           referrer_id?: string;
-          referred_id?: string;
+          referred_id?: string | null;
           reward_amount?: number;
           rewarded?: boolean | null;
           rewarded_at?: string | null;
@@ -2260,8 +2263,8 @@ export interface Database {
           id: string;
           order_id: string;
           order_item_id: string | null;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id: string | null;
+          seller_id: string | null;
           reason: string;
           notes: string | null;
           photo_urls: Json | null;
@@ -2280,8 +2283,8 @@ export interface Database {
           id?: string;
           order_id: string;
           order_item_id?: string | null;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           reason: string;
           notes?: string | null;
           photo_urls?: Json | null;
@@ -2300,8 +2303,8 @@ export interface Database {
           id?: string;
           order_id?: string;
           order_item_id?: string | null;
-          buyer_id?: string;
-          seller_id?: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           reason?: string;
           notes?: string | null;
           photo_urls?: Json | null;
@@ -3030,7 +3033,141 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: { [key: string]: never };
+    Views: {
+      documenti_iscrizione_a_meta: {
+        Row: {
+          profilo: string | null;
+          file: Json | null;
+          caricati_at: Json | null;
+        };
+        Relationships: [];
+      };
+      live_activity_public: {
+        Row: {
+          created_at: string | null;
+          delivery_status: string | null;
+          delivery_city: string | null;
+          store_name: string | null;
+        };
+        Relationships: [];
+      };
+      nomi_pubblici: {
+        Row: {
+          id: string | null;
+          nome: string | null;
+        };
+        Relationships: [];
+      };
+      ordini_disponibili_rider: {
+        Row: {
+          id: string | null;
+          seller_id: string | null;
+          store_name: string | null;
+          store_address: string | null;
+          store_lat: number | null;
+          store_lng: number | null;
+          delivery_city: string | null;
+          delivery_zip: string | null;
+          delivery_status: string | null;
+          payment_method: string | null;
+          total_price: number | null;
+          shipping_cost: number | null;
+          rider_fee_cents: number | null;
+          delivery_slot: string | null;
+          created_at: string | null;
+          articoli: number | null;
+        };
+        Relationships: [];
+      };
+      referral_leaderboard: {
+        Row: {
+          user_id: string | null;
+          full_name: string | null;
+          store_name: string | null;
+          total_referrals: number | null;
+          converted_referrals: number | null;
+          month: string | null;
+        };
+        Relationships: [];
+      };
+      rider_consegne_storico: {
+        Row: {
+          id: string | null;
+          rider_id: string | null;
+          delivered_at: string | null;
+          delivery_status: string | null;
+          payment_method: string | null;
+          shipping_cost: number | null;
+          rider_fee_cents: number | null;
+          total_price: number | null;
+          delivery_city: string | null;
+          rider_payout_status: string | null;
+        };
+        Relationships: [];
+      };
+      rider_reviews_ricevute: {
+        Row: {
+          id: string | null;
+          rider_id: string | null;
+          rating: number | null;
+          comment: string | null;
+          created_at: string | null;
+          autore_nome: string | null;
+        };
+        Relationships: [];
+      };
+      seller_public_profiles: {
+        Row: {
+          id: string | null;
+          store_name: string | null;
+          store_address: string | null;
+          store_lat: number | null;
+          store_lng: number | null;
+          store_phone: string | null;
+          store_logo: string | null;
+          store_hours: Json | null;
+          store_media: Json | null;
+          store_description: string | null;
+          store_customization: Json | null;
+          store_site: Json | null;
+          offers_express: boolean | null;
+          founded_year: number | null;
+          is_approved: boolean | null;
+          stripe_charges_enabled: boolean | null;
+          stripe_payouts_enabled: boolean | null;
+          role: string | null;
+          created_at: string | null;
+          business_legal_name: string | null;
+          business_form: string | null;
+          business_vat_number: string | null;
+          business_address: string | null;
+          business_city: string | null;
+          business_zip: string | null;
+        };
+        Relationships: [];
+      };
+      shop_of_month_leaderboard: {
+        Row: {
+          seller_id: string | null;
+          store_name: string | null;
+          store_logo: string | null;
+          month: string | null;
+          vote_count: number | null;
+        };
+        Relationships: [];
+      };
+      sponsored_active_public: {
+        Row: {
+          id: string | null;
+          product_id: string | null;
+          placement: string | null;
+          category_slug: string | null;
+          start_date: string | null;
+          end_date: string | null;
+        };
+        Relationships: [];
+      };
+    };
     Functions: { [key: string]: never };
     Enums: { [key: string]: never };
     CompositeTypes: { [key: string]: never };

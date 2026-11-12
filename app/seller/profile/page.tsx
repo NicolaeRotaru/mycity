@@ -15,6 +15,7 @@ import type { StoreHours } from '@/lib/store-hours';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
 import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
+import DatiPerIBonifici from '@/components/seller/DatiPerIBonifici';
 
 /**
  * Profilo negozio = dati di CONTATTO + impostazioni operative/private.
@@ -40,7 +41,8 @@ export default function SellerProfilePage() {
           id, role, full_name, email_marketing, store_name, store_logo, store_address,
           store_lat, store_lng, store_phone, store_hours, store_description, store_media,
           store_customization, store_site, offers_express, founded_year, is_approved,
-          approval_status, subscription_status, created_at
+          approval_status, subscription_status, created_at, billing_iban, business_legal_name,
+          business_vat_number, business_address, business_city, business_zip, business_pec, business_sdi
         `)
         .eq('id', user.id)
         .single();
@@ -152,10 +154,26 @@ export default function SellerProfilePage() {
                             ? (profile.store_hours as StoreHours)
                             : {},
           }}
-          onSubmit={(d) => updateContact.mutate(d)}
+          onSubmit={(d) => updateContact.mutateAsync(d)}
           isLoading={updateContact.isPending}
         />
       </div>
+
+      {/* R11-003 — IBAN e dati della ditta: prima si scrivevano solo dal modulo d'iscrizione,
+          che a un negozio approvato non si apre più. */}
+      <DatiPerIBonifici
+        iniziali={{
+          billingIban:       profile?.billing_iban        ?? '',
+          businessLegalName: profile?.business_legal_name ?? '',
+          businessVatNumber: profile?.business_vat_number ?? '',
+          businessAddress:   profile?.business_address    ?? '',
+          businessCity:      profile?.business_city       ?? '',
+          businessZip:       profile?.business_zip        ?? '',
+          businessPec:       profile?.business_pec        ?? '',
+          businessSdi:       profile?.business_sdi        ?? '',
+        }}
+        quandoSalvati={() => qc.invalidateQueries({ queryKey: queryKeys.seller.profile })}
+      />
 
       {/* 22/8/2026 — la rotta che apre il portale Stripe esisteva da sempre e
           non la chiamava nessuno: il negoziante non aveva alcun modo di

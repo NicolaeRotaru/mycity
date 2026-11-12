@@ -33,7 +33,28 @@ type GiftCard = {
   redeemed_at: string | null;
   expires_at: string;
   created_at: string;
+  /** 178 — annullato perché il pagamento è tornato indietro. */
+  voided_at?: string | null;
+  void_reason?: string | null;
 };
+
+/**
+ * R11-018 — Un buono annullato o scaduto si leggeva «Disponibile», col codice in
+ * chiaro e il tasto per copiarlo. Lo stato si legge da voided_at ed expires_at.
+ */
+function statoDelBuono(c: Pick<GiftCard, 'redeemed_at' | 'expires_at' | 'voided_at'>, adesso = new Date()):
+  'annullato' | 'scaduto' | 'riscattato' | 'disponibile' {
+  if (c.voided_at) return 'annullato';
+  // Già riscattato nel credito: la scadenza del codice non conta più (dal controllo qa).
+  if (c.redeemed_at) return 'riscattato';
+  if (c.expires_at && new Date(c.expires_at).getTime() < adesso.getTime()) return 'scaduto';
+  return 'disponibile';
+}
+
+const ETICHETTA_STATO = { annullato: 'Annullata', scaduto: 'Scaduta', riscattato: 'Riscattata', disponibile: 'Disponibile' } as const;
+
+/** Il codice di un buono che non si può più usare non si mostra intero. */
+const codiceMascherato = (code: string) => `${code.slice(0, 4)}••••`;
 
 const AMOUNTS = [10, 25, 50, 100];
 
@@ -344,13 +365,15 @@ export default function GiftCardsPage() {
           <div className="space-y-3">
             {cards.map((c) => {
               const isMine = c.buyer_id === userId;
-              const redeemed = !!c.redeemed_at;
+              const statoBuono = statoDelBuono(c);
+              const utilizzabile = statoBuono === 'disponibile' || statoBuono === 'riscattato';
               return (
                 <div key={c.code} className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
                   <div className="flex items-baseline justify-between gap-3 flex-wrap">
                     <div>
                       <p className="font-mono font-bold text-lg text-primary-700 inline-flex items-center gap-2">
-                        {c.code}
+                        {utilizzabile ? c.code : codiceMascherato(c.code)}
+                        {utilizzabile && (
                         <button
                           onClick={() => { navigator.clipboard.writeText(c.code); toast.success('Codice copiato!'); }}
                           className="text-ink-400 hover:text-ink-800"
@@ -358,6 +381,7 @@ export default function GiftCardsPage() {
                         >
                           <Copy size={14} />
                         </button>
+                        )}
                       </p>
                       <p className="text-xs text-ink-500 mt-0.5">
                         {isMine ? `Regalata a ${c.recipient_name}` : 'Ricevuta'} · {new Date(c.created_at).toLocaleDateString('it-IT')}
@@ -367,7 +391,14 @@ export default function GiftCardsPage() {
                       <p className="text-2xl font-serif font-bold text-ink-900">{formatPrice(c.balance_cents / 100)}</p>
                       <p className="text-xs text-ink-400">
                         di {formatPrice(c.amount_cents / 100)}
-                        {redeemed ? ' · Riscattata' : ' · Disponibile'}
+                        {` · ${ETICHETTA_STATO[statoBuono]}`}
+                        {/* Collaudo K04 — la data di scadenza si vede: «Scaduta il …», «Scade il …». */}
+                        {c.expires_at && (statoBuono === 'scaduto' || statoBuono === 'disponibile') && (
+                          <span className="block">
+                            {statoBuono === 'scaduto' ? 'Scaduta il ' : 'Scade il '}
+                            {new Date(c.expires_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>

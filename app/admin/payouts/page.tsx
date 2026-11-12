@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Banknote, Clock, CheckCircle2, Store, Info, AlertTriangle } from 'lucide-react';
@@ -9,25 +9,19 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannello, nettoDopoStorni, settimanaPrima, type GruppoDelPannello, type OrdineNegozio } from '@/lib/guadagni/negozio';
 
 /**
- * Payout venditori (admin · Trust & Safety) — SOLA LETTURA.
+ * Payout venditori (admin · Trust & Safety).
  *
- * Mostra lo stato reale dei bonifici ai venditori leggendo direttamente la
- * tabella `orders` (colonne payout: seller_payout_cents, payout_status,
- * payout_at, stripe_transfer_id) e raggruppando per venditore.
+ * R11-001 / R11-004 — Al lancio i contanti li versa Nicola a mano il lunedì: la
+ * pagina dice quanto versare a ogni negozio («Da versare lunedì») e il tasto
+ * «Bonifico fatto» lo registra (migrazione 350). La carta resta automatica.
  *
- * IMPORTANTE: nessuna azione di pagamento qui. Il payout reale avviene in modo
- * automatico via cron `release-payouts` (carta: ~1h dopo la consegna; COD: dopo
- * la conferma rimessa contanti del rider). Questa pagina è una vista di
- * riconciliazione per il founder, coerente col mockup admin v2 (40-ops).
- *
- * Stati payout (orders.payout_status), allineati a app/seller/earnings:
- *  - HELD / PENDING_SELLER_ONBOARDING → "In sospeso" (in attesa del cron/onboarding)
- *  - TRANSFERRED                      → "Pagato"
- *  - REVERSED / REFUNDED / FAILED     → esclusi dai totali "da pagare"/"pagato"
- * Gli ordini consegnati ma non ancora HELD (es. card freschi pre-cron) appaiono
- * come "Pronto" quando seller_payout_cents è valorizzato.
+ * Legge la tabella `orders` (netto, storni, stato del bonifico) e raggruppa per negozio. La regola
+ * degli stati sta in lib/guadagni/negozio.ts (`gruppoDelPannello`): contanti con la rimessa
+ * confermata = «Da versare»; contanti ancora dal fattorino, carta in attesa del giro, IBAN da
+ * verificare = «In sospeso»; ritiri al banco, storni e rimborsi = fuori dai totali.
  */
 
 type PayoutOrder = {
@@ -35,6 +29,11 @@ type PayoutOrder = {
   seller_id: string | null;
   total_price: number | string | null;
   seller_payout_cents: number | null;
+  seller_payout_reversed_cents: number | null;
+  dispute_status?: string | null;
+  internal_dispute_status?: string | null;
+  payment_status?: string | null;
+  pratica_aperta?: boolean;
   payout_status: string | null;
   payout_at: string | null;
   stripe_transfer_id: string | null;
@@ -45,26 +44,25 @@ type PayoutOrder = {
   seller: { store_name: string | null; billing_iban: string | null } | null;
 };
 
-type PayoutTone = 'ready' | 'hold' | 'paid';
+type PayoutTone = 'ready' | 'hold' | 'paid' | 'fuori';
 
-/** Mappa lo stato payout dell'ordine a un tono brand display-only. */
+const CLASSI: Record<GruppoDelPannello, string> = {
+  da_versare: 'bg-olive-100 text-olive-800',
+  in_sospeso: 'bg-accent-100 text-accent-800',
+  pagato: 'bg-cream-200 text-ink-600',
+  fuori: 'bg-secondary-100 text-secondary-700',
+};
+const TONO: Record<GruppoDelPannello, PayoutTone> = { da_versare: 'ready', in_sospeso: 'hold', pagato: 'paid', fuori: 'fuori' };
+
+/**
+ * R11-001 — Lo stato del bonifico per il pannello: la regola sta in
+ * lib/guadagni/negozio.ts (`gruppoDelPannello`). «Da versare» sono i contanti
+ * con la rimessa confermata: quelli che Nicola versa a mano il lunedì.
+ */
 function payoutTone(o: PayoutOrder): { tone: PayoutTone; label: string; cls: string } {
-  switch (o.payout_status) {
-    case 'TRANSFERRED':
-      return { tone: 'paid', label: 'Pagato', cls: 'bg-cream-200 text-ink-600' };
-    case 'HELD':
-    case 'PENDING_SELLER_ONBOARDING':
-      return { tone: 'hold', label: 'In sospeso', cls: 'bg-accent-100 text-accent-800' };
-    case 'REVERSED':
-      return { tone: 'paid', label: 'Stornato', cls: 'bg-secondary-100 text-secondary-700' };
-    case 'REFUNDED':
-      return { tone: 'paid', label: 'Rimborsato', cls: 'bg-secondary-100 text-secondary-700' };
-    case 'FAILED':
-      return { tone: 'hold', label: 'Verifica IBAN', cls: 'bg-secondary-100 text-secondary-700' };
-    default:
-      // Consegnato, importo netto calcolato, ma non ancora rilasciato dal cron.
-      return { tone: 'ready', label: 'Pronto', cls: 'bg-olive-100 text-olive-800' };
-  }
+  const { gruppo, etichetta } = gruppoDelPannello(o);
+  const label = o.payout_status === 'PAID_MANUALLY' && o.payout_at ? `${etichetta} ${fmtDate(o.payout_at)}` : etichetta;
+  return { tone: TONO[gruppo], label, cls: CLASSI[gruppo] };
 }
 
 type SellerGroup = {
@@ -72,12 +70,17 @@ type SellerGroup = {
   storeName: string;
   iban: string | null;
   orders: PayoutOrder[];
-  dueCents: number; // pronto + in sospeso (da liquidare)
-  paidCents: number; // già trasferiti
+  dueCents: number; // contanti da versare (rimessa confermata)
+  lunediCents: number; // di questi, consegnati entro la domenica scorsa
+  holdCents: number; // in sospeso (carta in attesa del giro, contanti dal fattorino, IBAN)
+  paidCents: number; // già trasferiti o pagati a mano
 };
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : '—';
+
+/** Il netto che spetta davvero al negozio: meno gli storni (rimborsi, contestazioni). */
+const netto = (o: PayoutOrder) => nettoDopoStorni(o as unknown as OrdineNegozio);
 
 /** Maschera l'IBAN mostrando prefisso paese + ultime 4 (display, dato reale). */
 function maskIban(iban: string | null): string | null {
@@ -93,17 +96,82 @@ function maskIban(iban: string | null): string | null {
  */
 const TETTO_PAYOUT = 1000;
 
+/**
+ * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
+ * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
+ * 350), riservata agli amministratori: da qui parte solo la richiesta.
+ */
+function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
+  sellerId: string;
+  storeName: string;
+  ordini: PayoutOrder[];
+  quandoFatto: () => void;
+}) {
+  const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
+  const [esito, setEsito] = useState<string | null>(null);
+  // R11-001 — si segnano gli stessi ordini di «Da versare lunedì»: quelli di questa settimana aspettano il prossimo.
+  const daSegnare = ordiniDaVersareLunedi(ordini, new Date());
+  if (daSegnare.length === 0) return esito ? <p role="status" className="mt-1.5 text-xs text-ink-600">{esito}</p> : null;
+  const totale = daSegnare.reduce((s, o) => s + netto(o), 0);
+  const segna = async () => {
+    const riferimento = window.prompt(
+      `Bonifico a ${storeName}: ${formatPrice(totale / 100)} per ${daSegnare.length} ordini in contanti.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
+    );
+    if (!riferimento || riferimento.trim().length < 3) return;
+    setStato('invio');
+    const { data: segnati, error } = await supabase.rpc('segna_bonifico_manuale', {
+      p_seller: sellerId,
+      p_order_ids: daSegnare.map((o) => o.id),
+      p_riferimento: riferimento.trim(),
+    } as never);
+    if (error) {
+      setStato('errore');
+      return;
+    }
+    // Collaudo K04 — la funzione dice quanti ne ha segnati davvero: se sono meno, lo si dice.
+    const n = typeof segnati === 'number' ? segnati : 0;
+    setEsito(
+      n === daSegnare.length
+        ? `Segnati ${n} ordini come pagati.`
+        : `Attenzione: segnati ${n} ordini su ${daSegnare.length}. Gli altri nel frattempo hanno un reso, un reclamo o una contestazione e restano da versare: controlla il bonifico fatto.`,
+    );
+    setStato('pronto');
+    quandoFatto();
+  };
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => void segna()}
+        disabled={stato === 'invio'}
+        className="rounded-lg border border-olive-300 bg-white px-3 py-1 text-xs font-semibold text-olive-800 hover:bg-olive-50 disabled:opacity-50"
+      >
+        {stato === 'invio' ? 'Segno…' : `Bonifico fatto · ${formatPrice(totale / 100)}`}
+      </button>
+      {esito && <p role="status" className="mt-1 text-xs text-ink-600">{esito}</p>}
+      {stato === 'errore' && (
+        <p role="alert" className="mt-1 text-xs text-secondary-700">Non sono riuscito a segnarlo: riprova.</p>
+      )}
+    </div>
+  );
+}
+
+const fmtGiorno = (g: string) => new Date(`${g}T12:00:00Z`).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+
 export default function AdminPayoutsPage() {
+  const settimana = settimanaPrima(new Date());
   const { data: letti = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['admin', 'payouts'],
     refetchInterval: 60_000,
-    queryFn: async (): Promise<PayoutOrder[]> => {
+    queryFn: async (): Promise<PayoutOrder[] & { totale?: number }> => {
       // Solo ordini consegnati con un netto venditore calcolato: sono gli unici
       // rilevanti per la riconciliazione payout. Esclude carrelli/annullati.
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('orders')
         .select(
-          'id, seller_id, total_price, seller_payout_cents, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+          'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+          // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
+          { count: 'exact' },
         )
         .eq('delivery_status', 'DELIVERED')
         .not('seller_payout_cents', 'is', null)
@@ -111,11 +179,31 @@ export default function AdminPayoutsPage() {
         // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
         .limit(TETTO_PAYOUT + 1);
       if (error) throw error;
-      return (data ?? []) as unknown as PayoutOrder[];
+      // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
+      const righe = (data ?? []) as unknown as PayoutOrder[];
+      // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
+      // funzione 350: senza, un contante con un reso aperto entrava nei «Da versare», la 350 lo saltava
+      // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
+      const contantiHeld = righe.filter((o) => o.payment_method === 'cod' && o.payout_status === 'HELD').map((o) => o.id);
+      const aperti = new Set<string>();
+      let letturaCaduta = false;
+      for (let i = 0; i < contantiHeld.length; i += 150) {
+        const pezzo = contantiHeld.slice(i, i + 150);
+        const [resi, reclami] = await Promise.all([
+          supabase.from('returns').select('order_id').in('order_id', pezzo).in('status', ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED']),
+          supabase.from('disputes').select('order_id').in('order_id', pezzo).in('status', ['open', 'under_review']),
+        ]);
+        if (resi.error || reclami.error) letturaCaduta = true;
+        for (const r of [...((resi.data ?? []) as { order_id: string }[]), ...((reclami.data ?? []) as { order_id: string }[])]) aperti.add(r.order_id);
+      }
+      for (const o of righe) {
+        if (letturaCaduta ? contantiHeld.includes(o.id) : aperti.has(o.id)) o.pratica_aperta = true;
+      }
+      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
 
-  const tagliato = letti.length > TETTO_PAYOUT;
+  const tagliato = Math.max((letti as { totale?: number }).totale ?? 0, letti.length) > TETTO_PAYOUT;
   const orders = useMemo(() => letti.slice(0, TETTO_PAYOUT), [letti]);
   // Con l'elenco tagliato ogni somma è un minimo, non il totale.
   const almeno = tagliato ? 'almeno ' : '';
@@ -130,17 +218,22 @@ export default function AdminPayoutsPage() {
         iban: o.seller?.billing_iban ?? null,
         orders: [],
         dueCents: 0,
+        lunediCents: 0,
+        holdCents: 0,
         paidCents: 0,
       };
       g.orders.push(o);
-      const cents = o.seller_payout_cents ?? 0;
+      const cents = netto(o);
       const t = payoutTone(o);
-      if (t.tone === 'paid' && o.payout_status === 'TRANSFERRED') g.paidCents += cents;
-      else if (t.tone === 'ready' || t.tone === 'hold') g.dueCents += cents;
+      if (t.tone === 'paid' && STATI_VERSATI.includes(o.payout_status ?? '')) g.paidCents += cents;
+      else if (t.tone === 'ready') g.dueCents += cents;
+      else if (t.tone === 'hold') g.holdCents += cents;
       map.set(o.seller_id, g);
     }
+    const adesso = new Date();
+    for (const g of map.values()) g.lunediCents = daVersareLunedi(g.orders, adesso).cents;
     // Ordina: prima chi ha più da liquidare.
-    return Array.from(map.values()).sort((a, b) => b.dueCents - a.dueCents);
+    return Array.from(map.values()).sort((a, b) => b.lunediCents - a.lunediCents || b.dueCents - a.dueCents);
   }, [orders]);
 
   const totals = useMemo(() => {
@@ -148,11 +241,11 @@ export default function AdminPayoutsPage() {
     let hold = 0;
     let paid = 0;
     for (const o of orders) {
-      const cents = o.seller_payout_cents ?? 0;
+      const cents = netto(o);
       const t = payoutTone(o);
       if (t.tone === 'ready') due += cents;
       else if (t.tone === 'hold') hold += cents;
-      else if (o.payout_status === 'TRANSFERRED') paid += cents;
+      else if (STATI_VERSATI.includes(o.payout_status ?? '')) paid += cents;
     }
     return { dueCents: due, holdCents: hold, paidCents: paid };
   }, [orders]);
@@ -180,7 +273,7 @@ export default function AdminPayoutsPage() {
       <AdminPageTitle
         eyebrow="Trust & Safety"
         title="Payout venditori"
-        sub="Riconciliazione dei bonifici ai negozi. Sola lettura: i pagamenti partono in automatico (carta ~1h dopo la consegna, COD dopo la conferma rimessa contanti)."
+        sub="Quanto versare a ogni negozio. Carta: parte in automatico ~1h dopo la consegna. Contanti: il bonifico lo fai tu il lunedì, per le consegne della settimana prima."
       />
 
       {/* L'avviso viene PRIMA dei riquadri: chi legge solo il numero deve già sapere che è parziale. */}
@@ -197,17 +290,19 @@ export default function AdminPayoutsPage() {
 
       {/* KPI: pronto · in sospeso · già pagato */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <AdminStatCard icon={Banknote} tone="olive" label="Da pagare (pronto)" value={`${almeno}${formatPrice(totals.dueCents / 100)}`} />
+        <AdminStatCard icon={Banknote} tone="olive" label="Contanti da versare" value={`${almeno}${formatPrice(totals.dueCents / 100)}`} />
         <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={`${almeno}${formatPrice(totals.holdCents / 100)}`} />
         <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={`${almeno}${formatPrice(totals.paidCents / 100)}`} />
       </div>
 
-      {/* Nota: pagamento automatico, niente azioni manuali */}
+      {/* R11-001 — La nota diceva «niente azioni manuali»: al lancio i contanti li versi tu. */}
       <div className="flex items-start gap-2.5 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
         <Info size={16} className="mt-0.5 shrink-0 text-ink-400" aria-hidden />
         <p>
-          I bonifici sono gestiti dal cron <span className="font-mono text-xs">release-payouts</span> verso l&apos;IBAN
-          Stripe del venditore. Da qui controlli lo stato; non ci sono azioni di pagamento manuali.
+          Carta: i bonifici li fa il giro <span className="font-mono text-xs">release-payouts</span> verso il conto Stripe
+          del negozio. Contanti: il lunedì versi tu, con un bonifico, quanto c&apos;è scritto in «Da versare lunedì»
+          (consegne dal {fmtGiorno(settimana.dal)} al {fmtGiorno(settimana.al)} e arretrati), poi premi «Bonifico fatto».
+          Gli importi sono già al netto degli storni.
         </p>
       </div>
 
@@ -229,15 +324,25 @@ export default function AdminPayoutsPage() {
                   </span>
                   <div>
                     <p className="font-bold text-ink-900">{g.storeName}</p>
-                    <p className="font-mono text-xs text-ink-400">{maskIban(g.iban) ?? 'IBAN non impostato'}</p>
+                    <p className="font-mono text-xs text-ink-500 select-all" title={maskIban(g.iban) ?? undefined}>
+                      {g.iban ? g.iban.replace(/\s+/g, '') : 'IBAN non impostato'}
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da liquidare</p>
-                  <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.dueCents / 100)}</p>
-                  {g.paidCents > 0 && (
-                    <p className="text-xs text-ink-500">{formatPrice(g.paidCents / 100)} già pagati</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
+                  <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.lunediCents / 100)}</p>
+                  {g.dueCents > g.lunediCents && (
+                    <p className="text-xs text-ink-500">+ {almeno}{formatPrice((g.dueCents - g.lunediCents) / 100)} di questa settimana</p>
                   )}
+                  {g.holdCents > 0 && (
+                    <p className="text-xs text-ink-500">{almeno}{formatPrice(g.holdCents / 100)} in sospeso</p>
+                  )}
+                  {/* R11-012 (collaudo K04) — anche le cifre del singolo negozio sono un minimo, con l'elenco tagliato. */}
+                  {g.paidCents > 0 && (
+                    <p className="text-xs text-ink-500">{almeno}{formatPrice(g.paidCents / 100)} già pagati</p>
+                  )}
+                  <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={() => void refetch()} />
                 </div>
               </div>
 
@@ -271,7 +376,7 @@ export default function AdminPayoutsPage() {
                             {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
                           </td>
                           <td className="px-5 py-3 text-right font-mono font-bold text-ink-900">
-                            {formatPrice((o.seller_payout_cents ?? 0) / 100)}
+                            {formatPrice(netto(o) / 100)}
                           </td>
                           <td className="px-5 py-3 text-right">
                             <span className={`${t.cls} inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold`}>

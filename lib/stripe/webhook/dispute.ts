@@ -25,6 +25,13 @@ import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148'
 import { formatPriceFromCents } from '@/lib/format';
 import { findOrdersForDispute, notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
+import { restituisciLeQuoteParziali } from './contestazione-parziale-vinta';
+import { buonoDaRiattivareDopoLaVittoria, richiestaSulBuonoSoloAvviso } from './contestazione-buoni';
+import {
+  contestazioneDiUnaParte, eUnaRichiestaDiInformazioni, promemoriaOTotale, quotaDelRimborsoSulNetto, stornatoDaQuestaContestazione,
+} from './quanto-restituire';
+
+export { promemoriaOTotale };
 
 /**
  * 15/10/2026 (collaudo, giro 2) — IL RIPIEGO NON SCATTAVA SULLE SCRITTURE.
@@ -121,6 +128,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     // Lo spegne il database (`gift_card_void_for_payment`, 178), una volta
     // sola anche se Stripe riconsegna l'evento. Un errore si rilancia, cosi'
     // Stripe riprova.
+    // R11-022 — una richiesta di informazioni non toglie soldi: il buono non si annulla.
+    if (await richiestaSulBuonoSoloAvviso(dispute)) return;
     const pi = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : (dispute.payment_intent?.id ?? null);
     if (pi) {
       const { data: buono, error: errBuono } = await getAdminSupabase().rpc('gift_card_void_for_payment', {
@@ -288,6 +297,14 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
         logger.warn('[stripe] storni della contestazione non annotati (migrazione 126 non applicata?)', {
           orderId: o.id, message: errPromemoria.message,
         });
+        // R11-021 — Un promemoria perso per un errore vero (non la 126 che manca) non si riscrive:
+        // al prossimo passaggio lo storno non si rifà. Chi chiude la contestazione deve sapere la cifra.
+        if (!colonnaNonTrovata(errPromemoria as ErroreDatabase)) {
+          daControllare.push({
+            orderId: o.id,
+            testo: `ordine ${o.id.slice(0, 8)}: per questa contestazione sono stati stornati ${formatPriceFromCents(stornatoVenditore)} al negozio, ma il promemoria non è stato scritto. Se la contestazione si vince, al negozio va restituita questa cifra, non tutto lo stornato.`,
+          });
+        }
       }
     }
   }
@@ -308,41 +325,6 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
 }
 
 /**
- * Quanto restituire alla vittoria: il promemoria messo da parte all'apertura
- * se c'è (più di zero), altrimenti il totale stornato come prima della 126.
- */
-export function promemoriaOTotale(promemoria: number | null | undefined, totale: number | null | undefined): number {
-  return (promemoria ?? 0) > 0 ? (promemoria as number) : (totale ?? 0);
-}
-
-/** Stati Stripe della richiesta di informazioni (inquiry): soldi non tolti. */
-function eUnaRichiestaDiInformazioni(dispute: Stripe.Dispute): boolean {
-  return String(dispute.status ?? '').startsWith('warning_');
-}
-
-/**
- * 1/11/2026 — QUANTO RESTITUIRE, CONTANDO SOLO QUESTA CONTESTAZIONE.
- *
- * Senza promemoria si ricadeva sul totale stornato. Ma se il pagamento era
- * gia' stato rimborsato per intero (payment_status 'REFUNDED') prima della
- * contestazione, lo storno di quel totale e' del rimborso, non della banca:
- * la contestazione non ha tolto niente e alla vittoria non c'e' niente da
- * restituire (null: l'ordine non si rimette in coda). Ripagarlo voleva dire
- * pagare due volte negozio e fattorino.
- * Il ripiego sul totale resta solo per un pagamento non rimborsato per
- * intero (contestazione aperta prima della migrazione 126).
- */
-function stornatoDaQuestaContestazione(
-  promemoria: number | null | undefined,
-  totale: number | null | undefined,
-  paymentStatus: unknown,
-): number | null {
-  if ((promemoria ?? 0) > 0) return promemoria as number;
-  if (paymentStatus === 'REFUNDED') return null;
-  return promemoriaOTotale(promemoria, totale);
-}
-
-/**
  * charge.dispute.closed → won: sblocca (gli ordini HELD tornano eleggibili al
  * payout cron). lost: i fondi sono già stati prelevati da Stripe (reversal già
  * fatto all'apertura) → annulla l'ordine (semantica rimborso).
@@ -359,8 +341,8 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // vinta: il negozio si faceva ripagare 32,40 € invece di 27,40. Il database
   // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
   // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
-  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
-  if (orders.length === 0) return;
+  const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  if (orders.length === 0) return buonoDaRiattivareDopoLaVittoria(dispute); // R11-022
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
 
@@ -387,6 +369,7 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
         const stornatoPerLaContestazione = stornatoDaQuestaContestazione(
           o.dispute_seller_reversed_cents, o.seller_payout_reversed_cents,
           (o as { payment_status?: unknown }).payment_status,
+          quotaDelRimborsoSulNetto(o as Parameters<typeof quotaDelRimborsoSulNetto>[0]), // R11-021
         );
         // 1/11/2026 — Rimborsato per intero prima della contestazione: lo storno
         // e' del rimborso. Resta 'REVERSED', il giro dei bonifici non lo vede.
@@ -446,6 +429,9 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       });
     }
 
+    // R11-007 — la contestazione parziale vinta restituisce al negozio la sua quota.
+    await restituisciLeQuoteParziali(dispute, orders);
+
     // 158 — E IL FATTORINO? All'apertura della contestazione gli veniva
     // richiamato indietro il compenso (`reverseRiderTransfer`, poche righe
     // sopra), ed e' il caso normale: il bonifico parte un'ora dopo la
@@ -492,6 +478,19 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     }
 
     await notifyAdmins('✓ Chargeback vinto', `Contestazione vinta su ordine ${ids[0]}. Payout rimesso in coda.`, '/admin/disputes');
+  } else if (dispute.status === 'lost' && contestazioneDiUnaParte(dispute, orders)) {
+    // R11-023 — persa su una PARTE del carrello: niente annulli, merce a scaffale o «rimborsato per
+    // intero» sugli ordini degli altri negozi. Bonifici fermi (LOST), la perdita la divide Nicola.
+    scritturaObbligatoria(
+      await admin.from('orders').update({ dispute_status: 'LOST', payment_status: 'PARTIALLY_REFUNDED' })
+        .in('id', orders.filter((o) => (o as { payment_status?: string }).payment_status !== 'REFUNDED').map((o) => o.id)),
+      'contestazione persa su una parte del carrello',
+    );
+    await notifyAdmins(
+      '✕ Chargeback perso su una parte del carrello',
+      `Contestazione ${dispute.id} persa per ${formatPriceFromCents(dispute.amount ?? 0)} su un pagamento di ${ids.length} ordine/i (${ids.map((id) => id.slice(0, 8)).join(', ')}). Nessun ordine annullato: i bonifici di questi ordini sono fermi finché non dividi la perdita fra i negozi.`,
+      '/admin/disputes',
+    );
   } else if (dispute.status === 'lost') {
     // 22/8/2026 — UNA CONSEGNA AVVENUTA NON TORNA «ANNULLATA», E LA MERCE NON
     // TORNA A MAGAZZINO.

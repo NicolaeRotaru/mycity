@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,13 +12,14 @@ import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
+import { useAvvisoModificheNonSalvate } from '@/components/hooks/useAvvisoModificheNonSalvate';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { campoDellErrore, normalizzaSocials, separaSocialSbagliati, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -64,13 +65,39 @@ export type VendorFormData = SchemaData & {
 type VendorFormMode = 'all' | 'branding' | 'contact';
 
 interface Props {
-  onSubmit: (data: VendorFormData) => void;
+  /** Se restituisce una promessa, l'avviso d'uscita si spegne solo quando il salvataggio riesce. */
+  onSubmit: (data: VendorFormData) => unknown;
+  /** R11-015 — avvisa il genitore quando ci sono modifiche non salvate (per chiedere conferma prima di uscire). */
+  onSporcoChange?: (sporco: boolean) => void;
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
   mode?: VendorFormMode;
 }
 
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
+/**
+ * Collaudo K04 — la fotografia del modulo non deve dipendere dall'ordine dei campi: lo stato li tiene
+ * nell'ordine in cui la persona li scrive, i dati controllati da zod nell'ordine dello schema. Con
+ * JSON.stringify semplice, dopo un salvataggio riuscito l'avviso «non salvate» restava acceso.
+ * Chiavi in ordine, valori vuoti (undefined, '') trattati come assenti.
+ */
+function fotografiaStabile(valore: unknown): string {
+  const pulisci = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(pulisci);
+    if (v && typeof v === 'object') {
+      const fuori: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+        const x = (v as Record<string, unknown>)[k];
+        if (x === undefined || x === '') continue;
+        fuori[k] = pulisci(x);
+      }
+      return fuori;
+    }
+    return v;
+  };
+  return JSON.stringify(pulisci(valore));
+}
+
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', onSporcoChange }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
@@ -97,7 +124,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     [showBranding, showContact],
   );
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
+  const { register, handleSubmit, watch, formState: { errors, isDirty }, reset } = useForm<SchemaData>({
     resolver: zodResolver(schema),
     defaultValues: {
       storeName:  defaultValues?.storeName  ?? '',
@@ -113,6 +140,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     confermata: false,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
+  // La prima notizia dalla mappa è il suo allineamento all'apertura, non un gesto della persona.
+  const primaNotiziaDallaMappa = useRef(true);
+  const [posizioneToccata, setPosizioneToccata] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
@@ -122,6 +152,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
   const [custom, setCustom] = useState<StoreCustomization>(defaultValues?.storeCustomization ?? {});
   const [customError, setCustomError] = useState<string | null>(null);
+  const [socialSbagliati, setSocialSbagliati] = useState<Partial<Record<string, string>>>({});
 
   const storeName = watch('storeName');
 
@@ -171,6 +202,20 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     },
   });
 
+  // R11-015 — Modifiche non salvate: i campi del modulo più quelli tenuti a parte (logo, foto,
+  // descrizione, orari, posizione, personalizzazione). La fotografia di partenza si rifà al salvataggio.
+  const fotografiaDi = (personalizzazione: StoreCustomization) =>
+    // Dal controllo qa: la posizione conta solo dopo che la persona l'ha toccata. All'apertura la mappa
+    // rimanda al modulo il suo punto di partenza (anche quello di Roma o le coordinate non valide):
+    // non è una modifica, e l'avviso d'uscita non deve comparire senza che nessuno abbia scritto niente.
+    fotografiaStabile({ logoUrl, media, description, hours, custom: personalizzazione,
+      ...(posizioneToccata ? { a: location.address, la: location.lat, lo: location.lng } : {}) });
+  const fotografia = fotografiaDi(custom);
+  const [fotografiaSalvata, setFotografiaSalvata] = useState(fotografia);
+  const sporco = isDirty || fotografia !== fotografiaSalvata;
+  useAvvisoModificheNonSalvate(sporco);
+  useEffect(() => { onSporcoChange?.(sporco); }, [sporco, onSporcoChange]);
+
   const handleFormSubmit = (data: SchemaData) => {
     if (showContact) {
       // Un orario sbagliato non si salva: quel giorno il negozio risulterebbe chiuso agli ordini.
@@ -203,7 +248,19 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
       // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
       const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
       setCustom(corretta);
-      const parsed = storeCustomizationSchema.safeParse(corretta);
+      // R11-016 — Un social scritto male non ferma più tutta la vetrina: quel campo si toglie,
+      // il motivo compare sotto il campo e la sezione si apre; il resto si salva.
+      const { pulita, scartati } = separaSocialSbagliati(corretta);
+      setSocialSbagliati(scartati);
+      // Dal controllo qa: la personalizzazione si salva intera, quindi un campo scartato va rimesso
+      // com'era prima (se c'era), altrimenti sbagliare un social già salvato lo cancellava.
+      const primaSocial = (defaultValues?.storeCustomization?.socials ?? {}) as Record<string, string | undefined>;
+      for (const k of Object.keys(scartati)) {
+        const prima = primaSocial[k];
+        const primaValida = !!prima && Object.keys(separaSocialSbagliati({ socials: { [k]: prima } }).scartati).length === 0;
+        if (primaValida) (pulita.socials as Record<string, string | undefined>)[k] = prima;
+      }
+      const parsed = storeCustomizationSchema.safeParse(pulita);
       if (!parsed.success) {
         const problema = parsed.error.issues[0];
         const campo = problema ? campoDellErrore(problema.path) : null;
@@ -211,10 +268,14 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
         setCustomError(`${campo ? `${campo}: ` : ''}${problema?.message ?? 'Personalizzazione non valida'}`);
         return;
       }
+      const nomiScartati = Object.keys(scartati).map((k) => campoDellErrore(['socials', k]) ?? k);
+      if (nomiScartati.length > 0) {
+        toast.warning(`${nomiScartati.join(', ')}: non salvato (resta quello di prima), il resto sì. Guarda sotto il campo.`);
+      }
       customData = parsed.data;
     }
     setCustomError(null);
-    onSubmit({
+    const esito = onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
       storeAddress: location.address,
@@ -226,6 +287,18 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
       storeHours: hours,
       storeCustomization: customData,
     });
+    // R11-015 — Inviato: quello che c'è ora diventa il punto di partenza (niente più avviso d'uscita).
+    const salvata = fotografiaDi(customData);
+    const segnaSalvato = () => {
+      reset(data);
+      setFotografiaSalvata(salvata);
+    };
+    // Dal controllo qa: col salvataggio fallito le modifiche restano «non salvate» (prima l'avviso spariva).
+    if (esito && typeof (esito as Promise<unknown>).then === 'function') {
+      (esito as Promise<unknown>).then(segnaSalvato, () => {});
+    } else {
+      segnaSalvato();
+    }
   };
 
   return (
@@ -309,6 +382,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             }}
             onChange={(loc) => {
               setLocation(loc);
+              if (primaNotiziaDallaMappa.current) primaNotiziaDallaMappa.current = false;
+              else setPosizioneToccata(true);
               if (loc.address.trim()) setLocationError(null);
             }}
           />
@@ -358,8 +433,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             title="Social e contatti"
             description="Instagram, Facebook, TikTok, WhatsApp, sito"
             icon={<Share2 size={18} />}
+            apri={Object.keys(socialSbagliati).length > 0}
           >
-            <SocialLinksFields value={custom.socials} onChange={(next) => setCustom({ ...custom, socials: next })} />
+            <SocialLinksFields value={custom.socials} errori={socialSbagliati} onChange={(next) => setCustom({ ...custom, socials: next })} />
           </CustomizationSection>
 
           <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
