@@ -1600,6 +1600,39 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     };
   }
 
+  // 12/11/2026 (R03-005) — IL CREDITO DI QUESTA CHIAVE E' GIA' USCITO E GIA' CONTATO.
+  // La chiave dei resi (`return_<id>`) non porta la cifra. Il caso: il negozio approva 20 € di
+  // rimborso in credito, il credito esce e l'ordine lo conta, poi cade la scrittura sul reso
+  // (decide risponde 500, il reso resta APPROVED). Coi passi normali avanza ripropone 20 € con
+  // la stessa chiave: si prenotava di nuovo, il portafoglio trovava il doppione e taceva, e il
+  // rimborso si registrava due volte (40 € sull'ordine, 36 € tolti al negozio invece di 18).
+  // Una riga a diario di questa chiave con la stessa cifra, su un ordine che conta gia' almeno
+  // quella cifra, e' il rimborso di prima finito: si restituisce quello, senza toccare niente.
+  // Se l'ordine non lo conta (il tentativo di prima e' stato stornato) si va avanti come sempre.
+  if (
+    tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima &&
+    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0
+  ) {
+    const giaADiario = await accreditoADiario(admin, opts.idempotencyKey);
+    if (giaADiario != null) {
+      controllaLaCifraGiaAccreditata(giaADiario, ripartoVero.creditoCents);
+      if (Number(order.refunded_amount_cents ?? 0) >= safeAmountCents) {
+        logger.warn('[refundOrder] credito di questa chiave gia uscito e contato: non si registra di nuovo', {
+          orderId: order.id, chiave: opts.idempotencyKey,
+        });
+        return {
+          refundId: `wallet:${opts.idempotencyKey}`,
+          reversedCents: 0,
+          pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
+          modo,
+          importoCents: safeAmountCents,
+          creditoCents: ripartoVero.creditoCents,
+          bonificoCents: 0,
+        };
+      }
+    }
+  }
+
   // L'email del cliente, prima dei soldi (vedi `emailDelCliente`). Col bonifico
   // serve all'avviso, e una lettura caduta ferma il rimborso; senza bonifico
   // serve solo all'email di rimborso, e una lettura caduta la salta.
