@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } from './riparazione-r01-pg';
+import { avviaPostgresConIndirizzo, type PostgresConIndirizzo } from './riparazione-r01-pg';
 
 /**
  * R01-023 — Lo script prometteva che il danno di un COMMIT dentro una migrazione era nullo
@@ -12,7 +12,7 @@ import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } fr
  */
 const ROOT = process.cwd();
 
-describe.skipIf(!BIN_POSTGRES)('R01-023 · l\'avviso sul COMMIT dice quando il danno non e\' nullo', () => {
+describe('R01-023 · l\'avviso sul COMMIT dice quando il danno non e\' nullo', () => {
   let pg: PostgresConIndirizzo;
   let cartella: string;
   beforeAll(() => {
