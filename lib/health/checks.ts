@@ -95,6 +95,7 @@ async function checkDb(): Promise<ServiceHealth> {
     const { error } = await pubblico.from('categories').select('id').limit(1);
     if (error) throw new Error(error.message);
   });
+  if (!r.ok) logger.warn('[salute] database non raggiungibile', { motivo: r.error ?? 'sconosciuto' });
   return svc(
     'db', 'Database', 'Supabase Postgres',
     statusFromLatency(r.ok, r.latencyMs),
@@ -151,6 +152,18 @@ async function checkPayments(): Promise<ServiceHealth> {
   );
 }
 
+/**
+ * Il motivo di un guasto, detto in breve e in italiano per la pagina pubblica: il
+ * testo grezzo (in inglese, per lo sviluppatore) resta nei log.
+ */
+function motivoPerIlPubblico(errore: string | undefined): string {
+  if (!errore) return 'motivo sconosciuto';
+  const http = /^HTTP (\d{3})$/.exec(errore);
+  if (http) return `HTTP ${http[1]}`;
+  if (/timeout|aborted/i.test(errore)) return 'tempo scaduto';
+  return 'rete non raggiungibile';
+}
+
 async function checkEmail(): Promise<ServiceHealth> {
   const key = env.resendKey();
   if (!key) {
@@ -185,7 +198,7 @@ async function checkEmail(): Promise<ServiceHealth> {
     r.ok ? r.latencyMs : null,
     r.ok
       ? (soloInvio ? 'Chiave di solo invio: raggiungibile' : null)
-      : `API non raggiungibile (${r.error ?? 'motivo sconosciuto'})`,
+      : `API non raggiungibile (${motivoPerIlPubblico(r.error)})`,
   );
 }
 
@@ -234,18 +247,22 @@ async function runServiceChecks(): Promise<SystemHealth> {
   // Il web sta servendo questa pagina: se sei qui, è operativo.
   const web = svc('web', 'Marketplace web', 'Applicazione Next.js', 'operational', null, null);
   // Realtime vive sulla stessa piattaforma del DB: se il DB è giù, lo è anche lui.
+  // 12/11/2026 (R06-023) — Senza le variabili pubbliche di Supabase il database e'
+  // «non configurato», e la chat (stessa piattaforma) non puo' dirsi operativa.
   const realtime = svc(
     'realtime', 'Chat & notifiche', 'Supabase Realtime',
-    db.status === 'outage' ? 'outage' : 'operational',
+    db.status === 'outage' ? 'outage' : db.status === 'unknown' ? 'unknown' : 'operational',
     null,
-    db.status === 'outage' ? 'Piattaforma non raggiungibile' : null,
+    db.status === 'outage' ? 'Piattaforma non raggiungibile' : db.status === 'unknown' ? 'Non configurato' : null,
   );
   const push = checkPush();
   // 12/11/2026 (R06-023) — Questa e' la pagina PUBBLICA: l'elenco delle variabili
   // mancanti («… Vanno messe PRIMA di ricompilare») e' un messaggio per lo
   // sviluppatore, non per una cliente. Qui resta lo stato; il dettaglio completo
-  // lo da' checkTitolare() a chi amministra.
+  // finisce nei log (e nessuna pagina admin lo mostra ancora: referto R06).
   const titolare = checkTitolare();
+  // Il dettaglio non sparisce: va nei log, dove lo legge chi amministra.
+  if (titolare.detail) logger.warn('[salute] dati del titolare incompleti', { dettaglio: titolare.detail });
   const titolareOk = { ...titolare, detail: titolare.status === 'operational' ? null : 'In completamento' };
 
   const services = [web, db, auth, payments, realtime, email, push, titolareOk];

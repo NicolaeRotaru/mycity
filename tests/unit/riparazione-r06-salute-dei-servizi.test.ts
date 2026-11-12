@@ -119,4 +119,23 @@ describe('R06-023 · la pagina pubblica non annuncia guasti che non ci sono', ()
     const t = s.services.find((x) => x.id === 'titolare')!;
     expect(t.detail ?? '').not.toMatch(/ricompilare|variabili/i);
   });
+
+  it('senza le variabili pubbliche di Supabase la chat non si dichiara operativa', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
+    const s = await salute();
+    expect(s.services.find((x) => x.id === 'db')!.status).toBe('unknown');
+    expect(s.services.find((x) => x.id === 'realtime')!.status, 'La chat risultava operativa su una piattaforma non configurata').not.toBe('operational');
+  });
+
+  it('il motivo di un guasto della posta arriva in italiano al pubblico, il testo grezzo nei log', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('api.resend.com')) throw new Error('The operation was aborted due to timeout');
+      return new Response('{}', { status: 200 });
+    }));
+    const s = await salute();
+    const email = s.services.find((x) => x.id === 'email')!;
+    expect(email.detail).toBe('API non raggiungibile (tempo scaduto)');
+    expect(JSON.stringify(stato.avvisi)).toContain('aborted due to timeout');
+  });
 });
