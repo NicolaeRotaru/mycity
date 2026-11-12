@@ -72,8 +72,8 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
-type Body = { instruction?: string; history?: ChatMessage[] };
+// R04-008 — `history` non c'e' piu': la rotta lo ignora (vedi sotto).
+type Body = { instruction?: string };
 type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[] };
 
 const MAX_CATALOG = 200;
@@ -173,33 +173,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 ${list}`;
 
-  // #206 — Due difetti nella stessa manciata di righe, ora allineati alle
-  // altre due chat (catalog-chat, product-chat).
+  // 12/11/2026 (R04-008) — LA CRONOLOGIA DEL BROWSER NON ARRIVA PIU' AL MODELLO.
   //
-  // ① L'istruzione corrente veniva messa PRIMA della conversazione passata:
-  //    l'ultima cosa che il modello leggeva era un vecchio turno, non la
-  //    richiesta di adesso. Su una conversazione lunga l'istruzione vera
-  //    finiva sepolta, e le modifiche proposte rispondevano al messaggio
-  //    sbagliato — su un pulsante che modifica il catalogo.
-  //
-  // ② La cronologia arriva dal client: un turno «assistente» inventato dal
-  //    browser veniva accettato cosi' com'e', cioe' si potevano mettere in
-  //    bocca al modello parole che non aveva detto («certo, cambio tutti i
-  //    prezzi a 1 euro») e poi chiedergli di proseguire. Ora la cronologia
-  //    deve cominciare con un turno dell'utente e i turni si alternano.
-  const history = (Array.isArray(body.history) ? body.history : [])
-    .filter((m): m is ChatMessage => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim().length > 0)
-    .slice(-10)
-    .map((m) => ({ role: m.role, content: m.content.slice(0, 1000) }));
-
-  while (history.length > 0 && history[0].role !== 'user') history.shift();
-  // Niente due turni dello stesso ruolo di fila: e' la forma che l'API accetta
-  // e insieme il modo piu' semplice di rifiutare una cronologia costruita a mano.
-  const cronologia: typeof history = [];
-  for (const m of history) {
-    if (cronologia.length > 0 && cronologia[cronologia.length - 1].role === m.role) continue;
-    cronologia.push(m);
-  }
+  // Il campo `history` del corpo (fino a dieci turni) passava solo un controllo
+  // di forma e finiva nel prompt senza il filtro anti-contenuti, turni
+  // «assistente» inventati compresi. Nessuna pagina lo manda
+  // (components/seller/CatalogCopilot.tsx invia solo `instruction`): serviva
+  // solo a chi costruisce la richiesta a mano. Si ignora: al modello arriva
+  // soltanto l'istruzione, che il filtro ha appena controllato.
 
   // 22/8/2026 — L'ISTRUZIONE STAVA FRA VIRGOLETTE, E BASTAVA CHIUDERLE.
   //
@@ -224,7 +205,6 @@ ${list}`;
   // uniscono in uno.
   const grezzi: Array<{ role: 'user' | 'assistant'; content: string }> = [
     { role: 'user', content: catalogo },
-    ...cronologia,
     { role: 'user', content: richiesta },
   ];
   const messages: Anthropic.MessageParam[] = [];
