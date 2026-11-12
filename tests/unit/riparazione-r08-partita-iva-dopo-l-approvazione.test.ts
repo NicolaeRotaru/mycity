@@ -15,6 +15,7 @@ const db = vi.hoisted(() => ({
   scritture: 0,
   avvisi: [] as string[],
   utente: 'negozio-1',
+  dopoLaLettura: null as null | (() => void),
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -26,7 +27,11 @@ vi.mock('@/lib/api/middleware', () => ({
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: db.profilo ? { ...db.profilo } : null, error: null }) }) }),
+      select: () => ({ eq: () => ({ maybeSingle: async () => {
+        const letto = db.profilo ? { ...db.profilo } : null;
+        db.dopoLaLettura?.();
+        return { data: letto, error: null };
+      } }) }),
       update: (patch: Riga) => {
         const filtri: Array<(r: Riga) => boolean> = [];
         const b: Record<string, unknown> = {
@@ -66,7 +71,7 @@ const VALIDA = '01234567897';
 const STORICO = { id: 'negozio-1', role: 'seller', approval_status: 'approved', business_vat_number: null, store_name: 'Forno Storico' };
 
 beforeEach(() => {
-  db.scritture = 0; db.avvisi = []; db.utente = 'negozio-1';
+  db.scritture = 0; db.avvisi = []; db.utente = 'negozio-1'; db.dopoLaLettura = null;
 });
 
 describe('R08-002 — la partita IVA di chi è già approvato', () => {
@@ -111,9 +116,9 @@ describe('R08-002 — la partita IVA di chi è già approvato', () => {
 
   it('se il negozio viene respinto fra la lettura e la scrittura, la scrittura non passa', async () => {
     db.profilo = { ...STORICO };
-    const r = invia(VALIDA);
-    db.profilo = { ...STORICO, approval_status: 'rejected' };
-    expect((await r).status).toBe(409);
+    // L'amministratore respinge il negozio subito DOPO che la rotta l'ha letto approvato.
+    db.dopoLaLettura = () => { db.profilo = { ...db.profilo, approval_status: 'rejected' }; };
+    expect((await invia(VALIDA)).status).toBe(409);
     expect(db.scritture).toBe(0);
   });
 
