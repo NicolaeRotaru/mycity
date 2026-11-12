@@ -280,7 +280,9 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        toast.error(apiErrorMessage(j, 'Password attuale non corretta'));
+        // R02-009 — Senza un messaggio del server (risposta non JSON, proxy, rete) non si sa se la
+        // password era sbagliata: non lo si dice.
+        toast.error(apiErrorMessage(j, 'Non è stato possibile cambiare la password. Riprova fra poco.'));
         return;
       }
     } catch (err) {

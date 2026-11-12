@@ -7,6 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { LUNGHEZZA_MINIMA } from '@/lib/account/cambio-password';
+import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
 
 export const runtime = 'nodejs';
 
@@ -84,6 +85,16 @@ export const POST = withAuthRateLimit(
       // Si prova comunque la password (chi è entrato con Google può averne impostata una col
       // recupero): solo se non combacia e l'account non ha l'email fra i fornitori, la risposta
       // giusta è «accedi senza password», non «password non corretta».
+      // 12/11/2026 (R02-009) — Il freno di Supabase (429) o un servizio giù (5xx, rete) non sono
+      // «password sbagliata»: chi la sapeva giusta finiva per credere di averla dimenticata.
+      // Stessa lettura dell'accesso (app/api/auth/signin).
+      const esito = esitoErroreDiAccesso(erroreVerifica);
+      if (esito === 'troppi_tentativi') {
+        return ApiErrors.rateLimited(60, 'Troppi tentativi. Riprova tra qualche minuto.');
+      }
+      if (esito === 'servizio_giu') {
+        return ApiErrors.unavailable("Il servizio di accesso non risponde in questo momento. Riprova fra poco: la password non c'entra.");
+      }
       if (senzaFornitoreEmail) {
         return ApiErrors.conflict('Questo account accede senza password: usa il tuo fornitore di accesso.');
       }
