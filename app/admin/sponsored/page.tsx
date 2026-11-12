@@ -12,6 +12,17 @@ import { useTranslations } from 'next-intl';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { confirmDialog } from '@/components/ConfirmDialog';
+
+/**
+ * 12/11/2026 (R09-018) — La tabella mostrava i codici del database («home_top») e la percentuale col
+ * punto inglese («3.55%») accanto agli euro con la virgola.
+ */
+const POSIZIONE: Record<string, string> = {
+  home_top: 'In cima alla home',
+  search_top: 'In cima alla ricerca',
+  category_top: 'In cima alla categoria',
+};
+const percentuale = (n: number) => `${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 import {
   vistaDelleCampagne,
   nomeDellaCampagna,
@@ -180,13 +191,13 @@ export default function AdminSponsoredPage() {
           <table className="w-full text-sm min-w-[800px]">
             <thead className="bg-cream-50 text-ink-600">
               <tr>
-                <th className="text-left px-4 py-2">Prodotto / Seller</th>
-                <th className="text-left px-4 py-2">Placement</th>
+                <th className="text-left px-4 py-2">Prodotto / Negozio</th>
+                <th className="text-left px-4 py-2">Posizione</th>
                 <th className="text-left px-4 py-2">Periodo</th>
-                <th className="text-right px-4 py-2">Budget/g</th>
+                <th className="text-right px-4 py-2">Budget al giorno</th>
                 <th className="text-right px-4 py-2">Speso</th>
-                <th className="text-right px-4 py-2">Impressions</th>
-                <th className="text-right px-4 py-2">CTR</th>
+                <th className="text-right px-4 py-2">Visualizzazioni</th>
+                <th className="text-right px-4 py-2">Clic su 100 visualizzazioni</th>
                 <th className="text-left px-4 py-2">Stato</th>
                 <th className="text-right px-4 py-2">Azioni</th>
               </tr>
@@ -198,14 +209,14 @@ export default function AdminSponsoredPage() {
                 <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">{vista.frasePerTabellaVuota}</td></tr>
               ) : vista.campagne.map((l) => {
                 const nome = nomeDellaCampagna(l);
-                const ctr = l.impressions > 0 ? `${((l.clicks / l.impressions) * 100).toFixed(2)}%` : '—';
+                const ctr = l.impressions > 0 ? percentuale((l.clicks / l.impressions) * 100) : '—';
                 return (
                   <tr key={l.id} className="hover:bg-cream-50">
                     <td className="px-4 py-3">
                       <p className="font-semibold text-ink-900 text-sm">{l.product?.name ?? '—'}</p>
                       <p className="text-xs text-ink-500">{l.seller?.store_name ?? '—'}</p>
                     </td>
-                    <td className="px-4 py-3 text-ink-700">{l.placement}{l.category_slug ? ` · ${l.category_slug}` : ''}</td>
+                    <td className="px-4 py-3 text-ink-700">{POSIZIONE[l.placement] ?? l.placement}{l.category_slug ? ` · ${l.category_slug}` : ''}</td>
                     <td className="px-4 py-3 text-ink-600 text-xs">
                       {formatDate(l.start_date)} → {formatDate(l.end_date)}
                     </td>
