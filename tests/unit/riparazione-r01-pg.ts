@@ -14,7 +14,12 @@ export { BIN_POSTGRES };
 export type PostgresConIndirizzo = { url: string; psql(sql: string): string; ferma(): void };
 
 export function avviaPostgresConIndirizzo(): PostgresConIndirizzo {
-  if (!BIN_POSTGRES) throw new Error('PostgreSQL non installato su questa macchina');
+  if (!BIN_POSTGRES) {
+    throw new Error(
+      'PostgreSQL non installato su questa macchina (cercato in PG_BIN, /usr/lib/postgresql/*/bin e pg_config): ' +
+        'queste prove girano su un database vero e non si saltano. Installa PostgreSQL (initdb) e rilancia.',
+    );
+  }
   const bin = BIN_POSTGRES;
   const daRoot = process.getuid?.() === 0;
   const cartella = mkdtempSync(join(existsSync('/tmp') ? '/tmp' : tmpdir(), 'pg-r01-'));

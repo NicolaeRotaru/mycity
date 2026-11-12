@@ -4,7 +4,7 @@ import { mkdtempSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { esitoDelConfronto } from '../../scripts/check-migration-drift.mjs';
-import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } from './riparazione-r01-pg';
+import { avviaPostgresConIndirizzo, type PostgresConIndirizzo } from './riparazione-r01-pg';
 
 /**
  * R01-024 — UNA MIGRAZIONE NUOVA CON LO STESSO NOME DI UNA VECCHIA NON ARRIVAVA MAI IN PRODUZIONE.
@@ -43,7 +43,7 @@ describe('R01-024 · il controllo della deriva non scambia un omonimo per la ste
   });
 });
 
-describe.skipIf(!BIN_POSTGRES)('R01-024 · lo script del rilascio applica l\'omonimo nuovo', () => {
+describe('R01-024 · lo script del rilascio applica l\'omonimo nuovo', () => {
   let pg: PostgresConIndirizzo;
   let cartella: string;
   beforeAll(() => { pg = avviaPostgresConIndirizzo(); cartella = mkdtempSync(join(tmpdir(), 'mig-r01-')); });
