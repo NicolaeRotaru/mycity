@@ -325,8 +325,8 @@ export default function SellerEarningsPage() {
           {contanti.incassatoAlBancoCents > 0 && (
             <p className="mt-2 text-xs text-olive-700">
               Incassati da te al banco (ritiro in negozio): <strong>{formatPrice(contanti.incassatoAlBancoCents / 100)}</strong>
-              {' '}· nessun bonifico per questi: la commissione MyCity di{' '}
-              <strong>{formatPrice(contanti.commissioneDovutaCents / 100)}</strong> si scala dal bonifico del lunedì.
+              {' '}· nessun bonifico per questi: su questi ritiri la commissione MyCity è di{' '}
+              <strong>{formatPrice(contanti.commissioneDovutaCents / 100)}</strong>, e te la chiediamo noi.
             </p>
           )}
         </Card>
