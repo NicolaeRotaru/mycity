@@ -90,3 +90,33 @@ describe('R08-017 — il riquadro nascosto non va in rete', () => {
     expect(mondo.rpc).toBe(1);
   });
 });
+
+describe('R08-017 — il telefono girato in orizzontale', () => {
+  it('da 390 a 844 pixel il riquadro chiede il negozio, invece di restare su «niente»', async () => {
+    let larghezza = 390;
+    const ascoltatori: Array<() => void> = [];
+    vi.stubGlobal('matchMedia', (q: string) => {
+      const min = Number(/min-width:\s*(\d+)px/.exec(q)?.[1] ?? 0);
+      return {
+        get matches() { return larghezza >= min; },
+        media: q,
+        addEventListener: (_t: string, f: () => void) => ascoltatori.push(f),
+        removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
+      };
+    });
+    const { default: HeroStoreCard } = await import('@/components/home/HeroStoreCard');
+    const nodo = document.createElement('div');
+    document.body.appendChild(nodo);
+    const radice = createRoot(nodo);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => { radice.render(createElement(QueryClientProvider, { client }, createElement(HeroStoreCard))); });
+    for (let i = 0; i < 3; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mondo.rpc).toBe(0);
+    larghezza = 844;
+    await act(async () => { ascoltatori.forEach((f) => f()); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mondo.rpc).toBe(1);
+    expect(nodo.textContent).toContain('Pane Quotidiano');
+    await act(async () => radice.unmount());
+  });
+});
