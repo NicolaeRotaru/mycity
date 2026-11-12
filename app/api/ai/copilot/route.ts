@@ -12,6 +12,7 @@ import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { REGOLA_CAMPI_DICHIARATIVI, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { REGOLA_PREZZO_AI, tettoTokenCopilot } from '@/lib/ai/regole-copilot';
+import { espandiRegolaCopilot, type RegolaCopilot } from '@/lib/ai/regolaCopilot';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
@@ -40,6 +41,7 @@ Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In b
 - ${REGOLA_PREZZO_AI}
 - "tags" è la lista COMPLETA desiderata del prodotto (ricostruiscila da quella attuale per aggiungere/togliere).
 - Usa "status" tra: available, draft, sold.
+- Se la STESSA operazione vale per molti prodotti (più di 20: una percentuale di prezzo, aggiungere o togliere un tag, cambiare lo stato), NON scrivere una voce per prodotto: usa "regola" con l'elenco degli id ("product_ids") e l'operazione ("prezzo_percentuale", per esempio -10; "aggiungi_tag"/"togli_tag"; "status"). Il server calcola i nuovi valori dai dati veri. Usa "changes" solo per le modifiche diverse da prodotto a prodotto.
 - Se l'istruzione è ambigua o pericolosa (es. "cancella tutto"), NON proporre modifiche: spiega e chiedi conferma in "reply".
 - Non inventare prodotti non in elenco. Niente emoji.
 - ${REGOLA_CAMPI_DICHIARATIVI} Nel riepilogo non dire mai di averli scritti o cambiati.
@@ -67,6 +69,18 @@ const TOOL: Anthropic.Tool = {
           required: ['product_id', 'patch'],
         },
       },
+      regola: {
+        type: 'object',
+        description: 'La stessa operazione su molti prodotti: gli id e cosa fare. Il server calcola i valori.',
+        properties: {
+          product_ids: { type: 'array', items: { type: 'string' }, description: 'ID presi dall\'elenco del catalogo.' },
+          prezzo_percentuale: { type: 'number', description: 'Variazione del prezzo in percento, es. -10 per abbassare del 10%.' },
+          aggiungi_tag: { type: 'array', items: { type: 'string' } },
+          togli_tag: { type: 'array', items: { type: 'string' } },
+          status: { type: 'string', enum: ['available', 'draft', 'sold'] },
+        },
+        required: ['product_ids'],
+      },
     },
     required: ['reply'],
   },
@@ -74,7 +88,7 @@ const TOOL: Anthropic.Tool = {
 
 // R04-008 — `history` non c'e' piu': la rotta lo ignora (vedi sotto).
 type Body = { instruction?: string };
-type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[] };
+type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[]; regola?: RegolaCopilot };
 
 const MAX_CATALOG = 200;
 const MAX_CHANGES = 200;
@@ -233,10 +247,16 @@ ${list}`;
 
     // Valida: solo product_id realmente del venditore e patch non vuoti.
     const owned = new Set(products.map((p) => p.id));
-    const changes = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
+    const singole = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
       .filter((c): c is { product_id: string; patch: AiProductPatch } =>
         !!c && typeof c.product_id === 'string' && owned.has(c.product_id) &&
-        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0)
+        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0);
+    // R04-007 — La regola si espande qui, sui dati veri; una voce singola sullo
+    // stesso prodotto si aggiunge sopra (vince lei sui campi che tocca).
+    const daRegola = espandiRegolaCopilot(toolInput?.regola, products, MAX_CHANGES);
+    const unite = new Map<string, AiProductPatch>();
+    for (const c of [...daRegola, ...singole]) unite.set(c.product_id, { ...(unite.get(c.product_id) ?? {}), ...c.patch });
+    const changes = Array.from(unite, ([product_id, patch]) => ({ product_id, patch }))
       .slice(0, MAX_CHANGES)
       .map((c) => {
         const snap = productSnapshot(products.find((p) => p.id === c.product_id)!, categories);
