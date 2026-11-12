@@ -21,7 +21,7 @@ export async function avvisaSeLaPostaNonParte(
   if (!e || typeof e !== 'object' || e.ok !== false || e.skipped === true) return;
   const errore = typeof e.error === 'string' ? e.error : 'errore';
   logger.error(`[email] ${cosa} non partita: destinatario non avvisato`, { ...dati, errore });
-  const riferimento = String(dati.orderId ?? dati.ordine ?? dati.payoutId ?? dati.sessionId ?? 'senza-riferimento');
+  const riferimento = String(dati.orderId ?? dati.ordine ?? dati.pendingCheckoutId ?? dati.payoutId ?? dati.sessionId ?? 'senza-riferimento');
   try {
     await notifyAdmins(
       '📭 Email non partita',

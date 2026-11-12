@@ -44,4 +44,11 @@ describe('R03-003 — una email rifiutata non passa in silenzio', () => {
     await provaAMandare('conferma al cliente', { orderId: ORDINE }, async () => ({ ok: true, id: 'em_1' }));
     expect(avvisi()).toHaveLength(0);
   });
+
+  it('collaudo: il rimborso automatico (carrello, senza ordine) avvisa una volta per carrello, non una volta per sempre', async () => {
+    const rifiuto = async () => ({ ok: false, error: 'quota' });
+    await provaAMandare('email di rimborso automatico al cliente', { pendingCheckoutId: 'pc_1' }, rifiuto);
+    await provaAMandare('email di rimborso automatico al cliente', { pendingCheckoutId: 'pc_2' }, rifiuto);
+    expect(avvisi()).toHaveLength(2);
+  });
 });
