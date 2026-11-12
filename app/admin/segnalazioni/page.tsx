@@ -69,10 +69,38 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
   const [decisione, setDecisione] = useState<Decisione>(s.stato === 'ricevuta' ? 'in_esame' : (s.stato as Decisione));
   const [motivazione, setMotivazione] = useState(s.esito_motivato ?? '');
   const serveMotivo = decisione !== 'in_esame';
+  // R02-003 — Si può accogliere solo ciò che da qui si sa togliere: il prodotto (va in bozza) e
+  // il negozio (si sospende). Recensioni e messaggi non hanno ancora un'azione di rimozione.
+  const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio';
   const motivoValido = motivazione.trim().length >= MOTIVAZIONE_MINIMA;
 
   const decidi = useMutation({
     mutationFn: async () => {
+      // 12/11/2026 (R02-003) — «Accolta» toglie davvero il contenuto, PRIMA di registrare la
+      // decisione: l'esito che parte dopo dice «rimosso», e deve essere vero. Se togliere non
+      // riesce, la decisione non si salva e non parte niente.
+      if (decisione === 'accolta' && s.tipo === 'prodotto') {
+        const r = await fetch('/api/admin/segnalazioni/accogli', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: s.id }),
+        });
+        if (!r.ok) throw new Error('Il prodotto non è stato tolto: decisione non registrata. Riprova.');
+      }
+      if (decisione === 'accolta' && s.tipo === 'negozio') {
+        if (!window.confirm('Accogliere la segnalazione sospende il negozio. Confermi?')) {
+          throw new Error('Decisione annullata: il negozio resta attivo.');
+        }
+        const r = await fetch(`/api/admin/users/${s.oggetto_id}/moderate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'suspend', reason: motivazione.trim() }),
+        });
+        if (!r.ok) throw new Error('Il negozio non è stato sospeso: decisione non registrata. Riprova.');
+      }
+      if (decisione === 'accolta' && !puoTogliere) {
+        throw new Error('Per questo tipo di contenuto non c\'è ancora un modo di toglierlo da qui.');
+      }
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('segnalazioni')
@@ -154,7 +182,13 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
             className="mt-1 block rounded-lg border border-cream-300 px-2 py-1 text-sm"
           >
             <option value="in_esame">In esame</option>
-            <option value="accolta">Accolta (il contenuto va tolto)</option>
+            <option value="accolta" disabled={!puoTogliere}>
+              {s.tipo === 'prodotto'
+                ? 'Accolta: il prodotto esce dalla vetrina'
+                : s.tipo === 'negozio'
+                ? 'Accolta: il negozio viene sospeso'
+                : 'Accolta (non disponibile: questo contenuto non si toglie da qui)'}
+            </option>
             <option value="respinta">Respinta</option>
           </select>
         </label>
