@@ -100,7 +100,13 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
           primo titolo era quello del primo blocco (un h2), e il nome della pagina stava
           solo nelle briciole. Chi salta di titolo in titolo col lettore di schermo, e
           Google, non trovavano l'h1 di «Chi siamo», «Orari», «Contatti». */}
-      <h1 className="font-serif text-2xl md:text-3xl font-bold text-ink-900">{page.title}</h1>
+      {/* Con il blocco «Copertina» (hero) l'h1 c'è già: lo disegna HeroSection col nome del
+          negozio. Un secondo h1 sarebbe un altro difetto; lì il titolo della pagina è un h2. */}
+      {sections.some((s) => s.type === 'hero') ? (
+        <h2 className="font-serif text-2xl md:text-3xl font-bold text-ink-900">{page.title}</h2>
+      ) : (
+        <h1 className="font-serif text-2xl md:text-3xl font-bold text-ink-900">{page.title}</h1>
+      )}
 
       {hidden && isOwner && (
         <div className="flex items-center gap-2 rounded-xl bg-accent-50 border border-accent-200 px-4 py-2.5 text-sm text-accent-800">

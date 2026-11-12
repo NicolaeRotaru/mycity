@@ -29,8 +29,9 @@ vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
 vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: stato.viewerId }) }));
 vi.mock('@/components/store-sections/useStorePageData', () => ({ useStorePageData: () => stato.data }));
 vi.mock('@/components/store-sections/SectionRenderer', () => ({
-  default: ({ sections }: { sections: Array<{ id: string }> }) => (
-    <div>{sections.map((s) => <h2 key={s.id}>La nostra storia</h2>)}</div>
+  // Come quelli veri: la copertina (hero) disegna l'h1 col nome del negozio, gli altri blocchi un h2.
+  default: ({ sections }: { sections: Array<{ id: string; type: string }> }) => (
+    <div>{sections.map((s) => (s.type === 'hero' ? <h1 key={s.id}>Forno Vetrina</h1> : <h2 key={s.id}>La nostra storia</h2>))}</div>
   ),
 }));
 vi.mock('@/components/store-sections/StoreNav', () => ({ default: () => <nav>menu</nav> }));
@@ -46,6 +47,8 @@ const sito = {
     { id: 'home', slug: '', title: 'Home', visibility: 'public', seo: {}, sections: [] },
     { id: 'p1', slug: 'chi-siamo', title: 'Chi siamo', visibility: 'public', seo: {},
       sections: [{ id: 's1', type: 'richText', enabled: true, config: {} }] },
+    { id: 'p3', slug: 'con-copertina', title: 'Con copertina', visibility: 'public', seo: {},
+      sections: [{ id: 's3', type: 'hero', enabled: true, config: {} }, { id: 's4', type: 'richText', enabled: true, config: {} }] },
     { id: 'p2', slug: 'ordini-per-le-feste', title: 'Ordini per le feste', visibility: 'hidden', seo: {},
       sections: [{ id: 's2', type: 'richText', enabled: true, config: {} }] },
   ],
@@ -76,6 +79,12 @@ beforeEach(() => {
 describe('R08-003 — la pagina in più ha il suo titolo principale', () => {
   it('«Chi siamo» ha un solo h1, «Chi siamo»', () => {
     expect(h1(disegna('chi-siamo'))).toEqual(['Chi siamo']);
+  });
+
+  it('con il blocco «Copertina» resta un solo h1 (quello della copertina) e il titolo della pagina è h2', () => {
+    const html = disegna('con-copertina');
+    expect(h1(html)).toEqual(['Forno Vetrina']);
+    expect(html).toMatch(/<h2[^>]*>Con copertina<\/h2>/);
   });
 
   it('una pagina che non esiste dice «Pagina non trovata» come h1, non come h3', () => {
