@@ -30,6 +30,24 @@ describe('dopo il 30/11 il sito non usa un modello spento', () => {
     errore.mockRestore();
   });
 
+  it('dal 30/11 una variabile che nomina ancora il modello ritirato non vale piu\'', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-12-01T09:00:00Z'));
+    vi.stubEnv('AI_MODELLO_VISION', 'claude-sonnet-4-5');
+    const errore = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { MODELS, MODELLO_PREDEFINITO } = await client();
+    expect(MODELS.vision).toBe(MODELLO_PREDEFINITO);
+    errore.mockRestore();
+  });
+
+  it('prima del 30/11 la variabile si rispetta ancora', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-20T09:00:00Z'));
+    vi.stubEnv('AI_MODELLO_VISION', 'claude-sonnet-4-5');
+    const { MODELS } = await client();
+    expect(MODELS.vision).toBe('claude-sonnet-4-5');
+  });
+
   it('il predefinito ha una riga prezzi (il freno di spesa resta vista)', async () => {
     const { MODELLO_PREDEFINITO, eModelloConPrezzo } = await client();
     expect(eModelloConPrezzo(MODELLO_PREDEFINITO)).toBe(true);

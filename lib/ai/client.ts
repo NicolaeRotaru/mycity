@@ -63,6 +63,13 @@ export function eModelloConPrezzo(id: unknown): id is ModelId {
 export function modelloDaAmbiente(nomeVariabile: string, predefinito: ModelId = MODELLO_PREDEFINITO): ModelId {
   const grezzo = process.env[nomeVariabile]?.trim();
   if (!grezzo) return predefinito;
+  // R04-002 (revisione) — Un modello ritirato scritto nella variabile, dal
+  // giorno dello spegnimento in poi, non si usa: si torna al predefinito attivo.
+  const ritiratoDal = eModelloConPrezzo(grezzo) ? MODELLI_RITIRATI[grezzo] : undefined;
+  if (ritiratoDal && new Date().toISOString().slice(0, 10) >= ritiratoDal) {
+    console.error(`[ai] ${nomeVariabile}=${grezzo} e' un modello ritirato dal ${ritiratoDal}: si usa ${predefinito}.`);
+    return predefinito;
+  }
   if (eModelloConPrezzo(grezzo)) return grezzo;
   console.warn(`[ai] ${nomeVariabile} indica un modello senza prezzo in PRICE_PER_MTOK: resta ${predefinito}.`);
   return predefinito;
