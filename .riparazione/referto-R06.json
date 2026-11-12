@@ -63,7 +63,7 @@
     },
     {
       "id": "R06-004",
-      "chiave": "accessibilita-visiva|nella pagina",
+      "chiave": "accessibilita-visiva|nella pagina «stato dei servizi» il link «contattaci» si distingue dal testo solo per il colore",
       "esito": "riparato",
       "commit": "4c6a8221d3a6b509cc986c8b7cc4eed5f07fb69c",
       "file_toccati": [
@@ -85,7 +85,7 @@
     },
     {
       "id": "R06-005",
-      "chiave": "architettura|la regola che vieta i tipi",
+      "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
       "esito": "parziale",
       "commit": "7edd7aec015b8d4ad3348ed81c24d0df212d0a4b",
       "file_toccati": [
@@ -247,7 +247,7 @@
     },
     {
       "id": "R06-007",
-      "chiave": "architettura|il controllo",
+      "chiave": "architettura|il controllo «la sessione va rinnovata?» è provato solo su cookie scritti a mano: se la libreria cambia formato, si torna in silenzio al tetto di 3 secondi",
       "esito": "gia_riparato_prima",
       "commit": "677632f390603b1ab788b2a6b1887a584fdf2222",
       "prova": "Il comportamento era gia' giusto: aggiunta solo la prova che mancava, senza difetto trovato (come chiesto dalla regista). npx vitest run tests/unit/riparazione-r06-cookie-scritti-dalla-libreria.test.ts → 9 passate. I cookie li scrive @supabase/ssr 0.5.2 vera (createServerClient + _saveSession + evento TOKEN_REFRESHED): tessera corta, tessera spezzata in .0/.1/.2, JSON grezzo senza base64- (cookieEncoding raw), tessera intera accanto ai pezzi, due progetti sullo stesso dominio. Controllo a mano: il mutante «JSON grezzo → false» fa cadere la prova del JSON grezzo (1 rossa su 9).",
@@ -403,7 +403,7 @@
     },
     {
       "id": "R06-014",
-      "chiave": "dati-analytics|negozio del mese: la classifica dei voti mostra tutti i negozi a zero voti in fila, e",
+      "chiave": "dati-analytics|negozio del mese: la classifica dei voti mostra tutti i negozi a zero voti in fila, e «nessun voto» non compare mai",
       "esito": "riparato",
       "commit": "586d5fe25e9e72f349ece5602d5f83d173ff61ee",
       "file_toccati": [
@@ -426,7 +426,7 @@
     },
     {
       "id": "R06-015",
-      "chiave": "dati-analytics|nello storico consegne compaiono due gruppi",
+      "chiave": "dati-analytics|nello storico consegne compaiono due gruppi «oggi»: le consegne fatte dopo mezzanotte finiscono in un gruppo a parte e il totale del giorno si spezza",
       "esito": "riparato",
       "commit": "940d692ea4f3adcbe05affa702555c91204db64b",
       "file_toccati": [
@@ -448,7 +448,7 @@
     },
     {
       "id": "R06-016",
-      "chiave": "dati-analytics|storico e recensioni del fattorino si caricano tutti in una volta, senza pagine, e le consegne vecchie aprono",
+      "chiave": "dati-analytics|storico e recensioni del fattorino si caricano tutti in una volta, senza pagine, e le consegne vecchie aprono «ordine non trovato»",
       "esito": "riparato",
       "commit": "12202bd61fac42b4e592eaf5561c172d16284aa0",
       "file_toccati": [
@@ -472,7 +472,7 @@
     },
     {
       "id": "R06-017",
-      "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge",
+      "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge «nessuna recensione», e le etichette sono in inglese",
       "esito": "riparato",
       "commit": "289d683889d9ec4452bcc15757ca1537f6cd6f26",
       "file_toccati": [
@@ -493,7 +493,8 @@
         "nota": "Per la migrazione 302 (file nuovo) la rimessa SQL esce 3, rosso_strutturale. Nel log, senza la 302: 'ROTTO recensioni=0' e 'ROTTO voto_medio=null'; con la 302: 3 e 3.67."
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Migrazione 302 (non applicata): andamento_del_negozio prende voto medio e recensioni da store_reviews con store_id = auth.uid(), come la pagina Recensioni; le visite restano come nella 141. Pagina: «Voto medio», «Consigli», «30 giorni» (5 punti), «la merce pronta». «Conversion rate» non toccato: la voce dice che si ripara nella sua voce."
+      "cosa_ho_fatto": "Migrazione 302 (non applicata): andamento_del_negozio conta voto medio e recensioni su store_reviews del negozio (store_id = auth.uid(), come la pagina Recensioni) INSIEME ai voti ai prodotti che contava gia' la 141: la prima versione contava solo store_reviews e faceva diventare rossa la prova SQL esistente 22-i-conti-del-venditore (che pretende i voti ai prodotti); corretto nel commit 2cb8eea4649f68a96397b0b6501f5f88bce91c73, come prevede la voce («si sommano e lo si dice nell'etichetta»). Le visite restano come nella 141. Pagina: «Voto medio» con sotto «N recensioni del negozio e dei prodotti», «Consigli», «30 giorni» (5 punti), «la merce pronta». «Conversion rate» non toccato: la voce dice che si ripara nella sua voce. Tutte le prove SQL verdi (tests/sql/harness/run.sh).",
+      "commit_successivo": "2cb8eea4649f68a96397b0b6501f5f88bce91c73"
     },
     {
       "id": "R06-018",
@@ -593,7 +594,7 @@
     },
     {
       "id": "R06-023",
-      "chiave": "deploy-sre|la pagina pubblica",
+      "chiave": "deploy-sre|la pagina pubblica «stato servizi» annuncia a tutti un guasto del database e dell'accesso che non c'è",
       "esito": "parziale",
       "commit": "c1d514af5c5bf5d30cbae9a620f6ce4fb8c73095",
       "file_toccati": [
@@ -622,7 +623,7 @@
     },
     {
       "id": "R06-024",
-      "chiave": "deploy-sre|la pagina pubblica",
+      "chiave": "deploy-sre|la pagina pubblica «stato servizi» dice anche che le email non partono, e non dice perché",
       "esito": "riparato",
       "commit": "7d55294e414807d5abca6afbdd07178bb720cb82",
       "file_toccati": [
