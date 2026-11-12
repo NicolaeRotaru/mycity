@@ -274,7 +274,7 @@ export default function SellerAnalyticsPage() {
     insights.push({
       icon: TrendingUp, tone: 'olive',
       title: `Spingi "${best.name ?? 'il tuo best-seller'}"`,
-      body: `È il prodotto più visto (${best.views} ${best.views === 1 ? 'visita' : 'visite'} in 30 giorni). Sponsorizzalo per restare in cima alle ricerche.`,
+      body: `È il prodotto più visto (${best.views} ${best.views === 1 ? 'visita' : 'visite'} in 30gg). Sponsorizzalo per restare in cima alle ricerche.`,
       ctaLabel: 'Sponsorizza', ctaHref: '/seller/promote',
     });
   }
@@ -284,7 +284,7 @@ export default function SellerAnalyticsPage() {
       icon: TrendingDown, tone: 'accent',
       // 5/11/2026 — Il dato sono le visite, non le vendite: si dice quello.
       title: `"${slow.name ?? 'Un prodotto'}" è poco visto`,
-      body: `Solo ${slow.views} ${slow.views === 1 ? 'visita' : 'visite'} in 30 giorni (contate solo per chi accetta i cookie). Prova uno sconto, una foto migliore o una descrizione più ricca.`,
+      body: `Solo ${slow.views} ${slow.views === 1 ? 'visita' : 'visite'} in 30gg (contate solo per chi accetta i cookie). Prova uno sconto, una foto migliore o una descrizione più ricca.`,
       ctaLabel: 'Modifica prodotto', ctaHref: slow.id ? `/seller/products/${slow.id}/edit` : '/seller/products',
     });
   }
@@ -302,7 +302,7 @@ export default function SellerAnalyticsPage() {
 
   return (
     <div>
-      <SellerPageTitle eyebrow="Consigli" title="Analisi" sub="Andamento delle vendite e prodotti migliori" />
+      <SellerPageTitle eyebrow="Insight" title="Analisi" sub="Andamento delle vendite e prodotti migliori" />
 
       {/*
         Quando manca solo il conto delle visite, la pagina resta in piedi ma
@@ -332,16 +332,16 @@ export default function SellerAnalyticsPage() {
       <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <KpiCard
           icon={Eye}
-          label="Visite (30 giorni)"
+          label="Visite (30gg)"
           value={numeroOTrattino(analytics.views30)}
           delta={
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le visite'
-              : `${analytics.viewsToday} oggi · ${analytics.views7} negli ultimi 7 giorni`
+              : `${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`
           }
           color="primary"
         />
-        <KpiCard icon={ShoppingCart} label="Ordini (30 giorni)" value={analytics.orders30.toString()} delta={`${analytics.orders7} negli ultimi 7 giorni`} color="olive" />
+        <KpiCard icon={ShoppingCart} label="Ordini (30gg)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
         <KpiCard
           icon={TrendingUp}
           label="Conversion rate"
@@ -364,13 +364,13 @@ export default function SellerAnalyticsPage() {
             lo scrive la pagina delle recensioni del rider. */}
         <KpiCard
           icon={Star}
-          label="Voto medio"
+          label="Rating medio"
           value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1).replace('.', ',') + ' ★' : '—'}
           delta={
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le recensioni'
               : analytics.reviewCount != null && analytics.reviewCount > 0
-                ? `${analytics.reviewCount} ${analytics.reviewCount === 1 ? 'recensione' : 'recensioni'} del negozio e dei prodotti`
+                ? `${analytics.reviewCount} recensioni`
                 : 'Nessuna recensione'
           }
           color="accent"
@@ -463,7 +463,7 @@ export default function SellerAnalyticsPage() {
           </div>
           {analytics.peakLabel && (
             <p className="mt-3 inline-flex items-center gap-2 rounded-md bg-olive-50 px-3 py-2.5 text-[13px] text-olive-800">
-              <Lightbulb size={15} className="text-olive-700" aria-hidden /> Picco tra le <strong>{analytics.peakLabel}</strong>: tieni il negozio online e la merce pronta.
+              <Lightbulb size={15} className="text-olive-700" aria-hidden /> Picco tra le <strong>{analytics.peakLabel}</strong>: tieni il negozio online e lo stock pronto.
             </p>
           )}
         </Card>
@@ -480,7 +480,7 @@ export default function SellerAnalyticsPage() {
               <div key={p.id} className="rounded-lg border border-secondary-200 bg-secondary-50 p-3">
                 <p className="truncate text-sm font-semibold text-ink-900">{p.name}</p>
                 <p className="mt-1 text-xs text-ink-600">
-                  Solo {p.views} {p.views === 1 ? 'visita' : 'visite'} in 30 giorni. Prova foto migliori o una descrizione più ricca.
+                  Solo {p.views} {p.views === 1 ? 'visita' : 'visite'} in 30gg. Prova foto migliori o una descrizione più ricca.
                 </p>
                 <Link href={`/seller/products/${p.id}/edit`} className="mt-2 inline-block text-xs font-semibold text-primary-700 hover:underline">
                   Modifica prodotto →
