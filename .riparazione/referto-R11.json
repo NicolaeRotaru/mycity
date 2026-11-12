@@ -1,27 +1,28 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-12 17:09",
+  "aggiornato": "2026-11-12 17:33",
   "finita": true,
-  "testa": "de8f21fdebc76c10f95676e2791a756923c1fff6",
+  "testa": "ae97c11ea7e9f390b55cb83ed4bd80ca5951328a",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "typecheck + lint + 1222 file di prove, dopo le correzioni del qa"
+    "nota": "typecheck + lint + prove, dopo le correzioni del collaudo K04"
   },
   "voci": [
     {
       "id": "R11-001",
       "chiave": "pagamenti-stripe|il pannello dei bonifici non dice a nicola quanto versare a ogni negozio il lunedì",
       "esito": "parziale",
-      "commit": "64e84fbdc7fa920d00b943f0dc148dab20cb5117",
+      "commit": "7c1ebdabb6ac467a7f7c26083accd51eb65e75ae",
       "file_toccati": [
         "app/admin/payouts/page.tsx",
         "lib/guadagni/negozio.ts",
         "tests/unit/minori-s05-bonifici-prodotti.test.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r11-pannello-bonifici.test.tsx",
-        "tests/unit/riparazione-r11-da-versare-lunedi.test.ts"
+        "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx",
+        "tests/unit/riparazione-r11-da-versare-lunedi.test.ts",
+        "tests/unit/riparazione-r11-pannello-bonifici.test.tsx"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r11-pannello-bonifici.test.tsx tests/unit/riparazione-r11-da-versare-lunedi.test.ts",
       "prova_tipo": "comando",
@@ -29,10 +30,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9bf1e109d1601db53091cb54057f649453db3ae9^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r11-pannello-bonifici.test.tsx,tests/unit/riparazione-r11-da-versare-lunedi.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7c1ebdabb6ac467a7f7c26083accd51eb65e75ae^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Regola in negozio.ts (gruppoDelPannello, settimanaPrima, ordiniDaVersareLunedi): contanti HELD = «Da versare»; AWAITING_REMITTANCE = «Contanti dal fattorino» (in sospeso); CASH_IN_STORE, REVERSAL_FAILED, REVERSED, REFUNDED fuori dai totali; carta HELD in sospeso (la paga il giro). Importi = netto meno seller_payout_reversed_cents (ora letto). Per negozio: «Da versare lunedì» = contanti HELD consegnati entro la domenica scorsa (ora di Piacenza, arretrati compresi) + quanto è di questa settimana; IBAN intero visibile all admin; nota e sottotitolo non dicono più «nessuna azione manuale». Il tasto «Bonifico fatto» (R11-004) segna gli stessi ordini del lunedì. Prova esistente minori-s05-bonifici-prodotti.test.tsx (importa la pagina) aggiornata solo sull etichetta del primo riquadro, rinominato «Contanti da versare».",
+      "cosa_ho_fatto": "Regola in negozio.ts (gruppoDelPannello, settimanaPrima, ordiniDaVersareLunedi): contanti HELD = «Da versare»; AWAITING_REMITTANCE = «Contanti dal fattorino» (in sospeso); CASH_IN_STORE, REVERSAL_FAILED, REVERSED, REFUNDED fuori dai totali; carta HELD in sospeso (la paga il giro). Importi = netto meno seller_payout_reversed_cents (ora letto). Per negozio: «Da versare lunedì» = contanti HELD consegnati entro la domenica scorsa (ora di Piacenza, arretrati compresi) + quanto è di questa settimana; IBAN intero visibile all admin; nota e sottotitolo non dicono più «nessuna azione manuale». Il tasto «Bonifico fatto» (R11-004) segna gli stessi ordini del lunedì. Prova esistente minori-s05-bonifici-prodotti.test.tsx (importa la pagina) aggiornata solo sull etichetta del primo riquadro, rinominato «Contanti da versare». Collaudo K04 (terzo commit): il pannello legge resi e reclami aperti dalle loro tabelle (come la funzione 350 e il giro) e li mostra fermi; una lettura caduta li ferma tutti. Il totale mostrato e gli ordini che «Bonifico fatto» segna sono lo stesso insieme, e la pagina dice quanti ordini la funzione ha segnato davvero («segnati N su M»).",
       "verificato_da": "qa (subagente): 174 prove verdi più 4 varianti (cambio d'ora, domenica 23:30, rimborso parziale, stati esclusi); trovati i punti in cosa_resta",
       "prove_esistenti_toccate": [
         {
@@ -104,7 +105,7 @@
     {
       "id": "R11-004",
       "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "bcca3bd4287f9818c3c00f411b9d50c0df63a267",
       "file_toccati": [
         "migrations/350_il_bonifico_del_lunedi_si_segna.sql",
@@ -125,7 +126,7 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6dced3b^ --file lib/guadagni/negozio.ts --prove tests/unit/riparazione-r11-bonifico-del-lunedi.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Migrazione 350 (NON applicata): stato PAID_MANUALLY nel vincolo, colonna payout_manual_ref e funzione segna_bonifico_manuale(seller, ordini, riferimento) riservata a is_admin(), che segna solo i contanti HELD consegnati di quel negozio. Pagina Guadagni e pannello admin contano PAID_MANUALLY come versato; nel pannello, per ogni negozio con contanti HELD, il tasto «Bonifico fatto» chiede il riferimento e chiama la funzione. Prova SQL eseguita su Postgres locale ricostruito dalle migrazioni (harness): 4 controlli verdi. Il giro Stripe resta fuori da solo (prende solo HELD/PENDING_SELLER_ONBOARDING). Funziona solo dopo che Nicola applica la 350. Dopo il qa (secondo commit): segna_bonifico_manuale ha gli stessi cancelli del giro automatico (niente con contestazione in banca, reclamo, reso o reclamo aperti, rimborso pieno) e il pannello mostra quei contanti come «Fermo: reclamo o contestazione», non «Da versare». Prova SQL con un ordine con reclamo aperto: resta HELD.",
       "verificato_da": "qa (subagente): prova unitaria e SQL verdi, 350 riapplicata due volte, negozio/anon respinti; ha trovato che la funzione segnava contanti con reclami o rimborsati, chiuso col secondo commit",
       "commit_iniziale": "c6dced3b",
@@ -133,8 +134,13 @@
         {
           "file": "lib/admin/etichette.ts",
           "modifica": "aggiungere PAID_MANUALLY: 'Bonifico fatto a mano' alle etichette di payout_status (oggi app/admin/orders/[id]/page.tsx:216 mostra il codice grezzo)"
+        },
+        {
+          "file": "lib/stripe/payout.ts",
+          "modifica": "in refundOrder trattare PAID_MANUALLY come TRANSFERRED per i contanti: non riscrivere payout_status a REFUNDED se il bonifico a mano è già partito, e registrare la quota del negozio da riprendere (seller_payout_reversed_cents + avviso agli admin «il negozio deve restituire X €»), visto che non c'è un transfer Stripe da stornare"
         }
-      ]
+      ],
+      "cosa_resta": "Collaudo K04: refundOrder (lib/stripe/payout.ts:1676, non mio) conosce solo TRANSFERRED: un rimborso pieno su un contante già pagato a mano (PAID_MANUALLY) lo riscrive REFUNDED e il versato sparisce dai conti del negozio; uno parziale non dice che il negozio deve restituire la quota. Vedi serve_file_altrui. Il doppio pagamento dal tasto (ordini saltati in silenzio dalla 350) è chiuso col commit di R11-001 del collaudo K04."
     },
     {
       "id": "R11-005",
@@ -193,13 +199,13 @@
       "cosa_ho_fatto": "Alla vittoria, gli ordini TRANSFERRED con dispute_seller_reversed_cents>0 (contestazione parziale) ricevono un bonifico Stripe pari al promemoria, con chiave dispute_won_seller_<dispute>_<ordine>_t<n>; poi lo stornato scende del promemoria, il promemoria va a zero e il tentativo sale. Niente ritorno in HELD. Senza conto Stripe del negozio: avviso agli admin. Logica in un file nuovo (contestazione-parziale-vinta.ts) per il tetto di righe di dispute.ts; prova rimessa su dispute.ts (il file che la collega).",
       "verificato_da": "qa (subagente): 33 prove sulle contestazioni verdi, 4 varianti in un worktree; ha trovato i tre punti in cosa_resta e il rifiuto che fermava tutto (chiuso)",
       "commit_iniziale": "8aa754dc",
-      "cosa_resta": "Dal controllo qa: (1) la stessa cosa per il fattorino: su una contestazione parziale gli si storna una quota, resta TRANSFERRED e alla vittoria non gli torna (dispute.ts rimette in coda solo i fattorini REVERSED); (2) dopo la restituzione con un bonifico nuovo, seller_payout_reversed_cents torna a 0 ma su Stripe lo storno resta sul bonifico originale: un rimborso pieno successivo chiederebbe di stornare da tr_originale più di quanto ci resta (Stripe rifiuta) e i 18 € restituiti non verrebbero ripresi. Serve decidere come tenere il conto (colonna per la restituzione, o storno da più bonifici): lo segnalo invece di indovinarlo. (3) se la scrittura fallisce per più di 24 ore la chiave di Stripe scade e un nuovo tentativo farebbe un secondo bonifico. Chiuso col secondo commit: un rifiuto di Stripe non ferma più il resto della vittoria."
+      "cosa_resta": "Dal controllo qa: (1) la stessa cosa per il fattorino: su una contestazione parziale gli si storna una quota, resta TRANSFERRED e alla vittoria non gli torna (dispute.ts rimette in coda solo i fattorini REVERSED); (2) dopo la restituzione con un bonifico nuovo, seller_payout_reversed_cents torna a 0 ma su Stripe lo storno resta sul bonifico originale: un rimborso pieno successivo chiederebbe di stornare da tr_originale più di quanto ci resta (Stripe rifiuta) e i 18 € restituiti non verrebbero ripresi. Serve decidere come tenere il conto (colonna per la restituzione, o storno da più bonifici): lo segnalo invece di indovinarlo. (3) se la scrittura fallisce per più di 24 ore la chiave di Stripe scade e un nuovo tentativo farebbe un secondo bonifico. Chiuso col secondo commit: un rifiuto di Stripe non ferma più il resto della vittoria. Dal collaudo K04: la scrittura riscrive seller_payout_reversed_cents con una lettura fatta prima della chiamata a Stripe, senza condizione; da verificare se source_transaction accetta una seconda uscita dalla stessa carica."
     },
     {
       "id": "R11-008",
       "chiave": "api-backend|se la domanda per diventare negozio parte due volte insieme, viene registrata due volte e gli amministratori ricevono l'avviso due volte",
-      "esito": "riparato",
-      "commit": "f2596486c946b4636db6e9ba4094a9e65b9a5f3c",
+      "esito": "parziale",
+      "commit": "8363a60f6e37b765e8c8bce1ff39b89708899343",
       "file_toccati": [
         "app/api/seller/apply/route.ts"
       ],
@@ -212,11 +218,12 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f2596486c946b4636db6e9ba4094a9e65b9a5f3c^ --file app/api/seller/apply/route.ts --prove tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8363a60f6e37b765e8c8bce1ff39b89708899343^ --file app/api/seller/apply/route.ts --prove tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La scrittura della domanda vale solo se approval_requested_at è ancora quello letto (eq sul valore, oppure is.null): il secondo invio partito insieme non scrive niente; rilette le righe, se la domanda risulta già in attesa con una data nuova risponde 200 senza scrivere un secondo consenso né mandare un secondo avviso. Senza la condizione (stato cambiato davvero) resta il 409 di prima.",
-      "verificato_da": "qa (subagente): doppio invio, reinvio dopo rifiuto e correzione in attesa provati; resta che il secondo invio risponde ok anche se il consenso del primo non è entrato"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La scrittura della domanda vale solo se approval_requested_at è ancora quello letto (eq sul valore, oppure is.null): il secondo invio partito insieme non scrive niente; rilette le righe, se la domanda risulta già in attesa con una data nuova risponde 200 senza scrivere un secondo consenso né mandare un secondo avviso. Senza la condizione (stato cambiato davvero) resta il 409 di prima. Collaudo K04: la domanda rimandata mentre è già in attesa (anche il secondo invio dopo due secondi) non aggiunge un'altra riga al verbale del consenso.",
+      "verificato_da": "qa (subagente): doppio invio, reinvio dopo rifiuto e correzione in attesa provati; resta che il secondo invio risponde ok anche se il consenso del primo non è entrato",
+      "cosa_resta": "Il secondo invio partito in parallelo risponde 200 senza salvare i suoi dati (vince il primo): se i due invii avevano dati diversi, quelli del secondo si perdono senza che lo si dica. consent_log non ha un indice unico: la difesa contro il doppio verbale è solo nella rotta."
     },
     {
       "id": "R11-009",
@@ -302,7 +309,7 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Prodotti e bonifici chiedono il conteggio esatto (count: exact) insieme alle righe: «tagliato» quando il totale supera il tetto, non più quando arriva la riga in più (il server ne dà al massimo mille). Prodotti: il sottotitolo dice «N di <totale>», l avviso dice il totale, e con l elenco tagliato la ricerca per nome va al database (ilike, 200 righe). L input di ricerca ha min-w-0 (la testata non sporge a 360 px). Prova esistente il-pannello-non-chiama-vuoto-una-lettura-caduta (importa le due pagine) aggiornata solo sull etichetta del riquadro rinominato da R11-001. Non fatto: la ricerca per nome del negozio sui prodotti più vecchi (solo per nome prodotto).",
       "verificato_da": "qa (subagente): conteggio esatto giusto, il totale attaccato all elenco sopravvive a React Query; trovata la ricerca per negozio vuota, chiusa col secondo commit",
-      "cosa_resta": "Con l elenco tagliato la ricerca va al database solo per nome del prodotto; per nome del negozio trova fra gli ultimi mille letti (come prima), non fra quelli più vecchi. Dopo il qa i due risultati si sommano: prima del secondo commit la ricerca per negozio non trovava più niente.",
+      "cosa_resta": "Con l elenco tagliato la ricerca va al database solo per nome del prodotto; per nome del negozio trova fra gli ultimi mille letti (come prima), non fra quelli più vecchi. Dopo il qa i due risultati si sommano: prima del secondo commit la ricerca per negozio non trovava più niente. Dal collaudo K04: la ricerca nel database si ferma a 200 righe senza dirlo e parte a ogni tasto.",
       "prove_esistenti_toccate": [
         {
           "file": "tests/unit/il-pannello-non-chiama-vuoto-una-lettura-caduta.test.ts",
@@ -314,9 +321,26 @@
     {
       "id": "R11-012",
       "chiave": "frontend-ux|payout: i riquadri «da pagare / già pagato» mostrano un totale parziale come cifra esatta, e l'avviso sta sotto",
-      "esito": "gia_riparato_prima",
-      "prova": "Sulla base db5164c5 app/admin/payouts/page.tsx:186-195 l avviso «Elenco tagliato» (role=status) sta PRIMA dei riquadri (:200-202), e :121 fa portare «almeno » a tutte le cifre quando l elenco è tagliato (limit TETTO_PAYOUT+1). Lo prova già tests/unit/minori-s05-bonifici-prodotti.test.tsx (1802/1800/1817): npx vitest run tests/unit/minori-s05-bonifici-prodotti.test.tsx → verde.",
-      "verificato_da": "qa (subagente): sulla base l avviso sta alla riga 186, i riquadri a 198-202, «almeno» a 121, 200-202, 237"
+      "esito": "riparato",
+      "verificato_da": "collaudo K04 (non regge come «già riparato»); qa (subagente) aveva confermato solo il codice della base, non il tetto del server",
+      "commit": "bf9dc941ed027cb80f3d7b7116af86e4217c677a",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base db5164c5 --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Collaudo K04: non era già riparato. Alla base l'avviso e «almeno» dipendevano dalla riga in più (limit TETTO+1), ma il server non ne dà mai più di mille (max_rows): l'avviso non compariva mai. Si chiude col conteggio esatto (count: exact, commit di R11-011, e5c2ea18) e con questo commit, che mette «almeno» anche alle cifre del singolo negozio (di questa settimana, in sospeso, già pagati). Prova rimessa contro la base db5164c5: regge.",
+      "insieme_a_commit": "e5c2ea18"
     },
     {
       "id": "R11-013",
@@ -368,7 +392,7 @@
       "id": "R11-015",
       "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
       "esito": "parziale",
-      "commit": "1cf3c48f0f173194c8f56274260ed2ea30f23213",
+      "commit": "63a2b7424022e2797423fd0775a96cc1e6be8c10",
       "file_toccati": [
         "app/seller/profile/page.tsx",
         "components/VendorForm.tsx",
@@ -385,19 +409,19 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 12837b7e893e901da114bb45ea18c9fea3786f92^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r11-modifiche-non-salvate.test.tsx --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63a2b7424022e2797423fd0775a96cc1e6be8c10^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r11-modifiche-non-salvate.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "VendorForm sa se ci sono modifiche non salvate (campi del modulo + logo, foto, descrizione, orari, posizione, personalizzazione) e, finché ce ne sono, il browser chiede conferma prima di lasciare la pagina (hook nuovo useAvvisoModificheNonSalvate, beforeunload); dopo l invio il punto di partenza si rifà. In Dettagli negozio il tasto «Tutte le impostazioni» chiede conferma con modifiche non salvate. Il profilo usa lo stesso VendorForm, quindi l avviso vale anche lì. Non coperto: i link del menu laterale dentro il sito (navigazione interna di Next, che beforeunload non vede). Dopo il qa: la posizione conta solo dopo che la persona tocca la mappa (all'apertura la mappa si allinea e prima faceva comparire l'avviso senza modifiche), e con onSubmit che restituisce una promessa (profilo e dettagli usano mutateAsync) l'avviso si spegne solo se il salvataggio riesce.",
+      "cosa_ho_fatto": "VendorForm sa se ci sono modifiche non salvate (campi del modulo + logo, foto, descrizione, orari, posizione, personalizzazione) e, finché ce ne sono, il browser chiede conferma prima di lasciare la pagina (hook nuovo useAvvisoModificheNonSalvate, beforeunload); dopo l invio il punto di partenza si rifà. In Dettagli negozio il tasto «Tutte le impostazioni» chiede conferma con modifiche non salvate. Il profilo usa lo stesso VendorForm, quindi l avviso vale anche lì. Non coperto: i link del menu laterale dentro il sito (navigazione interna di Next, che beforeunload non vede). Dopo il qa: la posizione conta solo dopo che la persona tocca la mappa (all'apertura la mappa si allinea e prima faceva comparire l'avviso senza modifiche), e con onSubmit che restituisce una promessa (profilo e dettagli usano mutateAsync) l'avviso si spegne solo se il salvataggio riesce. Collaudo K04: la fotografia del modulo non dipende più dall'ordine dei campi (chiavi in ordine, vuoti come assenti): dopo un salvataggio riuscito l'avviso si spegne anche scrivendo prima il Sito e poi Instagram.",
       "verificato_da": "qa (subagente): trovati l'avviso falso all'apertura della mappa (coordinate di Roma o non valide) e l'avviso spento col salvataggio fallito, chiusi col secondo commit; resta la navigazione interna (cosa_resta)",
-      "cosa_resta": "La navigazione interna (link del menu del pannello negozio): Next non lancia beforeunload. Serve un avviso sui link del layout del pannello (app/seller/layout o il menu laterale, non miei) che legga lo stesso stato «sporco».",
+      "cosa_resta": "La navigazione interna non è coperta: i link del menu del pannello negozio e il tasto indietro dentro «Costruisci il sito» (SiteEditor.tsx:143, che guarda solo il suo stato) perdono ancora le modifiche in silenzio. Next non lancia beforeunload; serve un avviso nel layout del pannello e in SiteEditor (non miei).",
       "commit_iniziale": "12837b7e"
     },
     {
       "id": "R11-016",
       "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
       "esito": "riparato",
-      "commit": "40f91fc5fb70ad5847dae69816ffec60d20fca17",
+      "commit": "d7ab8db82291b8330704339ac19dc176e1fff978",
       "file_toccati": [
         "lib/store-customization.ts",
         "components/VendorForm.tsx",
@@ -413,10 +437,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 49a539a6^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r11-social-non-fermano-la-vetrina.test.tsx --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7ab8db82291b8330704339ac19dc176e1fff978^ --file lib/store-customization.ts --prove tests/unit/riparazione-r11-social-non-fermano-la-vetrina.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già (295). Restava: il link copiato dall app con ?igsh= ora si riduce al nome (handleDaLink toglie la coda dopo ? o # sui link di profilo); un campo social che resta sbagliato (Facebook con gli spazi, profile.php, /p/…) non blocca più il salvataggio: separaSocialSbagliati lo toglie, il resto della vetrina si salva, il motivo compare sotto quel campo (role=alert), la sezione «Social e contatti» si apre da sola e un avviso dice quale campo non è stato salvato. Testo d aiuto riscritto. Prova rimessa: regge su VendorForm.tsx; su store-customization.ts la macchina dà 3 (nome nuovo importato da VendorForm), collaudo a mano rimettendo solo handleDaLink della base: la prova del link ?igsh va rossa. Dopo il qa: un campo scartato torna al valore salvato prima (se era valido), perché la personalizzazione si scrive intera e prima il social già salvato spariva.",
+      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già (295). Restava: il link copiato dall app con ?igsh= ora si riduce al nome (handleDaLink toglie la coda dopo ? o # sui link di profilo); un campo social che resta sbagliato (Facebook con gli spazi, profile.php, /p/…) non blocca più il salvataggio: separaSocialSbagliati lo toglie, il resto della vetrina si salva, il motivo compare sotto quel campo (role=alert), la sezione «Social e contatti» si apre da sola e un avviso dice quale campo non è stato salvato. Testo d aiuto riscritto. Prova rimessa: regge su VendorForm.tsx; su store-customization.ts la macchina dà 3 (nome nuovo importato da VendorForm), collaudo a mano rimettendo solo handleDaLink della base: la prova del link ?igsh va rossa. Dopo il qa: un campo scartato torna al valore salvato prima (se era valido), perché la personalizzazione si scrive intera e prima il social già salvato spariva. Collaudo K04: tolto l'aggancio a fine link che scartava facebook.com/<nome>/about, /photos e instagram.com/<nome>/reels/, che sulla base si correggevano da soli.",
       "verificato_da": "qa (subagente): ?igsh e salvataggio parziale funzionano; trovato che un social già salvato scritto male veniva cancellato, chiuso col secondo commit",
       "commit_iniziale": "49a539a6"
     },
@@ -424,7 +448,7 @@
       "id": "R11-017",
       "chiave": "pagamenti-stripe|un reclamo chiuso mentre un reso sullo stesso ordine sta per tornare indietro segna l'ordine come perso, e il negozio non riceve più il resto che gli spetta",
       "esito": "riparato",
-      "commit": "7caff9982f2941ca09d0fabbecf9d74d23ec94dd",
+      "commit": "7a057b14656a8693052775b2f579fdebca6ff55a",
       "file_toccati": [
         "app/api/admin/disputes/[id]/resolve/route.ts",
         "tests/unit/il-negozio-viene-pagato-anche-dopo-un-reclamo.test.ts"
@@ -438,17 +462,17 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7caff9982f2941ca09d0fabbecf9d74d23ec94dd^ --file app/api/admin/disputes/[id]/resolve/route.ts --prove tests/unit/riparazione-r11-reclamo-con-reso-aperto.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7a057b14656a8693052775b2f579fdebca6ff55a^ --file app/api/admin/disputes/[id]/resolve/route.ts --prove tests/unit/riparazione-r11-reclamo-con-reso-aperto.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Se refundOrder dice «pieno» ma sullo stesso ordine c è un reso ancora aperto (REQUESTED/APPROVED/SHIPPED_BACK/RECEIVED), o la lettura dei resi cade, sull ordine si scrive RESOLVED invece di LOST: il giro aspetta comunque il reso e un ordine rimborsato per intero non lo paga. Prova esistente il-negozio-viene-pagato-anche-dopo-un-reclamo (importa la rotta) aggiornata solo nel finto database: risponde anche alla tabella returns (vuota).",
+      "cosa_ho_fatto": "Se refundOrder dice «pieno» ma sullo stesso ordine c è un reso ancora aperto (REQUESTED/APPROVED/SHIPPED_BACK/RECEIVED), o la lettura dei resi cade, sull ordine si scrive RESOLVED invece di LOST: il giro aspetta comunque il reso e un ordine rimborsato per intero non lo paga. Prova esistente il-negozio-viene-pagato-anche-dopo-un-reclamo (importa la rotta) aggiornata solo nel finto database: risponde anche alla tabella returns (vuota). Collaudo K04: conta come reso in corso anche quello già REFUNDED senza refund_id (avanza lo segna REFUNDED prima di chiamare il rimborso, e usa lo stesso segno per la ripresa); il finto database della prova ora rispetta il filtro sugli stati.",
       "verificato_da": "qa (subagente): stati dei resi uguali al giro, lettura caduta → RESOLVED, rimborso pieno vero comunque non pagato"
     },
     {
       "id": "R11-018",
       "chiave": "pagamenti-stripe|un buono regalo annullato o scaduto si legge «disponibile», col codice in chiaro",
       "esito": "riparato",
-      "commit": "4b8fbb2c158d19bf7f49c1f9d491f5cea574a592",
+      "commit": "f73733294870dbcbc5fc0e215edb35d36a3b8419",
       "file_toccati": [
         "app/profile/gift-cards/page.tsx"
       ],
@@ -461,10 +485,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b366a5e5^ --file app/profile/gift-cards/page.tsx --prove tests/unit/riparazione-r11-buono-annullato-non-disponibile.test.tsx --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f73733294870dbcbc5fc0e215edb35d36a3b8419^ --file app/profile/gift-cards/page.tsx --prove tests/unit/riparazione-r11-buono-annullato-non-disponibile.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Lo stato del buono si legge da voided_at (178) ed expires_at: Annullata / Scaduta / Riscattata / Disponibile. Per un buono annullato o scaduto il codice si mostra mascherato e il tasto Copia sparisce.",
+      "cosa_ho_fatto": "Lo stato del buono si legge da voided_at (178) ed expires_at: Annullata / Scaduta / Riscattata / Disponibile. Per un buono annullato o scaduto il codice si mostra mascherato e il tasto Copia sparisce. Collaudo K04: si vede la data di scadenza («Scaduta il …» per un buono scaduto, «Scade il …» per uno disponibile).",
       "verificato_da": "qa (subagente): voided_at arriva alla pagina (nessun permesso per colonna, regola del proprietario); trovato che un buono riscattato e poi scaduto diventava «Scaduta», chiuso col secondo commit",
       "commit_iniziale": "b366a5e5"
     },
@@ -494,7 +518,7 @@
     {
       "id": "R11-020",
       "chiave": "pagamenti-stripe|se il primo collegamento a stripe si interrompe e poi cambiano email o ruolo, negozio e fattorino leggono «errore stripe» a ogni nuovo tentativo per 24 ore",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "d7f6b8befcdb56616eac9811802c476dd81af159",
       "file_toccati": [
         "lib/stripe/client.ts"
@@ -510,9 +534,10 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7f6b8befcdb56616eac9811802c476dd81af159^ --file lib/stripe/client.ts --prove tests/unit/riparazione-r11-chiave-del-conto-connect.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La chiave di idempotenza di accounts.create passa da connect_<id> a connect_<id>_<ruolo>_<impronta sha256 dell email>: lo stesso tentativo ripetuto resta lo stesso conto, un tentativo con email o ruolo cambiati è una richiesta nuova e non prende più l errore di Stripe. Il salvataggio dell id prima del link (onboarding e rider-onboarding, salvaConto) c era già sulla base dal 5/11: quella metà della voce non serviva toccarla.",
-      "verificato_da": "qa (subagente): regge; residuo: email che differiscono solo per maiuscole (improbabile, Supabase le salva minuscole)"
+      "verificato_da": "qa (subagente): regge; residuo: email che differiscono solo per maiuscole (improbabile, Supabase le salva minuscole)",
+      "cosa_resta": "Collaudo K04: la voce chiede che al secondo tentativo con email o ruolo diversi torni lo STESSO conto. Con la chiave che porta email e ruolo, se il salvataggio dell'id del primo conto fallisce (ContoNonSalvato, la rotta risponde 503) e poi cambia l'email, nasce un secondo conto Express e il primo resta orfano su Stripe senza avviso. Recuperarlo vuole cercare su Stripe i conti con metadata.seller_id (accounts.list non filtra per metadata: bisogna scorrerli) o salvare l'id da un'altra parte prima del link: non fatto."
     },
     {
       "id": "R11-021",
@@ -540,7 +565,7 @@
       "cosa_ho_fatto": "Senza promemoria e con pagamento PARTIALLY_REFUNDED, alla vittoria si restituisce lo stornato meno la quota del rimborso sul netto (rimborsato/lordo × netto), non il totale. La vittoria ora legge gross_total_cents e refunded_amount_cents. Se il promemoria non si scrive per un errore vero (non per la 126 che manca) l avviso agli admin «Storno al negozio da controllare» dice la cifra da restituire. Prova esistente la-contestazione-vinta-ripaga-il-negozio-del-giusto (importa il webhook → dispute.ts) corretta dove dava per giusto 3240: ora 2740, come dice la voce.",
       "verificato_da": "qa (subagente): prove verdi; trovati lordo nullo (chiuso) e rimborso non proporzionale (in cosa_resta)",
       "commit_iniziale": "1b302940",
-      "cosa_resta": "Dal qa: se il rimborso parziale aveva una quota del negozio diversa dalla proporzione (per esempio solo la consegna, quota negozio 0), senza promemoria la stima proporzionale restituisce al negozio meno del giusto. Il conto esatto richiede di salvare la quota del negozio di ogni rimborso (oggi solo in payout.ts, non mio). Chiuso col secondo commit: senza gross_total_cents si usa il totale."
+      "cosa_resta": "Dal qa: se il rimborso parziale aveva una quota del negozio diversa dalla proporzione (per esempio solo la consegna, quota negozio 0), senza promemoria la stima proporzionale restituisce al negozio meno del giusto. Il conto esatto richiede di salvare la quota del negozio di ogni rimborso (oggi solo in payout.ts, non mio). Chiuso col secondo commit: senza gross_total_cents si usa il totale. Dal collaudo K04: se lo storno del rimborso parziale era fallito (recuperoNonRiuscito, payout.ts:1893-1900) la formula toglie la quota lo stesso e il negozio viene ripagato di meno."
     },
     {
       "id": "R11-022",
@@ -565,14 +590,14 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "All apertura senza ordini, una richiesta di informazioni (warning_*) non chiama più gift_card_void_for_payment: avvisa e basta. Alla chiusura vinta senza ordini, se il buono di quel pagamento era annullato per contestazione, parte l avviso «Contestazione vinta: buono regalo da riattivare» con codice e importo. Logica in un file nuovo contestazione-buoni.ts; dispute.ts la collega.",
       "verificato_da": "qa (subagente): prove verdi; trovato il passaggio richiesta → contestazione vera senza nuovo evento (in cosa_resta)",
-      "cosa_resta": "La riattivazione automatica del buono: serve una migrazione nuova con una funzione che riaccende un buono annullato per 'disputed' (la 178 lo vieta senza saldo zero) e rimette saldo e credito ripreso, chiamata alla vittoria e alla chiusura della richiesta. Il registro dice di scriverla nel «Per riaccendere» di BUONI_REGALO_IN_VENDITA, oggi spento: per ora la riattivazione la fa un amministratore, avvisato. Dal qa: se la richiesta d'informazioni diventa una contestazione vera arriva solo charge.dispute.updated/closed, non un nuovo created: il buono resta valido mentre i soldi sono tolti (il webhook gestisce solo created e closed, app/api/stripe/webhook/route.ts, non mio). E una contestazione persa senza ordini non fa niente. L'avviso ora lo dice invece di promettere che il buono resta valido.",
+      "cosa_resta": "La riattivazione automatica del buono: serve una migrazione nuova con una funzione che riaccende un buono annullato per 'disputed' (la 178 lo vieta senza saldo zero) e rimette saldo e credito ripreso, chiamata alla vittoria e alla chiusura della richiesta. Il registro dice di scriverla nel «Per riaccendere» di BUONI_REGALO_IN_VENDITA, oggi spento: per ora la riattivazione la fa un amministratore, avvisato. Dal qa: se la richiesta d'informazioni diventa una contestazione vera arriva solo charge.dispute.updated/closed, non un nuovo created: il buono resta valido mentre i soldi sono tolti (il webhook gestisce solo created e closed, app/api/stripe/webhook/route.ts, non mio). E una contestazione persa senza ordini non fa niente. L'avviso ora lo dice invece di promettere che il buono resta valido. Dal collaudo K04: se la lettura di gift_cards alla vittoria fallisce c'è solo un log; un annullo in attesa in gift_card_pending_voids può spegnere il buono dopo una vittoria.",
       "commit_iniziale": "adb667c0"
     },
     {
       "id": "R11-023",
       "chiave": "pagamenti-stripe|una contestazione persa su una parte del carrello segna persi anche gli ordini degli altri negozi",
       "esito": "parziale",
-      "commit": "47c2974f80709b055ce4020923f0aca171f035ea",
+      "commit": "8e9b45adbef4a487ffd3110dd4ebc6606f005885",
       "file_toccati": [
         "lib/stripe/webhook/dispute.ts",
         "lib/stripe/webhook/quanto-restituire.ts"
@@ -586,19 +611,19 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e6277c33^ --file lib/stripe/webhook/dispute.ts --prove tests/unit/riparazione-r11-contestazione-persa-in-parte.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8e9b45adbef4a487ffd3110dd4ebc6606f005885^ --file lib/stripe/webhook/quanto-restituire.ts --prove tests/unit/riparazione-r11-contestazione-persa-in-parte.test.ts --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Se l importo perso è minore del lordo degli ordini del pagamento (contestazioneDiUnaParte), la contestazione persa non annulla gli ordini non consegnati, non rimette merce a scaffale e scrive PARTIALLY_REFUNDED invece di REFUNDED; dispute_status LOST tiene fermi i bonifici del carrello e Nicola riceve l avviso con importo e ordini da dividere. Persa per intero: come prima. Dopo il qa: il confronto usa il lordo meno i rimborsi già fatti (una contestazione di tutto il resto dopo un rimborso è intera), e un ordine già REFUNDED non viene riscritto PARTIALLY_REFUNDED.",
+      "cosa_ho_fatto": "Se l importo perso è minore del lordo degli ordini del pagamento (contestazioneDiUnaParte), la contestazione persa non annulla gli ordini non consegnati, non rimette merce a scaffale e scrive PARTIALLY_REFUNDED invece di REFUNDED; dispute_status LOST tiene fermi i bonifici del carrello e Nicola riceve l avviso con importo e ordini da dividere. Persa per intero: come prima. Dopo il qa: il confronto usa il lordo meno i rimborsi già fatti (una contestazione di tutto il resto dopo un rimborso è intera), e un ordine già REFUNDED non viene riscritto PARTIALLY_REFUNDED. Collaudo K04: il confronto usa la parte pagata con la carta (lordo meno credito MyCity meno rimborsi): una contestazione persa per tutto il pagato su un carrello pagato in parte col credito è intera.",
       "verificato_da": "qa (subagente): prove verdi; trovati il confronto senza i rimborsi e la riscrittura degli ordini già rimborsati, chiusi col secondo commit",
-      "cosa_resta": "La divisione automatica della perdita fra i negozi (scrivere la quota persa su ciascun ordine e sbloccare il resto del bonifico): stessa radice della voce 1639 e dello strumento dei rimborsi da dividere (lib/stripe/rimborsi-da-dividere.ts, non mio). Oggi i bonifici del carrello restano fermi finché Nicola divide a mano.",
+      "cosa_resta": "La divisione automatica della perdita fra i negozi (scrivere la quota persa su ciascun ordine e sbloccare il resto del bonifico): stessa radice della voce 1639 e dello strumento dei rimborsi da dividere (lib/stripe/rimborsi-da-dividere.ts, non mio). Oggi i bonifici del carrello restano fermi finché Nicola divide a mano. Dal collaudo K04: gli ordini rimasti LOST per una perdita parziale non si sbloccano da nessuno strumento (il giro paga solo null/WON, release-payouts:93, e la rotta del bonifico a mano rifiuta): finché non c'è la divisione, li sblocca solo una correzione a mano sul database.",
       "commit_iniziale": "e6277c33"
     },
     {
       "id": "R11-024",
       "chiave": "qa-flussi|il collegamento del negozio a stripe e il bonifico manuale non hanno nessuna prova",
       "esito": "parziale",
-      "commit": "de8f21fdebc76c10f95676e2791a756923c1fff6",
+      "commit": "ae97c11ea7e9f390b55cb83ed4bd80ca5951328a",
       "file_toccati": [
         "tests/unit/riparazione-r11-rotte-stripe-connect.test.ts"
       ],
@@ -608,15 +633,15 @@
       "prova_comando": "npx vitest run tests/unit/riparazione-r11-rotte-stripe-connect.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
-      "cosa_ho_fatto": "16 prove sulle 5 rotte (onboarding negozio, rider-onboarding, refresh-status, login, payout): chi non deve passare non passa (negozio non approvato, ruolo sbagliato, conto mancante, id non uuid, reso o contestazione aperti), gli errori non diventano 200 (Stripe spento 503, errore Stripe 500, stato non registrato 503), il percorso giusto risponde quello che la pagina aspetta. Tutte verdi sul codice della base: nessun difetto trovato. Dopo il qa (che ha mutato le rotte: 2 mutazioni su 9 prese) aggiunte le prove per negozio sul percorso del fattorino, reclamo aperto (tabella e colonna) e attesa dopo la consegna.",
-      "cosa_resta": "Come chiesto dalla regista: è una prova senza cambio di comportamento, quindi non la dichiaro «riparato» (la prova rimessa non può mordere: il codice delle rotte non è cambiato). La copertura che la voce chiedeva ora c è; nessun difetto nuovo da riportare. Restano non prese dalle prove, perché il finto middleware e il finto database le nascondono: il tipo di middleware (negozio o utente), il filtro .eq('id', user.id) di refresh-status, un errore di lettura nel bonifico a mano.",
+      "cosa_ho_fatto": "22 prove sulle 5 rotte (onboarding negozio, rider-onboarding, refresh-status, login, payout): chi non deve passare non passa (negozio non approvato, ruolo sbagliato, conto mancante, id non uuid, reso o contestazione aperti), gli errori non diventano 200 (Stripe spento 503, errore Stripe 500, stato non registrato 503), il percorso giusto risponde quello che la pagina aspetta. Tutte verdi sul codice della base: nessun difetto trovato. Dopo il qa (che ha mutato le rotte: 2 mutazioni su 9 prese) aggiunte le prove per negozio sul percorso del fattorino, reclamo aperto (tabella e colonna) e attesa dopo la consegna. Collaudo K04: aggiunte le prove della mappatura dei codici del bonifico (404/400/409/500, mai 200).",
+      "cosa_resta": "Detto chiaro (collaudo K04): la prova sostituisce withSellerAuthRateLimit, withAuthRateLimit e withInternalAuth con un passacarte che fa entrare tutti e finge applyConnectAccountStatus. Quindi NON prova il 401 senza sessione, il 403 sul ruolo fatto dall'involucro, il 401 senza x-internal-secret, né il filtro .eq('id', user.id) di refresh-status. Prova solo i controlli scritti dentro le rotte e la mappatura dei codici. Non è una riparazione: nessun codice del sito cambiato.",
       "copre_tutta_la_voce": false,
       "verificato_da": "qa (subagente): 9 mutazioni delle rotte, 2 prese; aggiunte le prove per 4 delle 7 sfuggite"
     },
     {
       "id": "R11-025",
       "chiave": "qa-flussi|le pagine cms caricano ancora youtube/vimeo senza clic",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "224b727c0711934510fe95704c7100cc3e36780b",
       "file_toccati": [
         "components/cms/CmsBlockRenderer.tsx"
@@ -632,9 +657,10 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 224b727c0711934510fe95704c7100cc3e36780b^ --file components/cms/CmsBlockRenderer.tsx --prove tests/unit/riparazione-r11-video-cms-al-clic.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il blocco video delle pagine CMS usa VideoAlClic (lo stesso di vetrina e home): al posto dell iframe un pulsante «Guarda il video», l iframe youtube-nocookie / vimeo dnt nasce solo al tocco. Il video «file» (MP4) resta com era. Non fatto (fuori dai miei file): la cookie policy che non nomina YouTube e Vimeo.",
-      "verificato_da": "qa (subagente): un componente server che usa VideoAlClic con proprietà testuali è valido; non restano altri iframe YouTube/Vimeo"
+      "verificato_da": "qa (subagente): un componente server che usa VideoAlClic con proprietà testuali è valido; non restano altri iframe YouTube/Vimeo",
+      "cosa_resta": "Collaudo K04: la voce ha un secondo caso, la cookie policy che non nomina YouTube e Vimeo; app/cookies e app/privacy non sono miei e non li nominano ancora (vedi nuovi_difetti_visti)."
     }
   ],
   "nuovi_difetti_visti": [
