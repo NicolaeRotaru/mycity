@@ -1488,6 +1488,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         price={price}
         category={product.categories?.slug ?? undefined}
         sellerId={sellerProfile?.id ?? product.seller_id ?? undefined}
+        chiGuardaEAdmin={isAdmin}
       />
     </div>
   );

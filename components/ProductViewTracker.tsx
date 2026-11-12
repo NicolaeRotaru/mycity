@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { trackProductViewed } from '@/lib/analytics/events';
 import { hasConsent } from '@/lib/consent';
@@ -13,6 +13,8 @@ type Props = {
   price?: number;
   category?: string;
   sellerId?: string;
+  /** R02-014 — Chi guarda è un amministratore: controlla la scheda, non è un cliente. */
+  chiGuardaEAdmin?: boolean;
 };
 
 /**
@@ -41,7 +43,10 @@ function improntaSessione(): string {
   }
 }
 
-export default function ProductViewTracker({ productId, price, category, sellerId }: Props) {
+export default function ProductViewTracker({ productId, price, category, sellerId, chiGuardaEAdmin }: Props) {
+  // Letto al momento di scrivere, non a quello di montare: il profilo arriva dopo la pagina.
+  const eAdmin = useRef(chiGuardaEAdmin);
+  eAdmin.current = chiGuardaEAdmin;
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -81,6 +86,10 @@ export default function ProductViewTracker({ productId, price, category, sellerI
           // 5/11/2026 — Il negoziante che apre il proprio prodotto non è un cliente: la sua visita
           // finiva in «visite», nel tasso di conversione e nei più visti della home.
           if (userId && sellerId && userId === sellerId) return;
+          // 12/11/2026 (R02-014) — Nemmeno l'amministratore che controlla le schede. Le righe che
+          // arrivano lo stesso (profilo non ancora letto, pagina vecchia) le scarta il conto nel
+          // database (migrazione 260).
+          if (eAdmin.current) return;
 
           // 041 — L'impronta di sessione serve a contare le visite anonime PER VISITATORE invece
           // che per prodotto. Prima il tetto era globale sul prodotto, e chi voleva azzerare le
