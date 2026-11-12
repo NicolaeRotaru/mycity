@@ -130,13 +130,22 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   if (daSalvare.length > 0) {
     try {
       const soglia = new Date(Date.now() - ORE_SILENZIO_CARRELLO * 3_600_000).toISOString();
-      const { data: gia, error: errGia } = await admin
-        .from('operational_alert_log')
-        .select('alert_key')
-        .in('alert_key', daSalvare.map((c) => chiaveCarrello(c.id as string)))
-        .gte('last_sent_at', soglia);
-      if (!errGia) {
-        const giaAvvisati = new Set((gia ?? []).map((r) => (r as { alert_key: string }).alert_key));
+      // R01-016 — Con le pagine i carrelli pagati a meta' possono essere fino a mille: le chiavi si
+      // chiedono a blocchi di cento, perche' mille chiavi in una sola richiesta fanno un indirizzo
+      // troppo lungo, la lettura cade e si riavviserebbe tutto a ogni giro.
+      const chiavi = daSalvare.map((c) => chiaveCarrello(c.id as string));
+      const giaAvvisati = new Set<string>();
+      let letturaRiuscita = true;
+      for (let i = 0; i < chiavi.length && letturaRiuscita; i += 100) {
+        const { data: gia, error: errGia } = await admin
+          .from('operational_alert_log')
+          .select('alert_key')
+          .in('alert_key', chiavi.slice(i, i + 100))
+          .gte('last_sent_at', soglia);
+        if (errGia) letturaRiuscita = false;
+        else for (const r of gia ?? []) giaAvvisati.add((r as { alert_key: string }).alert_key);
+      }
+      if (letturaRiuscita) {
         daAvvisare = daSalvare.filter((c) => !giaAvvisati.has(chiaveCarrello(c.id as string)));
       }
     } catch (e) {

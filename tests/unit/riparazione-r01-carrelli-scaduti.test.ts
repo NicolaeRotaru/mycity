@@ -12,7 +12,7 @@ import { describe, it, expect, vi } from 'vitest';
  * filtra per stato e scadenza, ordina, e `limit` taglia davvero.
  */
 type Riga = Record<string, unknown>;
-const db = vi.hoisted(() => ({ carrelli: [] as Riga[], ordini: [] as Riga[], rpc: [] as string[] }));
+const db = vi.hoisted(() => ({ carrelli: [] as Riga[], ordini: [] as Riga[], rpc: [] as string[], dimensioniIn: [] as number[] }));
 
 function query(tabella: string) {
   let righe: Riga[] = tabella === 'pending_checkouts' ? db.carrelli : tabella === 'orders' ? db.ordini : [];
@@ -23,7 +23,11 @@ function query(tabella: string) {
     upsert: () => Promise.resolve({ error: null }),
     insert: () => Promise.resolve({ error: null }),
     eq: (c: string, v: unknown) => { righe = righe.filter((r) => r[c] === v); return q; },
-    in: (c: string, v: unknown[]) => { righe = righe.filter((r) => v.includes(r[c])); return q; },
+    in: (c: string, v: unknown[]) => {
+      if (tabella === 'operational_alert_log') db.dimensioniIn.push(v.length);
+      righe = righe.filter((r) => v.includes(r[c]));
+      return q;
+    },
     lt: (c: string, v: string) => { righe = righe.filter((r) => String(r[c]) < v); return q; },
     gte: () => q,
     order: (c: string, o?: { ascending?: boolean }) => {
@@ -73,5 +77,22 @@ describe('R01-016 · i carrelli pagati a meta\' non bloccano la pulizia degli al
     expect(db.carrelli.find((c) => c.id === 'vero')!.status).toBe('EXPIRED');
     expect(db.carrelli.filter((c) => c.status === 'EXPIRED')).toHaveLength(1);
     expect(db.rpc).toContain('restore_stock');
+  });
+});
+
+describe('R01-016 · la memoria degli avvisi si legge a blocchi', () => {
+  it('con 300 carrelli pagati a meta\' nessuna lettura chiede piu\' di cento chiavi', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(ora);
+    db.carrelli = Array.from({ length: 300 }, (_, i) => ({
+      id: `meta-${i}`, status: 'PENDING', expires_at: isoFa(10 + i), stripe_session_id: `cs_meta_${i}`,
+      coupon_code: null, groups: [],
+    }));
+    db.ordini = db.carrelli.map((c, i) => ({ id: `o${i}`, stripe_session_id: c.stripe_session_id }));
+    db.dimensioniIn = [];
+    await (POST as unknown as (r: Request) => Promise<Response>)(new Request('http://x/api/cron/expire-checkouts', { method: 'POST' }));
+    vi.useRealTimers();
+    expect(db.dimensioniIn.length).toBeGreaterThan(0);
+    expect(Math.max(...db.dimensioniIn)).toBeLessThanOrEqual(100);
   });
 });
