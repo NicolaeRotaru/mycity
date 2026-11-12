@@ -78,6 +78,35 @@ function conColonneIndispensabili(select: string): string {
   return colonne.join(', ');
 }
 
+/**
+ * 12/11/2026 (R06-009) — UNA MEMORIA CONDIVISA, SOLO NEL BROWSER.
+ *
+ * In home ogni sezione (Drop del giorno, storie, Ordina di nuovo, fasce,
+ * tendenze, negozio del mese…) leggeva i suoi prodotti e poi, in fila, chiedeva
+ * di nuovo alla vetrina gli stessi negozi: sei-otto domande alla stessa riga, e
+ * ogni fascia compariva un giro di rete piu' tardi. Qui ogni negozio letto resta
+ * in memoria qualche minuto, e una domanda gia' in volo per lo stesso negozio si
+ * aspetta invece di rifarla.
+ *
+ * Solo nel browser: sul server la memoria di un modulo vive fra richieste di
+ * persone diverse, e non deve passare dati dall'una all'altra. La memoria e'
+ * legata al client che legge (una per client) e alle colonne chieste.
+ */
+const MEMORIA_VETRINA_MS = 3 * 60_000;
+type VoceMemoria = { riga: SellerPublicProfile | null; scade: number };
+type MemoriaClient = { righe: Map<string, VoceMemoria>; inVolo: Map<string, Promise<void>> };
+const memoriaPerClient = new WeakMap<object, MemoriaClient>();
+
+function memoriaDi(supabase: LettoreVista): MemoriaClient | null {
+  if (typeof window === 'undefined') return null;
+  let m = memoriaPerClient.get(supabase);
+  if (!m) {
+    m = { righe: new Map(), inVolo: new Map() };
+    memoriaPerClient.set(supabase, m);
+  }
+  return m;
+}
+
 /** Carica le vetrine pubbliche per un insieme di seller id (batch). */
 export async function fetchSellerPublicMap(
   supabase: LettoreVista,
@@ -85,6 +114,55 @@ export async function fetchSellerPublicMap(
   select = PUBLIC_SELLER_SELECT,
 ): Promise<Map<string, SellerPublicProfile>> {
   const unique = [...new Set(sellerIds.filter((s): s is string => !!s))];
+  const memoria = memoriaDi(supabase);
+  if (!memoria || unique.length === 0) return leggiDallaVista(supabase, unique, select);
+
+  const chiave = (id: string) => `${select}|${id}`;
+  const adesso = Date.now();
+  const daChiedere: string[] = [];
+  const attese: Promise<void>[] = [];
+  for (const id of unique) {
+    const voce = memoria.righe.get(chiave(id));
+    if (voce && voce.scade > adesso) continue;
+    const volo = memoria.inVolo.get(chiave(id));
+    if (volo) attese.push(volo);
+    else daChiedere.push(id);
+  }
+  if (daChiedere.length > 0) {
+    const lettura = leggiDallaVista(supabase, daChiedere, select).then((letti) => {
+      const scade = Date.now() + MEMORIA_VETRINA_MS;
+      // Anche «nessuna riga» si ricorda: un negozio non approvato non si richiede a ogni fascia.
+      for (const id of daChiedere) memoria.righe.set(chiave(id), { riga: letti.get(id) ?? null, scade });
+    });
+    const volo = lettura.finally(() => {
+      for (const id of daChiedere) memoria.inVolo.delete(chiave(id));
+    });
+    for (const id of daChiedere) memoria.inVolo.set(chiave(id), volo.catch(() => {}));
+    attese.push(volo);
+  }
+  // Una lettura caduta risale a chi chiama, come prima: niente mappa vuota «senza errore».
+  await Promise.all(attese);
+  // Un negozio atteso dal volo di un altro chiamante, se quel volo e' caduto, si chiede qui.
+  const rimasti = unique.filter((id) => !memoria.righe.has(chiave(id)));
+  if (rimasti.length > 0) {
+    const letti = await leggiDallaVista(supabase, rimasti, select);
+    const scade = Date.now() + MEMORIA_VETRINA_MS;
+    for (const id of rimasti) memoria.righe.set(chiave(id), { riga: letti.get(id) ?? null, scade });
+  }
+
+  const map = new Map<string, SellerPublicProfile>();
+  for (const id of unique) {
+    const riga = memoria.righe.get(chiave(id))?.riga;
+    if (riga) map.set(id, riga);
+  }
+  return map;
+}
+
+async function leggiDallaVista(
+  supabase: LettoreVista,
+  unique: string[],
+  select: string,
+): Promise<Map<string, SellerPublicProfile>> {
   const map = new Map<string, SellerPublicProfile>();
   if (unique.length === 0) return map;
 
