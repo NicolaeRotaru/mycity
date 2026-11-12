@@ -181,10 +181,12 @@ export default function StickyAddToCart({ bersaglio, price, available, onAdd, no
 
             <button
               onClick={onAdd}
-              disabled={!available}
+              // R02-008 (dopo il collaudo) — aria-disabled e non disabled: il pulsante resta nel
+              // giro del Tab e dice di non essere disponibile; chi lo preme riceve il perché da onAdd.
+              aria-disabled={!available || undefined}
               // Il nome intero resta qui anche quando a schermo si legge la parola corta.
               aria-label={available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}
-              className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
+              className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:hover:bg-cream-200 aria-disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
             >
               <ShoppingCart size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
               <span className="sm:hidden">{available ? ETICHETTA_CORTA : ETICHETTA_ESAURITO_CORTA}</span>

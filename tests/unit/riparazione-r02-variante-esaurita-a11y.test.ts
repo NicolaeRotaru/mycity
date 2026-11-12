@@ -35,3 +35,23 @@ describe('R02-008 · la variante esaurita e il lettore di schermo', () => {
     expect(src).toMatch(/conQuestoValore\.every\(\(v\) => v\.stock === 0\)/);
   });
 });
+
+describe('R02-008 · dopo il collaudo: «Compra ora» e la barra in fondo', () => {
+  const sticky = readFileSync('components/StickyAddToCart.tsx', 'utf8');
+  const compraOra = src.slice(src.indexOf('onClick={handleBuyNow}'), src.indexOf("{inPartenza ? 'Apro la cassa…'"));
+  const handleBuyNow = src.slice(src.indexOf('const handleBuyNow = () => {'), src.indexOf('setInPartenza(true);'));
+
+  it('«Compra ora» resta nel giro del Tab e su un esaurito non apre la cassa', () => {
+    expect(compraOra).toMatch(/aria-disabled=\{!canAdd \|\| inPartenza \|\| undefined\}/);
+    expect(compraOra).not.toMatch(/(?<!aria-)\bdisabled=\{/);
+    expect(compraOra).not.toMatch(/opacity-50/);
+    expect(handleBuyNow).toMatch(/if \(isOutOfStock\)/);
+  });
+
+  it('il pulsante della barra in fondo resta nel giro del Tab', () => {
+    const pulsante = sticky.slice(sticky.indexOf('onClick={onAdd}'), sticky.indexOf('<ShoppingCart'));
+    expect(pulsante).toMatch(/aria-disabled=\{!available \|\| undefined\}/);
+    expect(pulsante).not.toMatch(/(?<!aria-)\bdisabled=\{/);
+    expect(pulsante).not.toMatch(/opacity-50/);
+  });
+});

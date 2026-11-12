@@ -600,6 +600,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
       return;
     }
+    // R02-008 (dopo il collaudo) — Anche «Compra ora» resta nel giro del Tab quando non si può
+    // comprare: premuto su un esaurito, lo dice invece di aprire la cassa.
+    if (isOutOfStock) {
+      toast.error(selectedVariant ? 'Questa combinazione è esaurita: prova un\'altra opzione.' : 'Prodotto esaurito.');
+      return;
+    }
     setInPartenza(true);
     // 5/11/2026 — «Compra ora» compra QUESTA quantità: se la riga c'è già si porta alla
     // quantità scelta invece di sommarla (prima chi aveva già un filone ne trovava due).
@@ -1175,9 +1181,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <button
               type="button"
               onClick={handleBuyNow}
-              disabled={!canAdd || inPartenza}
+              // R02-008 (dopo il collaudo) — aria-disabled e non disabled: resta raggiungibile da
+              // tastiera e dice di non essere disponibile; handleBuyNow non apre la cassa.
+              aria-disabled={!canAdd || inPartenza || undefined}
+              aria-describedby={hasVariants && optionGroups.length > 0 ? 'disponibilita-variante' : undefined}
               aria-busy={inPartenza || undefined}
-              className="block w-full text-center bg-ink-900 hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
+              className="block w-full text-center bg-ink-900 hover:bg-ink-800 aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:hover:bg-cream-200 aria-disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
             >
               {inPartenza ? 'Apro la cassa…' : 'Compra ora · paghi alla consegna'}
             </button>
