@@ -10,6 +10,8 @@ import { normalizeCustomization } from '@/lib/store-customization';
 import type { StoreHours } from '@/lib/store-hours';
 import type { StoreMediaItem } from '@/components/StoreMediaCarousel';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
+import { useState } from 'react';
+import { DOMANDA_USCITA } from '@/components/hooks/useAvvisoModificheNonSalvate';
 
 /**
  * Schermata "Dettagli negozio" del site builder: logo, nome, copertina, descrizione,
@@ -32,6 +34,7 @@ type ProfileRow = {
 };
 
 export default function StoreDetailsEditor({ profile, onBack }: { profile: ProfileRow; onBack: () => void }) {
+  const [sporco, setSporco] = useState(false);
   const qc = useQueryClient();
 
   // Salva SOLO le colonne "branding" (vetrina). Telefono/indirizzo/orari stanno nel
@@ -61,7 +64,11 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
     <div className="space-y-4">
       <button
         type="button"
-        onClick={onBack}
+        onClick={() => {
+          // R11-015 — tornare all'elenco smontava il modulo e le modifiche sparivano senza avviso.
+          if (sporco && !window.confirm(DOMANDA_USCITA)) return;
+          onBack();
+        }}
         className="inline-flex items-center gap-1.5 -ml-1 text-sm font-semibold text-ink-600 hover:text-ink-900"
       >
         <ArrowLeft size={16} aria-hidden /> Tutte le impostazioni
@@ -75,6 +82,7 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <VendorForm
           mode="branding"
+          onSporcoChange={setSporco}
           defaultValues={{
             storeName:        profile.store_name        ?? '',
             storePhone:       profile.store_phone       ?? '',

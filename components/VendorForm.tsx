@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,6 +12,7 @@ import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
+import { useAvvisoModificheNonSalvate } from '@/components/hooks/useAvvisoModificheNonSalvate';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea } from '@/components/ui/Field';
@@ -65,12 +66,14 @@ type VendorFormMode = 'all' | 'branding' | 'contact';
 
 interface Props {
   onSubmit: (data: VendorFormData) => void;
+  /** R11-015 — avvisa il genitore quando ci sono modifiche non salvate (per chiedere conferma prima di uscire). */
+  onSporcoChange?: (sporco: boolean) => void;
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
   mode?: VendorFormMode;
 }
 
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', onSporcoChange }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
@@ -97,7 +100,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     [showBranding, showContact],
   );
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
+  const { register, handleSubmit, watch, formState: { errors, isDirty }, reset } = useForm<SchemaData>({
     resolver: zodResolver(schema),
     defaultValues: {
       storeName:  defaultValues?.storeName  ?? '',
@@ -171,6 +174,16 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     },
   });
 
+  // R11-015 — Modifiche non salvate: i campi del modulo più quelli tenuti a parte (logo, foto,
+  // descrizione, orari, posizione, personalizzazione). La fotografia di partenza si rifà al salvataggio.
+  const fotografiaDi = (personalizzazione: StoreCustomization) =>
+    JSON.stringify({ logoUrl, media, description, hours, custom: personalizzazione, a: location.address, la: location.lat, lo: location.lng });
+  const fotografia = fotografiaDi(custom);
+  const [fotografiaSalvata, setFotografiaSalvata] = useState(fotografia);
+  const sporco = isDirty || fotografia !== fotografiaSalvata;
+  useAvvisoModificheNonSalvate(sporco);
+  useEffect(() => { onSporcoChange?.(sporco); }, [sporco, onSporcoChange]);
+
   const handleFormSubmit = (data: SchemaData) => {
     if (showContact) {
       // Un orario sbagliato non si salva: quel giorno il negozio risulterebbe chiuso agli ordini.
@@ -226,6 +239,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
       storeHours: hours,
       storeCustomization: customData,
     });
+    // R11-015 — Inviato: quello che c'è ora diventa il punto di partenza (niente più avviso d'uscita).
+    reset(data);
+    setFotografiaSalvata(fotografiaDi(customData));
   };
 
   return (
