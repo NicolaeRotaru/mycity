@@ -36,6 +36,9 @@ describe('R03-022 — il prezzo all italiana nel modulo del prodotto', () => {
     expect(schema.safeParse({ ...BASE, price: '12,50' }).data?.price).toBe(12.5);
     expect(schema.safeParse({ ...BASE, price: 'abc' }).success).toBe(false);
     expect(schema.safeParse({ ...BASE, price: '1.250,00', compareAtPrice: '1.500,00' }).data?.compareAtPrice).toBe(1500);
+    // Collaudo: un prezzo pieno illeggibile si rifiuta, non si perde come «opzionale».
+    expect(schema.safeParse({ ...BASE, price: '1.200', compareAtPrice: 'abc' }).success).toBe(false);
+    expect(schema.safeParse({ ...BASE, price: '1.200', compareAtPrice: '' }).success).toBe(true);
   });
 
   it('il campo «Prezzo (€)» non è un campo numerico del browser (che trasforma «1.250,00» in 1.25)', async () => {

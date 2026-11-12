@@ -105,8 +105,9 @@ export type SellerStatus = (typeof SELLER_STATUSES)[number];
 function prezzoScritto(v: unknown): unknown {
   if (typeof v === 'number') return v;
   if (typeof v !== 'string') return v;
-  const n = leggiPrezzo(v);
-  return Number.isFinite(n) ? n : undefined;
+  // Illeggibile resta NaN, che lo schema rifiuta col suo messaggio: con undefined il prezzo pieno
+  // sbagliato passava come «opzionale» e si perdeva in silenzio (collaudo del 12/11).
+  return leggiPrezzo(v);
 }
 
 /**
