@@ -1,0 +1,287 @@
+{
+  "sessione": "R07",
+  "aggiornato": "2026-11-12 14:57",
+  "finita": false,
+  "testa": "43d1a381ad170d27d2858cff4961c38e86234a05",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R07-001",
+      "chiave": "frontend-ux|in chat il negoziante vede «utente» al posto del nome di ogni cliente",
+      "esito": "gia_riparato_prima",
+      "prova": "app/messages/page.tsx:96-102 passa userId a conInsegnaDelNegozio, che riempie «cliente» con nomi_dei_clienti_del_negozio (lib/queries/controparte-della-chat.ts:91); lib/queries/controparte-della-chat.ts:201 restituisce cliente ?? full_name ?? «Cliente» dal lato del negozio. «Utente» resta solo dal lato del cliente. Regge solo con la migrazione 181 applicata nel database vero.",
+      "nota": "commit 4cc977c1"
+    },
+    {
+      "id": "R07-002",
+      "chiave": "frontend-ux|la pagina di richiesta reso accetta il ripensamento anche su ordini di pane",
+      "esito": "riparato",
+      "commit": "955c95e4a4a23f51a49de5c41558534f802837b1",
+      "file_toccati": [
+        "app/orders/[id]/return/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-reso-pane.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-reso-pane.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 955c95e4^ --file 'app/orders/[id]/return/page.tsx' --prove tests/unit/riparazione-r07-reso-pane.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge righe e prodotti dell'ordine e usa rifiutoDelRecesso, la stessa regola del server: su un ordine di soli esclusi «Ho cambiato idea» è spento e sotto c'è il motivo (art. 59); su un ordine misto resta. Il server lo rifiutava già. Regge solo con la migrazione 180 applicata nel database vero."
+    },
+    {
+      "id": "R07-003",
+      "chiave": "frontend-ux|le foto dell'iphone (heic) adesso entrano davvero, ma nessuno le converte: sul telefono android e su chrome restano un riquadro rotto",
+      "esito": "scelta_di_nicola",
+      "domanda": "Foto HEIC dell iPhone: A) conversione vera nel browser con la libreria heic2any (dipendenza nuova in package.json) chiamata nei quattro campi, oppure B) togliere heic/heif dai tipi accettati (l iPhone converte da solo in JPEG; un .heic trascinato da computer si rifiuta con un messaggio chiaro), che rovescia in parte la decisione dell 8/9? Consiglio B."
+    },
+    {
+      "id": "R07-004",
+      "chiave": "frontend-ux|toccando la scheda di un prodotto in home e nella ricerca non si apre niente",
+      "esito": "riparato",
+      "commit": "353b8f2fa87f6f46d93aa9945e58fa21136874ac",
+      "file_toccati": [
+        "components/ProductCard.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-scheda-cliccabile.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-scheda-cliccabile.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 353b8f2f^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r07-scheda-cliccabile.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Badge, riquadro foto e corpo della card stavano sopra il link che apre la scheda e prendevano il tocco: ora sono trasparenti al tocco (pointer-events none: classe su badge e foto, style sul corpo, per non rompere le prove che leggono le classi del corpo), e cuore e «+» hanno pointer-events-auto. La prova controlla la regola sul markup (jsdom non sa dire quale strato prende il tocco); un controllo con elementFromPoint in un browser vero non l'ho fatto."
+    },
+    {
+      "id": "R07-005",
+      "chiave": "qa-flussi|l'ultimo giorno del recesso il sito rifiuta il reso dal pomeriggio, e col cambio d'ora anche prima dell'ora della consegna",
+      "esito": "riparato",
+      "commit": "ed8cab305847856f21019768175a63b77e9c50a0",
+      "file_toccati": [
+        "app/api/returns/create/route.ts",
+        "lib/ordini/termine-del-recesso.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-termine-recesso-server.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-termine-recesso-server.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed8cab30^ --file app/api/returns/create/route.ts --prove tests/unit/riparazione-r07-termine-recesso-server.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuovo lib/ordini/termine-del-recesso.ts: il reso resta aperto fino a tutto il quattordicesimo giorno di calendario dopo la consegna, a Piacenza. Il server lo usa al posto dei blocchi di 24 ore; la prova copre la sera dell'ultimo giorno, la mezzanotte dopo e il cambio d'ora del 25/10."
+    },
+    {
+      "id": "R07-006",
+      "chiave": "qa-flussi|nell'ultimo giorno di recesso e nel giorno dopo, la pagina fa compilare tutto il reso, iban compreso, e poi il server lo rifiuta come scaduto",
+      "esito": "riparato",
+      "commit": "afb25d44c3b921002bd4c0115d142800c021922f",
+      "file_toccati": [
+        "app/orders/[id]/return/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-termine-recesso-pagina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-termine-recesso-pagina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base afb25d44^ --file 'app/orders/[id]/return/page.tsx' --prove tests/unit/riparazione-r07-termine-recesso-pagina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina usa la stessa recessoAperto del server, con created_at come ripiego quando manca delivered_at: il giorno dopo l'ultimo il modulo non si apre più, e il messaggio dice fino a che giorno valeva il termine."
+    },
+    {
+      "id": "R07-007",
+      "chiave": "accessibilita|chi usa il lettore di schermo sente «3» accanto a una conversazione, senza sapere che sono messaggi da leggere",
+      "esito": "riparato",
+      "commit": "de9ae0077c5b98e9a148a420f284128c7cdcf691",
+      "file_toccati": [
+        "app/messages/page.tsx",
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-non-letti-a11y.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-non-letti-a11y.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de9ae007^ --file app/messages/page.tsx,app/notifications/page.tsx --prove tests/unit/riparazione-r07-non-letti-a11y.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Chat: il numero dei non letti è aria-hidden e accanto c'è «N messaggi non letti» in sr-only. Notifiche: il pallino è aria-hidden e «Non letta» sta in sr-only, al posto dell'aria-label su uno span senza ruolo."
+    },
+    {
+      "id": "R07-008",
+      "chiave": "accessibilita|il tasto per togliere una foto dal reso è grande la metà del minimo",
+      "esito": "riparato",
+      "commit": "a516b88dd708b9cf9a9011fc151b41227178ace1",
+      "file_toccati": [
+        "app/orders/[id]/return/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-togli-foto-reso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-togli-foto-reso.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a516b88d^ --file app/orders/[id]/return/page.tsx --prove tests/unit/riparazione-r07-togli-foto-reso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il tasto «×» diventa un'area h-11 w-11 (44 px) e il pallino visibile da 24 px sta dentro, aria-hidden."
+    },
+    {
+      "id": "R07-009",
+      "chiave": "accessibilita|nelle pagine regali, novità e i più recensiti i titoli saltano dal primo al terzo livello",
+      "esito": "riparato",
+      "commit": "81a4c190931f275a98423763b98a31b3d74a7c46",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-titoli-collezioni.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-titoli-collezioni.test.tsx",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81a4c190^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r07-titoli-collezioni.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella forma a griglia ProductGrid mette un h2 sr-only (il title, o «Prodotti») prima delle schede: fra l'h1 di CollectionHeader e l'h3 del nome di ogni prodotto non si salta più un livello, su Regali, Novità e I più recensiti insieme. RegaliClient (griglia montata prima delle categorie) non l'ho toccato: non cambia i livelli dei titoli."
+    },
+    {
+      "id": "R07-010",
+      "chiave": "coerenza-brand|la pagina che si apre dal link di conferma email non sembra mycity: niente logo, carattere di sistema, bottone verde",
+      "esito": "riparato",
+      "commit": "b4184549f21c0f54a0ad0912d3b30c34b04fad52",
+      "file_toccati": [
+        "app/auth/confirm/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-conferma-email-marchio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-conferma-email-marchio.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b4184549^ --file app/auth/confirm/route.ts --prove tests/unit/riparazione-r07-conferma-email-marchio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "paginaColPulsante ora ha il nome MyCity in serif in testa, sfondo crema #FBF7F0, testo #1C1A18, titolo in serif, bottone terracotta #C0492C al posto del verde, e «così» con l'accento."
+    },
+    {
+      "id": "R07-011",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "parziale",
+      "commit": "1baa071faa88bd729004126dd695c0d4389e7d35",
+      "file_toccati": [
+        "scripts/prova-di-fumo.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1baa071f^ --file scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Caso B: in rilascioDaTornare il dominio vale come risposta solo se dice un commit, diverso da quello che esce; un dominio senza commit ricade nella regola dell'elenco.",
+      "cosa_resta": "Caso A (un solo altro commit negli ultimi 20 rilasci): le prove esistenti (il-ritorno-indietro-torna-a-quello-che-usano-i-clienti.test.ts:83, il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts:29 e :54) fissano apposta «un solo altro commit → si torna lì», e cambiarle vorrebbe dire indebolirle. Strada senza toccarle: allargare l elenco dei rilasci letti.",
+      "serve_file_altrui": [
+        {
+          "file": ".github/workflows/deploy-dopo-ci.yml",
+          "modifica": "riga ~606: nella chiamata a /v6/deployments portare limit=20 a limit=100, così «un solo altro commit» si decide su 100 rilasci e non su 20"
+        }
+      ]
+    },
+    {
+      "id": "R07-012",
+      "chiave": "flussi-conversione|nel pannello del negozio non c'è un posto dove vedere e approvare le anteprime",
+      "esito": "scelta_di_nicola",
+      "domanda": "Le anteprime si approvano con una voce «Da approvare» nel pannello del negozio (elenco, Approva/Cambia con motivo, link da WhatsApp), o restano solo su WhatsApp e il pannello mostra lo storico? Oggi non esistono rotta, tabella né componente."
+    },
+    {
+      "id": "R07-013",
+      "chiave": "frontend-ux|una categoria principale senza prodotti mostra solo titolo e bottoni, senza nessun messaggio",
+      "esito": "gia_riparato_prima",
+      "prova": "app/category/[slug]/page.tsx:353 mostra lo stato vuoto con «Vedi tutte le categorie» quando tutte le file hanno contiDelleFile === 0 (commit 84e47dac). Il caso della lettura caduta è in nuovi_difetti_visti."
+    },
+    {
+      "id": "R07-014",
+      "chiave": "frontend-ux|in una lista, i prodotti che il negozio ha tolto dalla vetrina restano contati ma non si vedono e non si possono togliere",
+      "esito": "riparato",
+      "commit": "43d1a381ad170d27d2858cff4961c38e86234a05",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-lista-prodotto-nascosto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-lista-prodotto-nascosto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 43d1a381^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r07-lista-prodotto-nascosto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al posto di «if (!p) return null» la lista disegna una riga «Non più disponibile · il negozio l'ha tolto dalla vetrina», con il cestino per chi ha la lista (removeItem su it.product_id). Il conteggio in app/lists/page.tsx resta com'è: adesso corrisponde alle righe che si vedono."
+    },
+    {
+      "id": "R07-018",
+      "chiave": "frontend-ux|la pagina clienti del negozio mostra solo i nomi, senza contatti né esportazione, e consiglia offerte che non si possono mandare",
+      "esito": "scelta_di_nicola",
+      "domanda": "Il negozio deve vedere telefono ed email dei clienti ed esportarli? Serve una base legale e una vista/RPC nuova (dalla migrazione 161 il negozio legge solo delivery_full_name dell ordine).",
+      "nota": "Il consiglio sulle offerte non mandabili è già tolto: app/seller/customers/page.tsx:190-202."
+    },
+    {
+      "id": "R07-024",
+      "chiave": "frontend-ux|mancano «finito per oggi» e «chiuso fino al…», promessi ai negozi della prima ondata",
+      "esito": "scelta_di_nicola",
+      "domanda": "«Finito per oggi» chiude solo gli ordini di oggi o anche quelli programmati per domani? «Chiuso fino al…» accetta ordini programmati per dopo quella data?",
+      "nota": "Serve un dato nuovo (migrazione 31x) e la logica d ordine in lib/store-hours.ts (isStoreClosedForOrder, negozioPuoServire), che non è di R07."
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
