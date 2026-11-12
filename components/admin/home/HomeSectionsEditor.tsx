@@ -9,6 +9,7 @@ import {
   MAX_HOME_SECTIONS,
   type HomeSection,
   type HomeSectionType,
+  sezioneAccesa,
 } from '@/lib/home-site';
 import HomeSectionConfigForm from './HomeSectionConfigForm';
 
@@ -33,8 +34,10 @@ function AddSectionMenu({ onAdd, disabled, allowed }: { onAdd: (t: HomeSectionTy
     return () => { window.removeEventListener('keydown', tasto); document.removeEventListener('mousedown', clic); };
   }, [open]);
   const groups = [
-    { key: 'struttura' as const, label: 'Struttura', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'struttura') },
-    { key: 'contenuto' as const, label: 'Contenuto', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'contenuto') },
+    // R10-007 — Le sezioni spente al lancio (Drop del giorno, Newsletter) non si offrono: la
+    // home non le disegnerebbe (lib/home-site.ts, sezioneAccesa).
+    { key: 'struttura' as const, label: 'Struttura', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'struttura' && sezioneAccesa(s.type)) },
+    { key: 'contenuto' as const, label: 'Contenuto', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'contenuto' && sezioneAccesa(s.type)) },
   ].filter((g) => allowed.includes(g.key));
   return (
     <div className="relative" ref={contenitore}>
@@ -118,8 +121,12 @@ export default function HomeSectionsEditor({
 
       {sections.map((s, i) => {
         const isOpen = openId === s.id;
+        // R10-007 — «Visibile» qui deve voler dire «la home la disegna»: una sezione spenta al
+        // lancio resta fuori dalla home anche se e' attiva, e il pannello lo dice.
+        const spentaAlLancio = !sezioneAccesa(s.type);
+        const siVede = s.enabled && !spentaAlLancio;
         return (
-          <div key={s.id} className={`rounded-xl border ${s.enabled ? 'border-cream-300 bg-white' : 'border-cream-200 bg-cream-50/60'}`}>
+          <div key={s.id} className={`rounded-xl border ${siVede ? 'border-cream-300 bg-white' : 'border-cream-200 bg-cream-50/60'}`}>
             <div className="flex items-center gap-1.5 px-3 py-2.5">
               <div className="flex flex-col -my-1">
                 <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Sposta su" className="p-0.5 text-ink-400 hover:text-ink-700 disabled:opacity-30">
@@ -132,6 +139,9 @@ export default function HomeSectionsEditor({
               <button type="button" onClick={() => setOpenId(isOpen ? null : s.id)} aria-expanded={isOpen} aria-controls={`sezione-${s.id}`} className="flex-1 min-w-0 text-left">
                 <span className="font-medium text-ink-900">{homeSectionLabel(s.type)}</span>
                 {!s.enabled && <span className="ml-2 text-xs text-ink-400">nascosta</span>}
+                {s.enabled && spentaAlLancio && (
+                  <span className="ml-2 text-xs text-ink-500">spenta al lancio · non appare in home</span>
+                )}
               </button>
               <button type="button" onClick={() => toggle(i)} aria-label={s.enabled ? 'Nascondi sezione' : 'Mostra sezione'} title={s.enabled ? 'Nascondi' : 'Mostra'} className="p-1.5 text-ink-500 hover:text-ink-800">
                 {s.enabled ? <Eye size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
