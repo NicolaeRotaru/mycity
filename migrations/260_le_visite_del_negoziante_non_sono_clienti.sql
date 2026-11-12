@@ -36,7 +36,7 @@ AS $$
     and (
       pv.user_id is null
       or (
-        pv.user_id <> p.seller_id
+        pv.user_id is distinct from p.seller_id
         and not exists (select 1 from public.profiles a where a.id = pv.user_id and a.role = 'admin')
       )
     )

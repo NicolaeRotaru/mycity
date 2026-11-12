@@ -10,6 +10,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const scritte: unknown[] = [];
+const annunci: unknown[] = [];
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: (t: string) => ({
@@ -18,7 +19,7 @@ vi.mock('@/lib/supabase/client', () => ({
     }),
   },
 }));
-vi.mock('@/lib/analytics/events', () => ({ trackProductViewed: () => {} }));
+vi.mock('@/lib/analytics/events', () => ({ trackProductViewed: (...a: unknown[]) => { annunci.push(a); } }));
 vi.mock('@/lib/consent', () => ({ hasConsent: () => true }));
 vi.mock('@/components/hooks/useUtente', () => ({ idUtenteInMemoria: async () => 'utente-1' }));
 
@@ -34,15 +35,17 @@ async function monta(props: Record<string, unknown>) {
 }
 
 describe('R02-014 · la visita dell amministratore non conta', () => {
-  beforeEach(() => { scritte.length = 0; sessionStorage.clear(); localStorage.clear(); });
+  beforeEach(() => { scritte.length = 0; annunci.length = 0; sessionStorage.clear(); localStorage.clear(); });
 
   it('l amministratore non scrive in product_views', async () => {
     await monta({ chiGuardaEAdmin: true });
     expect(scritte).toEqual([]);
+    expect(annunci, 'nemmeno l evento verso PostHog').toEqual([]);
   });
 
   it('un cliente sì', async () => {
     await monta({ chiGuardaEAdmin: false });
     expect(scritte).toHaveLength(1);
+    expect(annunci).toHaveLength(1);
   });
 });

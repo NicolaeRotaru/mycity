@@ -65,12 +65,16 @@ export default function ProductViewTracker({ productId, price, category, sellerI
     let vivo = true;
 
     const prova = () => {
+      // R02-014 (dopo il qa) — Se chi guarda è il negoziante o un admin, la riga non si scrive E
+      // l'evento non parte: prima `registra` usciva senza errore e PostHog la contava lo stesso.
+      let nonEUnCliente = false;
       void contaLaVisita(productId, {
         consenso: () => hasConsent('analytics'),
         // R02-015 — Il freno è quello del database: una visita per prodotto all'ora, in tutte le
         // schede. PostHog e product_views contano con la stessa regola.
         ...frenoOrario(archivioDelleVisite()),
         annuncia: () => {
+          if (nonEUnCliente) return;
           trackProductViewed(productId, {
             // In centesimi, come gli altri eventi che portano un prezzo.
             priceCents: price != null ? Math.round(price * 100) : undefined,
@@ -85,6 +89,7 @@ export default function ProductViewTracker({ productId, price, category, sellerI
           const userId = await idUtenteInMemoria();
           // 5/11/2026 — Il negoziante che apre il proprio prodotto non è un cliente: la sua visita
           // finiva in «visite», nel tasso di conversione e nei più visti della home.
+          nonEUnCliente = Boolean((userId && sellerId && userId === sellerId) || eAdmin.current);
           if (userId && sellerId && userId === sellerId) return;
           // 12/11/2026 (R02-014) — Nemmeno l'amministratore che controlla le schede. Le righe che
           // arrivano lo stesso (profilo non ancora letto, pagina vecchia) le scarta il conto nel
