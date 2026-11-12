@@ -9,8 +9,6 @@ type Socials = NonNullable<StoreCustomization['socials']>;
 interface Props {
   value?: Socials;
   onChange: (next: Socials) => void;
-  /** R11-016 — il motivo per cui un campo non si è salvato, sotto quel campo. */
-  errori?: Partial<Record<string, string>>;
 }
 
 const FIELDS: { key: keyof Socials; label: string; placeholder: string; icon: ReactNode }[] = [
@@ -22,13 +20,12 @@ const FIELDS: { key: keyof Socials; label: string; placeholder: string; icon: Re
 ];
 
 /** Input dei link social — si salva solo handle/numero/URL, gli href li costruisce il sito. */
-export default function SocialLinksFields({ value, onChange, errori = {} }: Props) {
+export default function SocialLinksFields({ value, onChange }: Props) {
   const set = (key: keyof Socials, v: string) => onChange({ ...value, [key]: v });
   return (
     <div className="space-y-2.5">
       {FIELDS.map((f) => (
-        <div key={f.key}>
-          <div className="flex items-center gap-2">
+        <div key={f.key} className="flex items-center gap-2">
           <span className="w-9 h-9 rounded-lg bg-cream-100 text-ink-500 flex items-center justify-center shrink-0" aria-hidden>
             {f.icon}
           </span>
@@ -39,21 +36,11 @@ export default function SocialLinksFields({ value, onChange, errori = {} }: Prop
             value={value?.[f.key] ?? ''}
             onChange={(e) => set(f.key, e.target.value)}
             placeholder={`${f.label} · ${f.placeholder}`}
-            aria-invalid={errori[f.key] ? true : undefined}
-            aria-describedby={errori[f.key] ? `social-${f.key}-errore` : undefined}
             className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
           />
-          </div>
-          {errori[f.key] && (
-            <p id={`social-${f.key}-errore`} role="alert" className="mt-1 ml-11 text-xs text-secondary-700">
-              {f.label}: {errori[f.key]}
-            </p>
-          )}
         </div>
       ))}
-      <p className="text-xs text-ink-500">
-        Scrivi il nome del profilo (per esempio panequotidiano) o incolla il link del profilo: lo correggiamo noi. Per il sito basta www.…
-      </p>
+      <p className="text-xs text-ink-500">Inserisci solo il nome utente (senza @) o l&apos;URL del sito.</p>
     </div>
   );
 }
