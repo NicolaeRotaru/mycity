@@ -66,18 +66,20 @@ BEGIN
   END IF;
 
   -- La categoria di primo livello: le sottocategorie ereditano dal padre.
+  -- 363 (R12-023): l'obbligo e' una proprieta' della categoria, non il nome della
+  -- radice. Vale se la porta la categoria o uno qualunque dei suoi padri (collaudo
+  -- K03: «alimentari» spostata sotto un'altra radice non deve perderlo). Il nome
+  -- 'alimentari' resta come rete per una riga nata prima della colonna.
   WITH RECURSIVE risali AS (
-    SELECT id, parent_id, slug FROM public.categories WHERE id = NEW.category_id
+    SELECT id, parent_id, slug, richiede_dichiarazioni_alimentari FROM public.categories WHERE id = NEW.category_id
     UNION ALL
-    SELECT c.id, c.parent_id, c.slug
+    SELECT c.id, c.parent_id, c.slug, c.richiede_dichiarazioni_alimentari
       FROM public.categories c JOIN risali r ON c.id = r.parent_id
   )
-  -- 363 (R12-023): l'obbligo e' una proprieta' della radice, non il suo nome.
-  -- Il nome 'alimentari' resta come rete per una riga nata prima della colonna.
-  SELECT r.slug, coalesce(c.richiede_dichiarazioni_alimentari, false)
+  SELECT (array_agg(slug) FILTER (WHERE parent_id IS NULL))[1],
+         coalesce(bool_or(richiede_dichiarazioni_alimentari), false)
     INTO v_radice, v_obbligo
-    FROM risali r JOIN public.categories c ON c.id = r.id
-   WHERE r.parent_id IS NULL LIMIT 1;
+    FROM risali;
 
   IF NOT v_obbligo AND v_radice IS DISTINCT FROM 'alimentari' THEN
     RETURN NEW;

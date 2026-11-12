@@ -31,4 +31,14 @@ describe('R12-023 l obbligo degli allergeni segue la categoria', () => {
   it('una radice senza l obbligo resta senza campi obbligatori alimentari', () => {
     expect(obbligatori(albero('gastronomia', false))).not.toContain('allergeni');
   });
+
+  it('l obbligo di una categoria in mezzo all albero vale anche se la radice non ce l ha (collaudo K03)', () => {
+    const cats = [
+      { id: 'r', slug: 'negozio', parent_id: null },
+      { id: 'a', slug: 'alimentari', parent_id: 'r', richiede_dichiarazioni_alimentari: true },
+      { id: 'pane', slug: 'panificio', parent_id: 'a' },
+    ];
+    expect(getAttributesForCategory(cats, 'pane').fields.filter((f) => f.required).map((f) => f.key))
+      .toEqual(expect.arrayContaining(['allergeni', 'ingredienti']));
+  });
 });

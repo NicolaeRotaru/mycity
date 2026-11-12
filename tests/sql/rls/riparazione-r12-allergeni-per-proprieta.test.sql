@@ -106,10 +106,23 @@ BEGIN
   END;
   INSERT INTO esiti VALUES ('8 cambiare il nome resta libero', v_passato, '');
 
+  -- ⑨ (collaudo K03) la radice alimentari spostata sotto un'altra radice, scrivendo
+  --    diretto nel database: i suoi prodotti restano obbligati
+  UPDATE public.categories SET parent_id = 'e1230000-0000-0000-0000-0000000000c3'
+   WHERE slug = 'alimentari' AND parent_id IS NULL;
+  BEGIN
+    INSERT INTO public.products (seller_id, name, description, price, stock, category_id, attributes, status)
+    SELECT 'e1230000-0000-0000-0000-000000000001', 'Salame R12', 'x', 5, 3, id, '{}'::jsonb, 'available'
+      FROM public.categories WHERE slug = 'alimentari';
+    v_passato := true;
+  EXCEPTION WHEN check_violation THEN v_passato := false;
+  END;
+  INSERT INTO esiti VALUES ('9 alimentari spostata sotto un altra radice non perde l obbligo', NOT v_passato, '');
+
   -- ⑤ alimentari nasce con l'obbligo
   INSERT INTO esiti
   SELECT '5 la radice alimentari ha l obbligo', coalesce(bool_and(richiede_dichiarazioni_alimentari), false), count(*)::text
-    FROM public.categories WHERE slug = 'alimentari' AND parent_id IS NULL;
+    FROM public.categories WHERE slug = 'alimentari';
 END $$;
 
 SELECT nome, CASE WHEN ok THEN 'ok' ELSE 'ROTTO' END AS esito, dettaglio FROM esiti ORDER BY nome;

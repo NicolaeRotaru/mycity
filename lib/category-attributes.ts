@@ -295,14 +295,18 @@ export function getAttributesForCategory(
 ): { fields: AttributeField[]; topSlug: string | null } {
   if (!categoryId) return { fields: [], topSlug: null };
   let cur = categories.find((c) => c.id === categoryId);
+  // Collaudo K03: l'obbligo vale se lo porta la categoria o uno qualunque dei padri
+  // (come il guardiano del database), non solo la radice.
+  let obbligoAlimentare = cur?.richiede_dichiarazioni_alimentari === true;
   // Risali fino al livello top
   while (cur?.parent_id) {
     const parent: CategoriaPerAttributi | undefined = categories.find((c) => c.id === cur!.parent_id);
     if (!parent) break;
     cur = parent;
+    if (cur.richiede_dichiarazioni_alimentari === true) obbligoAlimentare = true;
   }
   if (!cur) return { fields: [], topSlug: null };
-  if (cur.richiede_dichiarazioni_alimentari === true) {
+  if (obbligoAlimentare) {
     return { fields: CATEGORY_ATTRIBUTES.alimentari, topSlug: cur.slug };
   }
   return { fields: CATEGORY_ATTRIBUTES[cur.slug] ?? [], topSlug: cur.slug };
