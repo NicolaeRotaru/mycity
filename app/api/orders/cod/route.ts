@@ -35,6 +35,7 @@ import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/or
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { avvisaSeLaPostaNonParte } from '@/lib/stripe/webhook/posta-non-partita';
 import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -1644,7 +1645,9 @@ export const POST = withAuthRateLimit(
               createdAt: c.creatoIl ? new Date(c.creatoIl) : new Date(),
               storeHours: orariNegozio.get(c.sellerId),
             });
-            await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            // R03-003 — un rifiuto di Resend non lancia: si legge l'esito (lib/stripe/webhook/posta-non-partita.ts).
+            const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            await avvisaSeLaPostaNonParte('email «Nuovo ordine» al negozio', { orderId: c.orderId, sellerId: c.sellerId }, esito);
           } catch (e) {
             logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
           }
@@ -1665,7 +1668,8 @@ export const POST = withAuthRateLimit(
               paymentMethod: 'cod',
             });
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
-            await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            await avvisaSeLaPostaNonParte('conferma dell ordine al cliente', { orderId: c.orderId }, esito);
           } catch (e) {
             logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
           }
