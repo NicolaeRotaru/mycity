@@ -19,6 +19,7 @@ vi.mock('@/lib/quando-arriva', async (orig) => ({ ...(await orig<object>()), CHI
 import { fraseComeArriva, spiegazioneDellaConsegna } from '@/lib/promesse-pubbliche';
 import { CONSEGNA_FRASE_INTERA, QUANDO_SI_PUO_LA_VELOCE } from '@/lib/promessa-consegna';
 import { DEFAULT_FOOTER_TAGLINE } from '@/lib/site-branding';
+import * as costantiR12 from '@/lib/constants';
 
 const TRE_CONDIZIONI = [/dalle 8 alle 20\b/, /negozi[^.;]*aperti/, /fattorino in servizio/];
 
@@ -45,6 +46,8 @@ describe('spostata la chiusura della veloce alle 20, ogni frase la segue', () =>
   it('la frase intera e il piede del sito', () => {
     diceLeTreCondizioni(CONSEGNA_FRASE_INTERA, 'CONSEGNA_FRASE_INTERA');
     diceLeTreCondizioni(DEFAULT_FOOTER_TAGLINE, 'il piede del sito');
+    // Al posto dell'asserzione su VALUE_PROPS: la promessa che nessuno vedeva non c'è più.
+    expect('VALUE_PROPS' in costantiR12).toBe(false);
   });
 
   it('«Come funziona», disegnata', async () => {
