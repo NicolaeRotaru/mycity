@@ -232,13 +232,18 @@ export default function SettingsPage() {
   }, [router]);
 
   const updatePref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
+    // 12/11/2026 (R02-017) — Il valore di prima, per rimetterlo se il salvataggio non riesce:
+    // l'interruttore restava nella posizione nuova mentre nel database c'era ancora la vecchia.
+    const prima = prefs[key];
     setPrefs((prev) => ({ ...prev, [key]: value }));
     const dbCols = ['notif_order_updates', 'notif_promos', 'notif_groups', 'notif_newsletter', 'email_marketing'];
     if (userId && dbCols.includes(key as string)) {
       void (async () => {
         const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
-        if (error) toast.error('Errore nel salvataggio');
-        else toast.success('Preferenza salvata');
+        if (error) {
+          setPrefs((prev) => (prev[key] === value ? { ...prev, [key]: prima } : prev));
+          toast.error('Errore nel salvataggio: la preferenza è tornata com\'era');
+        } else toast.success('Preferenza salvata');
       })();
     } else {
       toast.success('Preferenza salvata');
