@@ -29,7 +29,7 @@ afterEach(() => {
 
 const GIORNO = 86_400_000;
 
-function database() {
+function database(opzioni: { ordineInstabile?: boolean } = {}) {
   const adesso = Date.now();
   const profiles: Riga[] = [];
   const orders: Riga[] = [];
@@ -61,7 +61,7 @@ function database() {
       stripe_session_id: null,
     });
   }
-  return creaPostgrestColTetto({ profiles, orders });
+  return creaPostgrestColTetto({ profiles, orders }, opzioni);
 }
 
 describe('R06-001 · il funnel con piu\' di mille ordini in un blocco di cento clienti', () => {
@@ -83,5 +83,44 @@ describe('R06-001 · il funnel con piu\' di mille ordini in un blocco di cento c
       'Il funnel si e\' fermato alle prime mille righe di ordini: dice meno clienti che comprano di quelli veri',
     ).toBe(100);
     expect(dati.multipleOrders, 'I clienti che tornano sono cinquanta, non quelli che stanno nelle prime mille righe').toBe(50);
+  }, 60000);
+
+  async function letturaDellaPagina(): Promise<Lettura> {
+    let lettura: Lettura | null = null;
+    globale.__DATI_QUERY__ = (opzioni: Lettura) => { lettura = opzioni; return undefined; };
+    const mod = await monta('app/admin/funnel/page.tsx');
+    accendi(mod.default as ComponentType).smonta();
+    return lettura as unknown as Lettura;
+  }
+
+  it('legge gli ordini in un ordine stabile: senza, fra una finestra e l\'altra si perdono righe', async () => {
+    const lettura = await letturaDellaPagina();
+    const db = database({ ordineInstabile: true });
+    globale.__CLIENT_SUPABASE__ = db.client;
+    const dati = await lettura.queryFn!();
+    expect(dati.firstOrderEver).toBe(100);
+    expect(dati.multipleOrders).toBe(50);
+    const aFinestre = db.richieste.filter((r) => r.tabella === 'orders' && r.finestra);
+    expect(aFinestre.length).toBeGreaterThan(0);
+    for (const r of aFinestre) {
+      expect(r.ordini, 'Le finestre degli ordini senza un ordine stabile possono doppiare o saltare righe').toEqual(['created_at', 'id']);
+    }
+  }, 60000);
+
+  it('se sono gli ORDINI a sbattere contro il tetto duro, la pagina lo dice (campione)', async () => {
+    const lettura = await letturaDellaPagina();
+    const adesso = Date.now();
+    const orders: Riga[] = Array.from({ length: 20_001 }, (_, k) => ({
+      id: `x-${String(k).padStart(5, '0')}`,
+      user_id: 'cliente-0',
+      created_at: new Date(adesso - 70 * GIORNO + k * 1000).toISOString(),
+      delivery_status: 'DELIVERED',
+      payment_status: 'PAID',
+      stripe_session_id: null,
+    }));
+    const profiles: Riga[] = [{ id: 'cliente-0', role: 'buyer', created_at: new Date(adesso - 80 * GIORNO).toISOString() }];
+    globale.__CLIENT_SUPABASE__ = creaPostgrestColTetto({ profiles, orders }).client;
+    const dati = await lettura.queryFn!();
+    expect(dati.campione, 'Gli ordini sono stati tagliati al tetto duro e la pagina non lo diceva').toBe(true);
   }, 60000);
 });

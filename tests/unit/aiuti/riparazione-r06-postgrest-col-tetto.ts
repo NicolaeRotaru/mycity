@@ -20,9 +20,15 @@ function confronta(a: unknown, b: unknown): number {
   return sa === sb ? 0 : sa < sb ? -1 : 1;
 }
 
-export type Richiesta = { tabella: string; finestra: [number, number] | null; tetto: number | null };
+export type Richiesta = { tabella: string; finestra: [number, number] | null; tetto: number | null; ordini: string[] };
 
-export function creaPostgrestColTetto(tabelle: Tabelle) {
+/**
+ * `ordineInstabile`: come il database vero, senza `.order()` l'ordine delle righe
+ * non e' garantito e puo' cambiare da una richiesta all'altra. Qui, senza
+ * ordinamento, ogni richiesta dispari rovescia le righe: chi legge a finestre
+ * senza ordinare raccoglie doppioni e ne perde altre.
+ */
+export function creaPostgrestColTetto(tabelle: Tabelle, opzioni: { ordineInstabile?: boolean } = {}) {
   const richieste: Richiesta[] = [];
 
   function from(tabella: string) {
@@ -40,7 +46,8 @@ export function creaPostgrestColTetto(tabelle: Tabelle) {
         return q;
       },
       eq(c: string, v: unknown) { filtri.push((r) => r[c] === v); return q; },
-      neq(c: string, v: unknown) { filtri.push((r) => r[c] !== v); return q; },
+      // Come in SQL: `col <> v` non e' vero quando col e' vuota, quindi PostgREST scarta anche i NULL.
+      neq(c: string, v: unknown) { filtri.push((r) => r[c] != null && r[c] !== v); return q; },
       in(c: string, vs: readonly unknown[]) { filtri.push((r) => vs.includes(r[c])); return q; },
       gte(c: string, v: unknown) { filtri.push((r) => confronta(r[c], v) >= 0); return q; },
       lte(c: string, v: unknown) { filtri.push((r) => confronta(r[c], v) <= 0); return q; },
@@ -50,8 +57,9 @@ export function creaPostgrestColTetto(tabelle: Tabelle) {
       limit(n: number) { tetto = n; return q; },
       range(da: number, a: number) { finestra = [da, a]; return q; },
       then<T>(risolvi: (v: { data: Riga[] | null; error: null; count?: number }) => T, rifiuta?: (e: unknown) => unknown) {
-        richieste.push({ tabella, finestra, tetto });
+        richieste.push({ tabella, finestra, tetto, ordini: ordini.map((o) => o.colonna) });
         let righe = (tabelle[tabella] ?? []).filter((r) => filtri.every((f) => f(r)));
+        if (opzioni.ordineInstabile && ordini.length === 0 && richieste.length % 2 === 1) righe = [...righe].reverse();
         for (const o of [...ordini].reverse()) {
           righe = [...righe].sort((a, b) => (o.crescente ? 1 : -1) * confronta(a[o.colonna], b[o.colonna]));
         }

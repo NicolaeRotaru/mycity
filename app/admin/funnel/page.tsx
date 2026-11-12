@@ -385,9 +385,9 @@ export default function AdminFunnelPage() {
             </p>
             <p className="mt-0.5 text-sm leading-normal text-ink-700">
               Gli iscritti, o i loro ordini, sono più di quanti se ne possano leggere in una
-              volta sola. Le percentuali e le coorti qui sotto sono calcolate su queste
-              {' '}{data.iscrittiLetti}{' '}righe di iscritti e sugli ordini letti: i numeri veri
-              sono più alti, non più bassi.
+              volta sola. Le percentuali, i segmenti e le coorti qui sotto sono calcolati su una
+              parte dei dati ({data.iscrittiLetti} righe di iscritti e gli ordini letti fino al
+              tetto): i numeri veri possono essere diversi, in su o in giù.
             </p>
           </div>
         </div>

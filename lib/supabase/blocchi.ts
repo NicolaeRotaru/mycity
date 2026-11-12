@@ -95,8 +95,12 @@ export async function leggiTutteLeRighe<T>(
  * `leggiInBlocchi` fa UNA richiesta per blocco di cento identificativi. Ma
  * cento clienti possono avere ben piu' di mille ordini, e il servizio dati ne
  * restituisce al massimo mille per richiesta: il resto si perdeva senza errore.
- * Il funnel contava cosi' meno clienti che comprano di quelli veri, e la
- * sitemap perdeva i prodotti piu' vecchi.
+ * Il funnel contava cosi' meno clienti che comprano di quelli veri (la stessa
+ * funzione la usa ora anche la sitemap, R06-006).
+ *
+ * Chi la usa DEVE ordinare la lettura in modo stabile (per esempio
+ * `.order('created_at').order('id')`): senza ordine il database puo' restituire
+ * le righe in un ordine diverso a ogni finestra, con doppioni e righe perse.
  *
  * Qui ogni blocco si legge a finestre (`leggiTutteLeRighe`), finche' tornano
  * finestre piene. Se un blocco sbatte contro il tetto duro, `troncato` lo dice
