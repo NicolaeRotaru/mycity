@@ -13,6 +13,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import RiderConnectButton from '@/components/rider/RiderConnectButton';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 import { riepilogoFattorino } from '@/lib/guadagni/fattorino';
+import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -186,6 +187,10 @@ export default function RiderEarningsPage() {
               <p className="mt-1 text-xs leading-relaxed text-olive-800">
                 <strong>{formatPrice(paid)}</strong> già versati · <strong>{formatPrice(pending)}</strong> in arrivo
                 (consegne con carta) · <strong>{formatPrice(inContanti)}</strong> tenuti in contanti alla consegna.
+              </p>
+              {/* 12/11/2026 (R09-020) — «In arrivo» non diceva quando, né che senza IBAN collegato non arriva niente. */}
+              <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
+                Il bonifico di una consegna con carta parte {fraseAttesaBonifico()}, ma solo se hai collegato il tuo IBAN qui sotto: finché non è collegato i compensi restano in attesa.
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
                 Sulle consegne in contanti il compenso te lo tieni tu dall&apos;incasso: rimetti in
