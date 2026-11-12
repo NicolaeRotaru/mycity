@@ -76,7 +76,16 @@ BEGIN
      AND seller_id = p_seller
      AND payment_method = 'cod'
      AND delivery_status = 'DELIVERED'
-     AND payout_status = 'HELD';
+     AND payout_status = 'HELD'
+     -- Gli stessi cancelli del giro automatico (release-payouts): niente bonifico a mano su un
+     -- ordine con una contestazione in banca, un reclamo, un reso aperto o rimborsato per intero.
+     AND (dispute_status IS NULL OR dispute_status = 'WON')
+     AND (internal_dispute_status IS NULL OR internal_dispute_status = 'RESOLVED')
+     AND coalesce(payment_status, '') <> 'REFUNDED'
+     AND NOT EXISTS (SELECT 1 FROM public.returns r
+                      WHERE r.order_id = orders.id AND r.status IN ('REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'))
+     AND NOT EXISTS (SELECT 1 FROM public.disputes d
+                      WHERE d.order_id = orders.id AND d.status IN ('open', 'under_review'));
   GET DIAGNOSTICS v_segnati = ROW_COUNT;
 
   RETURN v_segnati;

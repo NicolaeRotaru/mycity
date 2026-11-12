@@ -175,7 +175,19 @@ export type OrdineDelPannello = {
   seller_payout_cents: number | null;
   seller_payout_reversed_cents?: number | null;
   delivered_at?: string | null;
+  dispute_status?: string | null;
+  internal_dispute_status?: string | null;
+  payment_status?: string | null;
 };
+
+/** Gli stessi cancelli del giro automatico: contestazione in banca, reclamo, rimborso pieno. */
+function fermoPerReclamo(o: OrdineDelPannello): boolean {
+  return (
+    (!!o.dispute_status && o.dispute_status !== 'WON') ||
+    (!!o.internal_dispute_status && o.internal_dispute_status !== 'RESOLVED') ||
+    o.payment_status === 'REFUNDED'
+  );
+}
 
 export function gruppoDelPannello(o: OrdineDelPannello): { gruppo: GruppoDelPannello; etichetta: string } {
   const contanti = o.payment_method === 'cod';
@@ -186,6 +198,7 @@ export function gruppoDelPannello(o: OrdineDelPannello): { gruppo: GruppoDelPann
       return { gruppo: 'pagato', etichetta: 'Bonifico fatto' };
     case 'HELD':
       // Contanti con la rimessa confermata: li versa Nicola a mano. Carta: li paga il giro.
+      if (contanti && fermoPerReclamo(o)) return { gruppo: 'in_sospeso', etichetta: 'Fermo: reclamo o contestazione' };
       return contanti ? { gruppo: 'da_versare', etichetta: 'Da versare' } : { gruppo: 'in_sospeso', etichetta: 'In sospeso' };
     case 'PENDING_SELLER_ONBOARDING':
     case 'PROCESSING':

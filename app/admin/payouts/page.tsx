@@ -41,6 +41,9 @@ type PayoutOrder = {
   total_price: number | string | null;
   seller_payout_cents: number | null;
   seller_payout_reversed_cents: number | null;
+  dispute_status?: string | null;
+  internal_dispute_status?: string | null;
+  payment_status?: string | null;
   payout_status: string | null;
   payout_at: string | null;
   stripe_transfer_id: string | null;
@@ -167,7 +170,7 @@ export default function AdminPayoutsPage() {
       const { data, error, count } = await supabase
         .from('orders')
         .select(
-          'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+          'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, dispute_status, internal_dispute_status, payment_status, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
           // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
           { count: 'exact' },
         )

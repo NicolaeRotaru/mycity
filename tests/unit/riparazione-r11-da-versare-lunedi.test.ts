@@ -32,6 +32,13 @@ describe('R11-001 — gli stati nel pannello', () => {
   it('la carta HELD la paga il giro: in sospeso, non da versare a mano', () => {
     expect(gruppoDelPannello(o({ payment_method: 'card' })).gruppo).toBe('in_sospeso');
   });
+  it('contanti HELD con una contestazione, un reclamo o un rimborso pieno: fermi, non da versare', () => {
+    expect(gruppoDelPannello(o({ dispute_status: 'OPEN' })).gruppo).toBe('in_sospeso');
+    expect(gruppoDelPannello(o({ internal_dispute_status: 'OPEN' })).gruppo).toBe('in_sospeso');
+    expect(gruppoDelPannello(o({ internal_dispute_status: 'LOST' })).gruppo).toBe('in_sospeso');
+    expect(gruppoDelPannello(o({ payment_status: 'REFUNDED' })).gruppo).toBe('in_sospeso');
+    expect(gruppoDelPannello(o({ dispute_status: 'WON', internal_dispute_status: 'RESOLVED' })).gruppo).toBe('da_versare');
+  });
   it('il bonifico fatto a mano è pagato', () => {
     expect(gruppoDelPannello(o({ payout_status: 'PAID_MANUALLY' })).gruppo).toBe('pagato');
   });

@@ -38,6 +38,15 @@ INSERT INTO public.orders (
   ('e1100000-0000-0000-0000-0000000000b1', 'e1100000-0000-0000-0000-000000000003', 'e1100000-0000-0000-0000-000000000002',
    20, 2000, 'cod', 'PAID', 'DELIVERED', now(), false, 'HELD', 1800, 'Maria', '333', 'Via A 1', 'Piacenza', '29121');
 
+-- Contante rimesso ma con un reclamo aperto: il giro automatico lo trattiene, il bonifico a mano pure.
+INSERT INTO public.orders (
+  id, user_id, seller_id, total_price, gross_total_cents, payment_method, payment_status,
+  delivery_status, delivered_at, pickup_in_store, payout_status, seller_payout_cents, internal_dispute_status,
+  delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip
+) VALUES
+  ('e1100000-0000-0000-0000-0000000000a4', 'e1100000-0000-0000-0000-000000000003', 'e1100000-0000-0000-0000-000000000001',
+   20, 2000, 'cod', 'PAID', 'DELIVERED', now(), false, 'HELD', 1800, 'OPEN', 'Maria', '333', 'Via A 1', 'Piacenza', '29121');
+
 SET LOCAL mycity.allow_order_write = '';
 
 -- ① Il negozio prova a segnarsi pagato da solo.
@@ -61,7 +70,8 @@ INSERT INTO esiti
 SELECT 'l amministratore segna solo il contante HELD di quel negozio', n = 1, n || ' ordini segnati'
   FROM (SELECT public.segna_bonifico_manuale('e1100000-0000-0000-0000-000000000001',
           ARRAY['e1100000-0000-0000-0000-0000000000a1', 'e1100000-0000-0000-0000-0000000000a2',
-                'e1100000-0000-0000-0000-0000000000a3', 'e1100000-0000-0000-0000-0000000000b1']::uuid[],
+                'e1100000-0000-0000-0000-0000000000a3', 'e1100000-0000-0000-0000-0000000000b1',
+                'e1100000-0000-0000-0000-0000000000a4']::uuid[],
           'TRN-123') AS n) t;
 RESET ROLE;
 RESET request.jwt.claims;
@@ -73,10 +83,10 @@ SELECT 'il contante rimesso diventa PAID_MANUALLY con data e riferimento',
   FROM public.orders WHERE id = 'e1100000-0000-0000-0000-0000000000a1';
 
 INSERT INTO esiti
-SELECT 'carta, contante non rimesso e altro negozio restano come erano',
+SELECT 'carta, contante non rimesso, altro negozio e contante con reclamo aperto restano come erano',
        bool_and(payout_status <> 'PAID_MANUALLY'), string_agg(id::text || '=' || payout_status, ', ')
   FROM public.orders WHERE id IN ('e1100000-0000-0000-0000-0000000000a2', 'e1100000-0000-0000-0000-0000000000a3',
-                                  'e1100000-0000-0000-0000-0000000000b1');
+                                  'e1100000-0000-0000-0000-0000000000b1', 'e1100000-0000-0000-0000-0000000000a4');
 
 DO $$
 DECLARE r record; rossi int;
