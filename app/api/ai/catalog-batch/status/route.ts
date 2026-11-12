@@ -27,6 +27,8 @@ type JobRow = {
   target_lang: string | null;
   total: number;
   results: CatalogJobResult[] | null;
+  created_at?: string | null;
+  error?: string | null;
 };
 
 export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -35,23 +37,76 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   const jobId = new URL(req.url).searchParams.get('jobId') ?? '';
-  if (!jobId) return ApiErrors.invalidRequest('Job mancante.');
-
   const admin = getAdminSupabase();
+
+  // 12/11/2026 (R04-013) — SENZA jobId: L'ULTIMO LAVORO ANCORA APERTO.
+  // L'id del lavoro stava solo nel browser che l'aveva avviato: da un altro
+  // telefono, in navigazione privata o con la memoria pulita, il lavoro pagato
+  // spariva dalla vista. Adesso la pagina, all'apertura, chiede al server.
+  if (!jobId) {
+    const { data: aperti } = await admin
+      .from('catalog_ai_jobs')
+      .select(COLONNE)
+      .eq('seller_id', user.id)
+      .in('status', ['submitting', 'processing', 'ready'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const ultimo = ((aperti ?? []) as JobRow[])[0];
+    if (!ultimo) return NextResponse.json(null);
+    return rispondiPerLavoro(admin, ultimo, user.id);
+  }
+
   const { data } = await admin
     .from('catalog_ai_jobs')
-    .select('id, seller_id, operation, status, batch_id, target_lang, total, results')
+    .select(COLONNE)
     .eq('id', jobId)
     .single();
 
   const job = data as JobRow | null;
   if (!job) return ApiErrors.notFound('Job non trovato.');
   if (job.seller_id !== user.id) return ApiErrors.forbidden('Non è un tuo job.');
+  return rispondiPerLavoro(admin, job, user.id);
+});
 
-  // Già pronto/applicato: ritorna lo stato salvato.
-  if (job.status !== 'processing' || !job.batch_id) {
+/**
+ * 12/11/2026 (R04-005) — Un lavoro «in invio» da troppo tempo, senza lotto
+ * agganciato, non tornera' mai «in corso» da solo: restava cosi' per sempre e
+ * la pagina non mostrava ne' rotella ne' pulsante. Oltre questa soglia lo si
+ * chiude come fallito, con il motivo, e il negoziante puo' ripartire.
+ */
+export const INVIO_SCADUTO_MS = 15 * 60_000;
+
+const COLONNE = 'id, seller_id, operation, status, batch_id, target_lang, total, results, created_at, error';
+
+async function rispondiPerLavoro(
+  admin: ReturnType<typeof getAdminSupabase>,
+  job: JobRow,
+  sellerId: string,
+): Promise<NextResponse> {
+  if (job.status === 'submitting' && !job.batch_id) {
+    const nato = job.created_at ? Date.parse(job.created_at) : NaN;
+    if (Number.isFinite(nato) && Date.now() - nato > INVIO_SCADUTO_MS) {
+      const motivo = job.error
+        ? `${job.error} — chiuso dopo ${INVIO_SCADUTO_MS / 60_000} minuti senza lotto agganciato`
+        : `invio non confermato: nessun lotto agganciato dopo ${INVIO_SCADUTO_MS / 60_000} minuti`;
+      await admin
+        .from('catalog_ai_jobs')
+        .update({ status: 'failed', error: motivo, updated_at: new Date().toISOString() })
+        .eq('id', job.id)
+        .eq('seller_id', sellerId)
+        .eq('status', 'submitting');
+      logger.error('catalog-batch status: lavoro in invio scaduto, chiuso come fallito', { jobId: job.id });
+      return NextResponse.json(serialize({ ...job, status: 'failed', error: motivo }));
+    }
     return NextResponse.json(serialize(job));
   }
+
+  // Già pronto/applicato/fallito: ritorna lo stato salvato. Un lavoro «in
+  // invio» che ha gia' il lotto agganciato si interroga come uno «in corso».
+  if ((job.status !== 'processing' && job.status !== 'submitting') || !job.batch_id) {
+    return NextResponse.json(serialize(job));
+  }
+  const user = { id: sellerId };
 
   // Polling del batch.
   let ended = false;
@@ -121,7 +176,7 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
     logger.error('catalog-batch status: fetch results failed', { jobId: job.id });
     return NextResponse.json(serialize(job));
   }
-});
+}
 
 function serialize(job: JobRow) {
   const results = Array.isArray(job.results) ? job.results : [];
@@ -134,5 +189,6 @@ function serialize(job: JobRow) {
     targetLang: job.target_lang,
     results,
     counts: { total: results.length, withChanges: changed },
+    error: job.error ?? null,
   };
 }

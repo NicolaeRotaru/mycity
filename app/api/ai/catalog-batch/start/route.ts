@@ -179,10 +179,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     logger.info('[ai] spesa del lotto impegnata alla partenza', {
       jobId: job.id, richieste: requests.length, stimaEur: impegnato.toFixed(4),
     });
-    const { error: errUpd } = await admin
-      .from('catalog_ai_jobs')
-      .update({ status: 'processing', batch_id: handle.id })
-      .eq('id', job.id);
+    // R04-005 — Agganciare il lotto alla riga si ritenta una volta: se non
+    // riesce, la risposta dice lo stato VERO («in invio»), non «in corso».
+    const aggancia = () =>
+      admin.from('catalog_ai_jobs').update({ status: 'processing', batch_id: handle.id }).eq('id', job.id);
+    let { error: errUpd } = await aggancia();
+    if (errUpd) ({ error: errUpd } = await aggancia());
 
     if (errUpd) {
       // Il lavoro è partito davvero: l'identificativo va nel log, così il lotto
@@ -190,6 +192,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       logger.error('catalog-batch start: batch avviato ma non agganciato', {
         sellerId: user.id, jobId: job.id, batchId: handle.id,
       });
+      return NextResponse.json({ jobId: job.id, total: products.length, status: 'submitting' });
     }
 
     return NextResponse.json({ jobId: job.id, total: products.length, status: 'processing' });

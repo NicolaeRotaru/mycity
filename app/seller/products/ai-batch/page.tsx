@@ -19,6 +19,13 @@ import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import { AI_NEGOZI_ACCESA, TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { campiDellaModifica, lavoroRicordato, ricordaLavoro } from './anteprima';
+import {
+  lavoroChiuso,
+  lavoroInCorso,
+  puoAvviareLavoro,
+  testoStatoLavoro,
+  type StatoLavoroCatalogo,
+} from '@/lib/ai/statoLavoroCatalogo';
 
 /**
  * AI Studio — tre modi per lavorare col catalogo con l'intelligenza artificiale:
@@ -45,8 +52,9 @@ type JobResult = {
 type Job = {
   id: string;
   operation: Operation;
-  status: 'processing' | 'ready' | 'applied' | 'error' | 'canceled';
+  status: StatoLavoroCatalogo;
   total: number;
+  error?: string | null;
   targetLang: string | null;
   results: JobResult[];
   counts: { total: number; withChanges: number };
@@ -336,9 +344,23 @@ function CatalogTab() {
     try {
       const data = (await authedFetch(`/api/ai/catalog-batch/status?jobId=${encodeURIComponent(jobId)}`)) as Job;
       setJob(data);
-      // Un lavoro chiuso non si ripropone alla prossima apertura.
-      if (data.status === 'applied' || data.status === 'canceled' || data.status === 'error') ricordaLavoro(null);
+      // Un lavoro chiuso non si ripropone alla prossima apertura (anche «fallito»: R04-005).
+      if (lavoroChiuso(data.status)) ricordaLavoro(null);
     } catch { /* riprova al prossimo tick */ }
+  }, []);
+
+  // R04-013 — Senza un lavoro ricordato da questo browser si chiede al server
+  // l'ultimo lavoro ancora aperto: da un altro telefono o dopo una pulizia della
+  // memoria, il lavoro pagato non deve sparire.
+  const riprendiUltimo = useCallback(async () => {
+    try {
+      const data = (await authedFetch('/api/ai/catalog-batch/status')) as Job | null;
+      if (data && data.id) {
+        setJob(data);
+        if (lavoroChiuso(data.status)) ricordaLavoro(null);
+        else ricordaLavoro(String(data.id));
+      }
+    } catch { /* niente da riprendere adesso */ }
   }, []);
 
   // All'apertura si riparte dall'ultimo lavoro avviato da questo browser: il lotto
@@ -346,11 +368,12 @@ function CatalogTab() {
   useEffect(() => {
     const ricordato = lavoroRicordato();
     if (ricordato) void poll(ricordato);
-  }, [poll]);
+    else void riprendiUltimo();
+  }, [poll, riprendiUltimo]);
 
-  // Polling mentre il job è in lavorazione.
+  // Polling mentre il job è in lavorazione (anche «in invio»: R04-005).
   useEffect(() => {
-    if (!job || job.status !== 'processing') return;
+    if (!job || !lavoroInCorso(job.status)) return;
     const id = setInterval(() => void poll(job.id), 5000);
     return () => clearInterval(id);
   }, [job, poll]);
@@ -365,9 +388,12 @@ function CatalogTab() {
       });
       toast.success(`Job avviato su ${data.total} prodotti. Può volerci qualche minuto: puoi chiudere la pagina, lo ritrovi qui.`);
       ricordaLavoro(String(data.jobId));
-      setJob({ id: data.jobId, operation, status: 'processing', total: data.total, targetLang: operation === 'translate' ? lang : null, results: [], counts: { total: 0, withChanges: 0 } });
+      setJob({ id: data.jobId, operation, status: data.status === 'submitting' ? 'submitting' : 'processing', total: data.total, targetLang: operation === 'translate' ? lang : null, results: [], counts: { total: 0, withChanges: 0 } });
     } catch (err) {
       toast.error(friendlyError(err));
+      // R04-013 · R04-025 — Se un lavoro era gia' aperto (o l'invio e' rimasto
+      // senza risposta), lo si mostra invece di lasciare la pagina vuota.
+      void riprendiUltimo();
     } finally {
       setStarting(false);
     }
@@ -418,7 +444,7 @@ function CatalogTab() {
               key={o.key}
               type="button"
               onClick={() => { setOperation(o.key); setJob(null); }}
-              disabled={job?.status === 'processing'}
+              disabled={lavoroInCorso(job?.status)}
               className={`rounded-xl border p-3.5 text-left transition-colors disabled:opacity-50 ${
                 active ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-white hover:bg-cream-50'
               }`}
@@ -438,24 +464,31 @@ function CatalogTab() {
             label="Lingua di destinazione"
             value={lang}
             onChange={(e) => setLang(e.target.value)}
-            disabled={job?.status === 'processing'}
+            disabled={lavoroInCorso(job?.status)}
           >
             {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
           </Select>
         </div>
       )}
 
-      {(!job || job.status === 'applied') && (
+      {puoAvviareLavoro(job) && (
         <Button size="lg" icon={Sparkles} loading={starting} onClick={() => void start()}>
           Avvia sul catalogo
         </Button>
       )}
 
       {/* Stato job */}
-      {job && job.status === 'processing' && (
+      {job && lavoroInCorso(job.status) && (
         <div className="flex items-center gap-3 rounded-xl border border-cream-200 bg-cream-50 p-4 text-sm text-ink-600">
           <Loader2 size={18} className="animate-spin" aria-hidden />
-          <span>Sto elaborando {job.total} prodotti… puoi lasciare aperta questa pagina o tornare più tardi.</span>
+          <span>{testoStatoLavoro(job)}</span>
+        </div>
+      )}
+
+      {job && lavoroChiuso(job.status) && job.status !== 'applied' && (
+        <div role="status" className="flex items-center gap-3 rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-ink-700">
+          <AlertTriangle size={18} className="text-secondary-600" aria-hidden />
+          <span>{testoStatoLavoro(job)}</span>
         </div>
       )}
 
