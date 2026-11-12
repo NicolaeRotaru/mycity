@@ -482,7 +482,8 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     // R11-023 — persa su una PARTE del carrello: niente annulli, merce a scaffale o «rimborsato per
     // intero» sugli ordini degli altri negozi. Bonifici fermi (LOST), la perdita la divide Nicola.
     scritturaObbligatoria(
-      await admin.from('orders').update({ dispute_status: 'LOST', payment_status: 'PARTIALLY_REFUNDED' }).in('id', ids),
+      await admin.from('orders').update({ dispute_status: 'LOST', payment_status: 'PARTIALLY_REFUNDED' })
+        .in('id', orders.filter((o) => (o as { payment_status?: string }).payment_status !== 'REFUNDED').map((o) => o.id)),
       'contestazione persa su una parte del carrello',
     );
     await notifyAdmins(

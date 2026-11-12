@@ -76,3 +76,12 @@ describe('R11-023 — contestazione persa su una parte del carrello', () => {
     expect(stato.rpc).toContain('restore_stock_for_order');
   });
 });
+
+describe('R11-023 — dal controllo qa', () => {
+  it('dopo un rimborso, la contestazione di tutto il resto è intera (non «di una parte»)', async () => {
+    stato.ordini = [{ ...ordine('solo-ord', 10000, 'CONFIRMED'), refunded_amount_cents: 2000 }];
+    await handleDisputeClosed(persa(8000));
+    expect(stato.scritture.some((v) => v.payment_status === 'REFUNDED')).toBe(true);
+    expect(stato.rpc).toContain('restore_stock_for_order');
+  });
+});
