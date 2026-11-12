@@ -42,7 +42,10 @@ vi.mock('@/lib/api/middleware', () => ({
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => stato.db.client,
   getServerSupabase: async () => ({
-    from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: stato.profiloCassa, error: null }) }) }) }),
+    from: (tabella: string) => tabella === 'orders'
+      // Un negozio che ha già incassato (R10-020): la cassa si apre.
+      ? { select: () => ({ eq: () => ({ or: () => ({ limit: async () => ({ data: [{ id: 'o1' }], error: null }) }) }) }) }
+      : { select: () => ({ eq: () => ({ single: async () => ({ data: stato.profiloCassa, error: null }) }) }) },
   }),
 }));
 vi.mock('@/lib/stripe/client', () => ({

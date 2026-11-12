@@ -447,7 +447,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
             Carta di credito per abbonamento
           </p>
           <p>
-            L'abbonamento ({PREZZO_ABBONAMENTO_MESE}/mese) viene addebitato <strong>solo dopo che l'admin avrà approvato la richiesta</strong>.
+            {/* R10-020 — La regola firmata: il canone parte dopo il primo incasso, non all'approvazione. */}
+            L'abbonamento ({PREZZO_ABBONAMENTO_MESE}/mese) parte <strong>solo dopo il tuo primo incasso con MyCity</strong>.
             In quel momento ti chiederemo di inserire la carta tramite un pagamento sicuro (Stripe). Non ti chiediamo i
             dati carta adesso per ridurre i tuoi rischi.
           </p>
@@ -474,7 +475,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         />
         {ABBONAMENTO_NEGOZI_ACCESO && (
           <Consent
-            label={`Accetto che, all'approvazione, mi venga richiesto l'inserimento della carta per l'addebito mensile di ${PREZZO_ABBONAMENTO_MESE}`}
+            label={`Accetto che, dopo il mio primo incasso con MyCity, mi venga richiesto l'inserimento della carta per l'addebito mensile di ${PREZZO_ABBONAMENTO_MESE}`}
             register={register('acceptBilling')}
             error={errors.acceptBilling?.message as string | undefined}
           />

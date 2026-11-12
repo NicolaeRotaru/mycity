@@ -26,6 +26,8 @@ export const runtime = 'nodejs';
 const SELLER_SUBSCRIPTION_CENTS = ABBONAMENTO_CENTESIMI_MESE;
 /** R10-019 — Le richieste dello stesso negozio dentro questa finestra ricevono la stessa cassa. */
 const FINESTRA_CASSA_MS = 10 * 60_000;
+/** R10-020 — Un ordine incassato: pagato (carta o contanti registrati), o in contanti e consegnato. */
+const PRIMO_INCASSO = 'payment_status.eq.PAID,and(payment_method.eq.cod,delivery_status.eq.DELIVERED)';
 
 export const POST = withAuthRateLimit(
   { name: 'seller-subscription-checkout', max: 10, windowMs: 10 * 60_000 },
@@ -50,6 +52,26 @@ export const POST = withAuthRateLimit(
     }
     if (profile.subscription_status === 'active') {
       return ApiErrors.invalidRequest('Abbonamento già attivo.');
+    }
+
+    // 12/11/2026 (R10-020) — LA REGOLA FIRMATA: IL CANONE PARTE DOPO IL PRIMO INCASSO.
+    // Le pagine lo dicevano gia' (commissione.ts, «che parte solo dopo il tuo primo incasso
+    // con MyCity»), ma qui bastava l'approvazione: il negozio appena approvato pagava 50 €
+    // prima di aver venduto niente. «Primo incasso» = un suo ordine pagato (carta, o contanti
+    // gia' registrati: PAID) oppure un ordine in contanti consegnato. Definizione approvata
+    // dalla regista, da confermare da Nicola (referto R10).
+    const { data: incassi, error: erroreIncassi } = await supa
+      .from('orders')
+      .select('id')
+      .eq('seller_id', user.id)
+      .or(PRIMO_INCASSO)
+      .limit(1);
+    if (erroreIncassi) {
+      logger.warn('[subscription] incassi del negozio non letti', { sellerId: user.id, code: erroreIncassi.code });
+      return ApiErrors.unavailable('Non riesco a verificare i tuoi incassi. Riprova fra poco.');
+    }
+    if (!incassi || incassi.length === 0) {
+      return ApiErrors.forbidden("L'abbonamento parte solo dopo il tuo primo incasso con MyCity.");
     }
 
     const stripe = getStripe();

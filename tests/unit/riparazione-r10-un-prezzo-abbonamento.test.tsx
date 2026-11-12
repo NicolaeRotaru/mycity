@@ -34,10 +34,12 @@ vi.mock('@/lib/env', async (orig) => ({
 }));
 vi.mock('@/lib/supabase/server', () => ({
   getServerSupabase: async () => ({
-    from: () => ({ select: () => ({ eq: () => ({ single: async () => ({
-      data: { role: 'seller', is_approved: true, stripe_customer_id: null, subscription_status: null }, error: null,
-    }) }) }) }),
-    rpc: async () => ({ data: true, error: null }),
+    from: (tabella: string) => tabella === 'orders'
+      // Un negozio che ha già incassato (R10-020): la cassa si apre.
+      ? { select: () => ({ eq: () => ({ or: () => ({ limit: async () => ({ data: [{ id: 'o1' }], error: null }) }) }) }) }
+      : { select: () => ({ eq: () => ({ single: async () => ({
+        data: { role: 'seller', is_approved: true, stripe_customer_id: null, subscription_status: null }, error: null,
+      }) }) }) },
   }),
 }));
 vi.mock('@/lib/stripe/client', () => ({
