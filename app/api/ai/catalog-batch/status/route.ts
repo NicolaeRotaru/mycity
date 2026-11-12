@@ -124,11 +124,12 @@ async function rispondiPerLavoro(
     const handle = await pollBatch(job.batch_id);
     ended = handle.processingStatus === 'ended';
   } catch {
-    // Anthropic non raggiungibile ora: resta processing, si riprova.
-    return NextResponse.json(serialize(job));
+    // Anthropic non raggiungibile ora: resta processing, si riprova — ma non
+    // per sempre (vedi chiudiSeScaduto).
+    return chiudiSeScaduto(admin, job, sellerId);
   }
 
-  if (!ended) return NextResponse.json(serialize(job));
+  if (!ended) return chiudiSeScaduto(admin, job, sellerId);
 
   // Terminato: recupera e parsa i risultati una volta sola.
   try {
@@ -186,6 +187,34 @@ async function rispondiPerLavoro(
     logger.error('catalog-batch status: fetch results failed', { jobId: job.id });
     return NextResponse.json(serialize(job));
   }
+}
+
+/**
+ * 12/11/2026 (R04-025, revisione K02) — UN LAVORO «IN CORSO» CHE NON FINISCE MAI.
+ *
+ * Con un lavoro aperto non se ne avvia un altro (R04-025): ma un lavoro
+ * «processing» che non si chiudeva piu' (lotto sparito, id sbagliato, fornitore
+ * che non risponde) teneva chiuso «migliora tutto il catalogo» per sempre. Un
+ * lotto dura al massimo 24 ore: oltre le 25 si chiude come fallito, col motivo.
+ */
+const LOTTO_SCADUTO_MS = 25 * 60 * 60_000;
+
+async function chiudiSeScaduto(
+  admin: ReturnType<typeof getAdminSupabase>,
+  job: JobRow,
+  sellerId: string,
+): Promise<NextResponse> {
+  const nato = job.created_at ? Date.parse(job.created_at) : NaN;
+  if (!(Number.isFinite(nato) && Date.now() - nato > LOTTO_SCADUTO_MS)) return NextResponse.json(serialize(job));
+  const motivo = 'il lotto non e\' finito entro 24 ore: chiuso. Se era partito, i risultati si recuperano con l\'assistenza.';
+  await admin
+    .from('catalog_ai_jobs')
+    .update({ status: 'failed', error: motivo, updated_at: new Date().toISOString() })
+    .eq('id', job.id)
+    .eq('seller_id', sellerId)
+    .eq('status', job.status);
+  logger.error('catalog-batch status: lotto oltre le 24 ore, chiuso come fallito', { jobId: job.id, batchId: job.batch_id });
+  return NextResponse.json(serialize({ ...job, status: 'failed', error: motivo }));
 }
 
 function serialize(job: JobRow) {

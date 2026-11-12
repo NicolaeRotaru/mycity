@@ -98,6 +98,44 @@ describe('un lavoro «in invio» non resta cosi\' per sempre', () => {
   });
 });
 
+describe('un lavoro «in corso» che non finisce mai non chiude il negozio per sempre (R04-025, K02)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    aggiornamenti.length = 0;
+    __resetRateLimitBuckets();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const inCorso = (creato: string) => ({
+    id: 'job-1', seller_id: 'seller-1', operation: 'improve', status: 'processing', batch_id: 'b9',
+    target_lang: null, total: 12, results: [], created_at: creato, error: null,
+  });
+
+  it('in corso da 30 ore e il fornitore non lo dà finito: chiuso come fallito, si puo\' ripartire', async () => {
+    riga = inCorso('2026-11-11T06:00:00Z');
+    const corpo = (await (await chiedi()).json()) as { status: string; error: string };
+    expect(corpo.status).toBe('failed');
+    expect(aggiornamenti).toContainEqual(expect.objectContaining({ status: 'failed' }));
+    expect(puoAvviareLavoro(corpo)).toBe(true);
+  });
+
+  it('in corso da 30 ore e il fornitore non risponde: chiuso lo stesso', async () => {
+    riga = inCorso('2026-11-11T06:00:00Z');
+    pollMock.mockRejectedValueOnce(new Error('giu'));
+    const corpo = (await (await chiedi()).json()) as { status: string };
+    expect(corpo.status).toBe('failed');
+  });
+
+  it('in corso da 2 ore: resta in corso', async () => {
+    riga = inCorso('2026-11-12T10:00:00Z');
+    const corpo = (await (await chiedi()).json()) as { status: string };
+    expect(corpo.status).toBe('processing');
+    expect(aggiornamenti).toHaveLength(0);
+  });
+});
+
 describe('la pagina ha un posto per ogni stato', () => {
   it('fallito: si dimentica, si spiega e si puo\' ripartire', () => {
     expect(lavoroChiuso('failed')).toBe(true);
