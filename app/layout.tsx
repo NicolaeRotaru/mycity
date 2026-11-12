@@ -94,13 +94,19 @@ if (FONTE_APP_URL === 'dominio-di-riserva') {
  */
 export const dynamic = 'force-dynamic';
 
+/** R10-001 — Il manifest solo con l'app installabile accesa; il link lo scrive il <head> qui sotto. */
+const MANIFEST = APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' } : null;
+
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   // 29/10/2026 — Senza abbigliamento, che al lancio non c'è (catalogo.categorie): il testo vive in lib/site-branding.
   description: DESCRIZIONE_DEL_SITO,
   // 31/10/2026 — App installabile spenta al lancio (APP_INSTALLABILE_ACCESA): niente manifest.
-  ...(APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' } : {}),
+  // 12/11/2026 (R10-001) — Il manifest e l'icona Apple NON stanno piu' qui: il layout e'
+  // force-dynamic e Next 15.5 manda in streaming i metadata, cioe' li scrive nel <body>.
+  // Chrome il manifest lo cerca solo fra i figli del <head> («no-manifest»): niente app
+  // installabile. Stanno nel <head> scritto a mano qui sotto.
   icons: {
     // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e
     // parecchi aggregatori chiedono da soli (/favicon.ico), e fino a oggi
@@ -111,7 +117,6 @@ export const metadata: Metadata = {
       { url: '/icon-192.svg', type: 'image/svg+xml' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
-    apple: '/apple-touch-icon.png',
   },
   // S10 (5/11/2026) — Il canonical «/» stava qui, e Next lo passa a ogni pagina
   // che non ne scrive uno suo: Categorie, Novità, Più venduti, Piccoli prezzi e
@@ -202,6 +207,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="preconnect" href="https://js.stripe.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://api.stripe.com" />
         <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+        {/* R10-001 — Qui e non nei metadata: nel <body> Chrome non li legge (vedi sopra). */}
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {MANIFEST && <link rel="manifest" href={MANIFEST.manifest} />}
       </head>
       {/*
         6/9/2026, secondo giro — DELLA «ZONA SICURA» LEGGEVAMO SOLO IL BORDO DI SOTTO.
