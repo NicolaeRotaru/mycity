@@ -59,6 +59,7 @@ import { trackReviewSubmitted } from '@/lib/analytics/events';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
+import { creaFrenoDoppioTocco } from '@/lib/ui/freno-doppio-tocco';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -76,6 +77,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const router = useRouter();
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
+  const frenoAggiunta = useRef(creaFrenoDoppioTocco());
   // 5/11/2026 — Dopo il primo tocco su «Compra ora» il pulsante si spegne fino al cambio pagina.
   const [inPartenza, setInPartenza] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -561,6 +563,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
       return;
     }
+    // R02-016 — Il secondo tocco dello stesso gesto (scheda o barra in fondo) non aggiunge un altro
+    // pezzo: addToCart somma alla riga che c'è.
+    if (!frenoAggiunta.current()) return;
     addToCart({
       id: product.id,
       name: product.name,
@@ -1136,6 +1141,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             </div>
 
             <Button
+              id="acquisto-principale"
               variant="accent"
               size="lg"
               fullWidth
@@ -1472,6 +1478,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}
       <StickyAddToCart
         price={price}
+        bersaglio="acquisto-principale"
         available={canAdd}
         onAdd={handleAdd}
         note="Paghi alla consegna"
