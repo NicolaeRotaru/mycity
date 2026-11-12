@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -148,6 +148,19 @@ const GRAD_MAP: Record<string, string> = {
 // immagine — la chiede. Finché la colonna è vuota si vede il gradiente qui
 // sopra, che almeno è nostro.
 const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
+/**
+ * I due veli delle tessere (12/11/2026, R08-013).
+ *
+ * Sopra una foto serve il velo pieno: la foto può essere chiara ovunque.
+ * Sul gradiente del marchio basta un'ombra dal basso, dove sta il nome, che sale
+ * SENZA risalite (55% → 30% → niente): una fermata a metà più chiara di quella in
+ * alto faceva la banda chiara. Al 37% — l'altezza della seconda riga di un nome
+ * lungo — l'ombra vale ancora circa il 36%, e il bianco sulla tessera più chiara
+ * (senape accent-400) sta sopra 4,5:1. Prova: tests/unit/riparazione-r08-le-tessere-senza-foto.test.tsx.
+ */
+const VELO_SULLA_FOTO = 'from-black/70 via-black/15 to-black/25';
+const VELO_SENZA_FOTO = 'from-black/55 via-black/30 to-transparent';
+
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 
 /**
@@ -222,6 +235,11 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
       if (daDire) logger.warn('[categorie] foto di categoria scartata', { slug: c.slug, dettaglio: daDire });
     }
   }, [tessere]);
+
+  // Le foto che non si sono caricate: per loro la tessera torna gradiente, velo compreso.
+  const [fotoRotte, setFotoRotte] = useState<ReadonlySet<string>>(() => new Set());
+  const segnaRotta = (slug: string) =>
+    setFotoRotte((prima) => (prima.has(slug) ? prima : new Set(prima).add(slug)));
 
   // Tre esiti. Prima il componente leggeva solo `data` e disegnava comunque la griglia: finché la
   // risposta non arrivava restava un vuoto sotto il titolo «Cosa cerchi oggi?», e se la lettura
@@ -301,19 +319,25 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                   // invisibile anche a noi, e la home perdeva un'immagine senza
                   // che nessuno lo sapesse.
                   e.currentTarget.style.display = 'none';
+                  segnaRotta(c.slug);
                   logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
                 }}
               />
             )}
             {/* Scrim per leggibilità. 5/11/2026 — Il velo scuro pieno serve solo sopra una foto:
                 senza, scuriva tutto il gradiente del marchio e lasciava una banda chiara in mezzo.
-                Sul gradiente basta un'ombra in basso, dove sta il nome. */}
+                12/11/2026 (R08-013) — «Sopra una foto» vuol dire una foto CARICATA: prima bastava
+                l'indirizzo nel dato, e una foto rotta lasciava il velo pieno, con la banda, sul
+                gradiente. E sul gradiente l'ombra al 35% faceva scendere il nome bianco a circa
+                4:1 sulla senape: ora VELO_SENZA_FOTO, che regge 4,5:1 e sale senza bande. */}
             <div
               className={`absolute inset-0 bg-gradient-to-t ${
-                foto.src ? 'from-black/70 via-black/15 to-black/25' : 'from-black/35 via-transparent to-transparent'
+                foto.src && !fotoRotte.has(c.slug) ? VELO_SULLA_FOTO : VELO_SENZA_FOTO
               }`}
             />
-            <span className="absolute left-2.5 top-2.5 text-white drop-shadow">
+            {/* L'icona sta su un cerchio scuro suo, così il gradiente in alto resta pulito e
+                l'icona bianca resta sopra 3:1 anche sulla tessera più chiara. */}
+            <span className="absolute left-2 top-2 rounded-full bg-black/30 p-1 text-white">
               <Icon size={18} strokeWidth={2.2} />
             </span>
             <span className="relative p-3 text-sm font-bold leading-tight text-white drop-shadow">{c.name}</span>
