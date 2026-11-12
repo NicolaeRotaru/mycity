@@ -1,0 +1,262 @@
+{
+  "sessione": "R11",
+  "aggiornato": "2026-11-12 15:53",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "da_fare",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R11-001",
+      "chiave": "pagamenti-stripe|il pannello dei bonifici non dice a nicola quanto versare a ogni negozio il lunedì",
+      "esito": "riparato",
+      "commit": "9bf1e109d1601db53091cb54057f649453db3ae9",
+      "file_toccati": [
+        "app/admin/payouts/page.tsx",
+        "lib/guadagni/negozio.ts",
+        "tests/unit/minori-s05-bonifici-prodotti.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-pannello-bonifici.test.tsx",
+        "tests/unit/riparazione-r11-da-versare-lunedi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-pannello-bonifici.test.tsx tests/unit/riparazione-r11-da-versare-lunedi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9bf1e109d1601db53091cb54057f649453db3ae9^ --file app/admin/payouts/page.tsx --prove tests/unit/riparazione-r11-pannello-bonifici.test.tsx,tests/unit/riparazione-r11-da-versare-lunedi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Regola in negozio.ts (gruppoDelPannello, settimanaPrima, ordiniDaVersareLunedi): contanti HELD = «Da versare»; AWAITING_REMITTANCE = «Contanti dal fattorino» (in sospeso); CASH_IN_STORE, REVERSAL_FAILED, REVERSED, REFUNDED fuori dai totali; carta HELD in sospeso (la paga il giro). Importi = netto meno seller_payout_reversed_cents (ora letto). Per negozio: «Da versare lunedì» = contanti HELD consegnati entro la domenica scorsa (ora di Piacenza, arretrati compresi) + quanto è di questa settimana; IBAN intero visibile all admin; nota e sottotitolo non dicono più «nessuna azione manuale». Il tasto «Bonifico fatto» (R11-004) segna gli stessi ordini del lunedì. Prova esistente minori-s05-bonifici-prodotti.test.tsx (importa la pagina) aggiornata solo sull etichetta del primo riquadro, rinominato «Contanti da versare».",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-002",
+      "chiave": "pagamenti-stripe|un reclamo chiuso a favore del negozio gli blocca ancora per sempre il bonifico di quell'ordine",
+      "esito": "riparato",
+      "commit": "4e824caf403f4cc9f1e0962e5b7aaa33da969354",
+      "file_toccati": [
+        "app/api/admin/disputes/[id]/resolve/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-reclamo-segno-banca.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-reclamo-segno-banca.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4e824caf403f4cc9f1e0962e5b7aaa33da969354^ --file app/api/admin/disputes/[id]/resolve/route.ts --prove tests/unit/riparazione-r11-reclamo-segno-banca.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Chiudendo il reclamo, la rotta toglie il dispute_status OPEN lasciato dal trigger della 063 (con filtro eq OPEN), solo se in banca non c è una contestazione aperta: contanti mai, carta chiedendo a Stripe disputes.list. Se Stripe non risponde il segno resta e parte un avviso agli admin. Resta comunque consigliato applicare la 184 (Nicola).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-003",
+      "chiave": "pagamenti-stripe|un negozio già approvato non ha nessuna pagina dove scrivere iban e dati della ditta, e il suo bonifico non può partire",
+      "esito": "riparato",
+      "commit": "5c2fbbdf8cf2ac495bf564f32bd53e772ccbce8a",
+      "file_toccati": [
+        "app/api/seller/apply/route.ts",
+        "app/seller/profile/page.tsx",
+        "app/seller/earnings/page.tsx",
+        "components/seller/DatiPerIBonifici.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-dati-per-i-bonifici.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-dati-per-i-bonifici.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale_collaudato",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5c2fbbdf8cf2ac495bf564f32bd53e772ccbce8a^ --file app/api/seller/apply/route.ts --prove tests/unit/riparazione-r11-dati-per-i-bonifici.test.ts --json",
+        "nota": "La macchina non decide: la prova usa il nome nuovo PATCH. Collaudo a mano: con route.ts della base la prova va rossa sul comportamento (4 su 5: la richiesta del negozio approvato risponde 405 e non scrive niente); con la correzione verde."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuovo PATCH /api/seller/apply per il negozio (ruolo seller, non sospeso, anche già approvato): salva IBAN, ragione sociale, P.IVA, sede, PEC, SDI con gli stessi controlli dell iscrizione (normalizzaIban/ibanValido, cifra di controllo P.IVA), senza toccare ruolo né stato; un IBAN nuovo o cambiato manda un avviso agli admin. In /seller/profile la sezione «Dati per i bonifici» (componente nuovo DatiPerIBonifici); in /seller/earnings l avviso «Manca il tuo IBAN» porta lì. Non fatto: la riga nel registro attività (serve un azione nuova in lib/audit-azioni.ts, non mio) e l email al negozio.",
+      "verificato_da": "",
+      "serve_file_altrui": [
+        {
+          "file": "lib/audit-azioni.ts",
+          "modifica": "aggiungere 'seller.billing_update' ad AZIONI_AUDIT con etichetta «Dati per i bonifici cambiati», poi in app/api/seller/apply/route.ts PATCH chiamare writeAudit({actorId:user.id, action:'seller.billing_update', targetTable:'profiles', targetId:user.id, metadata:{iban_ultime4}})"
+        }
+      ]
+    },
+    {
+      "id": "R11-004",
+      "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
+      "esito": "riparato",
+      "commit": "c6dced3b9e3de8c05f6e6d5735a3cb7f326814a3",
+      "file_toccati": [
+        "migrations/350_il_bonifico_del_lunedi_si_segna.sql",
+        "lib/guadagni/negozio.ts",
+        "lib/database.types.ts",
+        "app/admin/payouts/page.tsx",
+        "app/seller/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-bonifico-del-lunedi.test.ts",
+        "tests/sql/rls/riparazione-r11-bonifico-del-lunedi.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-bonifico-del-lunedi.test.ts && tests/sql/harness/apply.sh && psql -d mycity_test -f tests/sql/rls/riparazione-r11-bonifico-del-lunedi.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6dced3b9e3de8c05f6e6d5735a3cb7f326814a3^ --file lib/guadagni/negozio.ts --prove tests/unit/riparazione-r11-bonifico-del-lunedi.test.ts,tests/sql/rls/riparazione-r11-bonifico-del-lunedi.test.sql --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 350 (NON applicata): stato PAID_MANUALLY nel vincolo, colonna payout_manual_ref e funzione segna_bonifico_manuale(seller, ordini, riferimento) riservata a is_admin(), che segna solo i contanti HELD consegnati di quel negozio. Pagina Guadagni e pannello admin contano PAID_MANUALLY come versato; nel pannello, per ogni negozio con contanti HELD, il tasto «Bonifico fatto» chiede il riferimento e chiama la funzione. Prova SQL eseguita su Postgres locale ricostruito dalle migrazioni (harness): 4 controlli verdi. Il giro Stripe resta fuori da solo (prende solo HELD/PENDING_SELLER_ONBOARDING). Funziona solo dopo che Nicola applica la 350.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-005",
+      "chiave": "pagamenti-stripe|sul ritiro in negozio pagato in contanti al banco, la pagina guadagni dice al negozio che gli arriveranno i 18 euro che ha già in cassa, e che li ha raccolti un fattorino",
+      "esito": "riparato",
+      "commit": "3a05e4cbbdb6137eca2a8c2fddb2b0e7fad14fad",
+      "file_toccati": [
+        "lib/guadagni/negozio.ts",
+        "app/seller/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-ritiro-pagato-al-banco.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-ritiro-pagato-al-banco.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3a05e4cbbdb6137eca2a8c2fddb2b0e7fad14fad^ --file lib/guadagni/negozio.ts --prove tests/unit/riparazione-r11-ritiro-pagato-al-banco.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "riepilogoContanti separa i ritiri pagati al banco (CASH_IN_STORE o pickup_in_store): non entrano nel netto in arrivo né nel contante del fattorino; compaiono a parte come «incassati da te al banco» con la commissione MyCity da scalare dal bonifico del lunedì (application_fee_cents). La pagina legge pickup_in_store e mostra l etichetta «Incassato al banco». La migrazione 179 non serve toccarla. La parte del pannello admin (CASH_IN_STORE fra i Pronto) la chiudo con R11-001.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-006",
+      "chiave": "pagamenti-stripe|il bonifico di rimborso al cliente non si può segnare come fatto, e nessuno controlla la scadenza dei 14 giorni",
+      "esito": "scelta_di_nicola",
+      "domanda": "Bonifici di rimborso dei contanti: vuoi il tasto «Fatto» e lo stato DA_FARE/FATTO/RESPINTO con allarme sui 14 giorni (come dice il registro dei fatti del 29/10), oppure confermi la «Semplifica» del 17/10, cioè solo l avviso nella campanella con la causale? E sui reclami (non resi) da che data parte il termine?",
+      "nota": "Verificato sulla base: lib/rimborsi/bonifici-da-fare.ts:29-31 dice «sul sito non esiste un fatto»; il reclamo non passa resoChiestoIl e il testo dice «Va pagato presto». Se Nicola sceglie il tasto, la cura tocca file non miei: lib/stripe/payout.ts (refundOrder deve scrivere la riga del bonifico nello stesso passo del segno), app/api/cron/operational-alerts/route.ts (allarme a 3 giorni dal termine e a termine passato), una pagina admin nuova «Bonifici di rimborso da fare», più una migrazione (tabella bonifici_rimborso) e una RPC riservata agli admin; nei miei file solo il testo dell avviso (bonifici-da-fare.ts) e la data di partenza nella rotta dei reclami. Lo stesso registro della radiografia la segna «gialla: serve la firma di Nicola»."
+    },
+    {
+      "id": "R11-007",
+      "chiave": "pagamenti-stripe|se la banca contesta solo una parte del pagamento e mycity vince, al negozio non torna la parte che gli era stata tolta",
+      "esito": "riparato",
+      "commit": "8aa754dc247ce247b817f699741773bd55eaedbf",
+      "file_toccati": [
+        "lib/stripe/webhook/dispute.ts",
+        "lib/stripe/webhook/contestazione-parziale-vinta.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-contestazione-parziale-vinta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-contestazione-parziale-vinta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8aa754dc247ce247b817f699741773bd55eaedbf^ --file lib/stripe/webhook/dispute.ts --prove tests/unit/riparazione-r11-contestazione-parziale-vinta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla vittoria, gli ordini TRANSFERRED con dispute_seller_reversed_cents>0 (contestazione parziale) ricevono un bonifico Stripe pari al promemoria, con chiave dispute_won_seller_<dispute>_<ordine>_t<n>; poi lo stornato scende del promemoria, il promemoria va a zero e il tentativo sale. Niente ritorno in HELD. Senza conto Stripe del negozio: avviso agli admin. Logica in un file nuovo (contestazione-parziale-vinta.ts) per il tetto di righe di dispute.ts; prova rimessa su dispute.ts (il file che la collega).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-021",
+      "chiave": "pagamenti-stripe|dopo un rimborso parziale, una contestazione vinta senza promemoria ripaga al negozio anche la parte del rimborso, e le prove vecchie lo danno per giusto",
+      "esito": "riparato",
+      "commit": "1b30294065420b5140b1e361915b313d596838f7",
+      "file_toccati": [
+        "lib/stripe/webhook/quanto-restituire.ts",
+        "lib/stripe/webhook/dispute.ts",
+        "tests/unit/la-contestazione-vinta-ripaga-il-negozio-del-giusto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/la-contestazione-vinta-ripaga-il-negozio-del-giusto.test.ts",
+        "tests/unit/riparazione-r11-contestazione-dopo-rimborso-parziale.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/la-contestazione-vinta-ripaga-il-negozio-del-giusto.test.ts tests/unit/riparazione-r11-contestazione-dopo-rimborso-parziale.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b30294065420b5140b1e361915b313d596838f7^ --file lib/stripe/webhook/quanto-restituire.ts,lib/stripe/webhook/dispute.ts --prove tests/unit/la-contestazione-vinta-ripaga-il-negozio-del-giusto.test.ts,tests/unit/riparazione-r11-contestazione-dopo-rimborso-parziale.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Senza promemoria e con pagamento PARTIALLY_REFUNDED, alla vittoria si restituisce lo stornato meno la quota del rimborso sul netto (rimborsato/lordo × netto), non il totale. La vittoria ora legge gross_total_cents e refunded_amount_cents. Se il promemoria non si scrive per un errore vero (non per la 126 che manca) l avviso agli admin «Storno al negozio da controllare» dice la cifra da restituire. Prova esistente la-contestazione-vinta-ripaga-il-negozio-del-giusto (importa il webhook → dispute.ts) corretta dove dava per giusto 3240: ora 2740, come dice la voce.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-022",
+      "chiave": "pagamenti-stripe|sui buoni regalo la contestazione va in una sola direzione: una richiesta di informazioni della banca annulla il buono, e se mycity vince non torna",
+      "esito": "parziale",
+      "commit": "adb667c02d757d3fcba281e66cbf39e987d02c96",
+      "file_toccati": [
+        "lib/stripe/webhook/dispute.ts",
+        "lib/stripe/webhook/contestazione-buoni.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-buono-regalo-contestato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-buono-regalo-contestato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base adb667c02d757d3fcba281e66cbf39e987d02c96^ --file lib/stripe/webhook/dispute.ts --prove tests/unit/riparazione-r11-buono-regalo-contestato.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "All apertura senza ordini, una richiesta di informazioni (warning_*) non chiama più gift_card_void_for_payment: avvisa e basta. Alla chiusura vinta senza ordini, se il buono di quel pagamento era annullato per contestazione, parte l avviso «Contestazione vinta: buono regalo da riattivare» con codice e importo. Logica in un file nuovo contestazione-buoni.ts; dispute.ts la collega.",
+      "verificato_da": "",
+      "cosa_resta": "La riattivazione automatica del buono: serve una migrazione nuova con una funzione che riaccende un buono annullato per 'disputed' (la 178 lo vieta senza saldo zero) e rimette saldo e credito ripreso, chiamata alla vittoria e alla chiusura della richiesta. Il registro dice di scriverla nel «Per riaccendere» di BUONI_REGALO_IN_VENDITA, oggi spento: per ora la riattivazione la fa un amministratore, avvisato."
+    },
+    {
+      "id": "R11-023",
+      "chiave": "pagamenti-stripe|una contestazione persa su una parte del carrello segna persi anche gli ordini degli altri negozi",
+      "esito": "parziale",
+      "commit": "e6277c33dacc6550b24fbe16e15d86ae45e75062",
+      "file_toccati": [
+        "lib/stripe/webhook/dispute.ts",
+        "lib/stripe/webhook/quanto-restituire.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-contestazione-persa-in-parte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-contestazione-persa-in-parte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e6277c33dacc6550b24fbe16e15d86ae45e75062^ --file lib/stripe/webhook/dispute.ts --prove tests/unit/riparazione-r11-contestazione-persa-in-parte.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Se l importo perso è minore del lordo degli ordini del pagamento (contestazioneDiUnaParte), la contestazione persa non annulla gli ordini non consegnati, non rimette merce a scaffale e scrive PARTIALLY_REFUNDED invece di REFUNDED; dispute_status LOST tiene fermi i bonifici del carrello e Nicola riceve l avviso con importo e ordini da dividere. Persa per intero: come prima.",
+      "verificato_da": "",
+      "cosa_resta": "La divisione automatica della perdita fra i negozi (scrivere la quota persa su ciascun ordine e sbloccare il resto del bonifico): stessa radice della voce 1639 e dello strumento dei rimborsi da dividere (lib/stripe/rimborsi-da-dividere.ts, non mio). Oggi i bonifici del carrello restano fermi finché Nicola divide a mano."
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [
+    "R11-004: per far funzionare il tasto «Bonifico fatto» va applicata la migrazione 350 (stato PAID_MANUALLY + segna_bonifico_manuale). Prima di applicarla il tasto risponde con un errore e non segna niente."
+  ],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
