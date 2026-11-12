@@ -160,8 +160,13 @@ Per ogni decisione:
 ## ADR-006: Take rate 8% commissione (vs 5% / 12%)
 
 - **Data**: TBD post primi 30 ordini reali
-- **Stato**: proposed
+- **Stato**: superseded (12/11/2026)
 - **Decisore**: Founder
+
+> **Superata.** La decisione presa è la commissione del **10% su tutti gli ordini**, firmata il
+> 26/10/2026 (registro dei fatti, `pricing.commissione`; nel codice `MARKETPLACE_FEE_BPS = 1000` in
+> `lib/constants.ts`). Il piano PRO a 15 €/mese non è mai nato. Il testo qui sotto resta com'era
+> perché un ADR non si riscrive: è la storia di come si è arrivati alla scelta, non la scelta.
 
 **Contesto**: Devo decidere commissione marketplace.
 
@@ -188,8 +193,13 @@ Per ogni decisione:
 ## ADR-007: Welcome credit €5 vs €3 vs €10
 
 - **Data**: TBD
-- **Stato**: proposed
+- **Stato**: superseded (12/11/2026)
 - **Decisore**: Founder
+
+> **Superata.** Il benvenuto non è un credito sul conto: è un codice sconto «solo primo ordine»
+> (`coupons.first_order_only`), e al lancio i codici in cassa sono spenti
+> (`CODICI_SCONTO_IN_CASSA` in `lib/funzioni-al-lancio.ts`). Quanto vale e quando si riaccende lo
+> decide il registro dei fatti, non questo documento.
 
 **Contesto**: Quanto offrire al buyer signup?
 
