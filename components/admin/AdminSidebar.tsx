@@ -8,13 +8,14 @@ import {
   Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren, Wallet, MapPin,
   TrendingUp, Ticket, Megaphone, Zap, Crown, CalendarDays,
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
-  Home, LogOut, Menu, X, MessageCircle, Flag, Package,
+  Home, LogOut, Menu, X, MessageCircle, Flag, Package, Bell,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useBranding } from '@/components/hooks/useBranding';
+import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 
 /** Chiave su cui agganciare un badge "live" (pallino) calcolato da un conteggio. */
 type BadgeKey = 'disputes' | 'sos' | 'segnalazioni';
@@ -164,7 +165,45 @@ function AdminNav({
   );
 }
 
-/** Footer account condiviso (avatar + torna al sito + logout). */
+/**
+ * 12/11/2026 (R03-021) — LA CAMPANELLA ANCHE DENTRO IL PANNELLO.
+ *
+ * Su /admin la barra del sito (con la campanella) è spenta, e né il menu né il piede né la barra
+ * su telefono portavano alle notifiche. Ma `notifyAdmins` scrive solo lì, e alcuni avvisi sono
+ * l'unico promemoria di un lavoro a mano sui soldi («Storno al venditore non riuscito»,
+ * «Credito MyCity non restituito», «Togli X € dal prossimo bonifico»): si vedevano solo uscendo
+ * dal pannello. Ora il contatore delle non lette sta nel piede e nella barra su telefono, con lo
+ * stesso conto della barra del sito (`useNotificationsCount`).
+ */
+function CampanellaAdmin({ chiara = false, onNavigate }: { chiara?: boolean; onNavigate?: () => void }) {
+  const nonLette = useNotificationsCount();
+  const etichetta = nonLette > 0 ? `Notifiche: ${nonLette} da leggere` : 'Notifiche';
+  return (
+    <Link
+      href="/notifications"
+      onClick={onNavigate}
+      aria-label={etichetta}
+      className={
+        chiara
+          ? 'relative inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white'
+          : 'flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white'
+      }
+    >
+      <Bell size={chiara ? 20 : 16} strokeWidth={2.2} aria-hidden />
+      {!chiara && <span>Notifiche</span>}
+      {nonLette > 0 && (
+        <span
+          aria-hidden
+          className={`${chiara ? 'absolute -right-0.5 -top-0.5' : 'ml-auto'} inline-flex min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1 text-[11px] font-bold text-white`}
+        >
+          {nonLette > 99 ? '99+' : nonLette}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+/** Footer account condiviso (avatar + notifiche + torna al sito + logout). */
 function AdminFooter({
   name, initials, onSignOut, onNavigate,
 }: { name: string; initials: string; onSignOut: () => void; onNavigate?: () => void }) {
@@ -179,6 +218,7 @@ function AdminFooter({
           <p className="text-[11px] text-white/50">Admin</p>
         </div>
       </div>
+      <CampanellaAdmin onNavigate={onNavigate} />
       <Link
         href="/"
         onClick={onNavigate}
@@ -254,6 +294,8 @@ export function AdminMobileTopbar() {
     <>
       <header className="sticky top-0 z-40 flex items-center justify-between bg-ink-900 px-4 py-3 text-white md:hidden">
         <Link href="/admin/today" aria-label="MyCity Admin"><AdminLogo /></Link>
+        <div className="flex items-center gap-1">
+        <CampanellaAdmin chiara />
         <button
           ref={pulsanteRef}
           type="button"
@@ -264,6 +306,7 @@ export function AdminMobileTopbar() {
         >
           <Menu size={22} strokeWidth={2.2} aria-hidden />
         </button>
+        </div>
       </header>
 
       {open && (
