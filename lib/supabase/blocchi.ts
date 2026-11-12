@@ -82,3 +82,33 @@ export async function leggiTutteLeRighe<T>(
   }
   return { data: tutte, error: null, troncato: true };
 }
+
+/**
+ * 12/11/2026 (R06-001) — I BLOCCHI SPEZZAVANO GLI IDENTIFICATIVI, NON LE RIGHE.
+ *
+ * `leggiInBlocchi` fa UNA richiesta per blocco di cento identificativi. Ma
+ * cento clienti possono avere ben piu' di mille ordini, e il servizio dati ne
+ * restituisce al massimo mille per richiesta: il resto si perdeva senza errore.
+ * Il funnel contava cosi' meno clienti che comprano di quelli veri, e la
+ * sitemap perdeva i prodotti piu' vecchi.
+ *
+ * Qui ogni blocco si legge a finestre (`leggiTutteLeRighe`), finche' tornano
+ * finestre piene. Se un blocco sbatte contro il tetto duro, `troncato` lo dice
+ * a chi chiama, che deve scriverlo a schermo.
+ */
+export async function leggiInBlocchiTutte<R>(
+  identificativi: readonly string[],
+  leggi: (blocco: string[], da: number, a: number) => PromiseLike<Risposta<R>>,
+  dimensione = DIMENSIONE_BLOCCO,
+): Promise<{ data: R[]; error: { message?: string } | null; troncato: boolean }> {
+  if (identificativi.length === 0) return { data: [], error: null, troncato: false };
+  const righe: R[] = [];
+  let troncato = false;
+  for (const blocco of inBlocchi(identificativi, dimensione)) {
+    const r = await leggiTutteLeRighe<R>((da, a) => leggi(blocco, da, a));
+    righe.push(...r.data);
+    if (r.error) return { data: righe, error: r.error, troncato };
+    if (r.troncato) troncato = true;
+  }
+  return { data: righe, error: null, troncato };
+}

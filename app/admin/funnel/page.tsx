@@ -8,7 +8,7 @@ import { TrendingUp, Users, ShoppingCart, Package, UserX, AlertTriangle, type Lu
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
-import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
+import { leggiInBlocchiTutte, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -136,12 +136,18 @@ export default function AdminFunnelPage() {
        * usano la pagina Guadagni e i numeri del venditore. Tre pagine, un conto.
        */
       type RigaOrdine = { user_id: string; created_at: string; delivery_status: string; payment_status: string | null; stripe_session_id: string | null };
-      const { data: ordiniGrezzi, error: erroreOrdini } = await leggiInBlocchi<RigaOrdine>(userIds, (blocco) =>
+      // 12/11/2026 (R06-001) — Cento clienti possono avere piu' di mille ordini, e il
+      // database ne restituisce al massimo mille per richiesta: dentro ogni blocco si
+      // legge a finestre, e se si sbatte contro il tetto duro la pagina lo dice.
+      const { data: ordiniGrezzi, error: erroreOrdini, troncato: ordiniTroncati } = await leggiInBlocchiTutte<RigaOrdine>(userIds, (blocco, da, a) =>
         supabase
           .from('orders')
           .select('user_id, created_at, delivery_status, payment_status, stripe_session_id')
           .in('user_id', blocco)
-          .neq('delivery_status', 'CANCELED') as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
+          .neq('delivery_status', 'CANCELED')
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
       );
       const orders = (ordiniGrezzi ?? []).filter((o) =>
         ordineContaNelFatturato(o as unknown as Parameters<typeof ordineContaNelFatturato>[0]),
@@ -263,7 +269,7 @@ export default function AdminFunnelPage() {
         multipleOrders,
         aRischioChurn,
         cohortRetention: cohortMonths,
-        campione: iscrittiTroncati,
+        campione: iscrittiTroncati || ordiniTroncati,
         iscrittiLetti: (signupsList ?? []).length,
       };
     },
