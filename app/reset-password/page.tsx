@@ -10,6 +10,7 @@ import { Input, PasswordInput } from '@/components/ui/Field';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AuthShell } from '@/components/ui/AuthShell';
 import { logger } from '@/lib/logger';
+import { traduciErroreNuovaPassword, type ErroreDiSupabase } from '@/lib/auth/errori-nuova-password';
 import {
   motivoLinkPasswordSenzaSessione,
   SPIEGAZIONE_RESET,
@@ -45,43 +46,10 @@ import {
  *    pagina dice perche' e cosa fare (`lib/auth/link-email.ts`).
  */
 
-function translateError(msg: string): string {
-  const m = (msg || '').toLowerCase();
-  if (m.includes('same as') || m.includes('should be different'))
-    return 'La nuova password deve essere diversa da quella precedente';
-  if (m.includes('weak') || m.includes('at least'))
-    return 'Password troppo debole. Usane una più lunga, con maiuscole/numeri/simboli.';
-  if (m.includes('expired') || m.includes('jwt'))
-    return 'Sessione scaduta. Richiedi un nuovo link di reset qui sotto.';
-  if (m.includes('invalid') && m.includes('token'))
-    return 'Link di reset non valido. Richiedine uno nuovo qui sotto.';
-  if (m.includes('rate') || m.includes('too many'))
-    return 'Troppi tentativi. Riprova fra qualche minuto.';
-  if (m.includes('not authenticated') || m.includes('no session'))
-    return 'Sessione persa. Apri di nuovo il link dall\'email.';
-  /**
-   * 6/9/2026 — IL RIPIEGO MOSTRAVA L'INGLESE DI SUPABASE PRECEDUTO DA «Errore:».
-   *
-   * Qui c'era `return msg ? \`Errore: ${msg}\` : …`, col commento «mostra il
-   * messaggio originale per debug»: un aiuto per chi sviluppa, rimasto acceso
-   * davanti a chi sta rientrando nel proprio account. I sei casi qui sopra
-   * coprono gli errori frequenti, quindi ci si finisce di rado — ma chi ci
-   * finisce legge una frase inglese che non dice ne' cosa e' andato storto ne'
-   * cosa fare, proprio nel momento in cui e' gia' chiuso fuori.
-   *
-   * Il messaggio grezzo serve, ma serve a NOI: va nel registro (e da li' a
-   * Sentry), non a schermo. A schermo resta la strada d'uscita.
-   *
-   * La frase e' volutamente neutra e non nomina la password: `translateError`
-   * la usano DUE punti — l'aggiornamento della password e la richiesta di un
-   * nuovo link — e «non siamo riusciti ad aggiornare la password» sarebbe
-   * falsa nel secondo.
-   */
-  if (msg) {
-    logger.error(new Error(msg), { context: 'reset-password:messaggio-non-tradotto' });
-  }
-  return 'Qualcosa non ha funzionato. Riprova, oppure richiedi un nuovo link qui sotto.';
-}
+// 12/11/2026 (R10-016) — La traduzione degli errori sta in lib/auth/errori-nuova-password.ts
+// e legge il MOTIVO del rifiuto (una password rubata non e' una password corta).
+const translateError = (err: unknown): string =>
+  traduciErroreNuovaPassword(err && typeof err === 'object' ? (err as ErroreDiSupabase) : { message: String(err ?? '') });
 
 /**
  * 1/11/2026 — LA PASSWORD SI CAMBIA SOLO COL LINK DI RECUPERO.
@@ -172,6 +140,8 @@ function ResetPasswordInner() {
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  // R10-016 — Il motivo per cui la nuova password e' stata rifiutata, sotto il campo.
+  const [erroreDellaPassword, setErroreDellaPassword] = useState<string | undefined>(undefined);
   // Supabase ha annunciato PASSWORD_RECOVERY: il link dell'email e' stato aperto qui.
   const recuperoAnnunciato = useRef(false);
 
@@ -265,7 +235,10 @@ function ResetPasswordInner() {
       await supabase.auth.signOut();
       setTimeout(() => router.push('/sign-in'), 1200);
     } catch (err) {
-      toast.error(translateError(err instanceof Error ? err.message : ''));
+      // R10-016 — L'errore resta sotto il campo, non solo in un avviso che sparisce.
+      const testo = translateError(err);
+      setErroreDellaPassword(testo);
+      toast.error(testo);
     } finally {
       setSubmitting(false);
     }
@@ -287,7 +260,7 @@ function ResetPasswordInner() {
       if (error) throw error;
       setLinkSent(true);
     } catch (err) {
-      toast.error(translateError(err instanceof Error ? err.message : ''));
+      toast.error(translateError(err));
     } finally {
       setSendingLink(false);
     }
@@ -387,7 +360,7 @@ function ResetPasswordInner() {
         Nuova password
       </h1>
       <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
-        Scegli una password sicura, di almeno 8 caratteri.
+        Scegli una password sicura, di almeno 8 caratteri, che non usi già altrove.
       </p>
       {emailDellaSessione && (
         <p className="-mt-4 mb-6 rounded-lg border border-cream-300 bg-cream-50 p-3 text-sm text-ink-700">
@@ -398,7 +371,8 @@ function ResetPasswordInner() {
         <PasswordInput
           label="Nuova password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => { setPassword(e.target.value); setErroreDellaPassword(undefined); }}
+          error={erroreDellaPassword}
           minLength={8}
           maxLength={200}
           autoComplete="new-password"
