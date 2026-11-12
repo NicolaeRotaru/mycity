@@ -59,3 +59,28 @@ describe('R11-016 — i social non fermano la vetrina', () => {
     expect(toasts.avvisi.join(' ')).toMatch(/Facebook/);
   });
 });
+
+describe('R11-016 — dal controllo qa', () => {
+  it('sbagliare un social già salvato non lo cancella: resta quello di prima', async () => {
+    const salvati: VendorFormData[] = [];
+    const r = await disegna(
+      createElement(VendorForm, {
+        mode: 'branding',
+        onSubmit: (d: VendorFormData) => salvati.push(d),
+        defaultValues: { storeName: 'Pane Quotidiano', storeCustomization: { socials: { facebook: 'panequotidiano' } } },
+      }),
+    );
+    chiudi = r.chiudi;
+    const campo = r.host.querySelector('#social-facebook') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(campo, 'Pane Quotidiano Piacenza');
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((ok) => setTimeout(ok, 10));
+      (r.host.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((ok) => setTimeout(ok, 30));
+    });
+    expect(salvati).toHaveLength(1);
+    expect(salvati[0].storeCustomization?.socials?.facebook, 'il Facebook salvato prima sparisce dal database').toBe('panequotidiano');
+  });
+});

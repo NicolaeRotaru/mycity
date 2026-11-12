@@ -221,6 +221,14 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       // il motivo compare sotto il campo e la sezione si apre; il resto si salva.
       const { pulita, scartati } = separaSocialSbagliati(corretta);
       setSocialSbagliati(scartati);
+      // Dal controllo qa: la personalizzazione si salva intera, quindi un campo scartato va rimesso
+      // com'era prima (se c'era), altrimenti sbagliare un social già salvato lo cancellava.
+      const primaSocial = (defaultValues?.storeCustomization?.socials ?? {}) as Record<string, string | undefined>;
+      for (const k of Object.keys(scartati)) {
+        const prima = primaSocial[k];
+        const primaValida = !!prima && Object.keys(separaSocialSbagliati({ socials: { [k]: prima } }).scartati).length === 0;
+        if (primaValida) (pulita.socials as Record<string, string | undefined>)[k] = prima;
+      }
       const parsed = storeCustomizationSchema.safeParse(pulita);
       if (!parsed.success) {
         const problema = parsed.error.issues[0];
@@ -231,7 +239,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       }
       const nomiScartati = Object.keys(scartati).map((k) => campoDellErrore(['socials', k]) ?? k);
       if (nomiScartati.length > 0) {
-        toast.warning(`${nomiScartati.join(', ')}: non salvato, il resto sì. Guarda sotto il campo.`);
+        toast.warning(`${nomiScartati.join(', ')}: non salvato (resta quello di prima), il resto sì. Guarda sotto il campo.`);
       }
       customData = parsed.data;
     }
