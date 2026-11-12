@@ -1,6 +1,6 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-12 16:14",
+  "aggiornato": "2026-11-12 16:47",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -61,7 +61,7 @@
     {
       "id": "R11-003",
       "chiave": "pagamenti-stripe|un negozio già approvato non ha nessuna pagina dove scrivere iban e dati della ditta, e il suo bonifico non può partire",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "5c2fbbdf8cf2ac495bf564f32bd53e772ccbce8a",
       "file_toccati": [
         "app/api/seller/apply/route.ts",
@@ -81,7 +81,7 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5c2fbbdf8cf2ac495bf564f32bd53e772ccbce8a^ --file app/api/seller/apply/route.ts --prove tests/unit/riparazione-r11-dati-per-i-bonifici.test.ts --json",
         "nota": "La macchina non decide: la prova usa il nome nuovo PATCH. Collaudo a mano: con route.ts della base la prova va rossa sul comportamento (4 su 5: la richiesta del negozio approvato risponde 405 e non scrive niente); con la correzione verde."
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Nuovo PATCH /api/seller/apply per il negozio (ruolo seller, non sospeso, anche già approvato): salva IBAN, ragione sociale, P.IVA, sede, PEC, SDI con gli stessi controlli dell iscrizione (normalizzaIban/ibanValido, cifra di controllo P.IVA), senza toccare ruolo né stato; un IBAN nuovo o cambiato manda un avviso agli admin. In /seller/profile la sezione «Dati per i bonifici» (componente nuovo DatiPerIBonifici); in /seller/earnings l avviso «Manca il tuo IBAN» porta lì. Non fatto: la riga nel registro attività (serve un azione nuova in lib/audit-azioni.ts, non mio) e l email al negozio.",
       "verificato_da": "",
       "serve_file_altrui": [
@@ -89,7 +89,8 @@
           "file": "lib/audit-azioni.ts",
           "modifica": "aggiungere 'seller.billing_update' ad AZIONI_AUDIT con etichetta «Dati per i bonifici cambiati», poi in app/api/seller/apply/route.ts PATCH chiamare writeAudit({actorId:user.id, action:'seller.billing_update', targetTable:'profiles', targetId:user.id, metadata:{iban_ultime4}})"
         }
-      ]
+      ],
+      "cosa_resta": "La pagina e la rotta ci sono e il bonifico ora può partire. Mancano: la riga nel registro attività a ogni cambio di IBAN (serve un azione nuova in lib/audit-azioni.ts, non mio: vedi serve_file_altrui) e l email al negozio quando l IBAN cambia (oggi l avviso va solo agli amministratori). La prova rimessa dà 3 (nome nuovo PATCH): collaudo a mano rosso sulla base."
     },
     {
       "id": "R11-004",
@@ -198,9 +199,69 @@
       "verificato_da": ""
     },
     {
+      "id": "R11-009",
+      "chiave": "architettura|i tipi generati dal database sbagliano su 7 colonne che possono restare vuote",
+      "esito": "riparato",
+      "commit": "e40fc247857e58421ff02eaf41516856e2905d57",
+      "file_toccati": [
+        "scripts/gen-db-types.mjs",
+        "lib/database.types.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e40fc247857e58421ff02eaf41516856e2905d57^ --file scripts/gen-db-types.mjs,lib/database.types.ts --prove tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il generatore applica gli ALTER COLUMN … SET/DROP NOT NULL delle migrazioni successive e non perde più il NOT NULL dopo un tipo con la virgola fra parentesi (numeric(10, 2)); tipi rigenerati (21 righe, solo nullabilità). Verificato contro il database ricostruito dalle migrazioni con tests/sql/harness/apply.sh su Postgres 16 locale: nullabilità di tutte le 780 colonne delle 76 tabelle uguale a information_schema. La prova fa girare il generatore in una cartella a parte e controlla le colonne della voce e che il file salvato sia quello generato. Nessuna riga scritta a mano.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-010",
+      "chiave": "architettura|il generatore dei tipi del database scrive sempre «nessuna vista», così le 9 viste che il sito legge restano fuori dai tipi, cassa compresa",
+      "esito": "parziale",
+      "commit": "a75a4814ded52170fc9ccc8083948ce30d9896bf",
+      "file_toccati": [
+        "scripts/gen-db-types.mjs",
+        "lib/database.types.ts",
+        "tests/unit/se-una-colonna-sparisce-le-pagine-se-ne-accorgono.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-viste-nei-tipi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-viste-nei-tipi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a75a4814ded52170fc9ccc8083948ce30d9896bf^ --file scripts/gen-db-types.mjs,lib/database.types.ts --prove tests/unit/riparazione-r11-viste-nei-tipi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il generatore legge l ultima CREATE [OR REPLACE] VIEW di ogni vista (e le DROP VIEW) e ne scrive le colonne in Views: il nome da ogni voce del SELECT, il tipo dalla colonna della tabella (con gli alias del FROM e delle JOIN, anche fra parentesi), da «::tipo», da count/sum, da coalesce/nullif della prima colonna, da split_part/concat; una vista «FROM funzione()» prende le colonne dal RETURNS TABLE della funzione. Tutte le colonne di vista possono essere vuote, come nei tipi di Supabase. Confronto col database ricostruito (harness, Postgres 16): 10 viste, 83 colonne, nomi tutti uguali, 82 tipi uguali; documenti_iscrizione_a_meta.caricati_at (sottoquery) resta Json. tsc verde. Prova esistente se-una-colonna-sparisce (legge database.types.ts) aggiornata: toglie la colonna dalla tabella profiles, non dalle viste che ora la ripetono.",
+      "verificato_da": "",
+      "cosa_resta": "Estendere Riga<T> di lib/db-rows.ts alle viste (oggi funziona solo su Tables) e il finto database delle prove tests/unit/aiuti/database-che-conosce-le-colonne.ts, che sulle viste risponde «tabella che i tipi non conosce»: tutti e due non miei.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/db-rows.ts",
+          "modifica": "accettare anche i nomi in Database['public']['Views'] (Riga<T> = Tables[T]['Row'] | Views[T]['Row'])"
+        },
+        {
+          "file": "tests/unit/aiuti/database-che-conosce-le-colonne.ts",
+          "modifica": "leggere le colonne anche da Views, non solo da Tables"
+        }
+      ]
+    },
+    {
       "id": "R11-011",
       "chiave": "dati-analytics|l'elenco prodotti dell'amministratore si ferma a mille senza dirlo, e la ricerca non trova i prodotti più vecchi",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "e5c2ea183070698fb11b495f8c4c4462fe61f13a",
       "file_toccati": [
         "app/admin/products/page.tsx",
@@ -218,9 +279,10 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e5c2ea183070698fb11b495f8c4c4462fe61f13a^ --file app/admin/products/page.tsx,app/admin/payouts/page.tsx --prove tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Prodotti e bonifici chiedono il conteggio esatto (count: exact) insieme alle righe: «tagliato» quando il totale supera il tetto, non più quando arriva la riga in più (il server ne dà al massimo mille). Prodotti: il sottotitolo dice «N di <totale>», l avviso dice il totale, e con l elenco tagliato la ricerca per nome va al database (ilike, 200 righe). L input di ricerca ha min-w-0 (la testata non sporge a 360 px). Prova esistente il-pannello-non-chiama-vuoto-una-lettura-caduta (importa le due pagine) aggiornata solo sull etichetta del riquadro rinominato da R11-001. Non fatto: la ricerca per nome del negozio sui prodotti più vecchi (solo per nome prodotto).",
-      "verificato_da": ""
+      "verificato_da": "",
+      "cosa_resta": "Con l elenco tagliato la ricerca va al database solo per nome del prodotto: cercare per nome del negozio trova ancora solo fra gli ultimi mille."
     },
     {
       "id": "R11-012",
@@ -249,6 +311,81 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Grafico: la colonna di ogni giorno ha h-full, così l altezza in % della barra ha un riferimento. Targhette: REVERSAL_FAILED → «Storno da sistemare: ci pensiamo noi», PROCESSING → «Bonifico in corso», «Completa onboarding» → «Collega il conto», ripiego «Da verificare» invece del codice. Storico pagamenti: sotto sm la colonna Data sparisce e la data va sotto il numero d ordine, padding ridotto: la colonna Stato resta nello schermo. Parole: «Commissione MyCity», «Contanti alla consegna», «il tuo conto Stripe». Il layout a 360 px è provato sulle classi, non misurato in un browser vero.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-014",
+      "chiave": "frontend-ux|la lista dei primi passi manda al profilo per mettere nome e logo, ma lì quei campi non ci sono",
+      "esito": "riparato",
+      "commit": "b1572456d2b623ec1d41d7e67122981fed3a7e1f",
+      "file_toccati": [
+        "components/seller/SellerOnboardingChecklist.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-primi-passi-portano-ai-campi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-primi-passi-portano-ai-campi.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b1572456d2b623ec1d41d7e67122981fed3a7e1f^ --file components/seller/SellerOnboardingChecklist.tsx --prove tests/unit/riparazione-r11-primi-passi-portano-ai-campi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I passi «Imposta nome e descrizione» e «Carica logo» puntano a /seller/site?details=1 (Costruisci il sito → Dettagli negozio, StoreDetailsEditor, dove store_name e store_logo si salvano), non a /seller/profile. Profilo e VendorForm non toccati: la pagina profilo dice già dove stanno quei dati.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-015",
+      "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
+      "esito": "parziale",
+      "commit": "12837b7e893e901da114bb45ea18c9fea3786f92",
+      "file_toccati": [
+        "components/VendorForm.tsx",
+        "components/seller/site/StoreDetailsEditor.tsx",
+        "components/hooks/useAvvisoModificheNonSalvate.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-modifiche-non-salvate.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-modifiche-non-salvate.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 12837b7e893e901da114bb45ea18c9fea3786f92^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r11-modifiche-non-salvate.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "VendorForm sa se ci sono modifiche non salvate (campi del modulo + logo, foto, descrizione, orari, posizione, personalizzazione) e, finché ce ne sono, il browser chiede conferma prima di lasciare la pagina (hook nuovo useAvvisoModificheNonSalvate, beforeunload); dopo l invio il punto di partenza si rifà. In Dettagli negozio il tasto «Tutte le impostazioni» chiede conferma con modifiche non salvate. Il profilo usa lo stesso VendorForm, quindi l avviso vale anche lì. Non coperto: i link del menu laterale dentro il sito (navigazione interna di Next, che beforeunload non vede).",
+      "verificato_da": "",
+      "cosa_resta": "La navigazione interna (link del menu del pannello negozio): Next non lancia beforeunload. Serve un avviso sui link del layout del pannello (app/seller/layout o il menu laterale, non miei) che legga lo stesso stato «sporco»."
+    },
+    {
+      "id": "R11-016",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "riparato",
+      "commit": "49a539a652c5a26dcc31dbfb9b271edc833c13e3",
+      "file_toccati": [
+        "lib/store-customization.ts",
+        "components/VendorForm.tsx",
+        "components/seller/SocialLinksFields.tsx",
+        "components/seller/CustomizationSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-social-non-fermano-la-vetrina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-social-non-fermano-la-vetrina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 49a539a652c5a26dcc31dbfb9b271edc833c13e3^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r11-social-non-fermano-la-vetrina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già (295). Restava: il link copiato dall app con ?igsh= ora si riduce al nome (handleDaLink toglie la coda dopo ? o # sui link di profilo); un campo social che resta sbagliato (Facebook con gli spazi, profile.php, /p/…) non blocca più il salvataggio: separaSocialSbagliati lo toglie, il resto della vetrina si salva, il motivo compare sotto quel campo (role=alert), la sezione «Social e contatti» si apre da sola e un avviso dice quale campo non è stato salvato. Testo d aiuto riscritto. Prova rimessa: regge su VendorForm.tsx; su store-customization.ts la macchina dà 3 (nome nuovo importato da VendorForm), collaudo a mano rimettendo solo handleDaLink della base: la prova del link ?igsh va rossa.",
       "verificato_da": ""
     },
     {
@@ -419,9 +556,59 @@
       "cosa_ho_fatto": "Se l importo perso è minore del lordo degli ordini del pagamento (contestazioneDiUnaParte), la contestazione persa non annulla gli ordini non consegnati, non rimette merce a scaffale e scrive PARTIALLY_REFUNDED invece di REFUNDED; dispute_status LOST tiene fermi i bonifici del carrello e Nicola riceve l avviso con importo e ordini da dividere. Persa per intero: come prima.",
       "verificato_da": "",
       "cosa_resta": "La divisione automatica della perdita fra i negozi (scrivere la quota persa su ciascun ordine e sbloccare il resto del bonifico): stessa radice della voce 1639 e dello strumento dei rimborsi da dividere (lib/stripe/rimborsi-da-dividere.ts, non mio). Oggi i bonifici del carrello restano fermi finché Nicola divide a mano."
+    },
+    {
+      "id": "R11-024",
+      "chiave": "qa-flussi|il collegamento del negozio a stripe e il bonifico manuale non hanno nessuna prova",
+      "esito": "parziale",
+      "commit": "6b5b05135939ce9ab4069a7878e1ff0e4d0784a7",
+      "file_toccati": [
+        "tests/unit/riparazione-r11-rotte-stripe-connect.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-rotte-stripe-connect.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-rotte-stripe-connect.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "cosa_ho_fatto": "13 prove sulle 5 rotte (onboarding negozio, rider-onboarding, refresh-status, login, payout): chi non deve passare non passa (negozio non approvato, ruolo sbagliato, conto mancante, id non uuid, reso o contestazione aperti), gli errori non diventano 200 (Stripe spento 503, errore Stripe 500, stato non registrato 503), il percorso giusto risponde quello che la pagina aspetta. Tutte verdi sul codice della base: nessun difetto trovato.",
+      "cosa_resta": "Come chiesto dalla regista: è una prova senza cambio di comportamento, quindi non la dichiaro «riparato» (la prova rimessa non può mordere: il codice delle rotte non è cambiato). La copertura che la voce chiedeva ora c è; nessun difetto nuovo da riportare.",
+      "copre_tutta_la_voce": false,
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-025",
+      "chiave": "qa-flussi|le pagine cms caricano ancora youtube/vimeo senza clic",
+      "esito": "riparato",
+      "commit": "224b727c0711934510fe95704c7100cc3e36780b",
+      "file_toccati": [
+        "components/cms/CmsBlockRenderer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-video-cms-al-clic.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-video-cms-al-clic.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 224b727c0711934510fe95704c7100cc3e36780b^ --file components/cms/CmsBlockRenderer.tsx --prove tests/unit/riparazione-r11-video-cms-al-clic.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il blocco video delle pagine CMS usa VideoAlClic (lo stesso di vetrina e home): al posto dell iframe un pulsante «Guarda il video», l iframe youtube-nocookie / vimeo dnt nasce solo al tocco. Il video «file» (MP4) resta com era. Non fatto (fuori dai miei file): la cookie policy che non nomina YouTube e Vimeo.",
+      "verificato_da": ""
     }
   ],
-  "nuovi_difetti_visti": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La cookie policy non nomina YouTube e Vimeo, che il sito carica al tocco nei video di vetrina, home e pagine CMS",
+      "dimensione": "legale-privacy",
+      "severita": "minore",
+      "file": "(pagina della cookie policy, non mia)",
+      "descrizione": "Già detto nel resto della scheda 115 del registro: con i video al tocco il consenso è implicito nel gesto, ma la policy deve elencare i due fornitori."
+    }
+  ],
   "domande_per_nicola": [
     "R11-004: per far funzionare il tasto «Bonifico fatto» va applicata la migrazione 350 (stato PAID_MANUALLY + segna_bonifico_manuale). Prima di applicarla il tasto risponde con un errore e non segna niente."
   ],
