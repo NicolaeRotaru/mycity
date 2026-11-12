@@ -45,3 +45,37 @@ describe('R11-015 — modifiche non salvate', () => {
     expect(lasciaLaPagina(), 'il nome nuovo si perde uscendo, senza nessun avviso').toBe(true);
   });
 });
+
+describe('R11-015 — dal controllo qa', () => {
+  it('se il salvataggio fallisce le modifiche restano «non salvate»', async () => {
+    const r = await disegna(
+      createElement(VendorForm, {
+        mode: 'branding',
+        onSubmit: () => Promise.reject(new Error('rete giù')),
+        defaultValues: { storeName: 'Pane Quotidiano', storeDescription: 'Forno' },
+      }),
+    );
+    chiudi = r.chiudi;
+    const nome = r.host.querySelector('input[name="storeName"]') as HTMLInputElement;
+    await act(async () => { scrivi(nome, 'Pane Quotidiano di Piacenza'); await new Promise((ok) => setTimeout(ok, 10)); });
+    await act(async () => {
+      (r.host.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((ok) => setTimeout(ok, 30));
+    });
+    expect(lasciaLaPagina(), 'salvataggio fallito e nessun avviso: le modifiche si perdono uscendo').toBe(true);
+  });
+
+  it('se il salvataggio riesce, si esce senza domande', async () => {
+    const r = await disegna(
+      createElement(VendorForm, { mode: 'branding', onSubmit: () => Promise.resolve(), defaultValues: { storeName: 'Pane Quotidiano' } }),
+    );
+    chiudi = r.chiudi;
+    const nome = r.host.querySelector('input[name="storeName"]') as HTMLInputElement;
+    await act(async () => { scrivi(nome, 'Pane Quotidiano 2'); await new Promise((ok) => setTimeout(ok, 10)); });
+    await act(async () => {
+      (r.host.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((ok) => setTimeout(ok, 30));
+    });
+    expect(lasciaLaPagina()).toBe(false);
+  });
+});

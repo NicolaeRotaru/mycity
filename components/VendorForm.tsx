@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -65,7 +65,8 @@ export type VendorFormData = SchemaData & {
 type VendorFormMode = 'all' | 'branding' | 'contact';
 
 interface Props {
-  onSubmit: (data: VendorFormData) => void;
+  /** Se restituisce una promessa, l'avviso d'uscita si spegne solo quando il salvataggio riesce. */
+  onSubmit: (data: VendorFormData) => unknown;
   /** R11-015 — avvisa il genitore quando ci sono modifiche non salvate (per chiedere conferma prima di uscire). */
   onSporcoChange?: (sporco: boolean) => void;
   isLoading?: boolean;
@@ -116,6 +117,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     confermata: false,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
+  // La prima notizia dalla mappa è il suo allineamento all'apertura, non un gesto della persona.
+  const primaNotiziaDallaMappa = useRef(true);
+  const [posizioneToccata, setPosizioneToccata] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
@@ -178,7 +182,11 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   // R11-015 — Modifiche non salvate: i campi del modulo più quelli tenuti a parte (logo, foto,
   // descrizione, orari, posizione, personalizzazione). La fotografia di partenza si rifà al salvataggio.
   const fotografiaDi = (personalizzazione: StoreCustomization) =>
-    JSON.stringify({ logoUrl, media, description, hours, custom: personalizzazione, a: location.address, la: location.lat, lo: location.lng });
+    // Dal controllo qa: la posizione conta solo dopo che la persona l'ha toccata. All'apertura la mappa
+    // rimanda al modulo il suo punto di partenza (anche quello di Roma o le coordinate non valide):
+    // non è una modifica, e l'avviso d'uscita non deve comparire senza che nessuno abbia scritto niente.
+    JSON.stringify({ logoUrl, media, description, hours, custom: personalizzazione,
+      ...(posizioneToccata ? { a: location.address, la: location.lat, lo: location.lng } : {}) });
   const fotografia = fotografiaDi(custom);
   const [fotografiaSalvata, setFotografiaSalvata] = useState(fotografia);
   const sporco = isDirty || fotografia !== fotografiaSalvata;
@@ -244,7 +252,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       customData = parsed.data;
     }
     setCustomError(null);
-    onSubmit({
+    const esito = onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
       storeAddress: location.address,
@@ -257,8 +265,17 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       storeCustomization: customData,
     });
     // R11-015 — Inviato: quello che c'è ora diventa il punto di partenza (niente più avviso d'uscita).
-    reset(data);
-    setFotografiaSalvata(fotografiaDi(customData));
+    const salvata = fotografiaDi(customData);
+    const segnaSalvato = () => {
+      reset(data);
+      setFotografiaSalvata(salvata);
+    };
+    // Dal controllo qa: col salvataggio fallito le modifiche restano «non salvate» (prima l'avviso spariva).
+    if (esito && typeof (esito as Promise<unknown>).then === 'function') {
+      (esito as Promise<unknown>).then(segnaSalvato, () => {});
+    } else {
+      segnaSalvato();
+    }
   };
 
   return (
@@ -342,6 +359,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
             }}
             onChange={(loc) => {
               setLocation(loc);
+              if (primaNotiziaDallaMappa.current) primaNotiziaDallaMappa.current = false;
+              else setPosizioneToccata(true);
               if (loc.address.trim()) setLocationError(null);
             }}
           />

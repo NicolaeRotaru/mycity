@@ -97,7 +97,7 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
                                 : {},
             storeCustomization: normalizeCustomization(profile.store_customization),
           }}
-          onSubmit={(d) => update.mutate(d)}
+          onSubmit={(d) => update.mutateAsync(d)}
           isLoading={update.isPending}
         />
       </div>
