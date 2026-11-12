@@ -155,3 +155,26 @@ describe('R08-005 — due sospensioni insieme', () => {
     expect((await modera('suspend', 'x')).status).toBe(409);
   });
 });
+
+describe('R08-006 — il conteggio delle consegne che cade non resta muto', () => {
+  it('con un errore del conteggio la risposta avvisa di controllare le consegne in Ordini', async () => {
+    db.profilo = { ...FATTORINO };
+    db.erroreConteggio = { message: 'timeout' };
+    const j = (await (await modera('suspend', 'reclami')).json()) as { avviso?: string };
+    expect(j.avviso ?? 'nessun avviso').toMatch(/non ho potuto contare le consegne in corso/);
+    expect(j.avviso ?? 'nessun avviso').toMatch(/Ordini/);
+  });
+
+  it('anche se il conteggio lancia un’eccezione', async () => {
+    db.profilo = { ...FATTORINO };
+    db.conteggioLancia = true;
+    const j = (await (await modera('suspend', 'reclami')).json()) as { avviso?: string };
+    expect(j.avviso ?? 'nessun avviso').toMatch(/non ho potuto contare le consegne in corso/);
+  });
+
+  it('con zero consegne contate davvero non c’è avviso', async () => {
+    db.profilo = { ...FATTORINO };
+    const j = (await (await modera('suspend', 'reclami')).json()) as { avviso?: string };
+    expect(j.avviso).toBeUndefined();
+  });
+});

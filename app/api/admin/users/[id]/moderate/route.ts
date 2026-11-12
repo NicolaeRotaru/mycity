@@ -301,7 +301,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   // 5/11/2026 (S05) — Sospendere un fattorino non gli toglie le consegne già sue:
   // l'amministratore lo deve sapere per riassegnarle.
+  // 12/11/2026 (R08-006) — Un conteggio caduto non vale zero: prima diventava `count ?? 0`
+  // e l'avviso «riassegnale» spariva proprio quando non si sapeva niente. Ora chi ha
+  // premuto il pulsante legge che le consegne non sono state contate.
   let consegneInCorso = 0;
+  let consegneNonContate = false;
   if (body.action === 'suspend' && target.role === 'rider') {
     try {
       const { count, error: eConta } = await admin
@@ -309,10 +313,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         .select('id', { count: 'exact', head: true })
         .eq('rider_id', params.id)
         .in('delivery_status', ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
-      if (eConta) logger.error('[moderate] consegne in corso non contate', { target: params.id, err: eConta.message });
-      consegneInCorso = count ?? 0;
+      if (eConta || count == null) {
+        consegneNonContate = true;
+        logger.error('[moderate] consegne in corso non contate', { target: params.id, err: eConta?.message ?? 'conteggio vuoto' });
+      } else {
+        consegneInCorso = count;
+      }
     } catch (e) {
-      // Best-effort: la sospensione è già fatta, il conteggio serve solo all'avviso.
+      // La sospensione è già fatta: il conteggio serve all'avviso, e l'avviso deve dire che manca.
+      consegneNonContate = true;
       logger.error('[moderate] consegne in corso non contate', { target: params.id, err: e instanceof Error ? e.message : String(e) });
     }
   }
@@ -321,13 +330,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     notErr ? 'la notifica all\'utente non e\' partita' : null,
     emailInviata === false ? 'l\'email all\'utente non e\' partita' : null,
     consegneInCorso > 0 ? `il fattorino ha ancora ${consegneInCorso} consegne in corso: riassegnale dalla pagina Ordini` : null,
+    consegneNonContate ? 'non ho potuto contare le consegne in corso del fattorino: controllale nella pagina Ordini e riassegnale' : null,
   ].filter(Boolean);
   return NextResponse.json(
     {
       ok: true,
       notifica_inviata: !notErr,
       email_inviata: emailInviata,
-      consegne_in_corso: consegneInCorso,
+      consegne_in_corso: consegneNonContate ? null : consegneInCorso,
       ...(avvisi.length > 0 ? { avviso: `Stato aggiornato, ma ${avvisi.join('; ')}.` } : {}),
     },
     { status: 200 },
