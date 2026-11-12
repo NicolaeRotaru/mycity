@@ -95,3 +95,13 @@ describe('R12-017 nella pagina «Reinvia» si spegne col conto alla rovescia', (
     expect(pulsante().disabled).toBe(false);
   });
 });
+
+describe('R12-017 il singolare', () => {
+  it('«after 1 second» dice «fra 1 secondo»', async () => {
+    const esito = await rimandaLinkDiConferma(
+      clientCon({ status: 429, code: 'over_email_send_rate_limit', message: 'For security purposes, you can only request this after 1 second.' }),
+      dati,
+    );
+    expect(esito.messaggio).toContain('fra 1 secondo.');
+  });
+});

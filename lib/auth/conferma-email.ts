@@ -218,10 +218,10 @@ function attesaDalFreno(error: { message?: string; code?: string; status?: numbe
   const testo = error.message ?? '';
   const secondi = testo.match(/after (\d+) seconds?/i)?.[1];
   if (secondi) {
-    const n = Number(secondi);
+    const n = Math.max(1, Number(secondi));
     return {
       esito: 'attendi',
-      messaggio: `Ti abbiamo già mandato un link poco fa: puoi chiederne un altro fra ${n} secondi. Intanto controlla anche lo spam.`,
+      messaggio: `Ti abbiamo già mandato un link poco fa: puoi chiederne un altro fra ${n} ${n === 1 ? 'secondo' : 'secondi'}. Intanto controlla anche lo spam.`,
       attesaSecondi: n,
     };
   }
