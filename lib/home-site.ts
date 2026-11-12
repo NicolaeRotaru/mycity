@@ -4,6 +4,8 @@ import { safeInternalPath } from './safe-redirect';
 import { DROP_DEL_GIORNO_ACCESO, NEWSLETTER_ACCESA } from './funzioni-al-lancio';
 import { logger } from './logger';
 import { promessaSuperata } from './site-branding';
+import { lunghezzaDelTesto } from './testo-visibile';
+import { sanitizeRichText } from './sanitize-html';
 
 /**
  * Home del marketplace componibile a blocchi — tipi, validazione (zod), catalogo
@@ -34,6 +36,17 @@ export { newId, siteByteSize, MAX_SITE_BYTES };
 export const MAX_HOME_SECTIONS = 24;
 export const MAX_GALLERY_ITEMS = 12;
 export const RICHTEXT_MAX = 4000;
+/**
+ * 12/11/2026 (R10-014, revisione qa) — IL LIMITE SI CONTA SUL TESTO, NON SULL'HTML SALVATO.
+ *
+ * Le rotte prima controllano e poi sanitizzano, e la sanitizzazione ALLUNGA: a ogni link
+ * aggiunge target e rel, e `<` diventa `&lt;`. Un testo da 3.960 caratteri con qualche link
+ * passava il controllo, si salvava da 10.000, e alla rilettura lo schema lo scartava: il blocco
+ * spariva dalla home e dall'editor senza avviso. Adesso il limite si conta sul testo che si
+ * legge (senza tag, entità come un carattere solo), uguale prima e dopo la sanitizzazione; il
+ * tetto sull'HTML grezzo resta, piu' largo, contro i corpi enormi.
+ */
+export const RICHTEXT_MAX_HTML = RICHTEXT_MAX * 4;
 export const PRODUCTS_MIN = 4;
 export const PRODUCTS_MAX = 24;
 
@@ -157,7 +170,16 @@ const sellerCtaConfig = z
 const richTextConfig = z.object({
   heading: shortText(120),
   // HTML vincolato; va sanitizzato prima di salvare/renderizzare (lib/sanitize-html.ts).
-  body: z.string().max(RICHTEXT_MAX).default(''),
+  // R10-014 — Oltre il limite il salvataggio dice quale e' il limite, non un messaggio generico.
+  // Collaudo K03: i due controlli si fanno sull'HTML come verra' salvato (sanitizzato), cosi' un
+  // blocco accettato qui non viene scartato quando si rilegge. Il primo .max sul testo grezzo
+  // e' solo il freno contro i corpi enormi, prima di sanitizzare.
+  body: z
+    .string()
+    .max(RICHTEXT_MAX_HTML * 2, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`)
+    .refine((b) => lunghezzaDelTesto(b) <= RICHTEXT_MAX, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`)
+    .refine((b) => sanitizeRichText(b).length <= RICHTEXT_MAX_HTML, 'Il testo ha troppi link o formattazioni per un blocco solo: dividilo in due blocchi.')
+    .default(''),
 });
 
 const bannerConfig = z.object({

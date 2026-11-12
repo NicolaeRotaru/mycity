@@ -310,7 +310,10 @@ const SignInForm = () => {
               type="button"
               onClick={handleResetPassword}
               disabled={sendingReset}
-              className="text-xs text-primary-700 hover:underline disabled:opacity-50"
+              // R10-003 — Era alto 16 px (solo text-xs): troppo piccolo per il pollice, e a 4 px dal
+              // campo. L'area di tocco arriva a 44 px e cresce verso l'alto (-mt-3), non sopra il campo:
+              // fra il bottone e il campo restano 8 px (mb-1 piu' lo spazio dell'etichetta).
+              className="-mr-2 -mt-3 mb-1 inline-flex min-h-[44px] items-center px-2 text-xs text-primary-700 hover:underline disabled:opacity-50"
             >
               {sendingReset ? 'Invio…' : 'Password dimenticata?'}
             </button>

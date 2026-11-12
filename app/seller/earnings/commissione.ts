@@ -86,7 +86,13 @@ export const COMMISSIONE_DEL_PERCENTO = `${siPronunciaConVocale(COMMISSIONE_PERC
  * e se l'abbonamento si accende (`ABBONAMENTO_NEGOZI_ACCESO`) la frase cambia da sola.
  * Prova: tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx
  */
-export const PREZZO_ABBONAMENTO_MESE = '€50';
+/**
+ * 12/11/2026 (R10-005) — L'IMPORTO VERO, IN CENTESIMI: E' QUELLO CHE LA CASSA MANDA A STRIPE.
+ * Il prezzo scritto nelle pagine si ricava da qui, cosi' il giorno che l'addebito cambia
+ * cambia anche quello che il negozio legge (prima i posti erano sei, e uno era l'addebito).
+ */
+export const ABBONAMENTO_CENTESIMI_MESE = 5000;
+export const PREZZO_ABBONAMENTO_MESE = `€${ABBONAMENTO_CENTESIMI_MESE / 100}`;
 
 /**
  * Come si scrive l'IVA sulla commissione (fatto pricing.commissione: «IVA inclusa», la

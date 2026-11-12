@@ -27,6 +27,7 @@ import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { trackOrderPlaced } from '@/lib/analytics/events';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
+import { TETTO_ORDINI, quantiOrdini, avvisoOrdiniOltreIlTetto } from '@/lib/ordini/tetto-ordini';
 
 type OrderItem = {
   id: string;
@@ -74,7 +75,8 @@ const fetchOrders = async (): Promise<Order[]> => {
     // il limite implicito di mille righe di PostgREST, che taglia in
     // silenzio e fa sembrare veri dei numeri che non lo sono.
     .order('created_at', { ascending: false })
-      .limit(100);
+      // R10-013 — Il tetto e le parole che lo dicono stanno in lib/ordini/tetto-ordini.ts.
+      .limit(TETTO_ORDINI);
 
   if (error) throw error;
   // 18/10/2026 — Nome e logo del negozio dalla vetrina pubblica, non da `profiles`
@@ -325,7 +327,7 @@ export default function OrdersPage() {
           I tuoi ordini
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          {orders.length === 1 ? '1 ordine' : `${orders.length} ordini`}
+          {quantiOrdini(orders.length)}
         </p>
       </header>
 
@@ -367,8 +369,13 @@ export default function OrdersPage() {
 
             {/* FOOTER: striscia thumbnail + totale + azioni */}
             <div className="px-5 pb-4 flex flex-wrap items-center gap-3 border-t border-cream-100 pt-3">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div className="flex gap-1.5">
+              {/* R10-017, revisione qa e collaudo K03 — Con i bottoni da 44 px sulla stessa riga, le
+                  miniature (fino a 4 più «+N»: ~264 px) e il prezzo finivano sotto «Traccia», fino a
+                  600 px di larghezza. Adesso miniature e prezzo occupano la riga intera e i bottoni
+                  vanno sotto; sui computer larghi (lg) tornano accanto, dove lo spazio c'è. E le
+                  miniature, sul telefono più stretto, vanno a capo invece di uscire dalla card. */}
+              <div className="flex min-w-0 basis-full flex-wrap items-center gap-2 lg:flex-1 lg:basis-auto">
+                <div className="flex flex-wrap gap-1.5">
                   {thumbs.map((it) => {
                     const img = fotoDellaRigaOrdine(it);
                     return (
@@ -399,15 +406,16 @@ export default function OrdersPage() {
                 </span>
               </div>
 
-              <div className="flex shrink-0 gap-2">
+              {/* R10-017 — Misura md (44 px): la sm (32 px) è troppo piccola per il pollice. */}
+              <div className="flex shrink-0 flex-wrap gap-3">
                 {trackable && (
-                  <Button variant="secondary" size="sm" icon={MapPin} href={`/orders/${order.id}`}>
+                  <Button variant="secondary" size="md" icon={MapPin} href={`/orders/${order.id}`}>
                     Traccia
                   </Button>
                 )}
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="md"
                   icon={RotateCcw}
                   onClick={() => handleReorder(order)}
                 >
@@ -418,6 +426,13 @@ export default function OrdersPage() {
           </div>
         );
       })}
+
+      {avvisoOrdiniOltreIlTetto(orders.length) && (
+        <p className="rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-700">
+          {avvisoOrdiniOltreIlTetto(orders.length)}{' '}
+          <Link href="/help" className="font-semibold text-primary-700 underline">Vai all’assistenza</Link>
+        </p>
+      )}
     </div>
   );
 }

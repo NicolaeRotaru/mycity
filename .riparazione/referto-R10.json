@@ -1,0 +1,671 @@
+{
+  "sessione": "R10",
+  "aggiornato": "2026-11-12 16:23",
+  "finita": true,
+  "testa": "6243926fdf53beef32dbb79ea5285c690003e7d6",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "nota": "Dopo l'ultimo commit di codice (6243926f): typecheck, lint, 1214 file di prova, 8947 prove passate, 1 saltata già prima."
+  },
+  "voci": [
+    {
+      "id": "R10-001",
+      "esito": "riparato",
+      "commit": "36814a6ebfcbceb9aee9c4f5520414095d029695",
+      "file_toccati": [
+        "app/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-manifest-nel-head.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-manifest-nel-head.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 36814a6e^ --file app/layout.tsx --prove tests/unit/riparazione-r10-manifest-nel-head.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Manifest (sotto APP_INSTALLABILE_ACCESA) e apple-touch-icon spostati dai metadata, che con force-dynamic finiscono nel body, al <head> scritto a mano del layout. Niente htmlLimitedBots. Il <title> resta nei metadata: Chrome non lo usa per l'installabilità. La condizione resta scritta `APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' }` (costante MANIFEST), come chiede la prova esistente al-lancio-carta-abbonamento-…, che non ho toccato.",
+      "chiave": "mobile-pwa|chrome non trova il file che rende mycity installabile: su android l'app non si può mettere in home",
+      "verificato_da": "qa (subagente separato): ha acceso per un momento APP_INSTALLABILE_ACCESA, avviato next dev 15.5.29 e chiesto /faq come Chrome Android e come Googlebot. In tutti e due i casi <link rel=\"manifest\"> e apple-touch-icon escono una volta sola nel <head>. /manifest.json, le sue icone e l'icona Apple rispondono 200, e la CSP non li blocca. Con l'interruttore spento il manifest sparisce. Nessun altro layout li dichiara. 21 file di prova vicini, 131 prove: verdi. Regge."
+    },
+    {
+      "id": "R10-002",
+      "esito": "non_codice",
+      "nota": "La parte di codice c'è già sulla base: app/auth/confirm/route.ts verifica il token_hash con verifyOtp (funziona da qualunque dispositivo), app/reset-password/page.tsx:206-219 + lib/auth/link-email.ts:308-336 dicono «Questo link va aperto dove l'hai chiesto» (motivo altro-browser, pkce_code_verifier_not_found), /sign-in legge `error`. Prove esistenti verdi: npx vitest run tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts tests/unit/minori-s10-nuova-password.test.ts (35 passate). Cosa deve fare Nicola, su Supabase: 1) Authentication → URL Configuration: Site URL = l'indirizzo pubblico del sito. 2) Email Templates → «Reset password»: link = <SiteURL>/auth/confirm?token_hash=<TokenHash>&type=recovery. 3) «Confirm signup»: <SiteURL>/auth/confirm?token_hash=<TokenHash>&type=email&next=<RedirectTo>. 4) Subito dopo, prova a mano: reset chiesto dal computer, email aperta dal telefono e dall'app Gmail, password cambiata; poi un'iscrizione confermata da un altro dispositivo. Se fallisce, rimettere i modelli di prima. (Nei modelli di Supabase <SiteURL>, <TokenHash> e <RedirectTo> si scrivono fra doppie graffe con il punto davanti, come le variabili già presenti nel modello.)",
+      "prova": "tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts (verde sulla base)",
+      "chiave": "sicurezza-auth|chi chiede la nuova password dal computer e apre l'email dal telefono non riesce a cambiarla, e la pagina non dice perché",
+      "verificato_da": "non riparata da me: esito non di codice o già fatta, con la prova citata"
+    },
+    {
+      "id": "R10-003",
+      "esito": "riparato",
+      "commit": "85b35a51366b060e6479b6b215af12b9bb11b599",
+      "file_toccati": [
+        "app/sign-in/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-password-dimenticata-per-il-pollice.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-password-dimenticata-per-il-pollice.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85b35a51366b060e6479b6b215af12b9bb11b599^ --file app/sign-in/page.tsx --prove tests/unit/riparazione-r10-password-dimenticata-per-il-pollice.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il bottone «Password dimenticata?» ha ora inline-flex, min-h-[44px] e px-2. L'area cresce verso l'alto (-mt-3) e non si sovrappone al campo; con mb-1 fra bottone e campo restano 8 px. È uno stile: prova leggera sul sorgente.",
+      "chiave": "accessibilita|il link «password dimenticata?» nella pagina di accesso è alto 16 pixel, troppo piccolo per il pollice",
+      "verificato_da": "qa (subagente separato): misurato a 360 px. Il bottone è alto 44 px, sopra restano 4 px dal campo email e sotto 8 px dal campo password: nessuna sovrapposizione. Regge. Dettaglio estetico: il testo sta 7,5 px più in alto dell'etichetta."
+    },
+    {
+      "id": "R10-004",
+      "esito": "riparato",
+      "commit": "408eee62a3a0527927d1aba47b2ddc3ae4936bdf",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-spunta-recesso-dopo-una-lettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-spunta-recesso-dopo-una-lettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 408eee62a3a0527927d1aba47b2ddc3ae4936bdf^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r10-spunta-recesso-dopo-una-lettura-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella domanda «la colonna del recesso c'è?» una lettura caduta ora lancia l'errore (React Query riprova) invece di rispondere false, e staleTime passa da Infinity a 5 minuti. Finché non si sa, il ripiego resta «spunta nascosta». lib/ordini/recesso.ts non serviva toccarlo.",
+      "chiave": "api-backend|nel nuovo prodotto la spunta «escluso dal recesso» sparisce per tutta la sessione dopo una lettura caduta",
+      "verificato_da": "qa (subagente separato): retry:1 globale (QueryProvider.tsx:24), e una lettura che cade sempre lascia la spunta nascosta senza errori a schermo e si rilegge alla prossima apertura. La queryKey è usata solo qui. Regge. Residuo preesistente in nuovi_difetti_visti: il «Duplica» di un prodotto escluso dal recesso."
+    },
+    {
+      "id": "R10-005",
+      "esito": "riparato",
+      "commit": "38851d0cc7adabacddae7bc497ba3a8c0f4343f4",
+      "file_toccati": [
+        "app/seller/earnings/commissione.ts",
+        "app/api/seller/subscription/checkout/route.ts",
+        "components/seller/SubscriptionBanner.tsx",
+        "components/SellerApplicationForm.tsx",
+        "lib/stripe/webhook/abbonamenti.ts",
+        "tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 38851d0cc7adabacddae7bc497ba3a8c0f4343f4^ --file app/api/seller/subscription/checkout/route.ts,components/seller/SubscriptionBanner.tsx,components/SellerApplicationForm.tsx --prove tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Fonte unica in app/seller/earnings/commissione.ts: ABBONAMENTO_CENTESIMI_MESE=5000, da cui si ricava PREZZO_ABBONAMENTO_MESE. La usano la cassa (unit_amount e descrizione), il banner, il modulo di richiesta e la campanella «abbonamento attivo» del webhook. La prova esistente ai-negozi-diciamo-un-prezzo-solo (importa commissione.ts) ora legge il prezzo dalla costante; la prova nuova finge un prezzo di 60 € e controlla l'addebito vero.",
+      "chiave": "architettura|il prezzo dell'abbonamento dei negozi è scritto a mano in sei posti, e la prova che dovrebbe tenerli uguali non se ne accorge se l'addebito cambia",
+      "prova_esistente_modificata": "tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx (importa app/seller/earnings/commissione.ts): il canone atteso si costruisce da PREZZO_ABBONAMENTO_MESE invece di «€50» scritto a mano; nessuna asserzione tolta o indebolita.",
+      "verificato_da": "qa (subagente separato): grep di €50, 50 €, 50/mese, 5000 e cinquanta in app/, components/, lib/ e messages/. 5000 sta solo in commissione.ts; gli altri «50» sono commenti o non c'entrano. La prova finta a 6000 si accorge dell'addebito. Regge. Difetto latente, oggi innocuo: con un prezzo non intero PREZZO_ABBONAMENTO_MESE scriverebbe «€49.9»."
+    },
+    {
+      "id": "R10-006",
+      "esito": "parziale",
+      "commit": "974d9750e61fc1e8d81948f00e6c786bfa4065dc",
+      "file_toccati": [
+        "app/api/consegna/veloce/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 974d9750e61fc1e8d81948f00e6c786bfa4065dc^ --file app/api/consegna/veloce/route.ts --prove tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il freno da 30 al minuto si conta per indirizzo + insieme di negozi chiesti, più un tetto di 120 al minuto per indirizzo contro chi gira gli id. Con 40 schede in lista, il carrello e la cassa hanno ancora la loro risposta. StoreListRow e StorePreviewCard non serviva toccarli. Miglioria possibile, non necessaria per chiudere la voce: una domanda sola per tutta la lista nel gancio useVeloceDelNegozio (components/ui/DeliveryCutoff.tsx, non mio). La rotta accetta già fino a 20 negozi per domanda.",
+      "chiave": "architettura|ogni scheda dell elenco dei negozi chiede la veloce da sola: oltre 30 negozi consumano il limite di 30 domande al minuto per indirizzo, lo stesso che serve al carrello e alla cassa",
+      "cosa_resta": "Il tetto di 120 al minuto per indirizzo resta condiviso col carrello e con la cassa. /stores e /near mostrano fino a 200 schede (app/stores/page.tsx:40, app/near/page.tsx:29), e ogni scheda fa la sua domanda, che si rifà al ritorno sulla scheda dopo 5 minuti. Con 120 negozi, o con 61 caricati due volte in un minuto, il carrello riceve ancora 429. La cura vera è nel gancio useVeloceDelNegozio (components/ui/DeliveryCutoff.tsx:56-90), che non è mio: vedi serve_file_altrui. Il commento della rotta, che diceva che la cura «sta» nel gancio, ora dice che è da fare (commit 88bcccc2).",
+      "serve_file_altrui": [
+        {
+          "file": "components/ui/DeliveryCutoff.tsx",
+          "modifica": "useVeloceDelNegozio: raccogliere in un unico lotto (per esempio con un microtask o un debounce di 50 ms, in un modulo condiviso) gli id dei negozi chiesti dalle schede montate insieme. Mandare una domanda sola /api/consegna/veloce?negozi=a,b,… a gruppi di massimo 20 (MAX_NEGOZI della rotta), con una risposta per negozio. Oppure, più semplice: aggiungere &per=vetrina alla domanda delle schede, e la rotta conta quelle richieste in un contatore separato da quello di carrello e cassa."
+        },
+        {
+          "file": "app/api/consegna/veloce/route.ts",
+          "modifica": "Solo se si sceglie la seconda strada: la rotta legge per=vetrina e usa la chiave consegna-veloce-vetrina:${ip} per il tetto (è un file mio, ma la modifica ha senso solo insieme al gancio). Per la prima strada la rotta deve rispondere per negozio e non con un verdetto unico: oggi risponde un solo possibile/perche per tutto l'insieme."
+        }
+      ],
+      "verificato_da": "qa (subagente separato): col freno vero in memoria, 120 schede o 61 schede caricate due volte in un minuto mandano ancora il carrello a 429. Per questo la voce è parziale. Il tetto non si aggira cambiando l'ordine degli id. Con ?negozi= vuoto la rotta risponde 200 guardando solo orario e fattorini: non fa danni."
+    },
+    {
+      "id": "R10-007",
+      "esito": "riparato",
+      "commit": "87a5be051b55668627f58b244938b1500061672b",
+      "file_toccati": [
+        "components/admin/home/HomeSectionsEditor.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-pannello-home-sezioni-spente.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-pannello-home-sezioni-spente.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 87a5be051b55668627f58b244938b1500061672b^ --file components/admin/home/HomeSectionsEditor.tsx --prove tests/unit/riparazione-r10-pannello-home-sezioni-spente.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel pannello una sezione attiva ma spenta al lancio (sezioneAccesa=false) porta «spenta al lancio · non appare in home» e il riquadro grigio come le nascoste. Il menu «Aggiungi sezione» filtra HOME_SECTION_CATALOG con sezioneAccesa. lib/home-site.ts non serviva toccarlo.",
+      "chiave": "architettura|nel pannello /admin/home «drop del giorno» e «newsletter» risultano visibili, ma la home non le disegna",
+      "verificato_da": "qa (subagente separato): le pagine CMS non sono toccate (passano groups=['contenuto'] e ammettono solo richText, banner, gallery e video), e nel pannello non c'è un'anteprima che mostri la sezione. Regge. Dettaglio: su una sezione spenta l'occhio resta aperto, e la nota lo compensa."
+    },
+    {
+      "id": "R10-008",
+      "esito": "parziale",
+      "commit": "f807317fda35976d399b5c0587efd0475ffeb1fe",
+      "file_toccati": [
+        "app/api/ai/catalog-apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f807317fda35976d399b5c0587efd0475ffeb1fe^ --file app/api/ai/catalog-apply/route.ts --prove tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "catalog-apply non scrive più la voce del registro a mano: la costruisce tracciaDellaModifica (la stessa del modulo del prodotto), con prima=riga corrente, dopo=update, origine 'ai-copilot' e daAi = i campi proposti. Nel registro finiscono solo i campi davvero cambiati.",
+      "chiave": "architettura|la traccia «chi ha cambiato il prezzo» esce in due forme diverse a seconda della porta",
+      "cosa_resta": "catalog-apply ora coincide col modulo prodotto. Restano però altre porte con forme diverse, in file non miei: app/api/ai/catalog-apply-bulk/route.ts:250-258 e app/api/ai/catalog-batch/apply/route.ts:321-330 (tutte le chiavi, nessun daAi), e app/api/admin/products/route.ts:225-231, che registra solo {fields}, senza prima né dopo.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-apply-bulk/route.ts",
+          "modifica": "Righe 250-258: costruire la voce con tracciaDellaModifica({ prodottoId, attoreId, origine: 'ai-copilot-bulk', prima: riga corrente, dopo: update, campiDallAi: Object.keys(update) }) e scrivere writeAudit(voce) solo se non è null, come in app/api/ai/catalog-apply/route.ts."
+        },
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "Righe 321-330: la stessa cosa, con origine 'ai-batch'."
+        },
+        {
+          "file": "app/api/admin/products/route.ts",
+          "modifica": "Righe 225-231: tracciaDellaModifica con prima = la riga letta prima dell'update, dopo = i campi scritti, origine 'admin', senza campiDallAi."
+        }
+      ],
+      "verificato_da": "qa (subagente separato): catalog-apply e modulo usano la stessa tracciaDellaModifica. Nessun campo dell'AI si perde (tutti in COLONNE_DEL_VENDITORE e in PRODUCT_SNAPSHOT_COLS). Restano tre porte con forme diverse: per questo la voce è parziale."
+    },
+    {
+      "id": "R10-009",
+      "esito": "parziale",
+      "commit": "2df6e8cd6d29468f9bc0c93a10a98c9494a64539",
+      "file_toccati": [
+        "package-lock.json"
+      ],
+      "prova_file": [],
+      "prova_comando": "npm audit --json ; npm audit --omit=dev --json ; npm run verify",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "audit": {
+        "prima": {
+          "tutte": {
+            "low": 8,
+            "moderate": 20,
+            "high": 13,
+            "critical": 4,
+            "total": 45
+          },
+          "solo_produzione": {
+            "low": 2,
+            "moderate": 12,
+            "high": 5,
+            "critical": 3,
+            "total": 22
+          }
+        },
+        "dopo": {
+          "tutte": {
+            "low": 8,
+            "moderate": 14,
+            "high": 5,
+            "critical": 0,
+            "total": 27
+          },
+          "solo_produzione": {
+            "low": 2,
+            "moderate": 9,
+            "high": 2,
+            "critical": 0,
+            "total": 13
+          }
+        },
+        "dopo_brace_expansion": {
+          "tutte": {
+            "low": 8,
+            "moderate": 14,
+            "high": 4,
+            "critical": 0,
+            "total": 26
+          },
+          "solo_produzione": {
+            "low": 2,
+            "moderate": 9,
+            "high": 1,
+            "critical": 0,
+            "total": 12
+          }
+        }
+      },
+      "cosa_ho_fatto": "npm audit fix senza --force, in un commit da solo con il solo package-lock.json (package.json non è cambiato). Tutti gli aggiornamenti restano nei limiti già scritti in package.json: next 15.5.25→15.5.29, @sentry/nextjs 10.60→10.78, storybook e @storybook/* 10.4.6→10.6.7, vitest 4.1.7→4.1.12. Falle da 45 a 27 e critiche da 4 a 0; solo produzione da 22 a 13, critiche da 3 a 0. npm run verify subito dopo il commit: verde (1214 file di prova, 8935 prove passate, 1 saltata già prima). Dopo il controllo qa, secondo commit sul solo lock, 2df6e8cd: brace-expansion 2.1.8, nel range di minimatch. Falle 26 (4 alte); nell'albero di produzione 12, con 1 alta. npm run verify subito dopo: verde (1214 file, 8943 prove).",
+      "cosa_resta": "La frase della voce «nessuna arriva al sito» non regge del tutto. Nell'albero di produzione resta 1 falla alta: zod 3.25.76 (GHSA-mrhx-c7xc-m3w5, memoria esaurita con collezioni enormi), dipendenza diretta usata in 45 file per validare le richieste, che si ripara solo con zod 4 (salto maggiore, cambia l'API: è una scelta). I tetti sulla grandezza del JSON nelle rotte la attenuano, ma nessuno l'ha misurato. Negli strumenti restano webpack-dev-middleware via @storybook/builder-webpack5 (nessuna correzione in 10.x) e le falle dei bundler Sentry, di resend e di react-email. Overrides e cancello in CI: vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "package.json",
+          "modifica": "Aggiungere \"overrides\" per le transitive con correzione dentro la stessa major (undici, js-yaml, fast-uri, brace-expansion), poi npm install e npm audit. Valutare a parte zod 3→4 (cambia l'API: è una scelta) e Storybook con @storybook/nextjs-vite invece del builder webpack, che porta webpack-dev-middleware."
+        },
+        {
+          "file": ".github/workflows (il file della CI)",
+          "modifica": "Aggiungere il passo «npm audit --omit=dev --audit-level=high» come cancello, così le falle degli strumenti di sviluppo non coprono quelle del sito."
+        }
+      ],
+      "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+      "verificato_da": "qa (subagente separato): il commit cambia solo il lock; le 49 dipendenze dirette rispettano i range; tsc passa; 12 file di prova a caso verdi. Ha corretto il quadro: in produzione restavano 2 alte (zod e brace-expansion). brace-expansion è chiusa nel commit 2df6e8cd; zod no (salto maggiore)."
+    },
+    {
+      "id": "R10-010",
+      "esito": "parziale",
+      "commit": "90e765a5d7f62934e1cc0ce5c9536fbd9324761f",
+      "file_toccati": [
+        "components/ui/Card.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-card-raggio-per-contesto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-card-raggio-per-contesto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 90e765a5d7f62934e1cc0ce5c9536fbd9324761f^ --file components/ui/Card.tsx --prove tests/unit/riparazione-r10-card-raggio-per-contesto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La regola del raggio sta nella primitiva: prop radius ('xl' di base = 16px per il contenuto, '2xl' = 20px per prodotti e negozi, 'lg' = 12px per i riquadri interni). La base passa da 12px a 16px: i 10 file che usano <Card> guadagnano 4px di raggio, la variante funnel resta a 16px.",
+      "cosa_resta": "Portare su <Card> almeno le pagine del percorso d'acquisto (carrello, cassa) e poi le altre ~140 card scritte a mano con bg-white border cream-300/surface-200: sono tutte in file non miei. La regola per contesto va scritta anche nel design system (documento), come chiede la voce.",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "verificato_da": "qa (subagente separato): lib/cn non usa tailwind-merge, ma nessuno dei 12 file che usano Card passa un rounded-* proprio, quindi non c'è conflitto. Le card non-funnel passano da 12 a 16px. La prop radius per ora non la usa nessuno. «Parziale» è giusto."
+    },
+    {
+      "id": "R10-011",
+      "esito": "gia_riparato_prima",
+      "prova": "Il carrello non ha la scelta del ritiro: si fa in cassa, e oggi è spento ovunque (RITIRO_IN_NEGOZIO_ATTIVO=false, lib/constants; la radiografia S01 2594 lo conferma). L'avviso del carrello (app/cart/page.tsx:591-616) usa motivoFuoriZona (lib/ordini/zona-di-consegna.ts:61-68), che con il ritiro acceso dice già «… troppo lontano. Puoi ritirare in negozio.»: un'offerta per chi sceglierà il ritiro, non un muro. Con il ritiro spento l'avviso è giusto per tutti. Passare pickupInStore non si può: nel carrello non c'è ancora una scelta da passare.",
+      "chiave": "flussi-conversione|il carrello avvisa «fuori zona» anche chi poi sceglierà il ritiro in negozio",
+      "verificato_da": "non riparata da me: esito non di codice o già fatta, con la prova citata"
+    },
+    {
+      "id": "R10-012",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base app/cart/page.tsx:621-626 e app/orders/page.tsx:353,382 usano già loader={caricatoreFotoRemote} (lib/image-loader.ts) e nessun `unoptimized`: grep -c unoptimized app/cart/page.tsx = 0, e lo stesso per app/orders/page.tsx. srcSet e sizes tornano. I tre `unoptimized` che restano (app/shared-cart/page.tsx, app/seller/products/page.tsx, app/orders/[id]/page.tsx) sono in file non miei: li ho messi in nuovi_difetti_visti.",
+      "chiave": "frontend-ux|foto sgranate nel carrello e negli ordini: `unoptimized` spegne il `sizes` scritto lì accanto",
+      "verificato_da": "non riparata da me: esito non di codice o già fatta, con la prova citata"
+    },
+    {
+      "id": "R10-013",
+      "esito": "riparato",
+      "commit": "379dc98988c460259a78b7a0871b055a6ede04fe",
+      "file_toccati": [
+        "app/orders/page.tsx",
+        "lib/ordini/tetto-ordini.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-oltre-il-centesimo-ordine.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-oltre-il-centesimo-ordine.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 379dc98988c460259a78b7a0871b055a6ede04fe^ --file app/orders/page.tsx --prove tests/unit/riparazione-r10-oltre-il-centesimo-ordine.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il tetto (100) e le sue parole stanno in un file nuovo, lib/ordini/tetto-ordini.ts. La lettura usa TETTO_ORDINI; con il tetto pieno l'intestazione dice «ultimi 100 ordini» e sotto la lista compare «Qui vedi solo gli ultimi 100 ordini…» con il link all'assistenza (/help). Niente paginazione: la voce chiedeva paginazione oppure la frase, ho scelto la frase.",
+      "chiave": "frontend-ux|nella pagina dei miei ordini, dopo il centesimo gli ordini vecchi spariscono senza avviso",
+      "verificato_da": "qa (subagente separato): /help esiste (email e WhatsApp), e ogni riga di orders è una scheda della lista, quindi «ultimi 100» resta vero. Regge."
+    },
+    {
+      "id": "R10-014",
+      "esito": "riparato",
+      "commit": "c2118e58b5d05fdbc13488a57fa94bff7e425d98",
+      "file_toccati": [
+        "components/admin/home/HomeSectionConfigForm.tsx",
+        "lib/home-site.ts",
+        "lib/testo-visibile.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c2118e58b5d05fdbc13488a57fa94bff7e425d98^ --file lib/testo-visibile.ts --prove tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto maxLength={4000} dal campo del blocco di testo (lo usano sia /admin/home sia le pagine CMS), che tagliava in silenzio quello che si incollava. Al suo posto un contatore «n/4000 caratteri» e, oltre il limite, un errore visibile (aria-invalid) che dice cosa fare. Lo schema (lib/home-site.ts) rifiuta con un messaggio che dice il limite: è quello che rispondono la rotta app/api/admin/cms/[slug] e il salvataggio della home, e la rotta non serviva toccarla. Dopo il controllo qa, secondo commit e75482db (il primo era 585a8bcf). Le rotte controllano e POI sanitizzano, e la sanitizzazione allunga (attributi sui link, &lt;): un testo da 3.960 caratteri si salvava da 10.000 e alla rilettura leggiHomeSite scartava il blocco senza avviso. Ora il limite si conta sul testo visibile (lib/testo-visibile.ts: senza tag, un'entità vale un carattere), uguale prima e dopo la sanitizzazione, con un tetto di 16.000 sull'HTML grezzo. Il contatore del modulo conta allo stesso modo. Collaudo K03 (non reggeva), terzo commit c2118e58: lunghezzaDelTesto toglieva con un'espressione tutto ciò che stava fra «<» e «>». Un testo con quei simboli scritti a mano valeva pochi caratteri, passava, e alla rilettura il blocco spariva intero. Ora si misura sull'HTML già sanitizzato (i simboli letterali diventano entità, i tag restano solo quelli veri). Anche il tetto sull'HTML (16.000) si conta sull'HTML come verrà salvato, quindi tanti link vengono rifiutati al salvataggio con un messaggio e non spariscono dopo. Il freno sul testo grezzo è a 32.000.",
+      "chiave": "frontend-ux|un testo lungo incollato in una pagina del sito viene tagliato a 4.000 caratteri senza avvisare, e la pagina pubblicata resta monca",
+      "verificato_da": "qa (subagente separato): il messaggio dello schema arriva a chi salva sia su /admin/home sia su /admin/pages. Ha però misurato che la sanitizzazione allunga il testo e fa sparire il blocco alla rilettura. Chiuso nel commit e75482db, con una prova che sanitizza un testo da 3.900 caratteri con link e «<» e lo rilegge; la prova rimessa regge. Lo stesso maxLength={4000} c'è sulla pagina del negozio (components/seller/SectionConfigForm.tsx:119, non mio): in nuovi_difetti_visti. Collaudo K03: non reggeva («<»/«>» letterali, tetto HTML contato prima della sanitizzazione). Chiuso nel commit c2118e58, con due prove che ripetono i casi del collaudo; la prova rimessa regge."
+    },
+    {
+      "id": "R10-015",
+      "esito": "riparato",
+      "commit": "74b55ed4400e27c6466ebebbad0d2deae2e6c39b",
+      "file_toccati": [
+        "app/admin/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-dettaglio-ordine-non-scorre-di-lato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-dettaglio-ordine-non-scorre-di-lato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 74b55ed4400e27c6466ebebbad0d2deae2e6c39b^ --file app/admin/orders/[id]/page.tsx --prove tests/unit/riparazione-r10-dettaglio-ordine-non-scorre-di-lato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al <dd> della riga del dettaglio ordine aggiunti min-w-0, break-words e [overflow-wrap:anywhere]: un link incollato nelle note va a capo invece di allargare la pagina. È uno stile: prova leggera sul sorgente.",
+      "chiave": "layout-responsive|il dettaglio ordine sul telefono scorre di lato se il cliente incolla un link nelle note di consegna",
+      "verificato_da": "qa (subagente separato): la nota passa davvero da Riga (page.tsx:202) e misurato a 360 px il dd resta dentro lo schermo. Regge. La stessa nota senza ritorno a capo c'è nelle pagine di dettaglio di cliente, negozio e fattorino (non mie, e la voce parla solo della pagina admin): in nuovi_difetti_visti."
+    },
+    {
+      "id": "R10-016",
+      "esito": "riparato",
+      "commit": "1195153c2920fdd586dcde1cf1211042687fe01b",
+      "file_toccati": [
+        "app/reset-password/page.tsx",
+        "lib/auth/errori-nuova-password.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-password-rubata-consiglio-giusto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-password-rubata-consiglio-giusto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1195153c2920fdd586dcde1cf1211042687fe01b^ --file lib/auth/errori-nuova-password.ts --prove tests/unit/riparazione-r10-password-rubata-consiglio-giusto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La traduzione degli errori va in un file nuovo, lib/auth/errori-nuova-password.ts, e legge il motivo del rifiuto di Supabase (reasons): password rubata (pwned), troppo corta (length), troppo semplice (characters), ognuna con il suo consiglio. Il motivo resta sotto il campo «Nuova password» (prop error) oltre all'avviso, e sparisce quando si riscrive. La frase introduttiva aggiunge «che non usi già altrove». Dopo il controllo qa, secondo commit 1195153c (il primo era 533f6a7e). Il minimo di caratteri ora si legge dal messaggio del server. «you can only request this after N seconds» diventa «puoi chiederne un altro fra N secondi», e l'email non valida ha la sua frase (prima finivano nella frase generica «richiedi un nuovo link qui sotto»). Il controllo sulla parola «rate» non prende più «generate». Sotto il campo vanno solo gli errori della password.",
+      "chiave": "microcopy|sulla pagina della nuova password, una password già finita in rete viene rifiutata con un consiglio sbagliato che sparisce dopo pochi secondi",
+      "verificato_da": "qa (subagente separato): ha controllato auth-js 2.106.1 (AuthWeakPasswordError.reasons con length, characters, pwned) e fatto girare le frasi vere di GoTrue: ognuna riceve il consiglio giusto. Residui chiusi nel commit 1195153c. La stessa mancanza di traduzione c'è in registrazione e nel cambio password del profilo (non miei): in nuovi_difetti_visti."
+    },
+    {
+      "id": "R10-017",
+      "esito": "riparato",
+      "commit": "6243926fdf53beef32dbb79ea5285c690003e7d6",
+      "file_toccati": [
+        "app/orders/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6243926fdf53beef32dbb79ea5285c690003e7d6^ --file app/orders/page.tsx --prove tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I due bottoni passano da size sm (32 px) a md (min-h 44 px), con gap-3 e flex-wrap. components/ui/Button.tsx non l'ho toccato: ingrandire la sm cambierebbe anche le tabelle fitte dell'amministrazione. Dopo il controllo qa, secondo commit d26e5207 (il primo era aa88b5da). Con i bottoni da 44 px il blocco di miniature e prezzo (min-w-0 flex-1, base 0) si stringeva a 57 px a 360, e «Traccia» copriva il prezzo. Ora quel blocco ha basis-56: quando lo spazio non basta, sono i bottoni ad andare sulla riga sotto. Collaudo K03, terzo commit 6243926f: con 4 miniature più «+N» (~264 px) anche la base di 14rem lasciava il prezzo sotto i bottoni fino a 600 px. Ora miniature e prezzo prendono la riga intera e i bottoni vanno sotto, fino a lg; le miniature vanno a capo invece di uscire dalla card. Misurato con Playwright sul CSS compilato del progetto (replica della card, 4 miniature + «+3»): a 320, 360, 560, 600, 768, 1024 e 1280 px nessuna sovrapposizione fra prezzo, miniature e bottoni, e nessuno scorrimento di lato.",
+      "chiave": "mobile-pwa|nella lista ordini i bottoni «traccia» e «riordina» sono troppo piccoli per il pollice",
+      "verificato_da": "qa (subagente separato): ha compilato il CSS del progetto e misurato con Playwright a 320 e 360 px. La pagina non scorre di lato e i bottoni sono alti 44 px, ma i bottoni coprivano il prezzo (schermate prima e dopo). Chiuso nel commit d26e5207 con la prova sulla base del blocco; la prova rimessa regge. Collaudo K03: prezzo coperto negli ordini con 5 o più prodotti (8 px a 600, 48 px a 560). Chiuso nel commit 6243926f, misurato da 320 a 1280 px."
+    },
+    {
+      "id": "R10-018",
+      "esito": "parziale",
+      "prova": "public/manifest.json sulla base: «orientation» non c'è più, «id»: \"/\" e «display_override»: [\"standalone\",\"minimal-ui\"] ci sono già (punti ① e metà del ②, sistemati prima di questa campagna).",
+      "cosa_ho_fatto": "Niente da cambiare nel codice: tre richieste su quattro erano già fatte sulla base.",
+      "cosa_resta": "Il campo «screenshots» (2-3 immagini form_factor «narrow» e una «wide») vuole catture vere del sito online, con negozi e prodotti veri: non le posso produrre qui. Quando ci sono: metterle in public/ (es. public/screenshots/home-telefono.png 1080x1920) e aggiungere a public/manifest.json \"screenshots\": [{\"src\":\"/screenshots/home-telefono.png\",\"sizes\":\"1080x1920\",\"type\":\"image/png\",\"form_factor\":\"narrow\",\"label\":\"La vetrina dei negozi di Piacenza\"}, …]. L'id resta \"/\": cambiarlo creerebbe una seconda installazione per chi l'ha già.",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "verificato_da": "non riparata da me: esito non di codice o già fatta, con la prova citata"
+    },
+    {
+      "id": "R10-019",
+      "esito": "riparato",
+      "commit": "6850e1d9d67614bd66c0f74dabe76bd35e3f7abf",
+      "file_toccati": [
+        "app/api/seller/subscription/checkout/route.ts",
+        "lib/stripe/webhook/abbonamenti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-abbonamento-doppio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-abbonamento-doppio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6850e1d9d67614bd66c0f74dabe76bd35e3f7abf^ --file lib/stripe/webhook/abbonamenti.ts --prove tests/unit/riparazione-r10-abbonamento-doppio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La cassa passa a Stripe una idempotencyKey per negozio e finestra di 10 minuti: due schede ricevono la stessa sessione, anche al primo abbonamento senza stripe_customer_id. Il webhook, se il profilo ha già un altro abbonamento ancora in corso su Stripe, non lo sovrascrive: annulla subito il doppione e scrive un log per l'admin. Il rimborso del doppione non è automatico (domanda a Nicola). Il portale (portal/route.ts:47) non serviva toccarlo: con il primo abbonamento sul profilo si disdice dal sito. Dopo il controllo qa, secondo commit 501d46a8 (il primo era a47ea68b): la guardia del webhook ora vale anche quando il doppione è già annullato. Prima, se l'annullamento riusciva su Stripe ma la risposta si perdeva, al ritentativo il doppione si scriveva sopra al primo. Se il primo è in ritardo di pagamento e il nuovo è pagato, si annulla il primo, non quello pagato. Collaudo K03, terzo commit 6850e1d9: se subscriptions.retrieve del precedente fallisce (cancellato, id di prova, rete), prima il webhook lanciava, Stripe riceveva 500 a ogni ritentativo e l'abbonamento appena pagato non si attivava mai. Ora si scrive il nuovo e l'admin lo vede nel log.",
+      "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito",
+      "verificato_da": "qa (subagente separato): 4 prove + 63 file vicini (449 prove) verdi. Ha trovato due buchi: il ritentativo dopo un annullamento con la risposta persa sovrascriveva il primo, e con il primo past_due si annullava l'abbonamento appena pagato. Tutti e due chiusi nel commit 501d46a8, con le prove che li riproducono (la prova rimessa regge). Restano, dichiarati: due avvisi in contemporanea su un profilo vuoto (nessun blocco per riga; raro); la chiave a finestre fisse protegge dal doppio clic, non da due schede a distanza (lì difende il webhook); nessun rimborso automatico (domanda a Nicola). Collaudo K03: si rompeva se Stripe non sapeva dire com'era il precedente. Chiuso nel commit 6850e1d9 con la prova che lo ripete.",
+      "nota": "Resta, dichiarato: la chiave di idempotenza va a finestre fisse di 10 minuti. Protegge dal doppio clic, ma due schede aperte a cavallo della finestra, o la seconda dopo più di 10 minuti, creano due sessioni di cassa, e il doppione può nascere ed essere pagato. Il webhook lo annulla subito, ma la prima fattura del doppione non si rimborsa in automatico (domanda per Nicola). Due avvisi in contemporanea su un profilo vuoto restano senza blocco per riga."
+    },
+    {
+      "id": "R10-020",
+      "esito": "riparato",
+      "commit": "d78619dd89b5decf5fb7497be86f0f7a0241e14d",
+      "file_toccati": [
+        "app/api/seller/subscription/checkout/route.ts",
+        "components/SellerApplicationForm.tsx",
+        "components/seller/SubscriptionBanner.tsx",
+        "lib/abbonamento-primo-incasso.ts",
+        "tests/unit/riparazione-r10-abbonamento-doppio.test.ts",
+        "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx",
+        "tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d78619dd89b5decf5fb7497be86f0f7a0241e14d^ --file components/seller/SubscriptionBanner.tsx --prove tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La frase di commissione.ts:98-102 diceva già «dopo il tuo primo incasso»; il comportamento no. Ora la cassa risponde 403 «L'abbonamento parte solo dopo il tuo primo incasso con MyCity» finché il negozio non ha un ordine PAID o in contanti DELIVERED; se gli incassi non si leggono, risponde 503. Nel modulo di richiesta il riquadro e il consenso dicevano «all'approvazione»: ora dicono «dopo il primo incasso». Definizione approvata dalla regista, in domande_per_nicola. L'interruttore resta spento. Dopo il controllo qa, secondo commit 45b6c48b (il primo era 5bd9e7af): conta come incasso anche un ordine pagato e poi rimborsato in parte (PARTIALLY_REFUNDED), come in migrations/215. Collaudo K03, terzo commit d78619dd: il banner invitava ad «Attiva €50/mese» anche chi non aveva incassato, e il tasto rispondeva 403. La regola ora sta in lib/abbonamento-primo-incasso.ts e la leggono la cassa e il banner, che chiede gli ordini del negozio (RLS: Sellers can view their store orders) e mostra l'invito solo dopo il primo incasso. Chi è in ritardo di pagamento vede sempre l'avviso.",
+      "chiave": "pagamenti-stripe|quando si accenderà l'abbonamento, il negozio pagherà 50 euro subito dopo l'approvazione invece che dopo i primi incassi",
+      "nota": "Le due prove R10 sulla cassa (abbonamento-doppio, un-prezzo) hanno ora un finto `orders` con un incasso, perché la cassa legge gli ordini.",
+      "verificato_da": "qa (subagente separato): ha controllato che la policy «Sellers can view their store orders» (migrations/011:109-111) lasci leggere gli ordini al negozio e che i valori del database siano PAID e DELIVERED in maiuscolo, cod in minuscolo. La sintassi PostgREST è giusta, e con la lettura caduta la cassa dà 503. La riserva sul rimborso parziale è chiusa in 45b6c48b. Quella sul banner, che invita ancora il negozio appena approvato, è già in nuovi_difetti_visti. Collaudo K03: il banner contraddiceva la cassa. Chiuso nel commit d78619dd con la prova (nessun incasso: niente invito; un incasso: l'invito c'è)."
+    },
+    {
+      "id": "R10-021",
+      "esito": "riparato",
+      "commit": "d64e7d95e61e4e5f61ec87ee893d134f67c20dd1",
+      "file_toccati": [
+        "components/seller/GestisciAbbonamento.tsx",
+        "app/api/seller/subscription/portal/route.ts",
+        "lib/abbonamento-portale.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-gestisci-abbonamento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-gestisci-abbonamento.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d64e7d95e61e4e5f61ec87ee893d134f67c20dd1^ --file components/seller/GestisciAbbonamento.tsx --prove tests/unit/riparazione-r10-gestisci-abbonamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La regola «chi può aprire il portale» sta in un file nuovo, lib/abbonamento-portale.ts. La usano il bottone GestisciAbbonamento (a funzione spenta sparisce per un abbonamento disdetto) e la rotta del portale (stesso comportamento di prima, la regola ora sta lì). Il webhook non serviva toccarlo.",
+      "chiave": "pagamenti-stripe|un negozio con l'abbonamento disdetto vede ancora «gestisci l'abbonamento», e il tasto risponde che l'abbonamento non è attivo",
+      "verificato_da": "qa (subagente separato): il webhook scrive solo active, past_due, canceled o null. Con l'interruttore spento la regola del bottone coincide con quella della rotta, e con l'interruttore acceso resta coerente. Unico scarto, uno stato in corso senza stripe_customer_id: possibile solo con dati sistemati a mano. Regge."
+    },
+    {
+      "id": "R10-022",
+      "esito": "riparato",
+      "commit": "39f45396dbf6819b0b5b8130b5b841725c073902",
+      "file_toccati": [
+        "components/seller/SubscriptionBanner.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 39f45396dbf6819b0b5b8130b5b841725c073902^ --file components/seller/SubscriptionBanner.tsx --prove tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con past_due il tasto del banner chiama /api/seller/subscription/portal (dove si aggiorna la carta) invece della cassa, che su un abbonamento esistente risponde 409. Senza abbonamento chiama la cassa come prima.",
+      "chiave": "pagamenti-stripe|quando il pagamento dell'abbonamento non va a buon fine, il tasto «aggiorna pagamento» risponde con un errore invece di aprire il portale",
+      "verificato_da": "qa (subagente separato): il portale accetta la chiamata del banner col solo cookie (middleware.ts:216-223, provenienza.ts:60-81), la forma della risposta {url} coincide con quella che il banner legge, e a un abbonamento past_due non manca mai stripe_customer_id. Regge."
+    },
+    {
+      "id": "R10-023",
+      "esito": "serve_file_altrui",
+      "nota": "Inter corsivo NON si può togliere: lo usano le note in corsivo senza grazie (app/orders/[id]/page.tsx:865, app/seller/orders/[id]/page.tsx:641, app/profile/addresses/page.tsx:232, app/profile/gift-cards/page.tsx:375, app/lists/[id]/page.tsx:353, components/ProductQA.tsx:263 …): senza il file tornerebbe il corsivo finto. Per togliere il preload ai corsivi servono due istanze di next/font (una famiglia diversa) e una regola CSS che dica al corsivo quale famiglia usare. La regola va in app/globals.css, che non è mio. Cambiare il layout da solo rimetterebbe il corsivo finto ovunque, quindi le due modifiche vanno nello stesso commit: le scrivo tutte e due qui (app/layout.tsx è mio, ma non lo tocco da solo). Dopo, va rimisurato con lo script della voce.",
+      "serve_file_altrui": [
+        {
+          "file": "app/layout.tsx",
+          "modifica": "Righe 36-48: Inter e Fraunces con style: ['normal'] (preload come oggi). Aggiungere due istanze: const interCorsivo = Inter({ subsets: ['latin'], variable: '--font-inter-italic', display: 'swap', style: ['italic'], preload: false }); const frauncesCorsivo = Fraunces({ subsets: ['latin'], variable: '--font-serif-italic', display: 'swap', weight: ['400','500','600','700','800'], style: ['italic'], preload: false }); e nell'<html> className aggiungere ${interCorsivo.variable} ${frauncesCorsivo.variable}. Da fare SOLO insieme alla regola di app/globals.css."
+        },
+        {
+          "file": "app/globals.css",
+          "modifica": "Dopo le regole di h1/h2/h3 (riga ~217): `.italic, em, i { font-family: var(--font-inter-italic), var(--font-sans); }` e `:is(h1, h2, h3, .font-serif, .font-serif-display, .font-display) :is(.italic, em, i), :is(h1, h2, h3, .font-serif, .font-serif-display, .font-display):is(.italic, em, i) { font-family: var(--font-serif-italic), var(--font-serif); }`. Poi controllare a occhio «veri» nel titolone della home (app/page.tsx:27), in come-funziona (app/come-funziona/page.tsx:54) e in AuthShell (components/ui/AuthShell.tsx:84): devono restare in Fraunces corsivo vero."
+        }
+      ],
+      "chiave": "performance|ogni pagina scarica due caratteri in corsivo che quasi nessuna pagina usa",
+      "verificato_da": "non riparata da me: esito non di codice o già fatta, con la prova citata"
+    },
+    {
+      "id": "R10-024",
+      "esito": "non_codice",
+      "nota": "Il codice c'è già. La regola nuova (migrations/155_il_registro_attivita_oscura_per_difetto.sql:61-70, activity_key_sensibile) riconosce first_name/last_name, recipient e message, e vale per le righe nuove. La pulizia delle righe vecchie è migrations/183_il_registro_non_copia_i_nomi_legali.sql:40-63: un UPDATE idempotente che oscura con la stessa regola i nomi legali e i biglietti dei buoni regalo già scritti. La 115 è la regola vecchia, superata dalla 155: non va toccata. Cosa deve fare Nicola: applicare sul database vero la 155 (se non c'è già) e poi la 183. Prima, una copia del database. Nessuna migrazione nuova: rifarebbe la 183.",
+      "prova": "migrations/183_il_registro_non_copia_i_nomi_legali.sql:40-63",
+      "chiave": "privacy-legale|nel registro delle attività restano in chiaro i nomi legali di negozianti e fattorini e i biglietti dei buoni regalo scritti prima della correzione",
+      "verificato_da": "non riparata da me: esito non di codice o già fatta, con la prova citata"
+    },
+    {
+      "id": "R10-025",
+      "esito": "parziale",
+      "commit": "cbf95b1070e7e3c32eb06115d464de7dd6109ae2",
+      "file_toccati": [
+        "tests/unit/riparazione-r10-carrello-conto-consegna.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-carrello-conto-consegna.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-carrello-conto-consegna.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il file di collaudo originale non c'è più, quindi ho rifatto a mano 9 mutanti sul conto della consegna di app/cart/page.tsx contro tutte le 20 prove che importano il carrello. Prima: M2 (spedizione tolta dal totale), M3 (subtotale per negozio con Math.floor), M4 (avviso «spesa sotto i 10 €» letto sempre dal primo negozio) e M5 (lat/lng del negozio scambiate nel conto) restavano verdi. La prova nuova monta il carrello vero con due negozi, un prezzo da 1,15 € e coordinate vere (client Supabase vero su rete finta): M3 e M4 ora diventano rosse; M1, M6, M7, M8, M9 erano già rosse. Nessuna modifica al codice del carrello. Dopo il controllo qa (8 mutanti nuove), secondo commit cbf95b10. Sopravvivevano N5 (accanto al nome di ogni negozio il totale del carrello invece della spesa del negozio) e N1 (negozi raggruppati per nome invece che per venditore: due «Forno» fusi in uno, una consegna sola), che cadeva solo per caso. Le due prove nuove le fanno cadere tutte e due (verificato a mano).",
+      "cosa_resta": "M2 e M5 restano verdi, ma oggi sono equivalenti: al lancio la spedizione per distanza vale zero (shippingForEuro, lib/ordini/prezzi.ts), quindi togliere la spedizione o scambiare le coordinate nel conto non cambia nessun numero. Diventeranno rosse con una prova sul conto il giorno che la spedizione torna a dipendere dalla distanza. Le altre mutanti del collaudo originale non si possono rifare senza il suo file.",
+      "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
+      "verificato_da": "qa (subagente separato): ha confermato che M2 e M5 sono equivalenti finché shippingForEuro vale 0 (lib/shipping.ts:36-38). Su 8 mutanti nuove N2, N3, N4, N6, N7 e N8 cadevano già; N5 sopravviveva e N1 cadeva solo per caso. Chiuse nel commit cbf95b10."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "L'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
+      "dimensione": "performance",
+      "severita": "minore",
+      "file": "components/ui/DeliveryCutoff.tsx:56",
+      "descrizione": "Dopo R10-006 non consuma più il freno del carrello, ma resta una richiesta per negozio. useVeloceDelNegozio potrebbe raggrupparle (la rotta accetta già ?negozi=a,b,… fino a 20)."
+    },
+    {
+      "titolo": "Le altre due porte dell'AI sul catalogo scrivono ancora la traccia a mano, nella forma vecchia",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-apply-bulk/route.ts:217 · app/api/ai/catalog-batch/apply",
+      "descrizione": "Come catalog-apply prima di R10-008: tutte le chiavi mandate e nessun daAi. Cura: usare tracciaDellaModifica (lib/products/salvataggio-tracciato.ts) anche lì. File non miei."
+    },
+    {
+      "titolo": "Restano tre pagine con le foto sgranate perché `unoptimized` spegne srcSet e sizes",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/shared-cart/page.tsx · app/seller/products/page.tsx · app/orders/[id]/page.tsx",
+      "descrizione": "Come carrello e ordini prima della cura #99: sostituire `unoptimized` con loader={caricatoreFotoRemote}. Si può anche estendere tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts con un fattore di densità 2. File non miei."
+    },
+    {
+      "titolo": "«Duplica» di un prodotto escluso dal recesso: finché non si sa se la colonna c'è, la copia si salva recedibile senza avviso",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/seller/products/new/page.tsx:190 · components/seller/ProductForm.tsx:746",
+      "descrizione": "Il form parte con nonRecedibile=true dalla riga sorgente, ma ProductForm manda non_recedibile solo se recessoSegnabile è true, cioè dopo che la domanda sulla colonna ha risposto «sì». La riga sorgente letta con * (new/page.tsx:135) dimostra già che la colonna c'è e si potrebbe usarla come risposta. Preesistente, visto dal qa di R10-004."
+    },
+    {
+      "titolo": "Sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/seller/site/SectionConfigForm.tsx:119",
+      "descrizione": "Stesso difetto di R10-014 sul costruttore della vetrina del negozio: maxLength={4000}, e aCapoInHtml aggiunge anche i <br> dopo il controllo. Cura: come in R10-014, misurare con lib/testo-visibile.ts."
+    },
+    {
+      "titolo": "Nelle pagine di dettaglio ordine di cliente, negozio e fattorino una nota con un link lungo fa scorrere la pagina di lato",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/orders/[id]/page.tsx:865 · app/seller/orders/[id]/page.tsx:641 · app/rider/orders/[id]/page.tsx:594-597",
+      "descrizione": "Come nel dettaglio admin prima di R10-015: manca [overflow-wrap:anywhere] (e min-w-0 nei flex). Misurato dal qa su queste classi a 360 px: scrollWidth fra 1.057 e 1.136."
+    },
+    {
+      "titolo": "In registrazione e nel cambio password del profilo il rifiuto di una password debole o rubata non si traduce o si perde",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/sign-up/page.tsx:187 · app/api/account/cambia-password/route.ts:96-98 · app/api/auth/signup/route.ts:51-52",
+      "descrizione": "Registrazione: il messaggio esce in inglese grezzo. Cambio password: qualunque errore diventa un 500 «Non è stato possibile aggiornare la password». Cura: usare traduciErroreNuovaPassword (lib/auth/errori-nuova-password.ts)."
+    },
+    {
+      "titolo": "Il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/admin/home/HomeSectionConfigForm.tsx:96-97,151,180 · BannerFields.tsx:57,64",
+      "descrizione": "maxLength da 200, 320 e 400 caratteri su campi brevi: un incollato più lungo si taglia senza avviso. È meno grave del blocco di testo (sono titoli), ma è lo stesso meccanismo."
+    }
+  ],
+  "domande_per_nicola": [
+    "R10-019 — Quando arriva un secondo abbonamento da 50 € mentre il primo è in corso, ora il doppione si annulla subito, ma la prima fattura pagata NON viene rimborsata in automatico (lo vede l'admin nel log «abbonamento doppio annullato»). Vuoi il rimborso automatico del doppione?",
+    "R10-020 — Definizione approvata dalla regista, da confermare all'unione: il negozio può attivare l'abbonamento solo dopo il «primo incasso» = almeno un suo ordine pagato con carta (payment_status='paid') oppure un ordine in contanti consegnato. L'interruttore ABBONAMENTO_NEGOZI_ACCESO resta spento. Confermi?",
+    "R10-009 — zod 3 ha una falla alta (memoria esaurita con collezioni enormi) che si chiude solo passando a zod 4, che cambia l'API in 45 file di validazione. Vuoi pianificare il passaggio?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "5 subagenti qa (general-purpose, ognuno nella sua worktree): R10-001 da sola; 019+020+005; 022+021+004+006+008; 007+014+013+017+015+003; 016+010+025+009."
+  }
+}

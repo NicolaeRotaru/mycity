@@ -19,7 +19,8 @@ import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 // 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
 // viene poi trattenuta davvero.
-import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE } from '@/app/seller/earnings/commissione';
+// R10-005 — Il prezzo dell'abbonamento arriva da dove si calcola l'addebito.
+import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -46,8 +47,6 @@ import { useTranslations } from 'next-intl';
  * compilazione "tutta insieme" tipica del primo onboarding.
  */
 
-/** Il prezzo dell'abbonamento detto in un posto solo di questa pagina. */
-const PREZZO_ABBONAMENTO_MESE = '€50';
 
 const SellerSchema = z.object({
   // Contatti operativi
@@ -448,7 +447,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
             Carta di credito per abbonamento
           </p>
           <p>
-            L'abbonamento ({PREZZO_ABBONAMENTO_MESE}/mese) viene addebitato <strong>solo dopo che l'admin avrà approvato la richiesta</strong>.
+            {/* R10-020 — La regola firmata: il canone parte dopo il primo incasso, non all'approvazione. */}
+            L'abbonamento ({PREZZO_ABBONAMENTO_MESE}/mese) parte <strong>solo dopo il tuo primo incasso con MyCity</strong>.
             In quel momento ti chiederemo di inserire la carta tramite un pagamento sicuro (Stripe). Non ti chiediamo i
             dati carta adesso per ridurre i tuoi rischi.
           </p>
@@ -475,7 +475,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         />
         {ABBONAMENTO_NEGOZI_ACCESO && (
           <Consent
-            label={`Accetto che, all'approvazione, mi venga richiesto l'inserimento della carta per l'addebito mensile di ${PREZZO_ABBONAMENTO_MESE}`}
+            label={`Accetto che, dopo il mio primo incasso con MyCity, mi venga richiesto l'inserimento della carta per l'addebito mensile di ${PREZZO_ABBONAMENTO_MESE}`}
             register={register('acceptBilling')}
             error={errors.acceptBilling?.message as string | undefined}
           />

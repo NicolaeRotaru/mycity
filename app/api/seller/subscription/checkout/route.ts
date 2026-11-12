@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { FILTRO_PRIMO_INCASSO } from '@/lib/abbonamento-primo-incasso';
+import { ABBONAMENTO_CENTESIMI_MESE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
@@ -21,7 +23,13 @@ export const runtime = 'nodejs';
  * mano sul Dashboard Stripe.
  * Rate limit: 10 / 10 min per utente.
  */
-const SELLER_SUBSCRIPTION_CENTS = 5000; // €50,00 / mese
+// R10-005 — L'importo viene da app/seller/earnings/commissione.ts, lo stesso che leggono le pagine.
+const SELLER_SUBSCRIPTION_CENTS = ABBONAMENTO_CENTESIMI_MESE;
+/** R10-019 — Le richieste dello stesso negozio dentro questa finestra ricevono la stessa cassa. */
+const FINESTRA_CASSA_MS = 10 * 60_000;
+/** R10-020 — Un ordine incassato: pagato (carta o contanti registrati), o in contanti e consegnato. */
+// La regola sta in lib/abbonamento-primo-incasso.ts: la legge anche il banner (collaudo K03).
+const PRIMO_INCASSO = FILTRO_PRIMO_INCASSO;
 
 export const POST = withAuthRateLimit(
   { name: 'seller-subscription-checkout', max: 10, windowMs: 10 * 60_000 },
@@ -46,6 +54,26 @@ export const POST = withAuthRateLimit(
     }
     if (profile.subscription_status === 'active') {
       return ApiErrors.invalidRequest('Abbonamento già attivo.');
+    }
+
+    // 12/11/2026 (R10-020) — LA REGOLA FIRMATA: IL CANONE PARTE DOPO IL PRIMO INCASSO.
+    // Le pagine lo dicevano gia' (commissione.ts, «che parte solo dopo il tuo primo incasso
+    // con MyCity»), ma qui bastava l'approvazione: il negozio appena approvato pagava 50 €
+    // prima di aver venduto niente. «Primo incasso» = un suo ordine pagato (carta, o contanti
+    // gia' registrati: PAID) oppure un ordine in contanti consegnato. Definizione approvata
+    // dalla regista, da confermare da Nicola (referto R10).
+    const { data: incassi, error: erroreIncassi } = await supa
+      .from('orders')
+      .select('id')
+      .eq('seller_id', user.id)
+      .or(PRIMO_INCASSO)
+      .limit(1);
+    if (erroreIncassi) {
+      logger.warn('[subscription] incassi del negozio non letti', { sellerId: user.id, code: erroreIncassi.code });
+      return ApiErrors.unavailable('Non riesco a verificare i tuoi incassi. Riprova fra poco.');
+    }
+    if (!incassi || incassi.length === 0) {
+      return ApiErrors.forbidden("L'abbonamento parte solo dopo il tuo primo incasso con MyCity.");
     }
 
     const stripe = getStripe();
@@ -81,6 +109,11 @@ export const POST = withAuthRateLimit(
         logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
       }
     }
+    // 12/11/2026 (R10-019) — Il controllo qui sopra non vede le casse ancora aperte: con due
+    // schede (o senza `stripe_customer_id`, al primo abbonamento) nascevano due sessioni e due
+    // abbonamenti. La chiave di idempotenza fa rispondere a Stripe con LA STESSA sessione a
+    // tutte le richieste dello stesso negozio nella stessa finestra di 10 minuti.
+    const chiaveDellaCassa = `abbonamento-negozio:${user.id}:${Math.floor(Date.now() / FINESTRA_CASSA_MS)}`;
     try {
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
@@ -99,7 +132,7 @@ export const POST = withAuthRateLimit(
               recurring: { interval: 'month' },
               product_data: {
                 name: 'Abbonamento venditore MyCity',
-                description: 'Accesso alla piattaforma per i venditori · €50/mese',
+                description: `Accesso alla piattaforma per i venditori · ${PREZZO_ABBONAMENTO_MESE}/mese`,
               },
             },
           },
@@ -113,7 +146,7 @@ export const POST = withAuthRateLimit(
         },
         success_url: `${env.appUrl()}/seller/dashboard?subscription=success`,
         cancel_url: `${env.appUrl()}/seller/dashboard?subscription=canceled`,
-      });
+      }, { idempotencyKey: chiaveDellaCassa });
       return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (e) {
       logger.error('[seller-subscription] creazione sessione Stripe fallita', e);
