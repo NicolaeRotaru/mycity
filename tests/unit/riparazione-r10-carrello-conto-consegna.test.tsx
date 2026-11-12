@@ -16,6 +16,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import CartPage from '@/app/cart/page';
 import { avvisoSpesaPiccola } from '@/lib/promesse-pubbliche';
+import { formatPrice } from '@/lib/format';
 import { accendi } from './aiuti/schermo';
 
 const stato = vi.hoisted(() => ({
@@ -75,7 +76,7 @@ afterEach(() => {
 afterEach(() => { /* la rete finta resta per tutto il file */ });
 process.on('exit', () => { globalThis.fetch = reteDiPartenza; });
 
-type Riga = { id: string; prezzo: number; negozio: string };
+type Riga = { id: string; prezzo: number; negozio: string; nome?: string };
 
 async function carrello(righe: Riga[]): Promise<string> {
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
@@ -83,7 +84,7 @@ async function carrello(righe: Riga[]): Promise<string> {
   for (const r of righe) stato.prezzi[r.id] = r.prezzo;
   sessioneNeiCookie();
   localStorage.setItem('cart', JSON.stringify(righe.map((r) => ({
-    id: r.id, name: `Prodotto ${r.id}`, price: r.prezzo, quantity: 1, sellerId: r.negozio, storeName: `Negozio ${r.negozio}`,
+    id: r.id, name: `Prodotto ${r.id}`, price: r.prezzo, quantity: 1, sellerId: r.negozio, storeName: r.nome ?? `Negozio ${r.negozio}`,
   }))));
   schermo = accendi(CartPage);
   for (let i = 0; i < 12; i++) {
@@ -105,6 +106,24 @@ describe('R10-025 — il conto della consegna nel carrello, coi casi che le prov
     expect(t, 'l’avviso del secondo negozio manca o legge la spesa del primo').toContain(giusto);
     expect(t.split(giusto).length - 1, 'l’avviso compare per il negozio sbagliato').toBe(1);
     expect(t, 'il subtotale del negozio è arrotondato per difetto').not.toContain(avvisoSpesaPiccola(114)!);
+  });
+
+  it('con più negozi, accanto al nome di ognuno c’è la SUA spesa, non quella del carrello', async () => {
+    const t = await carrello([
+      { id: 'p-grande', prezzo: 12, negozio: 'neg-a' },
+      { id: 'p-piccolo', prezzo: 1.15, negozio: 'neg-b' },
+    ]);
+    expect(t).toContain(`Negozio neg-a · ${formatPrice(12)}`);
+    expect(t, 'accanto al secondo negozio c’è il totale del carrello').toContain(`Negozio neg-b · ${formatPrice(1.15)}`);
+  });
+
+  it('due negozi diversi con lo stesso nome restano due consegne', async () => {
+    const t = await carrello([
+      { id: 'p-1', prezzo: 2, negozio: 'neg-a', nome: 'Forno' },
+      { id: 'p-2', prezzo: 3, negozio: 'neg-b', nome: 'Forno' },
+    ]);
+    expect(t, 'i due negozi «Forno» sono stati fusi in uno').toContain(avvisoSpesaPiccola(200)!);
+    expect(t).toContain(avvisoSpesaPiccola(300)!);
   });
 
   it('negozio e casa a un chilometro: nessun avviso «troppo lontano»', async () => {
