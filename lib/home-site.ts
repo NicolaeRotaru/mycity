@@ -157,7 +157,8 @@ const sellerCtaConfig = z
 const richTextConfig = z.object({
   heading: shortText(120),
   // HTML vincolato; va sanitizzato prima di salvare/renderizzare (lib/sanitize-html.ts).
-  body: z.string().max(RICHTEXT_MAX).default(''),
+  // R10-014 — Oltre il limite il salvataggio dice quale e' il limite, non un messaggio generico.
+  body: z.string().max(RICHTEXT_MAX, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`).default(''),
 });
 
 const bannerConfig = z.object({

@@ -5,7 +5,7 @@ import { Trash2, CheckCircle2 } from 'lucide-react';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import { CONSIGLIO_IMMAGINE_BANNER } from '@/lib/banner-vetrina';
-import type { HomeSection } from '@/lib/home-site';
+import { RICHTEXT_MAX, type HomeSection } from '@/lib/home-site';
 import { chiaveDiRiga, conChiaveEreditata } from '@/lib/liste/chiave-di-riga';
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
@@ -196,10 +196,23 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
     case 'richText': {
       const c = section.config;
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
+      // 12/11/2026 (R10-014) — Niente piu' `maxLength` sul testo: il browser tagliava in silenzio
+      // quello che si incollava oltre i 4.000 caratteri, e la pagina pubblicata restava monca
+      // senza che nessuno se ne accorgesse. Adesso il testo resta intero, il contatore dice
+      // quanto manca e, oltre il limite, l'errore dice cosa fare (il salvataggio lo rifiuta).
+      const lunghezza = (c.body ?? '').length;
+      const troppoLungo = lunghezza > RICHTEXT_MAX;
       return (
         <div className="space-y-3">
           <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
-          <Textarea label="Testo" value={c.body ?? ''} rows={5} maxLength={4000} onChange={(e) => set({ body: e.target.value })} hint="Gli a-capo vengono mantenuti. Puoi usare grassetto, corsivo, elenchi e link." />
+          <Textarea
+            label="Testo"
+            value={c.body ?? ''}
+            rows={5}
+            onChange={(e) => set({ body: e.target.value })}
+            hint={`Gli a-capo vengono mantenuti. Puoi usare grassetto, corsivo, elenchi e link. ${lunghezza.toLocaleString('it-IT')}/${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri.`}
+            error={troppoLungo ? `Il testo è troppo lungo: ${lunghezza.toLocaleString('it-IT')} caratteri su ${RICHTEXT_MAX.toLocaleString('it-IT')}. Accorcialo o dividilo in due blocchi di testo: così non si salva.` : undefined}
+          />
         </div>
       );
     }
