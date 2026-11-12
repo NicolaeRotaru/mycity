@@ -1,14 +1,19 @@
 import { CONSEGNA_FRASE_INTERA } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { Banknote, ShieldCheck, RotateCcw, ArrowRight, Store } from 'lucide-react';
-import { fraseComeSiPaga, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
+import { fraseComeSiPaga, FRASE_RESO, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
 import HowItWorks from '@/components/home/HowItWorks';
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 
 export const metadata = {
   title: 'Come funziona · MyCity',
   description:
-    "Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa all'ora che scegli, reso entro 14 giorni sui prodotti non deperibili.",
+    // 12/11/2026 (R12-020) — Era scritta a mano («reso … sui prodotti non deperibili») e
+    // dimenticava i prodotti fatti su ordinazione, che il reso lo escludono: chi la leggeva su
+    // Google e poi ordinava una torta su ordinazione aveva letto «reso entro 14 giorni».
+    // Ora la frase del reso è quella del sito (FRASE_RESO), una sola.
+    // Corta apposta: Google ne mostra circa 160 caratteri, e gli esclusi devono starci dentro.
+    `Scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. ${FRASE_RESO}.`,
   alternates: { canonical: '/come-funziona' },
   openGraph: {
     title: 'Come funziona · MyCity',

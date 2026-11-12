@@ -83,7 +83,8 @@ describe('la promessa del reso porta sempre l’esclusione dei freschi', () => {
     const t = testo(renderToStaticMarkup(createElement(pagina.default)));
     expect(t).not.toMatch(SENZA_DOMANDE);
     ogniResoHaLaSuaEsclusione(t);
-    expect(pagina.metadata.description).toMatch(/reso entro 14 giorni sui prodotti non deperibili/i);
+    // 12/11/2026 (R12-020) — la frase scritta a mano dimenticava i prodotti su ordinazione.
+    expect(pagina.metadata.description).toMatch(/reso entro 14 giorni, esclusi i prodotti freschi, deperibili o fatti su ordinazione/i);
   });
 
   it('il riepilogo della cassa, l’ultimo schermo prima di confermare', async () => {
