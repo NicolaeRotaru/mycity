@@ -16,7 +16,7 @@ import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
 type Riga = { id: string; product_id: string; label: string; stock: number; options?: unknown; position?: number };
 const PRODOTTO = 'p-maglietta';
 
-function bancaDati(opz: { funzione: 'c-e' | 'manca' | 'rotta'; vendita?: boolean }) {
+function bancaDati(opz: { funzione: 'c-e' | 'manca' | 'rotta' | 'dentro'; vendita?: boolean }) {
   let righe: Riga[] = [
     { id: 'v-s', product_id: PRODOTTO, label: 'S', stock: 2 },
     { id: 'v-m', product_id: PRODOTTO, label: 'M', stock: 5 },
@@ -52,6 +52,7 @@ function bancaDati(opz: { funzione: 'c-e' | 'manca' | 'rotta'; vendita?: boolean
     rpc: async (nome: string, a: { p_delete: string[]; p_update: Array<Riga & { vista?: number }>; p_insert: Riga[] }) => {
       if (nome !== 'salva_varianti') throw new Error(nome);
       if (opz.funzione === 'manca') return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } };
+      if (opz.funzione === 'dentro') return { data: null, error: { code: '42883', message: 'function public.prodotto_in_vetrina(uuid) does not exist' } };
       if (opz.funzione === 'rotta') return { data: null, error: { code: '42501', message: 'permission denied' } };
       // Tutto o niente: si controlla prima, si scrive dopo.
       for (const u of a.p_update) {
@@ -100,6 +101,12 @@ describe('R08-008 — le varianti si salvano tutte o nessuna', () => {
     await expect(saveProductVariantsServer(db.client, PRODOTTO, MODULO as never, VISTE)).rejects.toBeInstanceOf(DaCompletare);
     // a pezzi la L era già cancellata prima del conflitto: è il comportamento di prima, dichiarato
     expect(db.aPezzi[0]).toBe('delete v-l');
+  });
+
+  it('una funzione che manca DENTRO salva_varianti (42883 su un altro nome) non fa ripiegare in silenzio', async () => {
+    const db = bancaDati({ funzione: 'dentro' });
+    await expect(saveProductVariantsServer(db.client, PRODOTTO, MODULO as never, VISTE)).rejects.toMatchObject({ code: '42883' });
+    expect(db.aPezzi).toEqual([]);
   });
 
   it('un altro errore della funzione esce com’è e non fa partire le scritture a pezzi', async () => {

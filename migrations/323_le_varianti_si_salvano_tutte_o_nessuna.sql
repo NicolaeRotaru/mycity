@@ -53,7 +53,7 @@ BEGIN
   FOR u IN SELECT * FROM jsonb_array_elements(coalesce(p_update, '[]'::jsonb)) LOOP
     vista := CASE WHEN u ? 'vista' AND jsonb_typeof(u->'vista') = 'number' THEN (u->>'vista')::integer END;
     UPDATE public.product_variants v
-       SET options  = coalesce(u->'options', v.options),
+       SET options  = coalesce(nullif(u->'options', 'null'::jsonb), v.options),
            label    = coalesce(u->>'label', v.label),
            position = coalesce((u->>'position')::integer, v.position),
            stock    = CASE WHEN u ? 'stock' THEN (u->>'stock')::integer ELSE v.stock END
@@ -68,7 +68,7 @@ BEGIN
 
   INSERT INTO public.product_variants (product_id, options, label, stock, position)
   SELECT p_product_id,
-         coalesce(r->'options', '{}'::jsonb),
+         coalesce(nullif(r->'options', 'null'::jsonb), '{}'::jsonb),
          coalesce(r->>'label', ''),
          greatest(coalesce((r->>'stock')::integer, 0), 0),
          coalesce((r->>'position')::integer, 0)

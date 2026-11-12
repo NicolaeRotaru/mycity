@@ -157,8 +157,10 @@ export async function saveProductVariantsServer(
 }
 
 /** La funzione del database non c'è (ancora): PostgREST risponde PGRST202, Postgres 42883. */
-function funzioneMancante(e: { code?: string }): boolean {
-  return e.code === 'PGRST202' || e.code === '42883';
+function funzioneMancante(e: { code?: string; message?: string }): boolean {
+  // Il 42883 può nascere anche da una funzione che manca DENTRO salva_varianti: lì non si ripiega
+  // in silenzio sui tre giri non atomici, si dice l'errore.
+  return e.code === 'PGRST202' || (e.code === '42883' && /salva_varianti/.test(e.message ?? ''));
 }
 
 /**

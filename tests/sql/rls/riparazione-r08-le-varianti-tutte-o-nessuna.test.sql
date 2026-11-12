@@ -77,6 +77,15 @@ INSERT INTO esiti SELECT '② con le scorte giuste: S 4, M 3, XL 2, niente L',
   (SELECT string_agg(label || ' ' || stock, ', ' ORDER BY position)
      FROM public.product_variants WHERE product_id = 'e3230000-0000-0000-0000-0000000000f1');
 
+-- ②bis options null non scrive una jsonb null (la colonna è NOT NULL, ma la jsonb null passerebbe)
+SELECT public.salva_varianti('e3230000-0000-0000-0000-0000000000f1', '{}'::uuid[],
+  '[{"id":"e3230000-0000-0000-0000-00000000005a","options":null,"label":"S","position":0}]'::jsonb,
+  '[{"options":null,"label":"XXL","stock":1,"position":3}]'::jsonb);
+INSERT INTO esiti SELECT '②bis options null non diventa una jsonb null',
+  (SELECT bool_and(jsonb_typeof(options) = 'object') FROM public.product_variants WHERE product_id = 'e3230000-0000-0000-0000-0000000000f1'),
+  (SELECT string_agg(label || '=' || options::text, ' ') FROM public.product_variants WHERE product_id = 'e3230000-0000-0000-0000-0000000000f1');
+DELETE FROM public.product_variants WHERE label = 'XXL' AND product_id = 'e3230000-0000-0000-0000-0000000000f1';
+
 -- ③ un altro negozio prova a cancellare e riscrivere
 SET LOCAL request.jwt.claims = '{"sub":"e3230000-0000-0000-0000-000000000002","role":"authenticated"}';
 SELECT public.salva_varianti(
