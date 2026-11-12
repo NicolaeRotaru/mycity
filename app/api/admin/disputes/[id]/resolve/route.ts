@@ -46,7 +46,10 @@ export const runtime = 'nodejs';
  * bonifico fermo che uno pagato con soldi che la banca ha ripreso) e lo si
  * dice agli amministratori.
  */
-const STATI_STRIPE_ANCORA_APERTI = ['needs_response', 'under_review', 'warning_needs_response', 'warning_under_review'];
+// Il segno si toglie solo se in banca non c'e' nessuna contestazione, o se sono tutte chiuse a
+// favore di MyCity. Una «lost» il cui avviso non e' ancora arrivato, o uno stato nuovo di Stripe,
+// lasciano il segno: il giro pagherebbe il negozio con soldi che la banca si e' gia' ripresa.
+const STATI_STRIPE_CHIUSI_A_FAVORE = ['won', 'warning_closed'];
 
 type EsitoDelSegno = 'niente_da_togliere' | 'da_togliere' | 'contestazione_vera' | 'non_verificato';
 
@@ -56,12 +59,15 @@ async function cosaFareDelSegno(ordine: {
   stripe_payment_intent?: string | null;
 }): Promise<EsitoDelSegno> {
   if (ordine.dispute_status !== 'OPEN') return 'niente_da_togliere';
-  if (ordine.payment_method !== 'card' || !ordine.stripe_payment_intent) return 'da_togliere';
+  // Coi contanti nessuna contestazione bancaria e' possibile.
+  if (ordine.payment_method !== 'card') return 'da_togliere';
+  // Carta senza payment intent: il webhook trova gli ordini anche dal solo addebito, quindi non si sa.
+  if (!ordine.stripe_payment_intent) return 'non_verificato';
   try {
-    const { data } = await getStripe().disputes.list({ payment_intent: ordine.stripe_payment_intent, limit: 20 });
-    return data.some((d) => STATI_STRIPE_ANCORA_APERTI.includes(String(d.status ?? '')))
-      ? 'contestazione_vera'
-      : 'da_togliere';
+    const { data } = await getStripe().disputes.list({ payment_intent: ordine.stripe_payment_intent, limit: 100 });
+    return data.every((d) => STATI_STRIPE_CHIUSI_A_FAVORE.includes(String(d.status ?? '')))
+      ? 'da_togliere'
+      : 'contestazione_vera';
   } catch {
     return 'non_verificato';
   }

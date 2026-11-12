@@ -140,6 +140,23 @@ describe('R11-002 — reclamo chiuso a favore del negozio col segno del trigger 
     expect(segnoTolto()).toBe(false);
   });
 
+  it('una contestazione già persa in banca (avviso non ancora arrivato) o uno stato nuovo: il segno resta', async () => {
+    stato.ordine = { payment_method: 'card', stripe_payment_intent: 'pi_1', total_price: 30, dispute_status: 'OPEN' };
+    for (const status of ['lost', 'uno_stato_nuovo']) {
+      stato.scrittureOrdine = [];
+      stato.contestazioniStripe = [{ status }];
+      await risolvi({ status: 'resolved_seller', notes: NOTE });
+      expect(segnoTolto(), `con una contestazione «${status}» il giro pagherebbe soldi già ripresi dalla banca`).toBe(false);
+    }
+  });
+
+  it('carta senza payment intent: non si sa, il segno resta e gli amministratori lo sanno', async () => {
+    stato.ordine = { payment_method: 'card', stripe_payment_intent: null, total_price: 30, dispute_status: 'OPEN' };
+    await risolvi({ status: 'resolved_seller', notes: NOTE });
+    expect(segnoTolto()).toBe(false);
+    expect(stato.avvisi).toContain('Reclamo chiuso, bonifico ancora fermo');
+  });
+
   it('Stripe non risponde: il segno resta e gli amministratori lo sanno', async () => {
     stato.ordine = { payment_method: 'card', stripe_payment_intent: 'pi_1', total_price: 30, dispute_status: 'OPEN' };
     stato.contestazioniStripe = 'errore';
