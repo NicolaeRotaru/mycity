@@ -139,9 +139,18 @@ export default function RiderOnboardingPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error('Sessione scaduta');
-      const { error } = await supabase.from('profiles').update(form).eq('id', userId);
+      // 12/11/2026 (R03-016) — Il passo 1 scrive solo i suoi quattro campi. Mandava l'oggetto
+      // intero, con le scadenze di patente e polizza ancora vuote (''): Postgres rifiuta '' come
+      // data (22007), il salvataggio cadeva e i caricamenti dei documenti restavano chiusi.
+      const anagrafica = {
+        legal_first_name: form.legal_first_name,
+        legal_last_name: form.legal_last_name,
+        legal_fiscal_code: form.legal_fiscal_code,
+        legal_birth_date: form.legal_birth_date || null,
+      };
+      const { error } = await supabase.from('profiles').update(anagrafica).eq('id', userId);
       if (error) throw error;
-      setProfile((p) => ({ ...(p ?? {}), ...form }));
+      setProfile((p) => ({ ...(p ?? {}), ...anagrafica }));
       toast.success('Dati salvati. Ora puoi caricare i documenti.');
     } catch (e) {
       toast.error(friendlyError(e));
@@ -173,9 +182,16 @@ export default function RiderOnboardingPage() {
       if (!userId) throw new Error('Sessione scaduta');
 
       // 1) Salva form anagrafico
+      // R03-016 — Le date lasciate vuote vanno come null, non come '' (che Postgres rifiuta):
+      // chi va in bici senza patente non ha una scadenza da scrivere.
       const { error: uErr } = await supabase
         .from('profiles')
-        .update(form)
+        .update({
+          ...form,
+          legal_birth_date: form.legal_birth_date || null,
+          rider_license_expires_on: form.rider_license_expires_on || null,
+          rider_insurance_expires_on: form.rider_insurance_expires_on || null,
+        })
         .eq('id', userId);
       if (uErr) throw uErr;
 
