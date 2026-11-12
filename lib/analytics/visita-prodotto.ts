@@ -61,7 +61,26 @@ export async function contaLaVisita(productId: string, d: DipendenzeVisita): Pro
 export const FINESTRA_DELLA_VISITA_MS = 60 * 60 * 1000;
 
 /** Il minimo di Storage che serve: localStorage, o un finto in una prova. */
-export type Archivio = Pick<Storage, 'getItem' | 'setItem'>;
+export type Archivio = Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem' | 'key' | 'length'>>;
+
+/**
+ * R02-015 (dopo il qa) — Le chiavi scadute non restano nel browser: prima stavano in sessionStorage,
+ * che si svuota chiudendo la scheda; in localStorage diventerebbero uno storico di cosa hai guardato.
+ * A ogni visita contata si tolgono quelle oltre l'ora.
+ */
+function pulisciScadute(archivio: Archivio | null, adesso: number): void {
+  try {
+    if (!archivio?.key || !archivio.removeItem || typeof archivio.length !== 'number') return;
+    const scadute: string[] = [];
+    for (let i = 0; i < archivio.length; i++) {
+      const k = archivio.key(i);
+      if (!k || !k.startsWith('mc_viewed_')) continue;
+      const quando = Number(archivio.getItem(k));
+      if (!Number.isFinite(quando) || adesso - quando >= FINESTRA_DELLA_VISITA_MS) scadute.push(k);
+    }
+    for (const k of scadute) archivio.removeItem(k);
+  } catch { /* archivio non disponibile */ }
+}
 
 function leggi(archivio: Archivio | null, chiave: string): string | null {
   try { return archivio?.getItem(chiave) ?? null; } catch { return null; }
@@ -80,7 +99,10 @@ export function frenoOrario(
       const quando = Number(leggi(archivio, chiave));
       return Number.isFinite(quando) && quando > 0 && adesso() - quando < FINESTRA_DELLA_VISITA_MS;
     },
-    segnaContata: (chiave) => scrivi(archivio, chiave, String(adesso())),
+    segnaContata: (chiave) => {
+      pulisciScadute(archivio, adesso());
+      scrivi(archivio, chiave, String(adesso()));
+    },
   };
 }
 

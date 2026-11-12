@@ -58,3 +58,21 @@ describe('R02-015 · una visita per prodotto all ora, come nel database', () => 
     expect(src).not.toMatch(/sessionStorage/);
   });
 });
+
+describe('R02-015 · dopo il qa: le chiavi scadute non restano nel browser', () => {
+  it('contando una visita nuova si tolgono i freni oltre l ora', () => {
+    const m = new Map<string, string>();
+    const archivio = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => { m.set(k, v); },
+      removeItem: (k: string) => { m.delete(k); },
+      key: (i: number) => [...m.keys()][i] ?? null,
+      get length() { return m.size; },
+    };
+    let ora = Date.parse('2026-11-12T10:00:00Z');
+    frenoOrario(archivio, () => ora).segnaContata('mc_viewed_vecchio');
+    ora += FINESTRA_DELLA_VISITA_MS + 1;
+    frenoOrario(archivio, () => ora).segnaContata('mc_viewed_nuovo');
+    expect([...m.keys()]).toEqual(['mc_viewed_nuovo']);
+  });
+});
