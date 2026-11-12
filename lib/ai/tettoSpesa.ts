@@ -342,7 +342,16 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
  * non buttare un giro di rete su OGNI chiamata al modello, mentre qui il giro
  * di rete e' esattamente il lavoro — una volta ogni passata del cron.
  */
-export async function sondaContoCondiviso(quando?: Date): Promise<{
+export async function sondaContoCondiviso(
+  quando?: Date,
+  /**
+   * 12/11/2026 (R04-018) — Da quando il guasto e' noto, detto da chi lo ricorda
+   * FUORI dalla memoria di questa copia (es. la prima riga d'allarme salvata dal
+   * cron). Senza, l'ora di tolleranza ripartiva da zero a ogni copia nuova e su
+   * Vercel, dove le copie vivono poco, l'allarme poteva non arrivare mai.
+   */
+  ripiegoNotoDaMs?: number,
+): Promise<{
   condiviso: boolean;
   permanente: boolean;
   motivo: string;
@@ -350,6 +359,18 @@ export async function sondaContoCondiviso(quando?: Date): Promise<{
 }> {
   const giorno = giornoDiSpesa(quando);
   const letto = await eseguiRpc('spesa_ai_di_oggi', { p_giorno: giorno });
-  if (letto === null) segnalaRipiego('sonda del conto condiviso non riuscita', giorno);
+  if (letto === null) {
+    const adesso = Date.now();
+    if (
+      typeof ripiegoNotoDaMs === 'number' &&
+      Number.isFinite(ripiegoNotoDaMs) &&
+      ripiegoNotoDaMs > 0 &&
+      ripiegoNotoDaMs <= adesso &&
+      (_stato.ripiegoDa === 0 || ripiegoNotoDaMs < _stato.ripiegoDa)
+    ) {
+      _stato.ripiegoDa = ripiegoNotoDaMs;
+    }
+    segnalaRipiego('sonda del conto condiviso non riuscita', giorno, adesso);
+  }
   return statoContoCondiviso();
 }
