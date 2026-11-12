@@ -80,12 +80,13 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
       };
     case 'reject':
       return {
-        // `approved_at` qui e' l'ora della DECISIONE, non dell'approvazione: la
-        // potatura dei documenti dei respinti (migrations/135) conta i 90 giorni
-        // da questo campo e salta chi ce l'ha vuoto. Senza, chi era rifiutato
-        // senza mai essere stato approvato teneva i documenti per sempre; e chi
-        // era stato approvato anni prima li perdeva la notte stessa.
-        patch: { approval_status: 'rejected', is_approved: false, rejection_reason: reason, approved_at: now },
+        // 12/11/2026 (R08-007) — L'ora del rifiuto ha una colonna sua. Prima finiva in
+        // `approved_at` perché la potatura dei documenti dei respinti contava da lì, e
+        // la colonna voleva dire due cose (con accanto un `approved_by` che il rifiuto
+        // non toccava). Ora la potatura conta da `rejected_at` (migrations/320) e
+        // `approved_at` resta la data dell'approvazione. Se la migrazione non è ancora
+        // applicata, vedi rifiutoSenzaColonna().
+        patch: { approval_status: 'rejected', is_approved: false, rejection_reason: reason, rejected_at: now },
         note,
         audit: 'user.reject',
       };
@@ -102,6 +103,24 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
         audit: 'user.suspend',
       };
   }
+}
+
+/**
+ * Il rifiuto come si scriveva prima della migrazione 320: l'ora in `approved_at`,
+ * da cui la potatura dei respinti contava i 90 giorni. Serve solo finché la
+ * colonna `rejected_at` non c'è: senza questo ripiego, un rilascio del codice
+ * prima della migrazione farebbe fallire ogni rifiuto.
+ */
+function rifiutoSenzaColonna(patch: Record<string, unknown>): Record<string, unknown> | null {
+  if (!('rejected_at' in patch)) return null;
+  const { rejected_at: ora, ...resto } = patch;
+  return { ...resto, approved_at: ora };
+}
+
+/** Colonna che non esiste: 42703 da Postgres, PGRST204 dalla cache dello schema di PostgREST. */
+function colonnaMancante(e: { message?: string; code?: string } | null): boolean {
+  if (!e) return false;
+  return e.code === '42703' || e.code === 'PGRST204';
 }
 
 /** L'email dell'esito. `true` inviata, `false` fallita, `null` niente indirizzo o email spenta. */
@@ -274,7 +293,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // insieme passavano tutte e due, con due campanelle, due email e due righe nel
   // registro. Ora una sola tocca la riga; l'altra trova zero righe e riceve 409, e
   // da quel ramo non parte niente.
-  const { error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, patch);
+  let { error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, patch);
+  const ripiego = colonnaMancante(updErr) ? rifiutoSenzaColonna(patch) : null;
+  if (ripiego) {
+    logger.warn('[moderate] rejected_at non c\'è ancora (migrazione 320 da applicare): rifiuto scritto in approved_at', { target: params.id });
+    ({ error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, ripiego));
+  }
   if (updErr) return ApiErrors.internal('Aggiornamento fallito.');
   if (count === 0) {
     return ApiErrors.conflict('Lo stato di questo profilo è cambiato nel frattempo: ricarica la pagina e riprova.');

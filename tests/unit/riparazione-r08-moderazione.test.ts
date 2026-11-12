@@ -178,3 +178,33 @@ describe('R08-006 — il conteggio delle consegne che cade non resta muto', () =
     expect(j.avviso).toBeUndefined();
   });
 });
+
+describe('R08-007 — il rifiuto ha la sua ora', () => {
+  it('rifiutare scrive rejected_at e non tocca approved_at né approved_by', async () => {
+    db.profilo = { ...NEGOZIO, approved_at: '2026-01-01T00:00:00Z', approved_by: 'admin-0' };
+    expect((await modera('reject', 'documenti illeggibili')).status).toBe(200);
+    expect(db.profilo?.approval_status).toBe('rejected');
+    expect(typeof db.profilo?.rejected_at).toBe('string');
+    expect(db.profilo?.approved_at).toBe('2026-01-01T00:00:00Z');
+    expect(db.profilo?.approved_by).toBe('admin-0');
+  });
+
+  it('ripiego: se la colonna non c’è ancora (42703) il rifiuto passa lo stesso, con l’ora in approved_at come prima', async () => {
+    db.profilo = { ...NEGOZIO };
+    db.colonnaRejectedAt = false;
+    const r = await modera('reject', 'documenti illeggibili');
+    expect(r.status).toBe(200);
+    expect(db.profilo?.approval_status).toBe('rejected');
+    expect(typeof db.profilo?.approved_at).toBe('string');
+    expect(db.profilo).not.toHaveProperty('rejected_at');
+    expect(db.patchTentate).toHaveLength(2);
+    expect(db.notifiche).toHaveLength(1);
+  });
+
+  it('l’approvazione non scrive rejected_at e non ripete niente', async () => {
+    db.profilo = { ...NEGOZIO };
+    db.colonnaRejectedAt = false;
+    expect((await modera('approve')).status).toBe(200);
+    expect(db.patchTentate).toHaveLength(1);
+  });
+});
