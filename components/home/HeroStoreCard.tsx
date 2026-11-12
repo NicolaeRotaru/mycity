@@ -28,6 +28,16 @@ type Store = {
 type Prod = { id: string; name: string; price: number | string; images: string[] | null };
 type Reviews = { avg: number; count: number };
 
+/**
+ * Lo schermo dove il riquadro si vede: da 768 pixel in su (la `md` di Tailwind, come
+ * `hidden md:flex` qui sotto). Senza `matchMedia` (server, prove) si risponde sì: lì
+ * non si va in rete comunque, e il comportamento resta quello di prima.
+ */
+export function schermoDelRiquadro(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return window.matchMedia('(min-width: 768px)').matches;
+}
+
 /** Prima immagine di `store_media` (cover) — null se assente/non parseabile. */
 function coverFromMedia(media: unknown): string | null {
   if (!Array.isArray(media)) return null;
@@ -59,6 +69,13 @@ export default function HeroStoreCard() {
       // Ora è una funzione sola nel database (`vetrina_home`, migrazione 124),
       // che torna negozio, prodotti e recensioni insieme.
       //
+      // 12/11/2026 (R08-017) — Sotto i 768 pixel questo riquadro non si vede (`hidden md:flex`),
+      // ma veniva montato e chiedeva lo stesso il negozio al database e, dietro, la veloce alla
+      // cassa: banda e una domanda a una rotta col freno a 30 al minuto, per niente, mentre la
+      // home del telefono carica ancora i prodotti. Il disegno resta lo stesso (niente salti
+      // all'idratazione): è la lettura che sul telefono non parte. Senza negozio non si chiede
+      // nemmeno la veloce (useVeloceDelNegozio vuole un id).
+      if (!schermoDelRiquadro()) return null;
       // #211 — Il mese è quello di Piacenza, non di Greenwich.
       const { data: risposta, error } = await supabase.rpc('vetrina_home', {
         p_mese: primoDelMesePiacenza(),
