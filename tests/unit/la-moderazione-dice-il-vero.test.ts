@@ -43,7 +43,7 @@ vi.mock('@/lib/supabase/server', () => ({
             }),
             update: (patch: Record<string, unknown>) => {
               aggiornamenti.push(patch);
-              return { eq: () => Promise.resolve({ error: null }) };
+              const b: Record<string, unknown> = { eq: () => b, is: () => b, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null, count: 1 }).then(ok, ko) }; return b;
             },
           }
         : {
@@ -77,14 +77,17 @@ beforeEach(() => {
 });
 
 describe('il rifiuto fa partire l orologio dei 90 giorni', () => {
-  it('scrive approved_at = adesso, così la potatura dei documenti si attiva', async () => {
+  // R08-007 (12/11/2026): l'ora del rifiuto ha la sua colonna, rejected_at (migrations/320), da cui
+  // conta la potatura; approved_at resta la data dell'approvazione e il rifiuto non la tocca più.
+  it('scrive rejected_at = adesso, così la potatura dei documenti si attiva', async () => {
     const prima = Date.now();
     const r = await MODERA(richiesta('reject', 'documento illeggibile'));
     expect(r.status).toBe(200);
     const patch = aggiornamenti[0];
     expect(patch.approval_status).toBe('rejected');
-    expect(patch.approved_at, 'il rifiuto non scrive approved_at: i documenti del respinto non scadono mai').toBeTruthy();
-    expect(Date.parse(String(patch.approved_at))).toBeGreaterThanOrEqual(prima - 1000);
+    expect(patch.rejected_at, 'il rifiuto non scrive rejected_at: i documenti del respinto non scadono mai').toBeTruthy();
+    expect(Date.parse(String(patch.rejected_at))).toBeGreaterThanOrEqual(prima - 1000);
+    expect(patch).not.toHaveProperty('approved_at');
   });
 });
 
@@ -95,14 +98,14 @@ describe('il rifiuto fa partire l orologio dei 90 giorni', () => {
  * verde).
  */
 describe('il rifiuto e gli avvisi valgono per negozi e fattorini, ognuno coi suoi testi', () => {
-  it('rifiutare un negozio scrive anche lì approved_at = adesso', async () => {
+  it('rifiutare un negozio scrive anche lì rejected_at = adesso', async () => {
     idBersaglio = 'seller-1';
     profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null };
     const prima = Date.now();
     const r = await MODERA(richiesta('reject', 'documenti incompleti'));
     expect(r.status).toBe(200);
     expect(aggiornamenti[0].approval_status).toBe('rejected');
-    expect(Date.parse(String(aggiornamenti[0].approved_at))).toBeGreaterThanOrEqual(prima - 1000);
+    expect(Date.parse(String(aggiornamenti[0].rejected_at))).toBeGreaterThanOrEqual(prima - 1000);
   });
 
   it('il fattorino approvato legge del suo profilo da fattorino, mai del «negozio»', async () => {

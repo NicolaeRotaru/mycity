@@ -24,6 +24,7 @@ describe('le misure verso Sentry sono ripulite (102)', () => {
     expect(e.spans[0].description).toMatch(/^GET /);
   });
   it('senza consenso (fuori dal browser) niente misure di velocità', () => {
-    expect((opzioniSentry() as { tracesSampleRate: number }).tracesSampleRate).toBe(0);
+    // R08-023 (12/11/2026): la quota non è più un numero fisso ma una funzione chiesta a ogni misura.
+    expect((opzioniSentry() as unknown as { tracesSampler: () => number }).tracesSampler()).toBe(0);
   });
 });

@@ -48,7 +48,7 @@ vi.mock('@/lib/supabase/server', () => ({
             },
             update: (patch: Record<string, unknown>) => {
               aggiornamenti.push(patch);
-              return { eq: () => Promise.resolve({ error: null }) };
+              const b: Record<string, unknown> = { eq: () => b, is: () => b, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null, count: 1 }).then(ok, ko) }; return b;
             },
           }
         : { insert: () => Promise.resolve({ error: null }) },
@@ -89,14 +89,15 @@ beforeEach(() => {
 });
 
 describe('① il rifiuto fa partire i 90 giorni', () => {
-  it('scrive approved_at = adesso anche per chi non era mai stato approvato', async () => {
+  // R08-007 (12/11/2026): l'orologio dei 90 giorni ora è rejected_at (migrations/320).
+  it('scrive rejected_at = adesso anche per chi non era mai stato approvato', async () => {
     usa({ ...FATTORINO, approved_at: null });
     const prima = Date.now();
     const r = await MODERA(richiesta('reject', { reason: 'patente scaduta' }));
     expect(r.status).toBe(200);
     expect(aggiornamenti[0].approval_status).toBe('rejected');
-    expect(aggiornamenti[0].approved_at, 'senza approved_at la potatura dei documenti non parte mai').toBeTruthy();
-    expect(Date.parse(String(aggiornamenti[0].approved_at))).toBeGreaterThanOrEqual(prima - 1000);
+    expect(aggiornamenti[0].rejected_at, 'senza rejected_at la potatura dei documenti non parte mai').toBeTruthy();
+    expect(Date.parse(String(aggiornamenti[0].rejected_at))).toBeGreaterThanOrEqual(prima - 1000);
   });
 
   it('il rifiuto non pretende partita IVA né documenti: si respinge proprio chi non li ha', async () => {

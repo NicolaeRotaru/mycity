@@ -20,6 +20,10 @@ interface Props {
 
 const PIACENZA = { lat: 45.0532, lng: 9.6914 };
 const PRIMARY = '#C0492C'; // terracotta (design system)
+// 12/11/2026 (R08-010) — Il pallino «Tu sei qui» era il blu di Tailwind, un colore che il
+// marchio non usa. Ora è l'inchiostro dei titoli (ink-900), diverso dal terracotta dei negozi.
+const INK = '#1C1A18'; // ink-900 (design system)
+const INK_ALONE = 'rgba(28,26,24,.25)'; // lo stesso inchiostro, al 25%
 
 /**
  * Mappa interattiva dei negozi "Vicino a te" (Leaflet + OpenStreetMap).
@@ -128,7 +132,7 @@ const NearbyStoresMap = ({
       if (userPos && Number.isFinite(userPos.lat) && Number.isFinite(userPos.lng)) {
         const userIcon = L.divIcon({
           className: '',
-          html: `<div style="width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid white;box-shadow:0 0 0 4px rgba(37,99,235,.25);"></div>`,
+          html: `<div style="width:18px;height:18px;border-radius:50%;background:${INK};border:3px solid white;box-shadow:0 0 0 4px ${INK_ALONE};"></div>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         });

@@ -57,9 +57,14 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: () => ({
       select: () => ({
-        in: () => (stato.lettura === 'subito'
-          ? Promise.resolve({ data: [] })
-          : new Promise((res) => { stato.sblocca = () => res({ data: [] }); })),
+        // R08-012 (12/11/2026): una lettura riuscita che non restituisce un prodotto vuol dire «non
+        // più in vendita». Qui i prodotti ci sono (senza prezzo: resta quello storico, come prima).
+        in: (_colonna: string, ids: string[]) => {
+          const righe = { data: ids.map((id) => ({ id })) };
+          return stato.lettura === 'subito'
+            ? Promise.resolve(righe)
+            : new Promise((res) => { stato.sblocca = () => res(righe); });
+        },
       }),
     }),
   },

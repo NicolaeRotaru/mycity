@@ -9,6 +9,7 @@ import { monta } from './aiuti/monta-componente';
 import { attendi, clicca } from './aiuti/schermo';
 import { salvaProdottoTracciato, ScortaCambiata } from '@/lib/products/salvataggio-tracciato';
 import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { salvaVariantiFinta } from './aiuti/salva-varianti-finta';
 
 /**
  * S06 — La scorta in «Modifica prodotto».
@@ -130,7 +131,11 @@ function dbVarianti(righe: { id: string; stock: number }[], scritture: string[])
     update: () => { scritture.push('update'); return c; },
     insert: async () => { scritture.push('insert'); return { error: null }; },
   });
-  return { from: () => c } as never;
+  return {
+    // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
+    from: () => c,
+  } as never;
 }
 
 describe('2478 — taglia cambiata: si scopre prima di scrivere', () => {

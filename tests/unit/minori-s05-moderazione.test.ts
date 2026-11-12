@@ -29,7 +29,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (t === 'profiles') {
         return {
           select: () => ({ eq: () => ({ single: async () => ({ data: stato.profilo, error: null }) }) }),
-          update: (patch: Record<string, unknown>) => { stato.aggiornamenti.push(patch); return { eq: async () => ({ error: null }) }; },
+          update: (patch: Record<string, unknown>) => { stato.aggiornamenti.push(patch); const b: Record<string, unknown> = { eq: () => b, is: () => b, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null, count: 1 }).then(ok, ko) }; return b; },
         };
       }
       if (t === 'orders') {

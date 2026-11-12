@@ -35,7 +35,7 @@ vi.mock('@/lib/supabase/server', () => ({
             },
             update: (patch: Record<string, unknown>) => {
               aggiornamenti.push(patch);
-              return { eq: () => Promise.resolve({ error: null }) };
+              const b: Record<string, unknown> = { eq: () => b, is: () => b, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null, count: 1 }).then(ok, ko) }; return b;
             },
           }
         : { insert: () => Promise.resolve({ error: null }) },
@@ -99,7 +99,10 @@ describe('il controllo resta dove porta ad «approvato» chi non lo era', () => 
 
   it('approvare un sospeso senza partita IVA resta bloccato: «approva» controlla sempre', async () => {
     usa({ ...NEGOZIO_STORICO, approval_status: 'suspended', approved_by: 'admin-0' });
-    expect((await MODERA(richiesta('approve'))).status).toBe(400);
+    // R08-004 (12/11/2026): «approva» vale solo per chi è in attesa, quindi qui il blocco arriva
+    // prima ancora del controllo sulla partita IVA, con 409. Resta bloccato e non scrive niente.
+    expect((await MODERA(richiesta('approve'))).status).toBe(409);
+    expect(aggiornamenti).toEqual([]);
   });
 });
 

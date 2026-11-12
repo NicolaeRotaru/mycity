@@ -80,12 +80,13 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
       };
     case 'reject':
       return {
-        // `approved_at` qui e' l'ora della DECISIONE, non dell'approvazione: la
-        // potatura dei documenti dei respinti (migrations/135) conta i 90 giorni
-        // da questo campo e salta chi ce l'ha vuoto. Senza, chi era rifiutato
-        // senza mai essere stato approvato teneva i documenti per sempre; e chi
-        // era stato approvato anni prima li perdeva la notte stessa.
-        patch: { approval_status: 'rejected', is_approved: false, rejection_reason: reason, approved_at: now },
+        // 12/11/2026 (R08-007) — L'ora del rifiuto ha una colonna sua. Prima finiva in
+        // `approved_at` perché la potatura dei documenti dei respinti contava da lì, e
+        // la colonna voleva dire due cose (con accanto un `approved_by` che il rifiuto
+        // non toccava). Ora la potatura conta da `rejected_at` (migrations/320) e
+        // `approved_at` resta la data dell'approvazione. Se la migrazione non è ancora
+        // applicata, vedi rifiutoSenzaColonna().
+        patch: { approval_status: 'rejected', is_approved: false, rejection_reason: reason, rejected_at: now },
         note,
         audit: 'user.reject',
       };
@@ -102,6 +103,24 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
         audit: 'user.suspend',
       };
   }
+}
+
+/**
+ * Il rifiuto come si scriveva prima della migrazione 320: l'ora in `approved_at`,
+ * da cui la potatura dei respinti contava i 90 giorni. Serve solo finché la
+ * colonna `rejected_at` non c'è: senza questo ripiego, un rilascio del codice
+ * prima della migrazione farebbe fallire ogni rifiuto.
+ */
+function rifiutoSenzaColonna(patch: Record<string, unknown>): Record<string, unknown> | null {
+  if (!('rejected_at' in patch)) return null;
+  const { rejected_at: ora, ...resto } = patch;
+  return { ...resto, approved_at: ora };
+}
+
+/** Colonna che non esiste: 42703 da Postgres, PGRST204 dalla cache dello schema di PostgREST. */
+function colonnaMancante(e: { message?: string; code?: string } | null): boolean {
+  if (!e) return false;
+  return e.code === '42703' || e.code === 'PGRST204';
 }
 
 /** L'email dell'esito. `true` inviata, `false` fallita, `null` niente indirizzo o email spenta. */
@@ -132,6 +151,27 @@ async function mandaEmailDellEsito(
     logger.error('[moderate] email dell esito non partita', { target: userId, err: e instanceof Error ? e.message : String(e) });
     return false;
   }
+}
+
+/** Lo stato «in attesa»: `pending`, o vuoto per le righe nate prima della colonna (migrations/021). */
+function inAttesa(stato: unknown): boolean {
+  return stato == null || stato === 'pending';
+}
+
+/**
+ * L'update condizionato allo stato letto. `count` dice quante righe ha toccato:
+ * 0 vuol dire che un'altra decisione è arrivata prima.
+ */
+async function scriviSeLoStatoENoto(
+  admin: ReturnType<typeof getAdminSupabase>,
+  id: string,
+  statoLetto: unknown,
+  patch: Record<string, unknown>,
+): Promise<{ error: { message: string; code?: string } | null; count: number | null }> {
+  const base = admin.from('profiles').update(patch, { count: 'exact' }).eq('id', id);
+  const q = statoLetto == null ? base.is('approval_status', null) : base.eq('approval_status', String(statoLetto));
+  const { error, count } = await q;
+  return { error, count: count ?? null };
 }
 
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
@@ -212,8 +252,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * pannello mostra «Sospendi» solo agli approvati, ma il controllo vero e'
    * questo, non il bottone.
    */
+  // 12/11/2026 (R08-005) — 409, non 400: la richiesta era giusta, è lo stato che è cambiato.
   if (body.action === 'suspend' && target.approval_status === 'suspended') {
-    return ApiErrors.invalidRequest('Questo profilo è già sospeso.');
+    return ApiErrors.conflict('Questo profilo è già sospeso.');
   }
   if (body.action === 'suspend' && target.approval_status !== 'approved') {
     return ApiErrors.invalidRequest(
@@ -228,6 +269,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Si riattiva solo un profilo sospeso: chi è in attesa o respinto si esamina dalla sua scheda («Esamina»).');
   }
 
+  // 12/11/2026 (R08-004) — «Approva» e «Rifiuta» decidono una richiesta in attesa, e
+  // solo quella. Prima passavano da qualunque stato: una scheda vecchia rimasta aperta
+  // rifiutava un negozio appena approvato da un altro amministratore, e il negozio
+  // riceveva tutti e due gli esiti. Il pannello li mostra solo a chi è «in attesa».
+  if ((body.action === 'approve' || body.action === 'reject') && !inAttesa(target.approval_status)) {
+    return ApiErrors.conflict(
+      'Questa richiesta è già stata decisa (o lo stato è cambiato nel frattempo): ricarica la pagina e guarda lo stato attuale.',
+    );
+  }
+
   if (approva) {
     const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve', giornoPiacenza());
     if (motivo) return ApiErrors.invalidRequest(motivo);
@@ -235,8 +286,23 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   const { patch, note, audit } = buildModeration(body.action, body.reason?.trim(), user.id, target.role);
 
-  const { error: updErr } = await admin.from('profiles').update(patch).eq('id', params.id);
+  // 12/11/2026 (R08-004, R08-005) — LA SCRITTURA VALE SOLO SE LO STATO E' ANCORA QUELLO LETTO.
+  //
+  // Fra la lettura qui sopra e questa scrittura un altro amministratore (o un doppio
+  // clic) può aver già deciso. Prima l'update filtrava solo per id: due sospensioni
+  // insieme passavano tutte e due, con due campanelle, due email e due righe nel
+  // registro. Ora una sola tocca la riga; l'altra trova zero righe e riceve 409, e
+  // da quel ramo non parte niente.
+  let { error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, patch);
+  const ripiego = colonnaMancante(updErr) ? rifiutoSenzaColonna(patch) : null;
+  if (ripiego) {
+    logger.warn('[moderate] rejected_at non c\'è ancora (migrazione 320 da applicare): rifiuto scritto in approved_at', { target: params.id });
+    ({ error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, ripiego));
+  }
   if (updErr) return ApiErrors.internal('Aggiornamento fallito.');
+  if (count === 0) {
+    return ApiErrors.conflict('Lo stato di questo profilo è cambiato nel frattempo: ricarica la pagina e riprova.');
+  }
 
   // L'esito della notifica si guarda: chi e' rifiutato deve ricevere il motivo,
   // e se non parte chi ha premuto il pulsante lo deve sapere.
@@ -259,7 +325,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   // 5/11/2026 (S05) — Sospendere un fattorino non gli toglie le consegne già sue:
   // l'amministratore lo deve sapere per riassegnarle.
+  // 12/11/2026 (R08-006) — Un conteggio caduto non vale zero: prima diventava `count ?? 0`
+  // e l'avviso «riassegnale» spariva proprio quando non si sapeva niente. Ora chi ha
+  // premuto il pulsante legge che le consegne non sono state contate.
   let consegneInCorso = 0;
+  let consegneNonContate = false;
   if (body.action === 'suspend' && target.role === 'rider') {
     try {
       const { count, error: eConta } = await admin
@@ -267,10 +337,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         .select('id', { count: 'exact', head: true })
         .eq('rider_id', params.id)
         .in('delivery_status', ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
-      if (eConta) logger.error('[moderate] consegne in corso non contate', { target: params.id, err: eConta.message });
-      consegneInCorso = count ?? 0;
+      if (eConta || count == null) {
+        consegneNonContate = true;
+        logger.error('[moderate] consegne in corso non contate', { target: params.id, err: eConta?.message ?? 'conteggio vuoto' });
+      } else {
+        consegneInCorso = count;
+      }
     } catch (e) {
-      // Best-effort: la sospensione è già fatta, il conteggio serve solo all'avviso.
+      // La sospensione è già fatta: il conteggio serve all'avviso, e l'avviso deve dire che manca.
+      consegneNonContate = true;
       logger.error('[moderate] consegne in corso non contate', { target: params.id, err: e instanceof Error ? e.message : String(e) });
     }
   }
@@ -279,13 +354,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     notErr ? 'la notifica all\'utente non e\' partita' : null,
     emailInviata === false ? 'l\'email all\'utente non e\' partita' : null,
     consegneInCorso > 0 ? `il fattorino ha ancora ${consegneInCorso} consegne in corso: riassegnale dalla pagina Ordini` : null,
+    consegneNonContate ? 'non ho potuto contare le consegne in corso del fattorino: controllale nella pagina Ordini e riassegnale' : null,
   ].filter(Boolean);
   return NextResponse.json(
     {
       ok: true,
       notifica_inviata: !notErr,
       email_inviata: emailInviata,
-      consegne_in_corso: consegneInCorso,
+      consegne_in_corso: consegneNonContate ? null : consegneInCorso,
       ...(avvisi.length > 0 ? { avviso: `Stato aggiornato, ma ${avvisi.join('; ')}.` } : {}),
     },
     { status: 200 },

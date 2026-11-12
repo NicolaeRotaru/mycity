@@ -18,6 +18,11 @@ import { indirizzoSenzaDatiPersonali } from './indirizzo-senza-dati-personali';
 
 export const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
+/** La quota delle misure di velocità adesso: 10% col consenso statistico, altrimenti niente. */
+export function quotaDelleMisure(): number {
+  return typeof window !== 'undefined' && hasConsent('analytics') ? 0.1 : 0;
+}
+
 export function opzioniSentry() {
   // La registrazione dello schermo (session replay) resta legata al consenso:
   // è l'unica parte che riprende quello che la persona fa. Il resto — gli
@@ -28,7 +33,14 @@ export function opzioniSentry() {
     // S10 (5/11/2026) — Le misure di velocità partivano dal 10% delle pagine
     // anche senza consenso, con l'indirizzo intero. Adesso solo col consenso
     // statistico, e passano dalla stessa pulizia degli errori.
-    tracesSampleRate: analyticsOk ? 0.1 : 0,
+    //
+    // 12/11/2026 (R08-023) — Il consenso si chiede A OGNI MISURA, non una volta all'avvio.
+    // Prima qui c'era `tracesSampleRate: analyticsOk ? 0.1 : 0`: un numero calcolato quando
+    // la pagina partiva. Chi toglieva il consenso dal banner continuava a essere misurato
+    // su una pagina su dieci finché non ricaricava — e il sito è a pagina singola, si
+    // naviga a lungo senza ricaricare. La revoca deve valere subito (art. 7.3 GDPR).
+    // Sentry chiama `tracesSampler` all'inizio di ogni misura.
+    tracesSampler: () => quotaDelleMisure(),
     replaysSessionSampleRate: analyticsOk ? 0.05 : 0,
     replaysOnErrorSampleRate: analyticsOk ? 1.0 : 0,
     // R187 — `NODE_ENV` su Vercel dice `production` anche per le anteprime.

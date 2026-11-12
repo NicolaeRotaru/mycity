@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { salvaVariantiFinta } from './aiuti/salva-varianti-finta';
 
 /**
  * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE RIMETTE IN MAGAZZINO LA MERCE VENDUTA.
@@ -131,6 +132,8 @@ describe('le varianti: si riscrive solo la scorta che il negoziante ha cambiato'
   function clientFinto(esistenti: string[]) {
     const aggiornamenti: Array<{ id: string; riga: Record<string, unknown> }> = [];
     const client = {
+      // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
       from: () => ({
         select: () => ({ eq: async () => ({ data: esistenti.map((id) => ({ id })), error: null }) }),
         update: (riga: Record<string, unknown>) => ({

@@ -21,7 +21,7 @@ vi.mock('@/lib/supabase/server', () => ({
             },
             update: (patch: Record<string, unknown>) => {
               profilo = { ...profilo, ...patch };
-              return { eq: () => Promise.resolve({ error: null }) };
+              const b: Record<string, unknown> = { eq: () => b, is: () => b, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null, count: 1 }).then(ok, ko) }; return b;
             },
           }
         : { insert: () => Promise.resolve({ error: null }) },
@@ -66,7 +66,8 @@ describe('collaudo B: sospendi e riattiva aggira il controllo', () => {
     profilo = { id: 'seller-3', role: 'seller', store_name: 'Bar', legal_birth_date: null, approval_status: 'suspended', approved_by: 'admin-0', is_approved: false };
     idBersaglio = 'seller-3';
     const r = await MODERA(req('suspend'));
-    expect(r.status).toBe(400);
+    // R08-005 (12/11/2026): 409, perché è lo stato che è cambiato, non la richiesta che è sbagliata.
+    expect(r.status).toBe(409);
     expect(JSON.stringify(await r.json())).toMatch(/già sospeso/);
   });
 });
