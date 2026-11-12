@@ -187,7 +187,9 @@ describe('contestazione piena su un ordine con un reso già stornato, poi vinta'
       payout_status: 'REVERSED', seller_payout_reversed_cents: 3240, dispute_status: 'OPEN', dispute_seller_reversed_cents: 0,
     })];
     expect(await consegna('evt_vinta', 'charge.dispute.closed', { ...contestazione, status: 'won' })).toBe(200);
-    expect(residuoDaVersare()).toBe(3240);
+    // R11-021 — Qui c'era 3240: il totale, reso da 5 € compreso. Il pagamento è PARTIALLY_REFUNDED
+    // (6,17 € su 40): la quota del reso sul netto (500) resta al cliente, al negozio tornano 27,40 €.
+    expect(residuoDaVersare()).toBe(2740);
   });
 });
 

@@ -29,13 +29,35 @@ export function eUnaRichiestaDiInformazioni(dispute: Stripe.Dispute): boolean {
  * pagare due volte negozio e fattorino.
  * Il ripiego sul totale resta solo per un pagamento non rimborsato per
  * intero (contestazione aperta prima della migrazione 126).
+ *
+ * R11-021 — E SE IL RIMBORSO ERA PARZIALE, DAL TOTALE SI TOGLIE LA SUA QUOTA.
+ * Dopo un rimborso parziale lo stornato al negozio contiene anche la quota del
+ * rimborso: senza promemoria si restituiva tutto, rimborso compreso, e MyCity
+ * pagava di tasca sua la parte gia' resa al cliente. `quotaDelRimborso` e' la
+ * parte del netto del negozio che il rimborso gli ha tolto (in proporzione al
+ * lordo, come fa lo storno del rimborso).
  */
 export function stornatoDaQuestaContestazione(
   promemoria: number | null | undefined,
   totale: number | null | undefined,
   paymentStatus: unknown,
+  quotaDelRimborso?: number,
 ): number | null {
   if ((promemoria ?? 0) > 0) return promemoria as number;
   if (paymentStatus === 'REFUNDED') return null;
+  if (paymentStatus === 'PARTIALLY_REFUNDED' && quotaDelRimborso !== undefined) {
+    return Math.max(0, (totale ?? 0) - quotaDelRimborso);
+  }
   return promemoriaOTotale(promemoria, totale);
+}
+
+/** R11-021 — La parte del netto del negozio tolta da un rimborso parziale: rimborsato / lordo × netto. */
+export function quotaDelRimborsoSulNetto(o: {
+  refunded_amount_cents?: number | null;
+  gross_total_cents?: number | null;
+  seller_payout_cents?: number | null;
+}): number | undefined {
+  const lordo = o.gross_total_cents ?? 0;
+  if (lordo <= 0 || o.refunded_amount_cents == null) return undefined;
+  return Math.round((Math.min(o.refunded_amount_cents, lordo) / lordo) * (o.seller_payout_cents ?? 0));
 }
