@@ -1,12 +1,12 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-12 15:32",
+  "aggiornato": "2026-11-12 15:57",
   "finita": true,
-  "testa": "3f422c18e852571f07d7e0f60cb10e71ad022252",
+  "testa": "855e7eda61931aa94a12146f7139b2ac107d86d3",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "1219 file di prova, 8943 prove, typecheck e lint verdi sulla testa"
+    "nota": "dopo il giro del collaudo K01: 1219 file di prova passati (1 saltato, non mio), 8948 prove, typecheck e lint verdi"
   },
   "voci": [
     {
@@ -52,8 +52,8 @@
     },
     {
       "id": "R02-003",
-      "esito": "riparato",
-      "commit": "73a0f45f6b842c0308afc311c3934ddd951f2aed",
+      "esito": "parziale",
+      "commit": "1b787f44f546d6e9ca6c4003f297cf4978bafe57",
       "file_toccati": [
         "app/admin/segnalazioni/page.tsx",
         "app/api/admin/segnalazioni/accogli/route.ts",
@@ -74,14 +74,23 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d0e1e9d0b11d881e5b85bbc1201f8b2c27c3f7a1^ --file app/admin/segnalazioni/page.tsx --prove tests/unit/riparazione-r02-segnalazione-accolta-pagina.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Rotta nuova solo admin (/api/admin/segnalazioni/accogli): con tipo prodotto lo mette in bozza (status draft, fuori vetrina) e scrive product.hide nel registro. La pagina la chiama PRIMA di salvare la decisione; su un negozio usa la sospensione esistente (/api/admin/users/[id]/moderate) con conferma; per recensioni e messaggi «Accolta» è spenta. Se togliere fallisce, niente decisione e niente esito. Etichette che dicono cosa succede. Nella prova esistente i-link-della-cabina-admin (importa la pagina) il caso «accolta» ora finge la rotta di rimozione riuscita: guarda la stessa cosa di prima.",
       "verificato_da": "qa (agente 2): 9 file di prova verdi, mutazioni sul ramo prodotto prese; trovati buchi su negozio già sospeso, prodotto sparito, garanzia solo nella pagina, prove scoperte → riparati dopo con prove nuove.",
       "chiave": "privacy-legale|accogliere una segnalazione non toglie il prodotto: resta online, e a chi ha segnalato si scrive che è stato rimosso",
       "commit_seguito": [
-        "73a0f45f6b842c0308afc311c3934ddd951f2aed"
+        "73a0f45f6b842c0308afc311c3934ddd951f2aed",
+        "1b787f44f546d6e9ca6c4003f297cf4978bafe57"
       ],
-      "dopo_il_qa": "PATCH /api/segnalazioni non manda l'esito di una «accolta» se il prodotto è ancora available, il negozio ancora approved o il tipo non si toglie (409): la garanzia sta sul server. Negozio già sospeso/non approvato: niente seconda sospensione, la decisione si registra. Motivo tagliato a 500 per la rotta moderate. Prodotto sparito: 200 (già fuori vetrina). Prove nuove sul ramo negozio, recensione spenta e garanzia server. Rimessa: regge."
+      "dopo_il_qa": "PATCH /api/segnalazioni non manda l'esito di una «accolta» se il prodotto è ancora available, il negozio ancora approved o il tipo non si toglie (409): la garanzia sta sul server. Negozio già sospeso/non approvato: niente seconda sospensione, la decisione si registra. Motivo tagliato a 500 per la rotta moderate. Prodotto sparito: 200 (già fuori vetrina). Prove nuove sul ramo negozio, recensione spenta e garanzia server. Rimessa: regge.",
+      "dopo_il_collaudo": "La verifica lato server fallisce chiusa: se la lettura della segnalazione, del prodotto o del negozio cade, PATCH risponde 409 e «rimosso» non parte. Rimessa: regge.",
+      "cosa_resta": "Il negoziante può rimettere in vendita con «Attiva» il prodotto tolto: la pagina del negoziante non è mia.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/products/page.tsx",
+          "modifica": "righe 173-177: «Attiva» non deve riportare ad 'available' un prodotto messo in bozza da una segnalazione accolta. Serve un segno «tolto dall'amministratore» (per esempio una colonna products.tolto_da_segnalazione o la presenza di un audit product.hide con origine segnalazione-accolta) e la pagina spegne «Attiva» per quei prodotti; meglio ancora il vincolo nel database (nuova migrazione) che rifiuta il passaggio ad available finché il segno c'è."
+        }
+      ]
     },
     {
       "id": "R02-004",
@@ -179,7 +188,7 @@
     {
       "id": "R02-008",
       "esito": "riparato",
-      "commit": "114d9a9ffc9053508ba16e08db045c63e49906a9",
+      "commit": "855e7eda61931aa94a12146f7139b2ac107d86d3",
       "file_toccati": [
         "app/product/[id]/page.tsx"
       ],
@@ -200,9 +209,12 @@
       "verificato_da": "qa (agente 5): handleAdd corretto in tutti i casi; trovati contrasto opacity-50 e describedby a vuoto → riparati dopo.",
       "chiave": "accessibilita|se scegli una variante esaurita il lettore di schermo non dice niente, e il pulsante d'acquisto sparisce dal giro del tab",
       "commit_seguito": [
-        "114d9a9ffc9053508ba16e08db045c63e49906a9"
+        "114d9a9ffc9053508ba16e08db045c63e49906a9",
+        "caa58d261b794ff41456caa6747cca820c4b3b7f",
+        "855e7eda61931aa94a12146f7139b2ac107d86d3"
       ],
-      "dopo_il_qa": "Tolto opacity-50 (1,62:1): aspetto spento esplicito del Button via aria-disabled:bg-cream-200/text-ink-600; aria-describedby solo quando la regione delle varianti esiste. Rimessa: regge."
+      "dopo_il_qa": "Tolto opacity-50 (1,62:1): aspetto spento esplicito del Button via aria-disabled:bg-cream-200/text-ink-600; aria-describedby solo quando la regione delle varianti esiste. Rimessa: regge.",
+      "dopo_il_collaudo": "Anche «Compra ora» e il pulsante della barra in fondo usano aria-disabled (restano nel giro del Tab, aspetto spento esplicito, niente opacity-50); handleBuyNow su un esaurito avvisa invece di aprire la cassa. Modificata un'asserzione di tests/unit/minori-s09-aspetto.test.ts (legge la scheda prodotto, mio file): ora pretende aria-disabled sulla stessa condizione; il freno «if (inPartenza) return;» resta controllato. Rimessa: regge. Ultimo ritocco: «Compra ora» spento con testo scuro su crema (la prova esistente il-bianco-sul-verde-del-sito-si-legge lo pretende; rimessa con quella prova: regge)."
     },
     {
       "id": "R02-009",
@@ -255,13 +267,14 @@
     {
       "id": "R02-011",
       "esito": "riparato",
-      "commit": "6b97d01ae5e4b9168d3b2b125a2f048a919431cf",
+      "commit": "10fc3d59c6ecb2b3117f8cee672b588bfa418bd3",
       "file_toccati": [
         "components/ActivePromoBadge.tsx",
         "app/product/[id]/page.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r02-sconto-promo-lettura.test.tsx"
+        "tests/unit/riparazione-r02-sconto-promo-lettura.test.tsx",
+        "tests/unit/riparazione-r02-sconto-non-verificato.test.tsx"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r02-sconto-promo-lettura.test.tsx",
       "prova_tipo": "comando",
@@ -275,7 +288,11 @@
       "cosa_ho_fatto": "Nelle due letture di product_active_discount (scheda :316 e ActivePromoBadge :33) «if (error) return 0» è diventato «throw error»: lo zero non resta in memoria per 60 secondi e React Query riprova. La prova copre il riquadro della promo; la lettura nella scheda è identica e usa la stessa chiave.",
       "verificato_da": "qa (agente 4): regge; la prova copre solo ActivePromoBadge, la lettura identica nella scheda non è coperta.",
       "chiave": "api-backend|sulla scheda prodotto lo sconto della promozione vale zero se la lettura cade, poi la cassa lo applica",
-      "nota": "La prova copre ActivePromoBadge; la stessa lettura nella scheda (page.tsx) è identica ma non provata. Con due letture cadute (un solo nuovo tentativo in QueryProvider) si torna al prezzo pieno."
+      "nota": "La barra in fondo, a lettura caduta, mostra ancora il prezzo pieno (ma il riquadro sopra avvisa).",
+      "commit_seguito": [
+        "10fc3d59c6ecb2b3117f8cee672b588bfa418bd3"
+      ],
+      "dopo_il_collaudo": "La lettura dello sconto riprova 3 volte (scheda e badge, stessa chiave); se cade lo stesso la scheda scrive che non ha verificato le promozioni e che il prezzo finale si vede nel carrello, invece di presentare il pieno come certo. Rimessa: regge."
     },
     {
       "id": "R02-012",
@@ -316,7 +333,7 @@
     },
     {
       "id": "R02-014",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "011b89f3203d4835e3ec9e675713f3a45fde6427",
       "file_toccati": [
         "components/ProductViewTracker.tsx",
@@ -335,7 +352,7 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5bb38d8e01c4d12ea9b06d7b7274a9edab0a3fe9^ --file components/ProductViewTracker.tsx --prove tests/unit/riparazione-r02-visite-admin.test.tsx --json ; parte SQL a mano: senza la 260 (database ricostruito senza) 3 controlli su 4 ROTTI, con la 260 4 su 4 verdi"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il tracciatore escludeva già il negoziante; ora salta anche l'amministratore (prop chiGuardaEAdmin, che la scheda passa da useProfile). Migrazione 260, NON applicata: trending_product_ids_24h e andamento_del_negozio scartano le righe del venditore del prodotto e degli admin (le visite anonime restano), così si tolgono anche quelle già scritte.",
       "nota": "La migrazione 260 va applicata da Nicola.",
       "verificato_da": "qa (agente 5): firma, SECURITY DEFINER, search_path e permessi uguali a 129/141 (pg_proc); SQL 4/4; mutazione presa. Trovati annuncio PostHog e seller_id NULL → riparati dopo.",
@@ -343,11 +360,12 @@
       "commit_seguito": [
         "011b89f3203d4835e3ec9e675713f3a45fde6427"
       ],
-      "dopo_il_qa": "Per negoziante e admin non parte nemmeno product_viewed verso PostHog (prima registra usciva senza errore e l'evento partiva). Migrazione 260: «is distinct from» per i prodotti con seller_id NULL; SQL riprovato: 4/4 verdi. Rimessa: regge."
+      "dopo_il_qa": "Per negoziante e admin non parte nemmeno product_viewed verso PostHog (prima registra usciva senza errore e l'evento partiva). Migrazione 260: «is distinct from» per i prodotti con seller_id NULL; SQL riprovato: 4/4 verdi. Rimessa: regge.",
+      "cosa_resta": "Le statistiche (Andamento, più visti) escludono negoziante e admin solo quando Nicola applica la migrazione 260; fino ad allora vale solo la parte del browser (niente righe e niente PostHog per negoziante e admin, ma le righe già scritte contano ancora)."
     },
     {
       "id": "R02-015",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "05b4058e6478c361e720f5e0884c6b92794b1f4e",
       "file_toccati": [
         "lib/analytics/visita-prodotto.ts",
@@ -366,7 +384,7 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 05b4058e6478c361e720f5e0884c6b92794b1f4e^ --file lib/analytics/visita-prodotto.ts --prove tests/unit/riparazione-r02-visita-una-all-ora.test.ts --json",
         "nota": "sul primo commit (4dc0c86) l'uscita era 3, nomi nuovi: difetto rimesso a mano → rosso. Sul commit del seguito regge (uscita 0)."
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Una definizione sola: una visita per prodotto all'ora, come il trigger product_views_dedup. Il freno del browser (frenoOrario) passa da sessionStorage per scheda a localStorage con l'ora, condiviso fra le schede; l'impronta degli anonimi (improntaOraria) è la stessa per un'ora in tutte le schede, poi cambia. PostHog e product_views contano con la stessa regola sullo stesso browser.",
       "nota": "Fra due dispositivi dello stesso utente il database ne conta una e PostHog due: per allinearli anche lì servirebbe la RPC «contata/scartata», cioè una migrazione. Va scritta la definizione nel GLOSSARIO-KPI (non è un mio file).",
       "verificato_da": "qa (agente 5): trovate chiavi senza scadenza e assenza dalla cookie policy → riparati dopo.",
@@ -374,7 +392,8 @@
       "commit_seguito": [
         "05b4058e6478c361e720f5e0884c6b92794b1f4e"
       ],
-      "dopo_il_qa": "A ogni visita contata si cancellano i freni mc_viewed_* oltre l'ora (niente storico in localStorage); la cookie policy elenca mc_viewed_* e mc_impronta_visite. Rimessa: regge."
+      "dopo_il_qa": "A ogni visita contata si cancellano i freni mc_viewed_* oltre l'ora (niente storico in localStorage); la cookie policy elenca mc_viewed_* e mc_impronta_visite. Rimessa: regge.",
+      "cosa_resta": "La regola è «una visita per browser all'ora»: fra due dispositivi dello stesso utente il database ne conta una e PostHog due. Per una regola sola anche lì serve che sia il database a dire «contata/scartata» (una RPC, cioè una migrazione) e annunciare solo le visite entrate."
     },
     {
       "id": "R02-016",
@@ -457,10 +476,18 @@
     },
     {
       "id": "R02-019",
-      "esito": "gia_riparato_prima",
-      "prova": "components/store-sections/ReviewsSection.tsx:190 (const mostrate = tutte ? reviews : reviews.slice(0, RECENSIONI_SUBITO)) e :239-245 («Mostra altre recensioni»); coperto da tests/unit/minori-s09-vetrina-recensioni.test.ts (caso 325). Il numero della linguetta usa il riepilogo vero (SectionRenderer.tsx:116, riepilogoRecensioni(ctx)?.totale).",
+      "esito": "parziale",
       "chiave": "frontend-ux|la vetrina dice «recensioni · 20» ma ne fa leggere solo sei, senza modo di vedere le altre",
-      "verificato_da": "qa (agente 6): confermato; limite: se ne leggono al massimo 20 (useStorePageData.ts, non mio)."
+      "verificato_da": "qa (agente 6): confermato; limite: se ne leggono al massimo 20 (useStorePageData.ts, non mio).",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Niente codice: «Mostra altre recensioni» c'era già (components/store-sections/ReviewsSection.tsx:190 e :239-245).",
+      "cosa_resta": "La vetrina legge al massimo 20 recensioni (components/store-sections/useStorePageData.ts:40, non mio) mentre la linguetta mostra il totale vero: con «Recensioni · 45» se ne leggono 20.",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/useStorePageData.ts",
+          "modifica": "riga 40: togliere il .limit(20) o caricare le altre a pagine quando si preme «Mostra altre recensioni»"
+        }
+      ]
     },
     {
       "id": "R02-020",
@@ -541,7 +568,7 @@
     {
       "id": "R02-023",
       "esito": "riparato",
-      "commit": "941948d9e37e3577ed00a386abbf8f14c287ce6b",
+      "commit": "40ed044bba533881efcc9f745f1d505d748e37ab",
       "file_toccati": [
         "components/store-sections/SectionRenderer.tsx",
         "components/store-sections/ReviewsSection.tsx",
@@ -562,15 +589,20 @@
       "cosa_ho_fatto": "SectionRenderer: il pannello non attivo ha solo la classe hidden (grid non vince più sull'attributo hidden). ReviewsSection: con zero recensioni e nessun errore scrive «Ancora nessuna recensione per questo negozio». HeroSection: la riga logo+nome non va più a capo (flex-nowrap, nome min-w-0 con overflow-wrap:anywhere), così il logo resta in basso nella copertina e non sale sotto la pillola «Indietro».",
       "nota": "Non misurato in Playwright a 360/390. Con un nome lunghissimo (80 caratteri) il nome cresce verso l'alto dentro la copertina ad altezza fissa (h-60, in misure-vetrina.ts che non è mio): il logo non si sposta più, ma le ultime righe del nome possono avvicinarsi alla pillola. Dopo il qa: mentre le recensioni caricano la sezione scrive «Ancora nessuna recensione» (useStorePageData.ts non dà lo stato di caricamento al ctx: non è mio).",
       "verificato_da": "qa (agente 6): regge, misurato a 320px: il logo resta in basso. Residui: nome lunghissimo vicino alla pillola; «Ancora nessuna recensione» anche durante il caricamento.",
-      "chiave": "layout-responsive|nella vetrina del negozio, sul telefono il logo resta coperto dal tasto indietro e la scheda recensioni mostra gli orari"
+      "chiave": "layout-responsive|nella vetrina del negozio, sul telefono il logo resta coperto dal tasto indietro e la scheda recensioni mostra gli orari",
+      "commit_seguito": [
+        "40ed044bba533881efcc9f745f1d505d748e37ab"
+      ],
+      "dopo_il_collaudo": "«Ancora nessuna recensione» solo quando store_review_stats, letto con successo, dice totale 0; durante la lettura o i nuovi tentativi non si scrive niente. Rimessa: regge."
     },
     {
       "id": "R02-024",
-      "esito": "gia_riparato_prima",
-      "prova": "components/Footer.tsx:178-181: const madri = soloLePiene(madriTutte, piene.isError ? null : piene.data). Il piede mostra solo le categorie con almeno un prodotto, quindi «abbigliamento» ricompare solo se nel database ha prodotti.",
-      "cosa_resta": "Dipende dal database vero, che non ho guardato: va controllato che la categoria abbigliamento (select slug from categories where slug=abbigliamento and parent_id is null) non abbia prodotti, oppure che sia giusto mostrarla se ne ha.",
+      "esito": "parziale",
+      "cosa_resta": "Finché quella lettura non arriva, o se cade, il piede mostra tutte le categorie madri lette dal database, quindi anche Abbigliamento se esiste ed è attiva. Va verificato sul database vero se la categoria abbigliamento è attiva.",
       "chiave": "microcopy|il piede rimette «abbigliamento» dopo la lettura se la categoria è attiva nel database (non verificato)",
-      "verificato_da": "qa (agente 6): confermato (Footer.tsx:182 soloLePiene)."
+      "verificato_da": "qa (agente 6): confermato (Footer.tsx:182 soloLePiene).",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Niente codice: components/Footer.tsx:178-181 mostra già solo le categorie con prodotti (soloLePiene) quando la lettura delle categorie piene è arrivata."
     },
     {
       "id": "R02-025",
