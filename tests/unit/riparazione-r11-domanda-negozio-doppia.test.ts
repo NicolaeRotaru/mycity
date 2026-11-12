@@ -83,3 +83,12 @@ describe('R11-008 — la domanda partita due volte insieme', () => {
     expect(stato.riga.approval_status).toBe('pending');
   });
 });
+
+describe('R11-008 — collaudo K04', () => {
+  it('il secondo invio due secondi dopo non aggiunge un altra riga al verbale né un altro avviso', async () => {
+    expect((await invia()).status).toBe(200);
+    expect((await invia()).status).toBe(200);
+    expect(stato.consensi, 'la stessa domanda finisce due volte a verbale').toBe(1);
+    expect(stato.avvisi).toBe(1);
+  });
+});

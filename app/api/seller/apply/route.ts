@@ -231,7 +231,10 @@ export const POST = withAuthRateLimit(
     // chiedere di nuovo le condizioni (/accetta-condizioni).
     // La richiesta è già salvata: un verbale che non entra si scrive nei log, e
     // la pagina /accetta-condizioni lo richiederà.
-    try {
+    // Collaudo K04 — una domanda già in attesa che il negozio corregge (o rimanda dopo due secondi)
+    // non è un nuovo consenso: la riga a verbale c'è già dal primo invio.
+    const giaAVerbale = attuale.approval_status === 'pending' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
+    if (!giaAVerbale) try {
       const { error: errConsenso } = await admin.from('consent_log').insert({
         user_id: user.id,
         categoria: 'privacy_terms',
