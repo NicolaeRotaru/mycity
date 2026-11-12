@@ -16,5 +16,7 @@ describe('R07-008 · il tasto «togli la foto» è grande almeno 44 px', () => {
     expect(classi).toMatch(/\bh-11\b/);
     expect(classi).toMatch(/\bw-11\b/);
     expect(classi).not.toMatch(/\bh-6\b/);
+    // Le miniature stanno a gap-2 (8 px): il tasto non deve sporgere oltre, o copre la foto accanto.
+    expect(classi).toMatch(/-right-2\b/);
   });
 });
