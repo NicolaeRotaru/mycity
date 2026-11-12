@@ -123,21 +123,36 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
   // restava orfano, si pagava ogni mese e dal sito non si disdiceva piu'. Adesso il primo
   // resta, il doppione si annulla subito e l'admin lo vede nel log. Il rimborso del
   // doppione NON e' automatico: e' una decisione sui soldi (domanda a Nicola, R10).
-  if (stato !== 'canceled') {
-    const { data: giaSalvato, error: erroreLettura } = await admin
-      .from('profiles')
-      .select('stripe_subscription_id')
-      .eq('id', sellerId)
-      .maybeSingle();
-    // Una lettura caduta non vale «nessun abbonamento»: Stripe riprova.
-    if (erroreLettura) throw new Error(`[stripe] abbonamento del negozio non letto: ${erroreLettura.message}`);
-    const precedente = (giaSalvato as { stripe_subscription_id?: string | null } | null)?.stripe_subscription_id ?? null;
-    if (precedente && precedente !== subscriptionId && (await statoDaStripe(precedente)).subscription_status !== 'canceled') {
-      await getStripe().subscriptions.cancel(subscriptionId);
-      logger.error('[stripe] abbonamento doppio annullato: resta il primo, il doppione va rimborsato a mano', {
-        sellerId, primo: precedente, doppione: subscriptionId, sessionId: session.id,
-      });
-      return;
+  //
+  // Revisione qa (12/11): la guardia vale ANCHE quando questo abbonamento e' gia' annullato.
+  // Se l'annullamento del doppione riesce su Stripe ma la risposta si perde, Stripe riprova
+  // l'avviso: il doppione ora e' 'canceled', e saltare il controllo lo scriveva sopra al primo
+  // (orfano di nuovo, e negozio «disdetto»). E fra i due si tiene quello PAGATO: se il primo e'
+  // in ritardo di pagamento e il nuovo e' attivo, si annulla il primo, non il nuovo.
+  const { data: giaSalvato, error: erroreLettura } = await admin
+    .from('profiles')
+    .select('stripe_subscription_id')
+    .eq('id', sellerId)
+    .maybeSingle();
+  // Una lettura caduta non vale «nessun abbonamento»: Stripe riprova.
+  if (erroreLettura) throw new Error(`[stripe] abbonamento del negozio non letto: ${erroreLettura.message}`);
+  const precedente = (giaSalvato as { stripe_subscription_id?: string | null } | null)?.stripe_subscription_id ?? null;
+  if (precedente && precedente !== subscriptionId) {
+    const statoPrecedente = (await statoDaStripe(precedente)).subscription_status;
+    if (statoPrecedente !== 'canceled') {
+      if (statoPrecedente === 'past_due' && stato === 'active') {
+        // Il nuovo e' pagato, il vecchio no: resta il nuovo (si scrive qui sotto).
+        await getStripe().subscriptions.cancel(precedente);
+        logger.error('[stripe] abbonamento doppio: annullato il precedente in ritardo di pagamento, resta quello pagato', {
+          sellerId, annullato: precedente, tenuto: subscriptionId, sessionId: session.id,
+        });
+      } else {
+        if (stato !== 'canceled') await getStripe().subscriptions.cancel(subscriptionId);
+        logger.error('[stripe] abbonamento doppio annullato: resta il primo, il doppione va rimborsato a mano', {
+          sellerId, primo: precedente, doppione: subscriptionId, sessionId: session.id,
+        });
+        return;
+      }
     }
   }
 
