@@ -103,7 +103,13 @@ export default function AdminProductsPage() {
       return (data ?? []) as unknown as Row[];
     },
   });
-  const filtered = (cercaNelDatabase && trovatiNelDatabase ? trovatiNelDatabase : products).filter((p) => {
+  // Dal controllo qa: i trovati nel database (per nome) si AGGIUNGONO a quelli già letti, che restano
+  // cercabili anche per nome del negozio come prima.
+  const daFiltrare =
+    cercaNelDatabase && trovatiNelDatabase
+      ? [...trovatiNelDatabase, ...products.filter((p) => !trovatiNelDatabase.some((t) => t.id === p.id))]
+      : products;
+  const filtered = daFiltrare.filter((p) => {
     if (!search) return true;
     const s = search.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.seller?.store_name?.toLowerCase().includes(s);
