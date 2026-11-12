@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * segnalazione «accolta» («il contenuto è stato rimosso») se il contenuto è ancora online.
  */
 
-const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null } = {
-  segnalazione: null, prodotto: null, negozio: null,
+const db: { segnalazione: Record<string, unknown> | null; prodotto: Record<string, unknown> | null; negozio: Record<string, unknown> | null; cade: string | null } = {
+  segnalazione: null, prodotto: null, negozio: null, cade: null,
 };
 const comunicate: string[] = [];
 
@@ -29,10 +29,12 @@ vi.mock('@/lib/supabase/server', () => ({
       const q: Record<string, unknown> = {};
       q.select = () => q;
       q.eq = () => q;
-      q.maybeSingle = async () => ({
-        data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : null,
-        error: null,
-      });
+      q.maybeSingle = async () => (db.cade === t
+        ? { data: null, error: { message: 'rete caduta' } }
+        : {
+            data: t === 'segnalazioni' ? db.segnalazione : t === 'products' ? db.prodotto : t === 'profiles' ? db.negozio : null,
+            error: null,
+          });
       return q;
     },
   }),
@@ -47,7 +49,7 @@ const chiama = () =>
   }));
 
 describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero fuori', () => {
-  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; });
+  beforeEach(() => { comunicate.length = 0; db.prodotto = null; db.negozio = null; db.cade = null; });
 
   it('prodotto accolto ma ancora in vetrina: 409, niente esito', async () => {
     db.segnalazione = { stato: 'accolta', tipo: 'prodotto', oggetto_id: 'p-1' };
@@ -79,5 +81,17 @@ describe('R02-003 · l esito «rimosso» parte solo se il contenuto è davvero f
     db.segnalazione = { stato: 'respinta', tipo: 'prodotto', oggetto_id: 'p-1' };
     db.prodotto = { status: 'available' };
     expect((await chiama()).status).toBe(200);
+  });
+
+  it('dopo il collaudo: se la lettura del prodotto o della segnalazione cade, si ferma (409), non manda «rimosso»', async () => {
+    db.segnalazione = { stato: 'accolta', tipo: 'prodotto', oggetto_id: 'p-1' };
+    db.cade = 'products';
+    expect((await chiama()).status).toBe(409);
+    db.cade = 'segnalazioni';
+    expect((await chiama()).status).toBe(409);
+    db.segnalazione = { stato: 'accolta', tipo: 'negozio', oggetto_id: 'n-1' };
+    db.cade = 'profiles';
+    expect((await chiama()).status).toBe(409);
+    expect(comunicate).toEqual([]);
   });
 });

@@ -180,17 +180,23 @@ async function contenutoAncoraOnline(
   admin: ReturnType<typeof getAdminSupabase>,
   id: string,
 ): Promise<string | null> {
-  const { data } = await admin.from('segnalazioni').select('stato, tipo, oggetto_id').eq('id', id).maybeSingle();
+  // Dopo il collaudo: una lettura caduta NON vuol dire «tolto». Si ferma (fallisce chiuso): meglio
+  // rimandare un esito che scrivere «rimosso» di un contenuto che forse è ancora online.
+  const NON_VERIFICATO = 'Non riesco a verificare che il contenuto sia stato tolto: riprova fra poco.';
+  const { data, error } = await admin.from('segnalazioni').select('stato, tipo, oggetto_id').eq('id', id).maybeSingle();
+  if (error) return NON_VERIFICATO;
   const s = data as { stato?: string; tipo?: string; oggetto_id?: string } | null;
   if (!s || s.stato !== 'accolta') return null;
   if (s.tipo === 'prodotto') {
-    const { data: p } = await admin.from('products').select('status').eq('id', s.oggetto_id).maybeSingle();
+    const { data: p, error: e } = await admin.from('products').select('status').eq('id', s.oggetto_id).maybeSingle();
+    if (e) return NON_VERIFICATO;
     return (p as { status?: string } | null)?.status === 'available'
       ? 'Il prodotto è ancora in vetrina: toglilo prima di comunicare «rimosso».'
       : null;
   }
   if (s.tipo === 'negozio') {
-    const { data: n } = await admin.from('profiles').select('approval_status').eq('id', s.oggetto_id).maybeSingle();
+    const { data: n, error: e } = await admin.from('profiles').select('approval_status').eq('id', s.oggetto_id).maybeSingle();
+    if (e) return NON_VERIFICATO;
     return (n as { approval_status?: string } | null)?.approval_status === 'approved'
       ? 'Il negozio è ancora attivo: sospendilo prima di comunicare «rimosso».'
       : null;
