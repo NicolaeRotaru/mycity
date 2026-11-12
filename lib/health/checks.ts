@@ -1,6 +1,6 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
-import { getAdminSupabase } from '@/lib/supabase/server';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { checkTitolare } from './titolare-check';
@@ -77,10 +77,22 @@ function svc(
   return { id, name, description, status, latencyMs, detail };
 }
 
+/**
+ * 12/11/2026 (R06-023) — IL DATABASE SI CONTROLLA COME LO LEGGE IL CATALOGO.
+ *
+ * Prima si usava il client amministrativo: senza SUPABASE_SERVICE_ROLE_KEY quel
+ * client lancia, e la pagina PUBBLICA scriveva «Database: Non disponibile» e
+ * «Disservizio in corso» mentre catalogo, schede e mappa del sito leggevano il
+ * database senza problemi con la chiave pubblica. Ora la lettura e' la stessa
+ * del catalogo: la chiave pubblica e le categorie.
+ */
 async function checkDb(): Promise<ServiceHealth> {
+  if (!env.supabaseUrl() || !env.supabaseAnonKey()) {
+    return svc('db', 'Database', 'Supabase Postgres', 'unknown', null, 'Non configurato');
+  }
   const r = await timed(async () => {
-    const admin = getAdminSupabase();
-    const { error } = await admin.from('categories').select('id').limit(1);
+    const pubblico = creaClientAnonimo();
+    const { error } = await pubblico.from('categories').select('id').limit(1);
     if (error) throw new Error(error.message);
   });
   return svc(
@@ -97,7 +109,7 @@ async function checkAuth(): Promise<ServiceHealth> {
   if (!url || !key) {
     return svc('auth', 'Autenticazione', 'Accesso, registrazione, recupero password', 'unknown', null, 'Non configurato');
   }
-  const r = await timed(async () => {
+  const tentativo = () => timed(async () => {
     // 22/8/2026 — `withTimeout` smette di ASPETTARE, non chiude la chiamata:
     // la richiesta resta appesa a consumare una connessione, e su un servizio
     // lento ne restano appese una per ogni giro del controllo di salute. Il
@@ -108,11 +120,19 @@ async function checkAuth(): Promise<ServiceHealth> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
+  // 12/11/2026 (R06-023) — Due tentativi prima di dire «giù». Un solo sforamento
+  // dei 3,5 secondi faceva scrivere «Autenticazione: Non disponibile» a tutti,
+  // mentre Supabase in quello stesso minuto rispondeva 200: se il secondo
+  // tentativo risponde, l'accesso e' «rallentato», non fuori servizio.
+  const primo = await tentativo();
+  const secondo = primo.ok ? null : await tentativo();
+  const r = secondo ?? primo;
+  if (!r.ok) logger.warn('[salute] accesso non raggiungibile due volte', { motivo: r.error ?? 'sconosciuto' });
   return svc(
     'auth', 'Autenticazione', 'Accesso, registrazione, recupero password',
-    statusFromLatency(r.ok, r.latencyMs),
+    !r.ok ? 'outage' : secondo ? 'degraded' : statusFromLatency(true, r.latencyMs),
     r.ok ? r.latencyMs : null,
-    r.ok ? null : 'Non raggiungibile',
+    !r.ok ? 'Non raggiungibile' : secondo ? 'Rallentato: ha risposto al secondo tentativo' : null,
   );
 }
 
@@ -221,7 +241,12 @@ async function runServiceChecks(): Promise<SystemHealth> {
     db.status === 'outage' ? 'Piattaforma non raggiungibile' : null,
   );
   const push = checkPush();
-  const titolareOk = checkTitolare();
+  // 12/11/2026 (R06-023) — Questa e' la pagina PUBBLICA: l'elenco delle variabili
+  // mancanti («… Vanno messe PRIMA di ricompilare») e' un messaggio per lo
+  // sviluppatore, non per una cliente. Qui resta lo stato; il dettaglio completo
+  // lo da' checkTitolare() a chi amministra.
+  const titolare = checkTitolare();
+  const titolareOk = { ...titolare, detail: titolare.status === 'operational' ? null : 'In completamento' };
 
   const services = [web, db, auth, payments, realtime, email, push, titolareOk];
   return {

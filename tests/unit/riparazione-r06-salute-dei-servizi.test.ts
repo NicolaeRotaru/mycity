@@ -13,6 +13,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const stato = vi.hoisted(() => ({
   resend: { status: 200, corpo: {} as unknown },
   avvisi: [] as Array<{ msg: string; ctx?: unknown }>,
+  /** Quante volte risponde male l'accesso prima di rispondere bene. */
+  accessoCadute: 0,
+  chiamateAccesso: 0,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -24,16 +27,28 @@ vi.mock('@/lib/logger', () => ({
     error: () => {}, info: () => {}, debug: () => {},
   },
 }));
+// Senza SUPABASE_SERVICE_ROLE_KEY il client amministrativo lancia, come in produzione.
 vi.mock('@/lib/supabase/server', () => ({
-  getAdminSupabase: () => ({ from: () => ({ select: () => ({ limit: async () => ({ error: null }) }) }) }),
+  getAdminSupabase: () => { throw new Error('Service role Supabase non configurato'); },
+}));
+// Il catalogo legge con la chiave pubblica, e il database risponde.
+vi.mock('@/lib/supabase/anonimo', () => ({
+  creaClientAnonimo: () => ({ from: () => ({ select: () => ({ limit: async () => ({ error: null }) }) }) }),
 }));
 
 beforeEach(() => {
   stato.avvisi.length = 0;
+  stato.accessoCadute = 0;
+  stato.chiamateAccesso = 0;
   vi.stubEnv('RESEND_API_KEY', 're_finta');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://progetto.supabase.co');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'chiave-anonima');
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (String(url).includes('/auth/v1/health')) {
+      stato.chiamateAccesso += 1;
+      if (stato.chiamateAccesso <= stato.accessoCadute) throw new Error('The operation was aborted due to timeout');
+      return new Response('{}', { status: 200 });
+    }
     if (String(url).includes('api.resend.com')) {
       return new Response(JSON.stringify(stato.resend.corpo), { status: stato.resend.status });
     }
@@ -69,5 +84,39 @@ describe('R06-024 · la riga della posta', () => {
     const email = await riga('email');
     expect(email.status).toBe('outage');
     expect(email.detail).toContain('HTTP 401');
+  });
+});
+
+describe('R06-023 · la pagina pubblica non annuncia guasti che non ci sono', () => {
+  async function salute() {
+    const { getSystemHealth } = await import('@/lib/health/checks');
+    return (getSystemHealth as unknown as () => Promise<{ overall: string; services: Array<{ id: string; status: string; detail: string | null }> }>)();
+  }
+
+  it('senza la chiave di servizio il database e\' operativo, come per il catalogo', async () => {
+    const s = await salute();
+    const db = s.services.find((x) => x.id === 'db')!;
+    expect(db.status, 'La pagina pubblica scriveva «Database: Non disponibile» per una chiave di servizio mancante').toBe('operational');
+    expect(s.services.find((x) => x.id === 'realtime')!.status).toBe('operational');
+  });
+
+  it('un solo sforamento sull\'accesso e\' «rallentato», non «non disponibile»', async () => {
+    stato.accessoCadute = 1;
+    const s = await salute();
+    const auth = s.services.find((x) => x.id === 'auth')!;
+    expect(auth.status, 'Un solo tempo scaduto annunciava a tutti l\'accesso fuori servizio').toBe('degraded');
+    expect(stato.chiamateAccesso).toBe(2);
+  });
+
+  it('due sforamenti di fila: allora si', async () => {
+    stato.accessoCadute = 2;
+    const s = await salute();
+    expect(s.services.find((x) => x.id === 'auth')!.status).toBe('outage');
+  });
+
+  it('il messaggio per lo sviluppatore sui dati del titolare non esce sulla pagina pubblica', async () => {
+    const s = await salute();
+    const t = s.services.find((x) => x.id === 'titolare')!;
+    expect(t.detail ?? '').not.toMatch(/ricompilare|variabili/i);
   });
 });
