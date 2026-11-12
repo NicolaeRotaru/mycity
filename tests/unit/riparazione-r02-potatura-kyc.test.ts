@@ -63,3 +63,14 @@ describe('R02-007 · la potatura dei documenti a metà iscrizione senza la migra
     expect(rpc).toContain('kyc_file_da_togliere_prendi');
   });
 });
+
+describe('R02-007 · dopo il qa: solo la 171 mancante si salta', () => {
+  it('una colonna mancante o un ruolo che non esiste restano guasti', async () => {
+    const { mancaLaMigrazione } = await import('@/lib/privacy/potature-ritenzione');
+    expect(mancaLaMigrazione({ code: 'PGRST205', message: "Could not find the table 'public.documenti_iscrizione_a_meta' in the schema cache" })).toBe(true);
+    expect(mancaLaMigrazione({ code: '42703', message: 'column caricati_at does not exist' })).toBe(false);
+    expect(mancaLaMigrazione({ code: 'PGRST204', message: "Could not find the 'caricati_at' column of 'documenti_iscrizione_a_meta' in the schema cache" })).toBe(false);
+    expect(mancaLaMigrazione({ code: '42704', message: 'role "x" does not exist' })).toBe(false);
+    expect(mancaLaMigrazione({ code: 'PGRST205', message: "Could not find the table 'public.altra_tabella' in the schema cache" })).toBe(false);
+  });
+});

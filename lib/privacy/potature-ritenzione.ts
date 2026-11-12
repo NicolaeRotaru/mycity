@@ -499,8 +499,10 @@ export async function contaOrfaniKyc(admin: ClienteOrfani, adessoMs: number = Da
  */
 export function mancaLaMigrazione(errore: { message?: string; code?: string } | null | undefined): boolean {
   if (!errore) return false;
-  if (errore.code === 'PGRST205' || errore.code === 'PGRST202' || errore.code === '42P01' || errore.code === '42883') return true;
-  return /schema cache|does not exist/i.test(errore.message ?? '');
+  // Solo i codici di «relazione o funzione che non esiste», e solo se parlano degli oggetti della
+  // 171: una colonna mancante (42703, PGRST204), un ruolo o un permesso sono guasti veri.
+  const codice = errore.code === 'PGRST205' || errore.code === 'PGRST202' || errore.code === '42P01';
+  return codice && /documenti_iscrizione_a_meta|kyc_file_da_togliere/.test(errore.message ?? '');
 }
 
 /** I documenti di chi si ferma a metà iscrizione (migrazione 171), saltati se la 171 manca. */
