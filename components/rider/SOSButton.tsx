@@ -200,7 +200,7 @@ export default function SOSButton({ orderId }: Props) {
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
                   <Phone size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>
+                  <span>Si aprirà il tastierino con il <strong>112 (numero unico emergenze)</strong> già composto: la chiamata parte quando premi CHIAMA</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
