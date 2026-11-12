@@ -31,6 +31,8 @@ VALUES
 
 -- Un ordine importato a mano senza stato.
 UPDATE public.orders SET delivery_status = NULL WHERE id = 'a0600000-0000-0000-0000-000000000102';
+-- E un profilo senza ruolo (il CHECK della colonna lascia passare il NULL).
+UPDATE public.profiles SET role = NULL WHERE id = 'a0600000-0000-0000-0000-000000000002';
 
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"a0600000-0000-0000-0000-000000000003","role":"authenticated"}';
@@ -41,6 +43,10 @@ BEGIN
   BEGIN
     k := public.admin_kpi();
     INSERT INTO esiti VALUES ('admin_kpi risponde con un ordine senza stato', true, 'ordini_totali=' || (k->>'ordini_totali'));
+    INSERT INTO esiti VALUES (
+      'il profilo senza ruolo si conta in senza_ruolo',
+      coalesce((k->'utenti'->>'senza_ruolo')::int, 0) >= 1,
+      coalesce(k->>'utenti', 'null'));
     INSERT INTO esiti VALUES (
       'l''ordine senza stato si conta in SENZA_STATO',
       coalesce((k->'ordini_per_stato'->>'SENZA_STATO')::int, 0) >= 1,
