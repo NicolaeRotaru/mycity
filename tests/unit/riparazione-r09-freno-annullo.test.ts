@@ -7,7 +7,7 @@ import { veloceNonConfermataTemplate } from '@/lib/email/templates';
 describe('R09-001 · il freno non promette l’annullo degli ordini già confermati', () => {
   it('carrello misto: la frase dice che gli ordini già confermati non si annullano', () => {
     const f = fraseDelFreno({ fascia: 'Domani · 9:00–12:00', euro: 'compresa', totaleCents: 1800, giaConfermati: 1 });
-    expect(f).toMatch(/già confermato non si annulla più/);
+    expect(f).toMatch(/già confermato non si annulla più: arriva anche lui nella fascia Domani · 9:00–12:00\./);
     // la chiusura «puoi annullarlo…» resta l'ultima frase
     expect(f.trim().endsWith('finché il negozio non lo conferma.')).toBe(true);
   });

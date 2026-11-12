@@ -160,7 +160,7 @@ export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCent
   // l'ultima frase: l'email la sostituisce con la sua).
   const confermati = a.giaConfermati ?? 0;
   const giaFermi = confermati > 0
-    ? `${confermati === 1 ? 'L’ordine che un negozio ha già confermato non si annulla più' : `I ${confermati} ordini che i negozi hanno già confermato non si annullano più`}: arrivano anche loro nella fascia ${a.fascia}. `
+    ? `${confermati === 1 ? `L’ordine che un negozio ha già confermato non si annulla più: arriva anche lui nella fascia ${a.fascia}` : `I ${confermati} ordini che i negozi hanno già confermato non si annullano più: arrivano anche loro nella fascia ${a.fascia}`}. `
     : '';
   const fine = `${giaFermi}Se non ti va bene, puoi annullarlo senza costi dalla sua pagina finché il negozio non lo conferma.`;
   if (a.euro === 'compresa') return `${inizio}. La consegna veloce era già compresa nel prezzo, quindi il totale non cambia. ${fine}`;
