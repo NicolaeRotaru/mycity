@@ -28,4 +28,17 @@ describe('i documenti dicono i numeri del codice', () => {
   it('in testa a tutti e due l\'avviso che sono superati in parte', () => {
     for (const doc of [PIANO, CONTI]) expect(doc.slice(0, 600)).toMatch(/Documento superato in parte/);
   });
+
+  it('il business plan non ha piu\' 8%, PRO o 15 € al mese da nessuna parte', () => {
+    expect(PIANO).not.toMatch(/\b8%|€15\/mese|\bPRO\b/);
+  });
+
+  it('nei conti unitari ogni sezione che usa ancora PRO o 15 € al mese e\' segnata «Numeri vecchi»', () => {
+    const sezioni = CONTI.split(/\n(?=## )/);
+    for (const sez of sezioni) {
+      if (/€15\/mese|× €15|seller PRO|PRO \+|\(\d+ PRO|€2,00/.test(sez)) {
+        expect(sez, sez.split('\n')[0]).toMatch(/Numeri vecchi \(R04-023\)/);
+      }
+    }
+  });
 });

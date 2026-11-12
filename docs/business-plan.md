@@ -6,8 +6,8 @@
 > commissione **10% su tutto** (`MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), abbonamento dei negozi
 > **50 € al mese, oggi spento** (`ABBONAMENTO_NEGOZI_ACCESO = false` in `lib/funzioni-al-lancio.ts`),
 > **nessun piano gratuito** con commissione diversa, **mancia al fattorino vietata** (compenso fisso per
-> consegna, `app/rider/help/page.tsx`). Le righe qui sotto con quei numeri sono state corrette; le stime
-> derivate (ricavi, margini) erano calcolate sui numeri vecchi e vanno rifatte.
+> consegna, `app/rider/help/page.tsx`). Corrette le righe con quei numeri (stream, pricing,
+> rischi, domande aperte); le stime di ricavo derivate erano calcolate sui numeri vecchi e vanno rifatte.
 
 ---
 
@@ -196,7 +196,7 @@ Vedi documento dedicato: [`unit-economics.md`](unit-economics.md)
 | Rischio | Probabilità | Impatto | Mitigazione |
 |---|---|---|---|
 | Cold start fallisce (no traction) | Alta | Critico | GTM door-to-door manuale primi 30 negozi |
-| Glovo/JustEat entra Piacenza non-food | Media | Alto | Defensive: relationship lock-in con seller via subscription PRO |
+| Glovo/JustEat entra Piacenza non-food | Media | Alto | Defensive: relazione stretta con i negozi (abbonamento 50 €/mese previsto, oggi spento) |
 | Founder burnout | Alta | Critico | Time-box features, focus su acquisition, weekly time-off |
 | Frodi pagamento | Bassa | Medio | Stripe Radar + COD limit + KYC seller |
 | Bug critico in prod | Media | Medio | Sentry + UptimeRobot + restore drill |
@@ -238,8 +238,8 @@ Vedi documento dedicato: [`unit-economics.md`](unit-economics.md)
 
 ## 10. Decisioni chiave da prendere (P0)
 
-1. **Take rate finale**: 8% vs 10% vs 12% → test con 3 seller pilota
-2. **Subscription seller PRO**: lanciare day 1 o aspettare €1k MRR?
+1. **Take rate finale**: oggi 10% su tutto (`MARKETPLACE_FEE_BPS`); eventuali prove a 12% con 3 negozi pilota
+2. **Abbonamento negozi (50 €/mese)**: oggi spento (`ABBONAMENTO_NEGOZI_ACCESO`); quando accenderlo?
 3. **Welcome credit €5**: ridurre a €3? Test A/B quando hai volumes.
 4. **COD limit**: massimo ordine COD €100? €200? Frode trade-off.
 5. **Founder = rider o ricerca rider day 1**: dipende dalla velocità di onboarding seller.
