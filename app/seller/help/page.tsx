@@ -46,7 +46,7 @@ export default function SellerHelpPage() {
             <div className="space-y-3">
               {topic.items.map((it) => (
                 <details key={it.q} className="group">
-                  <summary className="cursor-pointer font-semibold text-ink-800 hover:text-primary-700 list-none flex items-start justify-between gap-2">
+                  <summary className="cursor-pointer font-semibold text-ink-800 hover:text-primary-700 list-none flex min-h-11 items-center justify-between gap-2 py-2">
                     <span>{it.q}</span>
                     <span className="text-ink-400 group-open:rotate-45 transition-transform text-xl leading-none">+</span>
                   </summary>
