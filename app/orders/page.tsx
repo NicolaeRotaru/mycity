@@ -401,15 +401,16 @@ export default function OrdersPage() {
                 </span>
               </div>
 
-              <div className="flex shrink-0 gap-2">
+              {/* R10-017 — Misura md (44 px): la sm (32 px) è troppo piccola per il pollice. */}
+              <div className="flex shrink-0 flex-wrap gap-3">
                 {trackable && (
-                  <Button variant="secondary" size="sm" icon={MapPin} href={`/orders/${order.id}`}>
+                  <Button variant="secondary" size="md" icon={MapPin} href={`/orders/${order.id}`}>
                     Traccia
                   </Button>
                 )}
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="md"
                   icon={RotateCcw}
                   onClick={() => handleReorder(order)}
                 >
