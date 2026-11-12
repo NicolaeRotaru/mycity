@@ -111,9 +111,33 @@ END$$;
 COMMENT ON FUNCTION public.alimento_senza_dichiarazioni_non_si_pubblica() IS
   'Reg. UE 1169/2011: allergeni e ingredienti devono esserci prima dell acquisto, anche a distanza. Dalla 363 vale per ogni radice con richiede_dichiarazioni_alimentari.';
 
+-- La radice di una categoria e se ha l'obbligo (risale i padri).
+CREATE OR REPLACE FUNCTION public.radice_con_obbligo_alimentare(p_categoria uuid)
+RETURNS boolean LANGUAGE sql STABLE SET search_path = public AS $$
+  WITH RECURSIVE risali AS (
+    SELECT id, parent_id, richiede_dichiarazioni_alimentari FROM public.categories WHERE id = p_categoria
+    UNION ALL
+    SELECT c.id, c.parent_id, c.richiede_dichiarazioni_alimentari
+      FROM public.categories c JOIN risali r ON c.id = r.parent_id
+  )
+  SELECT coalesce(bool_or(richiede_dichiarazioni_alimentari), false) FROM risali;
+$$;
+
+-- Collaudo del 12/11: oltre a slug e obbligo, anche lo spostamento e la
+-- cancellazione toglievano l'obbligo (il pane spostato sotto una radice senza
+-- obbligo si pubblicava senza allergeni). Da qui una categoria che sta sotto
+-- una radice con l'obbligo non esce da quella radice, e una categoria con
+-- l'obbligo non si cancella.
 CREATE OR REPLACE FUNCTION public.categoria_alimentare_non_si_spegne()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.richiede_dichiarazioni_alimentari THEN
+      RAISE EXCEPTION 'La categoria «%» non si cancella: da lei dipende l''obbligo di allergeni e ingredienti.', OLD.name
+        USING ERRCODE = '23514';
+    END IF;
+    RETURN OLD;
+  END IF;
   IF OLD.richiede_dichiarazioni_alimentari THEN
     IF NEW.slug IS DISTINCT FROM OLD.slug THEN
       RAISE EXCEPTION 'Lo slug di «%» non si cambia: da questa categoria dipende l''obbligo di allergeni e ingredienti.', OLD.name
@@ -124,6 +148,13 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
   END IF;
+  IF NEW.parent_id IS DISTINCT FROM OLD.parent_id
+     AND public.radice_con_obbligo_alimentare(OLD.id)
+     AND NOT NEW.richiede_dichiarazioni_alimentari
+     AND (NEW.parent_id IS NULL OR NOT public.radice_con_obbligo_alimentare(NEW.parent_id)) THEN
+    RAISE EXCEPTION '«%» sta sotto una categoria con l''obbligo di allergeni e ingredienti: non si sposta fuori.', OLD.name
+      USING ERRCODE = '23514';
+  END IF;
   RETURN NEW;
 END$$;
 
@@ -131,6 +162,6 @@ REVOKE ALL ON FUNCTION public.categoria_alimentare_non_si_spegne() FROM PUBLIC, 
 
 DROP TRIGGER IF EXISTS categoria_alimentare_non_si_spegne ON public.categories;
 CREATE TRIGGER categoria_alimentare_non_si_spegne
-  BEFORE UPDATE ON public.categories
+  BEFORE UPDATE OR DELETE ON public.categories
   FOR EACH ROW
   EXECUTE FUNCTION public.categoria_alimentare_non_si_spegne();

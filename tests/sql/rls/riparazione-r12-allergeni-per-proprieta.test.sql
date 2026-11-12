@@ -81,6 +81,31 @@ BEGIN
   END;
   INSERT INTO esiti VALUES ('4 l obbligo non si toglie con un update', NOT v_passato, '');
 
+  -- ⑥ una sottocategoria spostata fuori dalla radice con l'obbligo
+  BEGIN
+    UPDATE public.categories SET parent_id = 'e1230000-0000-0000-0000-0000000000c3'
+     WHERE id = 'e1230000-0000-0000-0000-0000000000c2';
+    v_passato := FOUND;
+  EXCEPTION WHEN check_violation THEN v_passato := false;
+  END;
+  INSERT INTO esiti VALUES ('6 il pane non esce da sotto la radice con l obbligo', NOT v_passato, '');
+
+  -- ⑦ la radice con l'obbligo non si cancella
+  BEGIN
+    DELETE FROM public.categories WHERE id = 'e1230000-0000-0000-0000-0000000000c1';
+    v_passato := FOUND;
+  EXCEPTION WHEN check_violation OR foreign_key_violation THEN v_passato := false;
+  END;
+  INSERT INTO esiti VALUES ('7 la radice con l obbligo non si cancella', NOT v_passato, '');
+
+  -- ⑧ le modifiche normali passano (nome della categoria)
+  BEGIN
+    UPDATE public.categories SET name = 'Gastronomia R12 rinominata' WHERE id = 'e1230000-0000-0000-0000-0000000000c1';
+    v_passato := FOUND;
+  EXCEPTION WHEN check_violation THEN v_passato := false;
+  END;
+  INSERT INTO esiti VALUES ('8 cambiare il nome resta libero', v_passato, '');
+
   -- ⑤ alimentari nasce con l'obbligo
   INSERT INTO esiti
   SELECT '5 la radice alimentari ha l obbligo', coalesce(bool_and(richiede_dichiarazioni_alimentari), false), count(*)::text
