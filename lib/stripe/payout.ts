@@ -1437,6 +1437,55 @@ async function laParteDeiRimborsiSenzaOrdine(
 }
 
 /**
+ * 12/11/2026 (R03-007) — LA QUOTA DA TRATTENERE AL NEGOZIO PAGATO A MANO.
+ *
+ * Al lancio i contanti li incassa Nicola e il lunedì fa lui il bonifico al negozio per le
+ * consegne della settimana prima (registro dei fatti, pagamenti.bonifico-contanti-al-negozio).
+ * Sul sito l'ordine resta HELD: per il codice il negozio non è stato pagato, e la sua quota del
+ * rimborso si scriveva solo sullo stesso ordine (`addebitaQuotaVenditoreSeNonPagato`), «così il
+ * pagamento successivo versa il residuo». Ma quel pagamento è già uscito a mano, e nessun avviso
+ * diceva a Nicola di trattenerla: su un ordine da 23 € MyCity perdeva 23 € invece di 5 e il
+ * negozio teneva 18 € che non gli spettavano.
+ *
+ * Adesso, su un ordine in contanti con la rimessa confermata (HELD), parte un avviso agli
+ * amministratori con negozio, cifra e ordine: «togli 18,00 € dal prossimo bonifico». Una volta
+ * per rimborso (`unaVoltaPer` sulla chiave). Un avviso che non parte non ferma il rimborso, già
+ * uscito: resta nel log, col testo.
+ */
+async function avvisaDellaQuotaDaTrattenere(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  quotaCents: number,
+  chiave: string,
+): Promise<void> {
+  let negozio = 'il negozio';
+  try {
+    const { data: o } = await admin.from('orders').select('seller_id').eq('id', orderId).maybeSingle();
+    const sellerId = (o as { seller_id?: string | null } | null)?.seller_id ?? null;
+    if (sellerId) {
+      const { data: p } = await admin.from('profiles').select('store_name').eq('id', sellerId).maybeSingle();
+      const nome = (p as { store_name?: string | null } | null)?.store_name;
+      if (nome) negozio = nome;
+    }
+  } catch {
+    // Il nome del negozio è solo per leggere meglio: l'avviso parte lo stesso, con l'ordine.
+  }
+  const cifra = formatPriceFromCents(quotaCents);
+  const titolo = `💶 Togli ${cifra} dal prossimo bonifico a ${negozio}`;
+  const testo =
+    `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
+    `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
+    'se non è ancora partito, versa solo il resto.';
+  try {
+    await notifyAdmins(titolo, testo, '/admin/cod-remittance', { unaVoltaPer: `quota-da-trattenere:${chiave}` });
+  } catch (err) {
+    logger.error('[refundOrder] avviso della quota da trattenere al negozio non partito', {
+      orderId, quotaCents, titolo, err,
+    });
+  }
+}
+
+/**
  * 1/11/2026 — LA PRENOTAZIONE CON LA RISPOSTA PERSA.
  *
  * `accumula_rimborso` puo' scrivere e perdere la risposta: prima `refundOrder`
@@ -1986,6 +2035,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
   const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
+    await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
+  }
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
