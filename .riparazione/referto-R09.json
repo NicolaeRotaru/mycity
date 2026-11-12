@@ -1,12 +1,12 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-12 15:12",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-12 15:40",
+  "finita": true,
+  "testa": "83471f6962e5a94654af674127f41de8bb729a19",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "nota": ""
+    "esito": "verde",
+    "nota": "typecheck, lint e 8937 prove verdi dopo gli ultimi commit."
   },
   "voci": [
     {
@@ -29,7 +29,11 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La frase del limite all'annullo c'era già (finché il negozio non lo conferma, e l'email con CHIUSURA_ANNULLO_EMAIL). Restava il carrello con più negozi: ora fraseDelFreno riceve quanti ordini spostati erano già confermati e lo dice prima della chiusura, nella campanella e nell'email.",
-      "chiave": "microcopy|il messaggio del freno promette «puoi annullare senza costi», ma appena il negozio accetta la fascia nuova l annullo non si può più"
+      "chiave": "microcopy|il messaggio del freno promette «puoi annullare senza costi», ma appena il negozio accetta la fascia nuova l annullo non si può più",
+      "verificato_da": "qa (subagente): 12 combinazioni euro×confermati, la chiusura resta l'ultima frase e l'email la sostituisce; conteggio degli stati verificato; 194 prove del freno verdi; nessun'altra promessa «senza costi» incondizionata. Trovata una concordanza sbagliata al singolare, corretta dopo.",
+      "commit_successivi": [
+        "df6f64f7"
+      ]
     },
     {
       "id": "R09-002",
@@ -69,7 +73,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il logo, sul computer e sul telefono, ha un'area di tocco invisibile (before:) di 12 px sopra e sotto. Per la pausa della striscia, il taglio overflow-hidden passa dalla barra al solo contenitore che scorre, e la sua area di tocco scende di 12 px sotto la striscia (z-10). Le voci delle categorie hanno min-h-11. Il CAP l'aveva già sistemato il 5/11. Misurato con elementFromPoint in Chromium sul sito acceso in locale (/shipping). A 390 px: logo 73x44, pausa 44x44, CAP 91x44, «Tutte le categorie» 182x44, «Tutti i negozi» 130x44. A 1280 px: logo 84x48, pausa 44x48, voci delle categorie 44 di altezza. Prima erano logo 20-24, pausa 32-36 e categorie 42.",
-      "chiave": "accessibilita|sul telefono sei pulsanti della testata sono sotto i 44 pixel: pausa della striscia, logo, cap e tre voci delle categorie"
+      "chiave": "accessibilita|sul telefono sei pulsanti della testata sono sotto i 44 pixel: pausa della striscia, logo, cap e tre voci delle categorie",
+      "verificato_da": "qa (subagente, elementFromPoint a 375/390/800/1000/1024/1280): l'area della pausa colpisce solo la pausa, non copre «Accedi» né il carrello, nessuno scorrimento orizzontale, la striscia resta tagliata. Regge."
     },
     {
       "id": "R09-004",
@@ -91,7 +96,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "leggiConfigurazioneHome ora lancia se la lettura di site_settings restituisce un errore, così unstable_cache non salva la home di fabbrica. loadHomeSite fa il ripiego sulla home di fabbrica solo per quella richiesta e scrive un avviso nei registri (logger.warn).",
-      "chiave": "api-backend|se il database ha un singhiozzo, la home torna per un minuto alla versione di fabbrica per tutti"
+      "chiave": "api-backend|se il database ha un singhiozzo, la home torna per un minuto alla versione di fabbrica per tutti",
+      "verificato_da": "qa (subagente): anche un'eccezione del client anonimo passa da unstable_cache senza essere salvata e la prende il try di loadHomeSite; un solo chiamante. Regge."
     },
     {
       "id": "R09-005",
@@ -139,7 +145,42 @@
       ],
       "insieme_a": [
         "R09-015"
+      ],
+      "verificato_da": "qa (subagente): con vistaDaQuery l'errore vince anche sui dati vecchi (lib/stato-vista.ts) e il vuoto compare solo a lettura riuscita con zero reclami."
+    },
+    {
+      "id": "R09-006",
+      "esito": "riparato",
+      "commit": "346e8147896b2bb4680a92a521d9404a4308110a",
+      "file_toccati": [
+        "app/seller/products/import/page.tsx",
+        "app/api/seller/products/import/route.ts",
+        "lib/products/righe-dal-file.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-caricamento-da-file-passa-dal-server.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-caricamento-da-file-passa-dal-server.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 346e8147896b2bb4680a92a521d9404a4308110a^ --file app/seller/products/import/page.tsx --prove tests/unit/riparazione-r09-caricamento-da-file-passa-dal-server.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova rotta POST /api/seller/products/import (withSellerAuthRateLimit). Con CARICAMENTO_DA_FILE_ACCESO spento risponde 503 e non scrive. Ricontrolla ogni riga e decide bozza o in vendita con la regola del modulo, in lib/products/righe-dal-file.ts (nuovo, usato anche dalla pagina): lo stato e il negozio mandati dal browser non contano. Scrive col client di chi chiama e lascia una riga in audit_logs (product.create, origine caricamento-da-file). La pagina non inserisce più dal browser: manda le righe alla rotta. Aggiornate sei prove esistenti del caricamento che importano la pagina: catturavano l'insert dal browser, ora catturano quello che la pagina manda alla rotta (stesse righe, stesse verifiche). La prova rimessa regge sulla pagina (uscita 0). Sui due file nuovi esce 3 (alla base non esistevano: la rotta assente era il difetto). Resta aperta la regola di scrittura dei prodotti larga, che è R09-002.",
+      "chiave": "architettura|il caricamento da file scrive i prodotti direttamente dal browser: non esiste una rotta in cui mettere il freno di caricamento_da_file_acceso",
+      "verificato_da": "qa (subagente): colonne in più scartate, freno a 503, tipi sbagliati di nome/descrizione danno 400; trovati category_id non controllato (500 invece di 400), numeri non numeri accettati, descrizione senza tetto e un commento troppo ottimista: corretti nel commit successivo, con prova.",
+      "commit_successivi": [
+        "b2498253"
       ]
+    },
+    {
+      "id": "R09-007",
+      "esito": "non_fatto",
+      "nota": "Come concordato con la regista. lib/db/migrazione-124.ts:139: un PGRST204 che nomina una colonna della 124 vale «schema indietro» anche quando la colonna c è e la cache di PostgREST è vecchia. Da qui non si distingue una cache vecchia da una migrazione mancante senza un viaggio in più su ogni scrittura con ripiego. La scheda è a bassa confidenza (ragionata, non provata), in produzione la 124 c è e il ripiego lascia un avviso (logger.warn). Se l avviso «schema indietro» compare in produzione a migrazione applicata, Nicola ricarica la cache dallo SQL editor di Supabase: NOTIFY pgrst, 'reload schema'.",
+      "chiave": "architettura|il codice pgrst204 su una colonna della 124 ora fa scattare il ripiego per tutti: con la cache dello schema di postgrest vecchia, la scrittura salta gross_total_cents anche a migrazione applicata"
     },
     {
       "id": "R09-008",
@@ -162,7 +203,43 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Se cade la scrittura di un ordine dopo che altri del carrello sono già passati alla fascia, i loro negozi e il fattorino vengono avvisati subito. Al giro dopo il freno riusa la fascia già scritta su un ordine fratello invece di ricalcolarla con l'ora nuova, e il cliente viene avvisato in quel giro. Aggiornata la prova esistente minori-s02-freno-della-veloce.test.ts (2367), che legge questo file: ora pretende la frase nuova dell'avviso.",
       "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
-      "cosa_resta": "Se l'ordine rimasto «Adesso» è già confermato dal suo negozio (non NEW), il freno non lo trova più (cerca solo i NEW) e resta agli amministratori: l'avviso lo dice. Il cliente è avvisato al giro dopo, non nello stesso giro del guasto."
+      "cosa_resta": "Se l'ordine rimasto «Adesso» è già confermato dal suo negozio (non NEW), il freno non lo trova più (cerca solo i NEW) e resta agli amministratori: l'avviso lo dice. Il cliente è avvisato al giro dopo, non nello stesso giro del guasto.",
+      "verificato_da": "qa (subagente): il rischio di scambiare una fascia scelta dal cliente non c'è (cassa e webhook scrivono una fascia sola per il carrello); trovato che la fascia del carrello si riusava anche se già finita: corretto nel commit successivo (si riusa solo se ancora in tempo).",
+      "commit_successivi": [
+        "414e5c4a"
+      ]
+    },
+    {
+      "id": "R09-009",
+      "esito": "non_codice",
+      "nota": "È un controllo sui dati veri. Nicola (o l AD) lancia in sola lettura su Supabase: select id, store_name from profiles where store_hours ?& array['sun','mon','tue','wed','thu','fri','sat'] and not jsonb_path_exists(store_hours, '$.*[*]'); Deve tornare vuoto, o solo negozi davvero in ferie: quelli, da quando esce la modifica, risultano chiusi sempre (lib/store-hours.ts orariImpostati).",
+      "chiave": "architettura|da controllare sui dati: un negozio che oggi ha salvato 7 giorni vuoti diventa chiuso sempre appena esce la modifica"
+    },
+    {
+      "id": "R09-010",
+      "esito": "scelta_di_nicola",
+      "domanda": "Ferie salvate col vecchio editor su 1-3 giorni (tutti vuoti) lasciano il negozio aperto a ogni ora: abbassiamo la soglia GIORNI_PER_UNA_SETTIMANA_SCRITTA (oggi 4, lib/store-hours.ts:261), sapendo che un negozio con 1-2 giorni vuoti per sbaglio diventerebbe chiuso sempre, oppure prima contiamo quei negozi (select id, store_name, store_hours from profiles where store_hours is not null) e li sistemiamo a mano?",
+      "chiave": "architettura|ferie salvate con l'editor di prima su 3 giorni o meno: il negozio resta aperto a qualunque ora"
+    },
+    {
+      "id": "R09-011",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "Insieme a deliverySlot mandare alle due rotte l istante in cui la cassa ha proposto la fascia (es. fasciaSceltaIl: new Date().toISOString(), preso quando si sceglie o si conferma la fascia)."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Prima di motivoFasciaRifiutata (~riga 904): se body.fasciaSceltaIl è valido e non più vecchio di 15 minuti, const fascia = fasciaAlGiornoDellOrdine(body.deliverySlot, body.fasciaSceltaIl, new Date()) (lib/ordini/fascia-leggibile.ts). Con null: conflitto «La fascia scelta è già passata». Altrimenti si giudica e si scrive la fascia riportata, come fa già il webhook della carta (lib/stripe/webhook/ordini.ts:280-293)."
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "Stessa cosa prima di motivoFasciaRifiutata (~riga 494). Il webhook la riporta già al pagamento."
+        }
+      ],
+      "nota": "In lib/store-hours.ts non serve niente: negozioPuoServire giudica la fascia che riceve, e lo strumento per riportarla al giorno giusto esiste già (fasciaAlGiornoDellOrdine), usato dal webhook. Manca solo che la cassa mandi quando ha proposto la fascia e che le due rotte la riportino.",
+      "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo"
     },
     {
       "id": "R09-012",
@@ -184,8 +261,12 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d96baa7c3336d7fa9ce156d8a29cd9b5c71bcdb^ --file lib/queries/cruscotto-oggi.ts,app/admin/today/page.tsx --prove tests/unit/riparazione-r09-negozi-in-attesa.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il conteggio dei negozi in attesa filtra approval_status = 'pending' (come la pagina degli utenti a cui porta il riquadro) invece di is_approved = false, che contava anche i sospesi. L'etichetta del riquadro passa da «Seller pending» a «Negozi in attesa».",
-      "chiave": "dati-analytics|nel cruscotto di oggi i negozi «in attesa» comprendono anche quelli sospesi"
+      "cosa_ho_fatto": "Il conteggio usa approval_status = 'pending' invece di is_approved = false (che contava i sospesi), su negozi e fattorini come la lista /admin/users?role=pending a cui porta il riquadro; l'etichetta è «Richieste in attesa».",
+      "chiave": "dati-analytics|nel cruscotto di oggi i negozi «in attesa» comprendono anche quelli sospesi",
+      "verificato_da": "qa (subagente): la lista /admin/users?role=pending conta anche i fattorini (siPuoModerare): corretto nel commit successivo, il riquadro «Richieste in attesa» conta negozi e fattorini in attesa, come la lista.",
+      "commit_successivi": [
+        "c1c0e063"
+      ]
     },
     {
       "id": "R09-013",
@@ -207,7 +288,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "In nonSiSposta, se la scadenza dell'ordine è già passata il freno non scrive né al cliente né agli amministratori e restituisce 'scaduto' (contato in giaScaduti): l'ordine lo annulla expire-stale-orders (ogni 30 minuti), che avvisa lui.",
-      "chiave": "deploy-sre|il giorno che si riaccendono i lavori, il cliente di un ordine veloce vecchio riceve una scadenza già passata"
+      "chiave": "deploy-sre|il giorno che si riaccendono i lavori, il cliente di un ordine veloce vecchio riceve una scadenza già passata",
+      "verificato_da": "qa (subagente): nel funzionamento normale la scadenza della veloce è sempre ≥ nascita+20 min e il freno vede l'ordine a +10/15: nessun avviso perso; regge."
     },
     {
       "id": "R09-014",
@@ -229,7 +311,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Le ore delle tappe in «Stato dell'ordine» si scrivono con timeZone Europe/Rome (FUSO_PIACENZA), giorno/mese e ore:minuti, senza secondi. Prima seguivano il fuso del telefono.",
-      "chiave": "frontend-ux|nel dettaglio dell'ordine gli orari delle tappe seguono il fuso del telefono invece dell'ora di piacenza"
+      "chiave": "frontend-ux|nel dettaglio dell'ordine gli orari delle tappe seguono il fuso del telefono invece dell'ora di piacenza",
+      "verificato_da": "qa (subagente): nella pagina c'è un solo toLocale e usa ORA_DELLA_TAPPA; la fascia passa già da fasciaLeggibile col fuso di Piacenza. Regge."
     },
     {
       "id": "R09-015",
@@ -254,6 +337,10 @@
       "chiave": "layout-responsive|nei reclami, un link incollato dal cliente fa scorrere di lato tutta la pagina sul telefono, e oltre 100 reclami il conteggio si ferma a 100 senza dirlo",
       "insieme_a": [
         "R09-005"
+      ],
+      "verificato_da": "qa (subagente): con errore e dati vecchi segnali di rischio e avviso del limite restano nascosti; vuoto corretto anche con «Tutti». Trovati «vs», «auto», «Min 10 caratteri» e la data senza fuso: corretti nel commit successivo.",
+      "commit_successivi": [
+        "02defa34"
       ]
     },
     {
@@ -276,8 +363,12 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f776588bc668a1d862404af2da79eca7e119c192^ --file components/Navbar.tsx,components/LocationPill.tsx --prove tests/unit/riparazione-r09-ricerca-della-testata-su-tablet.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Fra md e lg la pillola dell'indirizzo mostra solo il CAP. «Registrati», «Ordini», «Consegne» e «Admin» diventano icone, col nome solo per i lettori di schermo. Il campo di ricerca ha min-w-0 flex-1 e lo spazio fra gli elementi scende a gap-3. Misurato in Chromium sul sito acceso in locale, pagina /shipping: il campo passa da 152 px a 357 px a 768, 820 e 1023 px (l'obiettivo era almeno 280). A 390 resta 366 px.",
-      "chiave": "layout-responsive|su tablet e telefono girato la ricerca nella testata è così stretta che si legge solo «ce»"
+      "cosa_ho_fatto": "Fra md e lg la pillola dell'indirizzo mostra solo il CAP. «Registrati», «Ordini», «Consegne» e «Admin» diventano icone, col nome solo per i lettori di schermo. Il campo di ricerca ha min-w-0 flex-1 e lo spazio fra gli elementi scende a gap-3. Misurato in Chromium sul sito acceso in locale, pagina /shipping: il campo passa da 152 px a 357 px a 768, 820 e 1023 px (l'obiettivo era almeno 280). A 390 resta 366 px. Dopo il collaudo: aria-label completo sulla pillola e «Registrati» icona a 44x44.",
+      "chiave": "layout-responsive|su tablet e telefono girato la ricerca nella testata è così stretta che si legge solo «ce»",
+      "verificato_da": "qa (subagente, Playwright su /shipping): campo 357 px a 800 e 1000, 348 a 1024, 604 a 1280, nessuno scorrimento orizzontale, da 1024 tornano le parole. Trovati il nome accessibile della pillola ridotto a «29121» e «Registrati» icona a 38x34: corretti nel commit successivo (aria-label completo, min-h-11 min-w-11).",
+      "commit_successivi": [
+        "7ad56390"
+      ]
     },
     {
       "id": "R09-017",
@@ -299,7 +390,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Se fetch cade (rete assente) la pagina dice «Non riesco a collegarmi: controlla la connessione e riprova.» invece di «Failed to fetch». Una risposta che non è JSON non fa più crollare la lettura. L'errore si mostra con ErrorState e il suo pulsante Riprova, che rilegge (refetch).",
-      "chiave": "microcopy|se la rete cade, la pagina del controllo del credito di un rimborso mostra «failed to fetch» e nessun modo di riprovare"
+      "chiave": "microcopy|se la rete cade, la pagina del controllo del credito di un rimborso mostra «failed to fetch» e nessun modo di riprovare",
+      "verificato_da": "qa (subagente): errore di rete in italiano, JSON illeggibile coperto, Riprova collegato a refetch. Costante spostata sotto gli import (R09-varie). Regge."
     },
     {
       "id": "R09-018",
@@ -322,13 +414,14 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Nella tabella le intestazioni sono in italiano (Negozio, Posizione, Budget al giorno, Visualizzazioni, Clic su 100 visualizzazioni). Le posizioni sono tradotte (home_top → «In cima alla home», ecc.) e la percentuale ha la virgola.",
       "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
-      "cosa_resta": "I quattro riquadri in cima («Impressions», «CTR medio 3.55%») li scrive lib/admin/vista-delle-campagne.ts, che non è mio.",
+      "cosa_resta": "I quattro riquadri in cima («Impressions», «CTR medio 3.55%») li scrive lib/admin/vista-delle-campagne.ts, che non è mio. Accanto alla posizione resta lo slug grezzo della categoria (es. «· alimentari»), minore.",
       "serve_file_altrui": [
         {
           "file": "lib/admin/vista-delle-campagne.ts",
           "modifica": "Riquadri (~righe 241-252): etichetta `Impressions${coda}` → `Visualizzazioni${coda}`; `${parziale ? 'CTR' : 'CTR medio'}` → `${parziale ? 'Clic su 100 visualizzazioni' : 'Clic su 100 visualizzazioni (media)'}`; valore `${numeri.ctr.toFixed(2)}%` → `${numeri.ctr.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`. Aggiornare i-riquadri-degli-sponsorizzati-non-chiamano-totale-un-pezzo.test.ts se fissa le etichette."
         }
-      ]
+      ],
+      "verificato_da": "qa (subagente): tabella in italiano; restano i riquadri in cima (file altrui, già dichiarato) e lo slug grezzo della categoria accanto alla posizione."
     },
     {
       "id": "R09-019",
@@ -350,7 +443,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il livello si scrive con TIER_META[a.tier].label (Bronzo/Argento/Oro/Platino) da lib/loyalty.ts. Le due letture lanciano l'errore invece di scartarlo. Se una cade, la pagina mostra ErrorState con Riprova invece di «0 / 0 sbloccati · 0% completato».",
-      "chiave": "microcopy|nella pagina dei traguardi il livello compare in inglese («gold») e se la lettura fallisce dice «0 su 0»"
+      "chiave": "microcopy|nella pagina dei traguardi il livello compare in inglese («gold») e se la lettura fallisce dice «0 su 0»",
+      "verificato_da": "qa (subagente): con zero badge la pagina mostra «0 / N» (nessun caricamento infinito); prima di userId resta il caricamento; livelli da TIER_META. Regge."
     },
     {
       "id": "R09-020",
@@ -371,8 +465,12 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b3fcb0ea2324d6a25ea170b84849b97be5b6acce^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r09-guadagni-del-fattorino.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sotto le cifre del riquadro «Compensi sul tuo IBAN» una riga dice quando parte il bonifico di una consegna con carta, presa da fraseAttesaBonifico (la stessa fonte della pagina Aiuto). Dice anche che senza IBAN collegato i compensi restano in attesa.",
-      "chiave": "microcopy|la pagina guadagni del fattorino non dice quando arriva il bonifico"
+      "cosa_ho_fatto": "Nel riquadro «Compensi sul tuo IBAN» una riga dice che i compensi in arrivo passano sul conto di pagamento circa un'ora dopo la consegna (fraseAttesaBonifico), che in banca servono alcuni giorni lavorativi e che serve l'IBAN collegato; «(consegne con carta)» ora dice anche del credito MyCity sopra i contanti.",
+      "chiave": "microcopy|la pagina guadagni del fattorino non dice quando arriva il bonifico",
+      "verificato_da": "qa (subagente): NON reggeva: la frase diceva «il bonifico parte circa un'ora dopo», la formula già tolta ai negozi (in banca i soldi arrivano giorni dopo), e «(consegne con carta)» non spiegava il resto coperto dal credito. Corretto nel commit successivo: passaggio sul conto di pagamento entro un'ora, in banca alcuni giorni lavorativi, serve l'IBAN.",
+      "commit_successivi": [
+        "6e3ea5d8"
+      ]
     },
     {
       "id": "R09-021",
@@ -395,7 +493,11 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nelle risposte «rider» diventa «fattorino», «evaderlo» diventa «prepararlo» e «compensato sul payout successivo» diventa «tolto dal prossimo pagamento che ti facciamo». La frase sulle sponsorizzate compare solo con ABBONAMENTO_NEGOZI_ACCESO. Le domande (<summary>) hanno min-h-11 e un po' di spazio in verticale. Resta «Pronto per il rider» fra virgolette, perché è l'etichetta vera del pulsante (lib/order-status.ts, non mio): è in nuovi_difetti_visti.",
-      "chiave": "microcopy|nell'aiuto per i negozi restano «payout» ed «evaderlo», e una risposta parla di prodotti sponsorizzati che oggi sono sospesi"
+      "chiave": "microcopy|nell'aiuto per i negozi restano «payout» ed «evaderlo», e una risposta parla di prodotti sponsorizzati che oggi sono sospesi",
+      "verificato_da": "qa (subagente): parole sistemate e sponsorizzate condizionate; trovata la promessa «riceve rimborso automatico» anche per chi paga alla consegna: corretta nel commit successivo.",
+      "commit_successivi": [
+        "774fd006"
+      ]
     },
     {
       "id": "R09-022",
@@ -417,7 +519,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il riquadro «Guide approfondite (prossimamente) · academy con video tutorial» diventa «Non trovi la risposta? Per qualunque dubbio scrivi all'assistenza.»",
-      "chiave": "microcopy|l'aiuto per i negozi promette un'«academy con video tutorial» che nessun piano prevede"
+      "chiave": "microcopy|l'aiuto per i negozi promette un'«academy con video tutorial» che nessun piano prevede",
+      "verificato_da": "qa (subagente): «academy» e «prossimamente» non compaiono più nella pagina. Regge."
     },
     {
       "id": "R09-023",
@@ -439,7 +542,35 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nel riepilogo dell'ordine, con spedizione e consegna a zero la riga si chiama VOCE_CONSEGNA («Consegna MyCity») e la cifra è «Gratis», come in cassa (OrderSummary). Prima era «Spedizione GRATUITA». Aggiornate tre prove esistenti che importano riepilogo-ordine e fissavano la scritta vecchia: la-consegna-da-3-euro-ha-un-nome-solo-e-non-e-mai-gratis.test.tsx, i-conti-dell-ordine-non-tornavano.test.ts e minori-s02-riepilogo.test.ts. Dove dicevano «niente GRATUITA» ora dicono «niente GRATUITA né Gratis», quindi non si indeboliscono.",
-      "chiave": "microcopy|con la consegna regalata la cassa la chiama «consegna mycity · gratis» e la pagina dell'ordine «spedizione gratuita»: due nomi per la stessa riga"
+      "chiave": "microcopy|con la consegna regalata la cassa la chiama «consegna mycity · gratis» e la pagina dell'ordine «spedizione gratuita»: due nomi per la stessa riga",
+      "verificato_da": "qa (subagente): le tre prove modificate sono più strette, non più deboli; le due pagine dell'ordine usano solo riepilogoOrdine/cifraDellaVoce; un commento vecchio aggiornato (R09-varie). Regge."
+    },
+    {
+      "id": "R09-024",
+      "esito": "parziale",
+      "commit": "6f467414eb205c710f49e1de53c12c0d5f2c1a31",
+      "file_toccati": [
+        "app/product/[id]/opengraph-image.tsx",
+        "components/ShareCartButton.tsx",
+        "app/profile/loyalty/page.tsx",
+        "messages/it.json"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-euro-all-italiana.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-euro-all-italiana.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6f467414eb205c710f49e1de53c12c0d5f2c1a31^ --file app/product/[id]/opengraph-image.tsx,components/ShareCartButton.tsx,app/profile/loyalty/page.tsx,messages/it.json --prove tests/unit/riparazione-r09-euro-all-italiana.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'anteprima del prodotto (opengraph-image), il messaggio di «Condividi il carrello» e i punti fedeltà usano formatPrice («12,50 €») invece di «€»+toFixed(2). I filtri del prezzo in messages/it.json mettono l'euro dopo la cifra. Nei miei file shipping/page.tsx, HomeSectionRenderer.tsx e lib/email/templates.ts l'euro scritto a mano non c'era già più (resta solo nei commenti).",
+      "chiave": "microcopy|in tanti punti l'euro è ancora scritto all'inglese: «€12.50», «€0 – €500+», «€ 2,50»",
+      "cosa_resta": "Restano circa 48 righe con l'euro scritto a mano fuori dai miei file (grep \"€ ?[0-9]|€${\" in app/components/lib, senza commenti). Le più visibili: app/profile/referral, app/sign-up, app/profile/gift-cards, components/seller/SubscriptionBanner, e le rotte AI/gift-card/reject/cash-confirm. Lo cura un'altra sessione col proprio territorio.",
+      "verificato_da": "qa (subagente): formatPrice usa solo Intl e funziona sul runtime edge; il carattere dell'anteprima ha NBSP, € e virgola; en.json intatto, chiavi it/en allineate a tutti i livelli. Regge sui file toccati."
     },
     {
       "id": "R09-025",
@@ -461,7 +592,11 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il rimborso di un'altra causa ha già una frase sua (non è «già reso»): c'era prima. Restavano due cose. L'avviso «fermo a metà» diceva «Già fatto in questo giro» anche per un rimborso di un giro di prima: ora dice «Lo stato adesso». L'avviso «fermo prima di cominciare» diceva solo «niente»: ora dice, ordine per ordine, se risultano già resi soldi sulla carta (dalla riga letta in questo giro) e che non vanno resi di nuovo.",
-      "chiave": "microcopy|l avviso «freno fermo a metà» elenca cosa ha fatto quel giro e non lo stato vero: un rimborso di un altra causa compare come «già reso sulla carta», e al secondo guasto può dire «niente» con l euro già reso"
+      "chiave": "microcopy|l avviso «freno fermo a metà» elenca cosa ha fatto quel giro e non lo stato vero: un rimborso di un altra causa compare come «già reso sulla carta», e al secondo guasto può dire «niente» con l euro già reso",
+      "verificato_da": "qa (subagente): trovati due casi in cui «nessun rimborso» era falso (euro tornato sul credito, euro su un ordine fratello) e un rimborso d'altra causa presentato come euro della veloce: frasi corrette nel commit successivo (dicono solo quello che la riga letta sa, e chiedono di guardare l'ordine/il carrello).",
+      "commit_successivi": [
+        "b8f6f9cb"
+      ]
     }
   ],
   "nuovi_difetti_visti": [
@@ -471,13 +606,29 @@
       "severita": "minore",
       "file": "lib/order-status.ts:45",
       "descrizione": "etichettaPronto(false) restituisce «Pronto per il rider», e ASSIGNED si chiama «Rider in arrivo» (:52). L aiuto per i negozi deve citare l etichetta vera, quindi «rider» resta lì finché non cambia l etichetta."
+    },
+    {
+      "titolo": "Nella pagina dei punti restano «streak», «referral» e «checkout»",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/profile/loyalty/page.tsx:245-252",
+      "descrizione": "Visto dal collaudo di R09-024 nelle stesse righe; i punti sono spenti al lancio."
+    },
+    {
+      "titolo": "Se la rilettura dei reclami cade a finestra aperta, la decisione resta su dati vecchi",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/admin/disputes/page.tsx (detail)",
+      "descrizione": "La finestra della decisione legge `detail` da disputes, che resta quello vecchio quando la lettura cade."
     }
   ],
   "domande_per_nicola": [
-    "R09-002: la regola di scrittura dei prodotti troppo larga si chiude in due passi, in quest ordine: prima la rotta del salvataggio prodotto (app/api/seller/products/[id]) scrive col client amministrativo dopo il controllo del proprietario, poi una migrazione nella fascia 330 toglie la regola. Va bene questo ordine, e in quale onda?"
+    "R09-002: la regola di scrittura dei prodotti troppo larga si chiude in due passi, in quest ordine: prima la rotta del salvataggio prodotto (app/api/seller/products/[id]) scrive col client amministrativo dopo il controllo del proprietario, poi una migrazione nella fascia 330 toglie la regola. Va bene questo ordine, e in quale onda?",
+    "R09-010: le ferie salvate col vecchio editor su 1-3 giorni lasciano il negozio aperto a ogni ora. Abbassiamo la soglia di 4 giorni scritti (lib/store-hours.ts:261), o prima contiamo e sistemiamo a mano quei negozi?",
+    "R09-009: lanciare in sola lettura la select sui negozi con sette giorni vuoti (nel referto, voce R09-009). Se torna qualcuno che non è in ferie, quel negozio risulta chiuso sempre."
   ],
   "conto": {
-    "agenti": 0,
-    "nota": ""
+    "agenti": 5,
+    "nota": "cinque subagenti di collaudo avversariale (R09-001 da solo, poi gruppi da ≤6 voci)."
   }
 }
