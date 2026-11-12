@@ -81,6 +81,16 @@ describe('R09-006 · il caricamento da file passa da una rotta col freno', () =>
     expect(stato.scritte).toHaveLength(0);
   });
 
+  it('al massimo 500 righe per caricamento: con 501 la rotta dice no e non scrive niente', async () => {
+    stato.acceso = true;
+    const { status } = await manda(Array.from({ length: 501 }, () => RIGA));
+    expect(status).toBe(400);
+    expect(stato.scritte).toHaveLength(0);
+    const { status: giusto } = await manda(Array.from({ length: 500 }, () => RIGA));
+    expect(giusto).toBe(200);
+    expect(stato.scritte).toHaveLength(500);
+  });
+
   it('la pagina non scrive più i prodotti dal browser', () => {
     const pagina = readFileSync('app/seller/products/import/page.tsx', 'utf8');
     expect(pagina).not.toMatch(/from\('products'\)\.insert\(/);
