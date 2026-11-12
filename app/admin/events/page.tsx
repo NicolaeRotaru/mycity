@@ -162,6 +162,13 @@ export default function AdminEventsPage() {
     ended: 'bg-cream-100 text-ink-600',
     cancelled: 'bg-accent-100 text-accent-800',
   };
+  // 12/11/2026 (R02-020) — Lo stato si leggeva in inglese grezzo («scheduled», «live»…).
+  const STATUS_LABEL: Record<EventRow['status'], string> = {
+    scheduled: 'In programma',
+    live: 'In corso',
+    ended: 'Concluso',
+    cancelled: 'Annullato',
+  };
 
   return (
     <div className="space-y-6">
@@ -183,7 +190,7 @@ export default function AdminEventsPage() {
       )}
 
       {/* DESKTOP: tabella */}
-      <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-hidden">
+      <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-cream-50 text-ink-600">
             <tr>
@@ -199,11 +206,11 @@ export default function AdminEventsPage() {
               <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500">{isError ? '—' : 'Nessun evento.'}</td></tr>
             ) : events.map((ev) => (
               <tr key={ev.id} className="hover:bg-cream-50">
-                <td className="px-4 py-3 font-semibold text-ink-900">{ev.title}</td>
+                <td className="px-4 py-3 font-semibold text-ink-900 max-w-xs break-words [overflow-wrap:anywhere]">{ev.title}</td>
                 <td className="px-4 py-3 text-ink-600">{new Date(ev.starts_at).toLocaleString('it-IT')}</td>
                 <td className="px-4 py-3 text-ink-600">{new Date(ev.ends_at).toLocaleString('it-IT')}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{ev.status}</span>
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{STATUS_LABEL[ev.status] ?? ev.status}</span>
                 </td>
                 <td className="px-4 py-3 text-right space-x-2">
                   {ev.status === 'scheduled' && (
@@ -251,8 +258,8 @@ export default function AdminEventsPage() {
         ) : events.map((ev) => (
           <div key={ev.id} className="bg-white border border-cream-300 rounded-xl p-4">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="font-semibold text-ink-900">{ev.title}</h3>
-              <span className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{ev.status}</span>
+              <h3 className="min-w-0 break-words [overflow-wrap:anywhere] font-semibold text-ink-900">{ev.title}</h3>
+              <span className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{STATUS_LABEL[ev.status] ?? ev.status}</span>
             </div>
             <p className="text-xs text-ink-500 mt-1">
               {new Date(ev.starts_at).toLocaleString('it-IT')} → {new Date(ev.ends_at).toLocaleString('it-IT')}
