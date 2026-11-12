@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import type { CartItem } from '@/lib/cart';
 import { trackShareCart } from '@/lib/analytics/events';
+import { formatPrice } from '@/lib/format';
 
 type Props = {
   items: CartItem[];
@@ -40,7 +41,7 @@ export default function ShareCartButton({ items }: Props) {
     .slice(0, 8)
     .map((i) => `· ${i.name}${i.variantLabel ? ` · ${i.variantLabel}` : ''} × ${i.quantity}`)
     .join('\n');
-  const text = `Ciao! Ho preparato una lista della spesa su MyCity:\n\n${itemList}${items.length > 8 ? `\n... e altri ${items.length - 8}` : ''}\n\nTotale: €${total.toFixed(2)}\n\nApri il link per vederla:\n${shareUrl}`;
+  const text = `Ciao! Ho preparato una lista della spesa su MyCity:\n\n${itemList}${items.length > 8 ? `\n... e altri ${items.length - 8}` : ''}\n\nTotale: ${formatPrice(total)}\n\nApri il link per vederla:\n${shareUrl}`;
 
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
   const emailUrl = `mailto:?subject=${encodeURIComponent('Lista della spesa MyCity')}&body=${encodeURIComponent(text)}`;

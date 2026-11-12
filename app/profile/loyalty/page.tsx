@@ -17,6 +17,7 @@ import {
   nextTier,
   pointsToEurValue,
   POINTS_REDEEM_RATE,
+  POINTS_REDEEM_VALUE_CENTS,
   type LoyaltyAccount,
 } from '@/lib/loyalty';
 import { queryKeys } from '@/lib/queries/keys';
@@ -143,7 +144,7 @@ export default function LoyaltyPage() {
           {/* 31/10/2026 — Con i punti spenti (migrazione 168) i punti non diventano sconto: niente cifra in euro. */}
           <p className="text-sm opacity-90 mt-1">
             {INVITI_E_PUNTI_ACCESI
-              ? <>= €{eurValue.toFixed(2)} di sconto disponibili (1 buono ogni {POINTS_REDEEM_RATE} punti)</>
+              ? <>= {formatPrice(eurValue)} di sconto disponibili (1 buono ogni {POINTS_REDEEM_RATE} punti)</>
               : <>I punti non sono ancora attivi: quelli che hai restano tuoi.</>}
           </p>
 
@@ -183,7 +184,7 @@ export default function LoyaltyPage() {
           <h2 className="font-serif font-bold text-lg text-ink-900">Converti in credito</h2>
         </div>
         <p className="text-sm text-ink-600 mb-3">
-          {POINTS_REDEEM_RATE} punti = €5 di credito MyCity, spendibile negli ordini con pagamento alla consegna.
+          {POINTS_REDEEM_RATE} punti = {formatPrice(POINTS_REDEEM_VALUE_CENTS / 100)} di credito MyCity, spendibile negli ordini con pagamento alla consegna.
           {creditoNonLetto
             ? <> Il credito che hai gi&agrave; non riusciamo a leggerlo adesso.</>
             : walletCents > 0 && <> Hai già <strong>{formatPrice(walletCents / 100)}</strong> di credito.</>}
@@ -242,12 +243,12 @@ export default function LoyaltyPage() {
         </h2>
         <ul className="space-y-2.5 text-sm text-ink-700">
           {[
-            { n: '+1 pt', t: 'per ogni €1 speso negli ordini' },
+            { n: '+1 pt', t: `per ogni ${formatPrice(1)} speso negli ordini` },
             { n: '+20 pt', t: 'a 7 giorni di visite consecutive' },
             { n: '+100 pt', t: 'a 30 giorni di streak' },
             { n: '+500 pt', t: 'a 100 giorni di streak' },
             { n: '+50 pt', t: 'per ogni amico che si iscrive con il tuo codice referral' },
-            { n: '€5', t: `puoi convertire ${POINTS_REDEEM_RATE} punti in un buono spendibile al checkout` },
+            { n: formatPrice(POINTS_REDEEM_VALUE_CENTS / 100), t: `puoi convertire ${POINTS_REDEEM_RATE} punti in un buono spendibile al checkout` },
           ].map((r) => (
             <li key={r.t} className="flex items-baseline gap-3">
               <span className="text-primary-700 font-bold w-20 shrink-0">{r.n}</span>

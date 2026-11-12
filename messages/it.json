@@ -102,9 +102,9 @@
     "noResultsDescription": "Non abbiamo trovato questo prodotto. Ecco alcune alternative dai negozi di Piacenza.",
     "didYouMean": "Forse cercavi",
     "alsoInteresting": "Potrebbe interessarti",
-    "filterPrice": "Fino a €{max}",
-    "filterPriceRange": "€{min} – €{max}",
-    "filterPriceMin": "Da €{min}",
+    "filterPrice": "Fino a {max} €",
+    "filterPriceRange": "{min} € – {max} €",
+    "filterPriceMin": "Da {min} €",
     "filterCategory": "Categoria: {name}",
     "chip": {
       "freeShipping": "Da 30 € in su",
