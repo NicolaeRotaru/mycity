@@ -24,7 +24,10 @@ const FINESTRA_SOS_MS = 10 * 60_000;
 export const POST = withAuthRateLimit(
   { name: 'rider-sos-avvisa', max: 5, windowMs: 60_000 },
   async ({ user, profile }) => {
-    if (profile.role !== 'rider') return ApiErrors.forbidden('Solo i fattorini possono mandare un SOS');
+    // Solo un fattorino approvato: e' lo stesso confine delle pagine /rider.
+    if (profile.role !== 'rider' || profile.is_approved !== true) {
+      return ApiErrors.forbidden('Solo i fattorini approvati possono mandare un SOS');
+    }
     if (!isPushConfigured()) {
       logger.error('[sos] push non configurato: l\'SOS resta solo nel pannello degli amministratori', { rider: user.id });
       return ApiErrors.unavailable('Le notifiche push non sono configurate');
@@ -53,6 +56,17 @@ export const POST = withAuthRateLimit(
       return ApiErrors.internal('SOS non letto');
     }
     if (!sos) return ApiErrors.notFound('Nessun SOS aperto negli ultimi minuti');
+
+    // Una volta sola per SOS: il segno si scrive prima di mandare, e la chiave primaria rifiuta
+    // il secondo (23505). Se il segno non si riesce a scrivere per altri motivi, si avvisa lo
+    // stesso: in un'emergenza un push di troppo costa meno di uno mancato.
+    const { error: errSegno } = await admin
+      .from('operational_alert_log')
+      .insert({ alert_key: `SOS_PUSH|${sos.id}`, last_sent_at: new Date().toISOString() });
+    if (errSegno && (errSegno as { code?: string }).code === '23505') {
+      return apiSuccess({ amministratori: 0, consegnati: 0, giaAvvisato: true });
+    }
+    if (errSegno) logger.warn('[sos] segno «gia\' avvisato» non scritto: si avvisa lo stesso', { message: errSegno.message });
 
     const { data: admins, error: errAdmin } = await admin.from('profiles').select('id').eq('role', 'admin');
     if (errAdmin) {

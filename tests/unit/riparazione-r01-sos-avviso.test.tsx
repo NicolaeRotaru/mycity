@@ -19,7 +19,8 @@ const stato = vi.hoisted(() => ({
   insert: vi.fn(),
   getSession: vi.fn(),
   push: vi.fn(),
-  profilo: { role: 'rider' as string },
+  profilo: { role: 'rider' as string, approvato: true },
+  segni: new Set<string>(),
   sos: { id: 'sos-1', order_id: 'ordine-abcdef12-x', triggered_at: '2026-11-12T10:00:00Z' } as Record<string, unknown> | null,
   admin: [{ id: 'admin-1' }, { id: 'admin-2' }],
   filtriSos: [] as Array<[string, unknown]>,
@@ -38,7 +39,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   withAuthRateLimit: (_o: unknown, h: (ctx: unknown) => unknown) => (req: Request) =>
-    h({ user: { id: 'rider-1' }, profile: { role: stato.profilo.role, is_approved: true }, req }),
+    h({ user: { id: 'rider-1' }, profile: { role: stato.profilo.role, is_approved: stato.profilo.approvato }, req }),
 }));
 vi.mock('@/lib/push/send', () => ({
   isPushConfigured: () => true,
@@ -64,6 +65,15 @@ vi.mock('@/lib/supabase/server', () => ({
       if (tabella === 'profiles') {
         return { select: () => ({ eq: async () => ({ data: stato.admin, error: null }) }) };
       }
+      if (tabella === 'operational_alert_log') {
+        return {
+          insert: async (r: { alert_key: string }) => {
+            if (stato.segni.has(r.alert_key)) return { error: { code: '23505', message: 'duplicate key' } };
+            stato.segni.add(r.alert_key);
+            return { error: null };
+          },
+        };
+      }
       throw new Error(`tabella inattesa ${tabella}`);
     },
   }),
@@ -76,6 +86,8 @@ import SOSButton from '@/components/rider/SOSButton';
 const accesi: Root[] = [];
 beforeEach(() => {
   stato.profilo.role = 'rider';
+  stato.profilo.approvato = true;
+  stato.segni = new Set<string>();
   stato.filtriSos = [];
   stato.push.mockReset();
   stato.push.mockResolvedValue({ delivered: 1, total: 1 });
@@ -110,6 +122,22 @@ describe('R01-004 · la rotta dell\'SOS manda subito il push agli amministratori
     const r = await chiama();
     expect(r.status).toBe(403);
     expect(stato.push).not.toHaveBeenCalled();
+  });
+
+  it('un fattorino non approvato non fa suonare nessun telefono', async () => {
+    stato.profilo.approvato = false;
+    const r = await chiama();
+    expect(r.status).toBe(403);
+    expect(stato.push).not.toHaveBeenCalled();
+  });
+
+  it('due chiamate sullo stesso SOS mandano il push una volta sola', async () => {
+    const prima = await chiama();
+    const seconda = await chiama();
+    expect(prima.status).toBe(200);
+    expect(seconda.status).toBe(200);
+    expect(stato.push).toHaveBeenCalledTimes(2); // due amministratori, un giro solo
+    expect(await seconda.json()).toMatchObject({ data: { giaAvvisato: true } });
   });
 
   it('senza un SOS aperto negli ultimi minuti non parte niente', async () => {
