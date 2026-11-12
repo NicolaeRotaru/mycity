@@ -1,7 +1,7 @@
 import { controllaTettoSpesaAi, registraSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiError } from '@/lib/api/responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
@@ -31,6 +31,9 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api
 export const runtime = 'nodejs';
 
 const MAX_PRODUCTS = 200;
+
+/** Un lavoro in questi stati e' ancora aperto: pagato, e non ancora chiuso dal venditore. */
+const STATI_APERTI = ['submitting', 'processing', 'ready'];
 
 type Body = { operation?: string; targetLang?: string };
 
@@ -66,6 +69,33 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   const admin = getAdminSupabase();
+
+  // 12/11/2026 (R04-025 · R04-013) — UN SECONDO LAVORO PAGAVA DI NUOVO.
+  // Con un lavoro ancora aperto (in invio, in corso o pronto da rivedere) un
+  // secondo avvio mandava un altro lotto e impegnava di nuovo la spesa, mentre
+  // il primo restava li', pagato. Adesso si rifiuta e si dice quale e' aperto:
+  // la pagina lo riprende invece di farne partire un altro.
+  const { data: aperti, error: errAperti } = await admin
+    .from('catalog_ai_jobs')
+    .select('id, status')
+    .eq('seller_id', user.id)
+    .in('status', STATI_APERTI)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (errAperti) {
+    logger.error('catalog-batch start: lettura dei lavori aperti fallita', { sellerId: user.id, status: errAperti.code });
+    return ApiErrors.badGateway('Non sono riuscito a controllare i lavori in corso. Riprova.');
+  }
+  const aperto = (aperti ?? [])[0] as { id: string; status: string } | undefined;
+  if (aperto) {
+    return apiError(
+      409,
+      'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.',
+      'CONFLICT',
+      { jobId: aperto.id, status: aperto.status },
+    );
+  }
+
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([
     admin
       .from('products')
