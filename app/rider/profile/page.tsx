@@ -12,6 +12,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Field';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import {
   Bike, Car, MapPin, ChevronRight, Star, Clock, FileText, HelpCircle, Package,
@@ -44,7 +45,7 @@ export default function RiderProfilePage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url')
+        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -144,33 +145,48 @@ export default function RiderProfilePage() {
 
   // Compliance / documenti: stato calcolato dalle scadenze reali.
   const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('it-IT') : null);
+  /**
+   * 12/11/2026 (R03-018) — UN DOCUMENTO SCADUTO E' «SCADUTO», NON «IN SCADENZA».
+   * «In scadenza» valeva per tutto quello che scadeva entro 60 giorni, comprese le date già
+   * passate: la polizza scaduta il 31/10 diceva «Scade 31/10/2026 · In scadenza» in giallo. Ora
+   * una data passata (giorno di Piacenza) è «Scaduto» in rosso, e il fattorino legge che non può
+   * prendere consegne finché non carica il documento nuovo (il database lo ferma: migrazione 270).
+   * E il documento d'identità appena caricato non è «Verificato» finché l'esame non è fatto.
+   */
+  const oggi = giornoPiacenza();
+  const scaduto = (d: string | null) => !!d && d.slice(0, 10) < oggi;
   const soon = (d: string | null) => !!d && (new Date(d).getTime() - Date.now()) < 60 * 86400000; // <60gg
-  type DocStatus = 'ok' | 'soon' | 'missing';
+  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing';
+  const statoDellaScadenza = (d: string | null): DocStatus => (!d ? 'missing' : scaduto(d) ? 'expired' : soon(d) ? 'soon' : 'ok');
+  const testoDellaScadenza = (d: string) =>
+    scaduto(d) ? `Scaduta il ${fmtDate(d)} · non puoi prendere consegne` : `Scade ${fmtDate(d)}`;
+  const approvato = (p?.is_approved as boolean | null) === true;
   const docs: { Icon: LucideIcon; label: string; sub: string; status: DocStatus }[] = [
     {
       Icon: IdCard, label: 'Patente di guida',
-      sub: licenseExpires ? `Scade ${fmtDate(licenseExpires)}` : 'Da caricare',
-      status: !licenseExpires ? 'missing' : soon(licenseExpires) ? 'soon' : 'ok',
+      sub: licenseExpires ? testoDellaScadenza(licenseExpires) : 'Da caricare',
+      status: statoDellaScadenza(licenseExpires),
     },
     {
       Icon: ShieldCheck, label: 'Assicurazione RC',
-      sub: insuranceExpires ? `Scade ${fmtDate(insuranceExpires)}` : 'Da caricare',
-      status: !insuranceExpires ? 'missing' : soon(insuranceExpires) ? 'soon' : 'ok',
+      sub: insuranceExpires ? testoDellaScadenza(insuranceExpires) : 'Da caricare',
+      status: statoDellaScadenza(insuranceExpires),
     },
     {
       Icon: FileCheck, label: 'Documento identità',
-      sub: idUploaded ? 'Verificato' : 'Da caricare',
-      status: idUploaded ? 'ok' : 'missing',
+      sub: idUploaded ? (approvato ? 'Verificato' : 'In attesa di verifica') : 'Da caricare',
+      status: idUploaded ? (approvato ? 'ok' : 'soon') : 'missing',
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',
-      sub: haccpExpires ? `Scade ${fmtDate(haccpExpires)}` : 'Facoltativo (food)',
-      status: haccpExpires ? (soon(haccpExpires) ? 'soon' : 'ok') : 'missing',
+      sub: haccpExpires ? testoDellaScadenza(haccpExpires) : 'Facoltativo (food)',
+      status: statoDellaScadenza(haccpExpires),
     },
   ];
   const STATUS_META: Record<DocStatus, { bg: string; text: string; label: string; Icon: LucideIcon }> = {
     ok:      { bg: 'bg-olive-50',     text: 'text-olive-700',     label: 'OK',          Icon: CircleCheck },
     soon:    { bg: 'bg-accent-50',    text: 'text-accent-700',    label: 'In scadenza', Icon: Clock },
+    expired: { bg: 'bg-secondary-50', text: 'text-secondary-700', label: 'Scaduto',     Icon: CircleAlert },
     missing: { bg: 'bg-secondary-50', text: 'text-secondary-600', label: 'Mancante',    Icon: CircleAlert },
   };
 
@@ -266,10 +282,10 @@ export default function RiderProfilePage() {
                   <p className="text-sm font-bold text-ink-900">{d.label}</p>
                   <p className="text-xs text-ink-500">{d.sub}</p>
                 </div>
-                {d.status === 'missing' ? (
+                {d.status === 'missing' || d.status === 'expired' ? (
                   <Link
                     href="/rider/onboarding"
-                    className={`shrink-0 rounded-full px-3 py-[7px] text-xs font-bold text-white ${d.status === 'missing' ? 'bg-secondary-600 hover:bg-secondary-700' : ''}`}
+                    className={`shrink-0 rounded-full px-3 py-[7px] text-xs font-bold text-white ${d.status === 'missing' || d.status === 'expired' ? 'bg-secondary-600 hover:bg-secondary-700' : ''}`}
                   >
                     Carica
                   </Link>
