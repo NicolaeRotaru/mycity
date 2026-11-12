@@ -19,7 +19,8 @@ import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 // 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
 // viene poi trattenuta davvero.
-import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE } from '@/app/seller/earnings/commissione';
+// R10-005 — Il prezzo dell'abbonamento arriva da dove si calcola l'addebito.
+import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -46,8 +47,6 @@ import { useTranslations } from 'next-intl';
  * compilazione "tutta insieme" tipica del primo onboarding.
  */
 
-/** Il prezzo dell'abbonamento detto in un posto solo di questa pagina. */
-const PREZZO_ABBONAMENTO_MESE = '€50';
 
 const SellerSchema = z.object({
   // Contatti operativi

@@ -64,10 +64,11 @@ const testo = (html: string) =>
 const VIETATO = /zero commission|apri gratis|nessun costo mensile|nessuna commissione mensile|commissioni mensili/i;
 
 async function attese() {
-  const { COMMISSIONE_PERCENTO } = await import('@/app/seller/earnings/commissione');
+  const { COMMISSIONE_PERCENTO, PREZZO_ABBONAMENTO_MESE } = await import('@/app/seller/earnings/commissione');
   const { ABBONAMENTO_NEGOZI_ACCESO } = await import('@/lib/funzioni-al-lancio');
   const commissione = `${COMMISSIONE_PERCENTO}% solo su quello che vendi tramite MyCity, IVA inclusa`;
-  const canone = ABBONAMENTO_NEGOZI_ACCESO ? 'Abbonamento €50/mese' : 'Nessun canone finché non incassi con MyCity';
+  // R10-005 — Il prezzo si legge dalla costante dell'addebito, non scritto a mano.
+  const canone = ABBONAMENTO_NEGOZI_ACCESO ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese` : 'Nessun canone finché non incassi con MyCity';
   return { commissione, canone, acceso: ABBONAMENTO_NEGOZI_ACCESO };
 }
 
@@ -119,7 +120,7 @@ describe('ai negozi diciamo un prezzo solo', () => {
 
   it('«Chi siamo»: niente «0€ di commissioni mensili»', async () => {
     const { default: AboutPage } = await import('@/app/about/page');
-    const { COMMISSIONE_PERCENTO } = await import('@/app/seller/earnings/commissione');
+    const { COMMISSIONE_PERCENTO, PREZZO_ABBONAMENTO_MESE } = await import('@/app/seller/earnings/commissione');
     const t = testo(renderToStaticMarkup(await AboutPage()));
     expect(t).not.toMatch(VIETATO);
     expect(t).not.toMatch(/(^|\s)0\s?€/);

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ABBONAMENTO_CENTESIMI_MESE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
@@ -21,7 +22,8 @@ export const runtime = 'nodejs';
  * mano sul Dashboard Stripe.
  * Rate limit: 10 / 10 min per utente.
  */
-const SELLER_SUBSCRIPTION_CENTS = 5000; // €50,00 / mese
+// R10-005 — L'importo viene da app/seller/earnings/commissione.ts, lo stesso che leggono le pagine.
+const SELLER_SUBSCRIPTION_CENTS = ABBONAMENTO_CENTESIMI_MESE;
 /** R10-019 — Le richieste dello stesso negozio dentro questa finestra ricevono la stessa cassa. */
 const FINESTRA_CASSA_MS = 10 * 60_000;
 
@@ -106,7 +108,7 @@ export const POST = withAuthRateLimit(
               recurring: { interval: 'month' },
               product_data: {
                 name: 'Abbonamento venditore MyCity',
-                description: 'Accesso alla piattaforma per i venditori · €50/mese',
+                description: `Accesso alla piattaforma per i venditori · ${PREZZO_ABBONAMENTO_MESE}/mese`,
               },
             },
           },

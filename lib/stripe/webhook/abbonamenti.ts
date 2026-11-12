@@ -19,6 +19,7 @@ import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { scritturaFacoltativa, scritturaObbligatoria } from './esito';
 
 /** Mappa lo stato Stripe della subscription sul nostro enum profili. */
@@ -167,7 +168,7 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
       category: 'order',
       user_id: sellerId,
       title: '✅ Abbonamento attivo',
-      body: 'Il tuo abbonamento venditore (€50/mese) è attivo. Grazie!',
+      body: `Il tuo abbonamento venditore (${PREZZO_ABBONAMENTO_MESE}/mese) è attivo. Grazie!`,
       link: '/seller/dashboard',
     }),
     'avviso abbonamento attivo',

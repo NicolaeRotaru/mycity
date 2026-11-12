@@ -9,7 +9,7 @@ import { apiErrorMessage } from '@/lib/errors';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 // 31/8/2026 (R037) — La percentuale non si scrive qui: arriva da dove viene poi
 // trattenuta sul venduto, cosi' non puo' piu' restare indietro da sola.
-import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
+import { COMMISSIONE_DEL_PERCENTO, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 // 184 — `json.error` funziona solo se il server risponde `{error:'testo'}`.
 // Le rotte rispondono `{ok:false, error:{code,message}}`: `json.error` era
 // un oggetto, quindi falso-y mai e stringa mai, e finiva sempre nel
@@ -59,13 +59,13 @@ export function SubscriptionBanner({ status }: { status: string | null | undefin
             </p>
             <p className="text-sm text-ink-600">
               {isPastDue
-                ? 'L’ultimo pagamento dell’abbonamento (€50/mese) non è andato a buon fine. Aggiorna il metodo di pagamento per non perdere visibilità.'
-                : `L’abbonamento venditore costa €50/mese. Attivalo per supportare la piattaforma — la commissione sulle vendite è ${COMMISSIONE_DEL_PERCENTO}.`}
+                ? `L’ultimo pagamento dell’abbonamento (${PREZZO_ABBONAMENTO_MESE}/mese) non è andato a buon fine. Aggiorna il metodo di pagamento per non perdere visibilità.`
+                : `L’abbonamento venditore costa ${PREZZO_ABBONAMENTO_MESE}/mese. Attivalo per supportare la piattaforma — la commissione sulle vendite è ${COMMISSIONE_DEL_PERCENTO}.`}
             </p>
           </div>
         </div>
         <Button onClick={start} loading={loading} icon={CreditCard} className="shrink-0">
-          {isPastDue ? 'Aggiorna pagamento' : 'Attiva €50/mese'}
+          {isPastDue ? 'Aggiorna pagamento' : `Attiva ${PREZZO_ABBONAMENTO_MESE}/mese`}
         </Button>
       </div>
     </div>
