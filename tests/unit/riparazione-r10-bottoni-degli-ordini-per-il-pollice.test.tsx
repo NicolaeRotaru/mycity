@@ -38,7 +38,10 @@ describe('R10-017 — «Traccia» e «Riordina» si prendono col pollice', () =>
     const prezzo = [...s.radice.querySelectorAll<HTMLElement>('span')].find((el) => /12,00/.test(el.textContent ?? ''));
     const bloccoSinistro = prezzo?.parentElement ?? null;
     s.smonta();
-    expect(bloccoSinistro?.className ?? '', 'il blocco del prezzo si stringe a zero sotto i bottoni').toMatch(/(^|\s)basis-(56|\[)/);
+    // Collaudo K03: con 4 miniature + «+N» anche una base di 14rem non bastava fino a 600 px.
+    // Miniature e prezzo prendono la riga intera (i bottoni vanno sotto) fino ai computer larghi.
+    expect(bloccoSinistro?.className ?? '', 'miniature e prezzo dividono la riga coi bottoni sul telefono').toMatch(/(^|\s)basis-full(\s|$)/);
+    expect(bloccoSinistro?.firstElementChild?.className ?? '', 'le miniature escono dalla card invece di andare a capo').toMatch(/(^|\s)flex-wrap(\s|$)/);
     expect(comandi.map((c) => (c.textContent ?? '').trim()).sort()).toEqual(['Riordina', 'Traccia']);
     for (const c of comandi) {
       expect(c.className, `«${c.textContent?.trim()}» è sotto i 44 px`).toMatch(/min-h-\[44px\]/);

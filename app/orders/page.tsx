@@ -369,11 +369,13 @@ export default function OrdersPage() {
 
             {/* FOOTER: striscia thumbnail + totale + azioni */}
             <div className="px-5 pb-4 flex flex-wrap items-center gap-3 border-t border-cream-100 pt-3">
-              {/* R10-017, revisione qa — Con i bottoni da 44 px e questo blocco a base 0 i bottoni non
-                  andavano mai a capo: miniature e prezzo si stringevano sotto «Traccia». Con una base
-                  di 14rem, quando lo spazio non basta, sono i bottoni ad andare sulla riga sotto. */}
-              <div className="flex min-w-0 flex-1 basis-56 items-center gap-2">
-                <div className="flex gap-1.5">
+              {/* R10-017, revisione qa e collaudo K03 — Con i bottoni da 44 px sulla stessa riga, le
+                  miniature (fino a 4 più «+N»: ~264 px) e il prezzo finivano sotto «Traccia», fino a
+                  600 px di larghezza. Adesso miniature e prezzo occupano la riga intera e i bottoni
+                  vanno sotto; sui computer larghi (lg) tornano accanto, dove lo spazio c'è. E le
+                  miniature, sul telefono più stretto, vanno a capo invece di uscire dalla card. */}
+              <div className="flex min-w-0 basis-full flex-wrap items-center gap-2 lg:flex-1 lg:basis-auto">
+                <div className="flex flex-wrap gap-1.5">
                   {thumbs.map((it) => {
                     const img = fotoDellaRigaOrdine(it);
                     return (
