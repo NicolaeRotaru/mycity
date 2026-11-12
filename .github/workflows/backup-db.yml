@@ -660,11 +660,28 @@ jobs:
           # Adesso finiscono in un file, si contano e i primi si scrivono nel
           # riepilogo, cosi' chi legge «si riapre» vede anche cosa non e' tornato.
           ERRORI_RIPRISTINO="$(mktemp)"
-          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia.dump 2>> "$ERRORI_RIPRISTINO" || true
+          # R01-012 — PRIMA L'IMPALCATURA DI SUPABASE, POI GLI UTENTI, POI IL RESTO.
+          # Su un PostgreSQL nudo non ci sono i ruoli (anon, authenticated) ne'
+          # auth.uid(): ogni regola di accesso che li nomina cadeva al ripristino,
+          # e la prova non se ne accorgeva. L'impalcatura e' la stessa delle prove
+          # del database (tests/sql/harness/00_shim_supabase.sql); la sua tabella
+          # auth.users finta si toglie, perche' quella vera arriva col dump degli
+          # utenti, e gli utenti vanno PRIMA, cosi' i profili trovano a chi puntare.
+          psql -q -v ON_ERROR_STOP=1 -d prova_ripristino -f tests/sql/harness/00_shim_supabase.sql
+          psql -q -v ON_ERROR_STOP=1 -d prova_ripristino -c "DROP TABLE IF EXISTS auth.users CASCADE;"
           # #234 — Gli utenti stanno in un dump a parte: senza, il database
           # ripristinato non ha nessuno a cui appartengano gli ordini.
-          psql -q -d prova_ripristino -c "CREATE SCHEMA IF NOT EXISTS auth;"
-          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia_utenti.dump 2>> "$ERRORI_RIPRISTINO" || true
+          # Gli utenti in due tempi: tutto tranne i trigger prima del resto (le chiavi
+          # servono ai profili), i trigger dopo, quando le funzioni di public che
+          # chiamano ci sono.
+          pg_restore -l /tmp/copia_utenti.dump > /tmp/utenti.lista
+          grep -v ' TRIGGER ' /tmp/utenti.lista > /tmp/utenti-senza-trigger.lista || true
+          grep ' TRIGGER ' /tmp/utenti.lista > /tmp/utenti-trigger.lista || true
+          pg_restore --no-owner --no-acl --use-list=/tmp/utenti-senza-trigger.lista --dbname=prova_ripristino /tmp/copia_utenti.dump 2>> "$ERRORI_RIPRISTINO" || true
+          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia.dump 2>> "$ERRORI_RIPRISTINO" || true
+          if [ -s /tmp/utenti-trigger.lista ]; then
+            pg_restore --no-owner --no-acl --use-list=/tmp/utenti-trigger.lista --dbname=prova_ripristino /tmp/copia_utenti.dump 2>> "$ERRORI_RIPRISTINO" || true
+          fi
           fine=$(date +%s)
           echo "⏱  ripristino in $((fine - inizio)) secondi"
           N_ERRORI="$(grep -c 'error:' "$ERRORI_RIPRISTINO" || true)"
@@ -674,7 +691,8 @@ jobs:
               echo "### Errori di pg_restore durante la prova ($N_ERRORI)"
               echo ""
               echo '```'
-              grep 'error:' "$ERRORI_RIPRISTINO" | head -n 20
+              # sed legge tutto: con head, oltre ~64KB di errori grep morirebbe di SIGPIPE (uscita 141).
+              grep 'error:' "$ERRORI_RIPRISTINO" | sed -n '1,20p' || true
               echo '```'
               echo ""
             } >> "$GITHUB_STEP_SUMMARY"
@@ -721,8 +739,12 @@ jobs:
             echo "::error::La copia si e' riaperta ma queste tabelle tornano SENZA regole di accesso (RLS spenta):$senza_rls"
             exit 1
           fi
-          if [ "${regole:-0}" -eq 0 ]; then
-            echo "::error::La copia si e' riaperta senza nessuna regola di accesso (pg_policies vuota): un ripristino cosi' esporrebbe tutti i dati."
+          # Non «piu' di zero»: se cade una regola su due la tabella resta con la RLS
+          # accesa ma senza le regole giuste. Sullo schema delle migrazioni sono 132
+          # (12/11/2026); la soglia lascia margine per regole tolte apposta.
+          REGOLE_MINIME=100
+          if [ "${regole:-0}" -lt "$REGOLE_MINIME" ]; then
+            echo "::error::La copia si e' riaperta con solo ${regole:-0} regole di accesso (ne servono almeno $REGOLE_MINIME): un ripristino cosi' perde i permessi. Guarda gli errori di pg_restore nel riepilogo."
             exit 1
           fi
 

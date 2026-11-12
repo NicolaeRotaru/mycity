@@ -27,7 +27,7 @@ function scriptDelPasso(nome: string): string | null {
 }
 const passo = { run: scriptDelPasso('Riaprila su un database vuoto, e cronometra') };
 
-function lancia(senzaRls: string, regole: string) {
+function lancia(senzaRls: string, regole: string, erroriPerRestore = 1) {
   const scena = mkdtempSync(join(tmpdir(), 'r01-ripr-'));
   try {
     const bin = join(scena, 'bin');
@@ -41,7 +41,13 @@ function lancia(senzaRls: string, regole: string) {
       chmodSync(join(bin, nome), 0o755);
     };
     finto('gpg', 'out=""; prev=""; for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done; echo x > "$out"');
-    finto('pg_restore', 'echo "pg_restore: error: role \\"supabase_admin\\" does not exist" >&2; exit 1');
+    finto('pg_restore', [
+      'for a in "$@"; do',
+      '  if [ "$a" = "-l" ]; then echo "1; 2 3 TABLE auth users postgres"; echo "4; 5 6 TRIGGER auth users on_auth_user_created postgres"; exit 0; fi',
+      'done',
+      `for i in $(seq 1 ${erroriPerRestore}); do echo "pg_restore: error: role \\"supabase_admin\\" does not exist ($i)" >&2; done`,
+      'exit 1',
+    ].join('\n'));
     finto('psql', [
       'q="$*"',
       'case "$q" in',
@@ -77,13 +83,29 @@ describe('R01-012 · la prova di ripristino guarda le regole di accesso e gli er
   it('nessuna regola di accesso tornata fa fallire la prova', () => {
     const { r } = lancia('', '0');
     expect(r.status).not.toBe(0);
-    expect(r.stdout).toMatch(/senza nessuna regola di accesso/);
+    expect(r.stdout).toMatch(/solo 0 regole di accesso/);
+  });
+
+  it('meta\' delle regole perse fa fallire la prova, non solo zero', () => {
+    const { r } = lancia('', '36');
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toMatch(/solo 36 regole di accesso/);
+  });
+
+  it('migliaia di errori di pg_restore non fanno morire il passo prima dei controlli', () => {
+    const { r, riepilogo } = lancia('', '132', 2000);
+    expect(r.status, r.stderr).toBe(0);
+    expect(riepilogo).toMatch(/Errori di pg_restore durante la prova \(\d+\)/);
+  });
+
+  it('prima di ripristinare monta l\'impalcatura di Supabase (ruoli e auth.uid)', () => {
+    expect(passo.run).toMatch(/00_shim_supabase\.sql/);
   });
 
   it('con le regole tornate passa, e gli errori di pg_restore finiscono nel riepilogo', () => {
     const { r, riepilogo } = lancia('', '120');
     expect(r.status, r.stderr).toBe(0);
-    expect(riepilogo).toMatch(/Errori di pg_restore durante la prova \(2\)/);
+    expect(riepilogo).toMatch(/Errori di pg_restore durante la prova \(3\)/);
     expect(riepilogo).toMatch(/supabase_admin/);
     expect(riepilogo).toMatch(/La copia si riapre: \*\*sì\*\*/);
   });
