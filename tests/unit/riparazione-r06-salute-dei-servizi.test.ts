@@ -16,6 +16,8 @@ const stato = vi.hoisted(() => ({
   /** Quante volte risponde male l'accesso prima di rispondere bene. */
   accessoCadute: 0,
   chiamateAccesso: 0,
+  /** Il database risponde con un errore (non con un'eccezione). */
+  dbGiu: false,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -33,13 +35,16 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 // Il catalogo legge con la chiave pubblica, e il database risponde.
 vi.mock('@/lib/supabase/anonimo', () => ({
-  creaClientAnonimo: () => ({ from: () => ({ select: () => ({ limit: async () => ({ error: null }) }) }) }),
+  creaClientAnonimo: () => ({
+    from: () => ({ select: () => ({ limit: async () => ({ error: stato.dbGiu ? { message: 'connection refused' } : null }) }) }),
+  }),
 }));
 
 beforeEach(() => {
   stato.avvisi.length = 0;
   stato.accessoCadute = 0;
   stato.chiamateAccesso = 0;
+  stato.dbGiu = false;
   vi.stubEnv('RESEND_API_KEY', 're_finta');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://progetto.supabase.co');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'chiave-anonima');
@@ -137,5 +142,13 @@ describe('R06-023 · la pagina pubblica non annuncia guasti che non ci sono', ()
     const email = s.services.find((x) => x.id === 'email')!;
     expect(email.detail).toBe('API non raggiungibile (tempo scaduto)');
     expect(JSON.stringify(stato.avvisi)).toContain('aborted due to timeout');
+  });
+
+  it('un database che risponde con un errore e\' giu\', e lo dice nei log', async () => {
+    stato.dbGiu = true;
+    const s = await salute();
+    expect(s.services.find((x) => x.id === 'db')!.status, 'Un errore del database passava per «operativo»').toBe('outage');
+    expect(s.services.find((x) => x.id === 'realtime')!.status).toBe('outage');
+    expect(JSON.stringify(stato.avvisi)).toContain('connection refused');
   });
 });

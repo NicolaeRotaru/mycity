@@ -151,6 +151,34 @@ export default function AdminDashboard() {
     retry: false,
   });
 
+  /**
+   * 12/11/2026 (R06-023) — LA CONFIGURAZIONE CHE MANCA, DETTA A CHI AMMINISTRA.
+   *
+   * La pagina pubblica «Stato servizi» non elenca piu' le variabili mancanti
+   * (era un messaggio per lo sviluppatore davanti ai clienti): il dettaglio sta
+   * qui, solo per l'admin. Una lettura caduta non mostra niente.
+   */
+  const { data: configurazione } = useQuery({
+    queryKey: ['admin', 'configurazione'],
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async (): Promise<{ chiaveDiServizio: boolean; titolareCompleto: boolean; titolareMancanti: string | null } | null> => {
+      try {
+        const res = await fetch('/api/admin/configurazione');
+        if (!res.ok) return null;
+        const j = (await res.json()) as { data?: { chiaveDiServizio?: boolean; titolareCompleto?: boolean; titolareMancanti?: string | null } };
+        if (!j.data) return null;
+        return {
+          chiaveDiServizio: j.data.chiaveDiServizio === true,
+          titolareCompleto: j.data.titolareCompleto === true,
+          titolareMancanti: j.data.titolareMancanti ?? null,
+        };
+      } catch {
+        return null;
+      }
+    },
+  });
+
   // 31/10/2026 — Qui c'era `if (isLoading || !stats) return <LoadingState />`. Quando `admin_kpi`
   // cade, `isLoading` torna falso ma `stats` resta undefined: la pagina rientrava sullo scheletro
   // a ogni disegno, per sempre, senza dire che la lettura era fallita né dare un «Riprova». È la
@@ -212,6 +240,20 @@ export default function AdminDashboard() {
         title="Panoramica"
         sub="Tutti i numeri del marketplace, in tempo reale."
       />
+
+      {configurazione && (!configurazione.chiaveDiServizio || !configurazione.titolareCompleto) && (
+        <section role="status" className="rounded-xl border-2 border-accent-200 bg-accent-50 p-4">
+          <p className="font-bold text-accent-800">Configurazione da completare</p>
+          <ul className="mt-1 list-disc pl-5 text-sm text-ink-700">
+            {!configurazione.chiaveDiServizio && (
+              <li>Chiave di servizio di Supabase non configurata: cancellazioni, registro visite e lavori notturni non possono scrivere.</li>
+            )}
+            {!configurazione.titolareCompleto && (
+              <li>Dati del titolare incompleti{configurazione.titolareMancanti ? `: ${configurazione.titolareMancanti}` : ''}</li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {/* Salute del marketplace */}
       <section>
