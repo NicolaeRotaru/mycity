@@ -33,7 +33,12 @@ describe('R10-017 — «Traccia» e «Riordina» si prendono col pollice', () =>
     const comandi = [...s.radice.querySelectorAll<HTMLElement>('a, button')].filter((el) =>
       /^(Traccia|Riordina)$/.test((el.textContent ?? '').trim()),
     );
+    // Revisione qa: il blocco con miniature e prezzo non deve avere base 0, o i bottoni (che non si
+    // stringono) non vanno mai a capo e coprono il prezzo sul telefono.
+    const prezzo = [...s.radice.querySelectorAll<HTMLElement>('span')].find((el) => /12,00/.test(el.textContent ?? ''));
+    const bloccoSinistro = prezzo?.parentElement ?? null;
     s.smonta();
+    expect(bloccoSinistro?.className ?? '', 'il blocco del prezzo si stringe a zero sotto i bottoni').toMatch(/(^|\s)basis-(56|\[)/);
     expect(comandi.map((c) => (c.textContent ?? '').trim()).sort()).toEqual(['Riordina', 'Traccia']);
     for (const c of comandi) {
       expect(c.className, `«${c.textContent?.trim()}» è sotto i 44 px`).toMatch(/min-h-\[44px\]/);

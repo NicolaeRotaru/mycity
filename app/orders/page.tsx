@@ -369,7 +369,10 @@ export default function OrdersPage() {
 
             {/* FOOTER: striscia thumbnail + totale + azioni */}
             <div className="px-5 pb-4 flex flex-wrap items-center gap-3 border-t border-cream-100 pt-3">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* R10-017, revisione qa — Con i bottoni da 44 px e questo blocco a base 0 i bottoni non
+                  andavano mai a capo: miniature e prezzo si stringevano sotto «Traccia». Con una base
+                  di 14rem, quando lo spazio non basta, sono i bottoni ad andare sulla riga sotto. */}
+              <div className="flex min-w-0 flex-1 basis-56 items-center gap-2">
                 <div className="flex gap-1.5">
                   {thumbs.map((it) => {
                     const img = fotoDellaRigaOrdine(it);
