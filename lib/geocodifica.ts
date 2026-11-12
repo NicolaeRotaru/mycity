@@ -43,7 +43,9 @@ export function nomeDelComune(s: string | null | undefined): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+    .trim()
+    // «Piacenza PC», «Piacenza (PC)»: la sigla della provincia non fa parte del comune.
+    .replace(/ pc$/, '');
 }
 
 type RisultatoNominatim = {
@@ -73,7 +75,10 @@ export function risultatoAffidabile(r: RisultatoNominatim, citta: string, cap: s
   if (!comuni.includes(voluto)) return false;
   const capScritto = cap.replace(/\D/g, '');
   const capTrovato = (a.postcode ?? '').replace(/\D/g, '');
-  if (capScritto.length === 5 && capTrovato.length === 5 && capScritto.slice(0, 4) !== capTrovato.slice(0, 4)) {
+  // Un CAP che finisce in «00» è quello generico di una città (29100 per Piacenza): vale per
+  // tutti i CAP della città, quindi si confrontano solo le prime tre cifre.
+  const cifre = capScritto.endsWith('00') ? 3 : 4;
+  if (capScritto.length === 5 && capTrovato.length === 5 && capScritto.slice(0, cifre) !== capTrovato.slice(0, cifre)) {
     return false;
   }
   return true;
@@ -88,8 +93,10 @@ export function urlDellaRicerca(indirizzo: { address: string; city: string; zip:
     addressdetails: '1',
     limit: '5',
     countrycodes: 'it',
+    // Il riquadro è una preferenza, non un confine (12/11, collaudo): con bounded=1 un indirizzo
+    // fuori zona (Milano, Bobbio) tornava null e l'ordine passava il controllo dei 5 km. Il
+    // filtro sul comune scritto (`risultatoAffidabile`) basta a scartare le vie omonime.
     viewbox: RIQUADRO_PIACENZA,
-    bounded: '1',
   });
   const cap = indirizzo.zip.trim();
   if (cap) p.set('postalcode', cap.slice(0, 10));

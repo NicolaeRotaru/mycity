@@ -66,8 +66,9 @@ describe('R03-001 — la via del centro resta in centro', () => {
     expect(u.searchParams.get('street')).toBe('Via Cavour 3');
     expect(u.searchParams.get('city')).toBe('Piacenza');
     expect(u.searchParams.get('postalcode')).toBe('29121');
-    expect(u.searchParams.get('bounded')).toBe('1');
     expect(u.searchParams.get('viewbox')).toBeTruthy();
+    // Il riquadro non è un confine: un indirizzo fuori zona si deve trovare, per essere rifiutato.
+    expect(u.searchParams.get('bounded')).toBeNull();
     expect(Number(u.searchParams.get('limit'))).toBeGreaterThan(1);
     expect(u.searchParams.get('q')).toBeNull();
   });
@@ -77,5 +78,17 @@ describe('R03-001 — la via del centro resta in centro', () => {
     expect(await coordinateDiUnIndirizzo({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' })).toBeNull();
     nominatim([{ lat: '45.05', lon: '9.69', address: { city: 'Piacenza', postcode: '29122' } }]);
     expect(await coordinateDiUnIndirizzo({ address: 'Via Roma 10', city: 'piacenza', zip: '29121' })).toEqual({ lat: 45.05, lng: 9.69 });
+  });
+
+  it('un indirizzo a Milano si trova (e il controllo dei 5 km lo rifiuta), non torna null', async () => {
+    nominatim([{ lat: '45.4642', lon: '9.19', address: { city: 'Milano', postcode: '20121' } }]);
+    const c = await coordinateDiUnIndirizzo({ address: 'Via Roma 1', city: 'Milano', zip: '20121' });
+    expect(c, 'fuori dal riquadro tornava null e l ordine passava').not.toBeNull();
+    expect(fuoriZonaDiConsegna({ storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng, deliveryLat: c!.lat, deliveryLng: c!.lng })).toBe(true);
+  });
+
+  it('«Piacenza (PC)» e il CAP generico 29100 combaciano con Piacenza 29121', async () => {
+    nominatim([VIA_ROMA_PIACENZA]);
+    expect(await coordinateDiUnIndirizzo({ address: 'Via Roma 10', city: 'Piacenza (PC)', zip: '29100' })).toEqual({ lat: 45.0517, lng: 9.699 });
   });
 });
