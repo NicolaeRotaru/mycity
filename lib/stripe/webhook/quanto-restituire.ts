@@ -55,9 +55,11 @@ export function stornatoDaQuestaContestazione(
 export function quotaDelRimborsoSulNetto(o: {
   refunded_amount_cents?: number | null;
   gross_total_cents?: number | null;
+  total_price?: number | string | null;
   seller_payout_cents?: number | null;
 }): number | undefined {
-  const lordo = o.gross_total_cents ?? 0;
+  // QA 12/11 — senza il lordo (ordini nati prima della 124) si usa il totale, come lordoDellOrdine.
+  const lordo = o.gross_total_cents ?? Math.round(Number(o.total_price ?? 0) * 100);
   if (lordo <= 0 || o.refunded_amount_cents == null) return undefined;
   return Math.round((Math.min(o.refunded_amount_cents, lordo) / lordo) * (o.seller_payout_cents ?? 0));
 }
