@@ -81,3 +81,17 @@ export function statoDellaConsolle(input: {
 export function puoDireTuttoTranquillo(stato: StatoConsolle): boolean {
   return stato.letturaRiuscita && stato.attivi.length === 0;
 }
+
+/**
+ * R01-006 (12/11/2026) — DA QUALE CONSEGNA PARTE L'ALLARME.
+ *
+ * L'SOS scrive `order_id` quando il fattorino lo preme durante una consegna, e la pagina lo
+ * leggeva nella select senza mostrarlo da nessuna parte: chi sta in sala controllo non sapeva
+ * quale cliente aspetta, quale negozio chiamare, dove stava andando il fattorino.
+ * `null` quando l'SOS non e' legato a nessun ordine.
+ */
+export function consegnaDellSOS(s: Pick<EventoSOS, 'order_id'>): { etichetta: string; href: string } | null {
+  const id = typeof s.order_id === 'string' ? s.order_id.trim() : '';
+  if (!id) return null;
+  return { etichetta: `Consegna #${id.slice(0, 8)}`, href: `/admin/orders/${encodeURIComponent(id)}` };
+}

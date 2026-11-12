@@ -1,13 +1,15 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, MapPin, Phone, Clock, RotateCcw, Siren, History } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, Check, MapPin, Phone, Clock, RotateCcw, Siren, History, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
 import {
+  consegnaDellSOS,
   puoDireTuttoTranquillo,
   statoDellaConsolle,
   type EventoSOS,
@@ -132,6 +134,7 @@ export default function AdminSOSPage() {
           <ul className="space-y-3">
             {active.map((s) => {
               const elapsed = Math.round((Date.now() - new Date(s.triggered_at).getTime()) / 60_000);
+              const consegna = consegnaDellSOS(s);
               return (
                 <li key={s.id} className="bg-secondary-50 border-2 border-secondary-300 rounded-xl p-4">
                   <div className="flex items-start justify-between flex-wrap gap-3">
@@ -153,6 +156,15 @@ export default function AdminSOSPage() {
                           <Clock size={14} strokeWidth={2.4} aria-hidden />
                           {elapsed} min fa
                         </p>
+                        {/* R01-006 — da quale consegna parte l'allarme. */}
+                        {consegna ? (
+                          <Link href={consegna.href} className="inline-flex items-center gap-1.5 mt-1 text-sm font-semibold text-primary-700 hover:underline">
+                            <Package size={14} strokeWidth={2.4} aria-hidden />
+                            {consegna.etichetta}
+                          </Link>
+                        ) : (
+                          <p className="text-sm text-ink-500 mt-1">Fuori da una consegna</p>
+                        )}
                         {s.rider?.phone && (
                           <a href={`tel:${s.rider.phone}`} className="inline-flex items-center gap-1.5 mt-1 text-sm text-primary-700 hover:underline">
                             <Phone size={14} strokeWidth={2.4} aria-hidden />
@@ -202,6 +214,11 @@ export default function AdminSOSPage() {
             {resolved.map((s) => (
               <li key={s.id} className="bg-white border border-cream-200 rounded-lg p-3 text-sm">
                 <p className="font-semibold text-ink-900">{s.rider?.full_name ?? 'Rider'}</p>
+                {consegnaDellSOS(s) && (
+                  <Link href={consegnaDellSOS(s)!.href} className="text-xs font-semibold text-primary-700 hover:underline">
+                    {consegnaDellSOS(s)!.etichetta}
+                  </Link>
+                )}
                 <p className="text-xs text-ink-500">
                   {new Date(s.triggered_at).toLocaleString('it-IT')} → risolto {s.resolved_at && new Date(s.resolved_at).toLocaleString('it-IT')}
                 </p>
