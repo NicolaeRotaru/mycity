@@ -410,7 +410,9 @@ Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale most
 
   // Gate policy: blocca i prodotti vietati prima di compilare l'annuncio.
   if (toolInput.policy_ok === false) {
-    const reason = toolInput.policy_reason?.trim();
+    // 12/11/2026 (R04-012) — L'uscita del modello si controlla prima di usarla:
+    // un motivo che non e' testo faceva cadere la rotta con un 500.
+    const reason = typeof toolInput.policy_reason === 'string' ? toolInput.policy_reason.trim() : '';
     return ApiErrors.invalidRequest(
       reason
         ? `Questo prodotto non può essere pubblicato su MyCity: ${reason}`
@@ -477,12 +479,17 @@ Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale most
   }
 
   return NextResponse.json({
-    name: toolInput.name,
-    description: toolInput.description,
+    // R04-012 — Come extract-products: solo testo dove si aspetta testo, solo
+    // un numero valido dove si aspetta un prezzo.
+    name: typeof toolInput.name === 'string' ? toolInput.name.trim() : '',
+    description: typeof toolInput.description === 'string' ? toolInput.description.trim() : '',
     category_id: categoryId,
     subcategory_id: subcategoryId,
-    category_slug: toolInput.category_slug,
-    suggested_price: toolInput.suggested_price_eur,
+    category_slug: typeof toolInput.category_slug === 'string' ? toolInput.category_slug : null,
+    suggested_price:
+      typeof toolInput.suggested_price_eur === 'number' && Number.isFinite(toolInput.suggested_price_eur) && toolInput.suggested_price_eur > 0
+        ? toolInput.suggested_price_eur
+        : null,
     attributes,
     tags,
     image_quality: imageQuality,
