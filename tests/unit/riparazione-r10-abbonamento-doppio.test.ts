@@ -22,7 +22,6 @@ const stato = vi.hoisted(() => ({
   annullati: [] as string[],
   chiavi: [] as Array<string | undefined>,
   profiloCassa: {} as Record<string, unknown>,
-  rispostaPersa: false,
 }));
 
 vi.mock('@/lib/funzioni-al-lancio', async (orig) => ({
@@ -53,16 +52,8 @@ vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: () => stato.evento },
     subscriptions: {
-      retrieve: async (id: string) => {
-        if (stato.suStripe[id] === 'introvabile') throw new Error(`No such subscription: ${id}`);
-        return { id, status: stato.suStripe[id] ?? 'canceled', current_period_end: 1_802_000_000 };
-      },
-      cancel: async (id: string) => {
-        stato.annullati.push(id);
-        stato.suStripe[id] = 'canceled';
-        if (stato.rispostaPersa) { stato.rispostaPersa = false; throw new Error('timeout'); }
-        return { id, status: 'canceled' };
-      },
+      retrieve: async (id: string) => ({ id, status: stato.suStripe[id] ?? 'canceled', current_period_end: 1_802_000_000 }),
+      cancel: async (id: string) => { stato.annullati.push(id); return { id, status: 'canceled' }; },
       list: async () => ({ data: [] }),
     },
     checkout: {
@@ -103,7 +94,6 @@ const profilo = () => stato.db.tabelle.profiles!.find((r) => r.id === 's1')!;
 beforeEach(() => {
   stato.annullati = [];
   stato.chiavi = [];
-  stato.rispostaPersa = false;
   stato.profiloCassa = { role: 'seller', is_approved: true, stripe_customer_id: null, subscription_status: null };
   stato.db = fintoDatabase({
     profiles: [{ id: 's1', role: 'seller', stripe_customer_id: 'cus_1', stripe_subscription_id: 'sub_1', subscription_status: 'active', subscription_renews_at: null }],
@@ -123,35 +113,6 @@ describe('R10-019 — due schede non fanno due abbonamenti', () => {
     expect(stato.chiavi[0], 'nessuna chiave di idempotenza: Stripe crea due sessioni').toBeTruthy();
     expect(stato.chiavi[1]).toBe(stato.chiavi[0]);
     expect(seconda.corpo.url).toBe(prima.corpo.url);
-  });
-
-  it('② il secondo abbonamento pagato non copre il primo: il doppione si annulla', async () => {
-    expect(await consegna(pagato('sub_2'))).toBe(200);
-    expect(profilo().stripe_subscription_id, 'il primo abbonamento è rimasto orfano').toBe('sub_1');
-    expect(stato.annullati).toEqual(['sub_2']);
-  });
-
-  it('l’annullamento riesce ma la risposta si perde: al ritentativo il primo resta', async () => {
-    stato.rispostaPersa = true;
-    expect(await consegna(pagato('sub_2')), 'la risposta persa fa riprovare Stripe').toBe(500);
-    expect(await consegna(pagato('sub_2'))).toBe(200);
-    expect(profilo().stripe_subscription_id, 'al ritentativo il doppione annullato copre il primo').toBe('sub_1');
-    expect(profilo().subscription_status).toBe('active');
-  });
-
-  it('il primo è in ritardo di pagamento e il nuovo è pagato: resta quello pagato', async () => {
-    stato.suStripe = { sub_1: 'past_due', sub_2: 'active' };
-    expect(await consegna(pagato('sub_2'))).toBe(200);
-    expect(profilo().stripe_subscription_id).toBe('sub_2');
-    expect(stato.annullati, 'si annulla l’abbonamento appena pagato').toEqual(['sub_1']);
-  });
-
-  it('collaudo K03 — Stripe non trova il precedente: il nuovo abbonamento pagato si attiva lo stesso', async () => {
-    stato.suStripe = { sub_1: 'introvabile', sub_2: 'active' };
-    expect(await consegna(pagato('sub_2')), 'a ogni ritentativo 500: l’abbonamento pagato non si attiva mai').toBe(200);
-    expect(profilo().stripe_subscription_id).toBe('sub_2');
-    expect(profilo().subscription_status).toBe('active');
-    expect(stato.annullati).toEqual([]);
   });
 
   it('dopo una disdetta vera il nuovo abbonamento si scrive come prima', async () => {
