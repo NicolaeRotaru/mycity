@@ -14,20 +14,21 @@ const testo = (r: ReturnType<typeof riepilogoOrdine>) => r.voci.map((v) => `${v.
 describe('il riepilogo dell ordine', () => {
   it('1970 · consegna null e 3 € nel totale: niente «GRATUITA», la consegna c è e il totale torna', () => {
     const r = riepilogoOrdine({ total_price: 23, shipping_cost: 0, delivery_fee_cents: null, discount_amount: 0, wallet_applied_cents: 0 }, 2000);
-    expect(testo(r)).not.toContain('GRATUITA');
+    expect(testo(r)).not.toMatch(/GRATUITA|Gratis/);
     expect(r.voci.some((v) => v.centesimi === 300)).toBe(true);
     expect(r.torna).toBe(true);
   });
 
   it('1970 · consegna null e nessun costo nel totale: resta gratis, ed è vero', () => {
     const r = riepilogoOrdine({ total_price: 20, shipping_cost: 0, delivery_fee_cents: null, discount_amount: 0, wallet_applied_cents: 0 }, 2000);
-    expect(testo(r)).toContain('GRATUITA');
+    // 12/11/2026 (R09-023) — «Gratis» con il nome della cassa, non «Spedizione GRATUITA».
+    expect(testo(r)).toContain('Consegna MyCity Gratis');
   });
 
   it('2078 · sopra i 50 € con la consegna da 3 €: niente «GRATUITA»', () => {
     for (const sub of [5000, 6000, 12000]) {
       const r = riepilogoOrdine({ total_price: (sub + 300) / 100, shipping_cost: 0, delivery_fee_cents: 300, discount_amount: 0, wallet_applied_cents: 0 }, sub);
-      expect(testo(r), String(sub)).not.toContain('GRATUITA');
+      expect(testo(r), String(sub)).not.toMatch(/GRATUITA|Gratis/);
     }
   });
 

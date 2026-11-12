@@ -43,7 +43,8 @@ describe('il riepilogo mostra tutto quello che fa il totale', () => {
 
   it('le voci a zero non allungano la colonna', () => {
     const r = riepilogoOrdine({ total_price: 20, shipping_cost: 0, delivery_fee_cents: 0, discount_amount: 0, wallet_applied_cents: 0 }, 2000);
-    expect(r.voci.map((v) => v.etichetta)).toEqual(['Subtotale', 'Spedizione']);
+    // 12/11/2026 (R09-023) — la riga regalata si chiama come in cassa.
+    expect(r.voci.map((v) => v.etichetta)).toEqual(['Subtotale', 'Consegna MyCity']);
     expect(r.torna).toBe(true);
   });
 
