@@ -271,20 +271,40 @@ export function formatAttributeValue(value: unknown, key?: string): string {
   return JSON.stringify(value);
 }
 
+/**
+ * 12/11/2026 (R12-023) — L'OBBLIGO SEGUE LA CATEGORIA, NON IL SUO NOME.
+ *
+ * I campi si sceglievano solo dallo slug della radice: bastava creare dal
+ * pannello una radice «gastronomia» (o rinominare «alimentari») perché il
+ * negoziante del pane non vedesse più Allergeni e Ingredienti, e il database
+ * glielo lasciasse pubblicare. Ora una radice con
+ * `richiede_dichiarazioni_alimentari` (migrazione 363) porta i campi degli
+ * alimenti qualunque sia il suo nome. Chi passa categorie senza la colonna
+ * (database prima della 363) ricade sul nome, come prima.
+ */
+type CategoriaPerAttributi = {
+  id: string;
+  slug: string;
+  parent_id: string | null;
+  richiede_dichiarazioni_alimentari?: boolean | null;
+};
+
 export function getAttributesForCategory(
-  categories: Array<{ id: string; slug: string; parent_id: string | null }>,
+  categories: Array<CategoriaPerAttributi>,
   categoryId: string | null | undefined,
 ): { fields: AttributeField[]; topSlug: string | null } {
   if (!categoryId) return { fields: [], topSlug: null };
   let cur = categories.find((c) => c.id === categoryId);
   // Risali fino al livello top
   while (cur?.parent_id) {
-    const parent: { id: string; slug: string; parent_id: string | null } | undefined =
-      categories.find((c) => c.id === cur!.parent_id);
+    const parent: CategoriaPerAttributi | undefined = categories.find((c) => c.id === cur!.parent_id);
     if (!parent) break;
     cur = parent;
   }
   if (!cur) return { fields: [], topSlug: null };
+  if (cur.richiede_dichiarazioni_alimentari === true) {
+    return { fields: CATEGORY_ATTRIBUTES.alimentari, topSlug: cur.slug };
+  }
   return { fields: CATEGORY_ATTRIBUTES[cur.slug] ?? [], topSlug: cur.slug };
 }
 
@@ -317,7 +337,7 @@ export function campiObbligatoriMancanti(
  * vendita. Il negoziante lo completa dal modulo e lo pubblica da li.
  */
 export function statoAlCaricamentoDaFile(
-  categories: Array<{ id: string; slug: string; parent_id: string | null }>,
+  categories: Array<CategoriaPerAttributi>,
   categoryId: string | null | undefined,
   attributes: Record<string, unknown> | null | undefined,
 ): { status: 'available' | 'draft'; mancanti: string[] } {
