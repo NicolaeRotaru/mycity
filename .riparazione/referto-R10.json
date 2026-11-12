@@ -29,7 +29,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Manifest (sotto APP_INSTALLABILE_ACCESA) e apple-touch-icon spostati dai metadata, che con force-dynamic finiscono nel body, al <head> scritto a mano del layout. Niente htmlLimitedBots. Il <title> resta nei metadata: Chrome non lo usa per l'installabilità. La condizione resta scritta `APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' }` (costante MANIFEST), come chiede la prova esistente al-lancio-carta-abbonamento-…, che non ho toccato.",
-      "chiave": "mobile-pwa|chrome non trova il file che rende mycity installabile: su android l'app non si può mettere in home"
+      "chiave": "mobile-pwa|chrome non trova il file che rende mycity installabile: su android l'app non si può mettere in home",
+      "verificato_da": "qa (subagente separato): ha acceso per un momento APP_INSTALLABILE_ACCESA, avviato next dev 15.5.29 e chiesto /faq come Chrome Android e come Googlebot. In tutti e due i casi <link rel=\"manifest\"> e apple-touch-icon escono una volta sola nel <head>. /manifest.json, le sue icone e l'icona Apple rispondono 200, e la CSP non li blocca. Con l'interruttore spento il manifest sparisce. Nessun altro layout li dichiara. 21 file di prova vicini, 131 prove: verdi. Regge."
     },
     {
       "id": "R10-002",
@@ -80,7 +81,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nella domanda «la colonna del recesso c'è?» una lettura caduta ora lancia l'errore (React Query riprova) invece di rispondere false, e staleTime passa da Infinity a 5 minuti. Finché non si sa, il ripiego resta «spunta nascosta». lib/ordini/recesso.ts non serviva toccarlo.",
-      "chiave": "api-backend|nel nuovo prodotto la spunta «escluso dal recesso» sparisce per tutta la sessione dopo una lettura caduta"
+      "chiave": "api-backend|nel nuovo prodotto la spunta «escluso dal recesso» sparisce per tutta la sessione dopo una lettura caduta",
+      "verificato_da": "qa (subagente separato): retry:1 globale (QueryProvider.tsx:24), e una lettura che cade sempre lascia la spunta nascosta senza errori a schermo e si rilegge alla prossima apertura. La queryKey è usata solo qui. Regge. Residuo preesistente in nuovi_difetti_visti: il «Duplica» di un prodotto escluso dal recesso."
     },
     {
       "id": "R10-005",
@@ -108,11 +110,12 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Fonte unica in app/seller/earnings/commissione.ts: ABBONAMENTO_CENTESIMI_MESE=5000, da cui si ricava PREZZO_ABBONAMENTO_MESE. La usano la cassa (unit_amount e descrizione), il banner, il modulo di richiesta e la campanella «abbonamento attivo» del webhook. La prova esistente ai-negozi-diciamo-un-prezzo-solo (importa commissione.ts) ora legge il prezzo dalla costante; la prova nuova finge un prezzo di 60 € e controlla l'addebito vero.",
       "chiave": "architettura|il prezzo dell'abbonamento dei negozi è scritto a mano in sei posti, e la prova che dovrebbe tenerli uguali non se ne accorge se l'addebito cambia",
-      "prova_esistente_modificata": "tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx (importa app/seller/earnings/commissione.ts): il canone atteso si costruisce da PREZZO_ABBONAMENTO_MESE invece di «€50» scritto a mano; nessuna asserzione tolta o indebolita."
+      "prova_esistente_modificata": "tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx (importa app/seller/earnings/commissione.ts): il canone atteso si costruisce da PREZZO_ABBONAMENTO_MESE invece di «€50» scritto a mano; nessuna asserzione tolta o indebolita.",
+      "verificato_da": "qa (subagente separato): grep di €50, 50 €, 50/mese, 5000 e cinquanta in app/, components/, lib/ e messages/. 5000 sta solo in commissione.ts; gli altri «50» sono commenti o non c'entrano. La prova finta a 6000 si accorge dell'addebito. Regge. Difetto latente, oggi innocuo: con un prezzo non intero PREZZO_ABBONAMENTO_MESE scriverebbe «€49.9»."
     },
     {
       "id": "R10-006",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "974d9750e61fc1e8d81948f00e6c786bfa4065dc",
       "file_toccati": [
         "app/api/consegna/veloce/route.ts"
@@ -128,9 +131,21 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 974d9750e61fc1e8d81948f00e6c786bfa4065dc^ --file app/api/consegna/veloce/route.ts --prove tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il freno da 30 al minuto si conta per indirizzo + insieme di negozi chiesti, più un tetto di 120 al minuto per indirizzo contro chi gira gli id. Con 40 schede in lista, il carrello e la cassa hanno ancora la loro risposta. StoreListRow e StorePreviewCard non serviva toccarli. Miglioria possibile, non necessaria per chiudere la voce: una domanda sola per tutta la lista nel gancio useVeloceDelNegozio (components/ui/DeliveryCutoff.tsx, non mio). La rotta accetta già fino a 20 negozi per domanda.",
-      "chiave": "architettura|ogni scheda dell elenco dei negozi chiede la veloce da sola: oltre 30 negozi consumano il limite di 30 domande al minuto per indirizzo, lo stesso che serve al carrello e alla cassa"
+      "chiave": "architettura|ogni scheda dell elenco dei negozi chiede la veloce da sola: oltre 30 negozi consumano il limite di 30 domande al minuto per indirizzo, lo stesso che serve al carrello e alla cassa",
+      "cosa_resta": "Il tetto di 120 al minuto per indirizzo resta condiviso col carrello e con la cassa. /stores e /near mostrano fino a 200 schede (app/stores/page.tsx:40, app/near/page.tsx:29), e ogni scheda fa la sua domanda, che si rifà al ritorno sulla scheda dopo 5 minuti. Con 120 negozi, o con 61 caricati due volte in un minuto, il carrello riceve ancora 429. La cura vera è nel gancio useVeloceDelNegozio (components/ui/DeliveryCutoff.tsx:56-90), che non è mio: vedi serve_file_altrui. Il commento della rotta, che diceva che la cura «sta» nel gancio, ora dice che è da fare (commit 88bcccc2).",
+      "serve_file_altrui": [
+        {
+          "file": "components/ui/DeliveryCutoff.tsx",
+          "modifica": "useVeloceDelNegozio: raccogliere in un unico lotto (per esempio con un microtask o un debounce di 50 ms, in un modulo condiviso) gli id dei negozi chiesti dalle schede montate insieme. Mandare una domanda sola /api/consegna/veloce?negozi=a,b,… a gruppi di massimo 20 (MAX_NEGOZI della rotta), con una risposta per negozio. Oppure, più semplice: aggiungere &per=vetrina alla domanda delle schede, e la rotta conta quelle richieste in un contatore separato da quello di carrello e cassa."
+        },
+        {
+          "file": "app/api/consegna/veloce/route.ts",
+          "modifica": "Solo se si sceglie la seconda strada: la rotta legge per=vetrina e usa la chiave consegna-veloce-vetrina:${ip} per il tetto (è un file mio, ma la modifica ha senso solo insieme al gancio). Per la prima strada la rotta deve rispondere per negozio e non con un verdetto unico: oggi risponde un solo possibile/perche per tutto l'insieme."
+        }
+      ],
+      "verificato_da": "qa (subagente separato): col freno vero in memoria, 120 schede o 61 schede caricate due volte in un minuto mandano ancora il carrello a 429. Per questo la voce è parziale. Il tetto non si aggira cambiando l'ordine degli id. Con ?negozi= vuoto la rotta risponde 200 guardando solo orario e fattorini: non fa danni."
     },
     {
       "id": "R10-007",
@@ -156,7 +171,7 @@
     },
     {
       "id": "R10-008",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "f807317fda35976d399b5c0587efd0475ffeb1fe",
       "file_toccati": [
         "app/api/ai/catalog-apply/route.ts"
@@ -172,9 +187,25 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f807317fda35976d399b5c0587efd0475ffeb1fe^ --file app/api/ai/catalog-apply/route.ts --prove tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "catalog-apply non scrive più la voce del registro a mano: la costruisce tracciaDellaModifica (la stessa del modulo del prodotto), con prima=riga corrente, dopo=update, origine 'ai-copilot' e daAi = i campi proposti. Nel registro finiscono solo i campi davvero cambiati.",
-      "chiave": "architettura|la traccia «chi ha cambiato il prezzo» esce in due forme diverse a seconda della porta"
+      "chiave": "architettura|la traccia «chi ha cambiato il prezzo» esce in due forme diverse a seconda della porta",
+      "cosa_resta": "catalog-apply ora coincide col modulo prodotto. Restano però altre porte con forme diverse, in file non miei: app/api/ai/catalog-apply-bulk/route.ts:250-258 e app/api/ai/catalog-batch/apply/route.ts:321-330 (tutte le chiavi, nessun daAi), e app/api/admin/products/route.ts:225-231, che registra solo {fields}, senza prima né dopo.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-apply-bulk/route.ts",
+          "modifica": "Righe 250-258: costruire la voce con tracciaDellaModifica({ prodottoId, attoreId, origine: 'ai-copilot-bulk', prima: riga corrente, dopo: update, campiDallAi: Object.keys(update) }) e scrivere writeAudit(voce) solo se non è null, come in app/api/ai/catalog-apply/route.ts."
+        },
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "Righe 321-330: la stessa cosa, con origine 'ai-batch'."
+        },
+        {
+          "file": "app/api/admin/products/route.ts",
+          "modifica": "Righe 225-231: tracciaDellaModifica con prima = la riga letta prima dell'update, dopo = i campi scritti, origine 'admin', senza campiDallAi."
+        }
+      ],
+      "verificato_da": "qa (subagente separato): catalog-apply e modulo usano la stessa tracciaDellaModifica. Nessun campo dell'AI si perde (tutti in COLONNE_DEL_VENDITORE e in PRODUCT_SNAPSHOT_COLS). Restano tre porte con forme diverse: per questo la voce è parziale."
     },
     {
       "id": "R10-009",
@@ -395,7 +426,7 @@
     {
       "id": "R10-019",
       "esito": "riparato",
-      "commit": "a47ea68b2f40410356e6de888a58f8e1b85acad6",
+      "commit": "501d46a89cf7632de4c8ea0ebd95f90d25cf5edc",
       "file_toccati": [
         "app/api/seller/subscription/checkout/route.ts",
         "lib/stripe/webhook/abbonamenti.ts"
@@ -409,16 +440,17 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a47ea68b2f40410356e6de888a58f8e1b85acad6^ --file app/api/seller/subscription/checkout/route.ts,lib/stripe/webhook/abbonamenti.ts --prove tests/unit/riparazione-r10-abbonamento-doppio.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 501d46a89cf7632de4c8ea0ebd95f90d25cf5edc^ --file lib/stripe/webhook/abbonamenti.ts --prove tests/unit/riparazione-r10-abbonamento-doppio.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La cassa passa a Stripe una idempotencyKey per negozio e finestra di 10 minuti: due schede ricevono la stessa sessione, anche al primo abbonamento senza stripe_customer_id. Il webhook, se il profilo ha già un altro abbonamento ancora in corso su Stripe, non lo sovrascrive: annulla subito il doppione e scrive un log per l'admin. Il rimborso del doppione non è automatico (domanda a Nicola). Il portale (portal/route.ts:47) non serviva toccarlo: con il primo abbonamento sul profilo si disdice dal sito.",
-      "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito"
+      "cosa_ho_fatto": "La cassa passa a Stripe una idempotencyKey per negozio e finestra di 10 minuti: due schede ricevono la stessa sessione, anche al primo abbonamento senza stripe_customer_id. Il webhook, se il profilo ha già un altro abbonamento ancora in corso su Stripe, non lo sovrascrive: annulla subito il doppione e scrive un log per l'admin. Il rimborso del doppione non è automatico (domanda a Nicola). Il portale (portal/route.ts:47) non serviva toccarlo: con il primo abbonamento sul profilo si disdice dal sito. Dopo il controllo qa, secondo commit 501d46a8 (il primo era a47ea68b): la guardia del webhook ora vale anche quando il doppione è già annullato. Prima, se l'annullamento riusciva su Stripe ma la risposta si perdeva, al ritentativo il doppione si scriveva sopra al primo. Se il primo è in ritardo di pagamento e il nuovo è pagato, si annulla il primo, non quello pagato.",
+      "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito",
+      "verificato_da": "qa (subagente separato): 4 prove + 63 file vicini (449 prove) verdi. Ha trovato due buchi: il ritentativo dopo un annullamento con la risposta persa sovrascriveva il primo, e con il primo past_due si annullava l'abbonamento appena pagato. Tutti e due chiusi nel commit 501d46a8, con le prove che li riproducono (la prova rimessa regge). Restano, dichiarati: due avvisi in contemporanea su un profilo vuoto (nessun blocco per riga; raro); la chiave a finestre fisse protegge dal doppio clic, non da due schede a distanza (lì difende il webhook); nessun rimborso automatico (domanda a Nicola)."
     },
     {
       "id": "R10-020",
       "esito": "riparato",
-      "commit": "5bd9e7afcfccadf77bce5590eedca503fd69417a",
+      "commit": "45b6c48b8967dcc09e0a3dca45adcef664c82e33",
       "file_toccati": [
         "app/api/seller/subscription/checkout/route.ts",
         "components/SellerApplicationForm.tsx",
@@ -434,12 +466,13 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5bd9e7afcfccadf77bce5590eedca503fd69417a^ --file app/api/seller/subscription/checkout/route.ts --prove tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45b6c48b8967dcc09e0a3dca45adcef664c82e33^ --file app/api/seller/subscription/checkout/route.ts --prove tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La frase di commissione.ts:98-102 diceva già «dopo il tuo primo incasso»; il comportamento no. Ora la cassa risponde 403 «L'abbonamento parte solo dopo il tuo primo incasso con MyCity» finché il negozio non ha un ordine PAID o in contanti DELIVERED; se gli incassi non si leggono, risponde 503. Nel modulo di richiesta il riquadro e il consenso dicevano «all'approvazione»: ora dicono «dopo il primo incasso». Definizione approvata dalla regista, in domande_per_nicola. L'interruttore resta spento.",
+      "cosa_ho_fatto": "La frase di commissione.ts:98-102 diceva già «dopo il tuo primo incasso»; il comportamento no. Ora la cassa risponde 403 «L'abbonamento parte solo dopo il tuo primo incasso con MyCity» finché il negozio non ha un ordine PAID o in contanti DELIVERED; se gli incassi non si leggono, risponde 503. Nel modulo di richiesta il riquadro e il consenso dicevano «all'approvazione»: ora dicono «dopo il primo incasso». Definizione approvata dalla regista, in domande_per_nicola. L'interruttore resta spento. Dopo il controllo qa, secondo commit 45b6c48b (il primo era 5bd9e7af): conta come incasso anche un ordine pagato e poi rimborsato in parte (PARTIALLY_REFUNDED), come in migrations/215.",
       "chiave": "pagamenti-stripe|quando si accenderà l'abbonamento, il negozio pagherà 50 euro subito dopo l'approvazione invece che dopo i primi incassi",
-      "nota": "Le due prove R10 sulla cassa (abbonamento-doppio, un-prezzo) hanno ora un finto `orders` con un incasso, perché la cassa legge gli ordini."
+      "nota": "Le due prove R10 sulla cassa (abbonamento-doppio, un-prezzo) hanno ora un finto `orders` con un incasso, perché la cassa legge gli ordini.",
+      "verificato_da": "qa (subagente separato): ha controllato che la policy «Sellers can view their store orders» (migrations/011:109-111) lasci leggere gli ordini al negozio e che i valori del database siano PAID e DELIVERED in maiuscolo, cod in minuscolo. La sintassi PostgREST è giusta, e con la lettura caduta la cassa dà 503. La riserva sul rimborso parziale è chiusa in 45b6c48b. Quella sul banner, che invita ancora il negozio appena approvato, è già in nuovi_difetti_visti."
     },
     {
       "id": "R10-021",
@@ -463,7 +496,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La regola «chi può aprire il portale» sta in un file nuovo, lib/abbonamento-portale.ts. La usano il bottone GestisciAbbonamento (a funzione spenta sparisce per un abbonamento disdetto) e la rotta del portale (stesso comportamento di prima, la regola ora sta lì). Il webhook non serviva toccarlo.",
-      "chiave": "pagamenti-stripe|un negozio con l'abbonamento disdetto vede ancora «gestisci l'abbonamento», e il tasto risponde che l'abbonamento non è attivo"
+      "chiave": "pagamenti-stripe|un negozio con l'abbonamento disdetto vede ancora «gestisci l'abbonamento», e il tasto risponde che l'abbonamento non è attivo",
+      "verificato_da": "qa (subagente separato): il webhook scrive solo active, past_due, canceled o null. Con l'interruttore spento la regola del bottone coincide con quella della rotta, e con l'interruttore acceso resta coerente. Unico scarto, uno stato in corso senza stripe_customer_id: possibile solo con dati sistemati a mano. Regge."
     },
     {
       "id": "R10-022",
@@ -485,7 +519,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Con past_due il tasto del banner chiama /api/seller/subscription/portal (dove si aggiorna la carta) invece della cassa, che su un abbonamento esistente risponde 409. Senza abbonamento chiama la cassa come prima.",
-      "chiave": "pagamenti-stripe|quando il pagamento dell'abbonamento non va a buon fine, il tasto «aggiorna pagamento» risponde con un errore invece di aprire il portale"
+      "chiave": "pagamenti-stripe|quando il pagamento dell'abbonamento non va a buon fine, il tasto «aggiorna pagamento» risponde con un errore invece di aprire il portale",
+      "verificato_da": "qa (subagente separato): il portale accetta la chiamata del banner col solo cookie (middleware.ts:216-223, provenienza.ts:60-81), la forma della risposta {url} coincide con quella che il banner legge, e a un abbonamento past_due non manca mai stripe_customer_id. Regge."
     },
     {
       "id": "R10-023",
@@ -557,6 +592,13 @@
       "severita": "minore",
       "file": "app/shared-cart/page.tsx · app/seller/products/page.tsx · app/orders/[id]/page.tsx",
       "descrizione": "Come carrello e ordini prima della cura #99: sostituire `unoptimized` con loader={caricatoreFotoRemote}. Si può anche estendere tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts con un fattore di densità 2. File non miei."
+    },
+    {
+      "titolo": "«Duplica» di un prodotto escluso dal recesso: finché non si sa se la colonna c'è, la copia si salva recedibile senza avviso",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/seller/products/new/page.tsx:190 · components/seller/ProductForm.tsx:746",
+      "descrizione": "Il form parte con nonRecedibile=true dalla riga sorgente, ma ProductForm manda non_recedibile solo se recessoSegnabile è true, cioè dopo che la domanda sulla colonna ha risposto «sì». La riga sorgente letta con * (new/page.tsx:135) dimostra già che la colonna c'è e si potrebbe usarla come risposta. Preesistente, visto dal qa di R10-004."
     }
   ],
   "domande_per_nicola": [
