@@ -63,10 +63,9 @@ describe('R01-011 · nella CI le prove col database vero non si saltano in silen
     expect(r.stdout).toMatch(/::error::/);
   });
 
-  it.skipIf(spawnSync('bash', ['-c', 'ls /usr/lib/postgresql/*/bin/initdb']).status !== 0)(
-    'se PostgreSQL risponde e initdb c\'e\', la guardia lascia passare',
-    () => {
-      expect(lanciaGuardia(true).status).toBe(0);
-    },
-  );
+  it('se PostgreSQL risponde e initdb c\'e\', la guardia lascia passare', () => {
+    // Su una macchina senza initdb questa prova cade, e la guardia dice perche': e' voluto.
+    const r = lanciaGuardia(true);
+    expect(r.status, r.stdout).toBe(0);
+  });
 });
