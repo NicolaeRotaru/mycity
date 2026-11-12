@@ -69,7 +69,11 @@ export async function restituisciLeQuoteParziali(dispute: Stripe.Dispute, orders
       );
       continue;
     }
-    const bonifico = await getStripe().transfers.create(
+    // QA del 12/11 — un rifiuto di Stripe qui non deve fermare il resto della vittoria (fattorino,
+    // avviso agli amministratori): si dice a chi gestisce, e il promemoria resta per rifarlo.
+    let bonifico: { id: string };
+    try {
+      bonifico = await getStripe().transfers.create(
       {
         amount: quota,
         currency: 'eur',
@@ -82,6 +86,15 @@ export async function restituisciLeQuoteParziali(dispute: Stripe.Dispute, orders
       },
       { idempotencyKey: `dispute_won_seller_${dispute.id}_${o.id}_t${tentativo}` },
     );
+    } catch (e) {
+      logger.error('[stripe] contestazione parziale vinta: quota del negozio non restituita', { orderId: o.id, e });
+      await notifyAdmins(
+        '⚠️ Contestazione vinta: quota del negozio da restituire a mano',
+        `Ordine ${o.id}: la contestazione ${dispute.id} è vinta, ma il bonifico che restituisce al negozio ${formatPriceFromCents(quota)} non è partito (${e instanceof Error ? e.message : 'errore sconosciuto'}). Prima di rifarlo guarda su Stripe se c'è già.`,
+        '/admin/payouts',
+      );
+      continue;
+    }
     scritturaObbligatoria(
       await scriviConRipiego(
         {
