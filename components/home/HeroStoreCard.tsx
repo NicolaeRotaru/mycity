@@ -113,7 +113,7 @@ export default function HeroStoreCard() {
 
   // L'ora del browser e la risposta della veloce: servono a «Consegna oggi» più sotto. Gli hook
   // stanno prima delle uscite anticipate, quindi leggono il negozio quando c'è.
-  const adesso = useOraDiPiacenza();
+  const adesso = useOraDiPiacenza(schermoGrande);
   const veloce = useVeloceDelNegozio(data?.store?.id, vetrinaChiedeLaVeloce(data?.store?.store_hours, adesso));
 
   // Tre esiti, non due. Il segnaposto di prima era un negozio inventato e credibile — «Salumeria
