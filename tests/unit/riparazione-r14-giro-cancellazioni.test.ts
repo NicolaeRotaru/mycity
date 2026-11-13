@@ -20,6 +20,10 @@
  * volte dieci secondi a email) e una quindicina di persone, il giro arrivava ai
  * 300 secondi del lavoro e veniva fermato: gli ultimi non avevano nemmeno la
  * spiegazione nel pannello. Orologio finto: ogni email «appesa» lo manda avanti.
+ *
+ * R14-014 — L'allarme «scrivile tu» (spiegazione non partita per email) si
+ * chiudeva solo la notte in cui l'email partiva. Se la persona annullava la
+ * richiesta o veniva cancellata, restava aperto per sempre col suo id.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fintoGiroNotturno } from './aiuti/finto-giro-notturno';
@@ -313,5 +317,85 @@ describe('R14-013 — gli avvisi e le email della notte hanno un tetto di tempo'
     expect(new Set(destinatari).size, 'qualcuno resta senza email anche la seconda notte').toBe(15);
     expect(destinatari.length, 'una email spedita due volte').toBe(15);
     expect(fattorini.every((id) => destinatari.includes(`${id}@example.it`))).toBe(true);
+  });
+});
+
+// ── l'allarme «scrivile tu» e chi non aspetta più ─────────────────────────────
+/**
+ * Luca, con la cassa aperta e la posta giù: dalla seconda notte la sua
+ * spiegazione per email è ferma e agli amministratori arriva «scrivile tu».
+ * Qui la lista delle richieste scadute la fa il database vero: solo chi ha
+ * ancora la richiesta aperta. E l'account chiuso porta via il profilo.
+ */
+function lucaConLaPostaGiu() {
+  const giro = laNotteDiLuca();
+  const profili = () => giro.db.profiles ?? [];
+  const base = mondo.admin as Record<string, unknown> & { auth: { admin: Record<string, unknown> } };
+  mondo.admin = {
+    ...base,
+    rpc: async (nome: string) => {
+      if (nome !== 'process_expired_deletions') return { data: [], error: null };
+      const scadute = profili().filter((p) => p.deletion_requested_at);
+      return { data: scadute.map((p) => ({ user_id: p.id, deleted_at: p.deletion_requested_at })), error: null };
+    },
+    auth: {
+      admin: {
+        ...base.auth.admin,
+        deleteUser: async (id: string) => {
+          giro.db.profiles = profili().filter((p) => p.id !== id);
+          return { error: null };
+        },
+      },
+    },
+  };
+  posta.invia = async () => ({ ok: false });
+  const allarmi = () => giro.righe('notifications').filter((n) => n.title === "Spiegazione dell'attesa non partita per email");
+  return { giro, allarmi };
+}
+
+describe("R14-014 — l'allarme «scrivile tu» si chiude anche quando non c'è più nessuno a cui scrivere", () => {
+  beforeEach(() => {
+    const adesso = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(adesso);
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const notte = async () => { vi.setSystemTime(Date.now() + GIORNO); await unGiro(); };
+
+  it('Luca annulla la richiesta: la notte dopo il suo allarme è chiuso', async () => {
+    const { giro, allarmi } = lucaConLaPostaGiu();
+    await notte();
+    await notte();
+    expect(allarmi().length, 'premessa: dalla seconda notte la spiegazione è ferma e l allarme c è').toBe(1);
+    expect(allarmi()[0].is_read).not.toBe(true);
+
+    const luca = giro.righe('profiles').find((p) => p.id === LUCA)!;
+    luca.deletion_requested_at = null;
+    await notte();
+
+    expect(allarmi().map((n) => n.is_read), 'l allarme di chi ha annullato resta aperto per sempre').toEqual([true]);
+  });
+
+  it('Luca versa i contanti e viene cancellato: il suo allarme si chiude', async () => {
+    const { giro, allarmi } = lucaConLaPostaGiu();
+    await notte();
+    await notte();
+    expect(allarmi().length).toBe(1);
+
+    giro.righe('cod_reconciliations').forEach((r) => { r.remitted_at = new Date().toISOString(); });
+    await notte();
+
+    expect(giro.righe('profiles').some((p) => p.id === LUCA), 'premessa: Luca è stato cancellato').toBe(false);
+    expect(allarmi().map((n) => n.is_read), 'l allarme resta aperto con l id di una persona cancellata').toEqual([true]);
+  });
+
+  it('finché Luca aspetta, il suo allarme resta aperto', async () => {
+    const { allarmi } = lucaConLaPostaGiu();
+    await notte();
+    await notte();
+    await notte();
+    expect(allarmi().length).toBe(1);
+    expect(allarmi()[0].is_read).not.toBe(true);
   });
 });
