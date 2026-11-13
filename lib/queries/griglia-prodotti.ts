@@ -150,7 +150,10 @@ export async function leggiProdottiDellaGriglia(
   /**
    * Le categorie da leggere, risolte UNA volta: `base()` viene richiamata per ogni blocco di
    * identificativi sul ramo pertinenza, e una lettura dentro di lei sarebbe un viaggio di rete per
-   * blocco. Chi passa già un elenco (i regali) ha risolto da sé: non si tocca.
+   * blocco. `categoryIds` ha la precedenza su `categoryId` e NON allarga alle figlie: chi lo passa
+   * decide lui l'elenco esatto. Lo fanno due pagine, per due motivi opposti: Regali (già con le
+   * figlie delle categorie regalabili dentro) e «Altri prodotti» della pagina categoria (solo la
+   * madre, apposta, perché le figlie hanno già la loro fila e ogni prodotto uscirebbe due volte).
    */
   const categorieDaLeggere =
     d.categoryIds && d.categoryIds.length > 0
