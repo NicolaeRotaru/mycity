@@ -271,12 +271,13 @@ export type MenuLink = z.infer<typeof menuLinkSchema>;
 /**
  * Menu spento: i link non si vedono nell'editor, quindi uno lasciato a metà (nome vuoto)
  * non deve bloccare «Salva sito». Si scartano solo i link incompleti, i completi restano.
- * Menu acceso: nessun cambio, il controllo resta com'è.
+ * Vale solo col menu spento in modo esplicito (`enabled: false`, come lo scrive l'editor):
+ * se `enabled` manca o il menu è acceso, nessun cambio, il controllo resta com'è.
  */
 function dropIncompleteLinksIfMenuOff(menu: unknown): unknown {
   if (!menu || typeof menu !== 'object') return menu;
   const m = menu as { enabled?: unknown; links?: unknown };
-  if (m.enabled === true || !Array.isArray(m.links)) return menu;
+  if (m.enabled !== false || !Array.isArray(m.links)) return menu;
   return { ...m, links: m.links.filter((l) => menuLinkSchema.safeParse(l).success) };
 }
 

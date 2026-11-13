@@ -13,7 +13,7 @@ import { defaultSite, storeSiteSchema } from '@/lib/store-site';
  */
 describe('351 — dove è il problema', () => {
   it('un link del menu senza nome', () => {
-    const sito = { ...defaultSite(), menu: { enabled: true, links: [{ label: '', target: { kind: 'page', pageId: 'x' } }] } };
+    const sito = { ...defaultSite(), menu: { links: [{ label: '', target: { kind: 'page', pageId: 'x' } }] } };
     const r = storeSiteSchema.safeParse(sito);
     if (r.success) throw new Error('la prova parte da un sito sbagliato');
     expect(doveEilProblema(r.error.issues[0].path, sito as never)).toMatch(/^Menu, link 1/);

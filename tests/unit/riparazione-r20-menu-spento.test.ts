@@ -20,6 +20,11 @@ describe('R20-005 menu spento con link a metà', () => {
     expect(r.success).toBe(false);
   });
 
+  it('senza «enabled» nell\'input il link vuoto è ancora rifiutato (si scarta solo col menu spento esplicito)', () => {
+    const r = storeSiteSchema.safeParse({ ...defaultSite(), menu: { links: [bozza] } });
+    expect(r.success).toBe(false);
+  });
+
   it('il sito pubblico con menu spento non mostra link', () => {
     const r = storeSiteSchema.parse(sito(false, [bozza, buono]));
     expect(resolveMenu(r, 's1')).toEqual([]);
