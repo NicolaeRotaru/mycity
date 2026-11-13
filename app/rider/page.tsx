@@ -386,9 +386,13 @@ export default function RiderDashboardPage() {
 
   // Toggle online/offline: stesso update profilo della pagina Disponibilità.
   const toggleOnline = useMutation({
+    // R20-002 — Senza rete la richiesta restava in pausa: interruttore grigio, nessun messaggio, e
+    // poi si accendeva da solo quando la rete tornava. Adesso parte lo stesso e, se non arriva,
+    // l'errore di rete diventa l'avviso «Problema di connessione» (non «Non autenticato»).
+    networkMode: 'always',
     mutationFn: async (next: boolean) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      if (!user) throw erroreUtente ?? new Error('Non autenticato');
       const { error } = await supabase.from('profiles').update({ rider_is_online: next }).eq('id', user.id);
       if (error) throw error;
       return next;
@@ -458,13 +462,14 @@ export default function RiderDashboardPage() {
             aria-label={online ? 'Vai offline' : 'Vai online'}
             disabled={toggleOnline.isPending}
             onClick={() => toggleOnline.mutate(!online)}
-            className={`relative h-8 w-[58px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+            // R20-002 — Alto 44 px (era 32): si tocca col pollice anche in strada.
+            className={`relative h-11 w-[76px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
               online ? 'bg-white/30' : 'bg-cream-300'
             }`}
           >
             <span
-              className="absolute top-[3px] h-[26px] w-[26px] rounded-full bg-white shadow-sm-neutral transition-all"
-              style={{ left: online ? '29px' : '3px' }}
+              className="absolute top-[3px] h-[38px] w-[38px] rounded-full bg-white shadow-sm-neutral transition-all"
+              style={{ left: online ? '35px' : '3px' }}
             />
           </button>
         </div>
@@ -648,8 +653,9 @@ export default function RiderDashboardPage() {
             <div className="mt-[18px]">
               <SectionLabel>In preparazione · attendi</SectionLabel>
               <div className="flex flex-col gap-2.5">
+                {/* R20-002 — Niente più opacity-75: targhetta e compenso scendevano sotto 4,5:1. */}
                 {inPrep.map((o) => (
-                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5 opacity-75">
+                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
                     <div className="mb-2 flex items-center justify-between">
                       <Badge variant="local" icon={ChefHat}>In preparazione</Badge>
                       <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</span>
