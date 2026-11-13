@@ -20,17 +20,137 @@ import { logger } from '@/lib/logger';
  * Stessa fonte, stesse regole e stesso timeout della rotta /api/geocode: la
  * logica sta qui una volta sola.
  */
-export async function coordinateDiUnIndirizzo(indirizzo: {
-  address: string;
-  city: string;
-  zip: string;
-}): Promise<{ lat: number; lng: number } | null> {
+export async function coordinateDiUnIndirizzo(
+  indirizzo: { address: string; city: string; zip: string } | string,
+): Promise<{ lat: number; lng: number } | null> {
+  // La rotta /api/geocode passa la frase così come le arriva; il server dell'ordine i tre campi,
+  // che diventano la stessa frase della cassa («via, CAP città, Italia»).
+  if (typeof indirizzo === 'string') return trovaLaPosizione(indirizzo);
   const q = `${indirizzo.address}, ${indirizzo.zip} ${indirizzo.city}, Italia`.trim().slice(0, 300);
   if (q.length < 3) return null;
+  return trovaLaPosizione(q);
+}
+
+/**
+ * 13/11/2026 (R13-001) — VIA ROMA, IN PIENO CENTRO, FINIVA A PODENZANO.
+ *
+ * La domanda alle mappe era a testo libero («Via Roma 10, 29121 Piacenza, Italia»), con un
+ * solo risultato e nessun confine. Nominatim prendeva «Piacenza» per la provincia e
+ * rispondeva con la prima Via Roma che trovava: quella di Podenzano, a 10 km dal negozio. La
+ * cassa diceva «troppo lontano» e l'ordine non partiva. Su otto vie del centro, cinque
+ * finivano fuori città.
+ *
+ * Adesso la frase si divide nei suoi pezzi (via, CAP, città) e la domanda è strutturata;
+ * se la città è Piacenza, o non è scritta, la ricerca resta dentro il riquadro di Piacenza
+ * (`viewbox` + `bounded`). Si chiedono più risultati e si tiene solo quello che cade nel
+ * comune scritto, col CAP scritto per primo. Se nessuno è affidabile la risposta è «non
+ * so» (null): l'ordine passa senza coordinate, come il codice prevede già, invece di
+ * essere fermato da un punto sbagliato. Il controllo dei 5 km resta com'è.
+ *
+ * La usano tutti e due gli ingressi: il server dell'ordine (contanti e carta, qui sopra) e
+ * la rotta /api/geocode (la cassa che avvisa prima, la rubrica degli indirizzi, il negozio
+ * che fissa la sua posizione). Stessa frase, stessa risposta.
+ */
+
+/** Piacenza e dintorni, il riquadro dove si cerca quando la città è Piacenza. */
+export const RIQUADRO_PIACENZA = { ovest: 9.57, sud: 44.97, est: 9.86, nord: 45.1 } as const;
+
+/** La città che serviamo: quella che si intende quando l'indirizzo non ne scrive una. */
+const CITTA_SERVITA = 'Piacenza';
+
+// I campi della risposta di Nominatim che dicono in che comune (o frazione) sta il punto.
+// NON la provincia (`county`): la provincia di Piacenza si chiama Piacenza anche a Podenzano.
+const CAMPI_DEL_COMUNE = ['city', 'town', 'village', 'municipality', 'hamlet', 'suburb'] as const;
+
+type RisultatoNominatim = {
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+  address?: Partial<Record<string, string>>;
+};
+
+type PosizioneTrovata = { lat: number; lng: number };
+
+function normalizza(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** «Via Roma 10, 29121 Piacenza, Italia» → via, CAP e città. Senza città: Piacenza. */
+function pezziDellaFrase(frase: string): { via: string; cap: string; citta: string } {
+  const parti = frase.split(',').map((p) => p.trim()).filter(Boolean);
+  // In coda: il paese e la sigla della provincia non sono la città.
+  while (parti.length > 1 && /^(italia|italy|\(?[a-z]{2}\)?)$/i.test(parti[parti.length - 1])) parti.pop();
+  let cap = '';
+  let citta = '';
+  if (parti.length > 1) {
+    const ultimo = parti[parti.length - 1];
+    const capScritto = ultimo.match(/\b\d{5}\b/)?.[0] ?? '';
+    const resto = ultimo.replace(/\b\d{5}\b/, '').replace(/\([^)]*\)/g, '').trim();
+    // «5» da solo è il numero civico di «Corso Vittorio Emanuele II, 5», non una città.
+    if (capScritto || /\p{L}/u.test(resto)) {
+      parti.pop();
+      cap = capScritto;
+      citta = resto;
+    }
+  }
+  return { via: parti.join(', '), cap, citta: citta || CITTA_SERVITA };
+}
+
+function scegliIlRisultato(
+  risultati: RisultatoNominatim[],
+  cercato: { cap: string; citta: string },
+): PosizioneTrovata | null {
+  const scritta = ` ${normalizza(cercato.citta)} `;
+  const nelComuneScritto = risultati.filter((r) =>
+    CAMPI_DEL_COMUNE.some((campo) => {
+      const nome = normalizza(r.address?.[campo] ?? '');
+      return nome.length > 0 && scritta.includes(` ${nome} `);
+    }),
+  );
+  const ordinati = cercato.cap
+    ? [
+        ...nelComuneScritto.filter((r) => r.address?.postcode === cercato.cap),
+        ...nelComuneScritto.filter((r) => r.address?.postcode !== cercato.cap),
+      ]
+    : nelComuneScritto;
+  for (const r of ordinati) {
+    const lat = r.lat != null ? parseFloat(r.lat) : NaN;
+    const lng = r.lon != null ? parseFloat(r.lon) : NaN;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+  return null;
+}
+
+/**
+ * Dove sta l'indirizzo scritto in una frase, secondo le mappe. null = non si sa (non
+ * trovato, nessun risultato nel comune scritto, rete giù): chi chiama non deve bloccare.
+ */
+async function trovaLaPosizione(frase: string): Promise<PosizioneTrovata | null> {
+  const cercato = pezziDellaFrase(frase.trim().slice(0, 300));
+  if (cercato.via.length < 3) return null;
+
+  const params = new URLSearchParams({
+    street: cercato.via,
+    city: cercato.citta,
+    countrycodes: 'it',
+    format: 'json',
+    addressdetails: '1',
+    limit: '5',
+  });
+  if (cercato.cap) params.set('postalcode', cercato.cap);
+  if (normalizza(cercato.citta) === normalizza(CITTA_SERVITA)) {
+    const r = RIQUADRO_PIACENZA;
+    params.set('viewbox', `${r.ovest},${r.nord},${r.est},${r.sud}`);
+    params.set('bounded', '1');
+  }
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
-    const res = await fetch(url, {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
       headers: {
         // Nominatim Usage Policy: User-Agent identificativo obbligatorio.
         'User-Agent': `MyCity/1.0 (${env.appUrl()})`,
@@ -39,16 +159,12 @@ export async function coordinateDiUnIndirizzo(indirizzo: {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return null;
-    const json = (await res.json()) as Array<{ lat?: string; lon?: string }>;
-    const primo = Array.isArray(json) ? json[0] : undefined;
-    const lat = primo?.lat != null ? parseFloat(primo.lat) : NaN;
-    const lng = primo?.lon != null ? parseFloat(primo.lon) : NaN;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
+    const json = (await res.json()) as unknown;
+    return Array.isArray(json) ? scegliIlRisultato(json as RisultatoNominatim[], cercato) : null;
   } catch {
     // Un indirizzo che non si trova non è un ordine da bloccare: si prosegue
     // senza la mappa, come si faceva prima.
-    logger.warn('[geocodifica] indirizzo non risolto', { lunghezza: q.length });
+    logger.warn('[geocodifica] indirizzo non risolto', { lunghezza: frase.length });
     return null;
   }
 }

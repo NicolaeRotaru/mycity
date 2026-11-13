@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
-import { env } from '@/lib/env';
-import { logger } from '@/lib/logger';
+import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -32,28 +31,11 @@ export async function POST(req: Request) {
   }
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
 
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
-    const appUrl = env.appUrl();
-    const res = await fetch(url, {
-      headers: {
-        // Nominatim Usage Policy: User-Agent identificativo obbligatorio.
-        'User-Agent': `MyCity/1.0 (${appUrl})`,
-        'Accept-Language': 'it',
-      },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!res.ok) return NextResponse.json({ lat: null, lng: null });
-    const json = (await res.json()) as Array<{ lat?: string; lon?: string }>;
-    const hit = Array.isArray(json) ? json[0] : undefined;
-    const lat = hit?.lat != null ? parseFloat(hit.lat) : null;
-    const lng = hit?.lon != null ? parseFloat(hit.lon) : null;
-    return NextResponse.json({
-      lat: Number.isFinite(lat as number) ? lat : null,
-      lng: Number.isFinite(lng as number) ? lng : null,
-    });
-  } catch {
-    logger.warn('[geocode] Nominatim non raggiungibile', { qlen: q.length });
-    return NextResponse.json({ lat: null, lng: null });
-  }
+  // 13/11/2026 (R13-001) — La stessa ricerca del server dell'ordine (lib/geocodifica.ts):
+  // prima qui c'era una copia a testo libero, con un solo risultato e nessun confine, e
+  // «Via Roma 10, 29121 Piacenza» tornava a Podenzano. Chi la chiama (la cassa che avvisa
+  // della zona, la rubrica degli indirizzi, il negozio che fissa la posizione) riceve ora la
+  // risposta che userà il server. «Non so» resta 200 con { lat: null, lng: null }.
+  const trovato = await coordinateDiUnIndirizzo(q);
+  return NextResponse.json({ lat: trovato?.lat ?? null, lng: trovato?.lng ?? null });
 }
