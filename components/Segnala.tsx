@@ -96,7 +96,16 @@ export function Segnala({
         }
         throw new Error('Segnalazione non inviata');
       }
-      toast.success('Segnalazione ricevuta: la esaminiamo.');
+      // 13/11/2026 (R21-008) — Chi ha lasciato l'email sa se la conferma è partita; se non è
+      // partita, il numero della segnalazione glielo diamo qui.
+      const ricevuta = (await res.json().catch(() => null)) as { id?: string; conferma?: string } | null;
+      const conferma =
+        ricevuta?.conferma === 'inviata'
+          ? ' Ti abbiamo mandato una conferma per email.'
+          : ricevuta?.conferma === 'fallita'
+            ? ` La conferma per email non è partita: il numero della segnalazione è ${ricevuta.id ?? ''}.`
+            : '';
+      toast.success(`Segnalazione ricevuta: la esaminiamo.${conferma}`);
       setAperto(false);
       setDettaglio('');
     } catch {
