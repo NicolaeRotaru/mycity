@@ -274,3 +274,78 @@ describe('R14-003 — un ordine che il negozio non accetta suona dopo 5 minuti, 
     expect(chiaviDelGiro(terzo.corpo)).not.toContain(`ORDINE_DA_ACCETTARE|${ORDINE}`);
   });
 });
+
+describe('R14-004 — l ordine fermo su «accettato» o «ritirato dal fattorino» fa suonare l allarme', () => {
+  const accettato = (o: Riga): Riga => ({
+    id: ORDINE,
+    delivery_status: 'ACCEPTED',
+    created_at: minutiFa(150),
+    accepted_at: minutiFa(125),
+    delivery_slot: null,
+    profiles: { store_name: 'Pane Quotidiano' },
+    ...o,
+  });
+  const ritirato = (o: Riga): Riga => ({
+    id: ORDINE,
+    delivery_status: 'PICKED_UP',
+    created_at: minutiFa(120),
+    picked_up_at: minutiFa(50),
+    rider_id: 'rider-1',
+    profiles: { full_name: 'Marco' },
+    ...o,
+  });
+
+  it('accettato da più di due ore e mai «Pronto»: allarme', async () => {
+    db.orders = [accettato({})];
+    const { corpo } = await giro();
+    expect(chiaviDelGiro(corpo), 'un ordine fermo su ACCEPTED non fa suonare niente').toContain(`ACCETTATO_FERMO|${ORDINE}`);
+    expect(campanelle()).toHaveLength(1);
+    expect(emailHtml()).toContain('#11111111');
+  });
+
+  it('accettato senza l ora dell accettazione: conta dalla nascita', async () => {
+    db.orders = [accettato({ accepted_at: null, created_at: minutiFa(130) })];
+    const { corpo } = await giro();
+    expect(chiaviDelGiro(corpo)).toContain(`ACCETTATO_FERMO|${ORDINE}`);
+  });
+
+  it('accettato da un ora e mezza: il negozio ha ancora tempo', async () => {
+    db.orders = [accettato({ accepted_at: minutiFa(90) })];
+    const { corpo } = await giro();
+    expect(chiaviDelGiro(corpo)).not.toContain(`ACCETTATO_FERMO|${ORDINE}`);
+  });
+
+  it('accettato ieri sera per la fascia di domattina: in regola finché la fascia non è passata', async () => {
+    // Domenica 15/11 alle 21:30 per «Domani · 9:00–12:00»: adesso è lunedì alle 11:00.
+    db.orders = [accettato({ created_at: '2026-11-15T20:25:00.000Z', accepted_at: '2026-11-15T20:30:00.000Z', delivery_slot: 'Domani · 9:00–12:00' })];
+    const prima = await giro();
+    expect(chiaviDelGiro(prima.corpo)).not.toContain(`ACCETTATO_FERMO|${ORDINE}`);
+    // Alle 12:30 la fascia è passata e l'ordine non è ancora pronto.
+    vaiAvanti(90);
+    const dopo = await giro();
+    expect(chiaviDelGiro(dopo.corpo)).toContain(`ACCETTATO_FERMO|${ORDINE}`);
+  });
+
+  it('ritirato dal fattorino da 50 minuti e mai messo «in consegna»: allarme', async () => {
+    db.orders = [ritirato({})];
+    const { corpo } = await giro();
+    expect(chiaviDelGiro(corpo), 'un ordine fermo su PICKED_UP non fa suonare niente').toContain(`RIDER_STUCK|${ORDINE}`);
+    expect((corpo.details ?? []).find((d) => d.key === `RIDER_STUCK|${ORDINE}`)?.detail).toMatch(/ritirato da 50 min/);
+  });
+
+  it('ritirato da 30 minuti: ancora nei tempi', async () => {
+    db.orders = [ritirato({ picked_up_at: minutiFa(30) })];
+    const { corpo } = await giro();
+    expect(chiaviDelGiro(corpo)).not.toContain(`RIDER_STUCK|${ORDINE}`);
+  });
+
+  it('da ritirato a «in consegna» lo stesso ordine non risuona', async () => {
+    db.orders = [ritirato({})];
+    await giro();
+    expect(campanelle()).toHaveLength(1);
+    db.orders[0].delivery_status = 'OUT_FOR_DELIVERY';
+    vaiAvanti(15);
+    await giro();
+    expect(campanelle()).toHaveLength(1);
+  });
+});

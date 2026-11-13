@@ -4,7 +4,7 @@ import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo, VARIABILE_DEL_FERMO, VALORE_CHE_ACCENDE } from '@/lib/cron/fermo-dei-lavori';
 import { escapeHtml } from '@/lib/html-escape';
-import { ORE_PER_ACCETTARE, scadenzaAccettazione } from '@/lib/ordini/scadenza-accettazione';
+import { ORE_PER_ACCETTARE, fineDellaFascia, scadenzaAccettazione } from '@/lib/ordini/scadenza-accettazione';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
@@ -142,11 +142,14 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   }
 
   // 2) Rider con ordine OUT_FOR_DELIVERY ma nessun aggiornamento da 45 minuti
+  // R14-004 — Anche PICKED_UP: ritirato dal negozio e mai messo «in consegna» restava senza nessun
+  // allarme. Stesso orologio (il ritiro, `picked_up_at`), stessa soglia e stessa chiave: ritirato da
+  // 45 minuti e non consegnato è in ritardo comunque, e il passaggio a «in consegna» non risuona.
   const fortyFiveMinAgo = new Date(Date.now() - 45 * 60_000).toISOString();
   const { data: stuckRiders, error: err_stuckRiders } = await admin
     .from('orders')
-    .select('id, rider_id, picked_up_at, profiles!orders_rider_id_fkey(full_name)')
-    .eq('delivery_status', 'OUT_FOR_DELIVERY')
+    .select('id, rider_id, delivery_status, picked_up_at, profiles!orders_rider_id_fkey(full_name)')
+    .in('delivery_status', ['PICKED_UP', 'OUT_FOR_DELIVERY'])
     .lt('picked_up_at', fortyFiveMinAgo)
     .limit(10);
   if (err_stuckRiders) controlliSaltati.push('ordini senza fattorino');
@@ -155,10 +158,13 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
     const id = (o as { id: string }).id;
     const minutes = Math.floor((Date.now() - new Date((o as { picked_up_at: string }).picked_up_at).getTime()) / 60_000);
+    const maiInConsegna = (o as { delivery_status?: string }).delivery_status === 'PICKED_UP';
     alerts.push({
       key: `RIDER_STUCK|${id}`,
       type: 'RIDER_STUCK',
-      detail: `Rider ${rider?.full_name ?? 'unknown'} con ordine #${id.slice(0, 8)} in consegna da ${minutes} min`,
+      detail: maiInConsegna
+        ? `Rider ${rider?.full_name ?? 'unknown'} con ordine #${id.slice(0, 8)} ritirato da ${minutes} min e mai messo «in consegna»`
+        : `Rider ${rider?.full_name ?? 'unknown'} con ordine #${id.slice(0, 8)} in consegna da ${minutes} min`,
       url: `/admin/orders/${id}`,
     });
   }
@@ -303,6 +309,34 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       detail: r.pickup_in_store
         ? `Ordine #${r.id.slice(0, 8)}: pronto da >2h e il cliente non e ancora passato a ritirarlo`
         : `Ordine #${r.id.slice(0, 8)}: pronto da >2h e nessun fattorino l'ha preso`,
+      url: `/admin/orders/${r.id}`,
+    });
+  }
+
+  // 5d) R14-004 — L'ORDINE ACCETTATO CHE NON DIVENTA MAI «PRONTO».
+  //     Il negozio accetta di corsa e si dimentica «Pronto»: nessun fattorino può prenderlo
+  //     (prendi_ordine vuole READY), il giro che annulla guarda solo NEW, e qui non suonava niente.
+  //     Due ore dall'accettazione (o dalla nascita, se manca l'ora dell'accettazione), come il
+  //     «pronto e fermo» del punto 5c: è il tempo che questo giro dà al negozio per il passo dopo.
+  //     E mai prima della fine della fascia promessa: l'ordine della sera accettato per domattina
+  //     è in regola finché la fascia non è passata, come per il punto 1.
+  const { data: accettatiFermi, error: err_accettatiFermi } = await admin
+    .from('orders')
+    .select('id, created_at, accepted_at, delivery_slot, profiles!orders_seller_id_fkey(store_name)')
+    .eq('delivery_status', 'ACCEPTED')
+    .or(`accepted_at.lt.${twoHoursAgo},and(accepted_at.is.null,created_at.lt.${twoHoursAgo})`)
+    .order('accepted_at', { ascending: true, nullsFirst: true })
+    .limit(20);
+  if (err_accettatiFermi) controlliSaltati.push('ordini accettati e mai pronti');
+  for (const o of accettatiFermi ?? []) {
+    const r = o as { id: string; created_at: string; accepted_at?: string | null; delivery_slot?: string | null; profiles?: { store_name?: string } | null };
+    const fine = fineDellaFascia(r);
+    if (fine && fine.getTime() > Date.now()) continue;
+    const minuti = Math.floor((Date.now() - new Date(r.accepted_at ?? r.created_at).getTime()) / 60_000);
+    alerts.push({
+      key: `ACCETTATO_FERMO|${r.id}`,
+      type: 'ACCETTATO_FERMO',
+      detail: `Ordine #${r.id.slice(0, 8)} da ${r.profiles?.store_name ?? 'unknown'} accettato da ${minuti} min e mai segnato «Pronto»${r.delivery_slot ? ` (fascia ${r.delivery_slot})` : ''}: nessun fattorino può prenderlo`,
       url: `/admin/orders/${r.id}`,
     });
   }
