@@ -491,7 +491,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         <Link
           href="/rider"
           aria-label="Torna alle consegne"
-          className="absolute left-3 top-3 z-[1] inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-0/95 text-ink-700 shadow-warm-sm hover:bg-surface-0"
+          className="absolute left-3 top-3 z-[1] inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-0/95 text-ink-700 shadow-warm-sm hover:bg-surface-0"
         >
           <ChevronLeft size={20} aria-hidden />
         </Link>
@@ -559,6 +559,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 </Link>
               </div>
             )}
+            {/* R20-001 — Naviga, Chiama e SMS alti 44 px (h-11): con size="sm" erano 32 px, troppo
+                piccoli per il pollice in strada. Testo e margini restano quelli piccoli: i tre stanno in fila. */}
             <div className="flex gap-2">
               {navHref && (
                 <Button
@@ -569,12 +571,13 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                   size="sm"
                   icon={Navigation}
                   fullWidth
+                  className="h-11"
                 >
                   Naviga
                 </Button>
               )}
               {callPhone && (
-                <Button href={`tel:${callPhone}`} variant="secondary" size="sm" icon={Phone} fullWidth>
+                <Button href={`tel:${callPhone}`} variant="secondary" size="sm" icon={Phone} fullWidth className="h-11">
                   Chiama
                 </Button>
               )}
@@ -585,6 +588,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                   size="sm"
                   icon={MessageSquare}
                   fullWidth
+                  className="h-11"
                 >
                   {/* 5/11/2026 — Apre gli SMS del telefono (col numero del fattorino), non una chat. */}
                   SMS
