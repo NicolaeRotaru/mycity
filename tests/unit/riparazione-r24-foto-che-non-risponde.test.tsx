@@ -9,9 +9,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 
+const disegni = vi.hoisted(() => ({ n: 0 }));
 vi.mock('next/image', () => ({
-  default: ({ src, alt, onError }: { src: string; alt: string; onError?: (e: unknown) => void }) =>
-    createElement('img', { src, alt, onError }),
+  default: ({ src, alt, onError }: { src: string; alt: string; onError?: (e: unknown) => void }) => {
+    disegni.n++;
+    return createElement('img', { src, alt, onError });
+  },
 }));
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: unknown; href: string }) => createElement('a', { href }, children as never) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/' }));
@@ -65,6 +68,19 @@ describe('R24-006 — la foto che non risponde passa al ripiego', () => {
     const { div, root } = await monta(createElement(TrendingNow));
     expect(div.querySelector('img')!.getAttribute('src')).toContain('example.com');
     expect(await rompi(div)).toBe('/foto-mancante.svg');
+    root.unmount();
+  });
+  it('se anche il ripiego non risponde non si entra in un giro infinito', async () => {
+    const { default: FotoConRipiego } = await import('@/components/ui/FotoConRipiego');
+    const sbagliati = vi.fn();
+    const { div, root } = await monta(createElement(FotoConRipiego, { src: 'https://example.com/cancellata.jpg', alt: 'Pane', width: 10, height: 10, onError: sbagliati } as never));
+    expect(await rompi(div)).toBe('/foto-mancante.svg');
+    const dopoIlPrimo = disegni.n;
+    // Il ripiego stesso fallisce, più volte: la foto resta il ripiego, nessun cambio di src
+    // e nessun ridisegno a catena (ogni errore al più un ridisegno, mai un giro).
+    for (let i = 0; i < 5; i++) expect(await rompi(div)).toBe('/foto-mancante.svg');
+    expect(disegni.n - dopoIlPrimo, 'il ripiego che fallisce ha scatenato ridisegni a catena').toBeLessThanOrEqual(5);
+    expect(sbagliati).toHaveBeenCalledTimes(6);
     root.unmount();
   });
 });
