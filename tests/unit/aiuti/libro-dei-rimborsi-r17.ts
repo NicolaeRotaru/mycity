@@ -121,6 +121,8 @@ export interface StripeFinto {
   chiaviScadute: boolean;
   /** La prossima `create` non risponde mai e non arriva a Stripe: il processo muore lì. */
   createMuore: boolean;
+  /** La prossima `create` crea il rimborso e poi non risponde mai: il processo muore dopo i soldi. */
+  createPoiMuore: boolean;
   /** La prossima `create` crea il rimborso e poi la risposta si perde. */
   rispostaPersa: boolean;
   /** La prossima `create` la rifiuta Stripe: niente esce. */
@@ -139,6 +141,7 @@ export function creaStripe(): StripeFinto {
     storni: [],
     chiaviScadute: false,
     createMuore: false,
+    createPoiMuore: false,
     rispostaPersa: false,
     createRifiutata: false,
     createLenta: null,
@@ -162,6 +165,10 @@ export function creaStripe(): StripeFinto {
           s.creati.push(p.amount);
           const nuovo = { id: `re_${s.suStripe.length + 1}`, amount: p.amount, status: 'succeeded', metadata: { ...(p.metadata ?? {}) }, chiave: o.idempotencyKey };
           s.suStripe.push(nuovo);
+          if (s.createPoiMuore) {
+            s.createPoiMuore = false;
+            return new Promise(() => {});
+          }
           if (s.rispostaPersa) {
             s.rispostaPersa = false;
             throw new Error('socket hang up');

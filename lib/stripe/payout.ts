@@ -1706,10 +1706,14 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       // R17-018 — Per un rimborso nato con la prenotazione che porta la chiave decide il libro: se la
       // prenotazione non c'è (tornata indietro con la risposta persa), il rimborso non è contato,
       // anche se i totali, gonfiati da un rimborso fatto fuori da Stripe, dicono di sì.
+      // R17-019 — E se c'è, è contato, anche se i totali dicono di no: il tentativo di prima è morto
+      // dopo i soldi (o gli è caduta la scrittura nell'elenco), e un rimborso dal cruscotto non ancora
+      // registrato gonfia la somma di Stripe. Prima lo si registrava di nuovo: al negozio la sua parte
+      // si toglieva due volte. Il conto sui totali resta solo per i rimborsi nati prima della 412.
       const nelLibro = ((uscito.metadata ?? {}) as Record<string, string>)[METADATO_DEL_LIBRO]
         ? await laChiaveENelLibro(admin, order.id, opts.idempotencyKey)
         : null;
-      const nonContato = registrato <= totaleDellOrdineCents - (uscito.amount ?? 0) || nelLibro === false;
+      const nonContato = nelLibro === null ? registrato <= totaleDellOrdineCents - (uscito.amount ?? 0) : !nelLibro;
       if (nonContato) {
         rimborsoGiaUscito = uscito;
       } else {
