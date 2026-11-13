@@ -201,10 +201,10 @@ function SignUpInner() {
 
   return (
     <>
-      <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+      <h1 className="font-serif text-4xl font-extrabold leading-tight text-ink-900">
         Crea il tuo account
       </h1>
-      <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+      <p className="mt-1.5 mb-7 text-base leading-relaxed text-ink-600">
         Ti serve solo per confermare l&apos;ordine — puoi pagare alla consegna.
       </p>
 
@@ -340,7 +340,7 @@ function SignUpInner() {
 
       <AuthAlternatives condizioniDalModulo={acceptTos} />
 
-      <p className="mt-6 text-[14px] text-ink-600">
+      <p className="mt-6 text-sm text-ink-600">
         Hai già un account?{' '}
         <Link href={accediHref(returnTo)} className="font-bold text-primary-700 hover:underline">Accedi</Link>
       </p>

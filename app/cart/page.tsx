@@ -598,7 +598,7 @@ export default function CartPage() {
               <div key={g.key} className="space-y-3">
                 {/* Header negozio */}
                 <div className="flex items-center gap-2 pt-1">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[9px] font-bold text-white">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-2xs font-bold text-white">
                     {storeInitials(g.storeName)}
                   </span>
                   <span className="text-sm font-bold text-ink-900">

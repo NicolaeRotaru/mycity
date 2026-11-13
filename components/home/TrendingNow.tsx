@@ -109,7 +109,7 @@ export default function TrendingNow() {
                   </div>
                 )}
                 {it.view_count > 5 && (
-                  <div className="absolute bottom-2 right-2 bg-ink-900/80 backdrop-blur text-white text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <div className="absolute bottom-2 right-2 bg-ink-900/80 backdrop-blur text-white text-2xs font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                     <Eye size={12} aria-hidden /> {it.view_count}
                   </div>
                 )}

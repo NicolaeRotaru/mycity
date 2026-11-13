@@ -233,7 +233,7 @@ const ProductCard = ({
             <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>
           </div>
         )}
-        <h3 className="line-clamp-2 min-h-[2.6em] text-[13px] font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
+        <h3 className="line-clamp-2 min-h-[2.6em] text-sm font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
           {name}
         </h3>
 

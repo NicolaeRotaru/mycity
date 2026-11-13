@@ -1497,7 +1497,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     <RatingStars rating={Number(r.rating)} size={16} />
                     {/* Verified Purchase badge — Trust & Safety insight */}
                     {r.verified_purchase && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-2xs font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">
                         <Check size={11} strokeWidth={3} aria-hidden /> Acquisto verificato
                       </span>
                     )}
