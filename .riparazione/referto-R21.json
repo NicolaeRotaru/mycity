@@ -1,15 +1,147 @@
 {
   "sessione": "R21",
-  "aggiornato": "2026-11-13 06:16",
+  "aggiornato": "2026-11-13 06:42",
   "finita": false,
-  "testa": "a19ff8923106fb5fbe7c2e74cc02979ea9dc2067",
+  "testa": "cc0c5e708b2a966ae80464e816d27d62eb9c68b2",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_lanciato",
     "testa": "",
-    "nota": ""
+    "nota": "Fermato al tetto di costo (39,2 $ su 35 $) prima del verify finale. Ogni lotto ha fatto girare tsc, eslint dei file toccati e le prove vicine; i lotti 1 e 2 anche tutta la suite vitest (verde)."
   },
   "voci": [
+    {
+      "id": "R21-001",
+      "chiave": "ai-endpoints|quando anthropic non risponde, vercel spegne la funzione ai prima che il negozio legga un errore chiaro",
+      "esito": "riparato",
+      "commit": "ea62b2cb",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "vercel.json"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-tempi-ai.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-tempi-ai.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ea62b2cb^ --file lib/ai/run.ts,vercel.json --prove tests/unit/riparazione-r21-tempi-ai.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il tempo di un tentativo ora dipende dai token chiesti (15 s + 10 ms per token, al massimo 40 s), passato a ogni chiamata in run.ts. Filtro più chiamata vera, col ritentativo, restano nel caso peggiore a circa 114 s, sotto i 120 della rotta, e mapAiError gira. Le rotte app/api/vision/** hanno maxDuration 120 in vercel.json. lib/ai/client.ts non è stato toccato.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R21-002",
+      "chiave": "ai-endpoints|con un fornitore lento la risposta lunga del copilot non arriva mai: dopo due minuti il negozio legge solo «riprova»",
+      "esito": "parziale",
+      "commit": "b51bf9a4",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "lib/ai/regole-copilot.ts",
+        "app/api/ai/copilot/route.ts",
+        "tests/unit/minori-s10-catalogo-chat.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-copilot-lento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-copilot-lento.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b51bf9a4^ --file lib/ai/run.ts,lib/ai/regole-copilot.ts,app/api/ai/copilot/route.ts --prove tests/unit/riparazione-r21-copilot-lento.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il Copilot fa un tentativo solo da 80 s (nuovi campi timeoutMs e senzaRitentativi in runMessage) e il tetto di token scende a 3000, quanto arriva in 80 s a 40 token al secondo: filtro (circa 33 s nel caso peggiore) più tentativo stanno sotto i 120 s, e il negozio legge l'errore chiaro invece della pagina di Vercel. Il commit cc0c5e70 aggiorna la prova esistente tests/unit/minori-s10-catalogo-chat.test.ts, che importa app/api/ai/copilot/route.ts e leggeva il tetto vecchio (ora chiede più di 2048 e al massimo 3200); in b51bf9a4 quella prova è rossa, torna verde in cc0c5e70.",
+      "cosa_resta": "Manca lo streaming (client.messages.stream) col piano parziale a tempo scaduto e il piano diviso in pezzi: è una riscrittura, esclusa in quest'onda dalla regista. Un fornitore più lento di 40 token al secondo dà ancora l'errore chiaro «Errore nel servizio AI. Riprova.» senza risposta parziale; i cataloghi grandi hanno piani più corti (circa 33 prodotti per piano).",
+      "nota": "Due commit: b51bf9a4 (la correzione) e cc0c5e70 (la prova esistente che leggeva il tetto vecchio).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R21-003",
+      "chiave": "deploy-sre|con il rilascio automatico acceso il ritorno indietro automatico non scatta quasi mai",
+      "esito": "scelta_di_nicola",
+      "domanda": "I tre segreti VERCEL_TOKEN, VERCEL_ORG_ID e VERCEL_PROJECT_ID sono già su GitHub (Settings → Secrets and variables → Actions)? Se sì, in vercel.json `git.deploymentEnabled.main` passa da true a false: il sito si pubblica solo dopo la CI verde (deploy-dopo-ci.yml) e il ritorno indietro automatico torna a funzionare. Se non ci sono, quel cambio ferma gli aggiornamenti del sito.",
+      "nota": "Il difetto è davvero nel file («main»: true), ma il cambio è l'ordine in due tempi (prima i segreti, poi la parola) scritto in deploy-dopo-ci.yml e docs/hosting-vercel.md. Da qui i segreti non si vedono. vercel.json non è stato toccato per questa voce.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R21-004",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "riparato",
+      "commit": "fc62905a",
+      "file_toccati": [
+        "components/VendorForm.tsx",
+        "components/seller/SocialLinksFields.tsx",
+        "components/seller/CustomizationSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-social-sotto-il-campo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-social-sotto-il-campo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fc62905a^ --file components/VendorForm.tsx,components/seller/SocialLinksFields.tsx,components/seller/CustomizationSection.tsx --prove tests/unit/riparazione-r21-social-sotto-il-campo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Link incollato, @ e sito senza https si correggevano già al salvataggio (371e4da8, prova minori-s06-social-del-negozio) e il messaggio già nominava il campo. Restavano l'errore in fondo e la sezione chiusa: ora l'errore sta sotto il campo giusto (con «per esempio panequotidiano»), il campo è segnato non valido e la sezione «Social e contatti» si apre da sola; l'aiuto dice che il link incollato e il sito senza https si correggono da soli. Il salvataggio resta fermo se un campo non vale.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R21-005",
+      "chiave": "layout-responsive|in chi siamo, coi caratteri del telefono un po' più grandi, la scritta «alla consegna» esce dal suo riquadro e la pagina scorre di lato",
+      "esito": "riparato",
+      "commit": "969f2cc5",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-chi-siamo-riquadro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-chi-siamo-riquadro.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 969f2cc5^ --file app/about/page.tsx --prove tests/unit/riparazione-r21-chi-siamo-riquadro.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il valore delle statistiche è text-xl sul telefono (sm:text-2xl md:text-3xl) con break-words, e la cella ha min-w-0. Il piede al 200% è escluso dalla voce stessa. La prova guarda le classi, non misura in un browser.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R21-006",
+      "chiave": "microcopy|se il conteggio dei negozi non riesce, la pagina chi siamo torna a dire «100% venditori locali verificati»",
+      "esito": "riparato",
+      "commit": "b9fcc3f5",
+      "file_toccati": [
+        "app/about/page.tsx",
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-chi-siamo-senza-cifra.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-chi-siamo-senza-cifra.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9fcc3f5^ --file app/about/page.tsx,components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r21-chi-siamo-senza-cifra.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolta la statistica «100% venditori locali verificati»: col conteggio caduto, errore, eccezione o zero negozi restano tre statistiche (griglia a tre colonne), col numero vero quattro. Rilette anche «verificati uno a uno» in Chi siamo («che approviamo prima di farli entrare») e la riga della home («Commercianti locali · Negozi di Piacenza, approvati da noi prima di entrare»). La prova monta la pagina vera col database finto: lettura caduta, zero negozi, conteggio riuscito.",
+      "verificato_da": ""
+    },
     {
       "id": "R21-007",
       "chiave": "privacy-legale|chi fa una segnalazione lascia la sua email lì per sempre",
@@ -45,28 +177,29 @@
     {
       "id": "R21-008",
       "chiave": "privacy-legale|chi segnala un contenuto illecito lasciando l'email non riceve nessuna conferma che la segnalazione è arrivata",
-      "esito": "parziale",
-      "commit": "bc292905",
+      "esito": "riparato",
+      "commit": "9b775728",
       "file_toccati": [
         "app/api/segnalazioni/route.ts",
         "components/Segnala.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r21-segnalazione-conferma.test.tsx"
+        "tests/unit/riparazione-r21-segnalazione-conferma.test.tsx",
+        "tests/unit/riparazione-r21-segnalazione-conferma-regole.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r21-segnalazione-conferma.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-segnalazione-conferma.test.tsx tests/unit/riparazione-r21-segnalazione-conferma-regole.test.tsx",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bc292905^ --file app/api/segnalazioni/route.ts,components/Segnala.tsx --prove tests/unit/riparazione-r21-segnalazione-conferma.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9b775728^ --file app/api/segnalazioni/route.ts,components/Segnala.tsx --prove tests/unit/riparazione-r21-segnalazione-conferma-regole.test.tsx --json"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Se c'è l'email parte un'email transazionale con numero, oggetto, motivo e data (ora di Roma). Il testo libero di chi segnala non c'è: l'indirizzo lo può scrivere chiunque. La rotta legge l'esito dell'invio e lo restituisce (conferma: inviata|fallita|nessun_recapito); se l'invio fallisce lo scrive nei registri e risponde comunque 201. Il modulo dice se la conferma è partita; se non è partita, mostra il numero della segnalazione. La prova usa un orologio finto.",
-      "nota": "In produzione l'email parte solo se ci sono RESEND_API_KEY e RESEND_FROM; senza, il risultato è 'fallita' e il modulo mostra il numero.",
-      "verificato_da": "collaudo-lotto1: vitest 6/6 verde, rimessa uscita 0; il testo libero non entra nell'email, il corpo è escapato; trovati due difetti, giro di correzione in corso",
-      "cosa_resta": "In correzione: (1) il numero della segnalazione, quando la conferma non parte, compare solo in un avviso che sparisce da solo; (2) un punto riservato, consegnato alla regista."
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima riparazione: se c'è l'email parte un'email transazionale con numero, oggetto, motivo e data (ora di Roma), senza il testo libero di chi segnala; la rotta restituisce l'esito dell'invio e, se fallisce, lo scrive nei registri. Correzione dopo il collaudo: se la conferma non parte, il modulo resta aperto con il numero della segnalazione finché chi segnala non lo chiude. La conferma parte solo col controllo anti-robot del modulo superato (stesso aiutante e riquadro di contatti e newsletter), al massimo una volta ogni 10 minuti e tre volte al giorno allo stesso indirizzo (il contatore usa un'impronta dell'indirizzo); quando non parte la segnalazione si salva lo stesso e la risposta dice conferma: non_inviata. L'email dice «Se non hai fatto tu questa segnalazione, ignora questa email.».",
+      "nota": "Prima riparazione bc292905, correzione 9b775728. In produzione la conferma parte solo se ci sono RESEND_API_KEY e RESEND_FROM e le chiavi Turnstile già usate da contatti e newsletter; senza, la risposta è fallita o non_inviata e il modulo mostra il numero. Il contatore per indirizzo vale fra più istanze solo con Upstash configurato, come gli altri freni.",
+      "verificato_da": "",
+      "cosa_resta": ""
     },
     {
       "id": "R21-009",
@@ -168,7 +301,7 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Potatura notturna nuova su recently_viewed (viewed_at più vecchio di 14 mesi, costante MESI_DEGLI_ULTIMI_VISTI, nell'elenco che process-deletions chiama con potatureNotturne). Migrazione 450: un trigger su consent_log cancella gli «Ultimi visti» di chi, con l'accesso fatto, registra un «no» ai cookie statistici (da qualunque pagina), e una volta sola ripulisce chi aveva già detto no. Il carosello (leggiVistiDiRecente) nel browser non legge senza consenso statistico attivo. L'informativa ha la riga con mesi e revoca, e la voce fra i dati raccolti.",
       "cosa_resta": "La migrazione 450 va applicata al database vero (la decide Nicola): finché non c'è, alla revoca cancella solo il riquadro «Ultimi visti» quando è aperto sulla pagina (components/RecentlyViewed.tsx, com'era), e l'informativa promette già la cancellazione subito.",
-      "verificato_da": ""
+      "verificato_da": "collaudo-lotto2: unit 6/6 e SQL 3/3 su db ricostruito (194 migrazioni, 0 fallite), due rimesse con 0; 450 applicata due volte senza errori; pulizia una tantum provata (no→sì resta, sì→no pulito, solo no pulito, solo marketing resta); /api/consent scrive categoria analytics, valore false e user_id solo con l'accesso; SECURITY DEFINER con search_path=public come le altre; 14 mesi uguali all'analitica dell'informativa; senza consenso il carosello non legge"
     },
     {
       "id": "R21-013",
@@ -192,40 +325,66 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nuovo passo notturno «prove-di-consegna-orfane» in potatureNotturne (lo chiama la rotta process-deletions): elenca cod-proof/<fattorino>/<ordine>/, legge i percorsi vivi nelle tre colonne dell'ordine e toglie i file che nessun ordine indica più (foto rifatte, pannello chiuso senza confermare, e i file che la potatura dei 90 giorni non era riuscita a togliere: la notte dopo sono orfani, così si riprova). Prudenze come per kyc-docs: 7 giorni di margine, tetto di 200 file per notte, si rilegge l'ordine della cartella prima di togliere, e se gli ordini non si leggono non si toglie niente e la notte lo segnala.",
       "nota": "Il fattorino non può cancellare da cod-proof (nessuna regola sul magazzino glielo permette, ed è giusto per una prova d'incasso): per questo la copia di prima non si toglie subito dal browser ma la notte, al massimo dopo 7 giorni. Per il giro a mano che conta prima di cancellare c'è contaOrfaniDelleProve (esportata, non ancora chiamata): in app/api/cron/process-deletions/route.ts, contaSenzaCancellare, andrebbe aggiunta a fileDaTogliere accanto a contaOrfaniKyc. Non è chiesto dalla voce.",
-      "verificato_da": ""
+      "verificato_da": "collaudo-lotto2: prova 3/3 dalla rotta process-deletions vera, rimessa con 0, più 8 prove avverse (250 ordini su 3 pagine senza togliere foto vive, URL firmati e prefissi, tetto 200, margine 7 giorni, letture fallite non tolgono niente, vecchia struttura non toccata); cercato ogni riferimento a cod-proof: l'unico filo vivo sono le 3 colonne di orders scritte da lib/cassa/registra-incasso.ts"
     },
     {
       "id": "R21-014",
       "chiave": "privacy-legale|il modulo di segnalazione non permette di dare il nome di chi segnala né di dichiarare la buona fede",
-      "esito": "parziale",
-      "commit": "163f7c99",
+      "esito": "riparato",
+      "commit": "6b84f56b",
       "file_toccati": [
         "app/api/segnalazioni/route.ts",
         "components/Segnala.tsx",
         "app/privacy/page.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r21-segnalazione-nome-buona-fede.test.tsx"
+        "tests/unit/riparazione-r21-segnalazione-nome-buona-fede.test.tsx",
+        "tests/unit/riparazione-r21-segnalazione-righe-del-sito.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r21-segnalazione-nome-buona-fede.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-segnalazione-nome-buona-fede.test.tsx tests/unit/riparazione-r21-segnalazione-righe-del-sito.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 163f7c99^ --file app/api/segnalazioni/route.ts,components/Segnala.tsx,app/privacy/page.tsx --prove tests/unit/riparazione-r21-segnalazione-nome-buona-fede.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6b84f56b^ --file app/api/segnalazioni/route.ts --prove tests/unit/riparazione-r21-segnalazione-righe-del-sito.test.ts --json"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nel modulo ci sono un campo nome facoltativo e una casella di buona fede facoltativa, non spuntata. La rotta ha nomeSegnalante e buonaFede nello schema. I due dati vanno in fondo al testo della segnalazione, in righe scritte da noi: la pagina admin mostra già quel testo, quindi l'amministratore li vede, e la potatura del R21-007 li toglie insieme al testo. Se il testo con queste righe supera i 2000 caratteri della colonna, la rotta risponde 400. L'informativa nomina il nome fra i dati raccolti.",
-      "nota": "Nessuna migrazione, apposta: una colonna nuova voleva dire rigenerare lib/database.types.ts (file non mio, controllato dalla CI e dalla prova nessuna-scrittura-inventa-una-colonna), prevedere un piano B finché la migrazione non è applicata e modificare la pagina admin. Se Nicola vuole due colonne vere servono quei tre passi.",
-      "verificato_da": "collaudo-lotto1: vitest 6/6 verde, rimessa uscita 0; una prova del collaudo, eseguita sulla rotta vera, mostra che le righe del nome e della buona fede si possono falsificare dal testo libero o con un nome che va a capo",
-      "cosa_resta": "In correzione: rifiutare gli a capo nel nome e neutralizzare, nel testo di chi segnala, le righe che imitano quelle scritte dal sistema."
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima riparazione: nel modulo un campo nome facoltativo e una casella di buona fede facoltativa; la rotta li mette in fondo al testo della segnalazione, in righe scritte dal sito; 400 oltre i 2000 caratteri; l'informativa nomina il nome. Correzione dopo il collaudo: il nome sta su una riga sola (a capo, caratteri di controllo e invisibili diventano spazi, le lineette diventano trattini) e nel testo di chi segnala una riga che comincia con una lineetta (o un segno che le somiglia, anche dopo spazi o caratteri invisibili) comincia con «-»: le righe che cominciano con «— » le scrive solo il sito. Il testo normale e gli elenchi col trattino restano come sono.",
+      "nota": "Prima riparazione 163f7c99, correzione 6b84f56b. Nessuna migrazione. La garanzia piena resterebbe quella di due colonne vere (migrazione, lib/database.types.ts e pagina admin, file non di R21).",
+      "verificato_da": "",
+      "cosa_resta": ""
     },
     {
       "id": "R21-015",
       "chiave": "qa-flussi|il riordino rilegge il prezzo del prodotto, non della variante",
       "esito": "gia_riparato_prima",
       "prova": "Il difetto non si può presentare: le varianti non hanno un prezzo loro. migrations/080_product_variants.sql:4-6 «Il prezzo resta unico a livello prodotto (decisione di prodotto: stesso prezzo per tutte le varianti); ogni variante ha SOLO il suo stock e l'etichetta»; nessuna migrazione dopo aggiunge un prezzo a product_variants (lib/database.types.ts: Row = id, product_id, options, label, stock, position, created_at); anche la cassa e il server usano il prezzo del prodotto (app/checkout/page.tsx:205-208, lib/ordini/valida-carrello.ts:167 unitCents = discountedUnitCents(p.price, …)). Quindi lib/riordino.ts (prodottiDiAdesso) legge già il prezzo giusto.",
+      "verificato_da": "collaudo-lotto2: nel db ricostruito fino alla 450 product_variants ha solo id, product_id, options, label, stock, position, created_at; nessun prezzo di variante in migrazioni, codice o editor; lib/riordino.ts:59 legge products.price come la cassa e lib/ordini/valida-carrello.ts:167"
+    },
+    {
+      "id": "R21-016",
+      "chiave": "qa-flussi|basta un solo campo fuori regola e tutta la personalizzazione della vetrina sparisce, e il salvataggio dopo la cancella",
+      "esito": "riparato",
+      "commit": "58757a63",
+      "file_toccati": [
+        "lib/store-customization.ts",
+        "tests/unit/store-customization.test.ts",
+        "tests/unit/la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-vetrina-un-campo-alla-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-vetrina-un-campo-alla-volta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 58757a63^ --file lib/store-customization.ts --prove tests/unit/riparazione-r21-vetrina-un-campo-alla-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "normalizeCustomization, se lo schema intero non passa, controlla ogni campo per conto suo (e ogni voce di tema, social e annuncio, ogni elemento di badge e prodotti in evidenza) e scarta solo l'invalido; lo schema di salvataggio resta severo. ThemePicker e StoreDetailsEditor leggono da lì e non sono stati toccati. Due prove esistenti che importano il file codificavano il vecchio «tutto o niente» e sono state aggiornate (dichiarato): store-customization.test.ts (badge sconosciuto scartato, il buono resta) e la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts (colore inventato scartato, il motto accanto resta).",
       "verificato_da": ""
     },
     {
@@ -251,12 +410,12 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La scheda legge insieme all'ordine internal_dispute_status e i reclami aperti dalla tabella disputes (stati open e under_review, gli stessi del giro dei bonifici). «Contestazione» mostra il reclamo aperto (con data e link ai reclami), il reclamo interno e la contestazione in banca; se i reclami non si leggono lo dice invece di «—». Accanto a «trattenuto» c'è il motivo («fermo per: reclamo aperto», «contestazione interna (…)», «contestazione in banca»). Etichetta WON aggiunta (il webhook la scrive maiuscola e usciva grezza). La logica del bonifico non è toccata.",
       "nota": "Il link porta a /admin/disputes (che si apre già sui reclami aperti), non al singolo reclamo: quella pagina non ha un indirizzo per reclamo e non è un mio file.",
-      "verificato_da": ""
+      "verificato_da": "collaudo-lotto2: prova 5/5, rimessa con 0; in SQL con RLS un admin legge i reclami open da disputes; stati uguali al giro dei bonifici (open, under_review) e motivi del fermo coi suoi filtri; se la lettura fallisce lo dice; diff solo su pagina ed etichette, logica del bonifico invariata"
     },
     {
       "id": "R21-018",
       "chiave": "stati-ui|dopo troppi tentativi di accesso la pagina dice «qualche minuto» invece di dire quanto aspettare",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "5ad1b7578b37d1824fc5402a2d333a22df8b3989",
       "file_toccati": [
         "app/api/auth/signin/route.ts",
@@ -275,8 +434,33 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5ad1b757^ --file app/api/auth/signin/route.ts,lib/auth/conferma-email.ts,app/sign-in/page.tsx --prove tests/unit/riparazione-r21-accesso-dice-quanto-aspettare.test.ts,tests/unit/riparazione-r21-accesso-conto-alla-rovescia.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La rotta scrive i minuti arrotondati per eccesso su tutti e tre i rami («Troppi tentativi su questo account. Riprova fra 5 minuti.», al singolare per 1 minuto). esitoDellaRispostaDiAccesso legge Retry-After per un 429 (attesaSecondi). La pagina spegne «Accedi», mostra «Puoi riprovare fra 4:21» col conto alla rovescia, non rimanda durante l'attesa e alla fine torna «Accedi» e toglie la frase. Prova sulla rotta vera col freno vero e l'orologio finto (il caso della palestra: 261 s) e sulla pagina vera montata.",
+      "verificato_da": "collaudo-lotto2: prove 6/6 e 2/2, rimessa con 0, più 16 prove avverse su Retry-After (assente, 0, negativo, non numerico, data HTTP, NaN: nessuna attesa inventata), minuti per eccesso e mai 0, stessa risposta per indirizzo esistente e inesistente; difetto trovato sul conto alla rovescia, giro di correzione in corso",
+      "cosa_resta": "In correzione: il conto alla rovescia di app/sign-in/page.tsx scala un secondo a ogni timer invece di guardare la scadenza; se la scheda va in secondo piano «Accedi» resta spento più a lungo del freno del server."
+    },
+    {
+      "id": "R21-019",
+      "chiave": "stati-ui|la pagina del negozio del mese, quando la redazione non ha ancora scelto, non dice niente, e una lettura fallita sembra uguale",
+      "esito": "riparato",
+      "commit": "3e6a2948",
+      "file_toccati": [
+        "app/shop-of-month/page.tsx",
+        "lib/queries/negozio-del-mese.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r21-negozio-del-mese-vuoto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r21-negozio-del-mese-vuoto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3e6a2948^ --file app/shop-of-month/page.tsx,lib/queries/negozio-del-mese.ts --prove tests/unit/riparazione-r21-negozio-del-mese-vuoto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "leggiNegozioDelMese lancia l'errore invece di valere «nessuna scelta». La pagina mostra «Non riesco a leggere la scelta della redazione» con Riprova se la lettura cade, e «La scelta di novembre arriva presto: intanto vota il tuo preferito qui sotto» (mese nel fuso di Piacenza) se riesce ed è vuota. In home ShopOfMonthHero usa la stessa funzione: senza scelta resta com'era; su lettura caduta react-query ora ritenta (file non di R21, non toccato).",
       "verificato_da": ""
     }
   ],
@@ -294,16 +478,53 @@
       "severita": "minore",
       "file": "app/admin/orders/[id]/page.tsx (motiviDelFermo) · app/api/cron/release-payouts/route.ts:229-235",
       "descrizione": "Il giro dei bonifici salta anche gli ordini con un reso aperto (tabella returns, OPEN_RETURN_STATUSES). La scheda adesso mostra reclami e contestazioni, ma non i resi: con un reso aperto il bonifico resta «trattenuto» senza motivo scritto. È fuori dalla voce R21-017, che parla solo di reclami."
+    },
+    {
+      "titolo": "Il giro a mano delle cancellazioni non conta le foto di consegna orfane che la notte toglierà",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts:87",
+      "descrizione": "contaOrfaniDelleProve (lib/privacy/potature-ritenzione.ts, R21-013) è esportata ma nessuno la chiama: dentro contaSenzaCancellare andrebbe aggiunta a fileDaTogliere accanto a contaOrfaniKyc, così il giro di prova mostra anche questi file."
+    },
+    {
+      "titolo": "Il link al reclamo nella scheda ordine porta all'elenco filtrato sui reclami aperti e non mostra quelli in esame",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/disputes/page.tsx:63",
+      "descrizione": "La scheda ordine (R21-017) linka /admin/disputes, che si apre filtrato su 'open': un reclamo 'under_review' non compare dove porta il link, e la pagina non ha un indirizzo per singolo reclamo."
+    },
+    {
+      "titolo": "Con Upstash il freno dell'accesso dice sempre di aspettare la finestra intera, anche quando ne manca meno",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "lib/rate-limit.ts:226",
+      "descrizione": "Con Upstash retryAfterSec vale sempre la finestra intera (300 s): in produzione la frase e il conto alla rovescia di R21-018 diranno sempre 5 minuti."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (accesso): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "La schermata di accesso dice ancora «100% commercianti locali verificati»",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "components/ui/AuthShell.tsx:44",
+      "descrizione": "Stessa frase assoluta di R21-006 (testo fisso, nessun dato la sostiene): va riletta come in home («Commercianti locali»)."
     }
   ],
   "domande_per_nicola": [
     "Segnalazioni: confermi che email, nome e testo di chi segnala si cancellano 12 mesi dopo la decisione? Il numero viene dalla ricetta del 24/10, non da una tua decisione (R21-007).",
     "Per quanto teniamo l'email con l'IBAN nella casella dell'assistenza dopo il bonifico, per esempio 90 giorni? (R21-010)",
     "I messaggi della chat col negozio devono avere una scadenza di N mesi dall'ultimo messaggio? Quanti? (R21-010)",
-    "Il Rider riceve i dati del cliente come titolare autonomo (Termini, punto 10) o per conto di MyCity, come dice il registro? Va scritto uguale nei Termini e nell'informativa (R21-011)."
+    "Il Rider riceve i dati del cliente come titolare autonomo (Termini, punto 10) o per conto di MyCity, come dice il registro? Va scritto uguale nei Termini e nell'informativa (R21-011).",
+    "R21-003: i segreti VERCEL_TOKEN, VERCEL_ORG_ID e VERCEL_PROJECT_ID sono già su GitHub? Se sì, in vercel.json `git.deploymentEnabled.main` passa a false e il ritorno indietro automatico torna a funzionare; se no, quel cambio fermerebbe gli aggiornamenti del sito.",
+    "R21-002: per stare sotto i 120 s della rotta il tetto di token del Copilot scende da 6000 a 3000: un negozio con un catalogo grande riceve piani più corti (circa 33 prodotti per volta). Va bene finché non c'è lo streaming?"
   ],
   "conto": {
-    "agenti": 4,
-    "nota": ""
+    "agenti": 7,
+    "nota": "7 subagenti su 12 (3 lotti, 1 correzione, 2 collaudi... più il collaudo del lotto 1). Costo della sessione 39,2 $ alle 06:41, oltre il tetto di 35 $: fermo qui. Restano: collaudo del lotto 3 (8 voci) e ricollaudo della correzione 008/014; correzione di R21-018 (conto alla rovescia dalla scadenza) e del rischio latente di R21-013 (delivery_signature_url fra le colonne lette); npm run verify; valida-referto."
   }
 }
