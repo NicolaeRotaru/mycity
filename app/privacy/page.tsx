@@ -222,12 +222,22 @@ export default function PrivacyPage() {
         </div>
       </LegalSection>
 
-      <LegalSection id="destinatari" heading="4. Destinatari dei dati (sub-responsabili)">
+      {/* 13/11/2026 (R21-011) — Il titolo diceva «(sub-responsabili)», ma il negozio non lo è: riceve
+          i dati come titolare autonomo, ed è scritto così anche nei Termini (punto 9). */}
+      <LegalSection id="destinatari" heading="4. Destinatari dei dati">
         {/* 5/11/2026 — Il riassunto in cima prometteva il negozio e il rider, e qui non
-            c'erano: sono i destinatari che ricevono di più. */}
+            c'erano: sono i destinatari che ricevono di più.
+            13/11/2026 (R21-011) — Mancava in che ruolo li ricevono. Il negozio è titolare autonomo
+            (Termini, punto 9). Il ruolo del Rider no: i Termini (punto 10) dicono «titolare
+            autonomo», il registro dei difetti «per conto di MyCity»; lo decide Nicola col legale. */}
         <p>
-          <strong>Il negozio da cui compri</strong> e <strong>il Rider che consegna</strong> ricevono nome,
-          telefono, indirizzo e note di consegna, solo per il tuo ordine.
+          <strong>Il negozio da cui compri</strong> riceve nome, telefono, indirizzo e note di consegna, solo
+          per il tuo ordine. Su questi dati è titolare autonomo del trattamento: li usa per preparare,
+          consegnare e assistere quell&apos;ordine, compresi resi, reclami e obblighi fiscali e contabili,
+          con gli impegni scritti nei <Link href="/terms" className="text-primary-700 underline">Termini di servizio</Link>.
+        </p>
+        <p>
+          <strong>Il Rider che consegna</strong> riceve gli stessi dati, solo per quella consegna.
         </p>
         <p>
           I tuoi dati sono trattati da fornitori esterni che operano come Responsabili del
