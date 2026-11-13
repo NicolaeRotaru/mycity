@@ -157,6 +157,46 @@ function scaduta(row: { scade_at?: string | null }): boolean {
   return Number.isFinite(quando) && quando <= Date.now();
 }
 
+const MOTIVO_SCADUTA = 'scaduta: non partita entro la scadenza (scade_at)';
+
+/**
+ * 13/11/2026 (R22-002) — LE SCADUTE SI CHIUDONO TUTTE INSIEME, PRIMA DI PRENDERE IL GIRO.
+ *
+ * `claim_pending_emails` (migrazione 165) prende le righe in ordine di `send_at` e non guarda
+ * `scade_at`: le scadute si chiudevano solo dopo essere state prese, una per uno dei quindici
+ * posti del giro. Il giorno della riaccensione, con cento scadute in coda, «il tuo ordine è
+ * pronto» partiva al settimo giro, un'ora dopo. Qui si chiudono in blocco, col motivo, prima
+ * della presa; quelle prenotate da un giro in corso le lascia a lui (le controlla `scaduta`).
+ * Se la scrittura non riesce (per esempio senza la colonna della 165) il giro va avanti come
+ * prima: le scadute si chiudono una per una quando vengono prese.
+ */
+async function chiudiLeScaduteInBlocco(supa: any): Promise<number> {
+  const adesso = new Date();
+  const prenotazioneScaduta = new Date(adesso.getTime() - 15 * 60_000).toISOString();
+  const valori = { cancelled_at: adesso.toISOString(), claimed_at: null, last_error: MOTIVO_SCADUTA };
+  let chiuse = 0;
+  try {
+    for (const libere of [
+      (q: any) => q.is('claimed_at', null),
+      (q: any) => q.lt('claimed_at', prenotazioneScaduta),
+    ]) {
+      const { data, error } = await libere(
+        supa.from('email_queue').update(valori)
+          .is('sent_at', null)
+          .is('cancelled_at', null)
+          .lte('scade_at', adesso.toISOString()),
+      ).select('id');
+      if (error) throw new Error(String((error as { message?: unknown }).message ?? error));
+      chiuse += Array.isArray(data) ? data.length : 0;
+    }
+  } catch (e) {
+    logger.warn('[cron] scadute non chiuse in blocco: si chiudono una per una quando il giro le prende', {
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return chiuse;
+}
+
 /**
  * 31/10/2026 — UN ACCOUNT CHE NON ESISTE PIU' NON E' UN ERRORE DI UN ATTIMO.
  *
@@ -180,6 +220,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
   }
   const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  // 0) R22-002 — Le scadute escono dalla fila prima della presa (vedi `chiudiLeScaduteInBlocco`).
+  const scaduteInBlocco = await chiudiLeScaduteInBlocco(supa);
 
   // 1) Claim batch (atomic UPDATE … RETURNING per evitare double-send)
   /**
@@ -229,7 +272,10 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // lo dice ad alta voce (lib/email/sentinella-posta-ordini.ts) e non ferma mai il giro.
   const postaOrdini = await controllaPostaDegliOrdini(supa);
 
-  return await processBatch(supa, (batch ?? []) as any[], { postaOrdini: postaOrdini.stato });
+  return await processBatch(supa, (batch ?? []) as any[], {
+    postaOrdini: postaOrdini.stato,
+    ...(scaduteInBlocco > 0 ? { scaduteInBlocco } : {}),
+  });
 });
 
 export const GET = handler;
@@ -343,7 +389,7 @@ async function processBatch(
     if (scaduta(row)) {
       skipped++;
       scadute++;
-      await annullaRiga(supa, row.id, 'scaduta: non partita entro la scadenza (scade_at)');
+      await annullaRiga(supa, row.id, MOTIVO_SCADUTA);
       continue;
     }
     const userProfile = profili.get(row.user_id) ?? null;
