@@ -230,13 +230,17 @@ function finestraDelRitiro(
   hours: StoreHours,
   scelta: { giorno: 'oggi' | 'domani'; aMinuti: number },
   now: Date,
+  propostaIl: Date = now,
 ): { intervals: HoursInterval[] | undefined; da: number; a: number } {
   const limite = scelta.aMinuti - MINUTI_PRIMA_DELLA_FINE;
   // Per una fascia di domani il ritiro si fa domani, prima del limite. Scelta prudente (AD,
   // 30/10): la regola alla lettera ammetterebbe anche il ritiro di stasera con la merce tenuta
   // da parte una notte (sabato sera per la domenica chiusa); finché Nicola non decide la notte,
   // la cassa non la promette.
-  if (scelta.giorno === 'domani') return { intervals: hours[DAY_KEYS[(now.getDay() + 1) % 7]], da: 0, a: limite };
+  // «Domani» è il giorno dopo quello in cui la cassa ha proposto la fascia (`propostaIl`), non dopo
+  // il momento in cui la rotta la giudica: proposta alle 23:59 e arrivata dopo mezzanotte, il
+  // domani è il giorno in cui la rotta sta già girando.
+  if (scelta.giorno === 'domani') return { intervals: hours[DAY_KEYS[(propostaIl.getDay() + 1) % 7]], da: 0, a: limite };
   // Paletti ① e ②: una fascia di oggi già finita, o a meno di un'ora dalla fine, non ha più un
   // momento per il ritiro (`limite < adesso` risponde no).
   return { intervals: hours[DAY_KEYS[now.getDay()]], da: minutiDelGiorno(now), a: limite };
@@ -304,6 +308,7 @@ export function negozioPuoServire(
   storeHours: unknown,
   fascia?: string | null,
   now: Date = romeNow(),
+  propostaIl: Date = now,
 ): boolean {
   const hours = orariImpostati(storeHours);
   if (!hours) return true;
@@ -317,7 +322,7 @@ export function negozioPuoServire(
   // cominciare fra adesso e 60 minuti prima della fine della fascia, con il negozio che resta aperto
   // almeno un quarto d'ora (`MINUTI_PER_IL_RITIRO`), anche se durante la fascia è chiuso. Lunedì alle 12:00 Pane Quotidiano (9-13, 16:30-19:30) serve la 13:00–16:30
   // (si ritira entro le 13); alle 14:00 no, riapre alle 16:30 e il ritiro andrebbe oltre le 15:30.
-  const ritiro = finestraDelRitiro(hours, scelta, now);
+  const ritiro = finestraDelRitiro(hours, scelta, now, propostaIl);
   return ritiroPossibileFra(ritiro.intervals, ritiro.da, ritiro.a);
 }
 
