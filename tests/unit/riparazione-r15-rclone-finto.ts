@@ -57,7 +57,7 @@ export function mondoFinto() {
   }
   const lancia = (env: Record<string, string>) => {
     const r = spawnSync('bash', ['-c', 'set -euo pipefail; TS=T1; riepilogo_lavoro() { :; }\n' + bloccoFoto()], {
-      env: { PATH: `${bin}:${process.env.PATH}`, FAKE_ROOT: radice, HOME: radice, ...env },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_ROOT: radice, HOME: radice, ...env },
       encoding: 'utf8',
     })
     return { uscita: r.status, out: (r.stdout || '') + (r.stderr || '') }
