@@ -1309,6 +1309,67 @@ async function rimettiLOrdineComEra(
 }
 
 /**
+ * 13/11/2026 (R17-020) — GLI STATI SI SCRIVONO SUL RIMBORSATO DI ADESSO.
+ *
+ * `refundOrder` decide «pieno» prima di chiamare Stripe, e l'ultima scrittura metteva payment_status e
+ * payout_status filtrando solo per id. Ma mentre Stripe esegue il rimborso la banca può respingerne uno
+ * vecchio: il gestore abbassa il rimborsato (40 → 35 €), scrive «rimborsato in parte» e lascia il
+ * bonifico al negozio in attesa. Subito dopo qui si riscriveva REFUNDED e REFUNDED: 35 € su 40 con
+ * l'ordine «rimborsato del tutto», il bonifico chiuso e il negozio senza i 4,05 € che gli restavano.
+ * Adesso la scrittura passa solo se il rimborsato è ancora quello lasciato da `accumula_rimborso`; se
+ * no si rilegge e i due stati si ricavano dal rimborsato di adesso confrontato col lordo: se non è più
+ * pieno, «rimborsato in parte» e il bonifico al negozio non si chiude.
+ */
+async function scriviLoStatoDelRimborso(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  stato: Record<string, unknown>,
+  rimborsatoLasciato: number,
+  lordoCents: number,
+): Promise<{ error: { message: string } | null }> {
+  // I soldi sono già usciti: una scrittura che lancia invece di rispondere non fa cadere il rimborso,
+  // diventa l'errore che chi chiama dice agli amministratori.
+  try {
+    return await scriviLoStatoSulRimborsatoDiAdesso(admin, orderId, stato, rimborsatoLasciato, lordoCents);
+  } catch (e) {
+    return { error: { message: e instanceof Error ? e.message : 'scrittura dello stato caduta' } };
+  }
+}
+
+async function scriviLoStatoSulRimborsatoDiAdesso(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  stato: Record<string, unknown>,
+  rimborsatoLasciato: number,
+  lordoCents: number,
+): Promise<{ error: { message: string } | null }> {
+  const { data: scritti, error } = await admin
+    .from('orders')
+    .update(stato)
+    .eq('id', orderId)
+    .eq('refunded_amount_cents', rimborsatoLasciato)
+    .select('id');
+  if (error) return { error };
+  if (!Array.isArray(scritti) || scritti.length > 0) return { error: null };
+
+  const { data: ora, error: errOra } = await admin.from('orders').select('refunded_amount_cents').eq('id', orderId).single();
+  if (errOra || !ora) return { error: errOra ?? { message: 'ordine non riletto dopo un rimborsato cambiato' } };
+  const rimborsatoOra = Number((ora as { refunded_amount_cents?: number | null }).refunded_amount_cents ?? 0);
+  const pienoOra = rimborsatoOra >= lordoCents;
+  const ricalcolato: Record<string, unknown> = { ...stato };
+  if ('payment_status' in ricalcolato) {
+    ricalcolato.payment_status = pienoOra ? 'REFUNDED' : rimborsatoOra > 0 ? 'PARTIALLY_REFUNDED' : 'PAID';
+  }
+  if (!pienoOra) delete ricalcolato.payout_status;
+  logger.warn('[refundOrder] il rimborsato è cambiato mentre il rimborso usciva: stati ricavati da quello di adesso', {
+    orderId, rimborsatoLasciato, rimborsatoOra, lordoCents,
+  });
+  if (Object.keys(ricalcolato).length === 0) return { error: null };
+  const { error: errRicalcolo } = await admin.from('orders').update(ricalcolato).eq('id', orderId);
+  return { error: errRicalcolo };
+}
+
+/**
  * 6/9/2026 — UN RIMBORSO CHE NON PUO' RIUSCIRE NON SI RITENTA.
  *
  * Il giro delle mezz'ore che annulla gli ordini mai accettati chiede il
@@ -2484,7 +2545,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   };
   const { error: errStato } = Object.keys(statoDaScrivere).length === 0
     ? { error: null }
-    : await admin.from('orders').update(statoDaScrivere).eq('id', order.id);
+    : await scriviLoStatoDelRimborso(admin, order.id, statoDaScrivere, newRefundedTotal, grossCents);
   // 13/11/2026 (R17-025) — Il rimborso pieno ha chiuso un bonifico che non era partito (REFUNDED): ma il
   // giro può averlo pagato mentre il rimborso usciva, e questa scrittura ci è passata sopra. Si rilegge:
   // se ora c'è un bonifico, al negozio di un ordine rimborsato tutto non spetta niente e si storna.
