@@ -88,7 +88,22 @@ function buildPexelsUrl(url: URL, sizePx: number, ritaglia: boolean): string {
   return url.toString();
 }
 
+/**
+ * R15-007 — L'INTERRUTTORE DI EMERGENZA DELLE FOTO.
+ *
+ * La trasformazione delle foto di Supabase (`/render/image/`) c'è solo a pagamento. Se una fattura
+ * non passa e il progetto torna al piano gratuito, ogni foto risponde 403 e la vetrina resta senza
+ * foto. Con `NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1` (variabile di Vercel, si cambia senza
+ * toccare il codice) gli indirizzi tornano quelli dell'originale, `/object/public/`, che il piano
+ * gratuito serve: foto più pesanti, ma visibili. Vale per `sizedImage` e quindi anche per il
+ * caricatore di `lib/image-loader.ts`, che passa da lì.
+ */
+export function trasformazioneFotoSpenta(): boolean {
+  return process.env.NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE === '1';
+}
+
 function buildSupabaseStorageUrl(url: URL, sizePx: number, square: boolean): string {
+  if (trasformazioneFotoSpenta()) return url.toString();
   // Le Image Transformations Supabase si usano sostituendo /object/public/
   // con /render/image/public/ e aggiungendo ?width=&quality=
   if (url.pathname.includes('/storage/v1/object/public/')) {
