@@ -37,9 +37,11 @@ describe('normalizeCustomization', () => {
     expect(normalizeCustomization({ theme: { accent: '#FFFFFF' } })).toEqual({});
   });
 
-  it('rejects too-long tagline and unknown badge -> {}', () => {
+  it('rejects too-long tagline and unknown badge', () => {
     expect(normalizeCustomization({ tagline: 'x'.repeat(200) })).toEqual({});
-    expect(normalizeCustomization({ badges: ['produzione_propria', 'bogus'] })).toEqual({});
+    // R21-016: il badge sconosciuto si scarta, quello buono resta (prima cadeva tutto).
+    expect(normalizeCustomization({ badges: ['produzione_propria', 'bogus'] })).toEqual({ badges: ['produzione_propria'] });
+    expect(normalizeCustomization({ badges: ['bogus'] })).toEqual({ badges: [] });
   });
 
   it('accepts a fully populated valid object', () => {

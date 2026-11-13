@@ -105,7 +105,8 @@ describe('chi aveva scelto uno dei colori ritirati', () => {
   });
 
   it('un colore davvero inventato resta rifiutato: qui non si ammorbidisce niente', () => {
-    expect(normalizeCustomization({ theme: { accent: '#123456' }, tagline: 'x' })).toEqual({});
+    // R21-016: il colore inventato si scarta da solo, il motto accanto non si perde.
+    expect(normalizeCustomization({ theme: { accent: '#123456' }, tagline: 'x' })).toEqual({ tagline: 'x' });
     expect(accentHex({ theme: { accent: '#123456' } })).toBe(DEFAULT_ACCENT);
   });
 });

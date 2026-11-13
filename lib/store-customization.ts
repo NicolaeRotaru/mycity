@@ -217,10 +217,69 @@ export type StoreCustomization = z.infer<typeof storeCustomizationSchema>;
 export function normalizeCustomization(raw: unknown): StoreCustomization {
   if (!raw || typeof raw !== 'object') return {};
   const parsed = storeCustomizationSchema.safeParse(raw);
-  if (!parsed.success) return {};
+  // R21-016 — Un campo fuori regola non butta più via gli altri: si tiene quello che passa.
+  const data = parsed.success ? parsed.data : salvaQuelloCheVale(raw as Record<string, unknown>);
   // Un badge spento già salvato non arriva alla pagina, né all'editor: il prossimo salvataggio lo toglie.
-  const { badges } = parsed.data;
-  return badges ? { ...parsed.data, badges: badges.filter(badgeAttivo) } : parsed.data;
+  const { badges } = data;
+  return badges ? { ...data, badges: badges.filter(badgeAttivo) } : data;
+}
+
+/**
+ * 13/11/2026 (R21-016) — UN CAMPO FUORI REGOLA NON CANCELLA GLI ALTRI.
+ *
+ * `safeParse` dell'intero oggetto è tutto-o-niente: se domani si toglie una
+ * copertina dalla tavolozza o si abbassa MAX_TAGLINE, il negozio che la usava
+ * perdeva in vetrina motto, social e annuncio, e al primo cambio di colore
+ * (lettura-modifica-scrittura di ThemePicker) li perdeva dal database.
+ * Qui ogni campo si controlla per conto suo, e dentro tema, social e annuncio
+ * anche ogni voce; negli elenchi si scartano solo gli elementi non validi.
+ * Lo schema di salvataggio non cambia: chi scrive resta severo.
+ */
+function salvaQuelloCheVale(raw: Record<string, unknown>): StoreCustomization {
+  const forma = storeCustomizationSchema.shape;
+  const out: Record<string, unknown> = {};
+
+  const tieni = (k: string, v: unknown) => { if (v !== undefined) out[k] = v; };
+  const parteDiOggetto = (
+    schema: { unwrap: () => { shape: Record<string, z.ZodTypeAny> } },
+    valore: unknown,
+  ): Record<string, unknown> | undefined => {
+    if (!valore || typeof valore !== 'object' || Array.isArray(valore)) return undefined;
+    const dentro: Record<string, unknown> = {};
+    for (const [nome, sotto] of Object.entries(schema.unwrap().shape)) {
+      const v = (valore as Record<string, unknown>)[nome];
+      if (v === undefined) continue;
+      const r = sotto.safeParse(v);
+      if (r.success && r.data !== undefined) dentro[nome] = r.data;
+    }
+    return Object.keys(dentro).length > 0 ? dentro : undefined;
+  };
+
+  const tagline = forma.tagline.safeParse(raw.tagline);
+  if (tagline.success) tieni('tagline', tagline.data);
+
+  tieni('theme', parteDiOggetto(forma.theme, raw.theme));
+  tieni('socials', parteDiOggetto(forma.socials, raw.socials));
+  // L'annuncio ha due campi con un valore di partenza: se il testo non vale, l'annuncio
+  // intero non si mostra, ma resta spento invece di far sparire il resto.
+  const annuncio = parteDiOggetto(forma.announcement, raw.announcement);
+  if (annuncio) {
+    const r = forma.announcement.safeParse(annuncio);
+    if (r.success) tieni('announcement', r.data);
+  }
+
+  if (Array.isArray(raw.featuredProductIds)) {
+    const buoni = raw.featuredProductIds.filter((v) => z.string().uuid().safeParse(v).success);
+    tieni('featuredProductIds', buoni.slice(0, MAX_FEATURED));
+  }
+  if (Array.isArray(raw.badges)) {
+    const buoni = raw.badges.filter((v): v is string => typeof v === 'string' && BADGE_KEYS.includes(v));
+    tieni('badges', buoni.slice(0, MAX_BADGES));
+  }
+
+  // Controllo finale: quello che si restituisce passa comunque lo schema.
+  const finale = storeCustomizationSchema.safeParse(out);
+  return finale.success ? finale.data : {};
 }
 
 /** Hex dell'accent, con fallback al brand se assente/non valido. */
