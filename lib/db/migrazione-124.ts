@@ -120,12 +120,54 @@ function nominaUnVincoloDiStato(errore: unknown): boolean {
  */
 export const COLONNE_126_DEI_TURNI = ['payout_claimed_at', 'rider_payout_claimed_at'] as const;
 
-function nominaUnaColonna124(errore: unknown): boolean {
+/** La colonna della 124 (o delle ore dei turni della 126) che l'errore nomina, se ne nomina una. */
+function colonnaNuovaNominata(errore: unknown): string | undefined {
   const e = errore as { message?: unknown; details?: unknown } | null;
   const testo = `${typeof e?.message === 'string' ? e.message : ''} ${typeof e?.details === 'string' ? e.details : ''}`;
   // Il bordo di parola tiene fuori i nomi più lunghi (`gross_total_cents_bis`):
   // `_` conta come lettera, quindi `payout_tentativo` non si trova dentro `rider_payout_tentativo`.
-  return [...COLONNE_124, ...COLONNE_126_DEI_TURNI].some((colonna) => new RegExp(`\\b${colonna}\\b`).test(testo));
+  return [...COLONNE_124, ...COLONNE_126_DEI_TURNI].find((colonna) => new RegExp(`\\b${colonna}\\b`).test(testo));
+}
+
+function nominaUnaColonna124(errore: unknown): boolean {
+  return colonnaNuovaNominata(errore) !== undefined;
+}
+
+/**
+ * 13/11/2026 (R23-003) — PGRST204 NON DICE SE LA COLONNA MANCA O SE POSTGREST NON LO SA ANCORA.
+ *
+ * PostgREST risponde PGRST204 confrontando la scrittura con lo schema che tiene in memoria. Con
+ * la migrazione applicata e la memoria vecchia (la ricarica dello schema non gli è arrivata) la
+ * risposta è identica a quella di prima della migrazione: il ripiego scattava e la scrittura
+ * saltava `gross_total_cents` (o il numero del tentativo del bonifico) su un database che li ha.
+ * Per ogni chiamante di `conRipiegoSchema`, non solo per l'annullo: un ordine senza lordo, e i
+ * paletti sui soldi, scritti «se il lordo c'è», non fermavano più niente.
+ *
+ * Adesso, prima di rinunciare alla colonna, si chiede al database con una LETTURA della sola
+ * colonna, sulla stessa tabella e con le stesse credenziali della scrittura: una lettura arriva a
+ * PostgreSQL, non si ferma alla memoria di PostgREST. Se la colonna c'è, niente ripiego: resta
+ * l'errore, e si vede. Se la lettura dice che non c'è, o non si può fare (la richiesta non è di
+ * PostgREST), si fa come prima. `leggiAGradini` fa solo letture, che PostgREST non ferma con
+ * PGRST204: lì il caso non nasce.
+ */
+async function colonnaCheIlDatabaseHa(richiesta: unknown, errore: unknown): Promise<boolean> {
+  const colonna = colonnaNuovaNominata(errore);
+  const r = richiesta as { url?: unknown; headers?: unknown; fetch?: unknown } | null;
+  if (!colonna || !r?.url || typeof r.fetch !== 'function') return false;
+  try {
+    const scrittura = new URL(String(r.url));
+    const lettura = new URL(scrittura.pathname, scrittura.origin);
+    lettura.searchParams.set('select', colonna);
+    lettura.searchParams.set('limit', '1');
+    const intestazioni = new Headers(r.headers as HeadersInit | undefined);
+    const schema = intestazioni.get('Content-Profile');
+    for (const nome of ['Prefer', 'Content-Type', 'Content-Profile']) intestazioni.delete(nome);
+    if (schema) intestazioni.set('Accept-Profile', schema);
+    const risposta = await (r.fetch as typeof fetch)(lettura.toString(), { method: 'GET', headers: intestazioni });
+    return risposta.ok;
+  } catch {
+    return false;
+  }
 }
 
 export function eSchemaIndietro(errore: unknown): boolean {
@@ -150,8 +192,17 @@ export async function conRipiegoSchema<T extends { error: unknown }>(
   conNuovo: () => PromiseLike<T>,
   senzaNuovo: () => PromiseLike<T>,
 ): Promise<T> {
-  const primo = await conNuovo();
+  const richiesta = conNuovo();
+  const primo = await richiesta;
   if (!primo.error || !eSchemaIndietro(primo.error)) return primo;
+  // R23-003 — PostgREST non vede una colonna che il database ha: la sua memoria è vecchia, non la migrazione.
+  if ((primo.error as { code?: string }).code === 'PGRST204' && (await colonnaCheIlDatabaseHa(richiesta, primo.error))) {
+    logger.error("[db] PostgREST ha in memoria uno schema vecchio: niente ripiego, va ricaricato (NOTIFY pgrst, 'reload schema')", {
+      dove,
+      codice: 'PGRST204',
+    });
+    return primo;
+  }
 
   logger.warn('[db] migrazione 124 non ancora applicata: proseguo senza i campi nuovi', {
     dove,
