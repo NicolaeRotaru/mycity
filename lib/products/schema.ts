@@ -63,6 +63,14 @@ export function condizioneDaScegliere(c: unknown): c is ProductCondition {
   return typeof c === 'string' && (CONDIZIONI_DA_SCEGLIERE as readonly string[]).includes(c);
 }
 
+/** «Come nuovo», «pari al nuovo», «non è nuovo», «like new»…: somiglia al nuovo, quindi è usato. */
+const SOMIGLIA_AL_NUOVO =
+  /semi[\s-]?nuov|\b(come|quasi|pari(\s+al?)?|praticamente|pressoch[eé]|tipo|sembra|da)\s+(un\s+|il\s+)?nuov|\b(non|not)\s+(è\s+|e'\s+|is\s+)?(brand\s+)?(nuov|new)|\bisn'?t\s+(brand\s+)?new|\b(like|as|nearly|almost)[\s-]+new\b/;
+
+/** Un uso negato che dice quanto è stato usato («non molto», «da anni», «non più»): è usato. */
+const USO_MISURATO =
+  /\b(molto|tanto|spesso|troppo|granch|pi(ù|u\b)|da\s+(anni|mesi|tempo)|a\s+lungo|much|often|anymore|for\s+(years|months|a\s+while))/;
+
 /**
  * Normalizza testo libero (AI o vecchio attributo per-categoria `stato`) nella
  * condizione standardizzata. '' se non riconosciuta.
@@ -70,14 +78,16 @@ export function condizioneDaScegliere(c: unknown): c is ProductCondition {
 export function normalizeCondition(s: string): ProductCondition | '' {
   const t = s.toLowerCase();
   if (t.includes('ricond') || t.includes('refurb')) return 'ricondizionato';
+  // 2261 · R16-005 — «Seminuovo», «come nuovo», «quasi nuovo», «non nuovo», «pari al nuovo»,
+  // «praticamente nuovo», «tipo nuovo», «like new» non sono nuovi: dicono che l'oggetto somiglia
+  // a uno nuovo, cioè che è usato. Prima bastava la sillaba «nuov» e entrava in vetrina come nuovo.
+  if (SOMIGLIA_AL_NUOVO.test(t)) return 'usato';
   // 2289 — «Nuovo, mai usato»: la negazione dell'uso dice nuovo (prima vinceva «usat»).
-  if (/\b(mai|non|never|not)\b[^,.;]{0,20}\b(usat|used)/.test(t)) return 'nuovo';
-  // 2261 — «Seminuovo», «come nuovo», «quasi nuovo», «non nuovo» non sono nuovi: prima
-  // bastava la sillaba «nuov» e un oggetto usato entrava in vetrina come nuovo.
+  // R16-005 — Ma non se dice quanto è stato usato: «non è stato usato molto», «non usato da anni».
+  const usoNegato = t.match(/\b(mai|non|never|not)\b[^,.;]{0,20}\b(usat|used)[^,.;]*/);
+  if (usoNegato) return USO_MISURATO.test(usoNegato[0]) ? 'usato' : 'nuovo';
   // 2268 — Anche «used», «second hand», «di seconda mano» si riconoscono come usato.
-  if (
-    /seminuov|semi-nuov|semi nuov|\bcome\s+nuov|\bquasi\s+nuov|\bnon\s+nuov|usat|second[\s-]?hand|seconda mano|\bused\b|pre-?owned/.test(t)
-  ) return 'usato';
+  if (/usat|second[\s-]?hand|seconda mano|\bused\b|pre-?owned/.test(t)) return 'usato';
   if (t.includes('nuov') || /\bnew\b|\bbrand new\b/.test(t)) return 'nuovo';
   return '';
 }
