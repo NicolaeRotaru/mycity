@@ -1,6 +1,6 @@
 {
   "sessione": "R14",
-  "aggiornato": "2026-11-13 06:50",
+  "aggiornato": "2026-11-13 07:58",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -31,7 +31,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Le email degli utenti si leggono a finestre di mille, in ordine di id, fino in fondo (leggiTutteLeRighe sulla rpc admin_list_user_emails). Se la lettura cade, lancia un errore invece di dare un elenco vuoto. Così la ricerca risulta caduta e dice che il vuoto non vuol dire «non iscritto», e il CSV non esce con la colonna Email vuota.",
-      "nota": "La migrazione 380 non è servita: la 074 resta intatta, perché PostgREST pagina il risultato della RPC con order/offset/limit. lib/admin/esporta-utenti.ts:115 non cambia: ora un risultato di ricerca esiste solo con tutte le email lette. Le 4 prove sono rosse sul comportamento alla base e verdi con la correzione."
+      "nota": "La migrazione 380 non è servita: la 074 resta intatta, perché PostgREST pagina il risultato della RPC con order/offset/limit. lib/admin/esporta-utenti.ts:115 non cambia: ora un risultato di ricerca esiste solo con tutte le email lette. Le 4 prove sono rosse sul comportamento alla base e verdi con la correzione.",
+      "verificato_da": "revisore: ha rilanciato la prova R14-001 (4/4 verdi), la prova rimessa sulla copia f4ffa34fb7cd (uscita 0, «regge») e le 5 prove accanto (59/59). Con le 195 migrazioni applicate ha controllato in SQL che la 074 è un SETOF con colonna id, e che ORDER BY id LIMIT/OFFSET la pagina a finestre fino al 2500° utente senza doppioni; un non admin riceve 42501. Ha provato il tetto di leggiTutteLeRighe sopra i 20.000."
     },
     {
       "id": "R14-002",
@@ -61,38 +62,24 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La 381 fa scrivere a confirm_cod_remittance il «versato» solo se quel giorno non resta nessun ordine in contanti consegnato e ancora da versare. Un grilletto, in fila con la rimessa sotto un lucchetto consultivo, riapre la giornata quando ne arriva uno; la migrazione riapre una volta le giornate già sbagliate. La rotta ricalcola la quadratura subito dopo la rpc senza toccare il «versato». La guardia della cancellazione e il sorvegliante leggono la stessa colonna, ora giusta: non toccati, provati in SQL e vitest.",
-      "nota": "Senza la 381 la prova SQL dà 4 controlli rossi con tutte le premesse verdi. Limite dichiarato: una giornata riaperta con incassato già scritto a zero la guardia la vede solo dopo il ricalcolo notturno (riquadra-casse 01:15, prima di process-deletions 04:00). Finché Nicola non applica la 381, il «versato» resta come prima."
+      "nota": "Senza la 381 la prova SQL dà 4 controlli rossi con tutte le premesse verdi. Limite dichiarato, corretto dal revisore: una giornata più vecchia di ieri, riaperta (dalla 381 o dal grilletto) con incassato a zero e stato PENDING (riga scritta dalla vecchia conferma 127 e mai ricalcolata), la guardia della cancellazione non la vede, perché riquadra-casse rifà solo oggi e ieri (app/api/cron/riquadra-casse/route.ts:58). È raro: dove il giro notturno girava già, la riga risulta MISMATCH e la guardia la vede. Finché Nicola non applica la 381, il «versato» resta come prima.",
+      "verificato_da": "revisore: in una copia pulita su 905ae0ce ha rilanciato le prove SQL (15/15) e vitest (9/9) e le due prove rimessa, sulla 381 con --sql e sulla rotta con vitest (uscita 0, regge); run.sh e 55 file vitest accanto sono verdi. A mano in SQL ha provato la corsa conferma/consegna nei due ordini, la mezzanotte di Piacenza, un ordine HELD che torna da versare, la riassegnazione, la seconda rimessa uguale, il costo del grilletto, i permessi, la migrazione rieseguita e la riapertura una tantum: tutto giusto."
     },
     {
       "id": "R14-003",
       "chiave": "qa-flussi|nicola non viene avvisato quando arriva un ordine: il primo allarme per un ordine non accettato parte dopo un'ora, non dopo 5 minuti",
-      "esito": "parziale",
-      "commit": "240530aa6862",
-      "file_toccati": [
-        "app/api/cron/operational-alerts/route.ts",
-        "tests/unit/minori-s03-sorvegliante.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r14-allarmi-ordini.test.ts"
-      ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r14-allarmi-ordini.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 240530aa^ --file app/api/cron/operational-alerts/route.ts --prove tests/unit/riparazione-r14-allarmi-ordini.test.ts --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Ogni ordine ancora NEW dopo 5 minuti fa suonare campanella ed email a Nicola (allarme ORDINE_DA_ACCETTARE|id), una volta sola per ordine, anche per l'ordine della sera per domani (senza dire «bloccato»).",
-      "cosa_resta": "La cadenza: vercel.json fa partire il sorvegliante ogni 15 minuti, quindi il primo allarme arriva fra 5 e 20 minuti dalla nascita, non a 5. Facoltativo: l'avviso agli amministratori già alla nascita dell'ordine in app/api/orders/cod/route.ts e lib/stripe/webhook, che non sono file miei.",
+      "esito": "serve_file_altrui",
       "serve_file_altrui": [
         {
+          "file": "tests/unit/minori-s03-sorvegliante.test.ts",
+          "modifica": "Scheda 7 (riga 90): `expect(corpo.alerts).toBe(0);` diventa `const dettagli = (corpo.details ?? []) as Array<{ type: string; detail: string }>; expect(dettagli.map((d) => d.type)).toEqual(['ORDINE_DA_ACCETTARE']); expect(dettagli.some((d) => /bloccato/i.test(d.detail))).toBe(false);`. È la parte di prova del commit 240530aa: l'ordine della sera per domani porta l'avviso «ordine nuovo da accettare», ma non il «bloccato». Poi va rimesso il codice di R14-003 con `git revert 5d8f2762`."
+        },
+        {
           "file": "vercel.json",
-          "modifica": "crons: { \"path\": \"/api/cron/operational-alerts\", \"schedule\": \"*/15 * * * *\" } → \"*/5 * * * *\""
+          "modifica": "crons: { \"path\": \"/api/cron/operational-alerts\", \"schedule\": \"*/15 * * * *\" } → \"*/5 * * * *\" (senza, il primo allarme arriva fra 5 e 20 minuti, non a 5)"
         }
       ],
-      "nota": "Prova esistente modificata e dichiarata: tests/unit/minori-s03-sorvegliante.test.ts, scheda 7, che importa solo operational-alerts. Prima voleva zero allarmi; ora vuole che l'unico allarme sia ORDINE_DA_ACCETTARE e che nessun testo dica «bloccato»."
+      "nota": "La riparazione c'era (240530aa: allarme ORDINE_DA_ACCETTARE|id dopo 5 minuti, prova rimessa che reggeva), ma cambiava la prova comune minori-s03-sorvegliante. Per la regola dell'onda 2 il codice è tolto col commit 5d8f2762 e la prova comune torna alla base. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert 5d8f2762`. Revisore sul codice tolto (240530aa): prova e prova rimessa reggono. Prima di rimetterlo va corretto un difetto: in app/api/cron/operational-alerts/route.ts:127-128 `order desc` + `limit(20)` vengono prima del filtro delle sei ore. Con più di 20 ordini NEW insieme, i più vecchi non ricevono mai ORDINE_DA_ACCETTARE: provato con 25 ordini, 5 restano senza avviso. Basta ordinare per nascita crescente fra quelli non ancora avvisati, o togliere dalla lettura quelli già suonati."
     },
     {
       "id": "R14-004",
@@ -115,8 +102,9 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Allarme ACCETTATO_FERMO dopo 2 ore dall'accettazione, e mai prima della fine della fascia, come il «pronto e fermo» del 5c. PICKED_UP entra nel controllo della consegna ferma, 45 minuti dal ritiro, con la stessa chiave RIDER_STUCK.",
-      "cosa_resta": "la scadenza automatica degli ordini fermi su accettato/ritirato: serve la soglia da Nicola",
-      "domanda": "Dopo quanto tempo un ordine fermo su «accettato» (mai «Pronto») o su «ritirato» va annullato e rimborsato da solo? Alla fine della fascia più quante ore (e senza fascia dopo quante), oppure mai, solo l'allarme?"
+      "cosa_resta": "1) La scadenza automatica degli ordini fermi su accettato/ritirato: serve la soglia da Nicola. 2) Trovato dal revisore: la lettura del punto 5d (app/api/cron/operational-alerts/route.ts:328-329, `order accepted_at asc nullsFirst` + `limit 20`) prende i 20 più vecchi. Senza scadenza, 20 accettati dimenticati (o vecchi senza accepted_at) occupano il tetto per sempre, e un ordine nuovo fermo da 3 ore non suona mai. Va letto dai più recenti, come il punto 3 alla riga 188, o escludendo quelli già avvisati. 3) Secondario: il `limit(10)` senza ordine della riga 149-154 ora è diviso fra PICKED_UP e OUT_FOR_DELIVERY. 4) Debole: con una fascia, l'allarme suona solo dopo la fine della fascia, non all'ultimo ritiro utile.",
+      "domanda": "Dopo quanto tempo un ordine fermo su «accettato» (mai «Pronto») o su «ritirato» va annullato e rimborsato da solo? Alla fine della fascia più quante ore (e senza fascia dopo quante), oppure mai, solo l'allarme?",
+      "verificato_da": "revisore: ha rilanciato la prova (11/11), la prova rimessa (uscita 0, «regge») e 13 file di prove accanto (155/155), anche sulla testa f26ccbf1 (159/159). Sul database ricostruito dalle migrazioni ha controllato gli stati ACCEPTED/PICKED_UP e le colonne accepted_at/picked_up_at. Verdetto parziale: con una prova temporanea, 20 accettati dimenticati occupano il tetto del punto 5d e un ordine nuovo fermo da 3 ore non suona (vedi cosa_resta)."
     },
     {
       "id": "R14-005",
@@ -146,31 +134,8 @@
           "file": "tests/sql/rls/31-la-cancellazione-non-lascia-l-indirizzo-di-casa.test.sql",
           "modifica": "Alle righe 109-110 inverti l'ordine: prima `DO $$ BEGIN PERFORM set_config('request.jwt.claims', '', true); END $$;` e poi `DELETE FROM auth.users WHERE id = 'eeeeeeee-0000-0000-0000-00000000000e';`, così il DELETE non eredita il `role = service_role` scritto a mano alla riga 83. Le righe di commento 105-108 diventano: «-- La chiusura dell'account la fa il servizio di autenticazione, senza claims: lo stacco (`user_id` = NULL) lo fa PostgreSQL e la 382 lo lascia passare (R14-005).» Verificato in locale: con la 382 è verde (6 controlli), senza la 382 è rossa al DELETE."
         }
-      ]
-    },
-    {
-      "id": "R14-006",
-      "chiave": "api-backend|un doppio clic su «conferma i contanti ricevuti» registra due rimesse invece di una",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-007",
-      "chiave": "api-backend|due cancellazioni dello stesso account partite insieme danno un errore falso o una riga doppia nel registro",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-008",
-      "chiave": "api-backend|la rotta che cancella un utente accetta anche un amministratore, mentre la pagina nasconde il bottone",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-009",
-      "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      ],
+      "verificato_da": "revisore: ha ricostruito il database dalle migrazioni. Prova R14 12/12 verdi, prova rimessa --sql «regge» (uscita 0), run.sh 61/61 verdi; la 382 regge anche su un database pieno. Ha provato il deleteUser vero (supabase_auth_admin, senza claims) su un cliente con un ordine passato per tutte le tappe, più reso, chat, recensione e contestazione: passa. Un browser dentro un grilletto col profilo già sparito resta respinto (42501). La 179 è l'ultima definizione e nessuna funzione esistente può ottenere lo stesso stacco."
     },
     {
       "id": "R14-010",
@@ -192,97 +157,32 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 76b57d9fed06^ --file app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r14-scadenze.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il tetto di 100 lasciava fuori la veloce scaduta dietro gli ordini rinviati. Ora si leggono le pagine successive, fino a 2000 ordini e anche con nascite uguali al bordo, e si fanno al massimo 100 annulli per giro."
+      "cosa_ho_fatto": "Il tetto di 100 lasciava fuori la veloce scaduta dietro gli ordini rinviati. Ora si leggono le pagine successive, fino a 2000 ordini e anche con nascite uguali al bordo, e si fanno al massimo 100 annulli per giro.",
+      "verificato_da": "prova rimessa del riparatore, tetto dei 12"
     },
     {
       "id": "R14-011",
       "chiave": "api-backend|se due giri del sorvegliante partono nello stesso istante, l'amministratore riceve due volte la stessa campanella",
-      "esito": "riparato",
-      "commit": "2e81dd8d9667",
-      "file_toccati": [
-        "app/api/cron/operational-alerts/route.ts",
-        "tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts",
+          "modifica": "È il diff del commit 2e81dd8d su questo file:\n1. Dopo `const scritte = …` aggiungi `const tolte: string[] = [];`.\n2. Nel finto `tabella()`, accanto al push in `scritte`, aggiungi `if (nome === 'operational_alert_log' && k === 'in' && chiamate.some((x) => x.m === 'delete')) { tolte.push(...(a[1] as string[])); }`.\n3. In `attesaScritta` la condizione diventa `!String(r.alert_key).startsWith('CAMPANELLA|') && !tolte.includes(String(r.alert_key))`.\n4. Nel beforeEach aggiungi `tolte.length = 0;`.\nIl giro prende il turno prima dell'invio e, se l'email non parte, lo restituisce: conta quello che resta scritto alla fine. Poi va rimesso il codice con `git revert 6df692ca`."
+        }
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r14-allarmi-ordini.test.ts"
-      ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r14-allarmi-ordini.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2e81dd8d9667^ --file app/api/cron/operational-alerts/route.ts --prove tests/unit/riparazione-r14-allarmi-ordini.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Campanella ed email prendono prima il turno sulla chiave primaria di operational_alert_log: suona solo chi lo vince, e se l'invio fallisce il turno si restituisce. Provato con due giri lanciati insieme: una campanella e una email.",
-      "nota": "Prova esistente modificata e dichiarata: l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts, che importa solo operational-alerts. attesaScritta ora guarda cosa resta scritto alla fine del giro."
-    },
-    {
-      "id": "R14-012",
-      "chiave": "api-backend|allarme 'persone non avvisate' riscritto ogni notte, senza dire chi: la stessa classe chiusa per le email resta aperta qui",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-013",
-      "chiave": "api-backend|avvisi ed email in un giro senza tetto di tempo: con posta appesa e ~15 in attesa, gli ultimi non hanno nemmeno l'avviso nel pannello",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-014",
-      "chiave": "api-backend|l'allarme 'scrivile tu' si chiude solo se l'email parte: se la persona annulla o viene cancellata resta aperto per sempre col suo id",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-015",
-      "chiave": "api-backend|se due giri della cancellazione account partono insieme, l'account sparisce ma agli amministratori arriva un falso allarme di cancellazione fallita",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "nota": "La riparazione c'era (2e81dd8d: turno sulla chiave primaria di operational_alert_log prima di campanella ed email, prova rimessa che reggeva), ma cambiava la prova comune l-allarme-che-non-parte-non-si-spaccia-per-spedito. È tolta col commit 6df692ca. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert 6df692ca`."
     },
     {
       "id": "R14-016",
       "chiave": "api-backend|la notifica del nuovo ordine fa la fila dietro le promozioni",
-      "esito": "riparato",
-      "commit": "ba36f97a8f4d",
-      "file_toccati": [
-        "app/api/cron/send-push/route.ts",
-        "tests/unit/minori-s03-push.test.ts"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s03-push.test.ts",
+          "modifica": "È il diff del commit ba36f97a su questo file. Nel finto supabase, `in` non è più `async`: risponde con `Promise.resolve(...)` nei rami update e push_subscriptions, e `if (tabella === 'notifications') return b;` lascia il filtro nella catena (risponde `limit`). Altrimenti `.in('category', [...])` sulla lettura delle notifiche rompe la catena. Poi va rimesso il codice con `git revert c81987f0`."
+        }
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r14-push.test.ts"
-      ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r14-push.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ba36f97a8f4d^ --file app/api/cron/send-push/route.ts --prove tests/unit/riparazione-r14-push.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Prima si leggono le notifiche order e system, poi le altre nel posto che resta, sempre in lotti da 100. Il «Nuovo ordine» parte al primo giro anche dietro 300 promozioni.",
-      "nota": "Prova esistente modificata e dichiarata: minori-s03-push.test.ts, che importa solo send-push: nel suo finto database `in` ora resta nella catena."
-    },
-    {
-      "id": "R14-017",
-      "chiave": "api-backend|se l'amministratore apre i documenti di un fattorino con un codice storto, la rotta risponde con un guasto invece di dire che il codice non è valido",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-018",
-      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-019",
-      "chiave": "api-backend|se il cliente ritira il reso mentre il negozio lo approva con rimborso, il reso resta annullato coi soldi gia' usciti",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "nota": "La riparazione c'era (ba36f97a: prima le notifiche order e system, poi le altre; prova rimessa che reggeva), ma cambiava la prova comune minori-s03-push. È tolta col commit c81987f0. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert c81987f0`."
     },
     {
       "id": "R14-020",
@@ -304,42 +204,13 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4711b9701bed^ --file app/api/rider/cash-confirm/route.ts --prove tests/unit/riparazione-r14-incasso-avvisi.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "I due avvisi passano da un aiuto che legge l'esito della lettura degli amministratori, il caso «nessun amministratore» e l'insert. Se l'avviso non parte, scrive logger.error col testo dell'avviso; incasso e risposta al fattorino restano come prima."
-    },
-    {
-      "id": "R14-021",
-      "chiave": "api-backend|comunicare due volte l'esito di una segnalazione rimanda la mail e le notifiche, e dopo un errore il nuovo tentativo rimanda anche i canali già riusciti",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-022",
-      "chiave": "api-backend|due invii uguali all'assistenza nello stesso istante creano due messaggi e due avvisi",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-023",
-      "chiave": "api-backend|due segnali di accesso per lo stesso ingresso: la deduplica legge-e-poi-scrive senza vincolo sul database — e la migrazione che la reggerebbe non c'e' in questo lotto",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-024",
-      "chiave": "api-backend|la rotta che registra le visite va in errore del server se riceve un corpo vuoto o rotto, o un cookie dei consensi storto",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
-    },
-    {
-      "id": "R14-025",
-      "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "cosa_ho_fatto": "I due avvisi passano da un aiuto che legge l'esito della lettura degli amministratori, il caso «nessun amministratore» e l'insert. Se l'avviso non parte, scrive logger.error col testo dell'avviso; incasso e risposta al fattorino restano come prima.",
+      "verificato_da": "prova rimessa del riparatore, tetto dei 12"
     }
   ],
   "nuovi_difetti_visti": [
     {
-      "titolo": "Falla di sicurezza da chiudere (cassa contanti del fattorino): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (pagamenti): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "api-backend",
       "severita": "grave",
       "file": "(nel referto privato)",
@@ -386,13 +257,27 @@
       "severita": "minore",
       "file": "migrations/084_operational_alert_dedup.sql:12",
       "descrizione": "Nessun giro cancella le righe vecchie: ogni allarme legato a un ordine lascia due righe per sempre (la chiave email e CAMPANELLA|…), e con ORDINE_DA_ACCETTARE (R14-003) succede per quasi ogni ordine. Le letture passano dalla chiave primaria e restano veloci, ma la tabella cresce senza fine. Basterebbe cancellare le righe con last_sent_at più vecchio di qualche giorno."
+    },
+    {
+      "titolo": "oltre 20.000 iscritti la ricerca utenti risulta sempre caduta e l'esportazione dell'elenco intero non esce, con un «riprova fra poco» che non serve",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/supabase/blocchi.ts:70",
+      "descrizione": "TETTO_DURO di leggiTutteLeRighe è 20.000, contro le 30 letture da 1000 di lib/admin/esporta-utenti.ts:56,62. Oltre quel numero la pagina dice «Riprova fra poco» (app/admin/users/page.tsx:565, lib/admin/elenco-utenti.ts:149), ma riprovare non serve. Non dà un «non iscritto» falso, ma il testo inganna. Oggi gli iscritti sono meno di 500."
+    },
+    {
+      "titolo": "la guardia della cancellazione dice un importo gonfiato su una giornata di cassa riaperta",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/account/cancellazione.ts:674",
+      "descrizione": "Confermato dal revisore di R14-002. Su una giornata riaperta dopo un versamento parziale la guardia somma l'incassato di tutta la giornata, ordini già versati compresi: il fattorino legge «risultano 82,00 € non versati» quando da versare ci sono 20,50 €. La cancellazione si ferma comunque. Il testo è fissato da una prova di altri (chi-aspetta-la-cancellazione-sa-perche-aspetta)."
     }
   ],
   "domande_per_nicola": [
     "R14-004: dopo quanto tempo un ordine fermo su «accettato» (mai «Pronto») o su «ritirato» va annullato e rimborsato da solo? Alla fine della fascia più quante ore (e senza fascia dopo quante), oppure mai, solo l'allarme?"
   ],
   "conto": {
-    "agenti": 4,
-    "nota": "4 riparatori su 12 (L1-L4)"
+    "agenti": 9,
+    "nota": "4 riparatori (L1-L4) + 5 revisori dei gravi su 12; L5, L6 e il revisore dei minori restano alla sessione che riprende. Fermata a 39,2 $ (soglia 33 $): le voci senza esito, cioè non presenti in questo referto, le riprende una sessione nuova dalla testa del ramo: R14-006, R14-007, R14-008, R14-009, R14-012, R14-013, R14-014, R14-015, R14-017, R14-018, R14-019, R14-021, R14-022, R14-023, R14-024, R14-025. Piano previsto per loro: L5 (006, 007, 008, 015, 012, 013, 014, 019) sul modello grande, L6 (009, 017, 018, 021, 022, 023, 024, 025) sul modello piccolo, migrazioni libere 380, 383-389. Restano 3 subagenti su 12 (2 riparatori + 1 revisore dei minori)."
   }
 }
