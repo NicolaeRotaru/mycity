@@ -46,11 +46,6 @@ const stato = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/audit', () => ({ writeAudit: async () => { stato.verbale++; } }));
-// Qui si prova il controllo del codice: gli strumenti AI restano accesi (l'interruttore ha la sua prova).
-vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
-  ...((await originale()) as Record<string, unknown>),
-  AI_NEGOZI_ACCESA: true,
-}));
 vi.mock('@/lib/ai/run', async (importActual) => {
   const vero = await importActual<typeof import('@/lib/ai/run')>();
   return {

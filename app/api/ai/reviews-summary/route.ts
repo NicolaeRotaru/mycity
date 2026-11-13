@@ -9,7 +9,6 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { recinta, REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
-import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 /**
  * Riepilogo recensioni: sintetizza i feedback degli acquirenti (di un prodotto
@@ -57,9 +56,6 @@ function cleanList(v: unknown, max = 6): string[] {
 }
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
-  // R14-018 — Spento al lancio (carta #209): la rotta lo dice subito, come
-  // catalog-batch/start, prima del freno e delle letture del database.
-  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   const rl = await rateLimitAsync({ key: `ai-reviews:${user.id}`, max: 20, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
