@@ -18,6 +18,11 @@ const mondo = vi.hoisted(() => ({
   avvisi: [] as string[],
   inviate: 0,
   recensione: null as null | { onSuccess?: () => void; onError?: (e: unknown) => void },
+  // Acceso, `mutate` fa come il database vero: la prima scrittura entra, la seconda urta il vincolo.
+  database: false,
+  scritte: 0,
+  // Quanti invii devono ancora fallire per la rete, prima di arrivare al database.
+  guasti: 0,
 }));
 const { nulla } = vi.hoisted(() => ({ nulla: () => null }));
 
@@ -63,7 +68,31 @@ vi.mock('@tanstack/react-query', () => ({
   // L'unica mutazione della scheda è la recensione: si contano gli invii e si tengono le risposte.
   useMutation: (o: { onSuccess?: () => void; onError?: (e: unknown) => void }) => {
     mondo.recensione = o;
-    return { mutate: () => { mondo.inviate += 1; }, mutateAsync: async () => undefined, isPending: false };
+    type Esiti = { onSuccess?: () => void; onError?: (e: unknown) => void };
+    const mutate = (_v?: unknown, chiamata?: Esiti) => {
+      mondo.inviate += 1;
+      if (!mondo.database) return;
+      const guasto = mondo.guasti > 0;
+      if (guasto) mondo.guasti -= 1;
+      else mondo.scritte += 1;
+      const doppione = mondo.scritte > 1;
+      // Come react-query: prima le risposte della mutazione, poi quelle della singola chiamata.
+      void Promise.resolve().then(() => {
+        if (guasto) {
+          const e = new Error('Failed to fetch');
+          o.onError?.(e);
+          chiamata?.onError?.(e);
+        } else if (doppione) {
+          const e = Object.assign(new Error('duplicate key value violates unique constraint "reviews_product_user_unique"'), { code: '23505' });
+          o.onError?.(e);
+          chiamata?.onError?.(e);
+        } else {
+          o.onSuccess?.();
+          chiamata?.onSuccess?.();
+        }
+      });
+    };
+    return { mutate, mutateAsync: async () => undefined, isPending: false };
   },
   useQueryClient: () => ({ invalidateQueries: () => undefined, setQueryData: () => undefined }),
 }));
@@ -115,6 +144,9 @@ afterEach(() => {
   mondo.avvisi = [];
   mondo.inviate = 0;
   mondo.recensione = null;
+  mondo.database = false;
+  mondo.scritte = 0;
+  mondo.guasti = 0;
 });
 
 async function apri() {
@@ -168,5 +200,51 @@ describe('R24-003 · la recensione del prodotto parte senza stelle', () => {
     const detto = mondo.avvisi.join(' ');
     expect(detto, 'il cliente legge un errore che non spiega niente').toContain('Hai già recensito questo prodotto');
     expect(detto).not.toContain('già stato usato');
+  });
+});
+
+describe('R24-003 · due invii nello stesso istante fanno una recensione sola', () => {
+  const pausa = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  it('IL CASO CHE ROMPEVA — doppio invio: una scrittura, «Grazie» e nessun «già recensito»', async () => {
+    mondo.database = true;
+    const m = await apri();
+    await act(async () => { clicca(m.stella(4)); });
+    await act(async () => {
+      m.modulo.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+      m.modulo.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    });
+    for (let i = 0; i < 3; i++) await pausa();
+    expect(mondo.scritte, 'il secondo invio ha mandato una seconda recensione').toBe(1);
+    const detto = mondo.avvisi.join(' ');
+    expect(detto, 'alla prima recensione il cliente legge «Hai già recensito»').not.toContain('già recensito');
+    expect(detto).toContain('Grazie per la recensione');
+  });
+
+  it('dopo l’invio riuscito un altro invio non scrive, e dice che la recensione c’è già', async () => {
+    mondo.database = true;
+    const m = await apri();
+    await act(async () => { clicca(m.stella(4)); });
+    await invia(m.modulo);
+    for (let i = 0; i < 3; i++) await pausa();
+    await act(async () => { clicca(m.stella(2)); });
+    await invia(m.modulo);
+    for (let i = 0; i < 3; i++) await pausa();
+    expect(mondo.scritte).toBe(1);
+    expect(mondo.avvisi.join(' ')).toContain('Hai già recensito questo prodotto');
+  });
+
+  it('se l’invio non riesce si può riprovare', async () => {
+    mondo.database = true;
+    mondo.guasti = 1;
+    const m = await apri();
+    await act(async () => { clicca(m.stella(4)); });
+    await invia(m.modulo);
+    for (let i = 0; i < 3; i++) await pausa();
+    expect(mondo.avvisi.some((a) => a.startsWith('err:')), 'il primo invio doveva fallire').toBe(true);
+    await invia(m.modulo);
+    for (let i = 0; i < 3; i++) await pausa();
+    expect(mondo.scritte, 'dopo un errore il freno resta chiuso e il cliente non può riprovare').toBe(1);
+    expect(mondo.avvisi.join(' ')).toContain('Grazie per la recensione');
   });
 });

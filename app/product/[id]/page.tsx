@@ -64,6 +64,8 @@ import { creaFrenoDoppioTocco } from '@/lib/ui/freno-doppio-tocco';
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
 const ALLERGEN_ACCORDION_KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'];
+// R24-003 — Una recensione di questo cliente su questo prodotto c'è già.
+const GIA_RECENSITO = 'Hai già recensito questo prodotto: resta pubblicata la recensione di prima.';
 
 /**
  * 30/8/2026 (R068) — La forma della scheda e la domanda che la legge stanno in
@@ -122,6 +124,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
+  // R24-003 — Il freno al doppio invio, come in app/orders/[id]/review/page.tsx (R24-012):
+  // `isPending` diventa vero solo al disegno dopo, e due invii nello stesso istante facevano due
+  // scritture; la seconda urtava il vincolo e chi recensiva per la prima volta leggeva «Hai già
+  // recensito». Si riapre solo se l'invio non riesce; dopo il successo resta chiuso e lo dice.
+  const invioRecensione = useRef<'libero' | 'in_volo' | 'fatto'>('libero');
 
   // Ordinamento + filtro "Con foto" delle recensioni (client-side, sui dati già caricati).
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
@@ -283,7 +290,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       // R24-003 — La seconda recensione urta il vincolo (product_id, user_id): si dice cosa è
       // successo, invece di «Questo valore è già stato usato».
       if ((err as { code?: string } | null)?.code === '23505') {
-        toast.error('Hai già recensito questo prodotto: resta pubblicata la recensione di prima.');
+        toast.error(GIA_RECENSITO);
         return;
       }
       toast.error(friendlyError(err));
@@ -1348,7 +1355,19 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <p className="text-sm text-ink-600">Puoi recensire questo prodotto dopo averlo ricevuto.</p>
           ) : (
             <form
-              onSubmit={(e) => { e.preventDefault(); if (reviewRating >= 1) submitReview.mutate(); }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (reviewRating < 1 || invioRecensione.current === 'in_volo') return;
+                if (invioRecensione.current === 'fatto') {
+                  toast.error(GIA_RECENSITO);
+                  return;
+                }
+                invioRecensione.current = 'in_volo';
+                submitReview.mutate(undefined, {
+                  onSuccess: () => { invioRecensione.current = 'fatto'; },
+                  onError: () => { invioRecensione.current = 'libero'; },
+                });
+              }}
               className="space-y-3"
             >
               {/* #142 — Le stelle erano cinque pulsanti senza stato: si sentiva
