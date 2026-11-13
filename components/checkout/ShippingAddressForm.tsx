@@ -5,7 +5,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Field';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { CONSEGNIAMO_A_PIACENZA } from '@/lib/promesse-pubbliche';
 
 /**
  * Form indirizzo di consegna per checkout.
@@ -306,8 +306,9 @@ export function ShippingAddressForm({
                non può dire una cosa mentre la cassa ne fa un'altra.
                28/10/2026 — Via «e dintorni»: col confine a 5 km Podenzano,
                Rottofreno e Gossolengo restano fuori, e la frase li prometteva.
-               Il limite vero è la distanza dal negozio, e la frase dice quella. */
-            hint={`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`}
+               Il limite vero è la distanza dal negozio, e la frase dice quella.
+               13/11/2026 (R13-013) — La frase è quella di tutto il sito (lib/promesse-pubbliche.ts). */
+            hint={CONSEGNIAMO_A_PIACENZA}
           />
         </div>
         <Input

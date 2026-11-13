@@ -13,7 +13,7 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 // confronta ogni euro e ogni chilometro col conto della cassa
 // (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx,
 // tests/unit/la-pagina-spedizioni-dice-la-consegna-di-oggi.test.tsx).
-import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
+import { FINO_A_DOVE_CONSEGNIAMO, NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { etichettaPronto } from '@/lib/order-status';
@@ -133,8 +133,9 @@ export default function ShippingPage() {
           <h2 className="text-xl font-bold text-ink-900 mb-2">Aree servite</h2>
           {/* 28/10/2026 — Qui c'era «Piacenza e dintorni»: col confine a 5 km Podenzano, Rottofreno e
               Gossolengo restano fuori, e la frase li prometteva. Il limite vero è la distanza dal
-              negozio. */}
-          <p>Consegniamo a <strong>Piacenza</strong>, fino a <strong>{confine}</strong> dal negozio in linea
+              negozio.
+              13/11/2026 (R13-013) — La frase è quella di tutto il sito (lib/promesse-pubbliche.ts). */}
+          <p>Consegniamo a <strong>Piacenza</strong>, <strong>{FINO_A_DOVE_CONSEGNIAMO}</strong> in linea
           d&apos;aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci
           arriviamo. Se l&apos;indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e
           l&apos;ordine passa senza questo controllo; lo stesso succede se il negozio non ha ancora la

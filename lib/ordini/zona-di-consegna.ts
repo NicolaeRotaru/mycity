@@ -1,5 +1,6 @@
 import { RAGGIO_CONSEGNA_KM, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
+import { FINO_A_DOVE_CONSEGNIAMO } from '@/lib/promesse-pubbliche';
 
 /**
  * FIN DOVE CONSEGNIAMO — la domanda in un posto solo.
@@ -61,7 +62,8 @@ export function fuoriZonaDiConsegna(opts: DoveVaLaConsegna & { pickupInStore?: b
 export function motivoFuoriZona(nomeNegozio?: string | null): string {
   const negozio = nomeNegozio?.trim();
   const dove = negozio ? `da ${negozio}` : 'da questo negozio';
-  const troppoLontano = `Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio: il tuo indirizzo è troppo lontano ${dove}.`;
+  // 13/11/2026 (R13-013) — Il confine si legge dalla frase di tutto il sito (lib/promesse-pubbliche.ts).
+  const troppoLontano = `Per ora consegniamo ${FINO_A_DOVE_CONSEGNIAMO}: il tuo indirizzo è troppo lontano ${dove}.`;
   return RITIRO_IN_NEGOZIO_ATTIVO
     ? `${troppoLontano} Puoi ritirare in negozio.`
     : `${troppoLontano} Prova con un negozio più vicino a te.`;

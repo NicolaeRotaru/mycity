@@ -16,6 +16,20 @@ import { CARTA_ACCESA } from './funzioni-al-lancio';
 import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents, vociDellaConsegna, type VociDellaConsegna } from './ordini/prezzi';
 
 /**
+ * FIN DOVE CONSEGNIAMO — la frase in un posto solo.
+ *
+ * 13/11/2026 (R13-013) — La stessa frase viveva scritta a mano in sei posti: la riga sotto il CAP
+ * in cassa, la pagina Spedizioni, il rifiuto della cassa (`motivoFuoriZona`), la tendina della
+ * pillola dell'indirizzo, le FAQ e «Vicino a te». Le teneva allineate solo una prova
+ * (le-frasi-della-zona-dicono-il-confine-della-cassa): chi ne cambiava una doveva ricordarsi delle
+ * altre. Adesso la leggono tutti da qui, e il numero viene da dove è deciso (`RAGGIO_CONSEGNA_KM`).
+ */
+export const FINO_A_DOVE_CONSEGNIAMO = `fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`;
+
+/** La frase intera: la riga sotto il CAP in cassa, la tendina della posizione, la pagina Spedizioni. */
+export const CONSEGNIAMO_A_PIACENZA = `Consegniamo a Piacenza, ${FINO_A_DOVE_CONSEGNIAMO}`;
+
+/**
  * IL NOME DELLA VOCE DA 3 EURO — uno solo, in ogni schermata.
  *
  * 27/10/2026 (terzo giro) — La stessa cifra aveva quattro nomi: «Consegna MyCity» nel carrello e
@@ -188,7 +202,7 @@ export const NEGOZIO_CHIUSO_COSA_SUCCEDE =
 export function rispostaTempiDiConsegna(): DomandaRisposta {
   return {
     q: "In quanto tempo arriva l'ordine?",
-    a: `Nella fascia oraria che scegli in cassa, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. La consegna veloce, in ${EXPRESS_ETA_LABEL} dalla conferma del negozio, si può ${QUANDO_SI_PUO_LA_VELOCE}: la cassa te la propone solo allora. ${NEGOZIO_CHIUSO_COSA_SUCCEDE}`,
+    a: `Nella fascia oraria che scegli in cassa, ${FINO_A_DOVE_CONSEGNIAMO}. La consegna veloce, in ${EXPRESS_ETA_LABEL} dalla conferma del negozio, si può ${QUANDO_SI_PUO_LA_VELOCE}: la cassa te la propone solo allora. ${NEGOZIO_CHIUSO_COSA_SUCCEDE}`,
   };
 }
 
@@ -221,7 +235,7 @@ export function rispostaCostoSpedizione(): DomandaRisposta {
         + `La consegna veloce, in ${EXPRESS_ETA_LABEL}, costa ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola; se hai già un negozio sotto i ${euro(SPESA_SENZA_SUPPLEMENTO_CENTS)}, è compresa.`;
   return {
     q: 'Quanto costa la consegna?',
-    a: `${quanto} Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Quando hai messo qualcosa nel carrello, gli esempi con le cifre li trovi lì, sotto «${RIGA_COME_SI_CALCOLA}».`,
+    a: `${quanto} Non c’è un costo a chilometro: consegniamo ${FINO_A_DOVE_CONSEGNIAMO}. Quando hai messo qualcosa nel carrello, gli esempi con le cifre li trovi lì, sotto «${RIGA_COME_SI_CALCOLA}».`,
   };
 }
 
@@ -624,7 +638,7 @@ export function spiegazioneDellaConsegna(fraseDelPagamento: string = frasePagame
       `Consegna veloce, in ${EXPRESS_ETA_LABEL}: ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola per tutto il carrello. Se hai già un negozio sotto i ${soglia}, la veloce è compresa: non paghi niente in più. La veloce si sceglie in cassa, alla voce «Adesso». Si può ${ORE_DELLA_VELOCE}, se tutti i negozi del carrello sono aperti e c’è un fattorino in servizio.`,
     ],
     esempi,
-    chiusura: `Se in cassa usi un codice sconto, i ${soglia} si contano dopo lo sconto. Il totale con la consegna lo vedi sempre prima di confermare l’ordine. Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. ${fraseDelPagamento}`,
+    chiusura: `Se in cassa usi un codice sconto, i ${soglia} si contano dopo lo sconto. Il totale con la consegna lo vedi sempre prima di confermare l’ordine. Non c’è un costo a chilometro: consegniamo ${FINO_A_DOVE_CONSEGNIAMO}. ${fraseDelPagamento}`,
   };
 }
 
@@ -672,5 +686,5 @@ export function avvisoNessunNegozioVicino(raggioKm: number): string {
   const nessuno = `Nessun negozio entro ${raggioKm} km.`;
   return raggioKm < RAGGIO_CONSEGNA_KM
     ? `${nessuno} Aumenta il raggio per vederne di più.`
-    : `${nessuno} Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, e oltre non arriviamo.`;
+    : `${nessuno} Per ora consegniamo ${FINO_A_DOVE_CONSEGNIAMO}, e oltre non arriviamo.`;
 }

@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { MapPin, ChevronDown, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
-import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { CONSEGNIAMO_A_PIACENZA } from '@/lib/promesse-pubbliche';
 
 const STORAGE_KEY = 'mc_delivery_location';
 
@@ -208,9 +208,10 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
             {/* 28/10/2026 — Qui c'era «In MVP serviamo Piacenza e provincia.», scritto a mano e falso
                 già col confine a 10 km: la provincia arriva a Fiorenzuola e a Castel San Giovanni.
                 Col confine a 5 km restano fuori anche Podenzano, Rottofreno e Gossolengo. Il limite
-                vero è la distanza dal negozio, letta da dove la decide la cassa. */}
+                vero è la distanza dal negozio, letta da dove la decide la cassa.
+                13/11/2026 (R13-013) — La frase è quella di tutto il sito (lib/promesse-pubbliche.ts). */}
             <p className="text-[11px] text-ink-400 mt-2 text-center">
-              {`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`}
+              {`${CONSEGNIAMO_A_PIACENZA}.`}
             </p>
           </div>
         </>

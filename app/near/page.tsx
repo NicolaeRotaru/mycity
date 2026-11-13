@@ -11,7 +11,7 @@ import { type ProductPreview, type StoreCardData } from '@/components/StorePrevi
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
-import { avvisoNessunNegozioVicino } from '@/lib/promesse-pubbliche';
+import { avvisoNessunNegozioVicino, FINO_A_DOVE_CONSEGNIAMO } from '@/lib/promesse-pubbliche';
 import { frasePosizione, motivoPosizione, siAspetta, type MotivoPosizione } from '@/lib/posizione';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
@@ -262,7 +262,7 @@ export default function NearMePage() {
         icon={MapPin}
         eyebrow="Negozi vicini"
         title="Vicino a te"
-        blurb={`I negozi della tua zona a Piacenza: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`}
+        blurb={`I negozi della tua zona a Piacenza: consegniamo ${FINO_A_DOVE_CONSEGNIAMO}.`}
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Vicino a te' }]}
       />
 
