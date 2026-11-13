@@ -106,7 +106,8 @@ function SignUpInner() {
   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
   // estensione che lo taglia, guasto loro), si dice cosa e' successo e cosa fare.
   // 13/11/2026 (R24-016) — Non si promette piu' «puoi provare lo stesso»: senza
-  // gettone la rotta del server rifiuta sempre, ed era un giro senza uscita.
+  // gettone l'iscrizione viene rifiutata (da Supabase col CAPTCHA acceso, dalla
+  // rotta del server con R24-020), ed era un giro senza uscita.
   const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // S10 (5/11/2026) — Gli errori restano accanto al campo (con aria-invalid e

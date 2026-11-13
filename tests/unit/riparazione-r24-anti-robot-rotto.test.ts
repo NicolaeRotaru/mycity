@@ -5,17 +5,21 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import { act, type ComponentType } from 'react';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 
 /**
  * 13/11/2026 (R24-016) — «PUOI PROVARE LO STESSO A REGISTRARTI», MA NON SI POTEVA.
  *
  * Quando il riquadro anti-robot non si carica, la pagina di iscrizione diceva di
- * provare lo stesso e lasciava partire il modulo senza gettone. La rotta del
- * server, senza gettone, rifiuta sempre: un giro senza uscita. Come sull'accesso
- * (scheda 278), il modulo non parte e la pagina dice cosa fare davvero.
+ * provare lo stesso e lasciava partire il modulo senza gettone, che poi veniva
+ * rifiutato: un giro senza uscita. Come sull'accesso (scheda 278), il modulo non
+ * parte e la pagina dice cosa fare davvero, con un indirizzo a cui scrivere.
  *
  * Qui il riquadro si rompe davvero: `turnstile.render` lancia, il componente
- * vero chiama `onError`, e si guarda cosa vede e cosa può fare la persona.
+ * vero chiama `onError`, e si guarda cosa vede e cosa può fare la persona. La
+ * prova regge con le due strade dell'iscrizione: `signUp` dal browser (oggi) e
+ * la rotta del server di R24-020 (quando la regista la cuce): nessuna delle due
+ * deve partire.
  */
 
 type Pagina = ComponentType<Record<string, unknown>>;
@@ -97,6 +101,9 @@ describe('l’anti-robot che non si carica non promette una strada che non c’�
     expect(testoVisibile(s.radice)).not.toMatch(/provare lo stesso/i);
     expect(testoVisibile(s.radice)).toMatch(/non può partire/);
     expect(testoVisibile(s.radice)).toMatch(/Google/);
+    // L'ultima strada è scrivere: un indirizzo vero, non la pagina Contatti, che ha lo stesso anti-robot.
+    const scrivici = s.radice.querySelector<HTMLAnchorElement>('[role="alert"] a');
+    expect(scrivici?.getAttribute('href')).toBe(`mailto:${indirizzoContatto('info')}`);
 
     scrivi(s.radice.querySelector<HTMLInputElement>('#signup-email')!, 'anna@esempio.it');
     scrivi(s.radice.querySelector<HTMLInputElement>('#signup-password')!, 'una-password-lunga');
