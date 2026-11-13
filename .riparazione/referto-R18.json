@@ -1,8 +1,8 @@
 {
   "sessione": "R18",
-  "aggiornato": "2026-11-13 07:53",
+  "aggiornato": "2026-11-13 13:36",
   "finita": false,
-  "testa": "b7c2d0dbe780e8ef4f2666632bf320786e8676fb",
+  "testa": "89cd5c2db96405d388310869fab52af87f5a23f9",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_lanciato",
@@ -44,12 +44,16 @@
           "modifica": "Nel mutationFn di create, supabase.from('products').insert({...payload, seller_id: user.id, ...external}).select('id').single() diventa const id = await creaProdottoDalBrowser({ payload, external }); external perde external_synced_at e vale undefined se il prodotto non è importato; in saveProductVariants, TaglieNonSalvate e nel return data.id diventa id; import da '@/lib/products/salva-dal-browser'."
         },
         {
-          "file": "migrations/<fascia di chi tiene i file sopra>_i_prodotti_si_scrivono_solo_dal_server.sql",
-          "modifica": "DROP POLICY IF EXISTS \"Sellers can update their own products\" ON public.products; DROP POLICY IF EXISTS \"Approved sellers can insert products\" ON public.products; REVOKE INSERT ON public.products FROM authenticated, anon; (il REVOKE serve: senza, il controllo ①bis di 14-le-porte-di-servizio diventa rosso). Va nello stesso ramo dei punti sopra, dopo di loro. Non si applica: la applica Nicola."
+          "file": "migrations/<un numero DOPO 425 (per esempio 428): con un numero più basso la 425 ridà INSERT su products ad authenticated e il REVOKE non resta>_i_prodotti_si_scrivono_solo_dal_server.sql",
+          "modifica": "DROP POLICY IF EXISTS \"Sellers can update their own products\" ON public.products; DROP POLICY IF EXISTS \"Approved sellers can insert products\" ON public.products; REVOKE INSERT ON public.products FROM authenticated, anon; (il REVOKE serve: senza, il controllo ①bis di 14-le-porte-di-servizio diventa rosso). Va nello stesso ramo dei punti sopra, dopo di loro. Non si applica: la applica Nicola. Il numero conta: la 425 (R18-021, 425:109) concede INSERT, UPDATE, DELETE su products ad authenticated, quindi la migrazione deve girare dopo (oppure si toglie INSERT da 425:109). Con 428 la prova 14-le-porte-di-servizio-sono-chiuse resta verde."
+        },
+        {
+          "file": "tests/sql/rls/riparazione-r18-permessi-scritti.test.sql:113-117 (file di R18, creato da R18-021)",
+          "modifica": "Nello STESSO passo della migrazione: il controllo che oggi pretende che il negozio cambi il prezzo dal browser (n = 1) diventa n = 0. Senza, con la cura run.sh è rosso; con n = 0 e la migrazione 428 run.sh è tutto verde (provato dal revisore A)."
         },
         {
           "file": "tests/sql/rls/riparazione-r18-prodotti.test.sql (NUOVO, nel ramo della migrazione)",
-          "modifica": "Da venditore approvato (request.jwt.claims): update price=1 sul suo prodotto → 0 righe; insert su products → permission denied; legge ancora i suoi due prodotti (bozza compresa); il prezzo resta 6.50; con service_role update e insert riescono. Prova rimessa con --sql e la migrazione in --file."
+          "modifica": "Da venditore approvato (request.jwt.claims): update price=1 sul suo prodotto → 0 righe; insert su products → permission denied; legge ancora i suoi due prodotti (bozza compresa); il prezzo resta 6.50; con service_role update e insert riescono. Prova rimessa con --sql e la migrazione in --file. La prova deve pretendere proprio permission denied (42501) sull insert, non un errore qualunque: così vede se il REVOKE viene annullato da una migrazione successiva."
         },
         {
           "file": "tests/unit/riparazione-r18-prodotti-nascono-dal-server.test.ts (NUOVO)",
@@ -68,7 +72,8 @@
           "modifica": "Togliere from: … insert … dal finto client e aggiungere vi.mock('@/lib/products/salva-dal-browser', () => ({ creaProdottoDalBrowser: async () => stato.inserito.id })) (senza, 1 prova rossa)."
         }
       ],
-      "nota": "La pagina d'import l'ha già chiusa R09-006 (346e8147): app/seller/products/import/page.tsx:181 chiama caricaSulServer, nessun insert nella pagina. Il precedente R09 copriva solo l'UPDATE; la voce nomina anche l'insert di new/page.tsx, quindi servono la rotta nuova e DROP+REVOKE dell'INSERT. Dopo la migrazione le scritture col client amministrativo lasciano actor NULL nel registro attività (il trigger usa auth.uid()); chi ha scritto resta in audit_logs e activity_events via writeAudit. CARICAMENTO_DA_FILE_ACCESO=false (lib/funzioni-al-lancio.ts:79): oggi la rotta d'import non è viva."
+      "nota": "La pagina d'import l'ha già chiusa R09-006 (346e8147): app/seller/products/import/page.tsx:181 chiama caricaSulServer, nessun insert nella pagina. Il precedente R09 copriva solo l'UPDATE; la voce nomina anche l'insert di new/page.tsx, quindi servono la rotta nuova e DROP+REVOKE dell'INSERT. Dopo la migrazione le scritture col client amministrativo lasciano actor NULL nel registro attività (il trigger usa auth.uid()); chi ha scritto resta in audit_logs e activity_events via writeAudit. CARICAMENTO_DA_FILE_ACCESO=false (lib/funzioni-al-lancio.ts:79): oggi la rotta d'import non è viva. La patch /home/user/r18-attrezzi/lotti/r18-001-serve-file-altrui.patch è stata scritta prima di R18-021: da aggiornare col numero dopo la 425 e con la prova permessi-scritti (revisore A). migrazione-su-database-pieno.sh prova solo l ultima migrazione per numero: il «verde» dichiarato non riguardava questa migrazione.",
+      "verificato_da": "revisore A: sulla testa 8bab0265 ricostruita (r18_rev_a_test) il venditore autenticato cambia price=1 e stock=999 e inserisce un prodotto 'available' senza foto; patch applicata: prova SQL nuova rossa 4/5 senza la migrazione e verde 5/5 con, vitest dei file toccati e delle due prove dei tipi verde (17 file, 72 prove), vitest intero 1421/9658 e tsc verdi, ma run.sh ROSSO in 2 file (verde sulla testa senza patch); cercate tutte le scritture su products."
     },
     {
       "id": "R18-003",
@@ -86,8 +91,51 @@
         {
           "file": "tests/sql/harness/migrazione-su-database-pieno.sh",
           "modifica": "Riga 42: `ULTIMA=\"$(ls \"$MIG\"/*.sql | sort -V | tail -1)\"` → `ULTIMA=\"$(ls \"$MIG\"/*.sql | LC_ALL=C sort | tail -1)\"`. Riga 50: `for f in $(ls \"$MIG\"/*.sql | sort -V); do` → `for f in $(ls \"$MIG\"/*.sql | LC_ALL=C sort); do`. Patch pronta: /home/user/r18-attrezzi/lotti/r18-003-serve-file-altrui.patch."
+        },
+        {
+          "file": "tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh:54 · la-159-non-lascia-la-tabella-scoperta.sh:61 · la-160-regge-un-ordine-annullato.sh:45 · lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh:55 (gira in CI, ci.yml:329) · tests/supabase-locale/avvia.sh:36 · il test che simula il rilascio (il-rilascio-non-riallinea…test.ts:35-38)",
+          "modifica": "Stessa causa radice: `sort -V` diventa `LC_ALL=C sort`, come in apply.sh, in ognuno di questi punti (revisore C)."
         }
-      ]
+      ],
+      "verificato_da": "revisore C: la patch si applica con git apply su 8bab0265; copia dello script corretta in una cartella di lavoro: verde, ultima migrazione 425, 052 prima di 052b; diff sort -V / LC_ALL=C sort conferma le due coppie invertite; grep di tutti i sort -V del deposito."
+    },
+    {
+      "id": "R18-004",
+      "chiave": "frontend-ux|nello storico delle promo una promo annullata si legge «terminata» con una data che deve ancora venire",
+      "esito": "riparato",
+      "commit": "dc067a0800d6c2599503a9070c7b533250fda17e",
+      "file_toccati": [
+        "app/seller/promotions/page.tsx",
+        "tests/unit/riparazione-r18-promo-annullata.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-promo-annullata.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-promo-annullata.test.tsx tests/unit/minori-s06-promozioni.test.ts tests/unit/riparazione-r03-promo-sceglie-la-categoria.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dc067a08^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-annullata.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nello storico la riga scrive « · Terminata <data>» solo quando statoDellaPromo dice «Scaduta» (non annullata e ends_at già passato); una promo annullata resta «-15%» col cartellino «Annullata», senza la data che deve ancora venire. Nessuna colonna nuova. La correzione sta tutta in page.tsx (riusa statoDellaPromo senza cambiarlo): una funzione nuova in stato-promo.ts avrebbe reso la prova rimessa «strutturale». La prova monta la pagina con orologio finto al 6/11 (promo annullata fino al 6/12 e una scaduta il 1/11) e controlla anche statoDellaPromo con l'orologio finto."
+    },
+    {
+      "id": "R18-005",
+      "chiave": "frontend-ux|il cliente legge «il tuo rider» e il negozio legge «cliente» al posto dei nomi, perché le due strade nuove per i nomi non esistono nel database vero",
+      "esito": "non_codice",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": null,
+      "prova_tipo": null,
+      "prova_eseguita": false,
+      "rimessa": null,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato che il codice non abbia una strada esistente su cui ripiegare: i nomi da mostrare sono di fattorini (al cliente e al negozio) e di clienti (al negozio), nessuno dei due sta in seller_public_profiles; la vecchia vista public_profiles (110) è stata tolta dalla 119; profiles in produzione si legge solo per la propria riga. Le due strade giuste sono già scritte nel deposito e il codice le usa già (fetchNomiPubblici con ripiego su profiles; app/seller/reviews/page.tsx:59 e lib/queries/controparte-della-chat.ts:48 con nomi_dei_clienti_del_negozio). Non ho scritto la 428: rifarebbe le stesse due. Il database vero non l'ho interrogato: lo stato di produzione è quello scritto nella voce (5/11).",
+      "nota": "Nicola: applicare in produzione la migrazione 164 (vista nomi_pubblici, solo authenticated) e la 181 (funzione nomi_dei_clienti_del_negozio, solo authenticated), già nel deposito; la 164 va con la 161 o dopo. Nessuna modifica al codice: appena ci sono, cliente e negozio leggono i nomi di battesimo al posto di «Il tuo rider» e «Cliente»."
     },
     {
       "id": "R18-007",
@@ -104,7 +152,7 @@
       "copre_tutta_la_voce": false,
       "prova": "La parte di codice era gia' chiusa prima della base (S05, 5/11): app/api/admin/users/[id]/moderate/route.ts:316-324 scrive nel registro solo { role, reason } (niente store_name ne' full_name), app/api/admin/users/[id]/delete/route.ts:75-77 solo { role }; lo specchio activity_events (lib/audit.ts:69-80) copia gli stessi metadati. Le prove esistenti tests/unit/minori-s05-moderazione.test.ts «113/125» (rotta di moderazione, nessun 'name' e nessun cognome nei metadati) e «125» (rotta di cancellazione) sono verdi sulla base: 2 passate.",
       "cosa_ho_fatto": "Controllato la rotta e il registro: nessun nome in chiaro viene piu' scritto quando si sospende, si riattiva, si approva, si rifiuta o si cancella un account. Nessun commit: nel mio file non c'e' niente da cambiare, e una prova nuova sarebbe verde anche senza correzione (quella esistente copre gia' il comportamento). Resta il passato, che e' nel database vero, e l'informativa, che non e' mia.",
-      "nota": "Per Nicola, sul database vero (io non l'ho interrogato): (1) togliere il nome dalle 20 righe vecchie e dalle loro copie: `UPDATE public.audit_logs SET metadata = metadata - 'name' WHERE target_table = 'profiles' AND metadata ? 'name' AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id::text = audit_logs.target_id);` e lo stesso su public.activity_events (category = 'moderation', target_table = 'profiles'); prima contale con la stessa condizione in un SELECT count(*) (atteso 20 e 20). Se si preferisce aspettare, la potatura notturna azzera metadata dopo 12 mesi (lib/privacy/potature-ritenzione.ts:296, giugno-luglio 2027), solo se il giro notturno e' acceso. (2) togliere dal contenitore products l'unico file con un proprietario che non esiste piu' (storage.objects con owner non in auth.users).",
+      "nota": "Per Nicola, sul database vero (io non l'ho interrogato): (1) togliere il nome dalle 20 righe vecchie e dalle loro copie: `UPDATE public.audit_logs SET metadata = metadata - 'name' WHERE target_table = 'profiles' AND metadata ? 'name' AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id::text = audit_logs.target_id);` e lo stesso su public.activity_events (category = 'moderation', target_table = 'profiles'); prima contale con la stessa condizione in un SELECT count(*) (atteso 20 e 20). Se si preferisce aspettare, la potatura notturna azzera metadata dopo 12 mesi (lib/privacy/potature-ritenzione.ts:296, giugno-luglio 2027), solo se il giro notturno e' acceso. (2) togliere dal contenitore products l'unico file con un proprietario che non esiste piu' (storage.objects con owner non in auth.users). Correzione del revisore C: le copie in activity_events si azzerano a 14 mesi, non a 12 (lib/…/potature-ritenzione.ts:288-293): la riga per l informativa va scritta con 14 mesi.",
       "serve_file_altrui": [
         {
           "file": "app/privacy/page.tsx",
@@ -113,6 +161,146 @@
         {
           "file": "lib/account/cancellazione.ts",
           "modifica": "Facoltativo, solo per le righe scritte prima del 5/11: nella cancellazione completa, dopo deleteUser, `UPDATE audit_logs SET metadata = metadata - 'name' WHERE target_table = 'profiles' AND target_id = <id>` e lo stesso su activity_events, col client di servizio, best-effort con un logger.error se fallisce. Le righe nuove il nome non lo hanno piu'."
+        }
+      ],
+      "verificato_da": "revisore C: tutte le 29 chiamate a writeAudit e gli insert diretti su audit_logs/activity_events: sui profili si scrivono solo ruolo, motivo, evento, id del conto Stripe, mai nomi; il grilletto log_activity_change su profiles redige full_name/store_name/email (activity_key_sensibile e' un elenco chiuso di chiavi ammesse) e alla cancellazione scrive solo l'id; prove S05 «registro» verdi (2 passate)."
+    },
+    {
+      "id": "R18-008",
+      "chiave": "privacy-legale|i video di youtube e vimeo si caricano senza chiedere il consenso, e la cookie policy non li nomina",
+      "esito": "serve_file_altrui",
+      "commit": "89cd5c2db96405d388310869fab52af87f5a23f9",
+      "file_toccati": [
+        "tests/unit/riparazione-r18-video-della-vetrina-al-clic.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-video-della-vetrina-al-clic.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-video-della-vetrina-al-clic.test.tsx tests/unit/riparazione-r11-video-cms-al-clic.test.tsx tests/unit/minori-s09-collezione-vetrina.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": "nessuna correzione di codice da togliere: VideoSection.tsx passa già da VideoAlClic (5/11). Controllo a mano al posto della rimessa: rimesso in VideoSection l'iframe diretto con loading=lazy, la prova è caduta (2 su 2, «il video si carica senza che nessuno lo chieda»), poi il file è tornato com'era."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La parte del codice c'era già sulla base: components/store-sections/VideoSection.tsx:29 mette VideoAlClic (pulsante «Guarda il video (YouTube|Vimeo)» con «Al tocco il video si carica da …, che riceve il tuo indirizzo IP»; l'iframe nasce solo al clic), e lo stesso fanno home (HomeSectionRenderer.tsx:532) e pagine CMS (CmsBlockRenderer.tsx:98). Non ho cambiato codice e non ho usato lib/consent.ts (il clic è già più stretto del consenso). Ho aggiunto la prova col clic vero (jsdom): niente iframe prima, il pulsante nomina YouTube o Vimeo, dopo il clic l'iframe con youtube-nocookie.com o player.vimeo.com ?dnt=1.",
+      "serve_file_altrui": [
+        {
+          "file": "app/cookies/page.tsx",
+          "modifica": "Nella sezione 2, dopo il blocco «2.4 Cookie di marketing» e prima di </LegalSection> (riga 119), aggiungere: <h3 className=\"font-semibold text-ink-900 mt-4 mb-2\">2.5 Video di YouTube e Vimeo (solo se tocchi il video)</h3><p>Alcune vetrine dei negozi, la home e le pagine informative possono mostrare un video di YouTube (Google Ireland Ltd., dal dominio youtube-nocookie.com) o di Vimeo (Vimeo.com, Inc., con l&apos;opzione «do not track»). Il video non si carica da solo: al suo posto c&apos;è il pulsante «Guarda il video». Solo quando lo tocchi il tuo browser si collega a YouTube o a Vimeo, che ricevono il tuo indirizzo IP e la pagina da cui guardi e possono salvare cookie o dati nel browser secondo le proprie regole (<a className=\"text-primary-700 underline\" href=\"https://policies.google.com/privacy\" target=\"_blank\" rel=\"noopener noreferrer\">privacy di Google</a>, <a className=\"text-primary-700 underline\" href=\"https://vimeo.com/privacy\" target=\"_blank\" rel=\"noopener noreferrer\">privacy di Vimeo</a>).</p> — e nella sezione 4 (righe 148-149) sostituire «(Cloudflare, Google, Stripe Inc., Anthropic, Resend, PostHog Inc.)» con «(Cloudflare, Google — anche per i video di YouTube —, Stripe Inc., Anthropic, Resend, PostHog Inc., Vimeo.com, Inc. per i video di Vimeo)». L'indice TOC (righe 16-22) elenca solo le sezioni: non cambia."
+        },
+        {
+          "file": "app/privacy/page.tsx",
+          "modifica": "Nell'elenco dei fornitori, subito dopo la riga «Google Ireland Ltd. — misurazione del traffico…» (riga 246), aggiungere: <li><strong>Google Ireland Ltd. / Google LLC (YouTube)</strong> e <strong>Vimeo.com, Inc.</strong> (Stati Uniti — SCC) — video incorporati nelle vetrine dei negozi, in home e nelle pagine informative. Il video si carica solo quando tocchi «Guarda il video»: da quel momento YouTube o Vimeo ricevono il tuo indirizzo IP e la pagina da cui guardi, e trattano i dati secondo le proprie regole.</li>"
+        }
+      ],
+      "nota": "Il codice era già a posto sulla base (components/store-sections/VideoSection.tsx:29 usa VideoAlClic): il commit 89cd5c2d aggiunge solo la prova col clic vero. Quello che resta della voce (la cookie policy e l informativa che nominano YouTube e Vimeo) sta in file non di R18."
+    },
+    {
+      "id": "R18-010",
+      "chiave": "qa-flussi|«migliora tutto il catalogo» fa vedere 50 prodotti e con «applica» ne riscrive fino a 200 (oggi spento)",
+      "esito": "riparato",
+      "commit": "2b4b10a607b182e501e6aab820e5c5d2f8c487ab",
+      "file_toccati": [
+        "app/seller/products/ai-batch/page.tsx",
+        "tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx tests/unit/minori-s10-lotto-applica.test.ts tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts tests/unit/minori-s06-ai-studio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2b4b10a6^ --file app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'anteprima mostra tutti i risultati (non più slice(0, 50); il lotto parte al massimo su 200 prodotti) e «Applica a tutti» / «Metti in bozza i segnalati» mandano alla rotta {jobId, productIds} con i prodotti mostrati: la rotta li filtrava già (apply/route.ts:74-98), quindi rotta e start non cambiano. La prova monta la pagina vera e passa la sua richiesta alla rotta vera con un database finto: 120 proposte, i prodotti riscritti sono esattamente quelli mostrati (sulla base: 70 riscritti senza essere stati mostrati); lo stesso per la moderazione (80, sulla base 30 messi in bozza senza essere mostrati); più un controllo diretto sulla rotta con productIds."
+    },
+    {
+      "id": "R18-011",
+      "chiave": "qa-flussi|la promo «oggi, fino a mezzanotte» finisce a mezzanotte del fuso del telefono, non di piacenza",
+      "esito": "riparato",
+      "commit": "3ec4673a5c9a591b2ecd34c4c28a1f411f19ef25",
+      "file_toccati": [
+        "app/seller/promotions/page.tsx",
+        "tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ec4673a^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "endDateFor('today') ora calcola l'ultimo istante del giorno di Piacenza: inizioGiornoPiacenza(giorno dopo) meno un millesimo, con giornoPiacenza e inizioGiornoPiacenza di lib/tempo-piacenza.ts usati senza modificarli. Le tre date mostrate (anteprima, «Fino al», «Terminata») hanno timeZone Europe/Rome (FUSO_PIACENZA). La prova monta la pagina col processo in America/New_York (e Asia/Tokyo), orologio finto, sceglie «Oggi» e preme «Crea promo»: ends_at = 22:59:59.999Z il 6/11 (inverno), 21:59:59.999Z il 15/7 (estate), la sera di New York quando a Piacenza è già il giorno dopo, e le due domeniche del cambio d'ora (25/10 e 29/3)."
+    },
+    {
+      "id": "R18-012",
+      "chiave": "qa-flussi|un doppio clic su «crea promo» crea due promozioni uguali, e se se ne cancella una l'altra resta attiva",
+      "esito": "riparato",
+      "commit": "1916a2e9b2d6cb2181032d8b3b1fd94bd95ac4aa",
+      "file_toccati": [
+        "app/seller/promotions/page.tsx",
+        "migrations/429_due_promo_uguali_non_restano_attive_insieme.sql",
+        "tests/unit/riparazione-r18-promo-doppio-clic.test.tsx",
+        "tests/sql/rls/riparazione-r18-promo-doppia.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-promo-doppio-clic.test.tsx",
+        "tests/sql/rls/riparazione-r18-promo-doppia.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-promo-doppio-clic.test.tsx --reporter=dot ; export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-promo-doppia.test.sql && bash tests/sql/harness/run.sh r18_prova ; npx vitest run tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts tests/unit/riparazione-r11-viste-nei-tipi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1916a2e9^ --file migrations/429_due_promo_uguali_non_restano_attive_insieme.sql --prove tests/sql/rls/riparazione-r18-promo-doppia.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1916a2e9^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-doppio-clic.test.tsx --json (0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Pagina: un useRef creazioneInCorso messo a true prima di create.mutate() e rimesso a false in onSettled; il secondo clic nello stesso istante si ignora (prova: due clic in un solo act, un solo insert; dopo un errore il bottone torna a funzionare). Database, migrazione 429: un controllo BEFORE INSERT OR UPDATE OF status su seller_promotions (funzione seller_promotions_niente_doppioni, plpgsql, search_path fisso, EXECUTE tolto a PUBLIC/anon/authenticated) rifiuta con un messaggio in italiano una promo attiva uguale (stesso negozio, titolo, sconto, scope, categoria, prodotti) a un'altra attiva la cui durata si sovrappone e non è finita; un lucchetto per negozio (pg_advisory_xact_lock) mette in fila due inserimenti concorrenti (provato a mano con due sessioni psql: una riga sola). Scadute e annullate non fermano niente. Niente colonne, niente indice: i doppioni vecchi non fermano la migrazione. run.sh e le due prove dei tipi verdi."
+    },
+    {
+      "id": "R18-015",
+      "chiave": "qa-flussi|col telefono del negozio un po' indietro, un ordine non più ritirabile legge «entro le 12:46» invece di «ritiro non più possibile»",
+      "esito": "parziale",
+      "commit": "a5d2477903843022b7a1fb3d4d75b71c390ac0de",
+      "file_toccati": [
+        "lib/ordini/scadenza-accettazione.ts",
+        "tests/unit/riparazione-r18-ritiro-impossibile-col-telefono-indietro.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-ritiro-impossibile-col-telefono-indietro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-ritiro-impossibile-col-telefono-indietro.test.ts tests/unit/la-scadenza-e-l-ultimo-ritiro-anche-per-il-giro-notturno.test.ts tests/unit/il-negozio-accetta-entro-l-ultimo-ritiro-possibile.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a5d24779^ --file lib/ordini/scadenza-accettazione.ts --prove tests/unit/riparazione-r18-ritiro-impossibile-col-telefono-indietro.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "rigaScadenzaPerIlNegozio: quando ultimoMomentoDelRitiro dice «impossibile» (l'ordine è nato senza nessun momento per il ritiro) la riga dice «Il ritiro per questa fascia non è più possibile…» qualunque ora segni il telefono; prima lo diceva solo da created_at in poi, e col telefono 30 secondi indietro usciva «entro le 12:46» (created_at, che entroQuandoAccettare restituisce per «impossibile»). Prova con orologio finto alle 12:45:31 (e 12:40) e TZ America/New_York; l'ordine ancora ritirabile resta «entro le 12:45».",
+      "cosa_resta": "Il caso generale dell'orologio indietro su un ordine che ERA ritirabile: passata l'ora dell'ultimo ritiro, un telefono 30 secondi indietro legge ancora «entro le 12:45» per quei 30 secondi, perché le pagine scrivono la riga con l'ora del browser (lettoAlle). Serve l'ora del server nelle pagine app/seller/orders/*.tsx, che non sono di questo lotto.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/orders/page.tsx",
+          "modifica": "riga 154: lettoAlle usa l'ora del browser. Calcolare una volta per montaggio lo scarto dall'orologio del server, per esempio con `fetch('/api/health', { cache: 'no-store' })` e `scarto = Date.parse(res.headers.get('date')) - Date.now()` (0 se l'intestazione manca o non si legge), e scrivere `const lettoAlle = new Date(Math.max(adesso, queryOrders.dataUpdatedAt || 0, queryOrders.errorUpdatedAt || 0) + scarto);`. Con una prova che, col telefono 30 s indietro dopo l'ultimo ritiro, la riga dica «Il ritiro per questa fascia non è più possibile»."
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "riga 240: la stessa correzione: `const lettoAlle = new Date(Math.max(adesso, dataUpdatedAt || 0, errorUpdatedAt || 0) + scarto);` con lo stesso scarto dall'orologio del server (meglio un aiutante comune, per esempio lib/ordini/ora-del-server.ts, usato da tutte e due le pagine)."
         }
       ]
     },
@@ -138,7 +326,8 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Migrazione 421: handle_new_user copia NULLIF(left(btrim(raw_user_meta_data->>'full_name'), 200), '') in profiles.full_name, il resto identico alla 161 ('pending' compreso). Nello stesso giro get_referral_leaderboard da' solo il nome di battesimo, come nomi_pubblici e rider_reviews_ricevute: il 5/11 la copia del nome era stata tolta proprio perche' la classifica degli inviti l'avrebbe mostrata intera a ogni utente con l'accesso. La prova simula l'iscrizione con una riga in auth.users coi dati dell'account (come lo shim) e guarda il profilo che nasce e la classifica vista da un altro.",
-      "cosa_resta": "I profili gia' nati restano senza nome: il recupero da auth.users e' una scrittura sui dati veri e la voce la vuole con la firma di Nicola. La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della migrazione 421."
+      "cosa_resta": "I profili gia' nati restano senza nome: il recupero da auth.users e' una scrittura sui dati veri e la voce la vuole con la firma di Nicola. La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della migrazione 421.",
+      "verificato_da": "revisore B: 421 confrontata con la 161 (handle_new_user uguale, più full_name) e con la 048 (get_referral_leaderboard uguale, cambia solo il nome); prova SQL verde nella suite intera; variante: rimessa la classifica della 048 e lasciato il resto, la prova cade solo sul controllo 5 (classifica con i cognomi). Il cambio della classifica era necessario: la nota_5_11 della voce lo mette come condizione prima di copiare il nome, quindi sta dentro la voce. L'unica altra lettura del nome di un altro è nomi_dei_clienti_del_negozio, che serve il negozio sui suoi clienti. Chi legge la classifica non si rompe: firma, colonne e permessi uguali (authenticated sì, anon no); l'unica pagina, app/profile/referral/leaderboard/page.tsx (spenta al lancio), con anonName regge un nome di una parola sola (mostra «Mario» invece di «Mario R.»). L'esito parziale è giusto: resta il recupero dei profili già nati, che vuole la firma di Nicola"
     },
     {
       "id": "R18-018",
@@ -164,7 +353,8 @@
         "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 554a60dd^ --file migrations/422_la_regola_dell_amministratore_non_ferma_la_lettura_degli_eventi.sql --prove tests/sql/rls/riparazione-r18-eventi-da-visitatore.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 554a60dd^ --file app/events/page.tsx --prove tests/unit/riparazione-r18-eventi-con-la-data.test.tsx --json (0)"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Migrazione 422: su marketplace_events la regola FOR ALL events_admin_write (034:95-99, sottodomanda su profiles coi permessi di chi chiede) lascia il posto a quattro regole TO authenticated con (SELECT public.is_admin()): scrittura (INSERT, UPDATE, DELETE) e la lettura completa dell'amministratore, che la pagina admin usa per gli annullati e senza la quale UPDATE e DELETE non troverebbero la riga. La lettura pubblica events_public_read resta com'e'. Con la stessa domanda sulle altre FOR ALL che leggono profiles: stessa cura su shop_of_month (negozio del mese in home, letto dai visitatori) e cashback_campaigns (lettura pubblica delle campagne attive); rider_sos_events e zone_codes restano (i visitatori non le leggono). Prova SQL: toglie ad anon SELECT su profiles come in produzione, poi da visitatore legge evento, negozio del mese e campagna senza errori e non scrive; il cliente non scrive; l'amministratore vede l'annullato, lo rimette in programma, crea e cancella. Pagina: accanto a «Inizia tra…/Termina tra…» data e ora di Piacenza (dataEOraPiacenza di lib/admin/etichette.ts, Intl con timeZone Europe/Rome: «31 dic 2026, 20:00» e «1 gen 2027, 12:00»), «tra meno di un minuto» invece di «tra 0 min», e un ridisegno ogni 30 secondi che toglie l'evento appena finito senza aspettare la rilettura. Lo stato d'errore resta com'era: con la 422 non scatta piu' per i visitatori (e la prova S04 ne pretende il testo). Vitest con orologio finto e TZ America/New_York."
+      "cosa_ho_fatto": "Migrazione 422: su marketplace_events la regola FOR ALL events_admin_write (034:95-99, sottodomanda su profiles coi permessi di chi chiede) lascia il posto a quattro regole TO authenticated con (SELECT public.is_admin()): scrittura (INSERT, UPDATE, DELETE) e la lettura completa dell'amministratore, che la pagina admin usa per gli annullati e senza la quale UPDATE e DELETE non troverebbero la riga. La lettura pubblica events_public_read resta com'e'. Con la stessa domanda sulle altre FOR ALL che leggono profiles: stessa cura su shop_of_month (negozio del mese in home, letto dai visitatori) e cashback_campaigns (lettura pubblica delle campagne attive); rider_sos_events e zone_codes restano (i visitatori non le leggono). Prova SQL: toglie ad anon SELECT su profiles come in produzione, poi da visitatore legge evento, negozio del mese e campagna senza errori e non scrive; il cliente non scrive; l'amministratore vede l'annullato, lo rimette in programma, crea e cancella. Pagina: accanto a «Inizia tra…/Termina tra…» data e ora di Piacenza (dataEOraPiacenza di lib/admin/etichette.ts, Intl con timeZone Europe/Rome: «31 dic 2026, 20:00» e «1 gen 2027, 12:00»), «tra meno di un minuto» invece di «tra 0 min», e un ridisegno ogni 30 secondi che toglie l'evento appena finito senza aspettare la rilettura. Lo stato d'errore resta com'era: con la 422 non scatta piu' per i visitatori (e la prova S04 ne pretende il testo). Vitest con orologio finto e TZ America/New_York.",
+      "verificato_da": "revisore C: a 554a60dd prova SQL verde (15/15) e vitest 41/41 (TZ New York); rimessa --sql della 422 e rimessa della pagina entrambe 0; con REVOKE SELECT su profiles ad anon, da visitatore legge eventi/negozio del mese/campagna e non scrive (permission denied); in piu' admin cambia e cancella un evento annullato, annulla con RETURNING, upsert del negozio del mese; scansione di tutte le tabelle leggibili da anon: restano in errore solo audit_logs, contact_messages, disputes, rider_sos_events (lette solo da admin/collegati); is_admin() identica alla vecchia sottodomanda; date con Intl timeZone Europe/Rome."
     },
     {
       "id": "R18-019",
@@ -190,7 +380,8 @@
         "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6eefff31^ --file migrations/423_il_codice_sconto_non_supera_il_cento_e_i_soldi_non_sono_negativi.sql --prove tests/sql/rls/riparazione-r18-coupon.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6eefff31^ --file app/admin/coupons/page.tsx --prove tests/unit/riparazione-r18-coupon.test.ts --json (0)"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Migrazione 423: dieci paletti CHECK col giro della 215 (NOT VALID, poi VALIDATE; se il passato non regge resta NOT VALID con un avviso e le domande per contare le righe). coupons: PERCENT fra 0 e 100, FIXED > 0, mai negativo; spesa minima >= 0; usi e massimo >= 0 e usi <= massimo. orders: shipping_cost, discount_amount, application_fee_cents, cash_collected_cents >= 0 e payment_method in ('card','cod') o vuoto; disputes.refund_cents e gift_cards.voided_cents >= 0. Nel modulo admin il Valore ha max=100 col tipo percentuale. La prova SQL scrive i 15 numeri storti (rifiutati) e 10 scritture oneste (passano, compresi claim/release del contatore); la vitest apre la pagina: 150% non parte, 15% e 150 euro fissi partono. lib/coupons.ts non cambia: la cassa taglia gia' lo sconto, il buco era nel database."
+      "cosa_ho_fatto": "Migrazione 423: dieci paletti CHECK col giro della 215 (NOT VALID, poi VALIDATE; se il passato non regge resta NOT VALID con un avviso e le domande per contare le righe). coupons: PERCENT fra 0 e 100, FIXED > 0, mai negativo; spesa minima >= 0; usi e massimo >= 0 e usi <= massimo. orders: shipping_cost, discount_amount, application_fee_cents, cash_collected_cents >= 0 e payment_method in ('card','cod') o vuoto; disputes.refund_cents e gift_cards.voided_cents >= 0. Nel modulo admin il Valore ha max=100 col tipo percentuale. La prova SQL scrive i 15 numeri storti (rifiutati) e 10 scritture oneste (passano, compresi claim/release del contatore); la vitest apre la pagina: 150% non parte, 15% e 150 euro fissi partono. lib/coupons.ts non cambia: la cassa taglia gia' lo sconto, il buco era nel database.",
+      "verificato_da": "revisore B: database ricostruito fino alla 422 con righe storte committate (coupon PERCENT 150, usi 7 su 1, spesa minima -10; ordine apple_pay con importi -1/-2/-3/-4; reclamo refund -300; buono voided -100), poi 423: esce 0 con 10 avvisi e i 10 vincoli NOT VALID; prova SQL e vitest verdi; rimessa --sql e rimessa sulla pagina rifatte: regge (0); i vincoli stanno tutti nella descrizione e nel fix della voce; gli unici payment_method scritti dal codice (anche nella storia git) sono 'card' e 'cod'"
     },
     {
       "id": "R18-020",
@@ -213,7 +404,8 @@
         "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8cdcffe4^ --file migrations/424_un_reclamo_non_resta_legato_a_un_ordine_che_non_esiste.sql --prove tests/sql/rls/riparazione-r18-reclamo-senza-ordine.test.sql --sql r18_rimessa --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Migrazione 424: chiavi esterne verso orders(id) sulle tre colonne della voce, NOT VALID poi VALIDATE (se ci sono orfani resta NOT VALID con un avviso e le domande per trovarli). disputes.order_id ON DELETE RESTRICT (un reclamo non sparisce con l'ordine e non resta senza; nel sito un ordine si cancella solo nel ripiego subito dopo averlo creato). loyalty_transactions.order_id e zone_code_uses.order_id ON DELETE SET NULL, come le altre order_id che possono restare vuote (cashback_redemptions, rider_sos_events); per loro due anche l'indice (controllo 4 di tests/sql/rls/14). La prova scrive su un ordine inventato (rifiutato) e cancella ordini con righe legate."
+      "cosa_ho_fatto": "Migrazione 424: chiavi esterne verso orders(id) sulle tre colonne della voce, NOT VALID poi VALIDATE (se ci sono orfani resta NOT VALID con un avviso e le domande per trovarli). disputes.order_id ON DELETE RESTRICT (un reclamo non sparisce con l'ordine e non resta senza; nel sito un ordine si cancella solo nel ripiego subito dopo averlo creato). loyalty_transactions.order_id e zone_code_uses.order_id ON DELETE SET NULL, come le altre order_id che possono restare vuote (cashback_redemptions, rider_sos_events); per loro due anche l'indice (controllo 4 di tests/sql/rls/14). La prova scrive su un ordine inventato (rifiutato) e cancella ordini con righe legate.",
+      "verificato_da": "revisore B: sul database fino alla 422 orfani committati (reclamo, movimento punti e uso del codice di zona su ordini inesistenti), poi 424: esce 0 con 3 avvisi e le 3 chiavi NOT VALID; UPDATE dello stato del reclamo orfano passa; prova SQL verde, rimessa --sql rifatta: regge (0); gli ordini si cancellano solo nei ripieghi subito dopo la creazione (app/api/orders/cod/route.ts:1193 e :1458, lib/stripe/webhook/ordini.ts:429), orders verso profiles è SET NULL, quindi RESTRICT sui reclami non blocca la cancellazione dell'account; loyalty_transactions.order_id e zone_code_uses.order_id possono restare vuote"
     },
     {
       "id": "R18-021",
@@ -248,7 +440,9 @@
           "modifica": "Come in R18-024: /home/user/r18-attrezzi/lotti/r18-024-prove-19-e-34-serve-file-altrui.patch."
         }
       ],
-      "insieme_a": "R18-024"
+      "insieme_a": "R18-024",
+      "verificato_da": "revisore C: confronto relacl/attacl/proacl/nspacl su 4 database (impalcatura di oggi con e senza 425: identici, no-op; impalcatura patchata con 425: sottoinsieme stretto della ricostruita, nessun permesso in piu', persi solo TRIGGER/TRUNCATE/REFERENCES, SELECT anon su profiles, sequenze, EXECUTE su grilletti); 77/77 tabelle con RLS; shim patch + patch 19/34: run.sh verde, la-158/159/160, lo-script, pieno, semine verdi; senza 425 la prova e' rossa 6/13 (76/77 tabelle chiuse ad anon); 59 prove unitarie che leggono migrations/ verdi (515).",
+      "nota": " Revisore C: (a) backup-db.yml:680-683 e scripts/backup-db.sh:96 usano --no-acl, quindi un ripristino da quei dump non porta i permessi e vuole la 425 riapplicata; (b) la 425 scrive per esteso anche INSERT ad anon su contact_messages, segnalazioni (425:63,125) e product_views, che ci sono già oggi in produzione: il sito scrive le prime due solo col client di servizio; (c) consent_log, product_views, product_views_daily e subscription_orders danno SELECT ad anon senza una regola per lui (zero righe lette): da stringere in un secondo momento."
     },
     {
       "id": "R18-022",
@@ -288,6 +482,10 @@
         {
           "file": "app/rider/page.tsx",
           "modifica": "Righe 329-330: il messaggio di DOCUMENTI_SCADUTI diventa «Documento d’identità, patente o polizza RC scaduti: carica il documento nuovo dal profilo per tornare a prendere consegne»."
+        },
+        {
+          "file": "app/rider/profile/page.tsx:179",
+          "modifica": "Il profilo del fattorino legge anche kyc_id_doc_expires_on e, se la data è passata, mostra «Documento identità scaduto» come fa per patente e polizza; senza, un fattorino fermato per il documento scaduto vede il documento a posto mentre il messaggio nuovo lo manda al profilo (revisore B)."
         }
       ],
       "commit_pronto": "1509d2f178949240b8340529776790f6bd7f4180",
@@ -296,12 +494,13 @@
         "esito": "regge",
         "uscita": 0,
         "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1509d2f1^ --file migrations/427_il_documento_d_identita_ha_la_sua_scadenza.sql --prove tests/sql/rls/riparazione-r18-scadenza-documento.test.sql --sql r18_rimessa --json"
-      }
+      },
+      "verificato_da": "revisore B: git cherry-pick -n 1509d2f1 + git apply della patch dei tipi sul worktree: npm run db:types genera un file identico alla patch (il passo CI dei tipi è verde); riparazione-r11-tipi-* più tutte le prove che leggono database.types, le prove sui documenti del fattorino e le 27 prove che leggono le migrazioni: 57 file, verdi; tsc --noEmit pulito; senza la patch dei tipi le due r11 sono rosse (2 test). La prova SQL è rossa senza la 427 per comportamento (prendi_ordine risponde ok:true al fattorino col documento scaduto ieri) e verde con la 427; apply.sh e run.sh interi verdi; migrazione-su-database-pieno.sh con la 427 come ultima: regge. I numeri di riga dell'elenco serve_file_altrui sono esatti. Il worktree è stato rimesso pulito"
     },
     {
       "id": "R18-023",
       "chiave": "rls-database|il controllo del codice di benvenuto nel database conta ancora gli ordini annullati come primo ordine",
-      "esito": "gia_riparato_prima",
+      "esito": "non_codice",
       "commit": null,
       "file_toccati": [],
       "prova_file": [
@@ -312,7 +511,8 @@
       "prova_eseguita": true,
       "copre_tutta_la_voce": true,
       "prova": "migrations/230_un_ordine_con_lo_stato_vuoto_conta.sql:60-61 — check_coupon conta gli ordini con delivery_status IS DISTINCT FROM 'CANCELED' AND payment_status IS DISTINCT FROM 'FAILED', la stessa regola della cassa (lib/coupons.ts:125-126); la 185 l'aveva gia' allineata. Sulla base ricostruita tests/sql/rls/44 e' verde (Maria con solo un ordine annullato riceve il benvenuto) e torna rossa rimettendo la funzione della 114.",
-      "nota": "Il difetto vive solo nella produzione, ferma alla 161: la cura e' applicare le migrazioni pendenti (185 e 230 comprese) col riallineamento a mano, prima di riaccendere i codici sconto (CODICI_SCONTO_IN_CASSA). Nessuna 428: una copia della funzione della 230 non cambierebbe nessun comportamento e la prova rimessa darebbe 1 (non morde)."
+      "nota": "Il codice è già giusto: check_coupon (migrazioni/230:58-61) conta come la cassa (lib/coupons.ts:125-126), e la prova SQL 44 è verde sulla testa e rossa rimettendo la funzione della 114. La voce parla della funzione IN PRODUZIONE: Nicola deve applicare le migrazioni pendenti 185 e 230 (in ordine) prima di riaccendere il codice di benvenuto. Revisore B: non_codice, non gia_riparato_prima.",
+      "verificato_da": "revisore B: è vero che check_coupon conta come la cassa. migrations/230:58-61 (IS DISTINCT FROM 'CANCELED' e 'FAILED') è la stessa regola di lib/coupons.ts:121-126, la 230 è l'ultima definizione, tests/sql/rls/44 è verde sulla testa ricostruita e diventa rossa (2 controlli) rimettendo il check_coupon della 114, e la prova di parità tests/unit/il-carrello-conta-il-primo-ordine-come-la-cassa.test.ts è verde. Ma la voce non parla del codice: dice che il difetto è la funzione in produzione e la cura è «Applicare la 185». Per il LEGGIMI (righe 100-102 e 241-242) applicare migrazioni al database vero fa della voce un non_codice, con la nota per Nicola, che il referto ha già"
     },
     {
       "id": "R18-024",
@@ -333,7 +533,7 @@
         "uscita": 0,
         "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7e40adc^ --file migrations/426_i_visitatori_non_leggono_la_tabella_dei_profili.sql --prove tests/sql/rls/riparazione-r18-profili-chiusi-ai-visitatori.test.sql --sql r18_rimessa --json"
       },
-      "copre_tutta_la_voce": false,
+      "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Migrazione 426: REVOKE SELECT ON public.profiles FROM anon (sul sito vero un no-op). Controllato prima che niente di pubblico legga la tabella da anon: le viste che i visitatori leggono e che guardano profiles (seller_public_profiles, shop_of_month_leaderboard, live_activity_public) sono security_invoker=off; le funzioni che leggono profiles sono tutte SECURITY DEFINER (nessuna funzione INVOKER di public la nomina); pagine e rotte pubbliche leggono i negozi da seller_public_profiles e i profili pubblici col client di servizio (app/u/[handle]/page.tsx:46), il resto dei .from('profiles') e' dietro l'accesso o col client di servizio, nessun aggancio profiles!… da pagine pubbliche; le regole FOR ALL degli amministratori su eventi, negozio del mese e campagne non leggono piu' profiles coi permessi di chi chiede (422, che viene prima). Prova SQL: da visitatore la lettura di profiles e' negata (non solo vuota) e vetrina, catalogo, eventi e negozio del mese si leggono; il cliente legge il suo profilo e solo quello. Rimessa --sql sul commit d7e40adc: regge. Il commit e' stato tolto dal ramo con b7c2d0db: con la 426 run.sh diventa rosso su due prove esistenti non mie, che contano le righe di profiles da anon (19:178-181 e 34:155-158, piu' 34:162-167 col vecchio aggancio): con la lettura negata danno «permission denied» invece di 0. Con la patch qui sotto tutte le prove SQL sono verdi con la 426 (provato file per file).",
       "serve_file_altrui": [
         {
@@ -343,22 +543,21 @@
         {
           "file": "tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
           "modifica": "Righe 155-158 (controllo ⑦, stesso cambio della 19) e righe 162-167 (controllo ⑧, il vecchio aggancio LEFT JOIN LATERAL su profiles da anon: blocco DO, verde se torna vuoto o se e' negato). Patch delle due prove, si applica con git apply: /home/user/r18-attrezzi/lotti/r18-024-prove-19-e-34-serve-file-altrui.patch. Poi `git cherry-pick d7e40adc` nello stesso passo."
+        },
+        {
+          "file": "scripts/check-migration-drift.mjs",
+          "modifica": "Il controllo di deriva confronta oggi solo i nomi delle migrazioni: la voce chiede che confronti anche i permessi (GRANT su tabelle, colonne, funzioni e schema per anon e authenticated) fra il database ricostruito e la produzione, così la differenza su profiles non torna di nascosto (revisore C)."
         }
       ],
-      "insieme_a": "R18-021"
+      "insieme_a": "R18-021",
+      "verificato_da": "revisore C: git cherry-pick --no-commit d7e40adc + git apply della patch 19/34 su 8bab0265: apply.sh 199 migrazioni, run.sh tutto verde, pieno verde con la 426 ultima, 59 prove unitarie su migrations/ verdi; prova 426 rossa senza la 426 e verde con; da anon con la 426 33 letture pubbliche (viste, search_products_smart, vetrina_home, active_promo_products, store_cards, catalogo...) senza errori, profiles negata; le tre funzioni INVOKER che nominano «profiles» leggono solo seller_public_profiles; nessuna pagina o rotta pubblica legge profiles da anon (middleware e lib/supabase/server solo con utente, il resto col client di servizio)."
     },
     {
       "id": "R18-025",
       "chiave": "sicurezza-auth|sospendere un fattorino non gli toglie le consegne in corso: continua a vedere i recapiti, ritirare e consegnare",
-      "esito": "parziale",
-      "commit": "11a97f7ae7fd54836d4c8734e5495584c8dc0e85",
-      "file_toccati": [
-        "migrations/420_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql",
-        "app/api/admin/users/[id]/moderate/route.ts",
-        "tests/sql/rls/riparazione-r18-rider-sospeso.test.sql",
-        "tests/unit/riparazione-r18-sospensione-rider.test.ts",
-        "tests/unit/riparazione-r08-moderazione.test.ts"
-      ],
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
       "prova_file": [
         "tests/sql/rls/riparazione-r18-rider-sospeso.test.sql",
         "tests/unit/riparazione-r18-sospensione-rider.test.ts"
@@ -366,15 +565,17 @@
       "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-rider-sospeso.test.sql && bash tests/sql/harness/run.sh r18_prova ; npx vitest run tests/unit/riparazione-r18-sospensione-rider.test.ts tests/unit/riparazione-r08-moderazione.test.ts tests/unit/minori-s05-moderazione.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a97f7a^ --file migrations/420_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql --prove tests/sql/rls/riparazione-r18-rider-sospeso.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a97f7a^ --file 'app/api/admin/users/[id]/moderate/route.ts' --prove tests/unit/riparazione-r18-sospensione-rider.test.ts --json (0)"
-      },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Controllato prima: nessuna migrazione dopo la 215 aveva messo l'approvazione nelle due funzioni o nella regola di lettura (ultime versioni: verify_pickup_code 127 riscritta dalla 215 senza faccine, verify_delivery_code 215, regola 215:761). Migrazione 420 (CREATE OR REPLACE con la stessa firma, permessi invariati, testo copiato dalla versione in vigore): is_rider_approvato() entra nella condizione di verify_pickup_code e di verify_delivery_code (il sospeso riceve i codici che il pannello conosce gia': NOT_ASSIGNED_OR_WRONG_STATUS e WRONG_STATUS) e nella regola di lettura «Riders can view available and own orders» (stessa regola della 215 con (SELECT public.is_rider_approvato()) davanti). Lo storico dei compensi non cambia (rider_consegne_storico gira coi permessi del creatore). Rotta di sospensione: per un fattorino, dopo aver scritto la sospensione, rimette in bacheca gli ASSIGNED (READY, rider_id e posizione a NULL, col client di servizio che il guardiano degli ordini lascia passare; i grilletti gia' trattano ASSIGNED->READY senza ripetere «ordine pronto» al cliente) e risponde rimesse_in_bacheca; il conteggio di prima resta e ora conta solo quelle con la merce in mano (PICKED_UP, OUT_FOR_DELIVERY), che l'avviso gia' nominava; se la bacheca non si riempie l'avviso lo dice e il conteggio comprende le ASSIGNED. Prova SQL: due fattorini, uno sospeso: il sospeso non legge i recapiti, non ritira e non consegna (stati fermi), l'approvato si'. Vitest: ordini in memoria coi filtri veri. Prova esistente toccata (importa la rotta): tests/unit/riparazione-r08-moderazione.test.ts, al finto Supabase degli ordini si aggiunge update (la rotta ora lo chiama); nessun controllo indebolito. La 420 regge anche un database con dentro un ordine, applicata due volte.",
-      "cosa_resta": "Le rotte del fattorino che leggono col client di servizio e non passano dalla regola di lettura ne' dalle due funzioni: cash-confirm e cliente-assente (file non miei, sotto). Fino ad allora un sospeso con un ordine gia' ritirato puo' ancora dichiarare l'incasso o segnare «cliente assente» (annullo con rimborso).",
+      "cosa_ho_fatto": "Controllato prima: nessuna migrazione dopo la 215 aveva messo l'approvazione nelle due funzioni o nella regola di lettura (ultime versioni: verify_pickup_code 127 riscritta dalla 215 senza faccine, verify_delivery_code 215, regola 215:761). Migrazione 420 (CREATE OR REPLACE con la stessa firma, permessi invariati, testo copiato dalla versione in vigore): is_rider_approvato() entra nella condizione di verify_pickup_code e di verify_delivery_code (il sospeso riceve i codici che il pannello conosce gia': NOT_ASSIGNED_OR_WRONG_STATUS e WRONG_STATUS) e nella regola di lettura «Riders can view available and own orders» (stessa regola della 215 con (SELECT public.is_rider_approvato()) davanti). Lo storico dei compensi non cambia (rider_consegne_storico gira coi permessi del creatore). Rotta di sospensione: per un fattorino, dopo aver scritto la sospensione, rimette in bacheca gli ASSIGNED (READY, rider_id e posizione a NULL, col client di servizio che il guardiano degli ordini lascia passare; i grilletti gia' trattano ASSIGNED->READY senza ripetere «ordine pronto» al cliente) e risponde rimesse_in_bacheca; il conteggio di prima resta e ora conta solo quelle con la merce in mano (PICKED_UP, OUT_FOR_DELIVERY), che l'avviso gia' nominava; se la bacheca non si riempie l'avviso lo dice e il conteggio comprende le ASSIGNED. Prova SQL: due fattorini, uno sospeso: il sospeso non legge i recapiti, non ritira e non consegna (stati fermi), l'approvato si'. Vitest: ordini in memoria coi filtri veri. Prova esistente toccata (importa la rotta): tests/unit/riparazione-r08-moderazione.test.ts, al finto Supabase degli ordini si aggiunge update (la rotta ora lo chiama); nessun controllo indebolito. La 420 regge anche un database con dentro un ordine, applicata due volte. Tolto dal ramo con 8bab0265 (regola della regista del 13/11: una voce che contraddice una prova comune esce intera e la riprende la cucitura).",
       "serve_file_altrui": [
+        {
+          "file": "migrations/420_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql + app/api/admin/users/[id]/moderate/route.ts + tests/sql/rls/riparazione-r18-rider-sospeso.test.sql + tests/unit/riparazione-r18-sospensione-rider.test.ts",
+          "modifica": "Pronti nel commit 11a97f7a di questo ramo (rimessa --sql e vitest: regge), tolti con 8bab0265 perché la rotta nuova contraddice la prova comune riparazione-r08-moderazione. Si riprendono con git cherry-pick 11a97f7a NELLO STESSO passo della modifica della prova comune qui sotto."
+        },
+        {
+          "file": "tests/unit/riparazione-r08-moderazione.test.ts",
+          "modifica": "Nel finto database della tabella degli ordini aggiungere, accanto a select: `// R18-025: la sospensione rimette in bacheca le consegne ASSIGNED (qui nessuna).\\n update: () => { const u: Record<string, unknown> = { eq: () => u, select: async () => ({ data: [], error: null }) }; return u; },` (5 righe, è la parte di 11a97f7a su quel file). Nessun controllo si indebolisce."
+        },
         {
           "file": "app/api/rider/cash-confirm/route.ts",
           "modifica": "Dopo la riga 130 (`if (!order || !order.rider_id) return ApiErrors.notFound('Ordine non trovato');`) aggiungere: `// R18-025 — Un fattorino sospeso non registra incassi: lo fa l'amministrazione al suo posto (/api/admin/cod-incasso-dichiarato).` poi `const { data: io } = await admin.from('profiles').select('role, is_approved').eq('id', user.id).maybeSingle();` e `if (!io || io.role !== 'rider' || io.is_approved !== true) return ApiErrors.forbidden('Il tuo profilo fattorino è sospeso: l’incasso lo registra l’assistenza.');`"
@@ -383,7 +584,15 @@
           "file": "app/api/rider/orders/[id]/cliente-assente/route.ts",
           "modifica": "Dopo la riga 55 (`if (order.rider_id !== user.id) return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');`) aggiungere: `const { data: io } = await admin.from('profiles').select('role, is_approved').eq('id', user.id).maybeSingle();` e `if (!io || io.role !== 'rider' || io.is_approved !== true) return ApiErrors.forbidden('Il tuo profilo fattorino è sospeso: questa consegna la chiude l’assistenza.');` Con una prova che monta la rotta con un profilo is_approved=false e pretende 403 senza annullo."
         }
-      ]
+      ],
+      "commit_pronto": "11a97f7a",
+      "tolto_con": "8bab0265",
+      "rimessa_sul_commit_pronto": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a97f7a^ --file migrations/420_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql --prove tests/sql/rls/riparazione-r18-rider-sospeso.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a97f7a^ --file 'app/api/admin/users/[id]/moderate/route.ts' --prove tests/unit/riparazione-r18-sospensione-rider.test.ts --json (0)"
+      },
+      "verificato_da": "revisore C: git cherry-pick --no-commit 11a97f7a su 8bab0265: 12 prove unitarie che toccano la moderazione verdi (93), r08 rossa senza le 5 righe del finto update e verde con la patch r18-025-prova-r08.patch (che e' esattamente la parte di 11a97f7a su quel file); 420 confrontata con le funzioni e la regola in vigore: cambia solo la condizione con is_rider_approvato(), permessi identici, applicata due volte senza errori; run.sh verde, prova SQL 8/8; la scrittura ASSIGNED->READY della rotta fatta davvero come service_role passa il guardiano degli ordini, non manda avvisi doppi e un altro fattorino approvato riprende l'ordine con prendi_ordine; righe e testo delle modifiche a cash-confirm:130 e cliente-assente:55 esatti."
     }
   ],
   "nuovi_difetti_visti": [
@@ -414,6 +623,20 @@
       "severita": "minore",
       "file": "rider_sos_admin_all (FOR ALL) · zone_codes_admin_write (FOR ALL) · audit_admin_read · contact_admin_read · contact_admin_update · disputes_party_read · disputes_admin_update",
       "descrizione": "Stessa costruzione di R18-018 su tabelle che i visitatori non leggono: per anon (che in produzione non legge profiles) una domanda su quelle tabelle da' errore invece di zero righe, e per tutti la sottodomanda gira riga per riga. Nessuna pagina si spegne oggi. Cura: (SELECT public.is_admin()) TO authenticated, come la 422."
+    },
+    {
+      "titolo": "La rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-batch/apply/route.ts:74-98",
+      "descrizione": "Dopo R18-010 la pagina manda sempre productIds, ma la rotta senza productIds applica tutto il lavoro (fino a 200 prodotti). Renderlo obbligatorio chiuderebbe la strada anche a un client vecchio o scritto a mano, ma fa diventare rosse cinque prove esistenti che chiamano la rotta con il solo jobId (minori-s10-lotto-applica, il-lotto-non-scrive-quello-che-il-filtro-nega, le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante, una-voce-scritta-male-non-ferma-le-modifiche-in-massa e altre), alcune comuni: non l'ho fatto. Latente: AI_NEGOZI_ACCESA=false."
+    },
+    {
+      "titolo": "Nel modulo «Nuova promozione» l'etichetta «Cosa scontare» non è legata a nessun campo",
+      "dimensione": "accessibilita",
+      "severita": "minore",
+      "file": "app/seller/promotions/page.tsx:311",
+      "descrizione": "eslint jsx-a11y/label-has-associated-control (avviso già presente sulla base): <label> senza controllo associato davanti ai due radio; sarebbe un fieldset con legend, come «Sconto»."
     }
   ],
   "domande_per_nicola": [
@@ -429,10 +652,13 @@
     "R18-018 (migrazione 422): oltre agli eventi ho cambiato allo stesso modo le regole degli amministratori su shop_of_month (negozio del mese in home) e cashback_campaigns, che i visitatori leggono e che con profiles chiusa ad anon davano lo stesso errore. Chi e' admin fa quello che faceva prima: confermi?",
     "R18-021 (migrazione 425 + impalcatura): togliendo dall'impalcatura i permessi di partenza, sulle prove una tabella nuova nasce chiusa; in produzione invece nasce ancora con SELECT per anon e authenticated (permessi di default dopo 114/119). Vuoi allineare anche la produzione (ALTER DEFAULT PRIVILEGES … REVOKE SELECT ON TABLES FROM anon, authenticated, anche FOR ROLE postgres), cosi' ogni migrazione nuova deve scrivere i suoi GRANT ovunque?",
     "R18-024 (migrazione 426, commit pronto d7e40adc): sul sito vero e' un no-op. Entra nel ramo solo insieme alla patch delle prove SQL 19 e 34 (non mie), che oggi contano le righe di profiles da anon e con la lettura negata diventerebbero rosse.",
-    "R18-007: le 20 righe del registro (e le loro copie in activity_events) con il nome di 16 account cancellati e il file orfano nel contenitore products stanno nel database vero: la domanda per ripulirle e' nella nota della voce. Le fai tu, o aspettiamo la potatura dei 12 mesi (giugno-luglio 2027)?"
+    "R18-007: le 20 righe del registro (e le loro copie in activity_events) con il nome di 16 account cancellati e il file orfano nel contenitore products stanno nel database vero: la domanda per ripulirle e' nella nota della voce. Le fai tu, o aspettiamo la potatura dei 12 mesi (giugno-luglio 2027)?",
+    "Migrazione 429 (R18-012), da applicare quando decidi: è un controllo (trigger seller_promotions_niente_doppioni con lucchetto per negozio), non un indice unico, perché la fine della promo la calcola il telefono e un indice su (negozio, titolo, sconto, bersaglio) fermerebbe anche la promo rifatta dopo la scadenza (le scadute restano «active»). Guarda solo le righe nuove o riaccese: i doppioni già nel database vero restano e non fermano la migrazione. Per vederli: SELECT seller_id, title, discount_percent, scope, count(*) FROM public.seller_promotions WHERE status = 'active' AND ends_at > now() GROUP BY 1, 2, 3, 4, category_id, product_ids HAVING count(*) > 1; vuoi che i doppioni vecchi si annullino (tenendone uno), o li lasci scadere?",
+    "R18-005: applicare in produzione la 164 (vista nomi_pubblici) e la 181 (funzione nomi_dei_clienti_del_negozio), già nel deposito; la 164 con la 161 o dopo.",
+    "R18-008: il testo proposto per cookie policy e informativa (YouTube tramite Google Ireland / Google LLC, Vimeo.com, Inc., trasferimento negli Stati Uniti con SCC) va guardato da chi cura la parte legale prima di pubblicarlo."
   ],
   "conto": {
-    "agenti": 3,
-    "nota": "Fermata al tetto di costo: 34,73 $ dopo i lotti 1-3 (3 subagenti riparatori, nessun revisore ancora). Restano senza esito R18-004, 005, 006, 008, 009, 010, 011, 012, 013, 014, 015, 017 (lotti 4 e 5 del piano approvato) e la revisione dei lotti 1-3. Migrazioni libere della fascia: 428, 429. Patch dei serve_file_altrui: non nel ramo, descritte per intero nelle voci."
+    "agenti": 7,
+    "nota": "Lotti 1-4 fatti, revisori A, B, C sui lotti 1-3. Restano: lotto 5 (002, 006, 009, 013, 014, 017), revisione dei lotti 4-5, il giro di correzione di R18-019 (vedi /home/user/r18-attrezzi/lotti/correzioni.md, descritto anche qui: i vincoli NOT VALID della 423 bloccano il Disattiva di un vecchio codice storto; lib/coupons.ts:137 lascia valere in cassa un vecchio codice oltre il 100%)."
   }
 }
