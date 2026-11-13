@@ -21,6 +21,7 @@ import { shippingForEuro } from '@/lib/shipping';
 import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
 import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
+import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, TETTO_CONTANTI_CENTS, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -768,6 +769,23 @@ export default function CheckoutPage() {
     creditoDisponibileCents: walletCents ?? 0,
   });
 
+  /*
+   * 13/11/2026 (R19-013) — SOPRA IL TETTO DELLA LEGGE I CONTANTI NON SI PROPONGONO.
+   *
+   * La rotta dei contanti rifiuta sopra 4.999,99 € (lib/ordini/tetto-dei-contanti.ts), ma la cassa
+   * offriva i contanti lo stesso: si compilava tutto e il «no» arrivava solo dopo «Ordina». Il tetto
+   * è lo stesso, sullo stesso numero della rotta: il lordo, prima del credito (totale + credito usato).
+   * Con la carta accesa si passa alla carta; senza, la cassa dice perché l'ordine così non parte.
+   */
+  const contantiSopraIlTetto = sopraIlTettoDeiContanti(Math.round((riepilogo.totale + riepilogo.creditoUsato) * 100));
+  const motivoNoContanti = stripeAvailable
+    ? MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI
+    : `Sopra ${formatPrice(TETTO_CONTANTI_CENTS / 100)} non si può pagare in contanti, e il pagamento con carta oggi non è attivo: così questo ordine non si può fare.`;
+  const contantiFuoriLegge = paymentMethod === 'cod' && contantiSopraIlTetto;
+  useEffect(() => {
+    if (contantiSopraIlTetto && stripeAvailable && paymentMethod === 'cod') setPaymentMethod('card');
+  }, [contantiSopraIlTetto, stripeAvailable, paymentMethod]);
+
   // La frase sulla consegna ha una casa sola: `promessaSpedizione` la fa nascere dal costo di
   // consegna vero. 27/10/2026 — La soglia dei 30 € per negozio non esiste più (si paga solo la
   // consegna, una sola per tutto il carrello): la barra «ti mancano X €» e il conto sul negozio più lontano
@@ -1175,7 +1193,7 @@ export default function CheckoutPage() {
   const fuoriZona = gruppoFuoriZona !== undefined;
 
   const ordineBloccato =
-    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || fuoriZona || !consegnaConfermabile || veloceDaAspettare;
+    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || fuoriZona || !consegnaConfermabile || veloceDaAspettare || contantiFuoriLegge;
 
   /*
    * 6/9/2026 — E LA FRASE CHE SPIEGA IL BLOCCO, MOTIVO PER MOTIVO.
@@ -1207,7 +1225,9 @@ export default function CheckoutPage() {
               ? rigaQuandoArriva(consegna)
               : veloceDaAspettare
                 ? (veloceDisponibile === null ? MOTIVO_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
-                : null;
+                : contantiFuoriLegge
+                  ? motivoNoContanti
+                  : null;
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
@@ -1279,6 +1299,11 @@ export default function CheckoutPage() {
     // 30/10/2026 (ondata 18) — «Adesso» senza il sì del server non parte, comunque arrivi l'invio.
     if (veloceDaAspettare) {
       toast.error(motivoDelBlocco ?? MOTIVO_VELOCE_IN_ATTESA);
+      return;
+    }
+    // R19-013 — Sopra il tetto della legge i contanti non partono, comunque arrivi l'invio.
+    if (contantiFuoriLegge) {
+      toast.error(motivoNoContanti);
       return;
     }
     trackCheckoutStep('address', { city: form.city });
@@ -1467,6 +1492,7 @@ export default function CheckoutPage() {
               onPickupChange={setPickupInStore}
               pickupDiscount={pickupDiscount}
               pickupDiscountPercent={PICKUP_DISCOUNT_PERCENT}
+              motivoNoContanti={contantiSopraIlTetto ? motivoNoContanti : null}
             />
 
             {/* Credito MyCity — solo COD in questo flusso */}
@@ -1510,16 +1536,19 @@ export default function CheckoutPage() {
                   <p className="mt-0.5 text-sm text-ink-600">
                     Per ora il credito si usa solo pagando alla consegna. Con la carta questo ordine lo paghi per intero e il credito resta tuo, da spendere su un altro ordine.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod('cod');
-                      trackCheckoutStep('payment_method', { method: 'cod' });
-                    }}
-                    className="mt-2 rounded-lg bg-primary-700 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
-                  >
-                    Paga alla consegna e usa il credito
-                  </button>
+                  {/* R19-013 — sopra il tetto della legge i contanti non si propongono. */}
+                  {!contantiSopraIlTetto && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod('cod');
+                        trackCheckoutStep('payment_method', { method: 'cod' });
+                      }}
+                      className="mt-2 rounded-lg bg-primary-700 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+                    >
+                      Paga alla consegna e usa il credito
+                    </button>
+                  )}
                 </div>
               </div>
             )}
