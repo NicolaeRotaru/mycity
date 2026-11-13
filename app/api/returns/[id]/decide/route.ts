@@ -289,12 +289,43 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // rimborso. Se lo stato non e' cambiato (rifiuto, o approvazione senza
   // rimborso immediato) questa scrittura non tocca niente di nuovo.
   if (newStatus !== statoRivendicato || refundId) {
-    const { data: scritte, error: errScrittura } = await admin
+    let { data: scritte, error: errScrittura } = await admin
       .from('returns')
       .update({ status: newStatus, refund_id: refundId, refunded_at: refundedAt })
       .eq('id', params.id)
       .eq('status', statoRivendicato)
       .select('id');
+    /**
+     * 13/11/2026 (R14-019) — IL CLIENTE HA RITIRATO IL RESO MENTRE IL RIMBORSO USCIVA.
+     *
+     * Da «approvato» il cliente puo' ritirare la richiesta (`avanza`, CANCELED).
+     * Se lo fa nei secondi in cui questo rimborso parte, la scrittura qui sopra
+     * non trova piu' «approvato» e il reso restava «annullato» coi soldi gia'
+     * usciti: per il negozio, per il cliente e per il giro dei bonifici un reso
+     * chiuso senza rimborso. I soldi pero' sono partiti, una volta sola (il turno
+     * l'ha preso questa decisione, prima del rimborso): il reso deve dirlo. Si
+     * scrive «rimborsato» sopra il ritiro, e solo sopra quello; ogni altro stato
+     * resta all'avviso per chi amministra, qui sotto.
+     */
+    if (!errScrittura && (!scritte || scritte.length === 0) && newStatus === 'REFUNDED') {
+      ({ data: scritte, error: errScrittura } = await admin
+        .from('returns')
+        .update({
+          status: newStatus,
+          refund_id: refundId,
+          refunded_at: refundedAt,
+          decision_notes: body.notes ?? null,
+          refund_amount_cents: body.refundAmountCents ?? null,
+        })
+        .eq('id', params.id)
+        .eq('status', 'CANCELED')
+        .select('id'));
+      if (!errScrittura && scritte && scritte.length > 0) {
+        logger.warn('[returns] reso ritirato dal cliente mentre il rimborso partiva: registrato come rimborsato', {
+          returnId: params.id, orderId: ret.order_id,
+        });
+      }
+    }
     // 5/11/2026 — Zero righe toccate non e' una scrittura riuscita: un'altra
     // scheda (o il cliente che ritira il reso) ha cambiato lo stato mentre il
     // rimborso usciva. Senza questo la rotta diceva «rimborsato» su un reso
