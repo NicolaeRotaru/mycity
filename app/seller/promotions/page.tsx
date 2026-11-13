@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Plus, Calendar, Tag } from 'lucide-react';
@@ -126,6 +126,9 @@ export default function SellerPromotionsPage() {
   const categorie = queryCategorie.data ?? [];
   const nomeCategoria = categorie.find((c) => c.id === categoriaId)?.name ?? null;
 
+  // R18-012 — Un freno che vale subito: create.isPending arriva al bottone solo al disegno
+  // dopo, e due clic nello stesso istante passavano tutti e due (due promo uguali).
+  const creazioneInCorso = useRef(false);
   const create = useMutation({
     mutationFn: async () => {
       const ends = endDateFor(duration);
@@ -146,7 +149,13 @@ export default function SellerPromotionsPage() {
       setShowWizard(false);
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
+    onSettled: () => { creazioneInCorso.current = false; },
   });
+  const creaPromo = () => {
+    if (creazioneInCorso.current) return;
+    creazioneInCorso.current = true;
+    create.mutate();
+  };
 
   const cancel = useMutation({
     mutationFn: async (id: string) => {
@@ -344,7 +353,7 @@ export default function SellerPromotionsPage() {
             </div>
 
             <Button
-              onClick={() => create.mutate()}
+              onClick={creaPromo}
               loading={create.isPending}
               disabled={scope === 'category' && !categoriaId}
               fullWidth
