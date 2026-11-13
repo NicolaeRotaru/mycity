@@ -16,15 +16,15 @@
  * webhook sono la dimostrazione che non si è rotto niente.
  */
 import type Stripe from 'stripe';
-import { getStripe } from '@/lib/stripe/client';
 import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { senzaCampi } from '@/lib/db/migrazione-124';
+import { memoriaDiPostgrestVecchia, senzaCampi } from '@/lib/db/migrazione-124';
 import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148';
 import { formatPriceFromCents } from '@/lib/format';
 import { findOrdersForDispute, notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
+import { stornoGiaFattoPerLaContestazione, type StornoDaControllare } from './dispute-storni';
 import { restituisciLeQuoteParziali } from './contestazione-parziale-vinta';
 import { buonoDaRiattivareDopoLaVittoria, richiestaSulBuonoSoloAvviso } from './contestazione-buoni';
 import {
@@ -50,6 +50,11 @@ export { promemoriaOTotale };
  * cioè con la stessa chiave anti-doppione del bonifico già stornato, e Stripe
  * avrebbe restituito quello invece di farne uno nuovo. Il negozio vinceva la
  * contestazione e non veniva pagato.
+ *
+ * R23-003 — Lo stesso danno veniva dalla memoria di PostgREST vecchia: un PGRST204 su
+ * `payout_tentativo` con la 124 applicata toglieva il tentativo lo stesso. Prima di togliere
+ * un gruppo si chiede al database se la colonna c'è (`memoriaDiPostgrestVecchia`): se c'è,
+ * niente ripiego, resta l'errore e Stripe riprova quando lo schema è ricaricato.
  */
 async function scriviConRipiego<T extends { error: unknown }>(
   dove: string,
@@ -62,6 +67,7 @@ async function scriviConRipiego<T extends { error: unknown }>(
   let esito = await esegui(campi);
   for (const gruppo of colonneRecenti) {
     if (!esito.error || !colonnaNonTrovata(esito.error as ErroreDatabase)) return esito;
+    if (await memoriaDiPostgrestVecchia(esito.error, dove)) return esito;
     logger.warn('[stripe] colonna nuova non ancora nel database: riscrivo senza', {
       dove, senza: gruppo, codice: (esito.error as { code?: string }).code ?? null,
     });
@@ -71,47 +77,11 @@ async function scriviConRipiego<T extends { error: unknown }>(
   return esito;
 }
 
-/** Uno storno al negozio che va guardato a mano, per l'avviso agli amministratori. */
-type StornoDaControllare = { orderId: string; testo: string };
-
 /**
- * 15/10/2026 (R81) — Su Stripe c'è già uno storno di questo bonifico fatto da
- * quando la contestazione è nata? Si chiede a Stripe e non al database, perché
- * il database può non averlo registrato (un processo morto fra la risposta di
- * Stripe e la scrittura). Un pagamento contestato Stripe non lo lascia più
- * rimborsare (errore `charge_disputed`), quindi uno storno nato dopo la
- * contestazione è il suo. Se Stripe non risponde si lancia: la rotta risponde
- * 500 e Stripe riprova (prima di questo punto è stata scritta solo la riga OPEN).
- */
-async function stornoGiaFattoPerLaContestazione(
-  o: { id: string; stripe_transfer_id: string | null; stripe_reversal_id: string | null },
-  dispute: Stripe.Dispute,
-  daControllare: StornoDaControllare[],
-): Promise<boolean> {
-  if (!o.stripe_transfer_id) return false;
-  const dal = dispute.created ?? 0;
-  const storni = await getStripe().transfers.listReversals(o.stripe_transfer_id, { limit: 100 });
-  const suo = storni.data.find((r) => r.created >= dal && (r.metadata?.order_id ?? o.id) === o.id);
-  if (suo && suo.id !== o.stripe_reversal_id) {
-    // Fatto su Stripe, non scritto da noi: non si rifà, ma va visto. Non solo
-    // nei log: senza registrazione, a contestazione vinta il negozio non
-    // verrebbe ripagato (per il database il bonifico non è mai stato toccato).
-    logger.error('[stripe] storno della contestazione fatto su Stripe ma non registrato sull ordine', {
-      orderId: o.id, reversalId: suo.id, centesimi: suo.amount,
-    });
-    daControllare.push({
-      orderId: o.id,
-      testo: `ordine ${o.id.slice(0, 8)}: lo storno di ${formatPriceFromCents(suo.amount)} (${suo.id}) è su Stripe ma non sull'ordine. Non va rifatto: va solo registrato sull'ordine.`,
-    });
-  }
-  return !!suo;
-}
-
-/**
- * charge.dispute.created → chargeback aperto. Stripe ha GIÀ prelevato i fondi
- * dalla piattaforma, quindi NON emettiamo refund (sarebbe doppio): facciamo
- * solo claw-back del transfer se il venditore era già stato pagato, flagghiamo
- * gli ordini (dispute_status='OPEN' blocca il payout cron) e avvisiamo gli admin.
+ * charge.dispute.created → chargeback aperto (Stripe ha GIÀ prelevato i fondi: niente refund, sarebbe doppio):
+ * claw-back del transfer se il negozio era già pagato, ordini 'OPEN' (il giro dei bonifici li salta), avviso.
+ * R23-012 — Anche charge.dispute.funds_withdrawn: la richiesta di informazioni diventata contestazione vera
+ * non ripassava di qui, e al negozio non si toglieva niente. L'avviso del chargeback parte una volta sola.
  */
 export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const orders = await findOrdersForDispute(
@@ -215,7 +185,6 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
    * 32,40 € invece di 16,20. Scritta per prima, se fallisce non è ancora
    * successo niente, e ripetere è davvero sicuro.
    */
-  //
   // 'OPEN' letto PRIMA di scrivere non vuol dire con certezza «questo avviso è
   // già passato di qui». Fino alla 184 lo scriveva anche il reclamo dall'app (trigger 063): gli
   // ordini di prima possono portarlo ancora. Per questo 'OPEN' fa solo da primo filtro, e la prova vera la dà Stripe
@@ -241,7 +210,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     const quota = quotaDaRiprendere(o);
     if (
       o.payout_status === 'TRANSFERRED' && quota !== undefined && giaPassati.has(o.id) &&
-      (await stornoGiaFattoPerLaContestazione(o, dispute, daControllare))
+      (await stornoGiaFattoPerLaContestazione(o, dispute, quota, daControllare))
     ) {
       // R81 — Lo stesso avviso consegnato di nuovo, e su Stripe lo storno per
       // questa contestazione c'è già. Uno storno PARZIALE non si rifà: dopo il
@@ -299,7 +268,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
         });
         // R11-021 — Un promemoria perso per un errore vero (non la 126 che manca) non si riscrive:
         // al prossimo passaggio lo storno non si rifà. Chi chiude la contestazione deve sapere la cifra.
-        if (!colonnaNonTrovata(errPromemoria as ErroreDatabase)) {
+        // R23-003 — Anche la 126 applicata con la memoria di PostgREST vecchia è un promemoria perso.
+        if (!colonnaNonTrovata(errPromemoria as ErroreDatabase) || (await memoriaDiPostgrestVecchia(errPromemoria, 'promemoria della contestazione'))) {
           daControllare.push({
             orderId: o.id,
             testo: `ordine ${o.id.slice(0, 8)}: per questa contestazione sono stati stornati ${formatPriceFromCents(stornatoVenditore)} al negozio, ma il promemoria non è stato scritto. Se la contestazione si vince, al negozio va restituita questa cifra, non tutto lo stornato.`,
@@ -317,10 +287,13 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     );
   }
 
+  // R23-012 — Una volta per contestazione: anche col negozio non ancora pagato (niente storno), e
+  // anche se il prelievo arriva prima di `created` (due passaggi, un avviso).
   await notifyAdmins(
     '⚠️ Chargeback aperto',
     `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
     '/admin/disputes',
+    { unaVoltaPer: `chargeback-aperto:${dispute.id}` },
   );
 }
 
@@ -534,9 +507,10 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       );
     }
     const scaffaleNonRiuscito: string[] = [];
-    // 1/11/2026 — Una richiesta di informazioni diventata contestazione non
-    // passa da handleDisputeCreated una seconda volta: il bonifico al negozio
-    // non e' stato stornato. Persa la contestazione, va ripreso a mano.
+    // 1/11/2026 — Una richiesta di informazioni diventata contestazione ripassa da
+    // handleDisputeCreated solo con charge.dispute.funds_withdrawn (R23-012): se
+    // quell'avviso non è acceso sull'endpoint, o lo storno non è riuscito, il bonifico
+    // al negozio non e' stato stornato. Persa la contestazione, va ripreso a mano.
     const nonStornati = orders.filter(
       (o) => o.payout_status === 'TRANSFERRED' && !giaChiusiPersi.has(o.id) && (o.dispute_seller_reversed_cents ?? 0) <= 0,
     );

@@ -81,6 +81,13 @@ export async function registraTentativoPagamento(
   esito: 'succeeded' | 'failed',
   eventId?: string,
 ): Promise<void> {
+  // 13/11/2026 (R23-008) — IL TASSO È DEI CLIENTI CHE COMPRANO, NON DEI NEGOZI CHE PAGANO NOI.
+  // Stripe manda l'esito di OGNI pagamento: anche i 50 € dell'abbonamento di un negozio (un
+  // pagamento della fattura, senza i nostri dati) e gli spazi sponsorizzati. Finivano nella stessa
+  // tabella, e la percentuale della Panoramica, che serve a capire se la cassa dei clienti funziona,
+  // mescolava la carta di un cliente con quella di un negozio. Si contano solo i pagamenti che
+  // portano il segno di un acquisto di un cliente: l'ordine (`pending_checkout_id`) o il buono regalo.
+  if (!pagamentoDiUnCliente(pi)) return;
   try {
     const admin = getAdminSupabase();
     const pieno = await conLaChargeEspansa(pi);
@@ -116,4 +123,10 @@ export async function registraTentativoPagamento(
   } catch (e) {
     logger.warn('[stripe] tentativo di pagamento non registrato', { paymentIntent: pi.id, e });
   }
+}
+
+/** R23-008 — Il pagamento è un acquisto di un cliente: un ordine o un buono regalo (vedi sopra). */
+function pagamentoDiUnCliente(pi: Stripe.PaymentIntent): boolean {
+  const segni = pi.metadata ?? {};
+  return (typeof segni.pending_checkout_id === 'string' && segni.pending_checkout_id !== '') || segni.kind === 'gift_card';
 }

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
 import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -209,13 +210,18 @@ export default function StoresPage() {
   const categoriesByStore = useMemo(() => data?.categoriesByStore ?? {}, [data?.categoriesByStore]);
   const categories = data?.categories ?? [];
 
+  // L'ora di Piacenza, che batte al minuto come quella delle schede: con «Aperti ora» acceso l'elenco
+  // si rifà quando un negozio chiude (prima restava com'era alla prima resa, con la scheda che
+  // diceva «Chiuso ora»). `null` prima dell'idratazione: allora vale l'orologio di sempre.
+  const adesso = useOraDiPiacenza();
+
   const filtered = useMemo(() => {
-    const todayKey = chiaveDiOggi();
+    const todayKey = chiaveDiOggi(adesso ?? undefined);
     let result = stores.filter((s) => {
       if (search && !s.store_name?.toLowerCase().includes(search.toLowerCase())) return false;
       if (onlyOpen) {
         const hours = (s.store_hours ?? {}) as StoreHours;
-        if (!isOpenNow(hours[todayKey])) return false;
+        if (!isOpenNow(hours[todayKey], adesso ?? undefined)) return false;
       }
       if (categoryId) {
         const cats = categoriesByStore[s.id];
@@ -237,7 +243,7 @@ export default function StoresPage() {
       result = [...result].sort((a, b) => (countByStore[b.id] ?? 0) - (countByStore[a.id] ?? 0));
     }
     return result;
-  }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
+  }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore, adesso]);
 
   // C'E' UN FILTRO ACCESO? La riga di conteggio dice due cose diverse nei due casi.
   const filtriAccesi = search !== '' || onlyOpen || categoryId !== '';
