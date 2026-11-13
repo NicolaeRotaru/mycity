@@ -34,6 +34,7 @@ import {
 import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { scriviCampanella } from '@/lib/ordini/campanella';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 export const runtime = 'nodejs';
 
@@ -64,12 +65,18 @@ export const runtime = 'nodejs';
  *    (merce mai partita, accordo di persona, cliente che ci ripensa): è la
  *    voce che libera il bonifico, e prima non c'era.
  *
- * Chi può: il venditore del reso, o un amministratore.
+ * Chi può: il venditore del reso, o un amministratore. Il cliente dell'ordine
+ * fa due cose sole: ritira la sua richiesta (CANCELED) e dice di aver
+ * rispedito la merce (SHIPPED_BACK, col giorno della spedizione).
  */
 const Body = z.object({
   stato: z.enum(['SHIPPED_BACK', 'RECEIVED', 'REFUNDED', 'CANCELED']),
   note: z.string().max(1000).optional(),
   refundAmountCents: z.number().int().positive().optional(),
+  /** R17-003 — Solo il cliente: il giorno in cui ha rispedito la merce (AAAA-MM-GG). */
+  speditoIl: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /** R17-003 — Solo il cliente: il numero di spedizione, se ce l'ha. */
+  numeroSpedizione: z.string().trim().max(100).optional(),
 });
 
 /** Da dove si può arrivare a ogni tappa. Fuori da qui non si passa. */
@@ -113,6 +120,54 @@ async function eIlClienteDellOrdine(orderId: string, utenteId: string): Promise<
   return ordine?.user_id && ordine.user_id === utenteId ? { sellerId: ordine.seller_id ?? null } : null;
 }
 
+/**
+ * 13/11/2026 (R17-003) — IL CLIENTE DICE «HO RISPEDITO LA MERCE».
+ *
+ * Un recesso approvato si chiudeva «senza rimborso» dopo 14 giorni se il reso
+ * era ancora APPROVED: la regola presume che il cliente non abbia rispedito
+ * niente. Ma «in rientro» lo scriveva solo il negozio, cioe' chi ha interesse a
+ * non rimborsare. Recesso approvato il 2/11, pacco spedito il 15/11, il 17/11 il
+ * negozio non l'ha ancora e preme «Chiudi senza rimborso»: il bonifico al
+ * negozio riparte, il pacco arriva il 18/11 e il reso chiuso non si riapre.
+ * Il rimborso si trattiene solo finche' non arrivano i beni o la prova della
+ * spedizione (Cod. Cons. art. 56 c.3).
+ *
+ * Adesso il cliente dell'ordine porta lui il reso da APPROVED a SHIPPED_BACK,
+ * col giorno della spedizione e, se ce l'ha, il numero. Da li' un recesso non si
+ * chiude senza rimborso (`percheIlRecessoNonSiChiude`, e il database dalla 411)
+ * e il giro dei bonifici lo tiene fermo come reso aperto. Il negozio non scrive
+ * la dichiarazione al posto suo: il suo «Il cliente ha rispedito» cambia lo
+ * stato, non il giorno ne' il numero.
+ */
+const COLONNA_DEL_GIORNO = 'customer_shipped_back_on';
+
+function percheLaSpedizioneNonVale(speditoIl: string | undefined, chiestoIl: string | null | undefined, adesso: number): string | null {
+  if (!speditoIl) return 'Indica il giorno in cui hai spedito la merce.';
+  const giorno = new Date(`${speditoIl}T12:00:00Z`);
+  if (!Number.isFinite(giorno.getTime()) || giorno.toISOString().slice(0, 10) !== speditoIl) {
+    return 'Il giorno della spedizione non è una data valida.';
+  }
+  if (speditoIl > giornoPiacenza(adesso)) return 'Il giorno della spedizione non può essere nel futuro.';
+  const richiesta = chiestoIl && Number.isFinite(Date.parse(chiestoIl)) ? giornoPiacenza(chiestoIl) : null;
+  if (richiesta && speditoIl < richiesta) {
+    return `Il giorno della spedizione non può venire prima della richiesta di reso (${inLettere(richiesta)}).`;
+  }
+  return null;
+}
+
+/** «2026-11-15» → «15/11/2026». */
+function inLettere(giorno: string): string {
+  const [a, m, g] = giorno.split('-');
+  return `${g}/${m}/${a}`;
+}
+
+/** PostgREST o PostgreSQL dicono che la colonna della 411 non c'e' ancora (migrazione non applicata). */
+function mancaLaColonnaDelGiorno(errore: unknown): boolean {
+  const e = errore as { code?: string; message?: string; details?: string } | null;
+  if (!e || (e.code !== 'PGRST204' && e.code !== '42703')) return false;
+  return new RegExp(`\\b${COLONNA_DEL_GIORNO}\\b`).test(`${e.message ?? ''} ${e.details ?? ''}`);
+}
+
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body;
   try {
@@ -152,16 +207,36 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    */
   const comando = await chiComandaIlReso(ret.order_id, user.id);
   let ritiro: { sellerId: string | null } | null = null;
+  // R17-003 — Il cliente dell'ordine che dice di aver rispedito la merce.
+  let dichiarazione: { sellerId: string | null } | null = null;
   if (!comando.autorizzato) {
     if (comando.motivo === 'guasto') return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
     if (comando.motivo === 'ordine-mancante') return ApiErrors.notFound('Ordine del reso non trovato');
-    if (body.stato === 'CANCELED') ritiro = await eIlClienteDellOrdine(ret.order_id, user.id);
-    if (!ritiro) return ApiErrors.forbidden();
-    if (!PARTENZE_DEL_RITIRO.includes(ret.status)) {
-      return ApiErrors.conflict(
-        'La merce è già in viaggio o in negozio: la richiesta non si può più ritirare. Scrivi al negozio.',
-      );
+    const cliente =
+      body.stato === 'CANCELED' || body.stato === 'SHIPPED_BACK' ? await eIlClienteDellOrdine(ret.order_id, user.id) : null;
+    if (!cliente) return ApiErrors.forbidden();
+    if (body.stato === 'CANCELED') {
+      ritiro = cliente;
+      if (!PARTENZE_DEL_RITIRO.includes(ret.status)) {
+        return ApiErrors.conflict(
+          'La merce è già in viaggio o in negozio: la richiesta non si può più ritirare. Scrivi al negozio.',
+        );
+      }
+    } else {
+      dichiarazione = cliente;
+      if (ret.status !== 'APPROVED') {
+        return ApiErrors.conflict(
+          ret.status === 'REQUESTED'
+            ? 'Il negozio non ha ancora approvato il reso: aspetta la sua risposta prima di spedire.'
+            : 'La spedizione di questo reso risulta già segnata, o il reso è chiuso.',
+        );
+      }
+      const nonVale = percheLaSpedizioneNonVale(body.speditoIl, (ret as { created_at?: string | null }).created_at, Date.now());
+      if (nonVale) return ApiErrors.invalidRequest(nonVale);
     }
+  } else if (body.speditoIl !== undefined || body.numeroSpedizione !== undefined) {
+    // La spedizione la dichiara il cliente: il negozio non la scrive al posto suo.
+    return ApiErrors.forbidden('Il giorno e il numero della spedizione li dichiara il cliente, dalla sua pagina del reso.');
   }
 
   // Un «rimborsato» rimasto a meta' si riprende (vedi `ripresa`, piu' sotto).
@@ -305,18 +380,30 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Il turno si prende con la scrittura: due schede aperte sullo stesso reso
   // non possono farlo avanzare due volte.
   const statoPrecedente = ret.status;
-  const { data: preso, error: errPresa } = ripresa
+  const prendiIlTurno = (patch: Record<string, unknown>) =>
+    admin.from('returns').update(patch).eq('id', params.id).eq('status', statoPrecedente).select('id');
+  // R17-003 — La dichiarazione del cliente scrive stato, giorno e numero: la nota del negozio resta sua.
+  const numeroSpedizione = body.numeroSpedizione ? body.numeroSpedizione : null;
+  let presa: { data: Array<{ id: string }> | null; error: unknown } = ripresa
     ? { data: [{ id: ret.id }], error: null }
-    : await admin
-        .from('returns')
-        .update({
-          status: body.stato,
-          decision_notes: body.note ?? null,
-          ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
-        })
-        .eq('id', params.id)
-        .eq('status', statoPrecedente)
-        .select('id');
+    : await prendiIlTurno(
+        dichiarazione
+          ? { status: 'SHIPPED_BACK', [COLONNA_DEL_GIORNO]: body.speditoIl, tracking_number: numeroSpedizione }
+          : {
+              status: body.stato,
+              decision_notes: body.note ?? null,
+              ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
+            },
+      );
+  if (dichiarazione && presa.error && mancaLaColonnaDelGiorno(presa.error)) {
+    // Prima della 411 la colonna del giorno non c'e': lo stato (che ferma la chiusura) e il numero si
+    // scrivono lo stesso, e il giorno arriva al negozio nell'avviso qui sotto.
+    logger.warn('[returns/avanza] migrazione 411 non ancora applicata: la spedizione si segna senza il giorno', {
+      returnId: ret.id,
+    });
+    presa = await prendiIlTurno({ status: 'SHIPPED_BACK', tracking_number: numeroSpedizione });
+  }
+  const { data: preso, error: errPresa } = presa;
 
   if (errPresa) return ApiErrors.internal('Aggiornamento del reso fallito');
   if (!preso || preso.length === 0) {
@@ -419,11 +506,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     RECEIVED: '📥 Reso: merce ricevuta dal negozio',
     CANCELED: '✕ Reso chiuso senza rimborso',
   };
+  // Quando ha agito il cliente (ritiro o spedizione) l'avviso va al negozio.
+  const delCliente = ritiro ?? dichiarazione;
   await scriviCampanella(admin, {
     // #33 — la categoria decide se la persona vuole ancora ricevere questo
     // tipo di avviso: senza, gli interruttori non spegnevano niente.
     category: 'order',
-    user_id: ritiro ? (ritiro.sellerId ?? ret.seller_id) : ret.buyer_id,
+    user_id: delCliente ? (delCliente.sellerId ?? ret.seller_id) : ret.buyer_id,
     // 17/10 (semplificazione) — Sui contanti il bonifico a questo punto e' solo
     // da fare: il titolo non dice «rimborsato», come non lo dice la pagina dell'ordine.
     // Sul misto dice anche il credito gia' tornato (titoloDelResoRimborsato).
@@ -432,9 +521,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         ? titoloDelResoRimborsato({ importoCents: importoRimborso, bonificoCents })
         : ritiro
           ? '↩ Il cliente ha ritirato la richiesta di reso'
-          : TITOLO[body.stato],
-    body: body.note ?? null,
-    link: ritiro ? `/seller/orders/${ret.order_id}` : `/orders/${ret.order_id}`,
+          : dichiarazione
+            ? '📦 Il cliente ha rispedito la merce del reso'
+            : TITOLO[body.stato],
+    body: dichiarazione
+      ? `Spedita il ${inLettere(body.speditoIl ?? '')}${numeroSpedizione ? `, numero di spedizione ${numeroSpedizione}` : ''}.` +
+        (eUnRecesso(ret) ? ' È un recesso: si chiude col rimborso quando ricevi la merce.' : '')
+      : body.note ?? null,
+    link: delCliente ? `/seller/orders/${ret.order_id}` : `/orders/${ret.order_id}`,
   }, { dove: 'returns-avanza', ordine: ret.order_id, reso: ret.id });
 
   return NextResponse.json({ ok: true, status: body.stato, refundId }, { status: 200 });
