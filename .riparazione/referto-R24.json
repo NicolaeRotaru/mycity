@@ -1,0 +1,324 @@
+{
+  "sessione": "R24",
+  "aggiornato": "2026-11-13 06:00",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R24-001",
+      "chiave": "coerenza-brand|ombre nere fredde accanto alle ombre calde del brand; il token creato apposta non è usato mai",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-002",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-003",
+      "chiave": "frontend-ux|le stelle delle recensioni partono già a 5, e una seconda recensione viene buttata via dicendo «grazie»",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-004",
+      "chiave": "frontend-ux|se il nome del negozio comincia con un numero, un apostrofo, le virgolette o contiene una parola inglese come «table», il cliente in cassa legge «qualcosa non ha funzionato» invece del motivo vero",
+      "esito": "riparato",
+      "commit": "ec8a953b5ce78fb684e1f09ab07f6af1aa5b2867",
+      "file_toccati": [
+        "lib/errors.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-motivo-in-cassa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-motivo-in-cassa.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ec8a953b^ --file lib/errors.ts --prove tests/unit/riparazione-r24-motivo-in-cassa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il segno lo mette la rotta: apiErrorMessage si ricorda le frasi dei rifiuti col codice CONFLICT (negozio chiuso, fascia, consegna veloce), al massimo le ultime 20, e friendlyError le lascia passare intere, parentesi comprese. «Bistrot La Table», «Row Bar» e «1920 Bottega» arrivano col motivo vero, provati col generatore vero motivoNegozioChiuso e con l'orologio finto. Gli errori grezzi, i 500 e il formato vecchio restano filtrati.",
+      "nota": "Niente classe dedicata: la cassa (app/checkout/page.tsx, non mia) fa throw new Error(apiErrorMessage(...)), quindi il segno passa dentro apiErrorMessage. Mi fido solo di CONFLICT, perché INVALID_REQUEST porta anche i testi grezzi di Zod."
+    },
+    {
+      "id": "R24-005",
+      "chiave": "immagini-media|il segnaposto «foto mancante» arriva da un sito esterno e ha tre stili diversi",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-006",
+      "chiave": "immagini-media|se la foto di un prodotto è stata cancellata, la scheda resta un riquadro bianco invece della foto di ripiego",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-007",
+      "chiave": "microcopy|gli errori dei moduli controllati dal server arrivano al cliente in inglese, per esempio «string must contain at most 120 character»",
+      "esito": "parziale",
+      "commit": "99fc86a385a4455c68a1b44520bb0cf6e5682419",
+      "file_toccati": [
+        "lib/errors.ts",
+        "app/api/contact/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-errori-dal-server.test.ts",
+        "tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-errori-dal-server.test.ts tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 99fc86a3^ --file lib/errors.ts,app/api/contact/route.ts --prove tests/unit/riparazione-r24-errori-dal-server.test.ts,tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La rotta dei contatti importa lib/zod-i18n, quindi il traduttore è acceso sul server: «Required» diventa «Campo obbligatorio», «Expected string, received number» diventa «Valore non valido: serve un testo». In friendlyError, prima del filtro finale, i testi inglesi predefiniti di Zod che arrivano da una rotta senza traduttore («String must contain at most 120 character(s)», Required, Expected…, Number must be…, Array must contain…, Invalid url/uuid/enum value) si dicono con le frasi di FRASI_ZOD; quelli senza frase pronta escono con una frase italiana generica, mai in inglese.",
+      "cosa_resta": "Le altre rotte che validano con Zod (le 14 della voce) rispondono ancora in inglese finché il traduttore non è acceso nel modulo comune (serve_file_altrui). Le pagine che passano il messaggio da friendlyError lo mostrano già in italiano; quelle che stampano apiErrorMessage così com'è no.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/api/responses.ts",
+          "modifica": "aggiungere in testa `import '@/lib/zod-i18n';` (la stessa riga di R24-019, una volta sola)"
+        }
+      ],
+      "nota": "lib/errors importa FRASI_ZOD da lib/zod-i18n, quindi z.setErrorMap si accende ovunque si carica lib/errors."
+    },
+    {
+      "id": "R24-008",
+      "chiave": "microcopy|chi si registra con una password troppo comune legge l'avviso in inglese e non capisce cosa cambiare",
+      "esito": "riparato",
+      "commit": "6a55e9a6f01cef689a86879fcc7b25f592449caa",
+      "file_toccati": [
+        "lib/errors.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-password-comune.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-password-comune.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a55e9a6^ --file lib/errors.ts --prove tests/unit/riparazione-r24-password-comune.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "traduciErroreAuth riconosce la password comune o rubata («known to be weak», pwned, leaked) e quella troppo semplice («weak password», «password is too weak», «password should contain»). Usa le stesse frasi di /reset-password (PASSWORD_RUBATA, PASSWORD_SEMPLICE da lib/auth/errori-nuova-password.ts). friendlyError ha una mappa dei codici Auth: con weak_password conta prima il testo, e il codice serve se il testo non si riconosce. La prova monta anche la pagina vera, con la rotta che risponde 422 weak_password.",
+      "nota": "/reset-password non passa a traduciErroreAuth: dal 12/11 (R10-016) usa già un traduttore condiviso che legge i `reasons`. Le frasi ora sono le stesse sulle due pagine."
+    },
+    {
+      "id": "R24-009",
+      "chiave": "navigazione-gerarchia|nella scheda prodotto il prezzo è quasi grande quanto il titolo e pesa meno del pulsante «+»",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-010",
+      "chiave": "qa-flussi|il modulo contatti e la porta cancella account giudicano support_email in due modi",
+      "esito": "riparato",
+      "commit": "cd86f3b051f70b4ae007e15a8286b2069aabbd9b",
+      "file_toccati": [
+        "app/api/contact/route.ts",
+        "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+        "tests/unit/minori-s08-contatti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-supporto-stesso-giudizio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-supporto-stesso-giudizio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cd86f3b0^ --file app/api/contact/route.ts --prove tests/unit/riparazione-r24-supporto-stesso-giudizio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Senza database, inoltraSenzaDatabase inoltra solo se ilModuloArrivaSenzaDatabase() (lib/legal/titolare.ts) dice di sì: casella sul dominio dei contatti, chiave della posta e mittente sul dominio. Il modulo e la porta Cancella account ora danno la stessa risposta sulla stessa casella.",
+      "nota": "Seguita la regola più severa, quella della porta. Da controllare su Vercel (non codice): SUPPORT_EMAIL sul dominio NEXT_PUBLIC_CONTATTI_DOMINIO, RESEND_API_KEY e RESEND_FROM sul dominio. Prove esistenti modificate e dichiarate (importano app/api/contact/route): chi-vuole-cancellarsi… quattro casi passano alla casella sul dominio con chiavi finte; minori-s08-contatti due casi con RESEND_API_KEY finta."
+    },
+    {
+      "id": "R24-011",
+      "chiave": "qa-flussi|l'avviso «spesa sotto i 10 €… ti mancano x» nel carrello può ignorare la quantità senza che una prova della squadra diventi rossa",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-012",
+      "chiave": "qa-flussi|col doppio clic la recensione parte due volte e il cliente legge «avevi già recensito»",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-013",
+      "chiave": "qa-flussi|la scheda prodotto passa il prezzo pieno alla barra d'acquisto e al carrello con una promozione attiva",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-014",
+      "chiave": "qa-flussi|il grafico della settimana nei guadagni del fattorino taglia i giorni all'ora di greenwich: le consegne dopo mezzanotte finiscono nel giorno prima",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-015",
+      "chiave": "qa-flussi|le pagine del venditore chiedono ancora il segnaposto a placehold.co",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-016",
+      "chiave": "qa-flussi|la pagina di iscrizione promette ancora «puoi provare lo stesso a registrarti» quando l'anti-robot non si carica",
+      "esito": "riparato",
+      "commit": "d4a24f7822c63ce451765a7269fd8886cbf617e2",
+      "file_toccati": [
+        "app/sign-up/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-anti-robot-rotto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-anti-robot-rotto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d4a24f78^ --file app/sign-up/page.tsx --prove tests/unit/riparazione-r24-anti-robot-rotto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se il riquadro anti-robot non si carica, il modulo non parte più senza gettone: la condizione aveva `&& !captchaRotto`. La frase «Puoi provare lo stesso a registrarti» è tolta. Al suo posto la pagina dice di ricaricare, di registrarsi con Google o di scrivere a un indirizzo email, come la pagina di accesso. La prova monta la pagina vera con turnstile.render che lancia un errore."
+    },
+    {
+      "id": "R24-017",
+      "chiave": "qa-flussi|la frase vecchia sui formati foto resta in friendlyerror",
+      "esito": "riparato",
+      "commit": "c7ab6b48512890f3edbf15d2744582dd566b070b",
+      "file_toccati": [
+        "lib/errors.ts",
+        "tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-formati-foto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-formati-foto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c7ab6b48^ --file lib/errors.ts --prove tests/unit/riparazione-r24-formati-foto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La frase sul formato foto rifiutato si costruisce con formatiLeggibili(TIPI_IMMAGINE), come la porta in lib/storage/carica-immagine.ts: «JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF».",
+      "nota": "Prova esistente modificata e dichiarata: la-foto-rifiutata-lo-dice-in-italiano.test.ts importa lib/errors; l'atteso ora è toBe esatto sulla frase nuova, non indebolito."
+    },
+    {
+      "id": "R24-018",
+      "chiave": "qa-flussi|un capo con più di cento combinazioni di taglia e colore perde le ultime in silenzio, e il cliente che le sceglie non può comprarle",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    },
+    {
+      "id": "R24-019",
+      "chiave": "qa-flussi|traduttore degli errori di zod: tre frasi sbagliate e acceso solo nel browser",
+      "esito": "parziale",
+      "commit": "fa846baede4bb56f846137741b0168b9104f805e",
+      "file_toccati": [
+        "lib/zod-i18n.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-traduttore-zod.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-traduttore-zod.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa846bae^ --file lib/zod-i18n.ts --prove tests/unit/riparazione-r24-traduttore-zod.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le tre frasi: «Atteso number» diventa «Valore non valido: serve un numero», con i tipi in italiano. «Seleziona almeno 1 elementi» diventa «1 elemento», e il plurale è giusto anche per «Massimo 1 carattere». Il valore fuori elenco dice «Valore non valido: scegline uno fra quelli proposti», senza chiavi interne. Le frasi stanno in un posto solo (FRASI_ZOD, esportato).",
+      "cosa_resta": "Il traduttore acceso sul server per tutte le rotte: serve un file non mio (serve_file_altrui). Con R24-007 è acceso nella rotta dei contatti.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/api/responses.ts",
+          "modifica": "aggiungere in testa, dopo `import { NextResponse } from 'next/server';`, la riga `import '@/lib/zod-i18n';` (le 41 rotte di app/api che importano zod importano tutte ApiErrors da qui, quindi il traduttore è acceso prima che validino)"
+        }
+      ]
+    },
+    {
+      "id": "R24-020",
+      "chiave": "sicurezza-auth|la registrazione non passa ancora dal server: niente freno sulle iscrizioni e niente verifica anti-robot",
+      "esito": "parziale",
+      "commit": "b6f1ad543082819384d4fd3968480c2fab7856c3",
+      "file_toccati": [
+        "app/sign-up/page.tsx",
+        "app/api/auth/registrazione/route.ts",
+        "tests/unit/le-pagine-vere-dell-accesso-non-chiudono-fuori-nessuno.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-iscrizione-dal-server.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-iscrizione-dal-server.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b6f1ad54^ --file app/sign-up/page.tsx,app/api/auth/registrazione/route.ts --prove tests/unit/riparazione-r24-iscrizione-dal-server.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La pagina /sign-up non chiama più supabase.auth.signUp dal browser: manda i dati alla rotta nuova /api/auth/registrazione. La rotta frena a 5 iscrizioni l'ora per rete, con la stessa chiave signup:<ip> della rotta vecchia. Verifica il gettone Turnstile e accetta solo i ruoli buyer, seller e rider. Vuole la spunta dei Termini e scrive lei la versione dei testi. Passa a Supabase role, full_name e ritorno dopo la conferma. Se Supabase rifiuta, rimanda codice e testo, che la pagina traduce con friendlyError come prima. Se c'è già una sessione (conferma email spenta), la pagina la installa.",
+      "cosa_resta": "Lato Supabase (non codice, lo fa Nicola): accendere il CAPTCHA Turnstile in Authentication → Attack Protection, così signUp non si chiama più direttamente con la chiave pubblica. Prima va provato in palestra, perché il gettone vale una volta sola (vedi nuovi_difetti_visti). La rotta morta app/api/auth/signup/route.ts non è mia: vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/auth/signup/route.ts",
+          "modifica": "cancellare il file: nessuno lo chiama, la registrazione passa da app/api/auth/registrazione/route.ts"
+        },
+        {
+          "file": "tests/unit/api-auth.test.ts",
+          "modifica": "togliere l'import `POST as signupPOST` da '@/app/api/auth/signup/route' e tutto il blocco describe('POST /api/auth/signup'); la rotta nuova ha le sue prove in tests/unit/riparazione-r24-iscrizione-dal-server.test.ts"
+        },
+        {
+          "file": "app/sign-in/page.tsx",
+          "modifica": "nel commento della riga 146 sostituire `/api/auth/signup` con `/api/auth/registrazione`"
+        }
+      ],
+      "nota": "La rimessa con solo la pagina regge, uscita 0: con la pagina alla base signUp parte dal browser e la rotta non viene chiamata. L'uscita 3 dipende dalla regola sui file nuovi: una rotta non la importa nessun file. Prova esistente modificata e dichiarata: le-pagine-vere-dell-accesso-non-chiudono-fuori-nessuno.test.ts monta app/sign-up/page.tsx; il caso ① finge fetch verso /api/auth/registrazione invece di signUp, con le stesse asserzioni."
+    },
+    {
+      "id": "R24-021",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "non_fatto",
+      "nota": "in attesa"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il gettone anti-robot si consuma due volte: accendendo il CAPTCHA su Supabase, accesso e iscrizione con email si rompono",
+      "dimensione": "sicurezza-auth",
+      "severita": "grave",
+      "file": "app/api/auth/signin/route.ts:66-71",
+      "descrizione": "La rotta di accesso verifica il gettone Turnstile con siteverify (lib/captcha.ts) e poi passa lo stesso gettone a Supabase. Un gettone Cloudflare vale una volta sola: col CAPTCHA acceso su Supabase la seconda verifica fallirebbe (timeout-or-duplicate). È latente finché il CAPTCHA su Supabase resta spento; va provato in palestra prima di accenderlo, e va scelto chi verifica, il server o Supabase. Dedotto dal codice, non visto girare."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": ""
+  }
+}
