@@ -104,8 +104,13 @@ jobs:
       # passassero da un giro all'altro, una home rotta da una richiesta
       # potrebbe uscire con la copia del giro prima e le prove resterebbero
       # verdi: il collaudo l'ha riprodotto il 13/11. Per questo si tengono
-      # solo webpack, swc e il registro del controllo dei tipi (.tsbuildinfo),
-      # e la chiave e' passata a v2 per non riprendere le cache di prima.
+      # solo webpack, swc, il registro del controllo dei tipi (.tsbuildinfo) e
+      # le due chiavi che Next genera alla prima costruzione (.rscinfo e
+      # .previewinfo). Quelle due servono: senza, Next ne crea di nuove, le
+      # mette dentro i pezzi compilati e la cache di webpack non vale piu'
+      # (misurato: compilazione da 24 a 68 secondi). Sono chiavi delle
+      # costruzioni di prova, la produzione la costruisce Vercel con le sue.
+      # La chiave e' a v3 per non riprendere le cache di prima.
       - name: Riprendi la cache di compilazione di Next
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -113,9 +118,11 @@ jobs:
             .next/cache/webpack
             .next/cache/swc
             .next/cache/.tsbuildinfo
-          key: next-build-v2-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+            .next/cache/.rscinfo
+            .next/cache/.previewinfo
+          key: next-build-v3-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v2-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v3-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # Storybook 8.x dichiara peer deps su React 18 + ecc, ma il monorepo usa
       # react-dom 18.3 risolto via Next 14; senza --legacy-peer-deps fallisce.
@@ -651,9 +658,11 @@ jobs:
             .next/cache/webpack
             .next/cache/swc
             .next/cache/.tsbuildinfo
-          key: next-build-v2-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+            .next/cache/.rscinfo
+            .next/cache/.previewinfo
+          key: next-build-v3-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v2-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v3-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
       # versione di Playwright (fissata da package-lock.json) vuole lo stesso
@@ -869,9 +878,11 @@ jobs:
             .next/cache/webpack
             .next/cache/swc
             .next/cache/.tsbuildinfo
-          key: next-build-v2-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+            .next/cache/.rscinfo
+            .next/cache/.previewinfo
+          key: next-build-v3-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v2-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v3-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
       # versione di Playwright (fissata da package-lock.json) vuole lo stesso

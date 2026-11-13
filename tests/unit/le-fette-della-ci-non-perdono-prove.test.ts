@@ -402,7 +402,13 @@ describe('nella CI le fette sono collegate a chi le rimette insieme', () => {
     // un giro all'altro anche .next/cache/fetch-cache, cioe' la home gia'
     // calcolata dal sito acceso; una home rotta usciva con la copia vecchia e
     // la prova «renders hero + CTA» restava verde invece di diventare rossa.
-    const permessi = new Set(['.next/cache/webpack', '.next/cache/swc', '.next/cache/.tsbuildinfo']);
+    const permessi = new Set([
+      '.next/cache/webpack',
+      '.next/cache/swc',
+      '.next/cache/.tsbuildinfo',
+      '.next/cache/.rscinfo',
+      '.next/cache/.previewinfo',
+    ]);
     const cacheDiNext = Object.entries(CI.jobs).flatMap(([id, lavoro]) =>
       (lavoro.steps ?? [])
         .filter((p) => p.uses?.startsWith('actions/cache') && String(p.with?.path ?? '').includes('.next'))
