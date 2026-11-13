@@ -43,6 +43,7 @@ export const FRASI_ZOD = {
   // «Valore minimo: 0».
   maggioreDi: (n: number | bigint) => `Deve essere maggiore di ${n}`,
   minoreDi: (n: number | bigint) => `Deve essere minore di ${n}`,
+  massimoElementi: (n: number | bigint) => `Massimo ${quanti(n, 'elemento', 'elementi')}`,
   almenoElementi: (n: number | bigint) => `Seleziona almeno ${quanti(n, 'elemento', 'elementi')}`,
   email: 'Email non valida',
   url: 'URL non valido',
@@ -77,6 +78,9 @@ z.setErrorMap((issue, ctx) => {
       }
       if (issue.type === 'number') {
         return { message: issue.inclusive ? FRASI_ZOD.massimo(issue.maximum) : FRASI_ZOD.minoreDi(issue.maximum) };
+      }
+      if (issue.type === 'array') {
+        return { message: FRASI_ZOD.massimoElementi(issue.maximum) };
       }
       break;
 

@@ -45,6 +45,11 @@ describe('il traduttore di Zod parla italiano corretto', () => {
     expect(primo(z.string().max(1).safeParse('ab'))).toBe('Massimo 1 carattere');
   });
 
+  it('«Massimo 1 elemento» al singolare, «Massimo 3 elementi» al plurale (liste troppo lunghe)', () => {
+    expect(primo(z.array(z.string()).max(1).safeParse(['a', 'b']))).toBe('Massimo 1 elemento');
+    expect(primo(z.array(z.string()).max(3).safeParse(['a', 'b', 'c', 'd']))).toBe('Massimo 3 elementi');
+  });
+
   it('le frasi giuste restano quelle di prima', () => {
     expect(primo(z.string().max(120).safeParse('a'.repeat(121)))).toBe('Massimo 120 caratteri');
     expect(primo(z.string().min(1).safeParse(''))).toBe('Campo obbligatorio');
