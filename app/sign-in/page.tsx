@@ -92,6 +92,21 @@ const SignInForm = () => {
   // sparisce dopo quattro secondi.
   const [erroreAccesso, setErroreAccesso] = useState<string | undefined>();
   const erroreDelRitorno = searchParams.get('error');
+  /**
+   * 13/11/2026 (R21-018) — Dopo troppi tentativi la rotta dice quanto aspettare
+   * (`Retry-After`): «Accedi» resta spento col conto alla rovescia fino alla
+   * scadenza. Prima restava premibile e ogni tocco prendeva lo stesso 429.
+   */
+  const [attesa, setAttesa] = useState(0);
+  useEffect(() => {
+    if (attesa <= 0) return;
+    const t = setTimeout(() => {
+      // Finita l'attesa, la frase «Riprova fra 5 minuti» non è più vera.
+      if (attesa === 1) setErroreAccesso(undefined);
+      setAttesa(attesa - 1);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [attesa]);
 
   // Difesa lato client: se Supabase ha mandato l'utente qui invece che
   // su /reset-password (Site URL configurata male), intercetta il flusso
@@ -136,6 +151,7 @@ const SignInForm = () => {
       toast.error(captchaRotto ? 'Il controllo anti-robot non si è caricato: ricarica la pagina o entra con Google.' : 'Completa il controllo anti-bot');
       return;
     }
+    if (attesa > 0) return;
     setErroreAccesso(undefined);
     setIsLoading(true);
     try {
@@ -166,7 +182,7 @@ const SignInForm = () => {
         body: JSON.stringify({ email, password, captchaToken: captchaToken || undefined }),
       });
       const corpo = await risposta.json().catch(() => null);
-      const esito = esitoDellaRispostaDiAccesso(risposta.ok, corpo);
+      const esito = esitoDellaRispostaDiAccesso(risposta.ok, corpo, risposta.headers?.get?.('Retry-After'));
       // 15/10/2026 (R43) — Prima questo caso finiva nel ripiego e usciva
       // «Email non valida» (il messaggio contiene la parola «email»): la
       // persona aveva la password giusta e veniva rimandata indietro.
@@ -179,6 +195,7 @@ const SignInForm = () => {
         const dallaRotta = messaggioDellaRottaDiAccesso(esito);
         if (dallaRotta) {
           rigeneraGettone();
+          if (esito.attesaSecondi) setAttesa(esito.attesaSecondi);
           setErroreAccesso(dallaRotta);
           toast.error(dallaRotta);
           requestAnimationFrame(() => document.getElementById('signin-password')?.focus());
@@ -337,8 +354,12 @@ const SignInForm = () => {
             <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
           </p>
         )}
-        <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
-          {isLoading ? 'Accesso in corso…' : 'Accedi'}
+        <Button type="submit" size="lg" loading={isLoading} disabled={attesa > 0} iconRight={ArrowRight} fullWidth>
+          {isLoading
+            ? 'Accesso in corso…'
+            : attesa > 0
+              ? `Puoi riprovare fra ${Math.floor(attesa / 60)}:${String(attesa % 60).padStart(2, '0')}`
+              : 'Accedi'}
         </Button>
       </form>
 
