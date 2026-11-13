@@ -20,11 +20,11 @@ type Props = {
 type SponsoredItem = Sponsorizzato;
 
 /**
- * Carosello "Sponsored" — placement-aware. Mostra prodotti dei seller
+ * Carosello «Sponsorizzato» — placement-aware. Mostra prodotti dei seller
  * che hanno comprato il listing sponsored per quel placement.
  *
  * Niente visualizzazione se 0 sponsorizzati attivi.
- * Badge "Sponsored" visibile per trasparenza (richiesto da legge UE).
+ * Etichetta «Sponsorizzato» visibile per trasparenza (richiesto da legge UE).
  */
 export default function SponsoredCarousel({ placement, categorySlug }: Props) {
   const { data: items = [] } = useQuery({
@@ -90,12 +90,12 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
 
   return (
     <section className="bg-accent-50 border border-accent-200 rounded-2xl p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2 flex-wrap mb-3">
         <h3 className="font-serif font-bold text-ink-900 inline-flex items-center gap-2">
           <Sparkles size={16} className="text-accent-700" />
           In primo piano
         </h3>
-        <span className="text-[10px] uppercase tracking-wider font-bold text-ink-400">Sponsored</span>
+        <span className="text-xs uppercase tracking-wider font-bold text-ink-600">Sponsorizzato</span>
       </div>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
         {items.map((it) => {

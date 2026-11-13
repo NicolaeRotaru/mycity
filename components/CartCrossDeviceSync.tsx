@@ -73,19 +73,22 @@ export default function CartCrossDeviceSync() {
       const localItems = getCart();
       const localUpdated = getLocalUpdatedAt();
 
+      // 5/11/2026 — Il cloud vuoto PIÙ RECENTE del locale vuol dire che un altro dispositivo l'ha
+      // svuotato dopo (ha comprato, o ha tolto tutto): il locale è vecchio e non si rimanda su.
+      // Prima la spesa appena pagata tornava nel cloud e poi, con la fusione, sul telefono.
+      // Solo se il locale non è cambiato dopo l'ultimo allineamento riuscito: un carrello
+      // riempito da ospite (mai salito) non si butta.
+      // R20-012 — E non solo col cloud vuoto: una riga tolta (o una quantità abbassata) sull'altro
+      // dispositivo tornava con la fusione «quantità più alta». Se il locale non ha niente di nuovo,
+      // vale il cloud com'è; si fonde solo quando anche il locale ha roba mai salita.
+      const allineatoIl = getSyncedAt();
+      if (data && allineatoIl > 0 && localUpdated <= allineatoIl && cloudUpdated > allineatoIl) {
+        if (JSON.stringify(localItems) !== JSON.stringify(cloudItems)) saveCart(cloudItems, { dallAltroDispositivo: true });
+        setLocalUpdatedAt(cloudUpdated);
+        setSyncedAt(cloudUpdated);
+        return;
+      }
       if (cloudItems.length === 0 && localItems.length > 0) {
-        // 5/11/2026 — Il cloud vuoto PIÙ RECENTE del locale vuol dire che un altro dispositivo l'ha
-        // svuotato dopo (ha comprato, o ha tolto tutto): il locale è vecchio e non si rimanda su.
-        // Prima la spesa appena pagata tornava nel cloud e poi, con la fusione, sul telefono.
-        // Solo se il locale non è cambiato dopo l'ultimo allineamento riuscito: un carrello
-        // riempito da ospite (mai salito) non si butta.
-        const allineatoIl = getSyncedAt();
-        if (data && allineatoIl > 0 && localUpdated <= allineatoIl && cloudUpdated > allineatoIl) {
-          saveCart([], { dallAltroDispositivo: true });
-          setLocalUpdatedAt(cloudUpdated);
-          setSyncedAt(cloudUpdated);
-          return;
-        }
         // Carrello locale ma cloud vuoto (o mai scritto): spingi locale
         await syncUp(uid, localItems);
         return;

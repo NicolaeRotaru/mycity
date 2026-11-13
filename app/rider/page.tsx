@@ -110,6 +110,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * R20-011 — La presa non è riuscita perché l'ordine non è più prendibile: l'ha preso un altro
+ * fattorino, oppure non è più pronto (annullato, tornato in preparazione). `prendi_ordine` risponde
+ * GIA_PRESO in tutti e due i casi, quindi il testo non dice più «preso da un altro rider».
+ */
+class OrdineNonPiuDisponibile extends Error {}
+
 /** 5/11/2026 — Le consegne del fattorino ancora aperte: tutto tranne consegnato e annullato. */
 const STATI_DELLE_MIE_CONSEGNE_APERTE = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
 
@@ -161,10 +168,12 @@ export default function RiderDashboardPage() {
       // 18/10/2026 — Il negozio delle consegne prese arriva dalla vetrina pubblica,
       // non da `profiles` (lib/queries/negozio-dell-ordine.ts): regge anche quando
       // `profiles` si chiude.
+      let negoziNonLetti = false;
       const mieiColNegozio = await conNegozioSePossibile(
         supabase,
         (miei.data ?? []) as unknown as Array<Omit<AvailableOrder, 'seller'> & { seller_id: string | null; rider_id: string | null }>,
         'id, store_name, store_logo, store_address',
+        () => { negoziNonLetti = true; },
       );
 
       return {
@@ -174,9 +183,12 @@ export default function RiderDashboardPage() {
         liberi: (bacheca.data ?? []) as unknown as OrdineLibero[],
         bachecaGuasta: !!bacheca.error,
         miei: mieiColNegozio as (AvailableOrder & { rider_id: string | null })[],
+        negoziNonLetti,
       };
     },
-    refetchInterval: 60_000,   // dashboard rider: 1 min è sufficiente
+    // dashboard rider: 1 min è sufficiente. R20-007 — Ma se la vista dei negozi è caduta la lettura
+    // è parziale (consegne senza il nome del negozio): si riprova dopo pochi secondi.
+    refetchInterval: (q) => (q.state.data?.negoziNonLetti ? 5_000 : 60_000),
     refetchOnWindowFocus: true, // appena torna sulla tab fa refresh subito
     staleTime: 15_000,
   });
@@ -243,19 +255,23 @@ export default function RiderDashboardPage() {
   const incassiDaDichiarare = riquadroIncassi.incassi;
 
   // Statistiche di oggi: consegne completate + incasso del giorno.
-  const { data: today } = useQuery({
+  const letturaOggi = useQuery({
     queryKey: queryKeys.rider.todayStats,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { count: 0, earned: 0 };
+      // R20-004 — Senza rete getUser() risponde «nessun utente» con un errore: non è «oggi 0,00 €».
+      // La lettura cade (il riquadro dice «—») e si rilegge quando la rete torna o col «Riprova».
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      if (!user) throw erroreUtente ?? new Error('Non autenticato');
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .select('shipping_cost, rider_fee_cents, delivered_at')
         .eq('rider_id', user.id)
         .eq('delivery_status', 'DELIVERED')
         .gte('delivered_at', start.toISOString());
+      // R20-004 — Una lettura caduta non è «oggi 0,00 €»: l'errore sale e il riquadro dice «—».
+      if (error) throw error;
       // 22/8/2026 — IL TOTALE DELLA GIORNATA SOMMAVA `shipping_cost`, cioe'
       // quanto ha pagato il CLIENTE per la spedizione: sopra i 30 euro e' zero.
       // Il fattorino chiudeva una giornata di consegne con un totale piu' basso
@@ -266,6 +282,7 @@ export default function RiderDashboardPage() {
     },
     staleTime: 30_000,
   });
+  const today = letturaOggi.data;
 
   // Priorità per zona: gli ordini che cadono in una zona preferita vanno PRIMA
   // (la disponibilità promette "riceverai prima le consegne in queste zone").
@@ -301,6 +318,13 @@ export default function RiderDashboardPage() {
   const inPrep     = liberi.filter((o) => o.delivery_status === 'ACCEPTED').sort(byZone);
   const bachecaGuasta = letturaBacheca.data?.bachecaGuasta ?? false;
 
+  /** R20-011 — Toglie subito un ordine dagli ordini liberi in memoria (preso da me, o non più prendibile). */
+  const togliDallaBacheca = (orderId: string) => {
+    qc.setQueryData<typeof letturaBacheca.data>(queryKeys.rider.orders, (prima) =>
+      prima ? { ...prima, liberi: prima.liberi.filter((o) => o.id !== orderId) } : prima,
+    );
+  };
+
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
       /*
@@ -322,13 +346,15 @@ export default function RiderDashboardPage() {
       if (error) throw error;
       const esito = data as { ok: boolean; id?: string; motivo?: string } | null;
       if (!esito?.ok || !esito.id) {
-        throw new Error(
+        const motivo =
           esito?.motivo === 'NON_FATTORINO'
             ? 'Il tuo profilo fattorino non è ancora approvato'
             // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
             : esito?.motivo === 'DOCUMENTI_SCADUTI'
               ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
-              : 'Ordine già preso da un altro rider',
+              : null;
+        throw motivo ? new Error(motivo) : new OrdineNonPiuDisponibile(
+          'Questo ordine non è più disponibile: l’ha preso un altro fattorino oppure non è più pronto.',
         );
       }
       const data2 = { id: esito.id };
@@ -343,18 +369,33 @@ export default function RiderDashboardPage() {
     },
     onSuccess: (data) => {
       trackRiderOrderAccepted(data.id);
+      togliDallaBacheca(data.id);
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // R20-011 — Un «Accetta» perso è un dato vecchio, non solo un messaggio: l'ordine esce subito
+    // dall'elenco e la bacheca si rilegge, invece di restare lì col suo «Accetta» fino al giro dopo.
+    onError: (err: unknown, orderId: string) => {
+      if (err instanceof OrdineNonPiuDisponibile) {
+        togliDallaBacheca(orderId);
+        qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+        toast.error(err.message);
+        return;
+      }
+      toast.error(friendlyError(err));
+    },
   });
 
   // Toggle online/offline: stesso update profilo della pagina Disponibilità.
   const toggleOnline = useMutation({
+    // R20-002 — Senza rete la richiesta restava in pausa: interruttore grigio, nessun messaggio, e
+    // poi si accendeva da solo quando la rete tornava. Adesso parte lo stesso e, se non arriva,
+    // l'errore di rete diventa l'avviso «Problema di connessione» (non «Non autenticato»).
+    networkMode: 'always',
     mutationFn: async (next: boolean) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      if (!user) throw erroreUtente ?? new Error('Non autenticato');
       const { error } = await supabase.from('profiles').update({ rider_is_online: next }).eq('id', user.id);
       if (error) throw error;
       return next;
@@ -372,7 +413,8 @@ export default function RiderDashboardPage() {
       <ErrorState
         title="Non riesco a leggere gli ordini"
         description="La lettura non è riuscita, quindi non so quali consegne ci sono. Non vuol dire che non ce ne siano: riprova fra un momento."
-        onRetry={() => { void letturaBacheca.refetch(); }}
+        // R20-004 — Il «Riprova» rilegge anche gli incassi di oggi: aperti senza rete, restavano «—».
+        onRetry={() => { void letturaOggi.refetch(); void letturaBacheca.refetch(); }}
       />
     );
   }
@@ -424,13 +466,14 @@ export default function RiderDashboardPage() {
             aria-label={online ? 'Vai offline' : 'Vai online'}
             disabled={toggleOnline.isPending}
             onClick={() => toggleOnline.mutate(!online)}
-            className={`relative h-8 w-[58px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+            // R20-002 — Alto 44 px (era 32): si tocca col pollice anche in strada.
+            className={`relative h-11 w-[76px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
               online ? 'bg-white/30' : 'bg-cream-300'
             }`}
           >
             <span
-              className="absolute top-[3px] h-[26px] w-[26px] rounded-full bg-white shadow-sm-neutral transition-all"
-              style={{ left: online ? '29px' : '3px' }}
+              className="absolute top-[3px] h-[38px] w-[38px] rounded-full bg-white shadow-sm-neutral transition-all"
+              style={{ left: online ? '35px' : '3px' }}
             />
           </button>
         </div>
@@ -439,8 +482,9 @@ export default function RiderDashboardPage() {
       {/* Stat di oggi: 3-up */}
       <div className="mb-[18px] grid grid-cols-3 gap-2 px-4">
         {[
-          ['Oggi', formatPrice(today?.earned ?? 0)],
-          ['Consegne', String(today?.count ?? 0)],
+          // R20-004 — «—» finché non c'è un numero (in caricamento o con la lettura caduta), non 0.
+          ['Oggi', today ? formatPrice(today.earned) : '—'],
+          ['Consegne', today ? String(today.count) : '—'],
           ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-cream-300 bg-surface-0 px-3 py-2.5 text-center">
@@ -597,7 +641,8 @@ export default function RiderDashboardPage() {
                     <Button
                       variant="accent"
                       onClick={() => claim.mutate(o.id)}
-                      loading={claim.isPending}
+                      // R20-011 — Gira solo il pulsante dell'ordine premuto, non tutti insieme.
+                      loading={claim.isPending && claim.variables === o.id}
                     >
                       Accetta
                     </Button>
@@ -612,8 +657,9 @@ export default function RiderDashboardPage() {
             <div className="mt-[18px]">
               <SectionLabel>In preparazione · attendi</SectionLabel>
               <div className="flex flex-col gap-2.5">
+                {/* R20-002 — Niente più opacity-75: targhetta e compenso scendevano sotto 4,5:1. */}
                 {inPrep.map((o) => (
-                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5 opacity-75">
+                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
                     <div className="mb-2 flex items-center justify-between">
                       <Badge variant="local" icon={ChefHat}>In preparazione</Badge>
                       <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</span>

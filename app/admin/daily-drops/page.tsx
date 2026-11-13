@@ -54,7 +54,7 @@ export default function AdminDailyDropsPage() {
   const [discountPct, setDiscountPct] = useState(20);
   const [headline, setHeadline] = useState('');
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isError: prodottiCaduti, refetch: rileggiProdotti } = useQuery({
     queryKey: ['admin', 'drop-products'],
     queryFn: async (): Promise<Product[]> => {
       const { data, error } = await supabase
@@ -139,6 +139,15 @@ export default function AdminDailyDropsPage() {
       )}
 
       <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-6 space-y-4">
+        {/* R20-008 — Anche i prodotti: una lettura caduta non è un elenco vuoto da cui scegliere. */}
+        {prodottiCaduti && (
+          <ErrorState
+            variant="compact"
+            title="Non riesco a leggere i prodotti"
+            description="L'elenco è vuoto perché la lettura non è riuscita, non perché non ce ne siano: riprova."
+            retry={() => { void rileggiProdotti(); }}
+          />
+        )}
         <fieldset disabled={!DROP_DEL_GIORNO_ACCESO} aria-describedby={DROP_DEL_GIORNO_ACCESO ? undefined : 'drop-spento'} className="space-y-4 disabled:opacity-70">
         <Select label="Prodotto" value={productId} onChange={(e) => setProductId(e.target.value)}>
           <option value="">— Seleziona —</option>
