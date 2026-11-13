@@ -90,11 +90,14 @@ async function assesta() {
   }
 }
 
-/** Maria, entrata, apre la cassa giovedì 29/10/2026 alle 10 di Roma con un filone da 15 €, per domani. */
-async function cassa() {
+/**
+ * Maria, entrata, apre la cassa giovedì 29/10/2026 alle 10 di Roma con un filone da 15 €, per domani.
+ * Il giro di correzione la apre anche venerdì 6/11 alle 23:59:30 (`quando`), con un'altra fascia.
+ */
+async function cassa(quando = '2026-10-29T09:00:00Z', fasciaDomani: string = FASCE_DI_DOMANI[2]) {
   process.env.TZ = 'Europe/Rome';
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
-  vi.setSystemTime(new Date('2026-10-29T09:00:00Z'));
+  vi.setSystemTime(new Date(quando));
   const filone = { id: 'p-filone', name: 'Filone', price: 15, quantity: 1, sellerId: PANE, storeName: 'Pane Quotidiano' };
   const gruppi = {
     groups: [{ sellerId: PANE, storeName: 'Pane Quotidiano', storeLat: null, storeLng: null, items: [filone] }],
@@ -108,7 +111,7 @@ async function cassa() {
     form: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567', notes: '' },
     metodoPagamento: 'cod',
     giorno: 'tomorrow',
-    fasciaDomani: FASCE_DI_DOMANI[2],
+    fasciaDomani,
     sceltaIl: Date.now(),
   }));
   globale.__UTENTE__ = MARIA;
@@ -178,6 +181,8 @@ describe('R19-015 · stesso carrello con un’altra fascia: la cassa non dice «
     const detto = avvisi.attenzione.join(' · ');
     expect(detto, 'la cassa non dice che l’ordine valido è quello di prima').toMatch(/già ordinato/);
     expect(detto, 'la cassa non dice con quale fascia è l’ordine valido').toContain(FASCE_DI_DOMANI[2]);
+    // Giro di correzione: la pagina dell'ordine non fa partire i coriandoli dopo questo avviso.
+    expect(sessionStorage.getItem('mc_just_ordered'), 'coriandoli per un ordine che la cassa ha appena detto di non aver creato').toBeNull();
   }, 30_000);
 
   it('risposta persa, indirizzo cambiato, ripremuto: stessa chiave e la cassa dice a quale indirizzo è l’ordine valido', async () => {
@@ -199,5 +204,55 @@ describe('R19-015 · stesso carrello con un’altra fascia: la cassa non dice «
     expect(invii[1].chiave, 'il doppio invio dello stesso ordine deve restare protetto').toBe(invii[0].chiave);
     expect(avvisi.attenzione, 'lo stesso ordine ripetuto non è «un altro ordine»').toEqual([]);
     expect(avvisi.fatti).toEqual(['Ordine effettuato!']);
+    expect(sessionStorage.getItem('mc_just_ordered'), 'l’ordine andato a buon fine perde la sua festa').toBe('1');
+  }, 30_000);
+
+  /**
+   * Giro di correzione (13/11): venerdì alle 23:59:30 Maria sceglie «Domani · …» (sabato), preme,
+   * la risposta si perde. Passa la mezzanotte: la cassa riporta la fascia a «Oggi · …» (R19-017),
+   * che è la stessa consegna di sabato. Ripremuto, la rotta restituisce l'ordine di prima: è proprio
+   * quello che Maria ha chiesto, e la cassa non deve dire «l'ordine valido è quello di prima».
+   */
+  it('risposta persa venerdì alle 23:59:30, ripremuto dopo la mezzanotte con «Oggi»: è lo stesso giorno, niente avviso falso', async () => {
+    const domani = FASCE_DI_DOMANI[0];
+    const oggi = domani.replace(/^Domani/, 'Oggi');
+    const c = await cassa('2026-11-06T22:59:30Z', domani);
+    expect(c.fascia()).toBe(domani);
+    await c.ordina();
+    expect(invii.length, 'il primo invio non è partito').toBe(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(91_000);
+    });
+    await assesta();
+    expect(c.fascia(), 'dopo la mezzanotte la fascia di sabato si chiama «Oggi»').toBe(oggi);
+    await c.ordina();
+
+    expect(invii.length, 'il secondo invio non è partito').toBe(2);
+    expect(invii[1].chiave).toBe(invii[0].chiave);
+    expect(invii.map((i) => i.fascia)).toEqual([domani, oggi]);
+    expect(avvisi.attenzione, 'stessa consegna di sabato: l’avviso «già ordinato» è falso').toEqual([]);
+    expect(avvisi.fatti).toEqual(['Ordine effettuato!']);
+  }, 30_000);
+
+  it('…ma se dopo la mezzanotte sceglie «Domani» con lo stesso orario (domenica), l’ordine di sabato va detto', async () => {
+    const domani = FASCE_DI_DOMANI[0];
+    const c = await cassa('2026-11-06T22:59:30Z', domani);
+    await c.ordina();
+    await act(async () => {
+      vi.advanceTimersByTime(91_000);
+    });
+    await assesta();
+    const tesseraDomani = schermo!.radice.querySelector<HTMLButtonElement>('button[aria-label^="Domani,"]');
+    expect(tesseraDomani, 'la tessera «Domani» non si trova').not.toBeNull();
+    await act(async () => {
+      tesseraDomani!.click();
+    });
+    await assesta();
+    await c.scegli(domani);
+    await c.ordina();
+    expect(invii.map((i) => i.fascia)).toEqual([domani, domani]);
+    expect(avvisi.fatti, 'domenica non è sabato: «fatto» con l’ordine di sabato è falso').toEqual([]);
+    expect(avvisi.attenzione.join(' · ')).toMatch(/già ordinato/);
   }, 30_000);
 });
