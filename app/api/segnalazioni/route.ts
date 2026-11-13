@@ -38,8 +38,7 @@ const Corpo = z.object({
   dettaglio: z.string().max(2000).optional(),
   emailContatto: z.string().email().max(320).optional(),
   // 13/11/2026 (R21-014) — Nome e dichiarazione di buona fede, tutti e due facoltativi.
-  // Il nome sta su una riga sola: vedi `nomeSuUnaRiga`.
-  nomeSegnalante: z.string().max(120).transform((n) => nomeSuUnaRiga(n)).optional(),
+  nomeSegnalante: z.string().trim().max(120).optional(),
   buonaFede: z.boolean().optional(),
 });
 
@@ -58,37 +57,13 @@ const LIMITE_DEL_TESTO = 2000; // il vincolo della colonna `dettaglio` (migrazio
 const DICHIARAZIONE_DI_BUONA_FEDE =
   'Dichiara in buona fede che le informazioni e le accuse di questa segnalazione sono esatte e complete.';
 
-/**
- * 13/11/2026 (R21-014, correzione) — LE RIGHE DEL SITO SI RICONOSCONO.
- *
- * Le righe che cominciano con la lineetta lunga «— » le scrive solo il sito. Il nome sta su una
- * riga sola: a capo, caratteri di controllo e caratteri invisibili diventano spazi, e le lineette
- * diventano trattini. Nel testo di chi segnala, una riga che comincia con una lineetta (o con un
- * segno che le somiglia) comincia con il trattino corto «-». Così una riga scritta a mano non è
- * mai uguale a una riga del sito.
- */
-const INVISIBILI = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu;
-const LINEETTE = /[\p{Pd}\u2212\u23AF\u2500\u2501]/gu;
-const LINEETTA_IN_TESTA = /(^|\r\n|[\n\r\u0085\u2028\u2029])([\s\p{Cf}]*)([\p{Pd}\u2212\u23AF\u2500\u2501]+)/gu;
-
-function nomeSuUnaRiga(nome: string): string {
-  return nome.replace(INVISIBILI, ' ').replace(LINEETTE, '-').replace(/\s+/g, ' ').trim();
-}
-
-function senzaRigheDelSito(testo: string): string {
-  return testo.replace(LINEETTA_IN_TESTA, (tutto, aCapo: string, spazi: string, lineette: string) =>
-    /^-+$/.test(lineette) ? tutto : `${aCapo}${spazi}-`,
-  );
-}
-
 function testoDellaSegnalazione(c: z.infer<typeof Corpo>): string | null {
   const firma = [
     c.nomeSegnalante ? `— Chi segnala: ${c.nomeSegnalante}` : null,
     c.buonaFede ? `— ${DICHIARAZIONE_DI_BUONA_FEDE}` : null,
   ].filter(Boolean);
-  const testo = c.dettaglio === undefined ? undefined : senzaRigheDelSito(c.dettaglio);
-  if (firma.length === 0) return testo ?? null;
-  return [testo?.trim() || null, firma.join('\n')].filter(Boolean).join('\n\n');
+  if (firma.length === 0) return c.dettaglio ?? null;
+  return [c.dettaglio?.trim() || null, firma.join('\n')].filter(Boolean).join('\n\n');
 }
 
 /**
