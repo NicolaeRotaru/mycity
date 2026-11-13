@@ -118,6 +118,8 @@ export default function PrivacyPage() {
               non compare nell'informativa e' un trattamento senza informativa. */}
           <li><strong>Iscrizione alle notifiche push:</strong> indirizzo del servizio push del browser (endpoint di Apple, Google o Mozilla), le due chiavi di cifratura del dispositivo e la stringa del programma di navigazione (user-agent) — raccolti solo se attivi le notifiche, e cancellati quando le disattivi o quando il servizio push ci dice che quel dispositivo non esiste più.</li>
           <li><strong>Dati di navigazione:</strong> pagine visitate, click, tempo di permanenza (se attivi i cookie analytics).</li>
+          {/* 13/11/2026 (R21-012) — Gli «Ultimi visti» sono legati all'account e non comparivano. */}
+          <li><strong>Prodotti che hai guardato («Ultimi visti»):</strong> se hai fatto l&apos;accesso e attivi i cookie analytics, i prodotti che apri e quando, per mostrarteli di nuovo nel riquadro «Ultimi visti».</li>
           {/* 13/11/2026 (R21-007) — Le segnalazioni non comparivano: né come dato raccolto né come
               finalità. Chi segnala può lasciare email e testo anche senza account. */}
           <li><strong>Segnalazioni di contenuti illeciti:</strong> il motivo, il testo che scrivi, il tuo nome e la dichiarazione di buona fede se li dai e, se la lasci, la tua email, per scriverti della segnalazione e del suo esito; se hai fatto l&apos;accesso, anche il collegamento al tuo account.</li>
@@ -164,6 +166,12 @@ export default function PrivacyPage() {
               <tr><td className="border px-3 py-2">Sicurezza, anti-frode</td><td className="border px-3 py-2">Legittimo interesse (art. 6.1.f)</td><td className="border px-3 py-2">12 mesi: dopo, i log di accesso vengono cancellati e l&apos;indirizzo IP azzerato</td></tr>
               <tr><td className="border px-3 py-2">Newsletter e marketing</td><td className="border px-3 py-2">Consenso (art. 6.1.a)</td><td className="border px-3 py-2">Fino a revoca consenso</td></tr>
               <tr><td className="border px-3 py-2">Analytics aggregati</td><td className="border px-3 py-2">Consenso (cookie)</td><td className="border px-3 py-2">14 mesi</td></tr>
+              {/* 13/11/2026 (R21-012) — Gli «Ultimi visti» restavano per sempre e anche dopo la revoca.
+                  I mesi sono quelli della potatura notturna (MESI_DEGLI_ULTIMI_VISTI in
+                  lib/privacy/potature-ritenzione.ts); la cancellazione alla revoca la fa il database
+                  quando registra il «no» (migrations/450). La prova riparazione-r21-ultimi-visti li
+                  confronta. */}
+              <tr><td className="border px-3 py-2">«Ultimi visti» (prodotti che hai guardato)</td><td className="border px-3 py-2">Consenso (cookie analytics)</td><td className="border px-3 py-2">14 mesi dall&apos;ultima volta che hai aperto il prodotto; cancellati subito se togli il consenso ai cookie analytics mentre hai fatto l&apos;accesso</td></tr>
               {/* #75 — La posizione del fattorino durante la consegna veniva
                   raccolta di continuo e non compariva in nessuna riga di questa
                   tabella: nessuna base giuridica dichiarata, nessun tempo di

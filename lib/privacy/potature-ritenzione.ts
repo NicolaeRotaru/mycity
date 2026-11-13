@@ -53,6 +53,15 @@ export const MESI_DEI_MESSAGGI_DEI_CONTATTI = 24;
  */
 const MESI_DELLE_SEGNALAZIONI_DECISE = 12;
 
+/**
+ * 13/11/2026 (R21-012) — Quanti mesi resta un prodotto fra gli «Ultimi visti» dall'ultima volta
+ * che lo si è guardato. Gli «Ultimi visti» si scrivono solo col consenso ai cookie statistici:
+ * sono un dato di analitica, e per l'analitica l'informativa promette 14 mesi (gli stessi delle
+ * potature di `activity_events` qui sotto). L'informativa (app/privacy/page.tsx) scrive lo stesso
+ * numero: la prova `riparazione-r21-ultimi-visti` fa girare la potatura e pretende che coincidano.
+ */
+const MESI_DEGLI_ULTIMI_VISTI = 14;
+
 /** La catena di filtri che le potature usano davvero, e nient'altro. */
 type Filtrabile = PromiseLike<Risposta> & {
   eq(colonna: string, valore: unknown): Filtrabile;
@@ -317,6 +326,18 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         const consolidate = await esigiRpc(admin, 'consolida_visite_prodotto', { p_giorni: 90 });
         registro.info('[cron-deletions] visite prodotto consolidate', { consolidate });
       },
+    },
+    // 13/11/2026 (R21-012) — GLI «ULTIMI VISTI» RESTAVANO PER SEMPRE.
+    // `product_views` si consolida e si cancella, `recently_viewed` no: la cronologia dei
+    // prodotti guardati, legata all'account, non scadeva mai. Ogni prodotto se ne va passati i
+    // mesi dichiarati dall'ultima volta che la persona l'ha aperto (`viewed_at` si rinfresca a
+    // ogni visita). Chi toglie il consenso perde la sua lista subito (migrazione 450).
+    {
+      cosa: 'recently_viewed',
+      fai: (admin) => esigi(admin
+        .from('recently_viewed')
+        .delete()
+        .lt('viewed_at', mesi(MESI_DEGLI_ULTIMI_VISTI))),
     },
     // E le righe di semplice navigazione si cancellano, non si sbiancano: senza
     // questo la tabella cresceva per sempre. Le altre categorie restano perche'
