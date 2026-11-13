@@ -62,6 +62,10 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   });
 
   if (!esito.ok) {
+    // 13/11/2026 (R13-007, collaudo) — Già restituito tutto: nessun reclamo, niente da fare.
+    if (esito.motivo === 'GIA_RIMBORSATO') {
+      return ApiErrors.conflict('Ordine già rimborsato per intero: non c’è niente da restituire.');
+    }
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       // 13/11/2026 (R13-007) — Il reclamo per restituire i contanti lo apre il sito (decisione del
       // 29/10): al cliente si dice che è già aperto. Solo se non si è aperto, l'assistenza.

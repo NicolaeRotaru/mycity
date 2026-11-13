@@ -62,6 +62,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   });
 
   if (!esito.ok) {
+    // 13/11/2026 (R13-007, collaudo) — Già restituito tutto: nessun reclamo, niente da fare.
+    if (esito.motivo === 'GIA_RIMBORSATO') {
+      return ApiErrors.conflict('Ordine in contanti già rimborsato per intero: niente da restituire, nessun reclamo aperto.');
+    }
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       // 5/11/2026 (S05) — Niente parentesi (friendlyError le toglie) e niente passi
       // che non esistono: la strada vera è il reclamo, col bonifico fatto a mano.

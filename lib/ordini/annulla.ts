@@ -64,7 +64,10 @@ export type EsitoAnnullo =
         | 'GIA_ANNULLATO'
         // 16/10/2026 — sul pagamento c'è un rimborso dal cruscotto ancora da
         // dividere fra i negozi: quanto rendere si sa solo dopo la divisione.
-        | 'RIMBORSO_DA_DIVIDERE';
+        | 'RIMBORSO_DA_DIVIDERE'
+        // 13/11/2026 (R13-007, collaudo) — contanti incassati, ma già restituiti per intero
+        // (contanti più credito usato): niente da restituire, nessun reclamo aperto.
+        | 'GIA_RIMBORSATO';
       dettaglio?: string;
       /**
        * 13/11/2026 (R13-007) — Solo su CONTANTI_INCASSATI, e solo se chi chiama ha chiesto
@@ -283,6 +286,14 @@ export async function annullaERimborsa(
   // `reclamoSeIncassati` — il rifiuto del negozio e il «cliente assente» non aprono reclami.
   if (order.payment_method === 'cod' && contantiIncassati(order)) {
     if (!opts.reclamoSeIncassati) return { ok: false, motivo: 'CONTANTI_INCASSATI' };
+    // 13/11/2026 (R13-007, collaudo) — Un ordine già rimborsato per intero non apre un reclamo
+    // inutile: quello vecchio è chiuso e l'indice lo lascerebbe passare, il reclamo nuovo
+    // avviserebbe gli amministratori e fermerebbe il bonifico al negozio per niente.
+    const versatoCents =
+      Math.max(0, Math.round(Number(order.total_price ?? 0) * 100)) + Math.max(0, Number(order.wallet_applied_cents ?? 0));
+    if (Math.max(0, Number(order.refunded_amount_cents ?? 0)) >= versatoCents) {
+      return { ok: false, motivo: 'GIA_RIMBORSATO' };
+    }
     const reclamo = await apriIlReclamoDeiContanti(admin, order, opts.reason);
     return { ok: false, motivo: 'CONTANTI_INCASSATI', reclamoId: reclamo?.id ?? null };
   }

@@ -141,6 +141,23 @@ describe('R13-007 · il pannello annulla un ordine in contanti già pagato', () 
     expect(r.messaggio).toMatch(/non si è aperto/);
     expect(stato.db.tabelle.orders!.find((o) => o.id === 'pane-di-anna')!.delivery_status).toBe('DELIVERED');
   });
+
+  // Collaudo di R13-007: il reclamo vecchio è chiuso e l'indice lascia passare quello nuovo, che
+  // avviserebbe gli amministratori e fermerebbe il bonifico al negozio senza niente da restituire.
+  it('un ordine già rimborsato per intero non apre un reclamo inutile: 409 senza effetti', async () => {
+    stato.db.tabelle.orders!.push(
+      ordine({ id: 'pane-rimborsato', payment_status: 'REFUNDED', total_price: 20, wallet_applied_cents: 400, refunded_amount_cents: 2400 }),
+    );
+    stato.db.tabelle.disputes = [{ id: 'vecchio', order_id: 'pane-rimborsato', opener_id: 'anna', status: 'resolved', refund_cents: 2400 }];
+    const r = await premi(annullaDalPannello, 'pane-rimborsato');
+    expect(r.status).toBe(409);
+    expect(reclami()).toHaveLength(1);
+    expect(stato.db.tabelle.notifications ?? []).toHaveLength(0);
+    expect(r.messaggio).toMatch(/già rimborsato per intero/);
+    expect(r.messaggio).toMatch(/niente da restituire/);
+    expect(r.dettagli).toBeUndefined();
+    expect(friendlyError(new Error(r.messaggio))).toBe(r.messaggio);
+  });
 });
 
 describe('R13-007 · il cliente annulla un ordine in contanti già pagato', () => {
