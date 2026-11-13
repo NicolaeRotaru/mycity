@@ -24,9 +24,15 @@ const orario = (min: number): string =>
  */
 export function erroreDelleFasce(fasce: HoursInterval[] | undefined): string | null {
   if (!fasce || fasce.length === 0) return null;
-  const lette = fasce.map(([a, c]) => [minuti(a), minuti(c)] as const);
+  // «00:00» in chiusura vuol dire mezzanotte di quel giorno (lo legge così anche lib/store-hours.ts):
+  // un negozio aperto fino a mezzanotte scrive 18:00–00:00 e non deve sentirsi dire che è un errore.
+  const lette = fasce.map(([a, c]) => {
+    const apre = minuti(a);
+    const chiude = minuti(c);
+    return [apre, chiude === 0 && apre > 0 ? 24 * 60 : chiude] as const;
+  });
   if (lette.some(([a, c]) => Number.isNaN(a) || Number.isNaN(c))) return 'Scrivi tutti e due gli orari.';
-  if (lette.some(([a, c]) => c <= a)) return "L'orario di chiusura deve venire dopo quello di apertura.";
+  if (lette.some(([a, c]) => c <= a)) return "L'orario di chiusura deve venire dopo quello di apertura (per chiudere a mezzanotte scrivi 00:00 o 23:59).";
   const ordinate = [...lette].sort((x, y) => x[0] - y[0]);
   for (let i = 1; i < ordinate.length; i++) {
     if (ordinate[i][0] < ordinate[i - 1][1]) return 'Due fasce si sovrappongono.';
