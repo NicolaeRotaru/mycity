@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { ApiErrors } from '@/lib/api/responses';
@@ -10,6 +11,7 @@ import { comunicaEsito, MOTIVAZIONE_MINIMA } from './esito/comunica';
 import { motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
+import { verifyTurnstileToken } from '@/lib/captcha';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +43,8 @@ const Corpo = z.object({
   // Il nome sta su una riga sola: vedi `nomeSuUnaRiga`.
   nomeSegnalante: z.string().max(120).transform((n) => nomeSuUnaRiga(n)).optional(),
   buonaFede: z.boolean().optional(),
+  // 13/11/2026 (R21-008, correzione) — Il gettone del controllo anti-robot del modulo.
+  captchaToken: z.string().max(2048).optional(),
 });
 
 /**
@@ -102,7 +106,37 @@ function testoDellaSegnalazione(c: z.infer<typeof Corpo>): string | null {
  * perché l'indirizzo lo può scrivere chiunque e la conferma non deve poter portare parole altrui.
  * L'esito dell'invio si legge: torna nella risposta e, se fallisce, nei registri.
  */
-type Conferma = 'inviata' | 'fallita' | 'nessun_recapito';
+type Conferma = 'inviata' | 'fallita' | 'non_inviata' | 'nessun_recapito';
+
+/**
+ * 13/11/2026 (R21-008, correzione) — QUANDO LA CONFERMA PARTE.
+ *
+ * Parte solo se il controllo anti-robot del modulo è passato, come nei contatti e nella
+ * newsletter, e arriva al massimo una volta ogni 10 minuti e tre volte al giorno allo stesso
+ * indirizzo. Il contatore usa un'impronta dell'indirizzo, non l'indirizzo in chiaro. Quando la
+ * conferma non parte la segnalazione resta registrata, la risposta dice `non_inviata` e il modulo
+ * mostra il numero della segnalazione.
+ */
+const PAUSA_FRA_CONFERME_MS = 10 * 60_000;
+const CONFERME_AL_GIORNO = 3;
+
+async function motivoPerNonConfermare(
+  email: string,
+  gettone: string | undefined,
+  ip: string,
+): Promise<'anti_robot' | 'pausa' | null> {
+  const antiRobot = await verifyTurnstileToken(gettone, ip);
+  if (!antiRobot.ok) return 'anti_robot';
+  const impronta = createHash('sha256').update(`segnalazioni:${email.trim().toLowerCase()}`).digest('hex');
+  const pausa = await rateLimitAsync({ key: `segnalazioni-conferma:${impronta}`, max: 1, windowMs: PAUSA_FRA_CONFERME_MS });
+  if (!pausa.allowed) return 'pausa';
+  const giorno = await rateLimitAsync({
+    key: `segnalazioni-conferma-giorno:${impronta}`,
+    max: CONFERME_AL_GIORNO,
+    windowMs: 24 * 60 * 60_000,
+  });
+  return giorno.allowed ? null : 'pausa';
+}
 
 async function mandaConferma(
   a: string,
@@ -116,6 +150,7 @@ async function mandaConferma(
     `Ricevuta il: ${quando}`,
   ];
   const chiusura = 'La esaminiamo e ti scriviamo a questo indirizzo la decisione, con la motivazione.';
+  const seNonSeiTu = 'Se non hai fatto tu questa segnalazione, ignora questa email.';
   try {
     const r = await sendEmail({
       to: a,
@@ -123,8 +158,9 @@ async function mandaConferma(
       html:
         '<p>Abbiamo ricevuto la tua segnalazione.</p>' +
         `<p>${righe.map(escapeHtml).join('<br>')}</p>` +
-        `<p>${escapeHtml(chiusura)}</p>`,
-      text: `Abbiamo ricevuto la tua segnalazione.\n\n${righe.join('\n')}\n\n${chiusura}`,
+        `<p>${escapeHtml(chiusura)}</p>` +
+        `<p>${escapeHtml(seNonSeiTu)}</p>`,
+      text: `Abbiamo ricevuto la tua segnalazione.\n\n${righe.join('\n')}\n\n${chiusura}\n\n${seNonSeiTu}`,
       tipo: 'transazionale',
     });
     if (r.ok) return 'inviata';
@@ -144,11 +180,11 @@ async function mandaConferma(
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const ip = getClientIp(req);
   {
     // Il canale deve restare aperto a chi non ha un account, quindi il freno
     // e' sull'indirizzo di rete: dieci segnalazioni all'ora bastano a chiunque
     // in buona fede e fermano chi vuole intasarlo.
-    const ip = getClientIp(req);
     const rl = await rateLimitAsync({ key: `segnalazioni:${ip}`, max: 10, windowMs: 60 * 60_000 });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
   }
@@ -261,14 +297,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       logger.warn('[segnalazioni] avviso agli amministratori non partito', { e });
     }
 
-    const conferma: Conferma = corpo.emailContatto
-      ? await mandaConferma(corpo.emailContatto, {
+    let conferma: Conferma = 'nessun_recapito';
+    if (corpo.emailContatto) {
+      const nonParte = await motivoPerNonConfermare(corpo.emailContatto, corpo.captchaToken, ip);
+      if (nonParte) {
+        conferma = 'non_inviata';
+        logger.info('[segnalazioni] conferma di ricezione non inviata', {
+          context: 'segnalazioni',
+          segnalazione: data.id,
+          motivo: nonParte,
+        });
+      } else {
+        conferma = await mandaConferma(corpo.emailContatto, {
           id: data.id,
           tipo: corpo.tipo,
           motivo: corpo.motivo,
           quando: data.created_at ? new Date(data.created_at) : new Date(),
-        })
-      : 'nessun_recapito';
+        });
+      }
+    }
 
     return NextResponse.json({ ok: true, id: data.id, conferma }, { status: 201 });
   }
