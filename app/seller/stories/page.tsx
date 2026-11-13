@@ -304,7 +304,7 @@ export default function SellerStoriesPage() {
                 )}
               </div>
               <Textarea
-                label="Caption (1 frase)"
+                label="Scritta sotto la foto (una frase)"
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 maxLength={140}
@@ -313,10 +313,12 @@ export default function SellerStoriesPage() {
                 className="bg-cream-50 resize-none"
               />
               <Input
-                label="Link prodotto/categoria (facoltativo)"
+                // R16-007 — l'esempio è un link che la regola del salvataggio accetta (R16-011).
+                label="Pagina del sito (facoltativo)"
+                hint="Il bottone «Scopri di più» porta a una pagina di MyCity: copia il suo indirizzo dal primo «/» dopo il nome del sito, per esempio /promozioni."
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="/category/alimentari"
+                placeholder="/promozioni"
                 className="bg-cream-50"
               />
           </div>
