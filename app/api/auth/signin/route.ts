@@ -28,12 +28,25 @@ function rispostaEmailDaConfermare() {
   );
 }
 
+/**
+ * 13/11/2026 (R21-018) — L'ATTESA SI DICE IN MINUTI, NON «QUALCHE MINUTO».
+ *
+ * Il freno sa l'attesa al secondo (`retryAfterSec`), ma la frase era scritta
+ * fissa: «Riprova tra qualche minuto». Chi riprovava dopo un minuto trovava lo
+ * stesso messaggio senza capire perché. Adesso la frase dice i minuti,
+ * arrotondati per eccesso (261 secondi sono «5 minuti»), su tutti e tre i rami.
+ */
+function riprovaFra(secondi: number): string {
+  const minuti = Math.max(1, Math.ceil((Number.isFinite(secondi) ? secondi : 60) / 60));
+  return `Riprova fra ${minuti} ${minuti === 1 ? 'minuto' : 'minuti'}.`;
+}
+
 export async function POST(request: Request) {
   // Rate limit per IP: 10 tentativi / 5 min (anti brute-force)
   const ip = getClientIp(request);
   const rl = await rateLimitAsync({ key: `signin:${ip}`, max: 10, windowMs: 5 * 60_000 });
   if (!rl.allowed) {
-    return ApiErrors.rateLimited(rl.retryAfterSec, 'Troppi tentativi di accesso. Riprova tra qualche minuto.');
+    return ApiErrors.rateLimited(rl.retryAfterSec, `Troppi tentativi di accesso. ${riprovaFra(rl.retryAfterSec)}`);
   }
 
   let body: { email?: unknown; password?: unknown; captchaToken?: unknown };
@@ -60,7 +73,7 @@ export async function POST(request: Request) {
   // molti account da una rete, e un account da molte reti.
   const rlEmail = await rateLimitAsync({ key: `signin-email:${email}`, max: 10, windowMs: 5 * 60_000 });
   if (!rlEmail.allowed) {
-    return ApiErrors.rateLimited(rlEmail.retryAfterSec, 'Troppi tentativi su questo account. Riprova tra qualche minuto.');
+    return ApiErrors.rateLimited(rlEmail.retryAfterSec, `Troppi tentativi su questo account. ${riprovaFra(rlEmail.retryAfterSec)}`);
   }
 
   const cap = await verifyTurnstileToken(captchaToken, ip);
@@ -84,7 +97,7 @@ export async function POST(request: Request) {
       if (eEmailNonConfermata(error)) return rispostaEmailDaConfermare();
       const esito = esitoErroreDiAccesso(error);
       if (esito === 'troppi_tentativi') {
-        return ApiErrors.rateLimited(60, 'Troppi tentativi di accesso. Riprova tra qualche minuto.');
+        return ApiErrors.rateLimited(60, `Troppi tentativi di accesso. ${riprovaFra(60)}`);
       }
       if (esito === 'servizio_giu') {
         return ApiErrors.unavailable("Il servizio di accesso non risponde in questo momento. Riprova fra poco: la password non c'entra.");

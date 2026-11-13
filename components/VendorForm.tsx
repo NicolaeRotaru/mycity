@@ -70,6 +70,8 @@ interface Props {
   mode?: VendorFormMode;
 }
 
+type SocialKey = keyof NonNullable<StoreCustomization['socials']>;
+
 const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
@@ -122,6 +124,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
   const [custom, setCustom] = useState<StoreCustomization>(defaultValues?.storeCustomization ?? {});
   const [customError, setCustomError] = useState<string | null>(null);
+  // R21-004 — Cosa non va in ogni campo social: si dice sotto il campo, non solo in fondo.
+  const [erroriSocial, setErroriSocial] = useState<Partial<Record<SocialKey, string>>>({});
 
   const storeName = watch('storeName');
 
@@ -209,11 +213,19 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
         const campo = problema ? campoDellErrore(problema.path) : null;
         // Il messaggio dice quale campo: prima arrivava «Handle non valido» e basta.
         setCustomError(`${campo ? `${campo}: ` : ''}${problema?.message ?? 'Personalizzazione non valida'}`);
+        const perCampo: Partial<Record<SocialKey, string>> = {};
+        for (const i of parsed.error.issues) {
+          if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !perCampo[i.path[1] as SocialKey]) {
+            perCampo[i.path[1] as SocialKey] = i.message;
+          }
+        }
+        setErroriSocial(perCampo);
         return;
       }
       customData = parsed.data;
     }
     setCustomError(null);
+    setErroriSocial({});
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
@@ -358,8 +370,13 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             title="Social e contatti"
             description="Instagram, Facebook, TikTok, WhatsApp, sito"
             icon={<Share2 size={18} />}
+            forzaApertura={Object.keys(erroriSocial).length > 0}
           >
-            <SocialLinksFields value={custom.socials} onChange={(next) => setCustom({ ...custom, socials: next })} />
+            <SocialLinksFields
+              value={custom.socials}
+              errori={erroriSocial}
+              onChange={(next) => { setErroriSocial({}); setCustom({ ...custom, socials: next }); }}
+            />
           </CustomizationSection>
 
           <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>

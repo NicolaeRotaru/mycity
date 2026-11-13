@@ -5,6 +5,7 @@ import {
   COLONNE_NEGOZIO_IN_VETRINA,
   type LettoreVista,
 } from '@/lib/queries/seller-public-profiles';
+import { hasConsent } from '@/lib/consent';
 
 /**
  * LE FASCE DI PRODOTTI: tendenze, simili, sponsorizzati, suggerimenti nel
@@ -299,11 +300,19 @@ export type VistoDiRecente = {
   product: { id: string; name: string; price: number; images: string[] | null; profiles: NegozioInFascia | null };
 };
 
-/** Gli ultimi prodotti visti da chi ha l'account, solo di negozi approvati. */
+/**
+ * Gli ultimi prodotti visti da chi ha l'account, solo di negozi approvati.
+ *
+ * 13/11/2026 (R21-012) — Solo col consenso ai cookie statistici ATTIVO in questo browser: gli
+ * «Ultimi visti» si scrivono solo con quel consenso, e prima si rileggevano anche quando non
+ * c'era più (scaduto dopo 180 giorni, o mai dato su questo apparecchio). Senza consenso non si
+ * chiede niente al database. Il consenso vive nel browser: dal server nessuno chiama questa lettura.
+ */
 export async function leggiVistiDiRecente(
   supa: LettoreVista,
   { userId, excludeId }: { userId: string; excludeId?: string },
 ): Promise<VistoDiRecente[]> {
+  if (typeof window !== 'undefined' && !hasConsent('analytics')) return [];
   const { data } = await supa
     .from('recently_viewed')
     .select(`
