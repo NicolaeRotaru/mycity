@@ -118,6 +118,9 @@ export default function PrivacyPage() {
               non compare nell'informativa e' un trattamento senza informativa. */}
           <li><strong>Iscrizione alle notifiche push:</strong> indirizzo del servizio push del browser (endpoint di Apple, Google o Mozilla), le due chiavi di cifratura del dispositivo e la stringa del programma di navigazione (user-agent) — raccolti solo se attivi le notifiche, e cancellati quando le disattivi o quando il servizio push ci dice che quel dispositivo non esiste più.</li>
           <li><strong>Dati di navigazione:</strong> pagine visitate, click, tempo di permanenza (se attivi i cookie analytics).</li>
+          {/* 13/11/2026 (R21-007) — Le segnalazioni non comparivano: né come dato raccolto né come
+              finalità. Chi segnala può lasciare email e testo anche senza account. */}
+          <li><strong>Segnalazioni di contenuti illeciti:</strong> il motivo, il testo che scrivi e, se la lasci, la tua email, per scriverti della segnalazione e del suo esito; se hai fatto l&apos;accesso, anche il collegamento al tuo account.</li>
         </ul>
       </LegalSection>
 
@@ -198,6 +201,10 @@ export default function PrivacyPage() {
               {/* 5/11/2026 — I messaggi del modulo Contatti non avevano una riga: i 24 mesi
                   comparivano solo dentro la frase sull'IBAN. Il numero è quello della potatura. */}
               <tr><td className="border px-3 py-2">Assistenza clienti (messaggi dal modulo Contatti)</td><td className="border px-3 py-2">Legittimo interesse a rispondere e a tenere traccia delle richieste (art. 6.1.f)</td><td className="border px-3 py-2">{MESI_DEI_MESSAGGI_DEI_CONTATTI} mesi</td></tr>
+              {/* 13/11/2026 (R21-007) — L'email e il testo di chi segnala restavano per sempre, e qui
+                  non c'era la riga. I mesi sono quelli della potatura notturna (lib/privacy/potature-ritenzione.ts):
+                  la prova riparazione-r21-segnalazioni-email fa girare la potatura e pretende lo stesso numero. */}
+              <tr><td className="border px-3 py-2">Segnalazioni di contenuti illeciti (email di contatto e testo della segnalazione)</td><td className="border px-3 py-2">Obbligo di legge: ricevere le segnalazioni e comunicarne l&apos;esito (Reg. UE 2022/2065 sui servizi digitali, artt. 16-17; art. 6.1.c GDPR)</td><td className="border px-3 py-2">12 mesi dalla decisione sulla segnalazione: dopo, email e testo vengono cancellati</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>

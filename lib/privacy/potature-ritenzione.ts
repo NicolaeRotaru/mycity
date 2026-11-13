@@ -46,6 +46,13 @@ type Risposta = { error: { message: string } | null };
  */
 export const MESI_DEI_MESSAGGI_DEI_CONTATTI = 24;
 
+/**
+ * 13/11/2026 (R21-007) — Quanti mesi restano email e testo di una segnalazione dopo la decisione.
+ * L'informativa (app/privacy/page.tsx) scrive lo stesso numero: la prova
+ * `riparazione-r21-segnalazioni-email` fa girare la potatura e pretende che coincidano.
+ */
+const MESI_DELLE_SEGNALAZIONI_DECISE = 12;
+
 /** La catena di filtri che le potature usano davvero, e nient'altro. */
 type Filtrabile = PromiseLike<Risposta> & {
   eq(colonna: string, valore: unknown): Filtrabile;
@@ -344,6 +351,19 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         .from('contact_messages')
         .delete()
         .lt('created_at', mesi(MESI_DEI_MESSAGGI_DEI_CONTATTI))),
+    },
+    // 13/11/2026 (R21-007) — CHI SEGNALAVA UN CONTENUTO LASCIAVA LA SUA EMAIL LI' PER SEMPRE.
+    // Email di contatto e testo libero di una segnalazione servono a esaminarla e a dire
+    // com'e' finita. Passati i mesi dichiarati dalla decisione si tolgono; la riga resta, senza
+    // dati personali, come traccia di cosa e' stato segnalato e deciso. Il filtro sui campi
+    // ancora pieni rende la potatura ripetibile senza riscrivere ogni notte le righe gia' pulite.
+    {
+      cosa: 'segnalazioni',
+      fai: (admin) => esigi(admin
+        .from('segnalazioni')
+        .update({ email_contatto: null, dettaglio: null })
+        .lt('deciso_at', mesi(MESI_DELLE_SEGNALAZIONI_DECISE))
+        .or('email_contatto.not.is.null,dettaglio.not.is.null')),
     },
     // 6/9/2026 — L'ISCRIZIONE CHE NESSUNO HA MAI CONFERMATO RESTAVA QUI PER
     // SEMPRE. Il modulo della newsletter e' pubblico: chiunque puo' scriverci
