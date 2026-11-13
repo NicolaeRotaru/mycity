@@ -1,0 +1,265 @@
+{
+  "sessione": "R13",
+  "aggiornato": "2026-11-13 06:45",
+  "finita": true,
+  "testa": "6f56a10df83465ec90b89f63cbf56b71c8847b6a",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "6f56a10df83465ec90b89f63cbf56b71c8847b6a",
+    "nota": "Lanciato con NODE_OPTIONS=--max-old-space-size=6144, perché senza tsc esaurisce la memoria anche sulla base. typecheck 0 errori, lint 0, vitest 1420 file e 9666 prove verdi. Le prove SQL (run.sh) sono verdi sulla base; la 371 è provata dalla sua prova SQL."
+  },
+  "voci": [
+    {
+      "id": "R13-001",
+      "chiave": "qa-flussi|la cassa dice «troppo lontano» a chi abita in via roma o in via cavour, in pieno centro, e l'ordine non parte",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-002",
+      "chiave": "api-backend|la funzione che muore fra l'ordine e gli articoli lascia la merce riservata senza nessuno che la liberi",
+      "esito": "parziale",
+      "commit": "2dfe2d7e193ef2b20e17e1543df6c8f372b49046",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "migrations/371_la_merce_della_cassa_ha_una_riserva_scritta.sql",
+        "tests/unit/riparazione-r13-riserva-della-cassa.test.ts",
+        "tests/sql/rls/riparazione-r13-riserva-della-cassa.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-riserva-della-cassa.test.ts",
+        "tests/sql/rls/riparazione-r13-riserva-della-cassa.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-riserva-della-cassa.test.ts && bash tests/sql/harness/apply.sh r13_prova && psql -q -X -d r13_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r13-riserva-della-cassa.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rotta: regge (uscita 0). Migrazione: rosso_strutturale (uscita 3), perché la prova SQL deve per forza nominare gli oggetti nuovi (interno.riserve_della_cassa, chiudi_/libera_riserve_della_cassa). Ho rimesso il difetto a mano sulla 371 in 7 varianti, tutte rosse sul comportamento (P0001). S1 è il difetto com'è scritto nella voce: reserve_stock non scrive la riga, 14 controlli rossi. Le altre: niente soglia di 15 minuti, niente regola dell'ordine ripreso da un secondo invio, niente credito, storno che rimette due volte, annullo che non guarda la riserva, filtro dei prodotti ignorato. Con la 371 corretta: 18 controlli verdi.",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2dfe2d7e^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r13-riserva-della-cassa.test.ts --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2dfe2d7e^ --file migrations/371_la_merce_della_cassa_ha_una_riserva_scritta.sql --prove tests/sql/rls/riparazione-r13-riserva-della-cassa.test.sql --sql r13_rimessa --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 371. Crea la tabella interno.riserve_della_cassa in uno schema che PostgREST non espone, quindi senza toccare lib/database.types.ts e senza dati della persona: l'ordine previsto, la merce, il riferimento della spesa di credito. reserve_stock e restore_stock prendono un argomento facoltativo (DROP più CREATE con DEFAULT NULL; chi le chiama come prima non vede differenze). Con quell'argomento la prima scrive la riga nella stessa transazione in cui scala la merce; la seconda chiude la riga e rimette la merce una volta sola. chiudi_riserve_della_cassa chiude come «ordine» solo se l'ordine ha gli articoli. libera_riserve_della_cassa(p_prodotti, p_minuti) lavora sulle righe aperte da più di 15 minuti (soglia minima fissa): ordine assente, o ripreso da un altro invio che ha chiuso la sua riga → rimette merce e credito (chi ha speso e quanto lo dice wallet_ledger, stessa coppia motivo/riferimento degli storni, quindi nessun doppio credito); ordine con articoli → chiude; ordine senza articoli → rimette la merce, il credito resta sull'ordine e torna col suo annullo; due righe aperte sullo stesso ordine → non tocca niente e le conta come incerte. restore_stock_for_order: l'annullo di un ordine senza articoli rimette la merce della sua riserva, cioè il giro degli ordini fermi che già esiste e l'annullo del cliente o dell'amministratore. Rotta: l'id dell'ordine si decide sempre prima (anche senza chiave); il riferimento del credito nasce prima della riserva; ogni storno (annullo dei negozi precedenti, gemello 23505, ordine non nato) chiude la sua riga; le righe si chiudono a ciclo finito; prima di leggere i prodotti chiama libera_riserve_della_cassa coi prodotti del carrello. Se il database risponde PGRST202 (371 non applicata) ripiega sulle chiamate di prima. Le 46 prove esistenti che importano la rotta sono verdi senza toccarle. Verdi anche le 57 prove che leggono le migrazioni, tutta la suite SQL, migrazione-su-database-pieno.sh, la 371 applicata due volte, eslint e tsc. Un solo commit, emendato prima della consegna (solo commenti resi onesti sul giro a orario che manca); le prove rimesse sono state rilanciate sul commit emendato.",
+      "cosa_resta": "Manca il giro a orario che chiami libera_riserve_della_cassa per tutti i prodotti. Senza di lui, una riserva rimasta aperta dopo la morte prima dell'ordine, su prodotti che nessuna cassa in contanti ritocca, resta presa. Il caso dell'ordine senza articoli lo chiude già l'annullo (giro degli ordini fermi o annullo a mano). Il file è altrui: vedi serve_file_altrui. La 371 va applicata da Nicola: fino ad allora il codice fa quello di prima.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/expire-stale-orders/route.ts",
+          "modifica": "Subito dopo il blocco try/catch che assegna `admin = getAdminSupabase()` e prima di `const cutoff = new Date().toISOString();`, aggiungere:\n\n  // R13-002 — Le riserve della cassa in contanti rimaste aperte da un invio morto (migrazione 371): dopo 15 minuti si sistemano qui, per tutti i prodotti. Non ferma il giro.\n  try {\n    const { data: riserve, error: errRiserve } = await admin.rpc('libera_riserve_della_cassa', {});\n    if (errRiserve) {\n      if ((errRiserve as { code?: string }).code !== 'PGRST202') logger.error('[cron] expire-stale-orders: riserve della cassa non sistemate', { message: errRiserve.message });\n    } else {\n      const r = (riserve ?? {}) as { liberate?: number; a_meta?: number; incerte?: number; errori?: number };\n      if ((r.liberate ?? 0) + (r.a_meta ?? 0) + (r.incerte ?? 0) + (r.errori ?? 0) > 0) logger.warn('[cron] expire-stale-orders: riserve della cassa sistemate', r);\n    }\n  } catch (e) {\n    logger.error('[cron] expire-stale-orders: riserve della cassa non sistemate', { message: e instanceof Error ? e.message : String(e) });\n  }\n\nSe si preferisce un lavoro a parte: una rotta nuova app/api/cron/riserve-della-cassa/route.ts (withCronAuth e fermo dei lavori come gli altri) con la stessa chiamata, e in vercel.json → crons `{ \"path\": \"/api/cron/riserve-della-cassa\", \"schedule\": \"*/15 * * * *\" }`. Se incerte o errori sono più di zero, la merce resta scalata finché qualcuno non guarda: conviene un avviso agli amministratori con la memoria di operational_alert_log, come fa expire-checkouts."
+        }
+      ],
+      "prova": "Unit (9 casi), attraverso la rotta vera con il database finto che fa quello che fa la 371. Funzione morta dopo l'ordine: resta la riga aperta con l'ordine, la merce e il riferimento della spesa di credito. Morta prima dell'ordine: la riga ha l'ordine previsto, che non c'è. Senza chiave: l'id è deciso prima. La cassa dopo con gli stessi prodotti chiama la pulizia prima di leggere i prodotti. Ordine riuscito su due negozi: le due righe sono «ordine». Ognuno dei tre storni chiude la sua riga. Prima della 371 l'ordine nasce come prima. Togliendo a mano una per volta le sei modifiche della rotta, ognuna fa cadere una prova. SQL: 18 controlli, dalla riga atomica con la merce fino ai permessi.",
+      "domanda": "",
+      "nota": "Prove: unit verde (9/9) e SQL verde (18/18) sul commit; rimessa della rotta = 0, della migrazione = 3, con il difetto rimesso a mano rosso sul comportamento. Esito parziale come chiesto dal capo: il giro a orario sta in un file non di R13.",
+      "verificato_da": "collaudo (parziale): Rilanciato tutto sul commit 2dfe2d7e: unit 9/9, SQL 18/18, tutta la suite SQL (60 file), le 47 prove che importano la rotta, le 57 che leggono le migrazioni, tsc, rigenerazione di database.types.ts (identico), la 371 applicata due volte. Prova rimessa: rotta uscita 0, migrazione uscita 3. Sull'uscita 3 ho rimesso il difetto a mano in 5 varianti (reserve_stock senza riga, annullo come nella 160, nessuna regola per l'ordine ripreso, storno senza controllo dello stato, nessun credito restituito): tutte rosse sul comportamento (P0001). Varianti scomode provate in SQL: (1) ordine con articoli, annullato, poi la pulizia: niente merce rimessa due volte; (2) due invii morti sullo stesso ordine, poi l'ordine annullato: 6 pezzi restano presi per sempre. Il resto l'ho controllato leggendo il codice: tutti gli storni della rotta passano da rimettiLaMerce, il credito non torna due volte, l'ordine rimasto a metà lo chiude già il giro expire-stale-orders, e il punto di aggancio di serve_file_altrui esiste davvero (righe 86-90).",
+      "collaudo_difetti": [
+        {
+          "file": "app/api/cron/expire-stale-orders/route.ts:89",
+          "cosa": "Manca il giro a orario che chiami libera_riserve_della_cassa per tutti i prodotti. Il riparatore lo dichiara giusto in serve_file_altrui (file fuori elenco, modifica esatta). Senza il giro, la merce e il credito di un invio morto prima dell'ordine, su prodotti che nessuna cassa in contanti ritocca, restano presi. Finché Nicola non applica la 371, in produzione non cambia niente."
+        },
+        {
+          "file": "migrations/371_la_merce_della_cassa_ha_una_riserva_scritta.sql:256",
+          "cosa": "Due righe aperte sullo stesso ordine contano come «incerte» a ogni giro, e restore_stock_for_order le salta (count = 1), anche quando l'ordine è annullato e la sua merce non serve più a nessuno. Provato: due invii morti, ordine annullato, la scorta resta a 4 su 10. Nessun avviso agli amministratori: la rotta scrive solo un warn nel log. Serve un doppio guasto. Il caso è dichiarato a metà: l'avviso è solo «conviene» dentro serve_file_altrui."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts:303",
+          "cosa": "Difetto estetico: il nuovo blocco R13-002 (righe 318-407) è stato inserito fra il commento «31/10/2026 — IL BROWSER BUTTA LA CHIAVE…» e la sua funzione conLaChiaveLiberata (riga 409). Ora quel commento descrive type MerceDelGruppo."
+        }
+      ]
+    },
+    {
+      "id": "R13-003",
+      "chiave": "pagamenti-stripe|il codice sconto di mycity lo paga il negozio: su 20 euro di pane con 5 euro di sconto incassa 13,50 invece di 18",
+      "esito": "scelta_di_nicola",
+      "domanda": "Chi paga i codici sconto di MyCity: MyCity (il negozio prende sempre il 90% del prezzo pieno, e serve un tetto allo sconto pari a quanto MyCity guadagna su quel carrello) oppure il negozio (e allora va scritto in Termini, Aiuto venditore e pagina Guadagni prima di riaccendere i codici)?",
+      "prova": "Il difetto è ancora nel codice di oggi (a19ff892). Ho chiamato le funzioni vere prezziDelCarrello e computeOrderSplit con vitest da uno script nello scratchpad, fuori dal ramo. Su 2000 centesimi di merce, senza codice: sellerPayoutCents 1800. Con un codice da 500: totalCents 1800, subtotalCents 1500, applicationFeeCents 150, sellerPayoutCents 1350. Sia la carta (lib/stripe/webhook/ordini.ts:311, totalCents: g.totalCents) sia i contanti (app/api/orders/cod/route.ts:1321, grossTotalCents) passano il totale già scontato. Oggi però il difetto non si può incontrare: i codici sono spenti sulle due casse (CODICI_SCONTO_IN_CASSA=false in lib/funzioni-al-lancio.ts:111, letto da cod/route.ts:1068 e da stripe/checkout/route.ts:651) e anche nel database dal 27/10 (carta #214).",
+      "nota": "Chi paga lo sconto non è mai stato deciso. Le proposte «li paga MyCity» ci sono, ma restano raccomandazioni: carta #204 dell'11/10 («lo pagherei noi», archiviata senza questa scelta dentro la #209), ricettario del 24/10, referto del 1/11 e consegne/ad/2026-11-03-lavori-di-nicola.md scelta 1 (in attesa di un «ok consigli» che nessun file registra). La #209 (scelta ⑦) ha solo spento i codici al lancio. Il registro dei fatti non ha nessuna voce su chi paga lo sconto (pricing.commissione dice «10% sul venduto»), e lo stesso codice dice in lib/funzioni-al-lancio.ts:105-110: «Per riaccendere: decidere chi paga lo sconto». Cambiare la base del 10% (o scrivere ai negozi che lo sconto lo pagano loro) sarebbe cambiare una commissione per scelta mia, e il mandato lo vieta. Il database non calcola il netto: la 014 conferma solo che coupons non ha un campo negozio. Quindi niente migrazione 370. Il ramo non è stato toccato.",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "verificato_da": "collaudo (regge): Ho rifatto il conto con prezziDelCarrello e computeOrderSplit veri, in una prova temporanea poi cancellata. Un negozio: 1800 senza codice e 1350 con 500 di sconto. Con due negozi il difetto si divide fra i due ordini. Ho rilanciato in verde le prove che tengono spenti i codici (3 file, 22 prove): le due rotte rispondono 400 a un codice e non lo rivendicano. Ho controllato che computeOrderSplit abbia solo i due chiamanti nominati, che un codice fatto di soli spazi non sconti niente, che lo sconto ritiro sia a 0% e che il credito si scali dopo lo split. Ho cercato una decisione in ad-mycity (registro dei fatti, DECISIONI, carte #204, #209 e #214, lavori-di-nicola del 3/11, referto del 1/11): ci sono solo raccomandazioni. La ⑦ della #209 spegne soltanto i codici, e l'«ok consigli» non è registrato da nessuna parte. Anche la voce stessa dice «Prima serve una decisione di Nicola»."
+    },
+    {
+      "id": "R13-004",
+      "chiave": "privacy-legale|il negozio può togliere il diritto di ripensamento a qualunque prodotto, anche a un maglione, e il sito rifiuta il reso dicendo al cliente che è la legge",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-005",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-006",
+      "chiave": "qa-flussi|la posizione del negozio può finire lontano da piacenza, o restare quella vecchia, e il modulo la salva lo stesso",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-007",
+      "chiave": "qa-flussi|un ordine in contanti già incassato non si rimborsa dall’amministrazione: il sito non apre da solo il reclamo come deciso il 29/10, e il pannello dice di aprirlo a chi non può",
+      "esito": "parziale",
+      "commit": "6f56a10d",
+      "file_toccati": [
+        "lib/ordini/annulla.ts",
+        "app/api/admin/orders/[id]/cancel/route.ts",
+        "app/api/orders/[id]/cancel/route.ts",
+        "app/orders/[id]/dispute/page.tsx",
+        "tests/unit/riparazione-r13-reclamo-dei-contanti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-reclamo-dei-contanti.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-reclamo-dei-contanti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7c203599^ --file lib/ordini/annulla.ts,app/api/admin/orders/[id]/cancel/route.ts,app/api/orders/[id]/cancel/route.ts,app/orders/[id]/dispute/page.tsx --prove tests/unit/riparazione-r13-reclamo-dei-contanti.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuovo apriIlReclamoDeiContanti in lib/ordini/annulla.ts. Apre il reclamo col client di servizio: a nome del cliente, contro il negozio, stato open, refund_cents vuoto, motivo 'other'. La descrizione dice la richiesta di annullo, i contanti incassati, il credito usato e quanto è già stato restituito. Rispetta disputes_one_open_per_order: sul doppione riprende il reclamo già aperto. Sul reclamo nuovo avvisa gli amministratori una volta sola. annullaERimborsa lo chiama sui contanti incassati solo se chi chiama passa reclamoSeIncassati, cosa che fanno le due rotte cancel; il rifiuto del negozio e il «cliente assente» restano come prima. L'esito porta reclamoId. Nella rotta admin ho tolto il rifiuto a parte DELIVERED+cod, che diceva «apri un reclamo» ed era proprio il percorso del caso di Anna. Ora quel caso passa da annullaERimborsa (contantiIncassati copre già DELIVERED) e la risposta è un 409 con il link {reclamoId, link:/admin/disputes}. Il testo non manda più nessuno ad aprire il reclamo; se l'apertura cade, lo dice. Rotta cliente: «abbiamo già aperto un reclamo per restituirti i soldi», col link alla pagina del reclamo. Pagina del reclamo: «L'hai aperto il» diventa «Aperto il». Nessuna migrazione: il client di servizio non passa dalla regola disputes_open_insert della 215, come già /api/disputes. La 372 non è servita. Ho fatto girare anche le 29 prove che importano i file toccati e le 2 che li leggono per nome: tutte verdi, nessuna modificata. eslint: 0 errori. Giro di correzione dal collaudo (commit 6f56a10d, primo commit della voce 7c203599): un ordine in contanti già rimborsato per intero, annullato di nuovo, non apre più un reclamo inutile (motivo GIA_RIMBORSATO, 409 senza effetti nelle due rotte); caso nuovo nella prova (10/10).",
+      "prova": "9 casi sulle rotte vere con il database finto: il reclamo si apre con la cifra e la risposta porta il link; due pressioni danno un solo reclamo; se il cliente l'aveva già aperto si usa il suo; con l'inserimento guasto il messaggio non dice «apri un reclamo»; la rotta del cliente dice che è già aperto; senza la richiesta nessun reclamo; la pagina non dice più «l'hai aperto».",
+      "verificato_da": "collaudo (parziale): Ho rilanciato la prova del riparatore (9/9 verdi) e la prova rimessa con il suo stesso comando: uscita 0, regge; sono verdi anche le 33 prove che importano o leggono per nome i file toccati (283 casi), eslint (0 errori) e tsc (uscita 0). Con una prova temporanea, poi cancellata, ho provato tre varianti: un ordine già rimborsato per intero e premuto di nuovo «Annulla», chi viene avvisato del reclamo nuovo, un ordine consegnato senza incasso confermato. Ho controllato anche lo schema di disputes (027/063), il blocco del bonifico (release-payouts) e la chiusura del reclamo (resolve). Il cuore della voce regge: il reclamo si apre a nome del cliente contro il negozio, un solo reclamo per ordine, link nella risposta, testi corretti nel pannello e nella rotta del cliente, file tutti in elenco, nessuna prova esistente toccata, nessuna migrazione. · Correzione 6f56a10d (guardia per il già rimborsato) fatta da un subagente nuovo; ricontrollo del capo: prova 10/10 e prova rimessa uscita 0 rilanciate sull'albero pulito.",
+      "cosa_resta": "Il reclamo aperto dal sito avvisa solo gli amministratori: a differenza di /api/disputes (R03-013) non manda la campanella al negozio, il cui bonifico per quell'ordine si ferma in silenzio, né la ricevuta al cliente (lib/ordini/annulla.ts, apriIlReclamoDeiContanti). La risposta 409 della rotta del cliente per l'ordine già rimborsato non ha una prova sua."
+    },
+    {
+      "id": "R13-008",
+      "chiave": "accessibilita|nella pagina del reclamo il bottone resta spento senza dire cosa manca",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-009",
+      "chiave": "ai-endpoints|«genera con ai» riscrive la descrizione partendo solo dal nome e la sostituisce a quella del negoziante, senza la regola «non inventare»",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-010",
+      "chiave": "api-backend|la ricerca degli indirizzi chiama il servizio pubblico delle mappe più volte al secondo, senza un freno per tutto il sito",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-011",
+      "chiave": "api-backend|doppio tocco sull annullo con la carta: il secondo dice «rimborso fallito» e manda agli amministratori un falso «carrello da sistemare a mano»",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-012",
+      "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-013",
+      "chiave": "architettura|la frase della zona vive in quattro posti (cassa, spedizioni, rifiuto, tendina della posizione) piu' faq e «vicino a te»: le tiene allineate solo una prova",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-014",
+      "chiave": "architettura|i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-015",
+      "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-016",
+      "chiave": "architettura|sul ramo carta l'annullo non prende il turno prima del rimborso: due annulli da strade diverse possono restituire il credito due volte",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-017",
+      "chiave": "architettura|il segnale «tieni la chiave» ora vuol dire quattro cose diverse, e la regola nel file racconta ancora che vale solo per l invio gemello",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-018",
+      "chiave": "architettura|interfacce zombie: shippingforeuro vale sempre 0 ma riceve 7 ingressi; promessaspedizione ha un argomento morto e campi sempre costanti",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-019",
+      "chiave": "dati-analytics|il cruscotto del negozio segna «0 ordini oggi» finché gli ordini in contanti non sono consegnati",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-020",
+      "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge «nessuna recensione», e le etichette sono in inglese",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-021",
+      "chiave": "deploy-sre|manca il tasto per fermare tutti gli ordini in un colpo: oggi si può solo sospendere il negozio, e il fornaio riceve un avviso brusco",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-022",
+      "chiave": "deploy-sre|la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-023",
+      "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-024",
+      "chiave": "frontend-ux|nella scheda ordine del negozio compaiono «il rider sta gestendo la consegna» su un ordine annullato e «il rider incassa» su uno già consegnato",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    },
+    {
+      "id": "R13-025",
+      "chiave": "frontend-ux|tornando dall'accesso con un indirizzo già scritto, la cassa lo nasconde e non segna nessun indirizzo come scelto",
+      "esito": "non_fatto",
+      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Se wallet_debit toglie il credito ma la risposta si perde, l'ordine in contanti nasce senza sconto e il credito è perso",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts:1418",
+      "descrizione": "Nel ramo `if (wErr)` dopo wallet_debit l'errore vale come «nessun credito applicato» (walletAppliedCents = 0). Se il database ha già scritto la spesa e si è persa solo la risposta, il cliente paga il totale pieno alla porta e il credito resta tolto (riga order_cod nel diario). A ordine finito la riserva si chiude come «ordine», quindi nemmeno la pulizia della 371 lo restituisce. Cura possibile: rileggere wallet_ledger (reason 'order_cod', ref = walletRef) prima di decidere."
+    },
+    {
+      "titolo": "Senza la chiave del browser, un ordine salvato con la risposta persa riceve storno di merce e credito e resta in piedi senza articoli",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts:1522",
+      "descrizione": "La rilettura dopo un errore di inserimento (`if (orderErr && idDiQuestoInvio)`) vale solo con la chiave. Per le app vecchie senza chiave, se la riga si è salvata e la risposta si è persa, la rotta rimette merce e credito come se l'ordine non fosse nato. L'ordine resta senza articoli, e il suo annullo restituisce il credito una seconda volta (wallet_applied_cents). Adesso l'id dell'ordine si decide sempre prima (R13-002), quindi la stessa rilettura si può estendere anche al caso senza chiave."
+    }
+  ],
+  "domande_per_nicola": [
+    "R13-003 · Chi paga i codici sconto di MyCity: MyCity (il negozio prende sempre il 90% del prezzo pieno, con un tetto allo sconto pari a quanto MyCity guadagna sul carrello) oppure il negozio (e allora lo scriviamo in Termini, Aiuto venditore e Guadagni prima di riaccendere i codici)?",
+    "La 371 mette la tabella delle riserve in uno schema nuovo, `interno`, che PostgREST non espone: la toccano solo le funzioni del database, nessun client la vede, e non entra nei tipi generati. Va bene come casa per le tabelle che usa solo il database?",
+    "Il giro che sistema per tutti le riserve rimaste aperte: lo agganciamo al giro degli ordini fermi (ogni 30 minuti, nessun file nuovo) o a un lavoro suo ogni 15 minuti (rotta nuova più vercel.json)?",
+    "Applicare la 371 (sta a te deciderlo). Prima di applicarla, il codice nuovo riserva la merce come prima, senza riga.",
+    "Il reclamo che il sito apre da solo avvisa gli amministratori. Al negozio non arriva la campanella che /api/disputes manda per i reclami aperti dal cliente (dove si dice che il bonifico di quell'ordine resta fermo). La aggiungiamo anche qui?",
+    "Il reclamo aperto dal sito ha il motivo 'other', che nel pannello Reclami si legge «Altro». Vuoi un motivo suo (per esempio «Annullo dopo l'incasso in contanti»)? Servirebbe toccare app/admin/disputes/page.tsx, che non è in questo lotto."
+  ],
+  "conto": {
+    "agenti": 7,
+    "nota": "Proposta A (12) ridotta dal tetto di costo di 35 $: 3 riparatori + 3 collaudatori + 1 giro di correzione su R13-007. Lotti 4-6 non lanciati (opzione b della regista)."
+  }
+}
