@@ -84,8 +84,6 @@ describe('il modulo dei contatti', () => {
   it('scheda 2017 — col database che risponde con errore si prova l inoltro per email', async () => {
     stato.erroreInsert = { message: 'DB giù' };
     process.env.SUPPORT_EMAIL = 'supporto@mycity-marketplace.com';
-    // 13/11/2026 (R24-010) — la regola della porta vuole anche la posta accesa (valore finto).
-    process.env.RESEND_API_KEY = 're_di_prova';
     const res = await scrivi();
     expect(res.status).toBe(200);
     expect(stato.email).toHaveLength(1);
@@ -95,8 +93,6 @@ describe('il modulo dei contatti', () => {
     stato.senzaChiave = true;
     stato.utente = { id: 'utente-42' };
     process.env.SUPPORT_EMAIL = 'supporto@mycity-marketplace.com';
-    // 13/11/2026 (R24-010) — la regola della porta vuole anche la posta accesa (valore finto).
-    process.env.RESEND_API_KEY = 're_di_prova';
     expect((await scrivi()).status).toBe(200);
     expect(String(stato.email[0].html)).toContain('utente-42');
   });

@@ -13,7 +13,7 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 // regola sono tre regole, e il giorno in cui va aggiunto un carattere da
 // filtrare due restano indietro senza dirlo a nessuno.
 import { escapeHtml } from '@/lib/html-escape';
-import { ilModuloArrivaSenzaDatabase, recapitoPrivacy } from '@/lib/legal/titolare';
+import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 // 13/11/2026 (R24-007) — Il traduttore italiano di Zod acceso anche qui, sul server: senza,
 // un campo mancante o del tipo sbagliato tornava al browser in inglese («Required»).
@@ -170,12 +170,7 @@ async function inoltraSenzaDatabase(p: Messaggio, utenteId: string | null): Prom
   const supporto = process.env.SUPPORT_EMAIL?.trim();
   // 5/11/2026 — Una traccia di chi ha scritto, anche quando il database non c'è.
   logger.warn('[contact] messaggio da inoltrare senza database', { utente: utenteId, oggetto: p.subject });
-  // 13/11/2026 (R24-010) — La stessa regola della porta «Cancella account» e
-  // dell'informativa (`ilModuloArrivaSenzaDatabase`): una casella del supporto fuori
-  // dal dominio dei contatti (support@mycity.it, quella dell'esempio) non la legge
-  // nessuno. Prima qui si inoltrava a qualunque indirizzo e si rispondeva «ok»,
-  // mentre la porta diceva «nessun canale»: due giudizi sulla stessa casella.
-  if (!supporto || !ilModuloArrivaSenzaDatabase()) return false;
+  if (!supporto) return false;
   try {
     const esito = await sendEmail({
       to: supporto,
