@@ -70,6 +70,15 @@ export const runtime = 'nodejs';
  * del negozio, e decide `ancoraNeiTempi` uno per uno: le tre ore restano il minimo per la veloce,
  * per gli ordini senza fascia e per i negozi senza orari.
  */
+const COLONNE_DEI_CANDIDATI =
+  'id, user_id, seller_id, payment_method, payment_status, stripe_payment_intent, stripe_session_id, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )';
+/** Righe per lettura. */
+const PAGINA = 100;
+/** Ordini fermi letti al massimo in un giro, rinviati compresi. */
+const TETTO_DELLA_LETTURA = 2_000;
+/** Ordini scaduti presi in carico al massimo in un giro (rimborsi, email): il resto al giro dopo. */
+const TETTO_DEGLI_ANNULLI = 100;
+
 /** Gli orari del negozio letti insieme all'ordine (PostgREST: un oggetto, o una lista di uno). */
 function orariDelNegozio(riga: unknown): unknown {
   const negozio = (riga as { seller?: unknown } | null)?.seller;
@@ -89,7 +98,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   }
   const cutoff = new Date().toISOString();
 
-  const { data: candidates, error } = await admin
+  const { data: primaPagina, error } = await admin
     .from('orders')
     // 27/8/2026 (R121) — `coupon_code` non veniva nemmeno letto, quindi il
     // codice sconto di un ordine che il negozio non ha mai accettato restava
@@ -102,7 +111,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // 5/11/2026 — `stripe_session_id`: il carrello, per non restituire un codice sconto che un
     // altro ordine dello stesso carrello tiene ancora. E i più vecchi prima: senza un ordine, con
     // più di cento ordini fermi, il database poteva rendere sempre gli stessi cento.
-    .select('id, user_id, seller_id, payment_method, payment_status, stripe_payment_intent, stripe_session_id, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
+    .select(COLONNE_DEI_CANDIDATI)
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .order('created_at', { ascending: true })
@@ -111,6 +120,43 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   if (error) {
     logger.error('[cron] expire-stale-orders: select fallita', error);
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  /**
+   * R14-010 — OLTRE I PRIMI CENTO.
+   *
+   * I più vecchi prima non bastava: gli ordini della sera per domani restano nuovi, in regola, per
+   * ore, e sono proprio i più vecchi. Con cento di loro in coda la lettura si fermava lì, e la
+   * veloce delle 6:00 scaduta alle 9:00 restava fuori dal giro, ogni giro. Adesso, se la pagina è
+   * piena, si legge la successiva (dalla nascita dell'ultimo letto in avanti, i doppioni si
+   * scartano), fino a un tetto di letture; gli annulli veri restano al massimo cento per giro,
+   * come prima, e gli altri scaduti li prende il giro dopo.
+   */
+  const candidates = [...(primaPagina ?? [])];
+  let piena = candidates.length >= PAGINA;
+  while (piena && candidates.length < TETTO_DELLA_LETTURA) {
+    const ultimo = candidates[candidates.length - 1]?.created_at;
+    if (!ultimo) break;
+    // Si riparte dalla nascita dell'ultimo letto, compresa: quelli nati nello stesso istante e già
+    // letti tornano (e si scartano), quindi se ne chiedono tanti in più quanti sono.
+    const visti = new Set(candidates.map((o) => o.id));
+    const quanti = PAGINA + candidates.filter((o) => o.created_at === ultimo).length;
+    const { data: dopo, error: errDopo } = await admin
+      .from('orders')
+      .select(COLONNE_DEI_CANDIDATI)
+      .eq('delivery_status', 'NEW')
+      .gte('created_at', ultimo)
+      .lt('created_at', cutoff)
+      .order('created_at', { ascending: true })
+      .limit(quanti);
+    if (errDopo) {
+      // Quello già letto si lavora lo stesso; il resto lo riprende il giro dopo.
+      logger.error('[cron] expire-stale-orders: pagina successiva non letta', { message: errDopo.message });
+      break;
+    }
+    const nuovi = (dopo ?? []).filter((o) => !visti.has(o.id));
+    candidates.push(...nuovi);
+    piena = (dopo ?? []).length >= quanti && nuovi.length > 0;
   }
 
   let canceled = 0;
@@ -124,7 +170,9 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   /** Annullati, ma la merce o il credito non sono tornati: lo sanno gli amministratori. */
   let ripristiniFalliti = 0;
 
-  for (const o of candidates ?? []) {
+  /** Gli ordini presi in carico per annullarli (i rinviati non contano): al massimo cento per giro. */
+  let presiInCarico = 0;
+  for (const o of candidates) {
     // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
     //
     // Tre ore dalla nascita è la regola giusta per una consegna immediata. Per
@@ -138,6 +186,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       rinviati++;
       continue;
     }
+    if (presiInCarico >= TETTO_DEGLI_ANNULLI) break;
+    presiInCarico++;
 
     // 16/10/2026 — Qui contava solo «PAID». Un rimborso parziale fatto dal
     // cruscotto Stripe porta l'ordine a «PARTIALLY_REFUNDED»: il giro lo
