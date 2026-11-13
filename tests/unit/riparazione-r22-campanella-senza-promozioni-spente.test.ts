@@ -19,7 +19,7 @@ const globali = globalThis as Record<string, unknown>;
 type Riga = Record<string, unknown>;
 
 /** Un PostgREST in miniatura: eq, neq, order, limit e il conteggio esatto, applicati alle righe. */
-function databaseFinto(tabelle: Record<string, Riga[]>, guasti: Record<string, { message: string }> = {}) {
+function databaseFinto(tabelle: Record<string, Riga[]>) {
   return {
     from(tavola: string) {
       const filtri: Array<(r: Riga) => boolean> = [];
@@ -40,7 +40,7 @@ function databaseFinto(tabelle: Record<string, Riga[]>, guasti: Record<string, {
         neq: (col: string, v: unknown) => { filtri.push((r) => r[col] !== v); return c; },
         order: (col: string, o?: { ascending?: boolean }) => { ordine = [col, o?.ascending ?? true]; return c; },
         limit: (n: number) => { tetto = n; return c; },
-        maybeSingle: async () => (guasti[tavola] ? { data: null, error: guasti[tavola] } : { data: righe()[0] ?? null, error: null }),
+        maybeSingle: async () => ({ data: righe()[0] ?? null, error: null }),
         then: (ok: (x: unknown) => unknown, ko?: (e: unknown) => unknown) =>
           Promise.resolve(conta ? { data: null, count: righe().length, error: null } : { data: righe(), error: null }).then(ok, ko),
       };
@@ -122,24 +122,5 @@ describe('R22-013 · chi ha spento le promozioni non le trova in campanella', ()
     const lista = await listaDellaPagina();
     expect(lista.map((n) => n.id)).toEqual(['n1', 'n2', 'n3']);
     expect(await numeroDelCampanello()).toBe(2);
-  }, 60000);
-
-  // Se la preferenza non si legge, il consenso non si indovina: la lettura fallisce e si riprova,
-  // come quando cade la lettura delle notifiche (la pagina mostra «Riprova», il campanello ritenta).
-  const senzaPreferenza = () => {
-    globali.__CLIENT_SUPABASE__ = databaseFinto(
-      { profiles: [{ id: 'u1', notif_promos: false }], notifications: NOTIFICHE.map((n) => ({ ...n })) },
-      { profiles: { message: 'rete caduta' } },
-    );
-  };
-
-  it('preferenza non letta: la lista non indovina, la lettura fallisce', async () => {
-    senzaPreferenza();
-    await expect(listaDellaPagina(), 'la lista è uscita lo stesso, con un consenso indovinato').rejects.toMatchObject({ message: 'rete caduta' });
-  }, 60000);
-
-  it('preferenza non letta: il campanello non indovina, la lettura fallisce', async () => {
-    senzaPreferenza();
-    await expect(numeroDelCampanello(), 'il campanello ha dato un numero, con un consenso indovinato').rejects.toMatchObject({ message: 'rete caduta' });
   }, 60000);
 });

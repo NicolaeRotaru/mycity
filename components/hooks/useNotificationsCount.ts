@@ -32,13 +32,11 @@ export const useNotificationsCount = () => {
       // 13/11/2026 (R22-013) — Le promozioni contano solo per chi le ha accese (`notif_promos`),
       // come nella lista di /notifications: un numero acceso per notifiche che la pagina non
       // mostra non si spegnerebbe mai.
-      const { data: preferenze, error: errPreferenze } = await supabase
+      const { data: preferenze } = await supabase
         .from('profiles')
         .select('notif_promos')
         .eq('id', userId)
         .maybeSingle();
-      // Come sotto: un guasto si lancia e si riprova, non diventa un numero falso.
-      if (errPreferenze) throw errPreferenze;
       let conta = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })

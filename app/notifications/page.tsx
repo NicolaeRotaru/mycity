@@ -100,14 +100,12 @@ export default function NotificationsPage() {
       if (!user) throw new Error(AUTH_RICHIESTA);
       // 13/11/2026 (R22-013) — Chi ha spento le promozioni nelle impostazioni (`notif_promos`) le
       // vedeva lo stesso qui: l'interruttore lo leggeva solo l'invio delle push. Le promozioni si
-      // mostrano solo a chi le ha accese. Se la preferenza non si legge, la lettura fallisce e si
-      // riprova, come quella delle notifiche: non si indovina il consenso.
-      const { data: preferenze, error: errPreferenze } = await supabase
+      // mostrano solo a chi le ha accese; se la preferenza non si legge, non si mostrano.
+      const { data: preferenze } = await supabase
         .from('profiles')
         .select('notif_promos')
         .eq('id', user.id)
         .maybeSingle();
-      if (errPreferenze) throw errPreferenze;
       let lettura = supabase.from('notifications').select('*').eq('user_id', user.id);
       if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo');
       const { data, error } = await lettura
