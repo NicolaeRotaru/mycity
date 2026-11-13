@@ -1,5 +1,6 @@
 // lib/ai/batch.ts
 import type Anthropic from '@anthropic-ai/sdk';
+import { APIConnectionError } from '@anthropic-ai/sdk';
 import { getAnthropic, type ModelId } from '@/lib/ai/client';
 
 /**
@@ -62,6 +63,11 @@ function toHandle(b: Anthropic.Messages.MessageBatch): BatchHandle {
 /** Invia un batch. Mappa BatchRequest → shape SDK { custom_id, params }. */
 export async function submitBatch(requests: BatchRequest[]): Promise<BatchHandle> {
   const client = getAnthropic();
+  // 12/11/2026 (R04-014) — NIENTE SECONDO INVIO AUTOMATICO.
+  // Il client unico ritenta una volta dopo un timeout, e la creazione del lotto
+  // non ha una chiave anti-doppione: se il primo invio era arrivato, presso
+  // Anthropic partivano DUE lotti, e se ne pagavano due vedendone uno. Qui un
+  // timeout resta un timeout: lo gestisce chi chiama, senza rimandare.
   const batch = await client.messages.batches.create({
     requests: requests.map((r) => ({
       custom_id: r.custom_id,
@@ -74,7 +80,7 @@ export async function submitBatch(requests: BatchRequest[]): Promise<BatchHandle
         ...(r.tool_choice ? { tool_choice: r.tool_choice } : {}),
       },
     })),
-  });
+  }, { maxRetries: 0 });
   return toHandle(batch);
 }
 
@@ -122,4 +128,15 @@ export async function* streamBatchResults<TInput = unknown>(
       };
     }
   }
+}
+
+/**
+ * L'invio e' rimasto senza risposta (timeout, connessione caduta): il lotto
+ * puo' essere partito oppure no. Non e' un «fallito» — se e' partito e' pagato.
+ */
+/** Il motivo scritto sulla riga di un invio incerto: lo stato lo riconosce da qui. */
+export const INVIO_SENZA_RISPOSTA = 'invio senza risposta: il lotto potrebbe essere partito, da verificare';
+
+export function invioIncerto(err: unknown): boolean {
+  return err instanceof APIConnectionError;
 }

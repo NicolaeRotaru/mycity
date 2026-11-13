@@ -48,7 +48,7 @@ describe('bonifici ai negozi', () => {
     stato.righe = Array.from({ length: 1001 }, (_, i) => ordine(i));
     const host = await apri('@/app/admin/payouts/page');
     const testo = host.textContent ?? '';
-    expect(testo.indexOf('Elenco tagliato')).toBeLessThan(testo.indexOf('Da pagare (pronto)'));
+    expect(testo.indexOf('Elenco tagliato')).toBeLessThan(testo.indexOf('Contanti da versare'));
     expect(testo).toMatch(/Mancano i più\s+vecchi/);
     expect(testo).toMatch(/anche quelli dei singoli\s+negozi/);
     expect(testo).toMatch(/almeno /);

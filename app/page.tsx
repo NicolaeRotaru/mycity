@@ -8,6 +8,7 @@ import { SECONDI_CATALOGO_FRESCO } from '@/lib/queries/cache-pubblica';
 import ExperimentExposure from '@/components/home/ExperimentExposure';
 import HomeSectionRenderer, { type HeroDefaults } from '@/components/home-sections/HomeSectionRenderer';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { logger } from '@/lib/logger';
 import { normalizeHomeSite, homeEnabledSections } from '@/lib/home-site';
 import { EXPERIMENTS, expHeaderName, resolveVariant } from '@/lib/experiments';
 import type { Metadata } from 'next';
@@ -81,19 +82,19 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
  * esistenti; i blocchi di contenuto (testo/banner/galleria/video) sono liberi.
  */
 async function leggiConfigurazioneHome() {
-  try {
-    // Client ANONIMO, non quello con i cookie della richiesta. Due ragioni, e la
-    // seconda è vincolante: ① la composizione della home è pubblica, la legge
-    // uguale chiunque, quindi la sessione non c'entra; ② una lettura tenuta in
-    // memoria per sessanta secondi non può guardare i cookie di UNA richiesta —
-    // sarebbe la risposta di una persona riusata per la successiva. Next lo
-    // vieta e ferma la pagina, ed è giusto che la fermi.
-    const supa = creaClientAnonimo();
-    const { data } = await supa.from('site_settings').select('home_site').eq('id', 1).maybeSingle();
-    return normalizeHomeSite((data as { home_site?: unknown } | null)?.home_site);
-  } catch {
-    return normalizeHomeSite(null);
-  }
+  // Client ANONIMO, non quello con i cookie della richiesta. Due ragioni, e la
+  // seconda è vincolante: ① la composizione della home è pubblica, la legge
+  // uguale chiunque, quindi la sessione non c'entra; ② una lettura tenuta in
+  // memoria per sessanta secondi non può guardare i cookie di UNA richiesta —
+  // sarebbe la risposta di una persona riusata per la successiva. Next lo
+  // vieta e ferma la pagina, ed è giusto che la fermi.
+  const supa = creaClientAnonimo();
+  // 12/11/2026 (R09-004) — supabase-js non lancia: un guasto tornava come `data = null`, cioè la home
+  // di fabbrica, e la memoria qui sotto la serviva a tutti per un minuto. Un errore adesso si lancia,
+  // così la memoria non lo salva; il ripiego di fabbrica vale solo per questa richiesta (loadHomeSite).
+  const { data, error } = await supa.from('site_settings').select('home_site').eq('id', 1).maybeSingle();
+  if (error) throw new Error(`composizione della home non letta: ${error.message}`);
+  return normalizeHomeSite((data as { home_site?: unknown } | null)?.home_site);
 }
 
 /**
@@ -121,11 +122,23 @@ async function leggiConfigurazioneHome() {
  * il browser fa quello che faceva prima — quindi mettergli davanti la memoria
  * non aggiunge nessun modo nuovo di rompersi.
  */
-const loadHomeSite = unstable_cache(
+const homeSiteInMemoria = unstable_cache(
   leggiConfigurazioneHome,
   ['home-configurazione'],
   { revalidate: SECONDI_CATALOGO_FRESCO, tags: ['home-configurazione'] },
 );
+
+/** La composizione della home; se il database non risponde, quella di fabbrica per QUESTA richiesta sola. */
+async function loadHomeSite() {
+  try {
+    return await homeSiteInMemoria();
+  } catch (err) {
+    logger.warn('[home] composizione non letta: home di fabbrica per questa richiesta', {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return normalizeHomeSite(null);
+  }
+}
 
 const precaricoDellaHome = unstable_cache(
   precaricaHome,

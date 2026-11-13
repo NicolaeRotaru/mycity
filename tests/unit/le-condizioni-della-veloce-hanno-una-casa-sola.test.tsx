@@ -19,7 +19,7 @@ vi.mock('@/lib/quando-arriva', async (orig) => ({ ...(await orig<object>()), CHI
 import { fraseComeArriva, spiegazioneDellaConsegna } from '@/lib/promesse-pubbliche';
 import { CONSEGNA_FRASE_INTERA, QUANDO_SI_PUO_LA_VELOCE } from '@/lib/promessa-consegna';
 import { DEFAULT_FOOTER_TAGLINE } from '@/lib/site-branding';
-import { VALUE_PROPS } from '@/lib/constants';
+import * as costantiR12 from '@/lib/constants';
 
 const TRE_CONDIZIONI = [/dalle 8 alle 20\b/, /negozi[^.;]*aperti/, /fattorino in servizio/];
 
@@ -42,11 +42,12 @@ describe('spostata la chiusura della veloce alle 20, ogni frase la segue', () =>
     diceLeTreCondizioni(veloce ?? '', 'spiegazioneDellaConsegna');
   });
 
-  it('la frase intera, il piede del sito e le promesse della home', () => {
+  // 12/11/2026 (R12-007) — VALUE_PROPS (le promesse che nessuna pagina mostrava) è stato tolto.
+  it('la frase intera e il piede del sito', () => {
     diceLeTreCondizioni(CONSEGNA_FRASE_INTERA, 'CONSEGNA_FRASE_INTERA');
     diceLeTreCondizioni(DEFAULT_FOOTER_TAGLINE, 'il piede del sito');
-    const rapida = VALUE_PROPS.find((v) => v.icon === 'Zap');
-    diceLeTreCondizioni(rapida?.subtitle ?? '', 'VALUE_PROPS');
+    // Al posto dell'asserzione su VALUE_PROPS: la promessa che nessuno vedeva non c'è più.
+    expect('VALUE_PROPS' in costantiR12).toBe(false);
   });
 
   it('«Come funziona», disegnata', async () => {

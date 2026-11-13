@@ -136,13 +136,15 @@ describe('i doppioni', () => {
     expect(stato.db.tabelle.notifications.length, 'il gestore non deve ripartire').toBe(notificheDopoLaPrima);
   });
 
-  it('un turno preso da meno di cinque minuti (un altra consegna sta lavorando): «già visto», il gestore non parte', async () => {
+  // 12/11/2026 (R12-018) — Era 200 «già visto». Ma la consegna col turno in mano può essere morta
+  // (tetto dei 60 secondi, memoria): col 200 Stripe smetteva di riprovare e l'avviso si perdeva.
+  it('un turno preso da meno di cinque minuti (un altra consegna sta lavorando): 409, Stripe riprova, il gestore non parte', async () => {
     stato.db.tabelle.stripe_event_log = [
       { event_id: stato.evento.id, processed: false, claimed_at: new Date(Date.now() - 60_000).toISOString() },
     ];
     const risposta = await consegna();
-    expect(risposta.status).toBe(200);
-    expect(await risposta.json()).toMatchObject({ duplicated: true });
+    expect(risposta.status).toBe(409);
+    expect(await risposta.json()).not.toHaveProperty('duplicated');
     expect(ordine()?.dispute_status).toBeNull();
   });
 

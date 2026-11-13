@@ -231,7 +231,9 @@ export default function MessagesListPage() {
                   </div>
                   {unread > 0 && (
                     <span className="shrink-0 bg-secondary-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
-                      {unread > 99 ? '99+' : unread}
+                      {/* 12/11/2026 (R07-007) — il lettore di schermo diceva solo «3»: ora dice cosa sono. */}
+                      <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
+                      <span className="sr-only">{unread === 1 ? '1 messaggio non letto' : `${unread > 99 ? 'Più di 99' : unread} messaggi non letti`}</span>
                     </span>
                   )}
                 </div>

@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import { leggiPrezzo } from '@/app/seller/products/import/csv';
 
 /**
  * Schema e modello condivisi del form prodotto (nuovo + modifica).
@@ -100,6 +101,15 @@ export function condizioneDalSuggerimento(s: string): ProductCondition | '' | nu
 export const SELLER_STATUSES = ['available', 'draft', 'sold'] as const;
 export type SellerStatus = (typeof SELLER_STATUSES)[number];
 
+/** Un prezzo scritto a mano diventa un numero all'italiana; uno illeggibile resta non valido. */
+function prezzoScritto(v: unknown): unknown {
+  if (typeof v === 'number') return v;
+  if (typeof v !== 'string') return v;
+  // Illeggibile resta NaN, che lo schema rifiuta col suo messaggio: con undefined il prezzo pieno
+  // sbagliato passava come «opzionale» e si perdeva in silenzio (collaudo del 12/11).
+  return leggiPrezzo(v);
+}
+
 /**
  * Schema dei campi RHF. `minDescription` differisce tra creazione (30, gate
  * qualità) e modifica (10, non bloccare annunci storici brevi).
@@ -117,11 +127,18 @@ export function createProductSchema(opts?: { minDescription?: number }) {
             ? 'Descrivi bene il prodotto: almeno 30 caratteri (materiali, taglia, condizione…)'
             : `Almeno ${minDesc} caratteri`,
         ),
-      price: z.coerce.number().positive('Inserisci un prezzo valido'),
+      // 12/11/2026 (R03-022) — Il prezzo si legge all'italiana (`leggiPrezzo`): «1.250,00» è
+      // milleduecentocinquanta, non 1,25. Prima `z.coerce.number` e il campo numerico del browser
+      // mettevano in vendita la poltrona da 1.250 € a 1,25 € senza nessun avviso.
+      price: z.preprocess(
+        prezzoScritto,
+        z.number({ invalid_type_error: 'Inserisci un prezzo valido', required_error: 'Inserisci un prezzo valido' })
+          .positive('Inserisci un prezzo valido'),
+      ),
       // Prezzo pieno barrato: opzionale. Stringa vuota → undefined.
       compareAtPrice: z.preprocess(
-        (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
-        z.number().positive('Inserisci un importo valido').optional(),
+        (v) => (v === '' || v === null || v === undefined ? undefined : prezzoScritto(v)),
+        z.number({ invalid_type_error: 'Inserisci un importo valido' }).positive('Inserisci un importo valido').optional(),
       ),
       // Disabilitato quando "illimitato" è attivo → RHF lo esclude (undefined).
       stock: z.coerce.number().int('Numero intero').min(0, 'Non può essere negativo').optional(),

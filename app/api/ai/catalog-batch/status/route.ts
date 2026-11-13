@@ -6,7 +6,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { pollBatch, streamBatchResults } from '@/lib/ai/batch';
+import { INVIO_SENZA_RISPOSTA, pollBatch, streamBatchResults } from '@/lib/ai/batch';
 import { parseCatalogBatchEntry, stimaCostoLottoEur, type CatalogJobResult, type CatalogOperation } from '@/lib/ai/catalogBatch';
 
 /**
@@ -27,6 +27,8 @@ type JobRow = {
   target_lang: string | null;
   total: number;
   results: CatalogJobResult[] | null;
+  created_at?: string | null;
+  error?: string | null;
 };
 
 export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -35,23 +37,86 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   const jobId = new URL(req.url).searchParams.get('jobId') ?? '';
-  if (!jobId) return ApiErrors.invalidRequest('Job mancante.');
-
   const admin = getAdminSupabase();
+
+  // 12/11/2026 (R04-013) — SENZA jobId: L'ULTIMO LAVORO ANCORA APERTO.
+  // L'id del lavoro stava solo nel browser che l'aveva avviato: da un altro
+  // telefono, in navigazione privata o con la memoria pulita, il lavoro pagato
+  // spariva dalla vista. Adesso la pagina, all'apertura, chiede al server.
+  if (!jobId) {
+    const { data: aperti } = await admin
+      .from('catalog_ai_jobs')
+      .select(COLONNE)
+      .eq('seller_id', user.id)
+      .in('status', ['submitting', 'processing', 'ready'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const ultimo = ((aperti ?? []) as JobRow[])[0];
+    if (!ultimo) return NextResponse.json(null);
+    return rispondiPerLavoro(admin, ultimo, user.id);
+  }
+
   const { data } = await admin
     .from('catalog_ai_jobs')
-    .select('id, seller_id, operation, status, batch_id, target_lang, total, results')
+    .select(COLONNE)
     .eq('id', jobId)
     .single();
 
   const job = data as JobRow | null;
   if (!job) return ApiErrors.notFound('Job non trovato.');
   if (job.seller_id !== user.id) return ApiErrors.forbidden('Non è un tuo job.');
+  return rispondiPerLavoro(admin, job, user.id);
+});
 
-  // Già pronto/applicato: ritorna lo stato salvato.
-  if (job.status !== 'processing' || !job.batch_id) {
+/**
+ * 12/11/2026 (R04-005) — Un lavoro «in invio» da troppo tempo, senza lotto
+ * agganciato, non tornera' mai «in corso» da solo: restava cosi' per sempre e
+ * la pagina non mostrava ne' rotella ne' pulsante. Oltre questa soglia lo si
+ * chiude come fallito, con il motivo, e il negoziante puo' ripartire.
+ */
+const INVIO_SCADUTO_MS = 15 * 60_000;
+/** Un invio senza risposta (forse partito) resta aperto quanto dura al massimo un lotto. */
+const INVIO_INCERTO_SCADUTO_MS = 24 * 60 * 60_000;
+
+const COLONNE = 'id, seller_id, operation, status, batch_id, target_lang, total, results, created_at, error';
+
+async function rispondiPerLavoro(
+  admin: ReturnType<typeof getAdminSupabase>,
+  job: JobRow,
+  sellerId: string,
+): Promise<NextResponse> {
+  if (job.status === 'submitting' && !job.batch_id) {
+    const nato = job.created_at ? Date.parse(job.created_at) : NaN;
+    // R04-014 (revisione) — Un invio rimasto SENZA RISPOSTA puo' essere partito:
+    // chiuderlo dopo 15 minuti riapriva la porta a un secondo lotto pagato.
+    // Quello resta aperto quanto puo' durare un lotto (24 ore); poi si chiude
+    // dicendo di controllare prima di ripartire.
+    const incerto = job.error === INVIO_SENZA_RISPOSTA;
+    const scadenza = incerto ? INVIO_INCERTO_SCADUTO_MS : INVIO_SCADUTO_MS;
+    if (Number.isFinite(nato) && Date.now() - nato > scadenza) {
+      const motivo = incerto
+        ? 'invio senza risposta da 24 ore: il lotto potrebbe essere partito ed essere stato pagato; chiedi all\'assistenza prima di avviarne un altro'
+        : job.error
+          ? `${job.error} — chiuso dopo ${INVIO_SCADUTO_MS / 60_000} minuti senza lotto agganciato`
+          : `invio non confermato: nessun lotto agganciato dopo ${INVIO_SCADUTO_MS / 60_000} minuti`;
+      await admin
+        .from('catalog_ai_jobs')
+        .update({ status: 'failed', error: motivo, updated_at: new Date().toISOString() })
+        .eq('id', job.id)
+        .eq('seller_id', sellerId)
+        .eq('status', 'submitting');
+      logger.error('catalog-batch status: lavoro in invio scaduto, chiuso come fallito', { jobId: job.id });
+      return NextResponse.json(serialize({ ...job, status: 'failed', error: motivo }));
+    }
     return NextResponse.json(serialize(job));
   }
+
+  // Già pronto/applicato/fallito: ritorna lo stato salvato. Un lavoro «in
+  // invio» che ha gia' il lotto agganciato si interroga come uno «in corso».
+  if ((job.status !== 'processing' && job.status !== 'submitting') || !job.batch_id) {
+    return NextResponse.json(serialize(job));
+  }
+  const user = { id: sellerId };
 
   // Polling del batch.
   let ended = false;
@@ -59,11 +124,12 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
     const handle = await pollBatch(job.batch_id);
     ended = handle.processingStatus === 'ended';
   } catch {
-    // Anthropic non raggiungibile ora: resta processing, si riprova.
-    return NextResponse.json(serialize(job));
+    // Anthropic non raggiungibile ora: resta processing, si riprova — ma non
+    // per sempre (vedi chiudiSeScaduto).
+    return chiudiSeScaduto(admin, job, sellerId);
   }
 
-  if (!ended) return NextResponse.json(serialize(job));
+  if (!ended) return chiudiSeScaduto(admin, job, sellerId);
 
   // Terminato: recupera e parsa i risultati una volta sola.
   try {
@@ -121,7 +187,35 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
     logger.error('catalog-batch status: fetch results failed', { jobId: job.id });
     return NextResponse.json(serialize(job));
   }
-});
+}
+
+/**
+ * 12/11/2026 (R04-025, revisione K02) — UN LAVORO «IN CORSO» CHE NON FINISCE MAI.
+ *
+ * Con un lavoro aperto non se ne avvia un altro (R04-025): ma un lavoro
+ * «processing» che non si chiudeva piu' (lotto sparito, id sbagliato, fornitore
+ * che non risponde) teneva chiuso «migliora tutto il catalogo» per sempre. Un
+ * lotto dura al massimo 24 ore: oltre le 25 si chiude come fallito, col motivo.
+ */
+const LOTTO_SCADUTO_MS = 25 * 60 * 60_000;
+
+async function chiudiSeScaduto(
+  admin: ReturnType<typeof getAdminSupabase>,
+  job: JobRow,
+  sellerId: string,
+): Promise<NextResponse> {
+  const nato = job.created_at ? Date.parse(job.created_at) : NaN;
+  if (!(Number.isFinite(nato) && Date.now() - nato > LOTTO_SCADUTO_MS)) return NextResponse.json(serialize(job));
+  const motivo = 'il lotto non e\' finito entro 24 ore: chiuso. Se era partito, i risultati si recuperano con l\'assistenza.';
+  await admin
+    .from('catalog_ai_jobs')
+    .update({ status: 'failed', error: motivo, updated_at: new Date().toISOString() })
+    .eq('id', job.id)
+    .eq('seller_id', sellerId)
+    .eq('status', job.status);
+  logger.error('catalog-batch status: lotto oltre le 24 ore, chiuso come fallito', { jobId: job.id, batchId: job.batch_id });
+  return NextResponse.json(serialize({ ...job, status: 'failed', error: motivo }));
+}
 
 function serialize(job: JobRow) {
   const results = Array.isArray(job.results) ? job.results : [];
@@ -134,5 +228,6 @@ function serialize(job: JobRow) {
     targetLang: job.target_lang,
     results,
     counts: { total: results.length, withChanges: changed },
+    error: job.error ?? null,
   };
 }

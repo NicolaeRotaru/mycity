@@ -48,11 +48,15 @@ describe('le pagine ancorate allo schema del database', () => {
       // 1. I tipi veri, meno una colonna: e' la mutazione.
       const tipi = readFileSync('lib/database.types.ts', 'utf8');
       const riga = '          store_name: string | null;\n';
+      // R11-010 — dalle viste in poi la stessa riga compare anche nelle viste che la leggono
+      // (seller_public_profiles, …): la colonna da far sparire e' quella della tabella.
+      const fineTabelle = tipi.indexOf('    Views:');
+      const tabelle = tipi.slice(0, fineTabelle);
       expect(
-        tipi.split(riga).length - 1,
+        tabelle.split(riga).length - 1,
         'i tipi generati sono cambiati di forma: questa prova non sa piu quale colonna far sparire',
       ).toBe(1);
-      writeFileSync(join(cartella, 'database.types.ts'), tipi.replace(riga, ''), 'utf8');
+      writeFileSync(join(cartella, 'database.types.ts'), tabelle.replace(riga, '') + tipi.slice(fineTabelle), 'utf8');
 
       // 2. Un progetto TypeScript che vede le pagine e i tipi mutilati.
       //    `components/GoogleAnalytics.tsx` porta con se' la dichiarazione di

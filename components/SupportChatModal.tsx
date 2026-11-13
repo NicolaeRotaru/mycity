@@ -62,7 +62,9 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
   // 'menu' = scelta argomento; 'ai' = assistente prodotti AI (solo seller).
   const [view, setView] = useState<'menu' | 'ai'>('menu');
 
-  useCloseOnBack(open, onClose);
+  // 12/11/2026 (R03-023) — Il riferimento serve: dice al gancio «sto navigando», così alla
+  // chiusura non chiama history.back(), che annullava il passaggio alla chat appena aperta.
+  const navigatingRef = useCloseOnBack(open, onClose);
 
   // Riparti sempre dal menu quando il modale si riapre.
   useEffect(() => {
@@ -110,8 +112,10 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
         await queryClient.cancelQueries({ queryKey: chiave });
         queryClient.setQueryData(chiave, supportId);
       }
+      navigatingRef.current = true;
       onClose();
       setText('');
+      toast.success('Messaggio inviato: ti apriamo la chat con l\'Assistenza.');
       router.push(`/messages/${conversationId}`);
     } catch (e) {
       toast.error(friendlyError(e));

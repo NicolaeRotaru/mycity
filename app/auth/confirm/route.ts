@@ -93,6 +93,9 @@ function testoSicuro(v: string): string {
   return v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
+// 12/11/2026 (R07-010) — la pagina non sembrava MyCity: niente nome, carattere di
+// sistema, bottone verde. Ora ha il nome in testa, i colori del marchio (sfondo
+// crema #FBF7F0, terracotta #C0492C) e i caratteri del sito.
 function paginaColPulsante(link: Extract<LinkDiConferma, { valido: true }>): string {
   const password = link.tipo === 'recovery';
   const titolo = password ? 'Scegli la nuova password' : 'Conferma il tuo indirizzo email';
@@ -101,15 +104,18 @@ function paginaColPulsante(link: Extract<LinkDiConferma, { valido: true }>): str
   return `<!doctype html>
 <html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>${titolo} · MyCity</title></head>
-<body style="font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;text-align:center;color:#1f1d1a">
-<h1 style="font-size:1.4rem">${titolo}</h1>
-<p>Premi il pulsante per continuare. Il link si attiva solo adesso, cosi' i filtri della posta che lo aprono in anteprima non lo usano al posto tuo.</p>
+<body style="margin:0;min-height:100vh;background:#FBF7F0;color:#1C1A18;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif">
+<main style="max-width:28rem;margin:0 auto;padding:4rem 1rem;text-align:center">
+<p style="margin:0 0 2rem;font-family:Georgia,'Times New Roman',serif;font-size:1.8rem;font-weight:700;color:#C0492C">MyCity</p>
+<h1 style="font-family:Georgia,'Times New Roman',serif;font-size:1.4rem">${titolo}</h1>
+<p>Premi il pulsante per continuare. Il link si attiva solo adesso, così i filtri della posta che lo aprono in anteprima non lo usano al posto tuo.</p>
 <form method="post" action="/auth/confirm">
 ${campo('token_hash', link.tokenHash)}
 ${campo('type', link.tipo)}
 ${campo('next', link.next)}
-<button type="submit" style="font-size:1.05rem;font-weight:700;padding:.8rem 1.6rem;border:0;border-radius:.6rem;background:#1f6f43;color:#fff;cursor:pointer">Continua</button>
+<button type="submit" style="font-size:1.05rem;font-weight:700;padding:.8rem 1.6rem;border:0;border-radius:.6rem;background:#C0492C;color:#fff;cursor:pointer">Continua</button>
 </form>
+</main>
 </body></html>`;
 }
 

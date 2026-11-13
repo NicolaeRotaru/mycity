@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Star, Home as HomeIcon, Truck, Store as StoreIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -28,6 +29,27 @@ type Store = {
 type Prod = { id: string; name: string; price: number | string; images: string[] | null };
 type Reviews = { avg: number; count: number };
 
+/**
+ * Lo schermo dove il riquadro si vede: da 768 pixel in su (la `md` di Tailwind, come
+ * `hidden md:flex` qui sotto). Senza `matchMedia` (server, prove) si risponde sì: lì
+ * non si va in rete comunque, e il comportamento resta quello di prima.
+ */
+export function schermoDelRiquadro(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return window.matchMedia('(min-width: 768px)').matches;
+}
+
+/** Il segno che sul telefono la lettura non è partita (R08-017). */
+const SALTATA_SUL_TELEFONO = 'saltata-sul-telefono' as const;
+
+/** Si ascolta il cambio di larghezza (rotazione, finestra ridimensionata). */
+function ascoltaLoSchermo(avvisa: () => void): () => void {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+  const mq = window.matchMedia('(min-width: 768px)');
+  mq.addEventListener?.('change', avvisa);
+  return () => mq.removeEventListener?.('change', avvisa);
+}
+
 /** Prima immagine di `store_media` (cover) — null se assente/non parseabile. */
 function coverFromMedia(media: unknown): string | null {
   if (!Array.isArray(media)) return null;
@@ -44,10 +66,14 @@ function coverFromMedia(media: unknown): string | null {
  * placeholder statico, così l'hero non resta mai vuoto.
  */
 export default function HeroStoreCard() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['home', 'hero-store'],
-    staleTime: 10 * 60 * 1000,
-    queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null> => {
+  // R08-017 — Lo schermo fa parte della chiave: girando il telefono in orizzontale (≥768 px) il
+  // riquadro diventa visibile e la lettura riparte, invece di restare sul «niente» del telefono.
+  const schermoGrande = useSyncExternalStore(ascoltaLoSchermo, schermoDelRiquadro, () => true);
+  const { data: risposta, isLoading, isError } = useQuery({
+    queryKey: ['home', 'hero-store', schermoGrande ? 'md' : 'telefono'],
+    // Il salto del telefono non è un dato: non si tiene per fresco.
+    staleTime: (q) => (q.state.data === SALTATA_SUL_TELEFONO ? 0 : 10 * 60 * 1000),
+    queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null | typeof SALTATA_SUL_TELEFONO> => {
       // #83 — UNA CHIAMATA SOLA, NON TRE IN FILA.
       //
       // Prima si facevano fino a tre giri uno dietro l'altro prima di sapere
@@ -59,6 +85,13 @@ export default function HeroStoreCard() {
       // Ora è una funzione sola nel database (`vetrina_home`, migrazione 124),
       // che torna negozio, prodotti e recensioni insieme.
       //
+      // 12/11/2026 (R08-017) — Sotto i 768 pixel questo riquadro non si vede (`hidden md:flex`),
+      // ma veniva montato e chiedeva lo stesso il negozio al database e, dietro, la veloce alla
+      // cassa: banda e una domanda a una rotta col freno a 30 al minuto, per niente, mentre la
+      // home del telefono carica ancora i prodotti. Il disegno resta lo stesso (niente salti
+      // all'idratazione): è la lettura che sul telefono non parte. Senza negozio non si chiede
+      // nemmeno la veloce (useVeloceDelNegozio vuole un id).
+      if (!schermoDelRiquadro()) return SALTATA_SUL_TELEFONO;
       // #211 — Il mese è quello di Piacenza, non di Greenwich.
       const { data: risposta, error } = await supabase.rpc('vetrina_home', {
         p_mese: primoDelMesePiacenza(),
@@ -73,6 +106,11 @@ export default function HeroStoreCard() {
     },
   });
 
+  // La lettura saltata sul telefono vale «non so ancora»: si disegna lo scheletro (invisibile lì).
+  const saltata = risposta === SALTATA_SUL_TELEFONO;
+  type Vetrina = { store: Store; products: Prod[]; reviews: Reviews | null };
+  const data: Vetrina | null | undefined = saltata ? undefined : (risposta as Vetrina | null | undefined);
+
   // L'ora del browser e la risposta della veloce: servono a «Consegna oggi» più sotto. Gli hook
   // stanno prima delle uscite anticipate, quindi leggono il negozio quando c'è.
   const adesso = useOraDiPiacenza();
@@ -83,8 +121,8 @@ export default function HeroStoreCard() {
   // oggi entro le 18:00» — mostrato sia mentre caricava sia quando negozio non ce n'era. Un numero
   // senza fonte messo davanti a chi arriva sul sito per la prima volta.
   const vista = statoDellaVista({
-    letto: !isLoading,
-    caricando: isLoading,
+    letto: !isLoading && !saltata,
+    caricando: isLoading || saltata,
     errore: isError || undefined,
     quanti: data?.store ? 1 : 0,
   });

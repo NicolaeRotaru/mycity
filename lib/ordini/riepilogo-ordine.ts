@@ -32,8 +32,9 @@ export type VoceRiepilogo = {
   centesimi: number;
   segno: SegnoVoce;
   /**
-   * Solo sulla riga «Spedizione», e solo se per farsi portare la spesa il cliente non ha pagato
-   * niente: né spedizione né consegna. È l'unico caso in cui la pagina può scrivere «GRATUITA».
+   * Solo sulla riga della consegna (VOCE_CONSEGNA), e solo se per farsi portare la spesa il cliente
+   * non ha pagato niente: né spedizione né consegna. È l'unico caso in cui la pagina scrive «Gratis»
+   * (12/11/2026, R09-023: lo stesso nome e la stessa parola della cassa).
    */
   gratis?: boolean;
 };
@@ -81,13 +82,14 @@ export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: 
   // subito sotto «Consegna MyCity 3,00 €», su ogni ordine. «Gratis» si dice solo se per portare a
   // casa la spesa non si è pagato niente. La spedizione resta in colonna quando c'è (gli ordini di
   // prima del 27/10 la pagavano) o quando non si è pagato niente per la consegna.
-  if (spedizione !== 0 || consegna === 0) {
-    voci.push({
-      etichetta: 'Spedizione',
-      centesimi: spedizione,
-      segno: 'piu',
-      ...(spedizione === 0 && consegna === 0 ? { gratis: true } : {}),
-    });
+  //
+  // 12/11/2026 (R09-023) — Con spedizione e consegna a zero la cassa scrive «Consegna MyCity · Gratis»,
+  // e la pagina dell'ordine scriveva «Spedizione GRATUITA»: due nomi per la stessa riga. Adesso la riga
+  // regalata si chiama come in cassa (VOCE_CONSEGNA) e dice «Gratis» come la cassa.
+  if (spedizione === 0 && consegna === 0) {
+    voci.push({ etichetta: VOCE_CONSEGNA, centesimi: 0, segno: 'piu', gratis: true });
+  } else if (spedizione !== 0) {
+    voci.push({ etichetta: 'Spedizione', centesimi: spedizione, segno: 'piu' });
   }
   // Le voci a zero non si mostrano: una riga «Sconto codice 0,00» non aggiunge niente e allunga la
   // colonna. Quelle diverse da zero invece devono esserci TUTTE, o il totale non si spiega.
@@ -111,7 +113,7 @@ export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: 
  * che guardava la riga della spedizione da sola.
  */
 export function cifraDellaVoce(v: VoceRiepilogo, euro: (centesimi: number) => string): string {
-  if (v.gratis) return 'GRATUITA';
+  if (v.gratis) return 'Gratis';
   return `${v.segno === 'meno' ? '−' : ''}${euro(v.centesimi)}`;
 }
 

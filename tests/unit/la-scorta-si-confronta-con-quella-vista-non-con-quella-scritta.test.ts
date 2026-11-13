@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { salvaProdottoTracciato, type ClientDelCatalogo } from '@/lib/products/salvataggio-tracciato';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { salvaVariantiFinta } from './aiuti/salva-varianti-finta';
 
 const globali = globalThis as Record<string, unknown>;
 
@@ -34,6 +35,8 @@ type Riga = Record<string, unknown>;
 /** Una banca dati finta: ogni lettura e ogni scrittura rispettano i loro `.eq()`. */
 function bancaDati(tabelle: Record<string, Riga[]>) {
   return {
+    // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
     from(tavola: string) {
       const righe = () => tabelle[tavola] ?? [];
       return {
@@ -172,6 +175,8 @@ describe('le varianti', () => {
     const tabelle = { product_variants: [{ id: S, product_id: PRODOTTO_ID, label: 'S', stock: 2 }] as Riga[] };
     const vera = bancaDati(tabelle);
     const db = {
+      // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
       from(tavola: string) {
         const f = vera.from(tavola);
         return {

@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase/anonimo', () => ({
   creaClientAnonimo: () => ({
     from: (tabella: string) => {
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'in', 'order', 'limit', 'is']) q[m] = () => q;
+      for (const m of ['select', 'eq', 'in', 'order', 'limit', 'range', 'is']) q[m] = () => q;
       const risposta = tabella === 'seller_public_profiles' && mondo.erroreNegozi
         ? { data: null, error: { message: 'rete' } }
         : { data: mondo.dati[tabella] ?? [], error: null };

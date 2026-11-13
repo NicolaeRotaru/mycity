@@ -1,4 +1,5 @@
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
+import { voceCorta } from '@/lib/ai/tetti-testo';
 import { NextResponse } from 'next/server';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -205,14 +206,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // modello col giro dopo. Adesso passano dal filtro tutti i turni utente
   // (al massimo 20 da 2000 caratteri), in una chiamata sola.
   try {
-    const turniUtente = history.filter((m) => m.role === 'user');
+    // 12/11/2026 (R04-009) — Anche i turni «assistente»: arrivano dal browser
+    // come gli altri, e uno scritto a mano funziona per il modello come una
+    // risposta gia' data. Nel filtro passa TUTTA la cronologia che va al modello.
+    const turniDaFiltrare = history;
     try {
-      await assertSafeText(turniUtente.map((m) => m.content).join('\n\n'), 'ai-product-chat-policy');
+      await assertSafeText(turniDaFiltrare.map((m) => m.content).join('\n\n'), 'ai-product-chat-policy');
     } catch (errStoria) {
       // Revisione S10 — Se il rifiuto viene da un messaggio VECCHIO (la chat lo
       // lascia nella storia), la conversazione non deve restare bloccata per
       // sempre: si controlla l'ultimo da solo e, se passa, al modello va solo lui.
-      if (!(errStoria instanceof UnsafeContentError) || turniUtente.length < 2) throw errStoria;
+      if (!(errStoria instanceof UnsafeContentError) || turniDaFiltrare.length < 2) throw errStoria;
       await assertSafeText(history[history.length - 1].content, 'ai-product-chat-policy');
       history.splice(0, history.length - 1);
     }
@@ -244,8 +248,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
    * ci sono, con le stesse soglie: quando questo file e quella funzione
    * divergeranno di nuovo, divergeranno almeno sui numeri giusti.
    */
-  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
-  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
+  // 12/11/2026 (R04-015) — Tagliati gli elenchi, ogni voce entrava ancora
+  // intera (un'opzione o un nome di categoria da un megabyte), e un elemento
+  // che non e' un oggetto faceva cadere la rotta. Solo oggetti, ogni testo col
+  // suo tetto (lib/ai/tetti-testo.ts).
+  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : [])
+    .filter((f): f is NonNullable<typeof f> => !!f && typeof f === 'object' && typeof f.key === 'string')
+    .slice(0, 40);
+  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : [])
+    .filter((c): c is NonNullable<typeof c> => !!c && typeof c === 'object')
+    .slice(0, 30);
   // 22/8/2026 — LE FOTO ARBITRARIE RIENTRAVANO DA QUI.
   //
   // Il filtro era «purche' cominci per http»: qualunque indirizzo passava. Il
@@ -274,7 +286,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 ${schedaTagliata}
 
 Categorie di primo livello disponibili (slug):
-${topCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n') || '- (nessuna)'}
+${topCategories.map((c) => `- ${voceCorta(c.slug)} (${voceCorta(c.name)})`).join('\n') || '- (nessuna)'}
 
 Attributi validi per la categoria attuale:
 ${attrLines || '- (nessuno)'}`;

@@ -22,7 +22,14 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (t: string) => {
       const q: Record<string, unknown> = {};
       Object.assign(q, {
-        select: () => q, not: () => q, order: () => q, eq: async () => ({ error: null }),
+        // 12/11/2026 (R04-011) — la rotta ora chiede prima i prodotti non in errore (.or) e
+        // poi i falliti (.eq): qui l'unico prodotto e' sano, i falliti sono zero.
+        select: () => q, not: () => q, order: () => q,
+        eq: (c: string) =>
+          c === 'external_sync_status'
+            ? { order: () => ({ limit: async () => ({ data: [], error: null }) }) }
+            : Promise.resolve({ error: null }),
+        or: () => q,
         limit: async () => ({
           data: [{ id: 'p1', name: 'Pane', seller_id: 's1', external_marketplace: null, external_source_url: 'https://x', external_synced_at: null, external_data: { price: 10, availability: 'in_stock', source_title: 'Pane' } }],
           error: null,

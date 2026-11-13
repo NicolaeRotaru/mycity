@@ -10,6 +10,12 @@ import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
 const MIA_CORSIA = '--altezza-barra-acquisto';
 
 type Props = {
+  /**
+   * R02-016 — L'id del pulsante d'acquisto della pagina. Se c'è, la barra compare quando quel
+   * pulsante NON si vede (anche appena aperta la pagina, se sta sotto la piega), invece che dopo
+   * mezzo schermo di scorrimento.
+   */
+  bersaglio?: string;
   price: number;
   available: boolean;
   onAdd: () => void;
@@ -56,11 +62,21 @@ const ETICHETTA_INTERA = 'Aggiungi al carrello';
 const ETICHETTA_ESAURITO_CORTA = 'Esaurito';
 const ETICHETTA_ESAURITO = 'Non disponibile';
 
-export default function StickyAddToCart({ price, available, onAdd, note, qty, onDec, onInc, canDec, canInc }: Props) {
+export default function StickyAddToCart({ bersaglio, price, available, onAdd, note, qty, onDec, onInc, canDec, canInc }: Props) {
   const [visible, setVisible] = useState(false);
   const barraRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 12/11/2026 (R02-016) — Sul telefono prezzo e «Aggiungi al carrello» stavano sotto la piega
+    // (y=792 su 844, il pulsante a y=1857) e la barra compariva solo dopo 370-450 px di
+    // scorrimento: appena aperta la scheda non c'era modo di comprare senza scorrere. Adesso la
+    // barra segue il pulsante vero: c'è quando lui non si vede.
+    const pulsante = bersaglio ? document.getElementById(bersaglio) : null;
+    if (pulsante && typeof IntersectionObserver !== 'undefined') {
+      const osservatore = new IntersectionObserver(([voce]) => setVisible(!voce.isIntersecting));
+      osservatore.observe(pulsante);
+      return () => osservatore.disconnect();
+    }
     const onScroll = () => {
       // Visible quando si scrolla oltre la prima metà del primo schermo
       const trigger = Math.max(300, window.innerHeight * 0.5);
@@ -69,7 +85,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [bersaglio]);
 
   // 3/9/2026 — QUESTA BARRA DICE QUANTO E' ALTA, e chi le sta sopra la legge.
   //
@@ -165,10 +181,12 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
 
             <button
               onClick={onAdd}
-              disabled={!available}
+              // R02-008 (dopo il collaudo) — aria-disabled e non disabled: il pulsante resta nel
+              // giro del Tab e dice di non essere disponibile; chi lo preme riceve il perché da onAdd.
+              aria-disabled={!available || undefined}
               // Il nome intero resta qui anche quando a schermo si legge la parola corta.
               aria-label={available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}
-              className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
+              className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:hover:bg-cream-200 aria-disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
             >
               <ShoppingCart size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
               <span className="sm:hidden">{available ? ETICHETTA_CORTA : ETICHETTA_ESAURITO_CORTA}</span>

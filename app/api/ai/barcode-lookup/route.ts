@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { voceCorta } from '@/lib/ai/tetti-testo';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -86,15 +87,23 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // 27/8/2026 (R149) — Elenchi che arrivano dal browser, prima senza nessun
   // tetto: composti interi nel prompt di una rotta che gira sul modello grande
   // con la ricerca sul web accesa. Stesse soglie di `buildProductContext`.
-  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
-  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
+  // 12/11/2026 (R04-015) — Tagliati gli elenchi, ogni voce entrava ancora
+  // intera (un'opzione o un nome di categoria da un megabyte), e un elemento
+  // che non e' un oggetto faceva cadere la rotta. Solo oggetti, ogni testo col
+  // suo tetto (lib/ai/tetti-testo.ts).
+  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : [])
+    .filter((f): f is NonNullable<typeof f> => !!f && typeof f === 'object' && typeof f.key === 'string')
+    .slice(0, 40);
+  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : [])
+    .filter((c): c is NonNullable<typeof c> => !!c && typeof c === 'object')
+    .slice(0, 30);
   // (16/10/2026) Le dichiarazioni restano nell'elenco ma segnate in sola lettura.
   const attrLines = attributeSchema.map(rigaAttributoPerIlModello).join('\n');
 
   const userText = `Codice a barre da identificare: ${ean}
 
 Categorie di primo livello disponibili (slug):
-${topCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n') || '- (nessuna)'}
+${topCategories.map((c) => `- ${voceCorta(c.slug)} (${voceCorta(c.name)})`).join('\n') || '- (nessuna)'}
 
 Attributi validi per la categoria attuale (se già scelta):
 ${attrLines || '- (compila in base alla categoria che sceglierai)'}

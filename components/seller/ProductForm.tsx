@@ -59,6 +59,14 @@ import {
   reconcileVariants,
   deriveOptionGroups,
 } from '@/lib/products/variants';
+import { leggiPrezzo } from '@/app/seller/products/import/csv';
+
+/** R03-022 — Anteprima e salvataggio leggono il prezzo come lo schema: all'italiana. */
+function prezzoDelCampo(v: unknown): number {
+  if (typeof v === 'number') return v;
+  const n = leggiPrezzo(String(v ?? ''));
+  return Number.isFinite(n) ? n : 0;
+}
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -373,7 +381,7 @@ export default function ProductForm({
      */
     const { patch: dallaFoto, rifiutati: prezzoScartato } = patchAiPerIlForm(
       { price: data.suggested_price && data.suggested_price > 0 ? data.suggested_price : undefined },
-      { prezzoAttuale: getValues('price') },
+      { prezzoAttuale: prezzoDelCampo(getValues('price')) },
     );
     if (typeof dallaFoto.price === 'number') {
       setValue('price', dallaFoto.price as unknown as number, { shouldValidate: true });
@@ -448,8 +456,8 @@ export default function ProductForm({
   const chatSnapshot: ProductChatSnapshot = {
     name: watch('name') ?? '',
     description: watch('description') ?? '',
-    price: Number(watch('price')) || null,
-    compareAtPrice: Number(watch('compareAtPrice')) || null,
+    price: prezzoDelCampo(watch('price')) || null,
+    compareAtPrice: prezzoDelCampo(watch('compareAtPrice')) || null,
     unit,
     condition,
     stock: unlimitedStock ? null : Number(watch('stock')) || null,
@@ -489,7 +497,7 @@ export default function ProductForm({
      * compilato».
      */
     const piano = pianoPatchPerIlModulo(proposta, {
-      prezzoAttuale: getValues('price'),
+      prezzoAttuale: prezzoDelCampo(getValues('price')),
       categorie: categories,
       categoriaAttuale: currentCategoryId,
       modo: mode,
@@ -805,8 +813,8 @@ export default function ProductForm({
     });
 
   // ---- Anteprima prezzo -----------------------------------------------------
-  const priceNum = Number(watch('price')) || 0;
-  const cmpNum = Number(watch('compareAtPrice')) || 0;
+  const priceNum = prezzoDelCampo(watch('price')) || 0;
+  const cmpNum = prezzoDelCampo(watch('compareAtPrice')) || 0;
   const hasDiscount = cmpNum > priceNum && priceNum > 0;
   const discountPct = hasDiscount ? Math.round((1 - priceNum / cmpNum) * 100) : 0;
 
@@ -923,8 +931,7 @@ export default function ProductForm({
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="Prezzo (€)"
-            type="number"
-            step="0.01"
+            type="text"
             inputMode="decimal"
             {...register('price')}
             error={typeof errors.price?.message === 'string' ? errors.price.message : undefined}
@@ -939,8 +946,7 @@ export default function ProductForm({
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="Prezzo pieno (barrato)"
-            type="number"
-            step="0.01"
+            type="text"
             inputMode="decimal"
             placeholder="Opzionale"
             hint="Mostra lo sconto rispetto a questo prezzo"

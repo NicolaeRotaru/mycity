@@ -46,7 +46,7 @@ export default function SellerHelpPage() {
             <div className="space-y-3">
               {topic.items.map((it) => (
                 <details key={it.q} className="group">
-                  <summary className="cursor-pointer font-semibold text-ink-800 hover:text-primary-700 list-none flex items-start justify-between gap-2">
+                  <summary className="cursor-pointer font-semibold text-ink-800 hover:text-primary-700 list-none flex min-h-11 items-center justify-between gap-2 py-2">
                     <span>{it.q}</span>
                     <span className="text-ink-400 group-open:rotate-45 transition-transform text-xl leading-none">+</span>
                   </summary>
@@ -58,9 +58,10 @@ export default function SellerHelpPage() {
         ))}
       </div>
 
+      {/* 12/11/2026 (R09-022) — Prometteva corsi video «in arrivo» che nessun piano prevede. */}
       <div className="bg-accent-50 border border-accent-200 rounded-xl p-5 text-sm text-accent-900">
-        <p className="font-bold mb-1 flex items-center gap-2"><BookOpen size={18} className="text-accent-500" aria-hidden /> Guide approfondite (prossimamente)</p>
-        <p>Stiamo preparando una academy con video tutorial per ogni funzionalità. Nel frattempo, per qualunque dubbio scrivi all&apos;assistenza.</p>
+        <p className="font-bold mb-1 flex items-center gap-2"><BookOpen size={18} className="text-accent-500" aria-hidden /> Non trovi la risposta?</p>
+        <p>Per qualunque dubbio scrivi all&apos;assistenza.</p>
       </div>
     </div>
   );

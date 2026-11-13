@@ -26,7 +26,8 @@ vi.mock('@/lib/supabase/client', () => ({
     from: () => ({
       select: (c: string) => {
         colonneLette = c;
-        const catena = { eq: () => catena, order: async () => ({ data: righe, error: null }) };
+        // R06-016 (12/11/2026): la pagina legge a finestre, con `.order(...).range(da, a)`.
+        const catena: Record<string, unknown> = { eq: () => catena, order: () => catena, range: async () => ({ data: righe, error: null }) };
         return catena;
       },
     }),
@@ -35,7 +36,7 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (o: { queryFn: () => Promise<unknown> }) => {
     queryFn = o.queryFn;
-    return { data: righe, isLoading: false };
+    return { data: { consegne: righe, troncato: false }, isLoading: false };
   },
 }));
 

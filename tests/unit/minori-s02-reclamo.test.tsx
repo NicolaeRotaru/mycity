@@ -97,6 +97,10 @@ describe('la pagina del reclamo', () => {
 
   it('1728 · il doppione rifiutato dal database si dice con una frase vera', async () => {
     stato.erroreInsert = { code: '23505', message: 'duplicate key value violates unique constraint "disputes_one_open_per_order"' };
+    // 12/11/2026 (R03-013) — il reclamo lo apre /api/disputes: il doppione rifiutato dal database
+    // torna dalla rotta come 409 con la frase vera (app/api/disputes/route.ts).
+    const fetchDiPrima = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false, error: { code: 'CONFLICT', message: 'Hai già un reclamo aperto su questo ordine: lo stiamo esaminando, ti scriviamo noi.' } }), { status: 409 })) as typeof fetch;
     await monta();
     const radio = c.querySelector('input[type=radio][value=damaged]') as HTMLInputElement;
     await act(async () => { radio.click(); });
@@ -110,6 +114,7 @@ describe('la pagina del reclamo', () => {
       (c.querySelector('form') as HTMLFormElement).requestSubmit();
       await new Promise((r) => setTimeout(r, 0));
     });
+    globalThis.fetch = fetchDiPrima;
     expect(stato.toastErrore.join(' ')).toContain('già un reclamo aperto');
     expect(stato.toastErrore.join(' ')).not.toContain('già stato usato');
   });

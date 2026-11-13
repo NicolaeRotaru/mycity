@@ -81,3 +81,31 @@ export function statoDellaConsolle(input: {
 export function puoDireTuttoTranquillo(stato: StatoConsolle): boolean {
   return stato.letturaRiuscita && stato.attivi.length === 0;
 }
+
+/**
+ * R01-006 (12/11/2026) — DA QUALE CONSEGNA PARTE L'ALLARME.
+ *
+ * L'SOS scrive `order_id` quando il fattorino lo preme durante una consegna, e la pagina lo
+ * leggeva nella select senza mostrarlo da nessuna parte: chi sta in sala controllo non sapeva
+ * quale cliente aspetta, quale negozio chiamare, dove stava andando il fattorino.
+ * `null` quando l'SOS non e' legato a nessun ordine.
+ */
+export function consegnaDellSOS(s: Pick<EventoSOS, 'order_id'>): { etichetta: string; href: string } | null {
+  const id = typeof s.order_id === 'string' ? s.order_id.trim() : '';
+  if (!id) return null;
+  return { etichetta: `Consegna #${id.slice(0, 8)}`, href: `/admin/orders/${encodeURIComponent(id)}` };
+}
+
+/**
+ * R01-009 (12/11/2026) — UN SOS APERTO NON ESCE DALL'ELENCO PERCHE' E' VECCHIO.
+ *
+ * La consolle leggeva solo gli ultimi 50 eventi. Con cinquanta SOS piu' recenti (anche gia'
+ * risolti, anche falsi allarmi) un'emergenza ancora aperta restava fuori, e con zero «attivi»
+ * la pagina diceva «Nessun SOS attivo. Tutto tranquillo.». Adesso si leggono anche TUTTI gli
+ * aperti, a parte, e si uniscono qui: ogni evento una volta sola, dal piu' recente.
+ */
+export function unisciGliAperti(ultimi: EventoSOS[], aperti: EventoSOS[]): EventoSOS[] {
+  const perId = new Map<string, EventoSOS>();
+  for (const s of [...aperti, ...ultimi]) perId.set(s.id, s);
+  return [...perId.values()].sort((a, b) => b.triggered_at.localeCompare(a.triggered_at));
+}

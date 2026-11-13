@@ -1,7 +1,7 @@
 import { Package, ShoppingBag, Euro, Star, Rocket, type LucideIcon } from 'lucide-react';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { FRASE_PREZZO_NEGOZI, spiegazioneCommissione } from '@/app/seller/earnings/commissione';
-import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
+import { ABBONAMENTO_NEGOZI_ACCESO, AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { ORDER_STATUS_LABEL, etichettaPronto } from '@/lib/order-status';
 
 // 31/10/2026 (ondata 4) — Qui c'era «Bonifico mensile il giorno 5»: una terza
@@ -45,11 +45,13 @@ export const TOPICS: ArgomentoAiuto[] = [
     items: [
       { q: 'Come accetto un ordine?',
         // Le etichette sono quelle dei pulsanti veri (lib/order-status.ts e la pagina dell'ordine).
-        a: `Da "Ordini" apri l'ordine "${ORDER_STATUS_LABEL.NEW}" e premi "Accetta ordine". Riceverai una notifica quando un rider lo prenderà in carico.` },
+        a: `Da "Ordini" apri l'ordine "${ORDER_STATUS_LABEL.NEW}" e premi "Accetta ordine". Riceverai una notifica quando un fattorino lo prenderà in carico.` },
       { q: 'Posso rifiutare un ordine?',
-        a: 'Sì, se non puoi evaderlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente riceve rimborso automatico.' },
+        // 12/11/2026 (R09-021, collaudo) — «riceve rimborso automatico» valeva solo per la carta: coi contanti
+        // non ha pagato niente, e lo si dice.
+        a: 'Sì, se non puoi prepararlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, se aveva pagato con carta gli torna tutto in automatico.' },
       { q: 'Come segnalo l\'ordine pronto?',
-        a: `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il rider o il cliente vengono avvisati.` },
+        a: `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il fattorino o il cliente vengono avvisati.` },
     ],
   },
   {
@@ -77,7 +79,7 @@ export const TOPICS: ArgomentoAiuto[] = [
         // 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola.
         a: `${FRASE_PREZZO_NEGOZI} La percentuale si calcola sul venduto effettivamente concluso.` },
       { q: 'Cosa succede se un ordine viene rimborsato?',
-        a: 'Non viene calcolato nel netto. Se è già stato pagato, viene compensato sul payout successivo.' },
+        a: 'Non viene calcolato nel netto. Se ti è già stato pagato, viene tolto dal prossimo pagamento che ti facciamo.' },
     ],
   },
   {
@@ -100,7 +102,8 @@ export const TOPICS: ArgomentoAiuto[] = [
         a: 'Logo + copertina + 10+ prodotti con foto pulite e descrizioni complete (peso, materiali, provenienza).' },
       { q: 'Come miglioro il posizionamento?',
         // Gli stessi criteri dei Termini (app/terms, «come ordiniamo i risultati»).
-        a: 'I risultati si ordinano per pertinenza con la ricerca, distanza, voto delle recensioni e disponibilità; i prodotti sponsorizzati sono segnalati. Schede complete e prodotti disponibili aiutano.' },
+        // 12/11/2026 (R09-021) — Le sponsorizzate sono sospese (ABBONAMENTO_NEGOZI_ACCESO): se ne parla solo da accese.
+        a: `I risultati si ordinano per pertinenza con la ricerca, distanza, voto delle recensioni e disponibilità${ABBONAMENTO_NEGOZI_ACCESO ? '; i prodotti sponsorizzati sono segnalati' : ''}. Schede complete e prodotti disponibili aiutano.` },
     ],
   },
 ];

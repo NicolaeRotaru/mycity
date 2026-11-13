@@ -161,7 +161,7 @@ export const POST = withAuthRateLimit(
     }
 
     const adesso = new Date().toISOString();
-    const { data: scritti, error } = await admin
+    const aggiorna = admin
       .from('profiles')
       .update({
         phone: f.contactPhone,
@@ -201,14 +201,27 @@ export const POST = withAuthRateLimit(
       .eq('id', user.id)
       .in('role', [...RUOLI_CHE_POSSONO_CHIEDERE])
       // NULL = profilo vecchio che non ha mai chiesto niente: può chiedere.
-      .or(`approval_status.is.null,approval_status.in.(${STATI_CHE_POSSONO_CHIEDERE.join(',')})`)
-      .select('id');
+      .or(`approval_status.is.null,approval_status.in.(${STATI_CHE_POSSONO_CHIEDERE.join(',')})`);
+    // R11-008 — Due invii partiti insieme leggevano lo stesso profilo e scrivevano tutti e due:
+    // due righe di consenso e due avvisi agli amministratori. La scrittura vale solo se la
+    // richiesta precedente è ancora quella letta: il secondo invio non tocca niente.
+    const richiestaLetta = (attuale as { approval_requested_at?: string | null }).approval_requested_at ?? null;
+    const { data: scritti, error } = await (richiestaLetta
+      ? aggiorna.eq('approval_requested_at', richiestaLetta)
+      : aggiorna.or('approval_requested_at.is.null')
+    ).select('id');
 
     if (error) {
       logger.error('[seller-apply] richiesta non salvata', { userId: user.id, code: error.code, message: error.message });
       return ApiErrors.internal('Non è stato possibile inviare la richiesta');
     }
     if (!scritti || scritti.length === 0) {
+      // R11-008 — Un altro invio della stessa richiesta è passato un attimo prima: è già arrivata.
+      const { data: dopo } = await admin.from('profiles').select('approval_status, approval_requested_at').eq('id', user.id).maybeSingle();
+      const giaArrivata = (dopo as { approval_status?: string | null; approval_requested_at?: string | null } | null);
+      if (giaArrivata?.approval_status === 'pending' && giaArrivata.approval_requested_at && giaArrivata.approval_requested_at !== richiestaLetta) {
+        return NextResponse.json({ ok: true }, { status: 200 });
+      }
       // Lo stato è cambiato fra la lettura e la scrittura (es. sospeso dallo staff).
       return ApiErrors.conflict('Lo stato del tuo account è appena cambiato: ricarica la pagina.');
     }
@@ -218,7 +231,10 @@ export const POST = withAuthRateLimit(
     // chiedere di nuovo le condizioni (/accetta-condizioni).
     // La richiesta è già salvata: un verbale che non entra si scrive nei log, e
     // la pagina /accetta-condizioni lo richiederà.
-    try {
+    // Collaudo K04 — una domanda già in attesa che il negozio corregge (o rimanda dopo due secondi)
+    // non è un nuovo consenso: la riga a verbale c'è già dal primo invio.
+    const giaAVerbale = attuale.approval_status === 'pending' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
+    if (!giaAVerbale) try {
       const { error: errConsenso } = await admin.from('consent_log').insert({
         user_id: user.id,
         categoria: 'privacy_terms',
@@ -245,6 +261,143 @@ export const POST = withAuthRateLimit(
       );
     } catch (errore) {
       logger.error('[seller-apply] avviso agli amministratori non partito', { userId: user.id, errore });
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  },
+);
+
+/**
+ * R11-003 — I DATI PER I BONIFICI DI UN NEGOZIO GIÀ ISCRITTO.
+ *
+ * IBAN, ragione sociale, partita IVA, sede, PEC e SDI si scrivevano solo dal
+ * modulo d'iscrizione: chi era gia' approvato veniva rimandato a
+ * /seller/profile (che quei campi non li aveva) e il POST qui sopra gli
+ * rispondeva «già approvato». Un negozio approvato prima del modulo nuovo, o
+ * che cambia banca, non poteva scrivere l'IBAN: Nicola il lunedi' non sapeva
+ * dove mandare il bonifico. Qui si aggiornano SOLO quei dati, con gli stessi
+ * controlli dell'iscrizione, senza toccare ruolo e stato del negozio.
+ */
+const DatiPerIBonifici = z.object({
+  billingIban: z
+    .string()
+    .transform(normalizzaIban)
+    .refine((v) => ibanValido(v), { message: 'IBAN non valido: controlla i caratteri' }),
+  businessLegalName: RichiestaNegozio.shape.businessLegalName,
+  businessVatNumber: RichiestaNegozio.shape.businessVatNumber,
+  businessAddress: RichiestaNegozio.shape.businessAddress,
+  businessCity: RichiestaNegozio.shape.businessCity,
+  businessZip: RichiestaNegozio.shape.businessZip,
+  businessPec: RichiestaNegozio.shape.businessPec,
+  businessSdi: RichiestaNegozio.shape.businessSdi,
+});
+
+export const PATCH = withAuthRateLimit(
+  { name: 'seller-billing', max: 10, windowMs: 60_000 },
+  async ({ user, req }) => {
+    let corpo: unknown;
+    try {
+      corpo = await jsonRichiesta(req, TETTO_JSON);
+    } catch (errore) {
+      if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
+      return ApiErrors.invalidRequest('Richiesta non leggibile');
+    }
+    const esito = DatiPerIBonifici.safeParse(corpo);
+    if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
+    const f = esito.data;
+
+    const admin = getAdminSupabase();
+    const { data: attuale, error: errLettura } = await admin
+      .from('profiles')
+      .select('role, approval_status, billing_iban, store_name, business_legal_name, business_vat_number, business_address, business_city, business_zip, business_pec, business_sdi')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (errLettura) {
+      logger.error('[seller-billing] profilo non leggibile', { userId: user.id, message: errLettura.message });
+      return ApiErrors.internal('Non è stato possibile salvare i dati');
+    }
+    if (!attuale) return ApiErrors.notFound('Profilo non trovato');
+    if (attuale.role !== 'seller') return ApiErrors.forbidden('Solo un negozio può salvare i dati per i bonifici.');
+    if (attuale.approval_status === 'suspended') {
+      return ApiErrors.forbidden("Il tuo negozio è sospeso: per i dati dei bonifici scrivi all'assistenza.");
+    }
+
+    // La partita IVA controllata all'approvazione non si cambia da qui: come in
+    // /api/seller/partita-iva, per cambiarla si scrive all'assistenza.
+    const att = attuale as Record<string, string | null | undefined>;
+    const ivaPrima = att.business_vat_number ? normalizzaPiva(String(att.business_vat_number)) : '';
+    if (ivaPrima && ivaPrima !== normalizzaPiva(f.businessVatNumber)) {
+      return ApiErrors.conflict("La partita IVA c'è già: per cambiarla scrivi all'assistenza.");
+    }
+
+    const { data: scritti, error } = await admin
+      .from('profiles')
+      .update({
+        billing_iban: f.billingIban,
+        business_legal_name: f.businessLegalName,
+        business_vat_number: f.businessVatNumber,
+        business_address: f.businessAddress,
+        business_city: f.businessCity,
+        business_zip: f.businessZip,
+        business_pec: f.businessPec || null,
+        business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
+      })
+      .eq('id', user.id)
+      .eq('role', 'seller')
+      .neq('approval_status', 'suspended')
+      // Due salvataggi insieme partiti dal campo vuoto: scrive solo chi trova
+      // ancora vuota (o uguale) la partita IVA letta sopra.
+      .or(ivaPrima
+        ? `business_vat_number.eq.${att.business_vat_number}`
+        : 'business_vat_number.is.null,business_vat_number.eq.')
+      .select('id');
+    if (error) {
+      logger.error('[seller-billing] dati non salvati', { userId: user.id, code: error.code, message: error.message });
+      return ApiErrors.internal('Non è stato possibile salvare i dati');
+    }
+    if (!scritti || scritti.length === 0) {
+      return ApiErrors.conflict('Lo stato del tuo account è appena cambiato: ricarica la pagina.');
+    }
+
+    // Un IBAN cambiato e' la mossa di chi vuole dirottare un bonifico: lo sa
+    // subito chi paga, prima del lunedi'.
+    const prima = normalizzaIban(String((attuale as { billing_iban?: string | null }).billing_iban ?? ''));
+    if (prima !== f.billingIban) {
+      try {
+        await notifyAdmins(
+          prima ? 'IBAN del negozio cambiato' : 'IBAN del negozio inserito',
+          `${(attuale as { store_name?: string | null }).store_name ?? 'Un negozio'} ha ${prima ? 'cambiato' : 'inserito'} l'IBAN per i bonifici (finisce con ${f.billingIban.slice(-4)}). Controlla prima del prossimo bonifico.`,
+          '/admin/payouts',
+        );
+      } catch (errore) {
+        logger.error('[seller-billing] avviso del cambio IBAN non partito', { userId: user.id, errore });
+      }
+    }
+
+    // I dati fiscali sono quelli che il cliente legge in «Venduto da»: ogni
+    // cambio lo sa subito chi approva i negozi.
+    const nuovi: Record<string, string | null> = {
+      business_legal_name: f.businessLegalName,
+      business_address: f.businessAddress,
+      business_city: f.businessCity,
+      business_zip: f.businessZip,
+      business_pec: f.businessPec || null,
+      business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
+    };
+    const cambiati = Object.keys(nuovi).filter(
+      (k) => String(att[k] ?? '').trim() !== String(nuovi[k] ?? '').trim() && String(att[k] ?? '').trim() !== '',
+    );
+    if (!ivaPrima) cambiati.push('business_vat_number (prima volta)');
+    if (cambiati.length > 0) {
+      try {
+        await notifyAdmins(
+          'Dati fiscali del negozio cambiati',
+          `${(attuale as { store_name?: string | null }).store_name ?? 'Un negozio'} ha cambiato: ${cambiati.join(', ')}. Controlla che siano ancora quelli verificati all'approvazione.`,
+          '/admin/users',
+        );
+      } catch (errore) {
+        logger.error('[seller-billing] avviso del cambio dei dati fiscali non partito', { userId: user.id, errore });
+      }
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });

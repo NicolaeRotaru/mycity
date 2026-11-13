@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { Landmark, Info, Banknote } from 'lucide-react';
@@ -42,6 +44,7 @@ type OrderRow = {
   application_fee_cents: number | null;
   stripe_transfer_id: string | null;
   stripe_reversal_id: string | null;
+  pickup_in_store: boolean | null;
 };
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
@@ -56,9 +59,12 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
   if (o.payment_method === 'cod') {
     switch (o.payout_status) {
       case 'TRANSFERRED':
+      case 'PAID_MANUALLY': // R11-004 — il bonifico del lunedì fatto a mano
         return { label: o.payout_at ? `Pagato ${fmtDate(o.payout_at)}` : 'Pagato', cls: 'bg-olive-100 text-olive-800' };
       case 'AWAITING_REMITTANCE':
         return { label: 'Attesa cassa fattorino', cls: 'bg-accent-100 text-accent-800' };
+      case 'CASH_IN_STORE': // R11-005 — ritiro pagato al banco: nessun bonifico
+        return { label: 'Incassato al banco', cls: 'bg-cream-200 text-ink-700' };
       case 'HELD':
       case 'PROCESSING':
         return { label: 'In liquidazione', cls: 'bg-accent-100 text-accent-800' };
@@ -76,7 +82,11 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
     case 'HELD':
       return { label: 'In attesa', cls: 'bg-accent-100 text-accent-800' };
     case 'PENDING_SELLER_ONBOARDING':
-      return { label: 'Completa onboarding', cls: 'bg-primary-100 text-primary-800' };
+      return { label: 'Collega il conto', cls: 'bg-primary-100 text-primary-800' };
+    case 'REVERSAL_FAILED': // R11-013 — prima usciva il codice grezzo
+      return { label: 'Storno da sistemare: ci pensiamo noi', cls: 'bg-secondary-100 text-secondary-700' };
+    case 'PROCESSING':
+      return { label: 'Bonifico in corso', cls: 'bg-accent-100 text-accent-800' };
     case 'REVERSED':
       return { label: 'Stornato', cls: 'bg-secondary-100 text-secondary-700' };
     case 'REFUNDED':
@@ -84,7 +94,8 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
     case 'FAILED':
       return { label: 'Verifica IBAN', cls: 'bg-secondary-100 text-secondary-700' };
     default:
-      return { label: o.payout_status ?? '—', cls: 'bg-cream-200 text-ink-700' };
+      // R11-013 — mai il codice tecnico a video: una parola sola.
+      return { label: o.payout_status ? 'Da verificare' : '—', cls: 'bg-cream-200 text-ink-700' };
   }
 }
 
@@ -115,7 +126,7 @@ export default function SellerEarningsPage() {
           // lo confrontava con la sua dashboard Stripe i conti non tornavano.
           // E' la telefonata «dove sono i miei soldi», che sul payout erode la
           // fiducia piu' di qualunque altra cosa.
-          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id',
+          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id, pickup_in_store',
         )
         .eq('seller_id', user.id)
         // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
@@ -130,6 +141,20 @@ export default function SellerEarningsPage() {
       return (data ?? []) as unknown as OrderRow[];
     },
   });
+  // R11-003 — Senza IBAN il bonifico non può partire: lo si dice qui, con la strada per scriverlo.
+  const queryIban = useQuery({
+    queryKey: ['seller', 'iban-per-i-bonifici'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data, error } = await supabase.from('profiles').select('billing_iban').eq('id', user.id).maybeSingle();
+      // Una lettura caduta non è «IBAN mancante»: niente avviso, la query resta in errore.
+      if (error) throw error;
+      return (data as { billing_iban?: string | null } | null)?.billing_iban ?? null;
+    },
+  });
+  const ibanMancante = queryIban.isSuccess && !queryIban.data;
+
   // Per i calcoli serve una lista: qui il ripiego è innocuo, perché a decidere COSA disegnare non è
   // più questa riga ma il verdetto qui sotto.
   const orders = query.data ?? [];
@@ -204,6 +229,13 @@ export default function SellerEarningsPage() {
         <p role="note" className="mb-4 text-xs text-ink-500">{avvisoDelTettoOrdini(orders.length)}</p>
       )}
 
+      {ibanMancante && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Manca il tuo IBAN:</strong> senza, i bonifici dei tuoi ordini non possono partire.{' '}
+          <Link href="/seller/profile#bonifici" className="font-semibold underline">Scrivilo nel profilo</Link>.
+        </div>
+      )}
+
       {/* Period switcher */}
       <div className="mb-5 flex flex-wrap gap-2">
         {PERIODS.map((p) => {
@@ -227,7 +259,7 @@ export default function SellerEarningsPage() {
       {/* KPI tower */}
       <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Stat label="Fatturato lordo (carta)" value={formatPrice(grossCents / 100)} hint={`${activeCard.length} ordini`} tone="primary" />
-        <Stat label="Commissione marketplace" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" tone="secondary" />
+        <Stat label="Commissione MyCity" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" tone="secondary" />
         <Stat
           label="Incassato"
           value={formatPrice(paidCents / 100)}
@@ -251,7 +283,8 @@ export default function SellerEarningsPage() {
             {daily.map(([day, val]) => {
               const pct = (val / maxDaily) * 100;
               return (
-                <div key={day} className="flex flex-1 flex-col items-center gap-1">
+                // R11-013 — h-full: senza un'altezza la colonna non dava riferimento al % della barra (0 px).
+                <div key={day} className="flex h-full flex-1 flex-col items-center gap-1">
                   <div className="flex w-full flex-1 items-end">
                     <div
                       className="w-full rounded-t bg-gradient-to-b from-primary-400 to-secondary-600"
@@ -270,7 +303,7 @@ export default function SellerEarningsPage() {
 
         <Card variant="flat" padding="lg" className="border border-olive-200 bg-olive-50">
           <h2 className="flex items-center gap-2 font-serif text-[17px] font-bold text-olive-900">
-            <Banknote size={19} className="text-olive-700" aria-hidden /> Contanti (COD)
+            <Banknote size={19} className="text-olive-700" aria-hidden /> Contanti alla consegna
           </h2>
           <p className="mb-3 mt-1 text-[13px] leading-relaxed text-olive-800">
             Gli ordini pagati alla consegna li incassa il fattorino. Il bonifico parte dopo la verifica
@@ -288,6 +321,14 @@ export default function SellerEarningsPage() {
               <> · già versato: <strong>{formatPrice(contanti.giaVersatoCents / 100)}</strong></>
             )}
           </p>
+          {/* R11-005 — Il ritiro pagato al banco: i soldi li hai già tu, la commissione la devi a MyCity. */}
+          {contanti.incassatoAlBancoCents > 0 && (
+            <p className="mt-2 text-xs text-olive-700">
+              Incassati da te al banco (ritiro in negozio): <strong>{formatPrice(contanti.incassatoAlBancoCents / 100)}</strong>
+              {' '}· nessun bonifico per questi: su questi ritiri la commissione MyCity è di{' '}
+              <strong>{formatPrice(contanti.commissioneDovutaCents / 100)}</strong>, e te la chiediamo noi.
+            </p>
+          )}
         </Card>
       </div>
 
@@ -309,7 +350,7 @@ export default function SellerEarningsPage() {
                   Stripe del negozio, non in banca, e al lancio si paga in contanti col
                   bonifico del lunedì. La frase è la stessa della spiegazione qui sotto. */}
               {tempiBonifico && <>{tempiBonifico.prima}{tempiBonifico.forte}{tempiBonifico.dopo}{' '}</>}
-              Per saldo e bonifici reali apri la dashboard Stripe.
+              Per saldo e bonifici reali apri il tuo conto Stripe.
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -332,10 +373,10 @@ export default function SellerEarningsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-cream-50 text-xs uppercase tracking-[0.03em] text-ink-500">
-                  <th className="px-5 py-3 text-left font-bold">Ordine</th>
-                  <th className="px-5 py-3 text-left font-bold">Data</th>
-                  <th className="px-5 py-3 text-right font-bold">Netto</th>
-                  <th className="px-5 py-3 text-right font-bold">Stato</th>
+                  <th className="px-3 py-3 text-left font-bold sm:px-5">Ordine</th>
+                  <th className="hidden px-5 py-3 text-left font-bold sm:table-cell">Data</th>
+                  <th className="px-3 py-3 text-right font-bold sm:px-5">Netto</th>
+                  <th className="px-3 py-3 text-right font-bold sm:px-5">Stato</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,11 +384,15 @@ export default function SellerEarningsPage() {
                   const badge = payoutBadge(o);
                   return (
                     <tr key={o.id} className="border-t border-cream-200">
-                      <td className="px-5 py-3 font-mono text-[13px] text-ink-700">#{o.id.slice(0, 8)}</td>
-                      <td className="px-5 py-3 text-[13px] text-ink-500">{fmtDate(o.created_at)}</td>
-                      <td className="px-5 py-3 text-right font-serif text-[15px] font-bold text-olive-700">{formatPrice((o.seller_payout_cents ?? 0) / 100)}</td>
-                      <td className="px-5 py-3 text-right">
-                        <span className={`${badge.cls} rounded-full px-2.5 py-0.5 text-xs font-semibold`}>{badge.label}</span>
+                      {/* R11-013 — sul telefono la data va sotto il numero: la colonna Stato non esce più dallo schermo. */}
+                      <td className="px-3 py-3 font-mono text-[13px] text-ink-700 sm:px-5">
+                        #{o.id.slice(0, 8)}
+                        <span className="block font-sans text-[11px] text-ink-500 sm:hidden">{fmtDate(o.created_at)}</span>
+                      </td>
+                      <td className="hidden px-5 py-3 text-[13px] text-ink-500 sm:table-cell">{fmtDate(o.created_at)}</td>
+                      <td className="px-3 py-3 text-right font-serif text-[15px] font-bold text-olive-700 sm:px-5">{formatPrice((o.seller_payout_cents ?? 0) / 100)}</td>
+                      <td className="px-3 py-3 text-right sm:px-5">
+                        <span className={`${badge.cls} inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold`}>{badge.label}</span>
                       </td>
                     </tr>
                   );

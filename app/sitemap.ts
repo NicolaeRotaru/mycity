@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
-import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { leggiInBlocchiTutte, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
+import { logger } from '@/lib/logger';
 import { env } from '@/lib/env';
 
 export const revalidate = 3600; // sitemap rigenerato ogni ora
@@ -88,11 +89,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   type StoreSlug = { id: string; created_at?: string | null };
   type CategorySlug = { id: string; slug: string; parent_id?: string | null };
 
+  // 12/11/2026 (R06-006) — `.limit(2000)` non e' una lettura completa: il database
+  // ne consegna al massimo mille per richiesta. I negozi si leggono a finestre.
   const [storesRes, categoriesRes] = await Promise.all([
-    supabase
-      .from('seller_public_profiles')
-      .select('id, created_at')
-      .limit(2000),
+    leggiTutteLeRighe<StoreSlug>((da, a) =>
+      supabase
+        .from('seller_public_profiles')
+        .select('id, created_at')
+        .order('id', { ascending: true })
+        .range(da, a) as unknown as PromiseLike<{ data: StoreSlug[] | null; error: { message?: string } | null }>,
+    ),
     supabase
       .from('categories')
       .select('id, slug, parent_id')
@@ -104,15 +110,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // settantaquattromila caratteri: il server risponde 414 e qui si legge
   // «nessun prodotto». La sitemap continuerebbe a rispondere, vuota, e Google
   // smetterebbe di indicizzare il catalogo senza che nessuno se ne accorga.
-  const products = await leggiInBlocchi<ProductSlug>(approvedSellerIds, (blocco) =>
+  // 12/11/2026 (R06-006) — Una sola richiesta per blocco con `.limit(5000)` tornava al
+  // massimo mille prodotti: oltre, i piu' vecchi sparivano dalla mappa senza dirlo.
+  // Dentro ogni blocco di negozi si legge a finestre di mille finche' finiscono.
+  const products = await leggiInBlocchiTutte<ProductSlug>(approvedSellerIds, (blocco, da, a) =>
     supabase
       .from('products')
       .select('id, created_at, seller_id, category_id')
       .eq('status', 'available')
       .in('seller_id', blocco)
       .order('created_at', { ascending: false })
-      .limit(5000) as unknown as PromiseLike<{ data: ProductSlug[] | null; error: { message?: string } | null }>,
+      .order('id', { ascending: true })
+      .range(da, a) as unknown as PromiseLike<{ data: ProductSlug[] | null; error: { message?: string } | null }>,
   );
+  // Il tetto dei 5000 indirizzi di prodotto resta, ma quando scatta si dice.
+  if (products.troncato || (products.data ?? []).length > 5000 || storesRes.troncato) {
+    logger.warn('[sitemap] tetto raggiunto: la mappa non elenca tutti i prodotti o tutti i negozi', {
+      prodotti: (products.data ?? []).length,
+      negozi: (storesRes.data ?? []).length,
+    });
+  }
 
   const stores = storesRes;
   const categories = categoriesRes;

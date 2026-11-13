@@ -78,6 +78,36 @@ function conColonneIndispensabili(select: string): string {
   return colonne.join(', ');
 }
 
+/**
+ * 12/11/2026 (R06-009) — LE DOMANDE IN VOLO PER LO STESSO NEGOZIO SI UNISCONO.
+ *
+ * In home ogni sezione (Drop del giorno, storie, Ordina di nuovo, fasce,
+ * tendenze, negozio del mese…) chiedeva alla vetrina gli stessi negozi, ognuna
+ * per conto suo. Qui, nel browser, una domanda gia' in volo per lo stesso negozio
+ * (stesso client, stesse colonne) si aspetta invece di rifarla, e si chiedono
+ * solo i negozi che mancano.
+ *
+ * Una memoria che duri qualche minuto, come proponeva la voce, qui non si tiene:
+ * il modulo non sa quando i dati diventano vecchi (un negozio sospeso, una vista
+ * che cade), e chi lo sa e' la cache di React Query dei chiamanti. Quella parte
+ * resta da fare nei componenti che chiamano (referto R06).
+ *
+ * Solo nel browser: sul server una mappa del modulo vive fra richieste di persone
+ * diverse.
+ */
+type VoliDelClient = Map<string, Promise<SellerPublicProfile | null>>;
+const voliPerClient = new WeakMap<object, VoliDelClient>();
+
+function voliDi(supabase: LettoreVista): VoliDelClient | null {
+  if (typeof window === 'undefined') return null;
+  let v = voliPerClient.get(supabase);
+  if (!v) {
+    v = new Map();
+    voliPerClient.set(supabase, v);
+  }
+  return v;
+}
+
 /** Carica le vetrine pubbliche per un insieme di seller id (batch). */
 export async function fetchSellerPublicMap(
   supabase: LettoreVista,
@@ -85,6 +115,39 @@ export async function fetchSellerPublicMap(
   select = PUBLIC_SELLER_SELECT,
 ): Promise<Map<string, SellerPublicProfile>> {
   const unique = [...new Set(sellerIds.filter((s): s is string => !!s))];
+  const voli = voliDi(supabase);
+  if (!voli || unique.length === 0) return leggiDallaVista(supabase, unique, select);
+
+  const chiave = (id: string) => `${select}|${id}`;
+  const daChiedere = unique.filter((id) => !voli.has(chiave(id)));
+  if (daChiedere.length > 0) {
+    const lettura = leggiDallaVista(supabase, daChiedere, select);
+    for (const id of daChiedere) {
+      const k = chiave(id);
+      const volo = lettura.then((letti) => letti.get(id) ?? null);
+      voli.set(k, volo);
+      // Atterrato (bene o male), il volo si toglie: la prossima domanda va al database.
+      void volo.then(
+        () => { if (voli.get(k) === volo) voli.delete(k); },
+        () => { if (voli.get(k) === volo) voli.delete(k); },
+      );
+    }
+  }
+  // Una lettura caduta risale a chi chiama, come prima: niente mappa vuota «senza errore».
+  const righe = await Promise.all(unique.map((id) => voli.get(chiave(id)) ?? Promise.resolve(null)));
+  const map = new Map<string, SellerPublicProfile>();
+  unique.forEach((id, i) => {
+    const riga = righe[i];
+    if (riga) map.set(id, riga);
+  });
+  return map;
+}
+
+async function leggiDallaVista(
+  supabase: LettoreVista,
+  unique: string[],
+  select: string,
+): Promise<Map<string, SellerPublicProfile>> {
   const map = new Map<string, SellerPublicProfile>();
   if (unique.length === 0) return map;
 

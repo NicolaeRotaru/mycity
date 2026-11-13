@@ -12,6 +12,7 @@ import { RatingStars } from '@/components/ui/RatingStars';
 import { useQuery } from '@tanstack/react-query';
 import { useUtente } from '@/components/hooks/useUtente';
 import { riepilogoRecensioni } from './riepilogo-recensioni';
+import { Segnala } from '@/components/Segnala';
 
 /** Quante recensioni si vedono subito; le altre lette con «Mostra altre recensioni». */
 const RECENSIONI_SUBITO = 6;
@@ -172,6 +173,11 @@ function ReviewItem({ r, accent, userId, giaVotata }: { r: SectionReview; accent
       >
         <ThumbsUp size={13} aria-hidden /> Utile{count > 0 ? ` · ${count}` : ''}
       </button>
+      {/* 12/11/2026 (R02-005) — I Termini promettono di togliere le recensioni non genuine:
+          serve un modo per dircelo, su ognuna. */}
+      <div className="mt-2">
+        <Segnala tipo="recensione" oggettoId={r.id} />
+      </div>
     </li>
   );
 }
@@ -201,9 +207,20 @@ export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
 
   if (reviews.length === 0) {
     // Un guasto non è «nessuna recensione»: lo si dice, invece di far sparire la sezione.
-    return ctx.recensioniInErrore ? (
-      <p role="status" className="rounded-2xl border border-cream-300 bg-white p-4 text-sm text-ink-600">
-        Non riusciamo a caricare le recensioni in questo momento. Riprova fra poco.
+    // 12/11/2026 (R02-023) — Con zero recensioni la scheda «Recensioni · 0» restava vuota: lo si dice.
+    // Ma solo quando lo si SA: un elenco vuoto è anche quello di una lettura ancora in corso o in
+    // un nuovo tentativo. «Nessuna» si scrive solo se il conto vero (store_review_stats, letto con
+    // successo) dice zero; finché non c'è, non si scrive niente.
+    if (ctx.recensioniInErrore) {
+      return (
+        <p role="status" className="rounded-2xl border border-cream-300 bg-white p-4 text-sm text-ink-600">
+          Non riusciamo a caricare le recensioni in questo momento. Riprova fra poco.
+        </p>
+      );
+    }
+    return ctx.riepilogoRecensioni?.totale === 0 ? (
+      <p className="rounded-2xl border border-cream-300 bg-white p-4 text-sm text-ink-600">
+        Ancora nessuna recensione per questo negozio.
       </p>
     ) : null;
   }

@@ -24,6 +24,36 @@ export const TURNO_SCADUTO_DOPO_MS = 5 * 60_000;
 export type Turno = 'preso' | 'occupato' | 'guasto';
 
 /**
+ * 12/11/2026 (R12-018) — «OCCUPATO» VOLEVA DIRE DUE COSE, E LA SECONDA PERDEVA L'AVVISO.
+ *
+ * `occupato` copre l'avviso già lavorato (processed = true) e quello che una
+ * consegna sta lavorando adesso (turno preso da meno di cinque minuti). La
+ * rotta rispondeva 200 «già visto» a tutti e due. Ma se la consegna che aveva
+ * il turno era morta senza liberarlo (il tetto dei 60 secondi di Vercel, la
+ * memoria finita) e la riconsegna arrivava entro cinque minuti, Stripe leggeva
+ * 200, smetteva di riprovare, e su un checkout pagato l'ordine non nasceva mai.
+ *
+ * Qui si distingue: `lavorato` → 200 come prima; `in_corso` → la rotta
+ * risponde 409 e Stripe riprova più tardi, quando il turno è chiuso (allora
+ * `lavorato`) o scaduto (allora lo riprende). `guasto`: la lettura non ha
+ * risposto, e nel dubbio si fa riprovare.
+ */
+export type StatoAvvisoOccupato = 'lavorato' | 'in_corso' | 'guasto';
+
+export async function statoDellAvvisoOccupato(admin: Admin, eventId: string): Promise<StatoAvvisoOccupato> {
+  const { data, error } = await admin
+    .from('stripe_event_log')
+    .select('processed')
+    .eq('event_id', eventId)
+    .maybeSingle();
+  if (error) {
+    logger.error(error, { context: 'stripe-event-log-stato-occupato' });
+    return 'guasto';
+  }
+  return (data as { processed?: boolean } | null)?.processed === true ? 'lavorato' : 'in_corso';
+}
+
+/**
  * 15/10/2026 (R81, collaudo) — IL TURNO NON SI RIPRENDEVA MAI.
  *
  * Qui c'era UNA scrittura sola con dentro un «oppure»:

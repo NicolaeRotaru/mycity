@@ -200,9 +200,10 @@ describe("il freno della veloce dice il vero a negozio, cliente e amministratori
     expect(src).toContain("c’era già un rimborso di ${formatPriceFromCents(giaResi)} che non è l’euro della veloce");
   });
 
-  it("2367 · se il guasto arriva dopo aver spostato un ordine, l avviso dice che cliente e negozi non sono stati avvisati", () => {
+  it("2367 · se il guasto arriva dopo aver spostato un ordine, l avviso dice chi è stato avvisato e chi no", () => {
+    // 12/11/2026 (R09-008) — negozi e fattorino degli ordini già spostati ora sono avvisati subito.
     const src = readFileSync("lib/ordini/veloce-non-confermata.ts", "utf8");
-    expect(src).toContain("Cliente, negozi e fattorino NON sono stati avvisati del cambio di fascia");
+    expect(src).toContain("I negozi e il fattorino degli ordini già spostati sono stati avvisati; il cliente NON ancora");
   });
 });
 

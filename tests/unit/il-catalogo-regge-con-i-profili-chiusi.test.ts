@@ -266,12 +266,21 @@ describe('le fasce di prodotti', () => {
   // devono scartarlo lo stesso, perche' il filtro sta nel codice e non solo nelle regole.
   const conFuga = (mondo: Mondo): Mondo => ({ ...mondo, prodottiDeiNonApprovatiVisibili: true });
 
-  it.each(CASI)('«Trending ora» si riempie anche senza visite — %s', async (_n, mondo, chi) => {
+  // 12/11/2026 (R12-008) — Era «si riempie anche senza visite»: il ripiego leggeva gli ultimi
+  // prodotti con view_count 0, che il riquadro scarta (VISITE_MINIME_PER_LA_CLASSIFICA). Tolto.
+  it.each(CASI)('«Trending ora» senza visite non legge niente (il riquadro non lo mostrerebbe) — %s', async (_n, mondo, chi) => {
     const fascia = await leggiTendenze(db(conFuga(mondo), chi).client);
-    const ids = fascia.map((t) => t.product.id);
-    expect(ids).toContain('p-focaccia');
-    expect(ids).not.toContain('p-panettone');
-    expect(fascia.find((t) => t.product.id === 'p-focaccia')?.product.profiles?.store_name).toBe('Pane Quotidiano');
+    expect(fascia).toEqual([]);
+  });
+
+  // R12-008 — le due asserzioni che guardavano il ripiego guardano adesso la strada vera: con le
+  // visite, il prodotto del negozio approvato c'è e porta il nome del negozio.
+  it.each(CASI)('«Trending ora» con una visita porta il prodotto col suo negozio — %s', async (_n, mondo, chi) => {
+    const fascia = await leggiTendenze(db(conFuga(mondo), chi, {
+      trending_product_ids_24h: () => [{ product_id: 'p-focaccia', view_count: 4 }],
+    }).client);
+    expect(fascia.map((t) => t.product.id)).toEqual(['p-focaccia']);
+    expect(fascia[0]?.product.profiles?.store_name).toBe('Pane Quotidiano');
   });
 
   it.each(CASI)('«Trending ora» con le visite tiene l ordine e scarta il negozio non approvato — %s', async (_n, mondo, chi) => {
@@ -486,7 +495,14 @@ describe('con due negozi approvati, come in produzione', () => {
 
   it.each(CASI)('ogni fascia porta i prodotti di tutti e due i negozi — %s', async (_n, mondo, chi) => {
     const supa = dueNegozi(mondo, chi);
-    const tendenze = (await leggiTendenze(supa)).map((t) => t.product.id);
+    // R12-008 — le tendenze si leggono con le visite: senza, la fascia è vuota.
+    const conVisite = dueNegozi(mondo, chi, {
+      trending_product_ids_24h: () => [
+        { product_id: 'p-focaccia', view_count: 12 },
+        { product_id: 'p-coppa', view_count: 9 },
+      ],
+    });
+    const tendenze = (await leggiTendenze(conVisite)).map((t) => t.product.id);
     expect(tendenze).toEqual(expect.arrayContaining(['p-focaccia', 'p-coppa']));
 
     const simili = (await leggiSimili(supa, { productId: 'p-grissini', categoryId: 'c-forno' })).map((p) => p.id);

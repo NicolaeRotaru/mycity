@@ -17,7 +17,7 @@
 /** Le colonne che la rotta deve leggere per poter decidere. */
 export const COLONNE_PER_APPROVARE =
   'approval_status, approved_by, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url, ' +
-  'rider_license_expires_on, rider_insurance_expires_on';
+  'rider_license_expires_on, rider_insurance_expires_on, rider_vehicle_type';
 
 type ColonnaDocumento = 'kyc_id_doc_front_url' | 'kyc_selfie_url' | 'rider_license_url' | 'rider_insurance_url';
 
@@ -42,8 +42,36 @@ export const DOCUMENTI_OBBLIGATORI: Record<'seller' | 'rider', ReadonlyArray<{ c
   seller: [],
 };
 
+/**
+ * 12/11/2026 (R03-024) — I DOCUMENTI DEL FATTORINO DIPENDONO DAL MEZZO.
+ *
+ * Si chiedevano sempre documento, selfie, patente e polizza RC, qualunque fosse il mezzo: chi
+ * consegna in bici (Nicola, un familiare, un ragazzo) senza patente non arrivava mai
+ * all'approvazione, e senza un fattorino approvato nessuno prende un ordine pronto. La patente
+ * serve per scooter e auto. La polizza RC della bici arriva dopo il lancio per scelta di Nicola
+ * (registro dei fatti, rischi.scelti-al-lancio, 1/11/2026: «la polizza infortuni più la
+ * responsabilità civile della bici arrivano DOPO»): quando c'è, si accende qui.
+ * Un mezzo non dichiarato chiede tutto, come prima.
+ */
+export const RC_OBBLIGATORIA_PER_LA_BICI = false;
+
+export type MezzoDelFattorino = 'BIKE' | 'EBIKE' | 'SCOOTER' | 'CAR';
+
+const IN_BICI = (mezzo: string | null | undefined) => mezzo === 'BIKE' || mezzo === 'EBIKE';
+
+/** I documenti obbligatori di un fattorino, per il mezzo dichiarato: la regola sta qui sola. */
+export function documentiObbligatoriDelFattorino(
+  mezzo: string | null | undefined,
+): ReadonlyArray<{ colonna: ColonnaDocumento; nome: string }> {
+  if (!IN_BICI(mezzo)) return DOCUMENTI_OBBLIGATORI.rider;
+  return DOCUMENTI_OBBLIGATORI.rider.filter(
+    (d) => d.colonna !== 'rider_license_url' && (d.colonna !== 'rider_insurance_url' || RC_OBBLIGATORIA_PER_LA_BICI),
+  );
+}
+
 export type ProfiloDaApprovare = {
   role: string;
+  rider_vehicle_type?: string | null;
   approval_status?: string | null;
   approved_by?: string | null;
   business_vat_number?: string | null;
@@ -64,7 +92,11 @@ const SCADENZE_RIDER: ReadonlyArray<{ colonna: 'rider_license_expires_on' | 'rid
 
 function scadenzeNonValide(p: ProfiloDaApprovare, oggi: string): string[] {
   const problemi: string[] = [];
+  // R03-024 — Si guarda la scadenza dei documenti che il mezzo chiede, e di quelli caricati.
+  const chiesti = new Set(documentiObbligatoriDelFattorino(p.rider_vehicle_type).map((d) => d.colonna));
   for (const d of SCADENZE_RIDER) {
+    const documento = d.colonna === 'rider_license_expires_on' ? 'rider_license_url' : 'rider_insurance_url';
+    if (!chiesti.has(documento) && !presente(p[documento])) continue;
     const v = p[d.colonna];
     if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(v)) problemi.push(`${d.nome} senza data di scadenza`);
     else if (v.slice(0, 10) < oggi) problemi.push(`${d.nome} scaduta il ${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}`);
@@ -125,7 +157,8 @@ export function motivoPerNonApprovare(
   // nessun documento: un clic su «Riattiva» lo avrebbe mandato a consegnare.
   // 5/11/2026 — Patente e polizza: una data di scadenza e non scadute. Vale anche per
   // chi torna da sospeso: tornerebbe a consegnare con una polizza scaduta.
-  if (p.role === 'rider' && presente(p.rider_license_url) && presente(p.rider_insurance_url)) {
+  const documentiDelMezzo = p.role === 'rider' ? documentiObbligatoriDelFattorino(p.rider_vehicle_type) : [];
+  if (p.role === 'rider' && documentiDelMezzo.every((d) => presente(p[d.colonna]))) {
     const scadenze = scadenzeNonValide(p, oggi);
     if (scadenze.length > 0) {
       const v = azione === 'reactivate' ? 'Non si riattiva' : 'Non si approva';
@@ -146,7 +179,8 @@ export function motivoPerNonApprovare(
     }
   }
 
-  const mancanti = DOCUMENTI_OBBLIGATORI[p.role].filter((d) => !presente(p[d.colonna])).map((d) => d.nome);
+  const richiesti = p.role === 'rider' ? documentiDelMezzo : DOCUMENTI_OBBLIGATORI[p.role];
+  const mancanti = richiesti.filter((d) => !presente(p[d.colonna])).map((d) => d.nome);
   if (mancanti.length > 0) {
     return `${verbo}: mancano i documenti obbligatori (${mancanti.join(', ')}). Chiedi di caricarli ${prima}.`;
   }

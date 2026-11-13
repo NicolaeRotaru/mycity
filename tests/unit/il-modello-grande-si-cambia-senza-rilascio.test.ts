@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  * claude-sonnet-4-5 era scritto a mano nel codice: per cambiarlo serviva un
  * rilascio. Ora AI_MODELLO_VISION / AI_MODELLO_SMART lo scelgono, ma solo fra i
  * modelli con una riga prezzi (altrimenti il costo diventa NaN e il freno di
- * spesa resta cieco). Nessun modello si accende da solo: il default e' lo stesso.
+ * spesa resta cieco). 12/11 (R04-002): il default e' claude-sonnet-4-6, stesso prezzo del 4-5 che si spegne.
  */
 
 async function client() {
@@ -41,13 +41,13 @@ describe('il modello di «vision» e «smart» si sceglie dall\'ambiente', () =>
     vi.stubEnv('AI_MODELLO_SMART', 'modello-che-non-esiste');
     const avviso = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { MODELS } = await client();
-    expect(MODELS.smart).toBe('claude-sonnet-4-5');
+    expect(MODELS.smart).toBe('claude-sonnet-4-6');
     avviso.mockRestore();
   });
 
   it('senza variabili non cambia niente', async () => {
     const { MODELS } = await client();
-    expect(MODELS.smart).toBe('claude-sonnet-4-5');
-    expect(MODELS.vision).toBe('claude-sonnet-4-5');
+    expect(MODELS.smart).toBe('claude-sonnet-4-6');
+    expect(MODELS.vision).toBe('claude-sonnet-4-6');
   });
 });

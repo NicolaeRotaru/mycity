@@ -1,7 +1,12 @@
 // lib/ai/tettoSpesa.ts
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI } from '@/lib/ai/decisioneTettoSpesa';
+import {
+  RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,
+  allarmiTettoSpesaAi as allarmiDelTetto,
+  leggiCopieAttese as copieDaAmbiente,
+  type AllarmeTetto,
+} from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * 8/9/2026 (lotto gravi, corsia 11) — QUI STA DOVE IL NUMERO E' CONSERVATO.
@@ -315,6 +320,17 @@ export async function spesaDiOggiCents(quando?: Date): Promise<number> {
   return condiviso;
 }
 
+/**
+ * 12/11/2026 (R04-017, revisione K02) — L'ULTIMO TOTALE CHE QUESTA COPIA CONOSCE.
+ *
+ * Una lettura del conto partita prima puo' arrivare dopo che un'altra chiamata
+ * ha gia' speso e registrato: il numero letto e' vecchio. Chi decide prende il
+ * piu' alto fra la lettura e questo, che sale a ogni registrazione e lettura.
+ */
+export function ultimaSpesaNotaCents(quando?: Date): number {
+  return ripiegoCents(giornoDiSpesa(quando));
+}
+
 /** Aggiunge una spesa al conto del giorno. Non lancia mai. */
 export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<void> {
   if (!Number.isFinite(cents) || cents <= 0) return;
@@ -342,7 +358,16 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
  * non buttare un giro di rete su OGNI chiamata al modello, mentre qui il giro
  * di rete e' esattamente il lavoro — una volta ogni passata del cron.
  */
-export async function sondaContoCondiviso(quando?: Date): Promise<{
+export async function sondaContoCondiviso(
+  quando?: Date,
+  /**
+   * 12/11/2026 (R04-018) — Da quando il guasto e' noto, detto da chi lo ricorda
+   * FUORI dalla memoria di questa copia (es. la prima riga d'allarme salvata dal
+   * cron). Senza, l'ora di tolleranza ripartiva da zero a ogni copia nuova e su
+   * Vercel, dove le copie vivono poco, l'allarme poteva non arrivare mai.
+   */
+  ripiegoNotoDaMs?: number,
+): Promise<{
   condiviso: boolean;
   permanente: boolean;
   motivo: string;
@@ -350,6 +375,66 @@ export async function sondaContoCondiviso(quando?: Date): Promise<{
 }> {
   const giorno = giornoDiSpesa(quando);
   const letto = await eseguiRpc('spesa_ai_di_oggi', { p_giorno: giorno });
-  if (letto === null) segnalaRipiego('sonda del conto condiviso non riuscita', giorno);
+  if (letto === null) {
+    const adesso = Date.now();
+    if (
+      typeof ripiegoNotoDaMs === 'number' &&
+      Number.isFinite(ripiegoNotoDaMs) &&
+      ripiegoNotoDaMs > 0 &&
+      ripiegoNotoDaMs <= adesso &&
+      (_stato.ripiegoDa === 0 || ripiegoNotoDaMs < _stato.ripiegoDa)
+    ) {
+      _stato.ripiegoDa = ripiegoNotoDaMs;
+    }
+    segnalaRipiego('sonda del conto condiviso non riuscita', giorno, adesso);
+  }
   return statoContoCondiviso();
+}
+
+/**
+ * 12/11/2026 (R04-018, revisione K02) — L'ALLARME DEL TETTO PRONTO PER IL CRON.
+ *
+ * L'ora di tolleranza si contava dalla memoria della copia che serve le
+ * richieste AI: su Vercel le copie vivono poco e l'allarme poteva non arrivare
+ * mai. Qui l'inizio del guasto si ricorda nel database, nella tabella che il
+ * cron degli avvisi usa gia' (`operational_alert_log`, colonne `alert_key` e
+ * `last_sent_at`): una riga dedicata, scritta solo la PRIMA volta che il conto
+ * non risponde (upsert che ignora i doppioni) e tolta quando risponde di nuovo.
+ * Il cron deve solo fare `alerts.push(...(await allarmiTettoSpesaAiPerIlCron()))`.
+ */
+export const CHIAVE_RIPIEGO_DA = 'ai-tetto-condiviso:ripiego-da';
+
+export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
+  tettoEur?: number;
+  copieAttese?: number;
+  quando?: Date;
+} = {}): Promise<AllarmeTetto[]> {
+  const allarmi = allarmiDelTetto;
+  const copie = copieDaAmbiente;
+  const tettoEur = opzioni.tettoEur ?? Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
+  const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
+  const primo = await sondaContoCondiviso(opzioni.quando);
+  try {
+    const admin = getAdminSupabase();
+    if (primo.condiviso) {
+      await admin.from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
+      return allarmi(primo, { tettoEur, copieAttese });
+    }
+    await admin
+      .from('operational_alert_log')
+      .upsert({ alert_key: CHIAVE_RIPIEGO_DA, last_sent_at: new Date().toISOString() }, { onConflict: 'alert_key', ignoreDuplicates: true });
+    const { data } = await admin
+      .from('operational_alert_log')
+      .select('last_sent_at')
+      .eq('alert_key', CHIAVE_RIPIEGO_DA)
+      .maybeSingle();
+    const da = data && typeof (data as { last_sent_at?: unknown }).last_sent_at === 'string'
+      ? Date.parse((data as { last_sent_at: string }).last_sent_at)
+      : NaN;
+    const conto = Number.isFinite(da) ? await sondaContoCondiviso(opzioni.quando, da) : primo;
+    return allarmi(conto, { tettoEur, copieAttese });
+  } catch {
+    // Se anche questa tabella non risponde, vale quello che sa la copia.
+    return allarmi(primo, { tettoEur, copieAttese });
+  }
 }

@@ -74,10 +74,22 @@ export function leggiEmailDaConfermare(memoria: MemoriaLeggibile | null | undefi
   }
 }
 
-/** La pagina di verifica, con la strada da cui si veniva (es. il checkout). */
-export function percorsoVerificaEmail(returnTo?: string | null): string {
+/**
+ * La pagina di verifica, con la strada da cui si veniva (es. il checkout).
+ *
+ * 12/11/2026 (R12-011, collaudo) — `daRegistrazione`: chi arriva dal modulo di
+ * registrazione può avere già un account (Supabase risponde «ok» lo stesso, e
+ * l'email non parte), e la pagina gli dice tutti e due i casi. Chi arriva
+ * dall'accesso con l'email non confermata l'account ce l'ha di sicuro: per lui
+ * il testo resta «ti abbiamo inviato un link».
+ */
+export function percorsoVerificaEmail(returnTo?: string | null, opzioni?: { daRegistrazione?: boolean }): string {
   const dove = safeInternalPath(returnTo ?? '/', '/');
-  return dove !== '/' ? `/auth/verify-email?returnTo=${encodeURIComponent(dove)}` : '/auth/verify-email';
+  const parametri = new URLSearchParams();
+  if (dove !== '/') parametri.set('returnTo', dove);
+  if (opzioni?.daRegistrazione) parametri.set('da', 'registrazione');
+  const q = parametri.toString();
+  return q ? `/auth/verify-email?${q}` : '/auth/verify-email';
 }
 
 /**
@@ -177,11 +189,52 @@ export type ClientPerReinvio = {
       type: 'signup';
       email: string;
       options?: { emailRedirectTo?: string };
-    }): PromiseLike<{ error: { message?: string } | null }>;
+    }): PromiseLike<{ error: { message?: string; code?: string; status?: number } | null }>;
   };
 };
 
-export type EsitoReinvio = { esito: 'inviato' | 'email-non-valida' | 'errore'; messaggio: string };
+export type EsitoReinvio = {
+  esito: 'inviato' | 'email-non-valida' | 'errore' | 'attendi';
+  messaggio: string;
+  /** Dopo quanti secondi si puo' chiedere un altro link: la pagina spegne «Reinvia» fino ad allora. */
+  attesaSecondi?: number;
+};
+
+/** Supabase non rimanda un link di conferma prima di 60 secondi dal precedente. */
+export const ATTESA_FRA_DUE_LINK_SECONDI = 60;
+
+/**
+ * 12/11/2026 (R12-017) — IL FRENO DEI 60 SECONDI NON ERA TRADOTTO.
+ *
+ * Chi chiedeva il link una seconda volta entro un minuto riceveva da Supabase un
+ * 429 «For security purposes, you can only request this after 55 seconds» e
+ * leggeva in rosso «Non siamo riusciti a mandare l'email», a link appena
+ * ricevuto. E il tetto orario del progetto (`over_email_send_rate_limit`,
+ * «email rate limit exceeded») gli parlava di «troppe email a questo
+ * indirizzo», anche senza averne mai ricevuta una. Si guardano il codice e i
+ * secondi, non solo il testo.
+ */
+function attesaDalFreno(error: { message?: string; code?: string; status?: number }): EsitoReinvio | null {
+  const testo = error.message ?? '';
+  const secondi = testo.match(/after (\d+) seconds?/i)?.[1];
+  if (secondi) {
+    const n = Math.max(1, Number(secondi));
+    return {
+      esito: 'attendi',
+      messaggio: `Ti abbiamo già mandato un link poco fa: puoi chiederne un altro fra ${n} ${n === 1 ? 'secondo' : 'secondi'}. Intanto controlla anche lo spam.`,
+      attesaSecondi: n,
+    };
+  }
+  if (error.code === 'over_email_send_rate_limit' || /email rate limit exceeded/i.test(testo)) {
+    return {
+      esito: 'errore',
+      messaggio: 'Il servizio email è al limite in questo momento: riprova fra qualche minuto.',
+      // «Qualche minuto»: il bottone resta spento tre minuti, non uno (collaudo K03).
+      attesaSecondi: 3 * ATTESA_FRA_DUE_LINK_SECONDI,
+    };
+  }
+  return null;
+}
 
 /**
  * Rimanda il link di conferma. Non serve una sessione: basta l'email.
@@ -203,12 +256,15 @@ export async function rimandaLinkDiConferma(
     options: { emailRedirectTo: ritornoDopoLaConferma(dati.base, dati.returnTo, 'email') },
   });
   if (error) {
+    const freno = attesaDalFreno(error);
+    if (freno) return freno;
     return {
       esito: 'errore',
       messaggio: traduciErroreAuth(error.message ?? '') ?? 'Non siamo riusciti a mandare l’email. Riprova tra qualche minuto.',
     };
   }
   return {
+    attesaSecondi: ATTESA_FRA_DUE_LINK_SECONDI,
     esito: 'inviato',
     messaggio:
       'Fatto. Se questa email ha un account da confermare, il nuovo link sta arrivando: controlla anche lo spam. Se l’avevi già confermata, puoi accedere.',

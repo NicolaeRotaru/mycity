@@ -77,7 +77,9 @@ describe('dopo il pagamento la pagina dell’ordine non scrive «gratis» sopra 
 
   it('«GRATUITA» solo se per portarsi a casa la spesa il cliente non ha pagato niente', () => {
     const righe = righeDellaPagina({ total_price: 20, shipping_cost: 0, delivery_fee_cents: 0 }, 2000);
-    expect(righe).toContain('Spedizione GRATUITA');
+    // 12/11/2026 (R09-023) — un nome solo, lo stesso della cassa: «Consegna MyCity · Gratis».
+    expect(righe).toContain(`${VOCE_CONSEGNA} Gratis`);
+    expect(righe.join(' · ')).not.toMatch(/Spedizione/);
   });
 
   it('un ordine di prima del 27/10, con la spedizione pagata, la mostra ancora accanto alla consegna', () => {

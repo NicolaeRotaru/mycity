@@ -89,7 +89,10 @@ describe('barra delle categorie (components/CategoryBar.tsx)', () => {
 describe('1604 — tessere delle categorie senza foto', () => {
   it('il velo scuro pieno c\'è solo sopra una foto', () => {
     const src = leggi('components/CategoryShowcase.tsx');
-    expect(src).toMatch(/foto\.src \? 'from-black\/70 via-black\/15 to-black\/25' : 'from-black\/35 via-transparent to-transparent'/);
+    // R08-013 (12/11/2026): il velo pieno dipende dalla foto caricata (non solo dall'indirizzo) e
+    // le classi stanno in due costanti; l'ombra senza foto è più scura (55→30→0) per il contrasto.
+    expect(src).toMatch(/foto\.src && !fotoRotte\.has\(chiaveFoto\(c\.slug, foto\.src\)\) \? VELO_SULLA_FOTO : VELO_SENZA_FOTO/);
+    expect(src).toMatch(/const VELO_SULLA_FOTO = 'from-black\/70 via-black\/15 to-black\/25'/);
     expect(src).not.toMatch(/<div className="absolute inset-0 bg-gradient-to-t from-black\/70 via-black\/15 to-black\/25" \/>/);
   });
 });
@@ -123,7 +126,9 @@ describe('scheda prodotto — acquisto (app/product/[id]/page.tsx)', () => {
   it('572 — un secondo tocco su «Compra ora» non aggiunge di nuovo', () => {
     expect(compraOra).toMatch(/if \(inPartenza\) return;/);
     expect(compraOra).toMatch(/setInPartenza\(true\)/);
-    expect(src).toMatch(/disabled=\{!canAdd \|\| inPartenza\}/);
+    // R02-008 (12/11/2026) — Il pulsante non usa più `disabled` (usciva dal giro del Tab): è
+    // aria-disabled sulla stessa condizione, e il freno vero resta `if (inPartenza) return;` qui sopra.
+    expect(src).toMatch(/aria-disabled=\{!canAdd \|\| inPartenza \|\| undefined\}/);
   });
   it('572 — «Compra ora» porta la riga alla quantità scelta invece di sommarla', () => {
     expect(compraOra).toMatch(/if \(giaNelCarrello\) \{\s*updateQuantity\(product\.id, qty, selectedVariant\?\.id\);/);

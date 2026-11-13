@@ -85,7 +85,8 @@ describe('il contenuto principale non è più alto di quanto ci sta nello scherm
 
     for (const [variabile, chi] of [
       ['--header-height', 'la barra in alto'],
-      ['--tabbar-height', 'la barra a schede del telefono'],
+      // 12/11/2026 (R04-022) — l'altezza vera della barra, la stessa del padding del body.
+      ['--tabbar-altezza-vera', 'la barra a schede del telefono'],
     ] as const) {
       expect(
         regola.replace(/\s+/g, ' '),
@@ -97,7 +98,7 @@ describe('il contenuto principale non è più alto di quanto ci sta nello scherm
   it('le due variabili che toglie esistono davvero nel foglio di stile', () => {
     // Una `var()` che non esiste fa saltare tutto il `calc`, e con lui l'altezza
     // minima: il difetto tornerebbe in silenzio, senza che niente diventi rosso.
-    for (const variabile of ['--header-height', '--tabbar-height']) {
+    for (const variabile of ['--header-height', '--tabbar-altezza-vera']) {
       expect(
         GLOBALS,
         `${variabile} non è più dichiarata: il calc dell'altezza minima non si risolve e cade tutto`,

@@ -17,9 +17,9 @@ import {
   PICKUP_DISCOUNT_PERCENT,
   PLATFORM_DELIVERY_FEE_CENTS,
   RITIRO_IN_NEGOZIO_ATTIVO,
-  VALUE_PROPS,
 } from '@/lib/constants';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import * as costantiR12 from '@/lib/constants';
 
 /**
  * IL SITO PROMETTEVA TRE COSE CHE NON FA.
@@ -213,15 +213,14 @@ describe('il riquadro «Lo sapevi?»: la frase regge i numeri che le stanno sopr
   });
 });
 
-describe('le quattro promesse della home dicono la regola vera', () => {
-  it('la consegna dichiara che si paga per negozio', () => {
-    const spedizione = VALUE_PROPS.find((v) => v.title === 'Consegna a casa');
-    expect(spedizione?.subtitle).toMatch(/per tutto il carrello/);
-  });
-
-  it('e i minuti vengono da dove sono decisi, non riscritti a mano', () => {
-    const consegna = VALUE_PROPS.find((v) => v.title === 'Consegna rapida');
-    expect(consegna?.subtitle).toContain(EXPRESS_ETA_LABEL);
+// 12/11/2026 (R12-007) — Qui c'era «le quattro promesse della home dicono la regola vera», su
+// VALUE_PROPS: nessuna pagina le mostrava, e sono state tolte.
+describe('le promesse che nessuno vede non tornano', () => {
+  // 12/11/2026 (R12-007) — Al posto delle asserzioni su VALUE_PROPS (tolto: nessuna pagina lo
+  // mostrava) si controlla che non torni una «promessa che nessuno vede».
+  it('VALUE_PROPS non esiste più e nessuna pagina lo cerca', () => {
+    expect('VALUE_PROPS' in costantiR12).toBe(false);
+    expect(Object.keys(costantiR12).filter((k) => /VALUE_PROP/.test(k))).toEqual([]);
   });
 });
 

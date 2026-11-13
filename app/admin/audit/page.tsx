@@ -12,6 +12,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { etichettaAzioneAudit, opzioniFiltroAudit } from '@/lib/audit-azioni';
 import { autoreDellaRiga } from '@/lib/admin/etichette';
 
+/** Quante azioni si leggono e si mostrano: le più recenti. */
+const RIGHE_MOSTRATE = 200;
+
 type AuditRow = {
   id: string;
   actor_id: string | null;
@@ -50,13 +53,28 @@ export default function AuditLogPage() {
           actor:profiles!audit_logs_actor_id_fkey ( full_name )
         `)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(RIGHE_MOSTRATE);
       if (filterAction) q = q.eq('action', filterAction);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as AuditRow[];
     },
   });
+
+  // 12/11/2026 (R12-014) — L'elenco si fermava a 200 righe senza dirlo: con 669
+  // voci se ne vedeva un terzo e sembrava tutto. Il totale si conta a parte (solo
+  // il numero, nessuna riga), e sopra l'elenco si dice «200 di N».
+  const { data: totale } = useQuery({
+    queryKey: [...queryKeys.admin.audit(filterAction), 'totale'],
+    queryFn: async (): Promise<number | null> => {
+      let q = supabase.from('audit_logs').select('id', { count: 'exact', head: true });
+      if (filterAction) q = q.eq('action', filterAction);
+      const { count, error } = await q;
+      if (error) return null;
+      return count ?? null;
+    },
+  });
+  const tagliato = typeof totale === 'number' && totale > rows.length && rows.length >= RIGHE_MOSTRATE;
 
   return (
     <div className="space-y-6">
@@ -71,7 +89,8 @@ export default function AuditLogPage() {
         <select
           value={filterAction}
           onChange={(e) => setFilterAction(e.target.value)}
-          className="bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
+          // R12-014 — senza larghezza massima, a 360 px il menu spingeva la pagina di 16 px di lato.
+          className="w-full max-w-full sm:w-auto bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         >
           <option value="">Tutte le azioni</option>
           {opzioniFiltroAudit().map(({ valore, etichetta }) => (
@@ -99,6 +118,13 @@ export default function AuditLogPage() {
           <p className="text-sm text-ink-400 mt-1">Le azioni admin compariranno qui man mano.</p>
         </div>
       ) : (
+        <>
+        {tagliato && (
+          <p role="status" className="text-sm text-ink-600">
+            Mostro le {rows.length} azioni più recenti di {totale}
+            {filterAction ? '.' : ': per le altre filtra per azione.'}
+          </p>
+        )}
         <div className="bg-white border-2 border-cream-300 rounded-xl divide-y divide-cream-200 overflow-hidden">
           {rows.map((r) => (
             <div key={r.id} className="px-4 py-3 hover:bg-cream-50 transition-colors">
@@ -128,6 +154,7 @@ export default function AuditLogPage() {
             </div>
           ))}
         </div>
+        </>
       )}
     </div>
   );

@@ -223,10 +223,12 @@ export default function NotificationsPage() {
                   {n.body && <p className="text-sm text-ink-600">{n.body}</p>}
                 </div>
                 {!n.is_read && (
-                  <span
-                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary-600"
-                    aria-label="Non letta"
-                  />
+                  // 12/11/2026 (R07-007) — un aria-label su uno <span> senza ruolo i lettori
+                  // di schermo lo ignorano: il pallino resta muto e la parola sta in sr-only.
+                  <>
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary-600" aria-hidden="true" />
+                    <span className="sr-only">Non letta</span>
+                  </>
                 )}
               </div>
             );

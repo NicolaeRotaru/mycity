@@ -88,16 +88,34 @@ export default function RiderAvailabilityPage() {
     })();
   }, [tentativo]);
 
-  const persist = async (patch: Record<string, unknown>) => {
-    if (!userId) return;
+  const persist = async (patch: Record<string, unknown>): Promise<boolean> => {
+    if (!userId) return false;
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
     if (error) toast.error('Errore nel salvataggio. Riprova.');
+    return !error;
   };
 
+  /**
+   * 12/11/2026 (R03-015) — SI SCRIVE SOLO QUELLO CHE E' CAMBIATO, E «SALVATE» DOPO L'ESITO.
+   * Ogni salvataggio riscriveva insieme turni e interruttore online, quest'ultimo col valore
+   * letto all'apertura: con la pagina dei turni rimasta aperta in un'altra scheda, cambiare un
+   * turno rimetteva offline il fattorino che intanto era andato online dalla bacheca. E
+   * «Preferenze salvate» compariva prima di sapere se la scrittura era riuscita.
+   */
   const save = (next: Availability, silent = false) => {
+    const prima = avail;
     setAvail(next);
-    void persist({ rider_is_online: next.online, rider_schedule: next.schedule });
-    if (!silent) toast.success('Preferenze salvate');
+    const patch: Record<string, unknown> = {};
+    if (next.online !== prima.online) patch.rider_is_online = next.online;
+    if (next.schedule !== prima.schedule) patch.rider_schedule = next.schedule;
+    if (Object.keys(patch).length === 0) return;
+    void persist(patch).then((ok) => {
+      if (!ok) {
+        setAvail(prima);
+        return;
+      }
+      if (!silent) toast.success('Preferenze salvate');
+    });
   };
 
   const saveZones = (next: string[]) => {

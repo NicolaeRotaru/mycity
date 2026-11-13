@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
 import { bonificoDaFareTemplate, refundIssuedTemplate } from '@/lib/email/templates';
 import { indirizzoContatto } from '@/lib/contatti-pubblici';
+import { escapeHtml } from '@/lib/html-escape';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { compensoDalContante } from '@/lib/shipping';
 import { formatPriceFromCents } from '@/lib/format';
@@ -1363,6 +1364,7 @@ async function ilRimborsoDellaChiaveGiaUscito(
   }
   let uscito: Stripe.Refund | null = null;
   let totaleDellOrdineCents = 0;
+  const senzaOrdine: Stripe.Refund[] = [];
   let dopo: string | undefined;
   for (let pagina = 0; pagina < PAGINE_DI_RIMBORSI; pagina++) {
     const elenco = await stripe.refunds.list({
@@ -1375,16 +1377,128 @@ async function ilRimborsoDellaChiaveGiaUscito(
       if (r.status === 'failed' || r.status === 'canceled') continue;
       const m = (r.metadata ?? {}) as Record<string, string>;
       // Di un altro ordine dello stesso carrello: non e' nostro. Senza ordine (dal
-      // cruscotto, etichetta mancata) si conta: un carrello che lo deve dividere
-      // non arriva fin qui (`RimborsoInAttesaDellaDivisione`).
+      // cruscotto, etichetta mancata) si conta la parte di questo ordine, se una divisione
+      // l'ha scritta (`laParteDeiRimborsiSenzaOrdine`); un carrello che lo deve ancora
+      // dividere non arriva fin qui (`RimborsoInAttesaDellaDivisione`).
       if (m.order_id && m.order_id !== order.id) continue;
+      if (!m.order_id) {
+        senzaOrdine.push(r);
+        continue;
+      }
       totaleDellOrdineCents += r.amount ?? 0;
       if (!uscito && m.order_id === order.id && (m[METADATO_DELLA_CHIAVE] === chiave || (idDelReso && m.return_id === idDelReso))) uscito = r;
     }
-    if (!elenco?.has_more || righe.length === 0) return uscito ? { uscito, totaleDellOrdineCents } : null;
+    if (!elenco?.has_more || righe.length === 0) {
+      if (!uscito) return null;
+      totaleDellOrdineCents += await laParteDeiRimborsiSenzaOrdine(order, senzaOrdine);
+      return { uscito, totaleDellOrdineCents };
+    }
     dopo = righe[righe.length - 1].id;
   }
   throw new Error('refundOrder: troppi rimborsi sul pagamento, il controllo della chiave non si chiude');
+}
+
+/**
+ * 12/11/2026 (R03-006) — DEL RIMBORSO DIVISO CONTA SOLO LA PARTE DI QUESTO ORDINE.
+ *
+ * Un rimborso dal cruscotto non porta l'ordine. Su un carrello di due negozi chi amministra lo
+ * divide (lib/stripe/rimborsi-da-dividere.ts) e la divisione decisa resta scritta nel registro
+ * delle azioni, con la parte di ogni ordine. Qui si contava per intero: 30 € divisi 5 e 25, e
+ * per l'ordine da 5 il totale saliva di 30. Il reso ripreso dopo un guasto risultava «non
+ * contato», si registrava di nuovo e al negozio si toglieva la quota una seconda volta.
+ * Ora, per i rimborsi che una divisione ha scritto, si conta la parte di questo ordine; quelli
+ * che nessuna divisione ha scritto si contano per intero, come prima. Una lettura caduta lancia:
+ * niente è stato toccato, si riprova.
+ */
+async function laParteDeiRimborsiSenzaOrdine(
+  order: { id: string; stripe_payment_intent?: string | null },
+  senzaOrdine: ReadonlyArray<Stripe.Refund>,
+): Promise<number> {
+  if (senzaOrdine.length === 0) return 0;
+  const { data, error } = await getAdminSupabase()
+    .from('audit_logs')
+    .select('metadata')
+    .eq('action', 'order.refund')
+    .eq('target_table', 'orders');
+  if (error) throw new Error(`refundOrder: divisioni dei rimborsi dal cruscotto non lette: ${error.message}`);
+  const divisioni = ((data ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+    .map((r) => r.metadata ?? {})
+    .filter((m) => m.origine === 'divisione_del_rimborso_dal_cruscotto' && m.pagamento === order.stripe_payment_intent);
+  let totale = 0;
+  const coperti = new Set<string>();
+  for (const d of divisioni) {
+    const rimborsi = Array.isArray(d.rimborsi) ? (d.rimborsi as unknown[]).map(String) : [];
+    if (!senzaOrdine.some((r) => rimborsi.includes(r.id))) continue;
+    rimborsi.forEach((id) => coperti.add(id));
+    const parte = (d.parti as Record<string, unknown> | undefined)?.[order.id];
+    totale += typeof parte === 'number' && Number.isFinite(parte) ? parte : 0;
+  }
+  for (const r of senzaOrdine) if (!coperti.has(r.id)) totale += r.amount ?? 0;
+  return totale;
+}
+
+/**
+ * 12/11/2026 (R03-007) — LA QUOTA DA TRATTENERE AL NEGOZIO PAGATO A MANO.
+ *
+ * Al lancio i contanti li incassa Nicola e il lunedì fa lui il bonifico al negozio per le
+ * consegne della settimana prima (registro dei fatti, pagamenti.bonifico-contanti-al-negozio).
+ * Sul sito l'ordine resta HELD: per il codice il negozio non è stato pagato, e la sua quota del
+ * rimborso si scriveva solo sullo stesso ordine (`addebitaQuotaVenditoreSeNonPagato`), «così il
+ * pagamento successivo versa il residuo». Ma quel pagamento è già uscito a mano, e nessun avviso
+ * diceva a Nicola di trattenerla: su un ordine da 23 € MyCity perdeva 23 € invece di 5 e il
+ * negozio teneva 18 € che non gli spettavano.
+ *
+ * Adesso, su un ordine in contanti con la rimessa confermata (HELD), parte un avviso agli
+ * amministratori con negozio, cifra e ordine: «togli 18,00 € dal prossimo bonifico». Una volta
+ * per rimborso (`unaVoltaPer` sulla chiave). Un avviso che non parte non ferma il rimborso, già
+ * uscito: resta nel log, col testo.
+ */
+async function avvisaDellaQuotaDaTrattenere(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  quotaCents: number,
+  chiave: string,
+): Promise<void> {
+  let negozio = 'il negozio';
+  try {
+    const { data: o } = await admin.from('orders').select('seller_id, delivered_at').eq('id', orderId).maybeSingle();
+    // Collaudo K04 — se i contanti di quell'ordine li paga Stripe (contantiPagabiliDaStripe), il
+    // bonifico automatico scala già la quota scritta sull'ordine: l'avviso la farebbe togliere due
+    // volte. L'avviso serve solo al bonifico fatto a mano.
+    if (o && contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at)) return;
+    const sellerId = (o as { seller_id?: string | null } | null)?.seller_id ?? null;
+    if (sellerId) {
+      const { data: p } = await admin.from('profiles').select('store_name').eq('id', sellerId).maybeSingle();
+      const nome = (p as { store_name?: string | null } | null)?.store_name;
+      if (nome) negozio = nome;
+    }
+  } catch {
+    // Il nome del negozio è solo per leggere meglio: l'avviso parte lo stesso, con l'ordine.
+  }
+  const cifra = formatPriceFromCents(quotaCents);
+  const titolo = `💶 Togli ${cifra} dal prossimo bonifico a ${negozio}`;
+  const testo =
+    `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
+    `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
+    'se non è ancora partito, versa solo il resto.';
+  let arrivato = false;
+  try {
+    arrivato = (await notifyAdmins(titolo, testo, '/admin/cod-remittance', { unaVoltaPer: `quota-da-trattenere:${chiave}` })) !== 'nessuno';
+  } catch (err) {
+    logger.error('[refundOrder] avviso della quota da trattenere al negozio non partito', {
+      orderId, quotaCents, titolo, err,
+    });
+  }
+  // Collaudo K04 — un avviso caduto non resta solo nel log: è l'unico promemoria di soldi da
+  // trattenere a mano. Si manda per email alla casella di chi paga i bonifici.
+  if (!arrivato) {
+    try {
+      const res = await sendEmail({ to: indirizzoContatto('info'), subject: titolo, html: `<p>${escapeHtml(testo)}</p>`, text: testo });
+      if (res && (res as { ok?: boolean }).ok === false) throw new Error('email non partita');
+    } catch (err) {
+      logger.error('[refundOrder] QUOTA DA TRATTENERE: né avviso né email sono partiti', { orderId, quotaCents, titolo, testo, err });
+    }
+  }
 }
 
 /**
@@ -1598,6 +1712,42 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       creditoCents: ripartoVero.creditoCents,
       bonificoCents: ripartoVero.bonificoCents,
     };
+  }
+
+  // 12/11/2026 (R03-005) — IL CREDITO DI QUESTA CHIAVE E' GIA' USCITO E GIA' CONTATO.
+  // La chiave dei resi (`return_<id>`) non porta la cifra. Il caso: il negozio approva 20 € di
+  // rimborso in credito, il credito esce e l'ordine lo conta, poi cade la scrittura sul reso
+  // (decide risponde 500, il reso resta APPROVED). Coi passi normali avanza ripropone 20 € con
+  // la stessa chiave: si prenotava di nuovo, il portafoglio trovava il doppione e taceva, e il
+  // rimborso si registrava due volte (40 € sull'ordine, 36 € tolti al negozio invece di 18).
+  // Il rimborso di prima e' finito quando sull'ordine c'e' il suo segno `wallet:<chiave>`, che si
+  // scrive a rimborso concluso (quota del negozio compresa, piu' sotto): si restituisce quello,
+  // senza toccare niente. Collaudo del 12/11 — prima si guardava il totale rimborsato
+  // dell'ordine, che puo' contenere ALTRI rimborsi: un reso stornato dopo un guasto doppio,
+  // su un ordine con un rimborso precedente, risultava «gia' contato» e non si registrava mai.
+  // Senza il segno (tentativo stornato, o morto prima della fine) si va avanti come sempre.
+  if (
+    tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima &&
+    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0 &&
+    rimborsiGiaScritti({ stripe_refund_id: (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null })
+      .has(`wallet:${opts.idempotencyKey}`)
+  ) {
+    const giaADiario = await accreditoADiario(admin, opts.idempotencyKey);
+    if (giaADiario != null) {
+      controllaLaCifraGiaAccreditata(giaADiario, ripartoVero.creditoCents);
+      logger.warn('[refundOrder] credito di questa chiave gia uscito e contato: non si registra di nuovo', {
+        orderId: order.id, chiave: opts.idempotencyKey,
+      });
+      return {
+        refundId: `wallet:${opts.idempotencyKey}`,
+        reversedCents: 0,
+        pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
+        modo,
+        importoCents: safeAmountCents,
+        creditoCents: ripartoVero.creditoCents,
+        bonificoCents: 0,
+      };
+    }
   }
 
   // L'email del cliente, prima dei soldi (vedi `emailDelCliente`). Col bonifico
@@ -1904,6 +2054,22 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
   const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
+    await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
+  }
+  // R03-005 — il segno del rimborso in credito finito (vedi sopra, `wallet:<chiave>`): si scrive
+  // dopo la quota del negozio, cosi' una ripresa che lo trova sa che non manca niente.
+  if (tipo === 'contanti' && opts.idempotencyKey && ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0) {
+    const errSegno = await aggiungiAllElencoDeiRimborsi(
+      admin,
+      order.id,
+      (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null,
+      `wallet:${opts.idempotencyKey}`,
+    );
+    if (errSegno) {
+      logger.error('[refundOrder] segno del rimborso in credito non scritto sull ordine', { orderId: order.id, message: errSegno.message });
+    }
+  }
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.

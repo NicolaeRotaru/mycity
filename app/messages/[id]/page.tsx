@@ -323,8 +323,16 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* THREAD */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-cream-50">
+        {/* THREAD — 12/11/2026 (R06-003): un registro che si annuncia. I messaggi
+            arrivano dal vivo; senza role="log" e aria-live il lettore di schermo
+            restava muto e chi non vede doveva rileggere la pagina per scoprirli. */}
+        <div
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-label="Messaggi della conversazione"
+          className="flex-1 overflow-y-auto p-4 space-y-2 bg-cream-50"
+        >
           {messaggiNonLetti ? (
             /* R091 — l'errore batte tutto: una lettura fallita non è una conversazione da
                iniziare. Questo ramo sta PRIMA di quello dello stato vuoto, apposta. */
@@ -358,7 +366,10 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
                   <div className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm-neutral ${
                     mine ? 'bg-primary-700 text-white rounded-br-sm' : 'bg-white text-ink-900 border rounded-bl-sm'
                   }`}>
-                    <p className="whitespace-pre-wrap break-words">{it.msg.body}</p>
+                    <p className="whitespace-pre-wrap break-words">
+                      <span className="sr-only">{mine ? 'Tu: ' : `${inArrivo ? 'Interlocutore' : counterpartName}: `}</span>
+                      {it.msg.body}
+                    </p>
                     <p className={`text-[10px] mt-0.5 text-right ${mine ? 'text-primary-100' : 'text-ink-400'}`}>
                       {formatTime(it.msg.created_at)}
                     </p>

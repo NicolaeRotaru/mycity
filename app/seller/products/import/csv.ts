@@ -88,11 +88,20 @@ export async function leggiFile(file: File): Promise<string> {
 /**
  * Il prezzo come lo scrive Excel italiano: «4,50», «19,90 €», «1.234,50».
  * Con la virgola, la virgola e' il decimale e i punti sono le migliaia.
+ *
+ * 12/11/2026 (R03-019, R03-022) — SENZA VIRGOLA, «1.500» SONO MILLECINQUECENTO.
+ * Il punto si trattava da migliaia solo se c'era anche una virgola: «1.500» passava a
+ * Number() e diventava 1,50 €, e la bici da 1500 euro andava in vendita a 1,50. In italiano
+ * il punto seguito da gruppi di esattamente tre cifre (e niente virgola) sono le migliaia:
+ * «1.500» → 1500, «12.000» → 12000, «1.234.567» → 1234567. «4.50», «1.5» e «0.500» restano
+ * decimali, come prima.
  */
 export function leggiPrezzo(grezzo: string): number {
   const s = grezzo.replace(/[^\d,.-]/g, '');
   if (s === '') return NaN;
-  return Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
+  if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.'));
+  if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ''));
+  return Number(s);
 }
 
 

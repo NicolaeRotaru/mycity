@@ -24,6 +24,7 @@ import { logger } from '@/lib/logger';
 import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148';
 import { senzaCampi } from '@/lib/db/migrazione-124';
 import { giftCardRecipientTemplate, giftCardBuyerTemplate } from '@/lib/email/templates';
+import { avvisaSeLaPostaNonParte } from './posta-non-partita';
 
 /**
  * Codice gift card DETERMINISTICO dalla session id: HMAC(session.id) con il
@@ -169,12 +170,14 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
 
   if (recipientEmail) {
     const t = giftCardRecipientTemplate({ code, amountEuro, senderName, message });
-    await sendEmail({ to: recipientEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_recipient' }] });
+    await avvisaSeLaPostaNonParte('email del buono regalo al destinatario', { sessionId: session.id },
+      await sendEmail({ to: recipientEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_recipient' }] }));
   }
 
   const buyerEmail = session.customer_details?.email ?? session.customer_email ?? null;
   if (buyerEmail) {
     const t = giftCardBuyerTemplate({ code, amountEuro, recipientName });
-    await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }] });
+    await avvisaSeLaPostaNonParte('email del buono regalo a chi l ha comprato', { sessionId: session.id },
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }] }));
   }
 }

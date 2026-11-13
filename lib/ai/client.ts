@@ -45,7 +45,11 @@ export type ModelId = keyof typeof PRICE_PER_MTOK;
  * prezzi: un nome sconosciuto renderebbe il costo NaN e il freno di spesa
  * cieco, quindi resta il default e lo si dice nel log.
  */
-export const MODELLO_PREDEFINITO: ModelId = 'claude-sonnet-4-5';
+// 12/11/2026 (R04-002) — Il predefinito e' claude-sonnet-4-6: stesso prezzo di
+// claude-sonnet-4-5, che il 30/11/2026 si spegne. Senza variabile su Vercel le
+// funzioni foto/ragionamento sarebbero morte quel giorno. CAMBIA IL MODELLO IN
+// PRODUZIONE (a parita' di prezzo); le variabili restano per sceglierne un altro.
+export const MODELLO_PREDEFINITO: ModelId = 'claude-sonnet-4-6';
 
 /** Modelli che Anthropic ritira, con il giorno dello spegnimento (AAAA-MM-GG). */
 export const MODELLI_RITIRATI: Partial<Record<ModelId, string>> = {
@@ -59,6 +63,13 @@ export function eModelloConPrezzo(id: unknown): id is ModelId {
 export function modelloDaAmbiente(nomeVariabile: string, predefinito: ModelId = MODELLO_PREDEFINITO): ModelId {
   const grezzo = process.env[nomeVariabile]?.trim();
   if (!grezzo) return predefinito;
+  // R04-002 (revisione) — Un modello ritirato scritto nella variabile, dal
+  // giorno dello spegnimento in poi, non si usa: si torna al predefinito attivo.
+  const ritiratoDal = eModelloConPrezzo(grezzo) ? MODELLI_RITIRATI[grezzo] : undefined;
+  if (ritiratoDal && new Date().toISOString().slice(0, 10) >= ritiratoDal) {
+    console.error(`[ai] ${nomeVariabile}=${grezzo} e' un modello ritirato dal ${ritiratoDal}: si usa ${predefinito}.`);
+    return predefinito;
+  }
   if (eModelloConPrezzo(grezzo)) return grezzo;
   console.warn(`[ai] ${nomeVariabile} indica un modello senza prezzo in PRICE_PER_MTOK: resta ${predefinito}.`);
   return predefinito;

@@ -15,12 +15,15 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { salvaVariantiFinta } from './aiuti/salva-varianti-finta';
 
 type Riga = Record<string, unknown>;
 
 function bancaDati(varianti: Riga[]) {
   const cancellate: string[] = [];
   const client = {
+    // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
     from(tavola: string) {
       if (tavola !== 'product_variants') throw new Error(`tavola inattesa: ${tavola}`);
       return {

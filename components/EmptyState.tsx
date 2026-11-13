@@ -24,6 +24,12 @@ type Props = {
   secondaryHref?: string;
   variant?: 'default' | 'compact';
   tone?: Tone;
+  /**
+   * 12/11/2026 (R08-003) — Il livello del titolo. h3 di solito, perché lo stato vuoto
+   * sta dentro una pagina che ha già il suo h1. Quando È la pagina (per esempio
+   * «Pagina non trovata»), il titolo è l'h1.
+   */
+  titoloCome?: 'h1' | 'h2' | 'h3';
 };
 
 const TONES: Record<Tone, string> = {
@@ -43,6 +49,7 @@ export default function EmptyState({
   secondaryHref,
   variant = 'default',
   tone = 'primary',
+  titoloCome: Titolo = 'h3',
 }: Props) {
   const isCompact = variant === 'compact';
   return (
@@ -52,7 +59,7 @@ export default function EmptyState({
       }`}>
         <Icon size={isCompact ? 22 : 28} strokeWidth={2} />
       </div>
-      <h3 className={`font-serif text-ink-900 font-bold ${isCompact ? 'text-base' : 'text-lg'}`}>{title}</h3>
+      <Titolo className={`font-serif text-ink-900 font-bold ${isCompact ? 'text-base' : 'text-lg'}`}>{title}</Titolo>
       {description && (
         <p className={`text-ink-500 mt-1 max-w-md mx-auto ${isCompact ? 'text-xs' : 'text-sm'}`}>
           {description}

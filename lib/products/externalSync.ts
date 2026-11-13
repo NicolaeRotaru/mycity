@@ -4,6 +4,7 @@ import { MODELS } from '@/lib/ai/client';
 import { runMessage } from '@/lib/ai/run';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
 import {
   type Marketplace,
@@ -273,4 +274,20 @@ export async function resolveCategoryFromSlug(
   } catch {
     return { categoryId: null, subcategoryId: null };
   }
+}
+
+/**
+ * 12/11/2026 (R04-011, revisione) — IL FRENO DI UN PRODOTTO CHE FALLISCE.
+ *
+ * Il freno contro i tentativi a raffica era scrivere external_synced_at=adesso
+ * anche quando l'aggiornamento falliva: cosi' il prodotto risultava
+ * «aggiornato adesso» senza dati nuovi. Adesso quella data dice solo il vero, e
+ * il freno e' questo: un prodotto in errore si ritenta al massimo una volta
+ * ogni sei ore (stesso ritmo di prima), da qualunque strada (vista o cron).
+ */
+export const RIPROVA_DOPO_ERRORE_MS = 6 * 60 * 60_000;
+
+export async function ritentoDopoErroreConsentito(productId: string): Promise<boolean> {
+  const esito = await rateLimitAsync({ key: `ext-sync-errore:${productId}`, max: 1, windowMs: RIPROVA_DOPO_ERRORE_MS });
+  return esito.allowed;
 }

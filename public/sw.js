@@ -96,8 +96,24 @@ async function trimCache(cacheName, maxEntries) {
   await Promise.all(toDelete.map((r) => cache.delete(r)));
 }
 
+// 12/11/2026 (R08-018) — LE FOTO DELLO STORAGE ARRIVAVANO «OPACHE» E NON SI SALVAVANO MAI.
+//
+// Le foto stanno su <progetto>.supabase.co e le chiede un <img> senza `crossorigin`: il
+// browser le domanda in modalita' no-cors e la risposta che arriva qui e' opaca (ok=false,
+// stato 0). La cache salva solo `res.ok`, quindi nessuna foto e' mai entrata: freschezza,
+// tetto e marca temporale non servivano a niente, e senza rete le pagine restavano senza foto.
+// Salvare le risposte opache no: pesano ~7 MB di quota l'una in Chrome e terrebbero anche i
+// 403 e i 404 senza saperlo. Qui il service worker rifa' la domanda DA SE', in modalita' cors
+// e senza credenziali: lo storage pubblico risponde con CORS, la risposta e' leggibile, un
+// 403 si vede come 403 e non si salva. Una risposta cors va bene anche a un <img> no-cors.
+// Se il CORS non c'e' (o la rete cade), si torna alla domanda originale, che non si salva.
+function scaricaFotoLeggibile(req) {
+  if (req.mode !== 'no-cors') return fetch(req);
+  return fetch(req.url, { mode: 'cors', credentials: 'omit' }).catch(() => fetch(req));
+}
+
 // Stale-while-revalidate per immagini: serve subito da cache, aggiorna in background.
-async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0) {
+async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0, scarica = (r) => fetch(r)) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(req);
 
@@ -112,7 +128,7 @@ async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0
   // sa quanto e' vecchia, si torna al comportamento di prima.
   if (cached && freschezzaMs > 0 && eRecente(cached, freschezzaMs)) return cached;
 
-  const fetchPromise = fetch(req).then((res) => {
+  const fetchPromise = scarica(req).then((res) => {
     if (res.ok) {
       // Il salvataggio resta in sottofondo e non puo' rovinare la risposta: se
       // la memoria del telefono e' piena, `cache.put` fallisce e la foto arriva
@@ -254,7 +270,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Immagini Supabase storage → stale-while-revalidate
   if (url.hostname.endsWith('.supabase.co') && url.pathname.startsWith('/storage/')) {
     event.respondWith(
-      staleWhileRevalidate(req, IMAGE_CACHE, MAX_IMAGE_ENTRIES, FRESCHEZZA_IMMAGINI_MS),
+      staleWhileRevalidate(req, IMAGE_CACHE, MAX_IMAGE_ENTRIES, FRESCHEZZA_IMMAGINI_MS, scaricaFotoLeggibile),
     );
     return;
   }

@@ -128,8 +128,11 @@ export default function CheckoutPage() {
 
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
   // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
-  const { data: cartData, isLoading: loadingGroups } = useQuery({
-    queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')),
+  const { data: cartData, isLoading: loadingGroups, refetch: rileggiLaCassa } = useQuery({
+    // 12/11/2026 (R03-012) — La lettura restituisce le righe intere (quantità e variante): nella
+    // chiave ci sono anche loro. Con solo `id:sellerId`, tornare al carrello, passare da 1 a 3
+    // filoni e rientrare entro mezzo minuto riusava la copia vecchia, e l'ordine partiva con 1.
+    queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.variantId ?? ''}:${c.quantity}:${c.sellerId ?? ''}`).join(',')),
     enabled: cart.length > 0,
     queryFn: async () => {
       // Valida TUTTI gli item del carrello contro il DB (non solo i legacy
@@ -496,7 +499,8 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
-      const bozza = bozzaLetta(JSON.parse(raw));
+      // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
+      const bozza = bozzaLetta(JSON.parse(raw), new Date());
       if (!bozza) return;
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
 
@@ -950,6 +954,8 @@ export default function CheckoutPage() {
           // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
           // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
           checkoutId: idCheckout,
+          // R03-011 — i sottototali mostrati: se il server trova prezzi diversi non crea l'ordine.
+          subtotaliVistiCents: sottototaliPerNegozioCents,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -961,6 +967,8 @@ export default function CheckoutPage() {
         // proprio quel caso: se il gemello sta ancora lavorando la chiave e'
         // sua, e buttarla creerebbe il doppione.
         if (laChiaveVaButtata(body)) chiudiIlTentativo();
+        // R03-011 — prezzi cambiati mentre si era in cassa: si rileggono e si mostrano.
+        if ((body as { error?: { code?: unknown } }).error?.code === 'PREZZI_CAMBIATI') void rileggiLaCassa();
         throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
       }
       // 22/8/2026 — la rotta adesso risponde al contratto del progetto,
@@ -1288,6 +1296,7 @@ export default function CheckoutPage() {
           giorno: slotDay,
           fasciaOggi: slotTodayTime,
           fasciaDomani: slotTomorrowTime,
+          adesso: new Date(),
         })));
       } catch { /* noop */ }
       router.push('/sign-in?returnTo=/checkout');

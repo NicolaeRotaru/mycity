@@ -35,26 +35,47 @@ export type ArticoloDaRiordinare = {
   prezzoStorico: number;
 };
 
-async function prezziDiAdesso(ids: string[]): Promise<Map<string, number>> {
+/**
+ * 12/11/2026 (R08-012) — Cosa dice il database dei prodotti di adesso.
+ *
+ * `nonInVendita`: i prodotti che oggi non si possono comprare. La lettura passa
+ * dalle regole del cliente, che vede solo i prodotti «available» dei negozi
+ * approvati: un prodotto esaurito, in bozza o tolto dalla vendita NON torna nella
+ * risposta. Prima questo silenzio veniva trattato come «rete caduta» e il prodotto
+ * entrava nel carrello al prezzo di allora, con «aggiunti al carrello!»: il cliente
+ * lo scopriva in cassa. Adesso, se la lettura è riuscita, chi manca non è in
+ * vendita; e così chi torna con uno stato diverso da «available» o con la scorta
+ * a zero. Solo se la lettura fallisce (errore o rete) `nonInVendita` è null e
+ * resta il ripiego dei prezzi storici.
+ */
+type ProdottiDiAdesso = { prezzi: Map<string, number>; nonInVendita: Set<string> | null };
+
+async function prodottiDiAdesso(ids: string[]): Promise<ProdottiDiAdesso> {
   const mappa = new Map<string, number>();
-  if (ids.length === 0) return mappa;
+  if (ids.length === 0) return { prezzi: mappa, nonInVendita: new Set() };
   try {
     const { supabase } = await import('@/lib/supabase/client');
     const unici = Array.from(new Set(ids));
-    const { data } = await supabase.from('products').select('id, price').in('id', unici);
+    const { data, error } = await supabase.from('products').select('id, price, status, stock').in('id', unici);
+    if (error || !Array.isArray(data)) return { prezzi: mappa, nonInVendita: null };
     // 5/11/2026 — Il prezzo di adesso con la stessa regola di carrello e cassa: pieno meno la
     // promozione attiva. Il prezzo storico è già scontato (unit_price), e confrontarlo col pieno
     // faceva dire «un prezzo è cambiato» a ogni prodotto ancora in promozione.
     const { fetchActiveDiscounts, discountedUnitCents } = await import('@/lib/promotions');
     const sconti = await fetchActiveDiscounts(supabase as never, unici).catch(() => new Map<string, number>());
-    for (const p of (data ?? []) as Array<{ id: string; price: number | string | null }>) {
+    const righe = data as Array<{ id: string; price: number | string | null; status?: string | null; stock?: number | null }>;
+    const nonInVendita = new Set(unici);
+    for (const p of righe) {
+      const ferma = (p.status != null && p.status !== 'available') || (typeof p.stock === 'number' && p.stock <= 0);
+      if (!ferma) nonInVendita.delete(p.id);
       const n = Number(p.price);
       if (Number.isFinite(n)) mappa.set(p.id, discountedUnitCents(n, sconti.get(p.id) ?? 0) / 100);
     }
+    return { prezzi: mappa, nonInVendita };
   } catch {
     /* senza rete si usano i prezzi storici: meglio un riordino che niente */
+    return { prezzi: mappa, nonInVendita: null };
   }
-  return mappa;
 }
 
 /**
@@ -170,13 +191,21 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, 
     sostituisci = esito === 'conferma';
   }
 
-  if (sostituisci && carrelloAttuale.length > 0) clearCart();
-
-  const prezzi = await prezziDiAdesso(validi.map((a) => a.productId));
+  const { prezzi, nonInVendita } = await prodottiDiAdesso(validi.map((a) => a.productId));
+  // Il carrello si svuota solo se c'è qualcosa da metterci: se tutto l'ordine è finito, la
+  // spesa che c'era resta dov'è.
+  const daAggiungere = validi.filter((a) => !nonInVendita?.has(a.productId)).length;
+  if (sostituisci && carrelloAttuale.length > 0 && daAggiungere > 0) clearCart();
   let aggiunti = 0;
   let prezziCambiati = 0;
+  let finiti = 0;
 
   for (const a of validi) {
+    // R08-012 — un prodotto che oggi non è in vendita non entra: si conta fra i «non più disponibili».
+    if (nonInVendita?.has(a.productId)) {
+      finiti += 1;
+      continue;
+    }
     const adesso = prezzi.get(a.productId);
     if (adesso != null && Math.abs(adesso - a.prezzoStorico) >= 0.01) prezziCambiati += 1;
     addToCart({
@@ -201,7 +230,8 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, 
   // Da qui in poi lo stesso riordino, ripetuto subito, non aggiunge di nuovo.
   ultimoRiuscito = { impronta, quando: Date.now() };
 
-  const nonPiu = mancanti > 0 ? ` · ${mancanti === 1 ? '1 articolo non è più disponibile' : `${mancanti} articoli non sono più disponibili`}` : '';
+  const nonDisponibili = mancanti + finiti;
+  const nonPiu = nonDisponibili > 0 ? ` · ${nonDisponibili === 1 ? '1 articolo non è più disponibile' : `${nonDisponibili} articoli non sono più disponibili`}` : '';
   toast.success(
     (prezziCambiati > 0
       ? `${aggiunti} ${aggiunti === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} · ${prezziCambiati === 1 ? 'un prezzo è cambiato' : `${prezziCambiati} prezzi sono cambiati`} dall'ultima volta`

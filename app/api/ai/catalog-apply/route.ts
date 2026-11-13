@@ -7,6 +7,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { writeAudit } from '@/lib/audit';
+import { tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato';
 import {
   messaggioDichiarazioniProtette,
   resolveAiPatch,
@@ -182,15 +183,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // descrizione uscivano sbagliati, non c'era modo di risalire — ne' di
   // annullare. Qui si registra chi, cosa, e il valore precedente dei soli
   // campi cambiati. Best-effort: non blocca la risposta.
-  const prima: Record<string, unknown> = {};
-  for (const campo of Object.keys(update)) prima[campo] = (current as Record<string, unknown>)[campo];
-  void writeAudit({
-    actorId: user.id,
-    action: 'product.update',
-    targetTable: 'products',
-    targetId: productId,
-    metadata: { origine: 'ai-copilot', campi: Object.keys(update), prima, dopo: update },
+  //
+  // 12/11/2026 (R10-008) — La voce la costruisce `tracciaDellaModifica`, la stessa del modulo
+  // del prodotto: prima qui si scriveva a mano un'altra forma (tutte le chiavi mandate, anche
+  // quelle rimaste uguali, e nessun `daAi`), e chi leggeva il registro trovava due tracce
+  // diverse a seconda della porta. Tutto quello che passa di qui l'ha proposto l'assistente.
+  const voce = tracciaDellaModifica({
+    prodottoId: productId,
+    attoreId: user.id,
+    origine: 'ai-copilot',
+    prima: current as unknown as Record<string, unknown>,
+    dopo: update as Record<string, unknown>,
+    campiDallAi: Object.keys(update),
   });
+  if (voce) void writeAudit(voce);
 
   return NextResponse.json({
     ok: true,

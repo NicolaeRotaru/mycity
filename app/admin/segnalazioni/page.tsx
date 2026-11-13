@@ -69,10 +69,49 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
   const [decisione, setDecisione] = useState<Decisione>(s.stato === 'ricevuta' ? 'in_esame' : (s.stato as Decisione));
   const [motivazione, setMotivazione] = useState(s.esito_motivato ?? '');
   const serveMotivo = decisione !== 'in_esame';
+  // R02-003 — Si può accogliere solo ciò che da qui si sa togliere: il prodotto (va in bozza) e
+  // il negozio (si sospende). Recensioni e messaggi non hanno ancora un'azione di rimozione.
+  const puoTogliere = s.tipo === 'prodotto' || s.tipo === 'negozio';
   const motivoValido = motivazione.trim().length >= MOTIVAZIONE_MINIMA;
 
   const decidi = useMutation({
     mutationFn: async () => {
+      // 12/11/2026 (R02-003) — «Accolta» toglie davvero il contenuto, PRIMA di registrare la
+      // decisione: l'esito che parte dopo dice «rimosso», e deve essere vero. Se togliere non
+      // riesce, la decisione non si salva e non parte niente.
+      if (decisione === 'accolta' && s.tipo === 'prodotto') {
+        const r = await fetch('/api/admin/segnalazioni/accogli', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: s.id }),
+        });
+        if (!r.ok) throw new Error('Il prodotto non è stato tolto: decisione non registrata. Riprova.');
+      }
+      if (decisione === 'accolta' && s.tipo === 'negozio') {
+        // Si sospende solo un negozio che è online (approvato). Già sospeso, in attesa o respinto
+        // vuol dire che dalla vetrina è già fuori: la decisione si registra senza risospenderlo
+        // (la rotta di moderazione risponderebbe 400 e la decisione non entrerebbe mai).
+        const { data: negozio } = await supabase
+          .from('profiles')
+          .select('approval_status')
+          .eq('id', s.oggetto_id)
+          .maybeSingle();
+        if ((negozio as { approval_status?: string } | null)?.approval_status === 'approved') {
+          if (!window.confirm('Accogliere la segnalazione sospende il negozio. Confermi?')) {
+            throw new Error('Decisione annullata: il negozio resta attivo.');
+          }
+          const r = await fetch(`/api/admin/users/${s.oggetto_id}/moderate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // La rotta di moderazione accetta un motivo di al massimo 500 caratteri.
+            body: JSON.stringify({ action: 'suspend', reason: motivazione.trim().slice(0, 500) }),
+          });
+          if (!r.ok) throw new Error('Il negozio non è stato sospeso: decisione non registrata. Riprova.');
+        }
+      }
+      if (decisione === 'accolta' && !puoTogliere) {
+        throw new Error('Per questo tipo di contenuto non c\'è ancora un modo di toglierlo da qui.');
+      }
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('segnalazioni')
@@ -130,7 +169,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
           {NOME_STATO[s.stato] ?? s.stato} · ricevuta il {formatDate(s.created_at)}
         </span>
       </div>
-      {s.dettaglio && <p className="mt-2 whitespace-pre-line text-ink-700">{s.dettaglio}</p>}
+      {/* R02-021 — Un link lungo incollato da chi segnala usciva dalla scheda e allargava la pagina sul telefono. */}
+      {s.dettaglio && <p className="mt-2 whitespace-pre-line break-words [overflow-wrap:anywhere] text-ink-700">{s.dettaglio}</p>}
       <p className="mt-1 text-xs text-ink-500">
         Chi ha segnalato: {s.segnalante_id ? 'utente registrato' : 'senza account'}
         {s.email_contatto ? ` · ${s.email_contatto}` : ''}
@@ -154,7 +194,13 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
             className="mt-1 block rounded-lg border border-cream-300 px-2 py-1 text-sm"
           >
             <option value="in_esame">In esame</option>
-            <option value="accolta">Accolta (il contenuto va tolto)</option>
+            <option value="accolta" disabled={!puoTogliere}>
+              {s.tipo === 'prodotto'
+                ? 'Accolta: il prodotto esce dalla vetrina'
+                : s.tipo === 'negozio'
+                ? 'Accolta: il negozio viene sospeso'
+                : 'Accolta (non disponibile: questo contenuto non si toglie da qui)'}
+            </option>
             <option value="respinta">Respinta</option>
           </select>
         </label>

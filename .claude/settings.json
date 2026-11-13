@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node ../ad-mycity/cervello/riparazione-sessioni.mjs valida-referto:*)",
+      "Bash(node ../ad-mycity/cervello/riparazione-sessioni.mjs guardia-ramo:*)",
+      "Bash(node ../ad-mycity/cervello/prova-rimessa.mjs:*)",
+      "Bash(timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs:*)"
+    ],
+    "deny": [
+      "mcp__Supabase",
+      "mcp__Vercel",
+      "mcp__Stripe"
+    ]
+  }
+}

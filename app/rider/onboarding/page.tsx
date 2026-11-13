@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
 import { controlloEta } from '@/lib/maggiore-eta';
+import { documentiObbligatoriDelFattorino } from '@/lib/admin/regole-approvazione';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -139,9 +140,18 @@ export default function RiderOnboardingPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error('Sessione scaduta');
-      const { error } = await supabase.from('profiles').update(form).eq('id', userId);
+      // 12/11/2026 (R03-016) — Il passo 1 scrive solo i suoi quattro campi. Mandava l'oggetto
+      // intero, con le scadenze di patente e polizza ancora vuote (''): Postgres rifiuta '' come
+      // data (22007), il salvataggio cadeva e i caricamenti dei documenti restavano chiusi.
+      const anagrafica = {
+        legal_first_name: form.legal_first_name,
+        legal_last_name: form.legal_last_name,
+        legal_fiscal_code: form.legal_fiscal_code,
+        legal_birth_date: form.legal_birth_date || null,
+      };
+      const { error } = await supabase.from('profiles').update(anagrafica).eq('id', userId);
       if (error) throw error;
-      setProfile((p) => ({ ...(p ?? {}), ...form }));
+      setProfile((p) => ({ ...(p ?? {}), ...anagrafica }));
       toast.success('Dati salvati. Ora puoi caricare i documenti.');
     } catch (e) {
       toast.error(friendlyError(e));
@@ -173,9 +183,16 @@ export default function RiderOnboardingPage() {
       if (!userId) throw new Error('Sessione scaduta');
 
       // 1) Salva form anagrafico
+      // R03-016 — Le date lasciate vuote vanno come null, non come '' (che Postgres rifiuta):
+      // chi va in bici senza patente non ha una scadenza da scrivere.
       const { error: uErr } = await supabase
         .from('profiles')
-        .update(form)
+        .update({
+          ...form,
+          legal_birth_date: form.legal_birth_date || null,
+          rider_license_expires_on: form.rider_license_expires_on || null,
+          rider_insurance_expires_on: form.rider_insurance_expires_on || null,
+        })
         .eq('id', userId);
       if (uErr) throw uErr;
 
@@ -203,7 +220,13 @@ export default function RiderOnboardingPage() {
     }
   }
 
-  const allRequiredUploaded = DOCS.filter((d) => d.required).every((d) => profile?.[columnForKind(d.kind)]);
+  // 12/11/2026 (R03-024) — Obbligatori secondo il mezzo, con la regola dell'approvazione
+  // (lib/admin/regole-approvazione.ts): in bici bastano documento e selfie.
+  const colonneObbligatorie = new Set<string>(
+    documentiObbligatoriDelFattorino(form.rider_vehicle_type).map((d) => d.colonna),
+  );
+  const obbligatorio = (d: DocDef) => colonneObbligatorie.has(columnForKind(d.kind));
+  const allRequiredUploaded = DOCS.filter(obbligatorio).every((d) => profile?.[columnForKind(d.kind)]);
 
   return (
     <div className="pb-6">
@@ -301,7 +324,7 @@ export default function RiderOnboardingPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium text-ink-900">
-                      {d.label} {d.required && <span className="text-secondary-600">*</span>}
+                      {d.label} {obbligatorio(d) && <span className="text-secondary-600">*</span>}
                     </div>
                     <div className="text-xs text-ink-500 mt-0.5">{d.hint}</div>
                     {uploaded && <div className="mt-1 text-xs text-olive-700 flex items-center gap-1.5"><Check size={14} strokeWidth={2.2} aria-hidden /> Caricato</div>}

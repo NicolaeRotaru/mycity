@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
@@ -10,6 +11,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { compensoConsegnaEuro } from '@/lib/shipping';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 
 type RiderOrderRow = {
   id: string;
@@ -23,22 +25,37 @@ type RiderOrderRow = {
   payment_method: string | null;
 };
 
-/** Etichetta giorno: Oggi / Ieri / data lunga. */
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const that = new Date(d); that.setHours(0, 0, 0, 0);
-  const diff = Math.round((today.getTime() - that.getTime()) / 86400000);
-  if (diff === 0) return 'Oggi';
-  if (diff === 1) return 'Ieri';
-  return d.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long' });
+/**
+ * Etichetta giorno: Oggi / Ieri / data lunga.
+ *
+ * 12/11/2026 (R06-015) — Il giorno e' quello di Piacenza, per la chiave del
+ * gruppo e per l'etichetta. Prima la chiave era la data di Greenwich
+ * (`delivered_at.slice(0, 10)`) e l'etichetta l'ora del telefono: fra mezzanotte
+ * e l'una (le due d'estate) le consegne finivano in un secondo gruppo «Oggi» e
+ * il totale del giorno si spezzava.
+ */
+function dayLabel(giorno: string): string {
+  const oggi = giornoPiacenza();
+  if (giorno === oggi) return 'Oggi';
+  const ieri = giornoPiacenza(new Date(inizioGiornoPiacenza(oggi).getTime() - 12 * 3600_000));
+  if (giorno === ieri) return 'Ieri';
+  // Mezzogiorno di quel giorno a Piacenza: lontano da ogni cambio di data.
+  const mezzogiorno = new Date(inizioGiornoPiacenza(giorno).getTime() + 12 * 3600_000);
+  return mezzogiorno.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'Europe/Rome' });
+}
+
+/** Il fattorino vede il dettaglio di una consegna fino a sette giorni dopo. */
+const GIORNI_APRIBILE = 7;
+function consegnaApribile(o: RiderOrderRow): boolean {
+  if (!o.delivered_at) return true;
+  return Date.now() - new Date(o.delivered_at).getTime() < GIORNI_APRIBILE * 86_400_000;
 }
 
 export default function RiderHistoryPage() {
   // 5/11/2026 — Una lettura caduta non è «Non hai ancora completato consegne».
-  const { data: orders = [], isLoading, isError, refetch } = useQuery({
+  const { data: lettura, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.rider.history,
-    queryFn: async (): Promise<RiderOrderRow[]> => {
+    queryFn: async (): Promise<{ consegne: RiderOrderRow[]; troncato: boolean }> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       /**
@@ -53,15 +70,24 @@ export default function RiderHistoryPage() {
        * regola su `orders` ha potuto stringersi a sette giorni dopo la
        * consegna senza togliere niente a chi lavora.
        */
-      const { data, error } = await supabase
-        .from('rider_consegne_storico')
-        .select('id, total_price, shipping_cost, rider_fee_cents, delivery_status, delivered_at, delivery_city, payment_method')
-        .eq('rider_id', user.id)
-        .order('delivered_at', { ascending: false });
+      // 12/11/2026 (R06-016) — Tutto in una lettura sola: oltre il tetto di righe
+      // del database (mille) conto e totale guadagnato sarebbero stati sbagliati
+      // in silenzio. Ora si legge a finestre, e se si arriva al tetto duro la
+      // pagina lo dice.
+      const { data, error, troncato } = await leggiTutteLeRighe<RiderOrderRow>((da, a) =>
+        supabase
+          .from('rider_consegne_storico')
+          .select('id, total_price, shipping_cost, rider_fee_cents, delivery_status, delivered_at, delivery_city, payment_method')
+          .eq('rider_id', user.id)
+          .order('delivered_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as PromiseLike<{ data: RiderOrderRow[] | null; error: { message?: string } | null }>,
+      );
       if (error) throw error;
-      return (data ?? []) as RiderOrderRow[];
+      return { consegne: data, troncato };
     },
   });
+  const orders = useMemo(() => lettura?.consegne ?? [], [lettura]);
 
   /*
    * 1/11/2026 — Si somma il compenso del fattorino (`rider_fee_cents`), non
@@ -72,11 +98,11 @@ export default function RiderHistoryPage() {
 
   // Raggruppa per giorno mantenendo l'ordine (già desc per delivered_at).
   const groups = useMemo(() => {
-    const map = new Map<string, { label: string; total: number; items: RiderOrderRow[] }>();
+    const map = new Map<string, { key: string; label: string; total: number; items: RiderOrderRow[] }>();
     for (const o of orders) {
-      const key = (o.delivered_at ?? '').slice(0, 10) || 'senza-data';
-      const label = o.delivered_at ? dayLabel(o.delivered_at) : 'Senza data';
-      if (!map.has(key)) map.set(key, { label, total: 0, items: [] });
+      const key = o.delivered_at ? giornoPiacenza(o.delivered_at) : 'senza-data';
+      const label = o.delivered_at ? dayLabel(key) : 'Senza data';
+      if (!map.has(key)) map.set(key, { key, label, total: 0, items: [] });
       const g = map.get(key)!;
       g.total += compensoConsegnaEuro(o);
       g.items.push(o);
@@ -104,6 +130,11 @@ export default function RiderHistoryPage() {
         <p className="mt-0.5 text-[13px] text-ink-500">
           {orders.length} consegne completate · {formatPrice(totalEarned)} guadagnati
         </p>
+        {lettura?.troncato && (
+          <p role="status" className="mt-1 text-[12px] font-semibold text-accent-800">
+            Sono le tue ultime {orders.length} consegne: le più vecchie non sono contate qui.
+          </p>
+        )}
       </div>
 
       <div className="px-4">
@@ -113,32 +144,45 @@ export default function RiderHistoryPage() {
           </div>
         ) : (
           groups.map((g) => (
-            <div key={g.label} className="mb-[18px]">
+            <div key={g.key} className="mb-[18px]">
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{g.label}</span>
                 <span className="text-[13px] font-bold text-olive-700">{formatPrice(g.total)}</span>
               </div>
               <div className="flex flex-col gap-2">
-                {g.items.map((o) => (
-                  <Link
-                    key={o.id}
-                    href={`/rider/orders/${o.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 transition-shadow hover:shadow-warm-sm"
-                  >
-                    <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-olive-50 text-olive-700">
-                      <Check size={16} strokeWidth={2.4} aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-ink-900">
-                        {o.delivery_city ?? 'Piacenza'}
-                      </p>
-                      <p className="text-[11px] text-ink-400">
-                        #{o.id.slice(0, 6).toUpperCase()} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
-                      </p>
+                {g.items.map((o) => {
+                  const riga = (
+                    <>
+                      <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-olive-50 text-olive-700">
+                        <Check size={16} strokeWidth={2.4} aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-ink-900">
+                          {o.delivery_city ?? 'Piacenza'}
+                        </p>
+                        <p className="text-[11px] text-ink-400">
+                          #{o.id.slice(0, 6).toUpperCase()} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-bold text-olive-700">+{formatPrice(compensoConsegnaEuro(o))}</span>
+                    </>
+                  );
+                  // 12/11/2026 (R06-016) — Dopo sette giorni la consegna non si apre piu'
+                  // (la regola su `orders` la nasconde): niente link a «Ordine non trovato».
+                  return consegnaApribile(o) ? (
+                    <Link
+                      key={o.id}
+                      href={`/rider/orders/${o.id}`}
+                      className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 transition-shadow hover:shadow-warm-sm"
+                    >
+                      {riga}
+                    </Link>
+                  ) : (
+                    <div key={o.id} className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3">
+                      {riga}
                     </div>
-                    <span className="shrink-0 font-bold text-olive-700">+{formatPrice(compensoConsegnaEuro(o))}</span>
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))

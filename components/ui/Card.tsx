@@ -12,6 +12,16 @@ import { cn } from '@/lib/cn';
 
 type Variant = 'bordered' | 'elevated' | 'flat' | 'funnel';
 type Padding = 'none' | 'sm' | 'md' | 'lg';
+/**
+ * 12/11/2026 (R10-010) — IL RAGGIO PER CONTESTO, DETTO QUI.
+ *
+ * La primitiva aveva angoli da 12px (rounded-lg), cioe' il raggio MENO usato: le card scritte
+ * a mano con lo stesso schema erano 71 da 20px e 56 da 16px, 14 da 12px. La regola adesso:
+ * card di contenuto = 16px (xl, il valore di base), card prodotto/negozio = 20px (2xl),
+ * riquadri dentro un'altra card = 12px (lg).
+ */
+type Radius = 'lg' | 'xl' | '2xl';
+const RADIUS: Record<Radius, string> = { lg: 'rounded-lg', xl: 'rounded-xl', '2xl': 'rounded-2xl' };
 
 const VARIANTS: Record<Variant, string> = {
   bordered: 'bg-white border border-cream-300',
@@ -46,13 +56,15 @@ type Props = {
   as?: 'div' | 'article' | 'section' | 'aside';
   /** Aggiunge sollevamento + ombra al passaggio del mouse (per card cliccabili). */
   hover?: boolean;
+  /** R10-010 — 'xl' (contenuto, di base), '2xl' (prodotto/negozio), 'lg' (riquadro interno). */
+  radius?: Radius;
 };
 
-export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false }: Props) {
+export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl' }: Props) {
   return (
     <Tag
       className={cn(
-        variant === 'funnel' ? 'rounded-xl' : 'rounded-lg',
+        RADIUS[radius],
         VARIANTS[variant],
         PADDINGS[padding],
         hover && 'transition-transform hover:-translate-y-[3px] hover:shadow-[var(--shadow-hover)]',

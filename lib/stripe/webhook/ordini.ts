@@ -575,7 +575,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           createdAt: new Date(),
           storeHours: orari,
         });
-        await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+        return sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
       });
     }
   }, 'avvisi post-ordine');

@@ -128,7 +128,7 @@ export default async function StatusPage() {
       </section>
 
       <div className="text-center text-xs text-ink-400">
-        Hai un problema? <Link href="/contact" className="text-primary-700 hover:underline">Contattaci</Link>
+        Hai un problema? <Link href="/contact" className="text-primary-700 underline underline-offset-2 hover:text-primary-800">Contattaci</Link>
       </div>
     </div>
   );

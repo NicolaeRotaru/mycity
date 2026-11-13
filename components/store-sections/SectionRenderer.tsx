@@ -213,7 +213,10 @@ function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionC
           hidden={t !== current}
           // La tab "Info & orari" affianca Orari + Dove siamo in due colonne; le
           // altre impilano le sezioni rispettando lo spacing del contenitore.
-          className={t === 'info' ? 'grid gap-4 sm:grid-cols-2 sm:items-start' : 'space-y-4'}
+          // 12/11/2026 (R02-023) — La classe `grid` vinceva sull'attributo hidden: il pannello «Info &
+          // orari» restava visibile sotto qualunque scheda. Il pannello nascosto non ha classi di
+          // impaginazione, solo `hidden`.
+          className={t !== current ? 'hidden' : t === 'info' ? 'grid gap-4 sm:grid-cols-2 sm:items-start' : 'space-y-4'}
         >
           {groups[t].map((s) => (
             <RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} />

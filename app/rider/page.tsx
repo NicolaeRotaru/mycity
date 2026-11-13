@@ -325,7 +325,10 @@ export default function RiderDashboardPage() {
         throw new Error(
           esito?.motivo === 'NON_FATTORINO'
             ? 'Il tuo profilo fattorino non è ancora approvato'
-            : 'Ordine già preso da un altro rider',
+            // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
+            : esito?.motivo === 'DOCUMENTI_SCADUTI'
+              ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
+              : 'Ordine già preso da un altro rider',
         );
       }
       const data2 = { id: esito.id };

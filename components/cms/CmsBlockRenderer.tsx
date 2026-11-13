@@ -6,6 +6,7 @@ import { sanitizeRichText } from '@/lib/sanitize-html';
 import { homeCtaHref } from '@/lib/home-site';
 import { CLASSI_FASCIA_BANNER, CLASSI_TESTO_FASCIA_BANNER } from '@/lib/banner-vetrina';
 import type { CmsSection } from '@/lib/cms-page';
+import VideoAlClic from '@/components/store-sections/VideoAlClic';
 
 /**
  * Render dei blocchi di CONTENUTO (testo/banner/galleria/video) di una pagina CMS.
@@ -92,7 +93,9 @@ function Block({ section }: { section: CmsSection }) {
               // eslint-disable-next-line jsx-a11y/media-has-caption
               <video src={c.videoUrl} controls playsInline preload="metadata" className="absolute inset-0 w-full h-full object-contain" aria-label={c.heading || 'Video'} />
             ) : (
-            <iframe src={src} title={c.heading || 'Video'} className="absolute inset-0 w-full h-full" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+            // R11-025 — come vetrina e home: l'iframe di YouTube/Vimeo nasce solo al tocco, non appena
+            // la pagina si apre (prima il browser contattava Google o Vimeo senza che nessuno lo chiedesse).
+            <VideoAlClic provider={c.provider === 'vimeo' ? 'vimeo' : 'youtube'} src={src} titolo={c.heading || 'Video'} />
             )}
           </div>
         </section>

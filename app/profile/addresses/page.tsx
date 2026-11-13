@@ -61,8 +61,16 @@ export default function AddressesPage() {
       if (!user) throw new Error('Non autenticato');
 
       // Geocode best-effort
-      let lat: number | null = form.lat;
-      let lng: number | null = form.lng;
+      // 12/11/2026 (R03-014) — In modifica le coordinate di partenza erano quelle dell'indirizzo di
+      // prima: se cambiava la via e la ricerca della posizione non rispondeva (o non trovava la via
+      // nuova), si salvava la via nuova con le coordinate della vecchia. Le rotte d'ordine le
+      // prendevano per buone (via, città e CAP combaciano) e il fattorino andava alla casa vecchia.
+      // Ora le coordinate restano solo se il testo è lo stesso; altrimenti si parte da vuote.
+      const prima = editing ? addresses.find((a) => a.id === editing) : undefined;
+      const stessoIndirizzo =
+        !!prima && prima.address === form.address && prima.city === form.city && prima.zip === form.zip;
+      let lat: number | null = stessoIndirizzo ? form.lat : null;
+      let lng: number | null = stessoIndirizzo ? form.lng : null;
       try {
         // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
         const res = await fetch('/api/geocode', {
@@ -78,6 +86,8 @@ export default function AddressesPage() {
       } catch {}
 
       const payload = { ...form, lat, lng, user_id: user.id };
+      // Senza posizione l'ordine si fa lo stesso (la cerca il server): lo si dice al cliente.
+      const posizioneNonTrovata = lat == null || lng == null;
 
       // 5/11/2026 — Le scritture non guardavano l'errore (supabase non lancia: restituisce
       // { error }): il sito diceva «Indirizzo salvato» e svuotava il modulo anche quando
@@ -101,13 +111,17 @@ export default function AddressesPage() {
           .neq('id', salvatoId);
         if (error) throw error;
       }
+      return { posizioneNonTrovata };
     },
-    onSuccess: () => {
+    onSuccess: (esito) => {
       qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       setShowForm(false);
       setEditing(null);
       setForm(empty);
       toast.success('Indirizzo salvato');
+      if (esito?.posizioneNonTrovata) {
+        toast.info('Non abbiamo trovato la posizione sulla mappa: controlla via e CAP. Puoi ordinare lo stesso.');
+      }
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { createElement, type ReactNode } from 'react';
 import { fake, disegna, aspetta, scrivi, paginaPer, type Domanda } from './aiuti/cabina-admin';
 
@@ -168,6 +168,11 @@ describe('l\'avviso di una segnalazione apre una pagina dove si esamina e si dec
   it('se il database non aggiorna nessuna riga, non dice «registrata»', async () => {
     const link = await linkDellAvviso();
     rispondiCon([]);
+    // R02-003 — «Accolta» su un prodotto passa prima dalla rotta che lo toglie: qui riesce, così
+    // la prova guarda solo quello che guardava, la scrittura della decisione che non entra.
+    const fetchPrima = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('{"ok":true}', { status: 200 })) as unknown as typeof fetch;
+    onTestFinished(() => { globalThis.fetch = fetchPrima; });
     const host = await apriIndirizzo(link);
     await scrivi(host.querySelector('select') as HTMLSelectElement, 'accolta');
     await scrivi(host.querySelector('textarea') as HTMLTextAreaElement, 'Prodotto contraffatto: tolto dal catalogo.');

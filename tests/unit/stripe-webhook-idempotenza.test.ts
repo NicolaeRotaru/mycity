@@ -41,11 +41,14 @@ const stato: {
   rivendicate: Array<{ event_id: string }>;
   /** Tutte le UPDATE viste su stripe_event_log, in ordine. */
   aggiornamenti: Record<string, unknown>[];
+  /** R12-018 — la riga letta quando il turno è occupato: già lavorata o no. */
+  lavorato: boolean;
 } = {
   evento: { id: 'evt_1', type: 'payment_intent.payment_failed', data: { object: { id: 'pi_1' } } },
   esitoInsert: { error: null },
   rivendicate: [{ event_id: 'evt_1' }],
   aggiornamenti: [],
+  lavorato: true,
 };
 
 const gestori = {
@@ -113,6 +116,9 @@ vi.mock('@/lib/supabase/server', () => ({
         return {
           insert: () => Promise.resolve(stato.esitoInsert),
           update: catenaUpdate,
+          select: () => ({
+            eq: () => ({ maybeSingle: () => Promise.resolve({ data: { processed: stato.lavorato }, error: null }) }),
+          }),
         };
       }
       return {
@@ -140,6 +146,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   stato.evento = { id: 'evt_1', type: 'payment_intent.payment_failed', data: { object: { id: 'pi_1' } } };
   stato.esitoInsert = { error: null };
+  stato.lavorato = true;
   stato.rivendicate = [{ event_id: 'evt_1' }];
   stato.aggiornamenti = [];
 });
@@ -162,10 +169,21 @@ describe('quando il registro degli eventi non risponde, il webhook si ferma', ()
 
   it('il doppione vero resta trattato come prima: 200 e nessun lavoro', async () => {
     stato.esitoInsert = { error: { code: '23505' } };
-    stato.rivendicate = []; // un altra consegna ha già il turno in mano
+    stato.rivendicate = []; // già lavorato: la presa del turno non trova niente
+    stato.lavorato = true;
     const res = await POST(richiesta());
     expect(res.status).toBe(200);
     expect((await res.json()).duplicated).toBe(true);
+    expect(gestori.pagamentoFallito).not.toHaveBeenCalled();
+  });
+
+  // 12/11/2026 (R12-018) — Un turno in mano a un'altra consegna (forse morta) non è «già visto».
+  it('un avviso in lavorazione altrove non è un doppione: 409, Stripe riprova, nessun lavoro', async () => {
+    stato.esitoInsert = { error: { code: '23505' } };
+    stato.rivendicate = [];
+    stato.lavorato = false;
+    const res = await POST(richiesta());
+    expect(res.status).toBe(409);
     expect(gestori.pagamentoFallito).not.toHaveBeenCalled();
   });
 });

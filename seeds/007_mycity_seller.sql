@@ -14,6 +14,10 @@ DECLARE
   mycity_email text := 'mycity.import@mycity-system.local';
   pwd text := crypt('MyCitySystem2025!', gen_salt('bf'));
 BEGIN
+  -- 12/11/2026 (R12-009) — La semina scrive con la stessa chiave delle prove SQL
+  -- (tests/sql/harness): il guardiano dei profili (119) lascia l'approvazione solo
+  -- allo staff, e qui chi scrive è la semina, non un utente. Vale per questa transazione.
+  PERFORM set_config('mycity.allow_profile_write', '1', true);
   ----------------------------------------------------------------
   -- 1) Cleanup di eventuali tentativi precedenti rotti
   ----------------------------------------------------------------
@@ -80,11 +84,12 @@ BEGIN
   ----------------------------------------------------------------
   -- 3) Profilo seller "MyCity" (approvato, visibile come negozio)
   ----------------------------------------------------------------
-  INSERT INTO public.profiles (id, role, is_approved, store_name, offers_express)
-  VALUES (mycity_uuid, 'seller', true, 'MyCity', false)
+  INSERT INTO public.profiles (id, role, is_approved, approval_status, store_name, offers_express)
+  VALUES (mycity_uuid, 'seller', true, 'approved', 'MyCity', false)
   ON CONFLICT (id) DO UPDATE
     SET role           = 'seller',
         is_approved    = true,
+        approval_status = 'approved',
         store_name     = 'MyCity',
         offers_express = COALESCE(public.profiles.offers_express, false);
 END $$;

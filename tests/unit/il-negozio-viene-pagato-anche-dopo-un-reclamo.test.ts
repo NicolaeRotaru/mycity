@@ -100,6 +100,15 @@ vi.mock('@/lib/supabase/server', () => ({
           },
         };
       }
+      // R11-017 — la rotta guarda se c'è un reso aperto sullo stesso ordine: qui nessuno.
+      if (tabella === 'returns') {
+        const catena: Record<string, unknown> = {
+          select: () => catena,
+          eq: () => catena,
+          in: async () => ({ data: [], error: null }),
+        };
+        return catena;
+      }
       return { insert: async () => ({ error: null }) };
     },
   }),

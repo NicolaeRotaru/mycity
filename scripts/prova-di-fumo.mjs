@@ -316,7 +316,12 @@ export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulD
   // Sul dominio il commit che esce: chi c'era prima non si sa piu', e si
   // ricade nella regola qui sotto (mai `candidati[0]`: puo' essere un
   // rilascio gia' tolto perche' rotto).
-  if (deiClienti && (!daScartare || commitDelRilascio(sulDominio) !== daScartare)) return deiClienti;
+  // 12/11/2026 (R07-011) — un dominio che non dice il suo commit non e' «un altro
+  // commit»: '' e' diverso da qualunque sha, e il dominio veniva preso per buono
+  // anche quando era proprio il rilascio rotto che esce. Senza commit si ricade
+  // nella regola qui sotto.
+  const commitDeiClienti = commitDelRilascio(sulDominio);
+  if (deiClienti && (!daScartare || (commitDeiClienti && commitDeiClienti !== daScartare))) return deiClienti;
 
   // Un rilascio senza commit conta come un commit a se': non si sa se e' lo
   // stesso di un altro.

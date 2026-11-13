@@ -2,6 +2,13 @@
 
 > Versione 1.0 · numeri target da validare con i primi 50 ordini reali.
 
+> ⚠️ **Documento superato in parte (12/11/2026, R04-023).** I numeri vivi stanno nel codice:
+> commissione **10% su tutto** (`MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), abbonamento dei negozi
+> **50 € al mese, oggi spento** (`ABBONAMENTO_NEGOZI_ACCESO = false` in `lib/funzioni-al-lancio.ts`),
+> **nessun piano gratuito** con commissione diversa, **mancia al fattorino vietata** (compenso fisso per
+> consegna, `app/rider/help/page.tsx`). Corrette le righe dei ricavi per ordine;
+> le sezioni segnate «Numeri vecchi» (margini, breakeven, scenari) sono calcolate sui numeri di prima e vanno rifatte.
+
 ---
 
 ## Schema base per ordine
@@ -11,9 +18,9 @@
 | Voce | Importo | Note |
 |---|---|---|
 | GMV medio per ordine | €25 | Target alimentari + cross categoria |
-| Take rate commissione | 8% | Standard marketplace local |
-| **Revenue commissione** | **€2,00** | |
-| Tip rider opzionale 10% | €2,50 | Va al rider, no MyCity |
+| Take rate commissione | 10% | `MARKETPLACE_FEE_BPS` |
+| **Revenue commissione** | **€2,50** | |
+| Mancia al fattorino | vietata | Compenso fisso per consegna |
 | Spedizione pagata dal buyer (sotto €30) | €4,90 | Va al rider, no MyCity |
 
 ### Costi per ordine (lato MyCity)
@@ -30,6 +37,8 @@
 
 ### Margine per ordine
 
+> ⚠️ **Numeri vecchi (R04-023):** questa sezione e' calcolata con commissione all'8% e/o un abbonamento PRO a 15 € con piani gratuiti, che non esistono piu' (oggi: 10% su tutto, abbonamento 50 €/mese spento). Va rifatta prima di usarla.
+
 | Scenario | GMV | Revenue | Costo | Margine | Note |
 |---|---|---|---|---|---|
 | **Card + spedizione pagata (subtotal <€30)** | €25 | €2,00 + €4,90 (ship) - €4,90 (a rider) - €0,28 = **€1,72** | €3,00 (rider) ma incassiamo €4,90 = **+€1,90** netto | **+€0,18** | Margine sottile |
@@ -41,7 +50,7 @@
 
 **Marketplace è in loss strutturale sul singolo ordine sotto certe condizioni**.
 Per breakeven serve:
-- O subscription seller (€15/mese × N seller)
+- O abbonamento negozi (€50/mese × N negozi; oggi spento al lancio)
 - O frequenza ordini alta (LTV)
 - O take rate più alto (10-12% — rischio churn seller)
 - O pickup in negozio incentivato (+10% sconto)
@@ -97,8 +106,8 @@ Revenue lordo cumulato 12 mesi (commissioni + spedizioni):
 
 → A regime con paid acquisition, **serve aumentare LTV via**:
 1. Frequenza ordini +1/mese → +50% LTV
-2. Take rate +2% (10% vs 8%) → +25% revenue
-3. Subscription PRO seller (revenue diretta, non per-buyer)
+2. Take rate: gia' al 10% su tutto (era 8% in questo documento)
+3. Abbonamento negozi (50 €/mese, revenue diretta; oggi spento al lancio)
 
 ---
 
@@ -117,6 +126,8 @@ Se margine medio per ordine = **€0,30** (mix bilanciato):
 
 ### Calcolo breakeven con subscription PRO
 
+> ⚠️ **Numeri vecchi (R04-023):** questa sezione e' calcolata con commissione all'8% e/o un abbonamento PRO a 15 € con piani gratuiti, che non esistono piu' (oggi: 10% su tutto, abbonamento 50 €/mese spento). Va rifatta prima di usarla.
+
 Se 30 seller pagano €15/mese = €450 sub revenue:
 - Costi netti dopo sub: €280 - €450 = **-€170 (profitto)**
 - → breakeven a 30 seller PRO + 50 buyer attivi
@@ -127,6 +138,8 @@ ottimizzare commissione. Subscription è MRR garantito; commissione è variabile
 ---
 
 ## Sensitivity analysis
+
+> ⚠️ **Numeri vecchi (R04-023):** questa sezione e' calcolata con commissione all'8% e/o un abbonamento PRO a 15 € con piani gratuiti, che non esistono piu' (oggi: 10% su tutto, abbonamento 50 €/mese spento). Va rifatta prima di usarla.
 
 ### Scenario ottimista (mese 12)
 
@@ -161,7 +174,7 @@ ottimizzare commissione. Subscription è MRR garantito; commissione è variabile
 
 ## Decisioni strategiche P0
 
-1. **Lancio subscription PRO al day 1**: la sub salva la matematica.
+1. **Abbonamento negozi (50 €/mese)**: oggi spento al lancio; la matematica di questo documento era fatta con un PRO a 15 € e va rifatta.
 2. **Spingere ritiro in negozio (-10%)**: ogni pickup = +€1.72 margine vs -€0.50 delivery.
 3. **Free shipping threshold a €40** (non €30): aumenta GMV medio e ammortizza rider cost.
 4. **COD limit a €50**: oltre, solo card. Frode + cash handling cost.

@@ -70,6 +70,9 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
     rider: { full_name: string | null } | null;
     /** 5/11/2026 — La recensione già lasciata su questo ordine, se c'è. */
     giaRecensito?: boolean;
+    /** 12/11/2026 (R07-015) — negozio e fattorino si guardano separati. */
+    giaNegozio?: boolean;
+    giaFattorino?: boolean;
   };
   // 5/11/2026 — Un guasto di rete non è «Ordine non trovato»: si guarda isError (con Riprova),
   // e «non trovato» resta per l'ordine che non c'è (maybeSingle → null).
@@ -97,8 +100,27 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       const [conFattorino] = await conFattorinoDellOrdine(supabase, [conNegozio]);
       // 5/11/2026 — Una seconda recensione urta il vincolo (order_id, user_id) e veniva buttata
       // dicendo «Grazie». Se c'è già, la pagina lo dice al posto del modulo.
-      const { data: gia } = await supabase.from('store_reviews').select('id').eq('order_id', id).limit(1);
-      return { ...(conFattorino as OrderForReview), giaRecensito: ((gia as unknown[] | null) ?? []).length > 0 };
+      //
+      // 12/11/2026 (R07-015) — Si guardava solo la recensione al negozio: se quella
+      // entrava e quella al fattorino no (rete caduta fra le due scritture), la pagina
+      // diceva «già recensito» e il fattorino non si poteva più votare. Ora si guardano
+      // tutte e due, e il modulo chiede solo quella che manca.
+      // Una lettura che cade non vuol dire «non recensito»: sale l'errore, e la pagina offre Riprova.
+      const { data: gia, error: erroreGia } = await supabase.from('store_reviews').select('id').eq('order_id', id).limit(1);
+      if (erroreGia) throw erroreGia;
+      const giaNegozio = ((gia as unknown[] | null) ?? []).length > 0;
+      let giaFattorino = false;
+      if (data.rider_id) {
+        const { data: giaR, error: erroreGiaR } = await supabase.from('rider_reviews').select('id').eq('order_id', id).limit(1);
+        if (erroreGiaR) throw erroreGiaR;
+        giaFattorino = ((giaR as unknown[] | null) ?? []).length > 0;
+      }
+      return {
+        ...(conFattorino as OrderForReview),
+        giaNegozio,
+        giaFattorino,
+        giaRecensito: giaNegozio && (!data.rider_id || giaFattorino),
+      };
     },
   });
 
@@ -107,10 +129,15 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       if (!order || order.delivery_status !== 'DELIVERED') throw new Error('Ordine non consegnato');
-      if (storeRating < 1 || (order.rider_id && riderRating < 1)) throw new Error('Tocca le stelle per votare');
-      let doppione = false;
+      const chiediNegozio = !order.giaNegozio;
+      const chiediFattorino = !!order.rider_id && !order.giaFattorino;
+      if ((chiediNegozio && storeRating < 1) || (chiediFattorino && riderRating < 1)) throw new Error('Tocca le stelle per votare');
+      // «Avevi già recensito» solo se non è entrata nessuna recensione nuova: se il negozio
+      // urta il doppione ma il fattorino entra, il voto nuovo c'è e va ringraziato.
+      let doppioni = 0;
+      let nuove = 0;
 
-      if (order.seller_id) {
+      if (order.seller_id && chiediNegozio) {
         const { error: e1 } = await supabase.from('store_reviews').insert({
           store_id: order.seller_id,
           user_id: user.id,
@@ -119,9 +146,9 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           comment: storeComment.trim() || null,
         });
         if (e1 && e1.code !== '23505') throw e1;
-        if (e1) doppione = true;
+        if (e1) doppioni += 1; else nuove += 1;
       }
-      if (order.rider_id) {
+      if (order.rider_id && chiediFattorino) {
         const { error: e2 } = await supabase.from('rider_reviews').insert({
           rider_id: order.rider_id,
           user_id: user.id,
@@ -130,16 +157,18 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           comment: riderComment.trim() || null,
         });
         if (e2 && e2.code !== '23505') throw e2;
-        if (e2) doppione = true;
+        if (e2) doppioni += 1; else nuove += 1;
       }
-      return { doppione };
+      return { doppione: doppioni > 0 && nuove === 0 };
     },
     onSuccess: ({ doppione }) => {
       if (doppione) toast.info('Avevi già recensito questo ordine: la recensione di prima resta quella valida.');
       else toast.success('Grazie per la recensione!');
       router.push(`/orders/${id}`);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // Una delle due scritture può essere già entrata: si rilegge l'ordine, e il modulo chiede
+    // solo quella che manca.
+    onError: (err: unknown) => { toast.error(friendlyError(err)); void refetch(); },
   });
 
   if (isLoading) return <LoadingState />;
@@ -173,7 +202,9 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
     );
   }
 
-  const manca = storeRating < 1 || (!!order.rider_id && riderRating < 1);
+  const chiediNegozio = !order.giaNegozio;
+  const chiediFattorino = !!order.rider_id && !order.giaFattorino;
+  const manca = (chiediNegozio && storeRating < 1) || (chiediFattorino && riderRating < 1);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-xl space-y-6">
@@ -183,6 +214,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
         <p className="text-sm text-ink-500">Le tue stelle aiutano gli altri clienti a scegliere.</p>
       </div>
 
+      {chiediNegozio && (
       <div className="bg-white border rounded-xl p-6 space-y-4">
         <div>
           <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={16} strokeWidth={2.2} aria-hidden /> {order.seller?.store_name ?? 'Negozio'}</p>
@@ -198,8 +230,12 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           />
         </div>
       </div>
+      )}
+      {!chiediNegozio && (
+        <p className="text-sm text-ink-600">Il negozio l&apos;hai già recensito: manca solo il voto al fattorino.</p>
+      )}
 
-      {order.rider_id && (
+      {chiediFattorino && (
         <div className="bg-white border rounded-xl p-6 space-y-4">
           <div>
             <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Bike size={16} strokeWidth={2.2} aria-hidden /> {order.rider?.full_name ?? 'Il tuo rider'}</p>

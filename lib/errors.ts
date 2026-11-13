@@ -93,8 +93,10 @@ export function traduciErroreAuth(msg: string): string | null {
   }
   if (m.includes('unable to validate email address') || m.includes('invalid email'))
     return 'Questa email non sembra valida. Controlla come l’hai scritta.';
+  // 12/11/2026 (R12-011) — È il tetto orario di tutto il progetto, non di un indirizzo:
+  // «troppe email a questo indirizzo» lo leggeva anche chi non ne aveva mai ricevuta una.
   if (m.includes('email rate limit exceeded'))
-    return 'Abbiamo già inviato troppe email a questo indirizzo. Riprova fra qualche minuto.';
+    return 'In questo momento non riusciamo a mandare email: riprova fra qualche minuto.';
   if (m.includes('new password should be different'))
     return 'La password nuova deve essere diversa da quella attuale';
   if (m.includes('same password'))

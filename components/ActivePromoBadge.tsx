@@ -30,10 +30,15 @@ export default function ActivePromoBadge({ productId, basePrice }: Props) {
     queryKey: queryKeys.products.activeDiscount(productId),
     queryFn: async (): Promise<number> => {
       const { data, error } = await supabase.rpc('product_active_discount', { p_product: productId });
-      if (error) return 0;
+      // 12/11/2026 (R02-011) — Una lettura caduta non è «nessuno sconto»: con `return 0` lo zero
+      // restava in memoria per un minuto (stessa chiave della scheda) e si mostrava il prezzo pieno,
+      // mentre la cassa applica lo sconto. Si lancia: React Query riprova, e non si salva lo zero.
+      if (error) throw error;
       return Number(data) || 0;
     },
     staleTime: 60_000,
+    // R02-011 (dopo il collaudo) — Stessa chiave della scheda: gli stessi nuovi tentativi.
+    retry: 3,
   });
 
   if (!discount || discount <= 0) return null;

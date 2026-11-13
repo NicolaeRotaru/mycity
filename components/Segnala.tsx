@@ -36,6 +36,14 @@ const MOTIVI: Array<{ valore: string; etichetta: string }> = [
   { valore: 'altro', etichetta: 'Altro' },
 ];
 
+/** 12/11/2026 (R02-005) — Una recensione non è un prodotto: «contraffatto» non vuol dire niente. */
+const MOTIVI_RECENSIONE: Array<{ valore: string; etichetta: string }> = [
+  { valore: 'ingannevole', etichetta: 'Recensione non genuina o ingannevole' },
+  { valore: 'odio_o_molestie', etichetta: 'Contenuto offensivo o molesto' },
+  { valore: 'illecito', etichetta: 'Altro contenuto illecito' },
+  { valore: 'altro', etichetta: 'Altro' },
+];
+
 export function Segnala({
   tipo,
   oggettoId,
@@ -44,7 +52,8 @@ export function Segnala({
   oggettoId: string;
 }) {
   const [aperto, setAperto] = useState(false);
-  const [motivo, setMotivo] = useState(MOTIVI[0].valore);
+  const motivi = tipo === 'recensione' ? MOTIVI_RECENSIONE : MOTIVI;
+  const [motivo, setMotivo] = useState(motivi[0].valore);
   const [dettaglio, setDettaglio] = useState('');
   const [email, setEmail] = useState('');
   const [inCorso, setInCorso] = useState(false);
@@ -134,7 +143,7 @@ export function Segnala({
           onChange={(e) => setMotivo(e.target.value)}
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
         >
-          {MOTIVI.map((m) => (
+          {motivi.map((m) => (
             <option key={m.valore} value={m.valore}>{m.etichetta}</option>
           ))}
         </select>

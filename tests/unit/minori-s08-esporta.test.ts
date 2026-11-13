@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 /** S08 (5/11/2026) — scheda 1523: «Scarica i miei dati» legge ogni tabella con un tetto, e lo dice. */
 
 const letture: Array<{ tabella: string; tetto: number | null }> = [];
-const tante = Array.from({ length: 5000 }, (_, i) => ({ id: i }));
+const tante = Array.from({ length: 5001 }, (_, i) => ({ id: i }));
 
 vi.mock('@/lib/api/middleware', () => ({
   withAuthRateLimit: (_o: unknown, handler: (ctx: { user: { id: string; email: string } }) => unknown) =>
@@ -17,10 +17,18 @@ vi.mock('@/lib/supabase/server', () => ({
       letture.push(voce);
       const q: Record<string, unknown> = {};
       for (const m of ['select', 'eq', 'or', 'order']) q[m] = () => q;
-      q.limit = (n: number) => { voce.tetto = n; return q; };
+      // R02-004 — Il database non dà mai 5000 righe in una lettura: al massimo mille (max_rows).
+      // Il finto rispetta la finestra chiesta e quel tetto.
+      let da = 0;
+      let quante = Infinity;
+      q.limit = (n: number) => { voce.tetto = n; quante = n; return q; };
+      q.range = (a: number, b: number) => { voce.tetto = b - a + 1; da = a; quante = b - a + 1; return q; };
       q.single = async () => ({ data: { id: 'u-1' }, error: null });
       q.then = (ok: (v: unknown) => unknown) =>
-        Promise.resolve({ data: tabella === 'notifications' ? tante : [], error: null }).then(ok);
+        Promise.resolve({
+          data: (tabella === 'notifications' ? tante : []).slice(da, da + Math.min(quante, 1000)),
+          error: null,
+        }).then(ok);
       return q;
     },
   }),
