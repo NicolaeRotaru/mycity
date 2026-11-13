@@ -108,12 +108,12 @@ async function stornoGiaFattoPerLaContestazione(
 }
 
 /**
- * charge.dispute.created → chargeback aperto. Stripe ha GIÀ prelevato i fondi
- * dalla piattaforma, quindi NON emettiamo refund (sarebbe doppio): facciamo
- * solo claw-back del transfer se il venditore era già stato pagato, flagghiamo
- * gli ordini (dispute_status='OPEN' blocca il payout cron) e avvisiamo gli admin.
+ * charge.dispute.created → chargeback aperto (Stripe ha GIÀ prelevato i fondi: niente refund, sarebbe doppio):
+ * claw-back del transfer se il negozio era già pagato, ordini 'OPEN' (il giro dei bonifici li salta), avviso.
+ * R23-012 — Anche charge.dispute.funds_withdrawn (`prelievo`): la richiesta di informazioni diventata contestazione
+ * vera non ripassava di qui, e al negozio non si toglieva niente. Su un chargeback già lavorato l'avviso non si ripete.
  */
-export async function handleDisputeCreated(dispute: Stripe.Dispute) {
+export async function handleDisputeCreated(dispute: Stripe.Dispute, prelievo = false) {
   const orders = await findOrdersForDispute(
     dispute,
     // R052 — serve anche il lordo dell'ordine: la quota da riprendere al
@@ -215,7 +215,6 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
    * 32,40 € invece di 16,20. Scritta per prima, se fallisce non è ancora
    * successo niente, e ripetere è davvero sicuro.
    */
-  //
   // 'OPEN' letto PRIMA di scrivere non vuol dire con certezza «questo avviso è
   // già passato di qui». Fino alla 184 lo scriveva anche il reclamo dall'app (trigger 063): gli
   // ordini di prima possono portarlo ancora. Per questo 'OPEN' fa solo da primo filtro, e la prova vera la dà Stripe
@@ -223,6 +222,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   // Se c'era solo il reclamo, Stripe non ne ha nessuno e lo storno si fa.
   const giaPassati = new Set(orders.filter((o) => o.dispute_status === 'OPEN').map((o) => o.id));
   const daControllare: StornoDaControllare[] = [];
+  let stornatoOra = 0; // R23-012 — quanto ha tolto QUESTO passaggio, a negozio e fattorino
   scritturaObbligatoria(
     await admin
       .from('orders')
@@ -285,6 +285,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     // ripetuto, uno zero non deve cancellare il promemoria del primo, che alla
     // chiusura vinta dice quanto restituire al negozio.
     const valori: Record<string, number> = {};
+    stornatoOra += stornatoVenditore + stornatoFattorino;
     if (stornatoVenditore > 0) valori.dispute_seller_reversed_cents = stornatoVenditore;
     if (stornatoFattorino > 0) valori.dispute_rider_reversed_cents = stornatoFattorino;
     if (Object.keys(valori).length > 0) {
@@ -317,7 +318,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     );
   }
 
-  await notifyAdmins(
+  if (!prelievo || stornatoOra > 0) await notifyAdmins(
     '⚠️ Chargeback aperto',
     `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
     '/admin/disputes',
