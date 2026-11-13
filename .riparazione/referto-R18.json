@@ -1,0 +1,240 @@
+{
+  "sessione": "R18",
+  "aggiornato": "2026-11-13 07:02",
+  "finita": false,
+  "testa": "ad9dce85062d4a9640f548a8d5a9bb55f6a4b19d",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_lanciato",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R18-001",
+      "chiave": "rls-database|la regola per riga della migrazione 001 lascia scrivere i prodotti dal browser, senza traccia ne' controllo di vendibilita'",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova; psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-prodotti.test.sql (su una copia del deposito, fuori dal ramo: rossa 4/5 senza la migrazione, verde 5/5 con)",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllato sulla base ricostruita: su products restano «Sellers can update their own products» e «Approved sellers can insert products»; da venditore autenticato update price=1 riesce, e anche un insert 'available' senza foto. Col client dell'utente scrivono tre porte: PATCH /api/seller/products/[id] (modulo, modifica veloce, Nascondi), l'insert di app/seller/products/new/page.tsx:216-221 e l'insert della rotta d'import (route.ts:73). Stringere la regola rompe le tre porte, tutte in file non miei: la cura intera è stata provata su una copia del deposito (tsc, eslint, vitest 9652 prove, run.sh e migrazione-su-database-pieno verdi) ma non sta in questo ramo.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/seller/products/[id]/route.ts",
+          "modifica": "A salvaProdottoTracciato si passa db: getAdminSupabase() as unknown as ClientDelCatalogo (import da '@/lib/supabase/server') al posto di supaUtente; si toglie il parametro db dall'handler e l'involucro diventa ({ req, user, params }) => handler(req, user, String(params.id ?? '')). lib/products/salvataggio-tracciato.ts non cambia: rilegge il prodotto, pretende prima.seller_id === attoreId e scrive con .eq('seller_id', attoreId). Il Nascondi (lib/products/salva-dal-browser.ts) passa da questa rotta."
+        },
+        {
+          "file": "app/api/seller/products/import/route.ts",
+          "modifica": "Insert con getAdminSupabase().from('products').insert(daScrivere) al posto di db; l'handler riceve anche profile e risponde 403 se profile.role !== 'seller' (la regola tolta chiedeva role='seller' e is_approved; l'involucro lascia passare anche l'admin). seller_id e status restano decisi dal server."
+        },
+        {
+          "file": "app/api/seller/products/route.ts (NUOVO)",
+          "modifica": "POST con withSellerAuthRateLimit {name:'seller-products-create', max:30, windowMs:60000}: 403 se role !== 'seller'; colonneAmmesse(payload) senza stock_visto e stock_confermato; nome obbligatorio; prezzo > 0 altrimenti 400; status solo 'available' o 'draft' (altrimenti draft). Se 'available' rilegge categories e chiama cosaMancaPerVendere({name, description, price, haCategoria, categoriaTop: getAttributesForCategory(...).topSlug, numeroFoto: images.length, attributes}); se manca qualcosa 400 con messaggioDaCompletare e mancanti. Da corpo.external solo external_source_url, external_marketplace, external_data; external_synced_at lo mette il server. Insert col client amministrativo con seller_id: user.id, .select('id').single(); 23514 → 400 (erroreDiSalvataggio), altro → 500 col logger; writeAudit product.create con targetId = id e metadata {origine:'venditore-nuovo', status}; risponde {id, status}."
+        },
+        {
+          "file": "lib/products/salva-dal-browser.ts",
+          "modifica": "Nuova funzione creaProdottoDalBrowser({ payload, external? }): POST /api/seller/products col gettone della sessione, restituisce data.id oppure lancia il messaggio della rotta."
+        },
+        {
+          "file": "app/seller/products/new/page.tsx",
+          "modifica": "Nel mutationFn di create, supabase.from('products').insert({...payload, seller_id: user.id, ...external}).select('id').single() diventa const id = await creaProdottoDalBrowser({ payload, external }); external perde external_synced_at e vale undefined se il prodotto non è importato; in saveProductVariants, TaglieNonSalvate e nel return data.id diventa id; import da '@/lib/products/salva-dal-browser'."
+        },
+        {
+          "file": "migrations/<fascia di chi tiene i file sopra>_i_prodotti_si_scrivono_solo_dal_server.sql",
+          "modifica": "DROP POLICY IF EXISTS \"Sellers can update their own products\" ON public.products; DROP POLICY IF EXISTS \"Approved sellers can insert products\" ON public.products; REVOKE INSERT ON public.products FROM authenticated, anon; (il REVOKE serve: senza, il controllo ①bis di 14-le-porte-di-servizio diventa rosso). Va nello stesso ramo dei punti sopra, dopo di loro. Non si applica: la applica Nicola."
+        },
+        {
+          "file": "tests/sql/rls/riparazione-r18-prodotti.test.sql (NUOVO, nel ramo della migrazione)",
+          "modifica": "Da venditore approvato (request.jwt.claims): update price=1 sul suo prodotto → 0 righe; insert su products → permission denied; legge ancora i suoi due prodotti (bozza compresa); il prezzo resta 6.50; con service_role update e insert riescono. Prova rimessa con --sql e la migrazione in --file."
+        },
+        {
+          "file": "tests/unit/riparazione-r18-prodotti-nascono-dal-server.test.ts (NUOVO)",
+          "modifica": "Cinque prove sulla rotta nuova: 'available' senza foto né descrizione → 400 e niente scritto; scheda completa → seller_id di chi chiama, colonne estranee scartate, riga di traccia; bozza incompleta si salva; prezzo 0 → 400; admin → 403."
+        },
+        {
+          "file": "tests/unit/minori-s06-salvataggio-del-prodotto.test.ts",
+          "modifica": "Aggiungere vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => ({}) })) (senza, 3 prove rosse)."
+        },
+        {
+          "file": "tests/unit/riparazione-r09-caricamento-da-file-passa-dal-server.test.ts",
+          "modifica": "Nel finto involucro aggiungere profile: { id: 'negozio-1', role: 'seller', is_approved: true }, più vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => supaUtente })) (senza, 4 prove rosse)."
+        },
+        {
+          "file": "tests/unit/minori-s06-duplica-prodotto.test.tsx",
+          "modifica": "Togliere from: … insert … dal finto client e aggiungere vi.mock('@/lib/products/salva-dal-browser', () => ({ creaProdottoDalBrowser: async () => stato.inserito.id })) (senza, 1 prova rossa)."
+        }
+      ],
+      "nota": "La pagina d'import l'ha già chiusa R09-006 (346e8147): app/seller/products/import/page.tsx:181 chiama caricaSulServer, nessun insert nella pagina. Il precedente R09 copriva solo l'UPDATE; la voce nomina anche l'insert di new/page.tsx, quindi servono la rotta nuova e DROP+REVOKE dell'INSERT. Dopo la migrazione le scritture col client amministrativo lasciano actor NULL nel registro attività (il trigger usa auth.uid()); chi ha scritto resta in audit_logs e activity_events via writeAudit. CARICAMENTO_DA_FILE_ACCESO=false (lib/funzioni-al-lancio.ts:79): oggi la rotta d'import non è viva."
+    },
+    {
+      "id": "R18-016",
+      "chiave": "qa-flussi|il nome scritto alla registrazione si perde e il profilo resta senza nome",
+      "esito": "parziale",
+      "commit": "548151b625cddd1f4c3d6234dd8cb64b030debd5",
+      "file_toccati": [
+        "migrations/421_il_nome_scritto_alla_registrazione_resta_nel_profilo.sql",
+        "tests/sql/rls/riparazione-r18-nome-alla-registrazione.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-nome-alla-registrazione.test.sql"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-nome-alla-registrazione.test.sql && bash tests/sql/harness/run.sh r18_prova",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 548151b6^ --file migrations/421_il_nome_scritto_alla_registrazione_resta_nel_profilo.sql --prove tests/sql/rls/riparazione-r18-nome-alla-registrazione.test.sql --sql r18_rimessa --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 421: handle_new_user copia NULLIF(left(btrim(raw_user_meta_data->>'full_name'), 200), '') in profiles.full_name, il resto identico alla 161 ('pending' compreso). Nello stesso giro get_referral_leaderboard da' solo il nome di battesimo, come nomi_pubblici e rider_reviews_ricevute: il 5/11 la copia del nome era stata tolta proprio perche' la classifica degli inviti l'avrebbe mostrata intera a ogni utente con l'accesso. La prova simula l'iscrizione con una riga in auth.users coi dati dell'account (come lo shim) e guarda il profilo che nasce e la classifica vista da un altro.",
+      "cosa_resta": "I profili gia' nati restano senza nome: il recupero da auth.users e' una scrittura sui dati veri e la voce la vuole con la firma di Nicola. La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della migrazione 421."
+    },
+    {
+      "id": "R18-019",
+      "chiave": "rls-database|il database accetta un codice sconto del 150% e importi in soldi negativi",
+      "esito": "riparato",
+      "commit": "6eefff317cfb384ee60d75ca65d3d940ba88aa55",
+      "file_toccati": [
+        "migrations/423_il_codice_sconto_non_supera_il_cento_e_i_soldi_non_sono_negativi.sql",
+        "app/admin/coupons/page.tsx",
+        "tests/sql/rls/riparazione-r18-coupon.test.sql",
+        "tests/unit/riparazione-r18-coupon.test.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-coupon.test.sql",
+        "tests/unit/riparazione-r18-coupon.test.ts"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-coupon.test.sql && bash tests/sql/harness/run.sh r18_prova ; npx vitest run tests/unit/riparazione-r18-coupon.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6eefff31^ --file migrations/423_il_codice_sconto_non_supera_il_cento_e_i_soldi_non_sono_negativi.sql --prove tests/sql/rls/riparazione-r18-coupon.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6eefff31^ --file app/admin/coupons/page.tsx --prove tests/unit/riparazione-r18-coupon.test.ts --json (0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 423: dieci paletti CHECK col giro della 215 (NOT VALID, poi VALIDATE; se il passato non regge resta NOT VALID con un avviso e le domande per contare le righe). coupons: PERCENT fra 0 e 100, FIXED > 0, mai negativo; spesa minima >= 0; usi e massimo >= 0 e usi <= massimo. orders: shipping_cost, discount_amount, application_fee_cents, cash_collected_cents >= 0 e payment_method in ('card','cod') o vuoto; disputes.refund_cents e gift_cards.voided_cents >= 0. Nel modulo admin il Valore ha max=100 col tipo percentuale. La prova SQL scrive i 15 numeri storti (rifiutati) e 10 scritture oneste (passano, compresi claim/release del contatore); la vitest apre la pagina: 150% non parte, 15% e 150 euro fissi partono. lib/coupons.ts non cambia: la cassa taglia gia' lo sconto, il buco era nel database."
+    },
+    {
+      "id": "R18-020",
+      "chiave": "rls-database|un reclamo può restare legato a un ordine che non esiste",
+      "esito": "riparato",
+      "commit": "8cdcffe4f82049e1b0a281fdb397431891a4d02e",
+      "file_toccati": [
+        "migrations/424_un_reclamo_non_resta_legato_a_un_ordine_che_non_esiste.sql",
+        "tests/sql/rls/riparazione-r18-reclamo-senza-ordine.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-reclamo-senza-ordine.test.sql"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-reclamo-senza-ordine.test.sql && bash tests/sql/harness/run.sh r18_prova",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8cdcffe4^ --file migrations/424_un_reclamo_non_resta_legato_a_un_ordine_che_non_esiste.sql --prove tests/sql/rls/riparazione-r18-reclamo-senza-ordine.test.sql --sql r18_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 424: chiavi esterne verso orders(id) sulle tre colonne della voce, NOT VALID poi VALIDATE (se ci sono orfani resta NOT VALID con un avviso e le domande per trovarli). disputes.order_id ON DELETE RESTRICT (un reclamo non sparisce con l'ordine e non resta senza; nel sito un ordine si cancella solo nel ripiego subito dopo averlo creato). loyalty_transactions.order_id e zone_code_uses.order_id ON DELETE SET NULL, come le altre order_id che possono restare vuote (cashback_redemptions, rider_sos_events); per loro due anche l'indice (controllo 4 di tests/sql/rls/14). La prova scrive su un ordine inventato (rifiutato) e cancella ordini con righe legate."
+    },
+    {
+      "id": "R18-022",
+      "chiave": "rls-database|manca la colonna della scadenza del documento d'identità: si può controllare solo patente e polizza",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-scadenza-documento.test.sql"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-scadenza-documento.test.sql && bash tests/sql/harness/run.sh r18_prova",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 427, solo database, come patente e polizza: colonna profiles.kyc_id_doc_expires_on date, e is_rider_in_regola (270) la guarda con la stessa regola (scadenza passata al giorno di Piacenza = prendi_ordine risponde DOCUMENTI_SCADUTI; data vuota non ferma, quindi oggi non cambia niente per nessuno; le consegne gia' prese si finiscono). La colonna non entra fra quelle che il profilo si riscrive da solo: la data deve arrivare dalla rotta del server che carica il documento. La prova cade sul comportamento: il profilo del fattorino si riscrive da un JSON (jsonb_populate_record) e senza la colonna la scadenza si perde, e il fattorino col documento scaduto ieri prende l'ordine. Il commit 1509d2f1 è stato tolto dal ramo con ad9dce85: aggiunge una colonna, e senza lib/database.types.ts rigenerato (file non mio) le prove riparazione-r11-tipi-* e il passo CI dei tipi sono rossi.",
+      "serve_file_altrui": [
+        {
+          "file": "migrations/427_il_documento_d_identita_ha_la_sua_scadenza.sql + tests/sql/rls/riparazione-r18-scadenza-documento.test.sql",
+          "modifica": "Pronti nel commit 1509d2f1 di questo ramo (rimessa --sql: regge), tolti con ad9dce85 perché da soli lasciano rosse le prove dei tipi. Si riprendono con git cherry-pick 1509d2f1 NELLO STESSO passo della rigenerazione di lib/database.types.ts."
+        },
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "Rigenerare con `npm run db:types`: in profiles aggiunge `kyc_id_doc_expires_on: string | null;` in Row (dopo rejected_at) e `kyc_id_doc_expires_on?: string | null;` in Insert e Update. Patch pronto: /home/user/r18-attrezzi/lotti/r18-022-serve-file-altrui.patch (git apply). · Patch esatta: diff --git a/lib/database.types.ts b/lib/database.types.ts\nindex 739401f3..ff723267 100644\n--- a/lib/database.types.ts\n+++ b/lib/database.types.ts\n@@ -2011,6 +2011,7 @@ export interface Database {\n           stripe_subscription_id: string | null;\n           founded_year: number | null;\n           rejected_at: string | null;\n+          kyc_id_doc_expires_on: string | null;\n         };\n         Insert: {\n           id: string;\n@@ -2100,6 +2101,7 @@ export interface Database {\n           stripe_subscription_id?: string | null;\n           founded_year?: number | null;\n           rejected_at?: string | null;\n+          kyc_id_doc_expires_on?: string | null;\n         };\n         Update: {\n           id?: string;\n@@ -2189,6 +2191,7 @@ export interface Database {\n           stripe_subscription_id?: string | null;\n           founded_year?: number | null;\n           rejected_at?: string | null;\n+          kyc_id_doc_expires_on?: string | null;\n         };\n         Relationships: [];\n       };\n"
+        },
+        {
+          "file": "app/api/kyc/upload-document/route.ts",
+          "modifica": "Per i tipi id_front e id_back accettare un campo data di scadenza (YYYY-MM-DD, non nel passato al giorno di Piacenza) e scriverlo in profiles.kyc_id_doc_expires_on col client di servizio, nella stessa scrittura del percorso (COLONNA_PER_TIPO, riga 52)."
+        },
+        {
+          "file": "app/rider/onboarding/page.tsx",
+          "modifica": "Accanto a «Documento d’identità — fronte» (riga 19) chiedere la data di scadenza del documento e mandarla alla rotta di caricamento insieme al file (come rider_license_expires_on per la patente, riga 193)."
+        },
+        {
+          "file": "app/api/kyc/documenti-rider/[id]/route.ts",
+          "modifica": "Riga 34: leggere anche kyc_id_doc_expires_on; righe 63-64: scade_il: data.kyc_id_doc_expires_on ?? null per documento_fronte e documento_retro al posto di null."
+        },
+        {
+          "file": "app/rider/page.tsx",
+          "modifica": "Righe 329-330: il messaggio di DOCUMENTI_SCADUTI diventa «Documento d’identità, patente o polizza RC scaduti: carica il documento nuovo dal profilo per tornare a prendere consegne»."
+        }
+      ],
+      "commit_pronto": "1509d2f178949240b8340529776790f6bd7f4180",
+      "tolto_con": "ad9dce85",
+      "rimessa_sul_commit_pronto": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1509d2f1^ --file migrations/427_il_documento_d_identita_ha_la_sua_scadenza.sql --prove tests/sql/rls/riparazione-r18-scadenza-documento.test.sql --sql r18_rimessa --json"
+      }
+    },
+    {
+      "id": "R18-023",
+      "chiave": "rls-database|il controllo del codice di benvenuto nel database conta ancora gli ordini annullati come primo ordine",
+      "esito": "gia_riparato_prima",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/sql/rls/44-il-carrello-accetta-il-benvenuto-dopo-un-annullo.test.sql"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/44-il-carrello-accetta-il-benvenuto-dopo-un-annullo.test.sql && bash tests/sql/harness/run.sh r18_prova ; poi in una transazione il check_coupon della 114 (righe 315-379) + la stessa prova: rossa ('2 controlli falliti sul codice di benvenuto nel carrello')",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "migrations/230_un_ordine_con_lo_stato_vuoto_conta.sql:60-61 — check_coupon conta gli ordini con delivery_status IS DISTINCT FROM 'CANCELED' AND payment_status IS DISTINCT FROM 'FAILED', la stessa regola della cassa (lib/coupons.ts:125-126); la 185 l'aveva gia' allineata. Sulla base ricostruita tests/sql/rls/44 e' verde (Maria con solo un ordine annullato riceve il benvenuto) e torna rossa rimettendo la funzione della 114.",
+      "nota": "Il difetto vive solo nella produzione, ferma alla 161: la cura e' applicare le migrazioni pendenti (185 e 230 comprese) col riallineamento a mano, prima di riaccendere i codici sconto (CODICI_SCONTO_IN_CASSA). Nessuna 428: una copia della funzione della 230 non cambierebbe nessun comportamento e la prova rimessa darebbe 1 (non morde)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la regola di cancellazione del venditore lascia cancellare dal browser un prodotto mai venduto, senza riga in audit_logs",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "pg_policies: products «Sellers can delete their own products»",
+      "descrizione": "Nessuna pagina del venditore la usa più (dal 27/8 il tasto nasconde, non cancella); un prodotto venduto o recensito è già protetto dal trigger 140; resta solo il registro attività col trigger."
+    },
+    {
+      "titolo": "La funzione increment_coupon_usage alza il contatore dei codici sconto senza guardare il massimo",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "migrations/114_hardening_radiografia.sql (increment_coupon_usage)",
+      "descrizione": "Nessun codice del sito la chiama piu' (app/api/orders/cod/route.ts:1779), ma esiste ancora e fa uses_count + 1 senza il controllo max_uses di claim_coupon. Con la 423 una chiamata oltre il massimo viene fermata dal paletto (errore invece che contatore storto); resta una funzione morta da togliere o allineare a claim_coupon."
+    }
+  ],
+  "domande_per_nicola": [
+    "R18-001, ordine di rilascio: prima vanno online le rotte (PATCH col client amministrativo, POST /api/seller/products, import), poi si applica la migrazione che toglie le regole di scrittura su products; al contrario per qualche minuto non si salvano né si creano prodotti. Confermi?",
+    "R18-019 (migrazione 423): i dieci paletti nascono NOT VALID e si validano subito; se in produzione ci sono righe vecchie storte (codici oltre il 100%, FIXED a zero, usi oltre il massimo, importi negativi, payment_method diverso da 'card'/'cod') il vincolo resta NOT VALID con un avviso nei log. Le domande per contarle sono in fondo alla 423: guardale dopo l'applicazione e, sistemate le righe, lancia VALIDATE CONSTRAINT.",
+    "R18-019: va bene che payment_method accetti solo 'card' e 'cod' (piu' il vuoto degli ordini vecchi)? Sono i soli valori che il sito scrive; il commento della 024 citava anche 'apple_pay' e 'google_pay', che passano da Stripe come 'card'.",
+    "R18-020 (migrazione 424): le tre chiavi esterne nascono NOT VALID e si validano subito; se in produzione esiste un reclamo, un movimento punti o un uso di codice di zona legato a un ordine cancellato, la chiave resta NOT VALID con un avviso. Le domande per trovarli sono in fondo alla 424. Scelto RESTRICT per i reclami e SET NULL per punti e codici di zona (la voce diceva RESTRICT per tutte e tre): confermi?",
+    "R18-016 (migrazione 421): firmi il recupero dei nomi dei profili gia' nati da auth.users? La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della 421. Con la 421 la classifica degli inviti mostra solo il nome di battesimo, come gli altri nomi pubblici.",
+    "R18-022 (migrazione 427): un fattorino col documento d'identita' scaduto non prende consegne nuove, come con patente e polizza scadute (data vuota = non ferma): confermi? E per il negoziante col documento scaduto cosa deve succedere (oggi niente)? Va controllata anche all'approvazione (lib/admin/regole-approvazione.ts, come patente e polizza)?",
+    "R18-023: la correzione di check_coupon e' gia' nel codice (185 e 230): la produzione la riceve col riallineamento delle migrazioni pendenti, da fare prima di riaccendere i codici sconto."
+  ],
+  "conto": {
+    "agenti": 2,
+    "nota": ""
+  }
+}
