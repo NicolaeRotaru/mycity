@@ -40,14 +40,32 @@ async function initSentry() {
 }
 
 
-export async function captureError(err: unknown, context?: Record<string, any>) {
+/**
+ * R14-025 — Il registratore e' acceso solo se c'e' la chiave del servizio (NEXT_PUBLIC_SENTRY_DSN):
+ * senza, `captureError` scrive nella console del telefono e non lo vede nessuno. Le pagine d'errore
+ * lo usano per dire «abbiamo registrato il problema» solo quando e' vero.
+ */
+export function registratoreAcceso(): boolean {
+  return Boolean(DSN);
+}
+
+/** Manda l'errore al registratore. Dice se l'ha consegnato: senza chiave, o se l'SDK non c'e', no. */
+export async function captureError(err: unknown, context?: Record<string, any>): Promise<boolean> {
   if (!DSN) {
     console.error('[error]', err, context);
-    return;
+    return false;
   }
-  const Sentry = await import('@sentry/nextjs').catch(() => null);
-  if (!Sentry) return;
-  Sentry.captureException(err, { extra: context });
+  try {
+    // Rete di sicurezza: se l'accensione di instrumentation-client non e' ancora arrivata, parte qui.
+    await initSentry();
+    const Sentry = await import('@sentry/nextjs').catch(() => null);
+    if (!Sentry) return false;
+    Sentry.captureException(err, { extra: context });
+    return true;
+  } catch {
+    // Il registratore non deve mai rompere la pagina d'errore che lo chiama.
+    return false;
+  }
 }
 
 export async function setSentryUser(userId: string, email?: string) {
