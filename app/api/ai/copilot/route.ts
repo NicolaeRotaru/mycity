@@ -11,7 +11,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { REGOLA_CAMPI_DICHIARATIVI, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
-import { REGOLA_PREZZO_AI, TEMPO_COPILOT_MS, tettoTokenCopilot } from '@/lib/ai/regole-copilot';
+import { REGOLA_PREZZO_AI, tettoTokenCopilot } from '@/lib/ai/regole-copilot';
 import { espandiRegolaCopilot, type RegolaCopilot } from '@/lib/ai/regolaCopilot';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
@@ -239,9 +239,6 @@ ${list}`;
       // 4096 ne entravano un centinaio e il piano su tutto il catalogo si
       // tagliava sempre. Circa 60 token per prodotto, piu' il riepilogo.
       max_tokens: tettoTokenCopilot(products.length),
-      // R21-002 — un tentativo solo, col tempo che resta alla rotta dopo il filtro.
-      timeoutMs: TEMPO_COPILOT_MS,
-      senzaRitentativi: true,
       system: SYSTEM,
       messages,
       tools: [TOOL],
