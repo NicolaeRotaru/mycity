@@ -21,7 +21,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 import { useTranslations } from 'next-intl';
 import { useDebounce } from '@/lib/hooks';
-import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import {
   TETTO_UTENTI, TETTO_RISULTATI_RICERCA,
   etichetteElenco, filtroRicercaProfili, idsDaContattiAuth, unisciPerId,
@@ -150,12 +150,23 @@ async function leggiProfili(chiedi: (colonne: string) => PromiseLike<RispostaPro
 
 /**
  * Email e ultimo accesso vivono in auth.users: arrivano dalla RPC admin-only
- * (migrazione 074). Se la RPC non c'e', la pagina resta usabile senza email.
+ * (migrazione 074).
+ *
+ * R14-001 (13/11/2026) — Prima un errore della RPC diventava «nessuna email»,
+ * e la ricerca rispondeva «nessuno, ho cercato su tutti» senza aver guardato
+ * un'email. E la RPC passa da PostgREST, che rende al massimo mille righe: dal
+ * milleunesimo iscritto in poi l'email non si trovava, in silenzio. Ora si
+ * legge a finestre, in ordine di id, fino in fondo; se la lettura cade o non
+ * arriva in fondo si LANCIA un errore. Chi chiama decide cosa dire, ma non puo'
+ * piu' scambiarlo per un elenco vuoto.
  */
 async function leggiContattiAuth(): Promise<RigaAuth[]> {
-  const { data, error } = await supabase.rpc('admin_list_user_emails');
-  if (error || !Array.isArray(data)) return [];
-  return data as RigaAuth[];
+  const letti = await leggiTutteLeRighe<RigaAuth>((da, a) =>
+    supabase.rpc('admin_list_user_emails').order('id').range(da, a),
+  );
+  if (letti.error) throw new Error(`Le email degli utenti non sono arrivate: ${letti.error.message ?? 'errore sconosciuto'}`);
+  if (letti.troncato) throw new Error('Le email degli utenti sono arrivate solo in parte: sono piu\' di quante se ne leggono in una volta.');
+  return letti.data;
 }
 
 /** Attacca a ogni profilo i contatti letti da auth.users. */
@@ -196,7 +207,13 @@ function AdminUsersPageInner() {
           .order('created_at', { ascending: false })
           .limit(TETTO_UTENTI) as unknown as PromiseLike<RispostaProfili>,
       );
-      return conContattiAuth(base, await leggiContattiAuth());
+      // L'elenco dei piu' recenti resta usabile anche senza email: qui non si
+      // dichiara di aver cercato niente. La ricerca, invece, l'errore lo vede.
+      const contatti = await leggiContattiAuth().catch((e: unknown) => {
+        logger.warn('admin/users: email non lette, elenco senza email', { motivo: e instanceof Error ? e.message : String(e) });
+        return [] as RigaAuth[];
+      });
+      return conContattiAuth(base, contatti);
     },
   });
 
@@ -242,6 +259,9 @@ function AdminUsersPageInner() {
     queryFn: async (): Promise<{ righe: Profile[]; troncato: boolean }> => {
       if (!filtro) return { righe: [], troncato: false };
 
+      // R14-001 — Se le email non arrivano tutte, l'errore risale: la ricerca
+      // risulta caduta e la pagina dice che ha guardato solo in memoria. Un
+      // elenco vuoto qui diventerebbe «nessuno, ho cercato su tutti».
       const contatti = await leggiContattiAuth();
       const idsPerContatto = idsDaContattiAuth(contatti, termine);
 
@@ -533,8 +553,19 @@ function AdminUsersPageInner() {
     if (esportando) return; // due clic non fanno due file
     setEsportando(true);
     try {
-      const contatti = await leggiContattiAuth();
-      const perId = new Map(contatti.map((c) => [c.id, c]));
+      // R14-001 — Le email servono solo all'elenco intero (il risultato di una
+      // ricerca le ha gia'). Se non arrivano tutte il file non esce: avrebbe la
+      // colonna Email vuota, o mezza vuota, e nessuna riga che lo dica.
+      let perId = new Map<string, RigaAuth>();
+      if (!ricerca) {
+        try {
+          perId = new Map((await leggiContattiAuth()).map((c) => [c.id, c]));
+        } catch (e: unknown) {
+          logger.warn('admin/users: esportazione fermata, email non lette', { motivo: e instanceof Error ? e.message : String(e) });
+          toast.error('Non sono riuscito a leggere le email degli utenti: il file non è stato creato, perché avrebbe la colonna Email vuota. Riprova fra poco.');
+          return;
+        }
+      }
       const raccolta = ricerca
         ? raccoltaDallaRicerca(filtered, ricerca.troncato)
         : await raccogliUtentiDaEsportare(async (da, a) => {
