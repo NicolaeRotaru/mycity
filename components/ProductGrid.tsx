@@ -114,6 +114,14 @@ interface Props {
    * non delle schede già caricate. Opt-in: le altre griglie non cambiano.
    */
   soloNovita?: boolean;
+  /**
+   * 13/11/2026 (R15-009) — Solo i prodotti con almeno una recensione. Serve a «I più recensiti»:
+   * senza, la pagina presentava come «scelti dai clienti» gli ultimi 40 pubblicati, tutti a zero
+   * recensioni. Il taglio lo fa il database (`prodotti_con_voto_almeno(0)` = chi ha recensioni),
+   * quindi non esclude chi ne ha molte ma è stato pubblicato prima degli ultimi 40.
+   * Opt-in: ricerca, categorie e negozi con «Più recensiti» scelto a mano non cambiano.
+   */
+  soloRecensiti?: boolean;
   /** Modalità "sezione" (solo con `rail`): mostra un'intestazione "titolo + Vedi tutto"
    *  sopra la rail e si auto-nasconde quando non ci sono prodotti. Usata nelle pagine
    *  categoria-hub, una rail per sottocategoria. */
@@ -142,7 +150,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloNovita, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloNovita, soloRecensiti, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -191,12 +199,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   });
   const apertiOra = domandaAperti.data;
 
+  const vistaPerVoto = (minRating !== undefined && minRating > 0) || !!soloRecensiti;
   const domandaVoto = useQuery<string[]>({
     queryKey: queryKeys.products.conVotoAlmeno(minRating ?? 0),
-    enabled: minRating !== undefined && minRating > 0,
+    enabled: vistaPerVoto,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating });
+      const { data, error } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating ?? 0 });
       if (error) throw error;
       return ((data ?? []) as Array<{ product_id: string }>).map((r) => r.product_id);
     },
@@ -204,7 +213,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const idsColVoto = domandaVoto.data;
   const filtroInErrore =
     (!!onlyOpenStores && domandaAperti.isError) ||
-    (minRating !== undefined && minRating > 0 && domandaVoto.isError);
+    (vistaPerVoto && domandaVoto.isError);
 
   /**
    * 30/8/2026 (R080) — «CARICA ALTRI» RISCARICAVA OGNI VOLTA ANCHE I PRODOTTI
@@ -239,13 +248,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   const domanda = useInfiniteQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort, creatiDal }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloRecensiti, sort, creatiDal }),
     initialPageParam: 0,
     // Senza gli insiemi la query non parte: partirebbe senza filtro, e
     // mostrerebbe proprio i prodotti che il filtro doveva escludere.
     enabled:
       (!onlyOpenStores || apertiOra !== undefined) &&
-      (!(minRating !== undefined && minRating > 0) || idsColVoto !== undefined),
+      (!vistaPerVoto || idsColVoto !== undefined),
     queryFn: async ({ pageParam }) => {
       // 27/8/2026 (R069, R073) — la lettura vera sta in `lib/queries/griglia-prodotti.ts`, dove una
       // prova la puo' eseguire: qui dentro nessuno poteva accorgersi ne' del viaggio in piu' ai
@@ -260,7 +269,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         minPrice,
         onlyInStock,
         apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
-        idsColVoto: minRating !== undefined && minRating > 0 ? idsColVoto ?? [] : undefined,
+        idsColVoto: vistaPerVoto ? idsColVoto ?? [] : undefined,
         creatiDal,
         tetto: righePerPagina,
         finestra: finestraDellaPagina(pageParam as number, righePerPagina),
