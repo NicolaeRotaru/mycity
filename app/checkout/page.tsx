@@ -1546,7 +1546,7 @@ export default function CheckoutPage() {
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
-                    {consegnaDaPagare === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(consegnaDaPagare)}
+                    {groups.length === 0 ? '—' : consegnaDaPagare === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(consegnaDaPagare)}
                   </span>
                 </div>
                 {/* 3/9/2026 — «Gratis» da solo, mentre il riepilogo qui a fianco
@@ -1771,7 +1771,8 @@ export default function CheckoutPage() {
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
             <div role="alert" className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-              <span><strong>Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.</span>
+              <span className="flex-1"><strong>Non riesco a leggere il carrello.</strong> Nessuna cifra finché non lo leggo: riprova, oppure ricarica la pagina.</span>
+              <button type="button" onClick={() => void rileggiLaCassa()} className="shrink-0 font-bold underline">Riprova</button>
             </div>
           )}
         </div>
