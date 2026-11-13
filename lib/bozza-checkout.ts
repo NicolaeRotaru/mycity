@@ -46,6 +46,18 @@ function fasceDi(giorno: 'today' | 'tomorrow', adesso: number | Date, orari: rea
   return giorno === 'today' ? fasceAncoraPossibili(adesso, orari) : fasceDiDomaniPossibili(adesso, orari);
 }
 
+/**
+ * 13/11/2026 (R19-009) — QUANTO VIVE UNA BOZZA: DUE ORE.
+ *
+ * Dentro la bozza ci sono nome, indirizzo, telefono e note («citofono Rossi, cancello 1234»), e sta
+ * nella memoria permanente del browser. Si cancellava solo quando qualcuno riapriva la cassa: chi
+ * rinunciava all'accesso lasciava i suoi dati lì per sempre, e chi apriva la cassa una settimana
+ * dopo sullo stesso computer li trovava già scritti. Adesso la bozza porta la sua scadenza
+ * (`scadeIl`): passata quella non si rimette più, la cassa la butta, e la barra in alto la butta
+ * a ogni caricamento e a ogni uscita dall'account. Due ore bastano per accedere o registrarsi.
+ */
+export const BOZZA_VALE_MS = 2 * 60 * 60_000;
+
 /** I campi dell'indirizzo: gli unici che tornano indietro così come sono. */
 export type CampiIndirizzo = Record<string, unknown>;
 
@@ -62,7 +74,25 @@ export type Bozza = {
    * domani rispetto a QUEL giorno, non a quello in cui si torna (vedi `bozzaRiportataAOggi`).
    */
   sceltaIl?: number;
+  /** R19-009 — Quando la bozza scade (millisecondi): dopo, non si rimette più. */
+  scadeIl?: number;
 };
+
+/**
+ * 13/11/2026 (R19-009, giro di correzione) — La scadenza è ancora valida, ed è credibile.
+ *
+ * `scadeIl` arriva dal browser come il resto: una bozza con la scadenza fra dieci giorni passava per
+ * buona. Una bozza vera scade al più 2 ore dopo la scelta (`sceltaIl`), e non può scadere più di 2
+ * ore dopo adesso: oltre, non vale. La usano la cassa (`bozzaLetta`) e la barra in alto.
+ */
+export function scadenzaDellaBozzaValida(g: { scadeIl?: unknown; sceltaIl?: unknown }, adesso: Date): boolean {
+  if (typeof g.scadeIl !== 'number' || !Number.isFinite(g.scadeIl)) return false;
+  const ora = adesso.getTime();
+  if (ora > g.scadeIl) return false;
+  if (g.scadeIl > ora + BOZZA_VALE_MS) return false;
+  if (typeof g.sceltaIl === 'number' && Number.isFinite(g.sceltaIl) && g.scadeIl > g.sceltaIl + BOZZA_VALE_MS) return false;
+  return true;
+}
 
 /** Quello che si mette da parte prima di mandare qualcuno a fare l'accesso. */
 export function bozzaDaSalvare(s: {
@@ -75,13 +105,15 @@ export function bozzaDaSalvare(s: {
   /** L'istante in cui si salva: chi chiama passa l'orologio (di norma `new Date()`). */
   adesso?: Date;
 }): Bozza {
+  const istante = (s.adesso ?? new Date()).getTime();
   const bozza: Bozza = {
     form: s.form,
     metodoPagamento: s.metodoPagamento,
     giorno: s.giorno,
     fasciaOggi: s.fasciaOggi,
     fasciaDomani: s.fasciaDomani,
-    sceltaIl: (s.adesso ?? new Date()).getTime(),
+    sceltaIl: istante,
+    scadeIl: istante + BOZZA_VALE_MS,
   };
   const codice = (s.couponCode ?? '').trim();
   if (codice) bozza.couponCode = codice;
@@ -97,6 +129,9 @@ export function bozzaDaSalvare(s: {
 export function bozzaLetta(grezza: unknown, adesso?: Date): Bozza | null {
   if (!grezza || typeof grezza !== 'object') return null;
   const g = grezza as Record<string, unknown>;
+  // R19-009 — Scaduta: i dati di chi l'ha scritta non tornano a chi apre la cassa dopo. E una
+  // scadenza oltre le 2 ore dalla scelta (o da adesso) non vale (`scadenzaDellaBozzaValida`).
+  if (adesso && typeof g.scadeIl === 'number' && !scadenzaDellaBozzaValida(g, adesso)) return null;
   // Le bozze vecchie erano il form e basta, senza il campo `form`: si leggono lo stesso.
   const form = (g.form && typeof g.form === 'object' ? g.form : g) as CampiIndirizzo;
   const bozza: Bozza = { form: soloCampiSemplici(form) };
@@ -145,7 +180,7 @@ function soloCampiSemplici(form: CampiIndirizzo): CampiIndirizzo {
   const fuori: CampiIndirizzo = {};
   for (const [k, v] of Object.entries(form ?? {})) {
     if (k === 'form' || k === 'couponCode' || k === 'metodoPagamento') continue;
-    if (k === 'giorno' || k === 'fasciaOggi' || k === 'fasciaDomani' || k === 'sceltaIl') continue;
+    if (k === 'giorno' || k === 'fasciaOggi' || k === 'fasciaDomani' || k === 'sceltaIl' || k === 'scadeIl') continue;
     if (v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') fuori[k] = v;
   }
   return fuori;

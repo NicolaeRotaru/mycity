@@ -138,6 +138,23 @@ export default function SettingsPage() {
     const daAprire = schedaDallIndirizzo();
     if (daAprire) setTab(daAprire);
   }, []);
+  // 13/11/2026 (R19-008, giro di correzione) — `?tab=` SEGUITO ANCHE A PAGINA GIÀ APERTA. Qui sopra
+  // la scheda si legge solo al montaggio: chi era già nelle impostazioni e toccava «Riattiva»
+  // nell'avviso delle notifiche spente (che porta a `?tab=notifications`) restava sulla scheda di
+  // prima. Il router di Next, cambiato l'indirizzo, ridisegna la pagina senza rimontarla: a ogni
+  // disegno si guarda `?tab=`, e se è cambiato dall'ultima volta si apre quella scheda. Se non è
+  // cambiato non si tocca niente: la scheda scelta a mano resta.
+  // (Senza `useSearchParams`, che vorrebbe tutta la pagina in un Suspense.)
+  const ultimaSchedaDallIndirizzo = useRef<string | null>(null);
+  // A ogni disegno di proposito: setTab parte solo se `?tab=` è cambiato, quindi non si ripete.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const scritta = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tab');
+    if (scritta === ultimaSchedaDallIndirizzo.current) return;
+    ultimaSchedaDallIndirizzo.current = scritta;
+    const daAprire = schedaDallIndirizzo();
+    if (daAprire) setTab(daAprire);
+  });
   const [email, setEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -302,10 +319,22 @@ export default function SettingsPage() {
     } finally {
       setChangingPwd(false);
     }
-    toast.success('Password aggiornata con successo');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    // 13/11/2026 (R19-021) — Il cambio chiude TUTTE le sessioni dell'account,
+    // anche questa (la rotta scrive col client di servizio, ed e' voluto: caccia
+    // chi avesse una sessione rubata). Restare qui voleva dire essere fuori al
+    // clic dopo senza saperlo. Si dice, si chiude la sessione di questo browser
+    // (solo in locale: sul server e' gia' chiusa) e si torna all'accesso.
+    toast.success('Password cambiata: accedi con quella nuova');
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // La sessione sul server non c'e' gia' piu': all'accesso si va lo stesso.
+    }
+    router.push(`/sign-in?returnTo=${encodeURIComponent('/profile/settings')}`);
+    router.refresh();
   };
 
   const handleChangeEmail = async (e: React.FormEvent) => {

@@ -141,5 +141,11 @@ export const useProfile = () => {
     isSeller: role === 'seller',
     isRider: role === 'rider',
     isAdmin: role === 'admin',
+    // 13/11/2026 (R19-023) — «non sono riuscito a leggere il profilo» e' un
+    // terzo stato, non «nessun ruolo»: chi decide su isSeller/isAdmin deve
+    // poterlo distinguere e offrire «Riprova». Si aggiungono, non cambia niente
+    // di quello che c'era.
+    isError: isAuthenticated && query.isError,
+    refetch: query.refetch,
   };
 };

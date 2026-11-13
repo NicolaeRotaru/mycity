@@ -22,11 +22,127 @@ import CategoryBar from './CategoryBar';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import { trackSignedOut } from '@/lib/analytics/events';
-import { scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
+import { gestoreDiQuestoBrowser, scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
+import { toast } from 'sonner';
 import { hrefDiAccesso } from '@/lib/auth/href-di-accesso';
+import { scadenzaDellaBozzaValida } from '@/lib/bozza-checkout';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
+
+/**
+ * 13/11/2026 (R19-008) — LE NOTIFICHE SPENTE ALL'USCITA, DETTE AL RIENTRO.
+ *
+ * Ogni fine della sessione spegne l'iscrizione push di questo apparecchio
+ * (vedi l'ascolto qui sotto): e' la difesa degli avvisi di uno sullo schermo di
+ * un altro, e resta. Ma la sessione finisce anche da sola (rinnovo fallito), e
+ * allora nessuno ha premuto niente: il permesso del browser resta «concesso» e
+ * la persona crede di avere ancora le notifiche. Quando l'ascolto spegne
+ * davvero un'iscrizione, se ne lascia un segno su questo apparecchio; al
+ * rientro, se il permesso e' ancora concesso e l'iscrizione non c'e' piu', lo si
+ * dice una volta, con la strada per riattivarle. Non si riaccendono da sole:
+ * chi entra puo' essere un'altra persona, che non le ha chieste.
+ */
+const SEGNO_NOTIFICHE_SPENTE = 'mc_notifiche_spente_all_uscita';
+
+/**
+ * 13/11/2026 (R19-008, giro di correzione) — IL SEGNO È DELLA PERSONA, NON DELL'APPARECCHIO.
+ *
+ * Il segno era un «1» e basta: se dopo la sessione caduta di Anna entrava Bruno, l'avviso andava a
+ * lui, e Anna non lo sapeva più. Adesso il segno dice di chi è (l'identificativo interno
+ * dell'account, non il nome né l'email) e fino a quando vale: l'avviso si dà solo a quella persona,
+ * e per gli altri il segno resta lì, finché non scade.
+ */
+const SEGNO_VALE_MS = 30 * 24 * 60 * 60_000;
+
+/** I segni ancora validi: identificativo dell'account → quando scade. */
+function leggiSegniNotificheSpente(): Record<string, number> {
+  try {
+    const letti = JSON.parse(window.localStorage.getItem(SEGNO_NOTIFICHE_SPENTE) ?? 'null') as unknown;
+    if (!letti || typeof letti !== 'object' || Array.isArray(letti)) return {};
+    const adesso = Date.now();
+    const validi: Record<string, number> = {};
+    for (const [chi, scadeIl] of Object.entries(letti as Record<string, unknown>)) {
+      if (typeof scadeIl === 'number' && adesso <= scadeIl) validi[chi] = scadeIl;
+    }
+    return validi;
+  } catch {
+    return {};
+  }
+}
+
+function scriviSegniNotificheSpente(segni: Record<string, number>): void {
+  try {
+    if (Object.keys(segni).length === 0) window.localStorage.removeItem(SEGNO_NOTIFICHE_SPENTE);
+    else window.localStorage.setItem(SEGNO_NOTIFICHE_SPENTE, JSON.stringify(segni));
+  } catch { /* memoria chiusa: niente avviso */ }
+}
+
+/** Chi è uscito non si sa (nessuna sessione vista): nessun segno, perché non si saprebbe a chi dirlo. */
+function segnaNotificheSpente(utenteId: string | null): void {
+  if (!utenteId) return;
+  scriviSegniNotificheSpente({ ...leggiSegniNotificheSpente(), [utenteId]: Date.now() + SEGNO_VALE_MS });
+}
+
+/** Legge il segno di QUESTA persona e lo toglie subito: l'avviso si da' una volta sola. */
+function prendiSegnoNotificheSpente(utenteId: string): boolean {
+  const segni = leggiSegniNotificheSpente();
+  const c = Object.prototype.hasOwnProperty.call(segni, utenteId);
+  if (c) delete segni[utenteId];
+  // Si riscrive comunque: così i segni scaduti (e quello vecchio, «1») se ne vanno.
+  scriviSegniNotificheSpente(segni);
+  return c;
+}
+
+/**
+ * 13/11/2026 (R19-009) — LA BOZZA DELLA CASSA NON RESTA NEL BROWSER DI CHI VIENE DOPO.
+ *
+ * Chi compila la cassa da ospite e va all'accesso lascia nel browser una bozza col suo nome,
+ * l'indirizzo, il telefono e le note (`mc_checkout_draft`, lib/bozza-checkout.ts). Si cancellava solo
+ * riaprendo la cassa: chi rinunciava la lasciava lì per sempre. La barra è montata su ogni pagina:
+ * a ogni caricamento butta la bozza scaduta (o senza scadenza, cioè scritta prima che ce l'avesse),
+ * e a ogni uscita dall'account la butta comunque.
+ */
+const BOZZA_DELLA_CASSA = 'mc_checkout_draft';
+
+function buttaLaBozzaDellaCassa(soloSeScaduta: boolean): void {
+  try {
+    for (const memoria of [window.localStorage, window.sessionStorage]) {
+      const scritta = memoria.getItem(BOZZA_DELLA_CASSA);
+      if (scritta === null) continue;
+      if (soloSeScaduta) {
+        let letta: { scadeIl?: unknown; sceltaIl?: unknown } | null = null;
+        try {
+          letta = JSON.parse(scritta) as { scadeIl?: unknown; sceltaIl?: unknown } | null;
+        } catch {
+          letta = null;
+        }
+        // Giro di correzione: la stessa regola della cassa, col tetto delle 2 ore sulla scadenza.
+        if (letta && typeof letta === 'object' && scadenzaDellaBozzaValida(letta, new Date())) continue;
+      }
+      memoria.removeItem(BOZZA_DELLA_CASSA);
+    }
+  } catch {
+    /* memoria chiusa: non c'è niente da buttare */
+  }
+}
+
+async function diciSeLeNotificheSonoSpente(utenteId: string, dove: () => string, vai: (href: string) => void): Promise<void> {
+  if (!prendiSegnoNotificheSpente(utenteId)) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  let iscritto = false;
+  try {
+    const gestore = await gestoreDiQuestoBrowser();
+    iscritto = !!(gestore && (await gestore.getSubscription()));
+  } catch {
+    iscritto = false;
+  }
+  if (iscritto) return;
+  toast.info('Le notifiche su questo dispositivo si sono spente alla fine della sessione: riattivale per ricevere gli avvisi.', {
+    duration: 12000,
+    action: { label: 'Riattiva', onClick: () => vai(dove()) },
+  });
+}
 
 /**
  * Navbar redesignata "Mediterranean Modern":
@@ -90,12 +206,37 @@ export default function Navbar() {
    * browser si spegne — ed è quella che consegna gli avvisi di uno all'altro.
    * La riga rimasta indietro la ripulisce il primo invio fallito.
    */
+  // R19-008 — Dove si riattivano le notifiche: ogni area ha la sua pagina.
+  const doveLeNotifiche = useRef('/profile/settings?tab=notifications');
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((evento) => {
-      if (evento !== 'SIGNED_OUT') return;
-      void scollegaQuestoDispositivo();
+    doveLeNotifiche.current = isSeller ? '/seller/profile' : isRider ? '/rider/profile' : '/profile/settings?tab=notifications';
+  }, [isSeller, isRider]);
+
+  useEffect(() => {
+    // R19-009 — la bozza scaduta della cassa si butta a ogni caricamento, su qualunque pagina.
+    buttaLaBozzaDellaCassa(true);
+    // R19-008 — Chi c'è adesso: a sessione finita non lo dice più nessuno, e il segno è suo.
+    let utenteDellaSessione: string | null = null;
+    const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      const chiEntrato = sessione?.user?.id ?? null;
+      if (evento === 'SIGNED_OUT') {
+        const chiEUscito = utenteDellaSessione;
+        utenteDellaSessione = null;
+        // R19-009 — e a ogni uscita dall'account, scaduta o no.
+        buttaLaBozzaDellaCassa(false);
+        void scollegaQuestoDispositivo().then((esito) => {
+          if (esito.disiscritto) segnaNotificheSpente(chiEUscito);
+        });
+        return;
+      }
+      if (chiEntrato) utenteDellaSessione = chiEntrato;
+      if ((evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') && chiEntrato) {
+        void diciSeLeNotificheSonoSpente(chiEntrato, () => doveLeNotifiche.current, (href) => router.push(href));
+      }
     });
     return () => data.subscription.unsubscribe();
+    // router: lo stesso oggetto per tutta la vita della pagina.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Su /admin, /seller e /rider la navbar globale è nascosta: queste aree usano

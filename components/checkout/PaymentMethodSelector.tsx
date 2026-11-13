@@ -74,6 +74,11 @@ type Props = {
   pickupDiscount: number;
   /** Percentuale sconto ritiro, per il badge quando non ancora attivo. */
   pickupDiscountPercent: number;
+  /**
+   * 13/11/2026 (R19-013) — Perché i contanti non si possono (sopra il tetto della legge,
+   * lib/ordini/tetto-dei-contanti.ts). Se c'è, la scelta dei contanti è spenta e la frase si legge lì.
+   */
+  motivoNoContanti?: string | null;
 };
 
 export function PaymentMethodSelector({
@@ -85,6 +90,7 @@ export function PaymentMethodSelector({
   onPickupChange,
   pickupDiscount,
   pickupDiscountPercent,
+  motivoNoContanti = null,
 }: Props) {
   return (
     /**
@@ -96,8 +102,12 @@ export function PaymentMethodSelector({
      * alternative della stessa domanda, né quante sono. Il `fieldset` con la
      * sua `legend` è il modo standard di dirlo, ed è già usato dieci righe più
      * in là per le fasce di consegna.
+     *
+     * 13/11/2026 (R19-007) — `min-w-0`: il browser dà al fieldset
+     * min-width: min-content, e col testo del telefono al massimo la pagina
+     * diventava larga 444 px su uno schermo da 375. Misurato in Chromium.
      */
-    <fieldset className="space-y-3">
+    <fieldset className="min-w-0 space-y-3">
       <legend className="sr-only">Come vuoi pagare</legend>
       {stripeAvailable && (
         <label
@@ -118,7 +128,7 @@ export function PaymentMethodSelector({
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
             <CreditCard size={20} aria-hidden />
           </span>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1 break-words">
             <p className="font-bold text-ink-900">Carta di credito / debito</p>
             <p className="text-sm text-ink-600">
               Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
@@ -133,10 +143,12 @@ export function PaymentMethodSelector({
       )}
 
       <label
-        className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
-          value === 'cod'
-            ? 'border-olive-400 bg-olive-50'
-            : 'border-cream-300 bg-white hover:border-olive-200'
+        className={`flex items-start gap-3 rounded-xl border-2 p-4 transition-colors ${
+          motivoNoContanti
+            ? 'cursor-not-allowed border-cream-300 bg-cream-50'
+            : value === 'cod'
+              ? 'cursor-pointer border-olive-400 bg-olive-50'
+              : 'cursor-pointer border-cream-300 bg-white hover:border-olive-200'
         }`}
       >
         <input
@@ -144,18 +156,23 @@ export function PaymentMethodSelector({
           name="paymentMethod"
           value="cod"
           checked={value === 'cod'}
+          disabled={!!motivoNoContanti}
+          aria-describedby={motivoNoContanti ? 'motivo-no-contanti' : undefined}
           onChange={() => onChange('cod')}
           className="mt-2.5 accent-olive-600"
         />
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Banknote size={20} aria-hidden />
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1 break-words">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-bold text-ink-900">Contanti alla consegna</p>
+            <p className="min-w-0 font-bold text-ink-900">Contanti alla consegna</p>
             <Badge variant="cod">Zero rischio</Badge>
           </div>
           <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
+          {motivoNoContanti && (
+            <p id="motivo-no-contanti" className="mt-1 text-sm font-semibold text-secondary-800">{motivoNoContanti}</p>
+          )}
         </div>
       </label>
 
@@ -187,7 +204,7 @@ export function PaymentMethodSelector({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Store size={20} aria-hidden />
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1 break-words">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
             {pickupInStore && pickupDiscount > 0 ? (
