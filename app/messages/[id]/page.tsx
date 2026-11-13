@@ -192,13 +192,30 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   // messaggio appena arrivava: il contatore tornava a zero e sul telefono del fornaio, in
   // laboratorio, non c'era nessun «non letto». Si segna letto solo con la pagina visibile, e
   // quando la pagina torna in primo piano.
-  const [paginaVisibile, setPaginaVisibile] = useState(
-    () => typeof document === 'undefined' || document.visibilityState === 'visible',
-  );
+  // «Vista» = scheda in primo piano E finestra con il fuoco: un browser lasciato dietro un altro
+  // programma resta «visible» ma non è guardato.
+  const paginaViva = () =>
+    typeof document === 'undefined' || (document.visibilityState === 'visible' && document.hasFocus());
+  const [paginaVisibile, setPaginaVisibile] = useState(paginaViva);
+  // Se mark-read risponde non ok, si riprova al prossimo focus / visibilitychange.
+  const daRiprovare = useRef(false);
+  const [tentativo, setTentativo] = useState(0);
   useEffect(() => {
-    const aggiorna = () => setPaginaVisibile(document.visibilityState === 'visible');
+    const aggiorna = () => {
+      setPaginaVisibile(paginaViva());
+      if (daRiprovare.current && paginaViva()) {
+        daRiprovare.current = false;
+        setTentativo((n) => n + 1);
+      }
+    };
     document.addEventListener('visibilitychange', aggiorna);
-    return () => document.removeEventListener('visibilitychange', aggiorna);
+    window.addEventListener('focus', aggiorna);
+    window.addEventListener('blur', aggiorna);
+    return () => {
+      document.removeEventListener('visibilitychange', aggiorna);
+      window.removeEventListener('focus', aggiorna);
+      window.removeEventListener('blur', aggiorna);
+    };
   }, []);
 
   // Mark-read quando entro o ricevo, se la pagina si vede
@@ -208,10 +225,11 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ conversationId: params.id }),
-    }).then(() => {
-      qc.invalidateQueries({ queryKey: queryKeys.messages.conversations });
-    }).catch(() => { /* noop */ });
-  }, [userId, messages.length, params.id, qc, paginaVisibile]);
+    }).then((r) => {
+      if (r.ok) qc.invalidateQueries({ queryKey: queryKeys.messages.conversations });
+      else daRiprovare.current = true;
+    }).catch(() => { daRiprovare.current = true; });
+  }, [userId, messages.length, params.id, qc, paginaVisibile, tentativo]);
 
   const sendMutation = useMutation({
     mutationFn: async (body: string) => {

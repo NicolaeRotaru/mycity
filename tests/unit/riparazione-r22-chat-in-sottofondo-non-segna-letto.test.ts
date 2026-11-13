@@ -30,6 +30,8 @@ const M3 = { id: 'm3', conversation_id: 'c1', sender_id: 'cliente', body: 'Me ne
 
 let messaggi = [M1, M2];
 let visibilita: 'visible' | 'hidden' = 'visible';
+let fuoco = true;
+let rispostaOk = true;
 let chiamate: string[] = [];
 const fetchDiPrima = globalThis.fetch;
 
@@ -63,13 +65,16 @@ async function apriIlFilo() {
 beforeEach(() => {
   messaggi = [M1, M2];
   visibilita = 'visible';
+  fuoco = true;
+  rispostaOk = true;
   chiamate = [];
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibilita });
+  document.hasFocus = () => fuoco;
   // jsdom non scorre: lo scorrimento in fondo al filo qui non ha niente da dire.
   window.HTMLElement.prototype.scrollIntoView = () => undefined;
   globalThis.fetch = (async (url: unknown) => {
     chiamate.push(String(url));
-    return { ok: true, json: async () => ({ ok: true }) };
+    return { ok: rispostaOk, json: async () => ({ ok: true }) };
   }) as unknown as typeof fetch;
   globali.__UTENTE__ = { id: 'forno' };
   globali.__DATI_QUERY__ = (o: { queryKey: unknown[] }) =>
@@ -106,6 +111,35 @@ describe('R22-012 · la chat segna letto solo quando si vede', () => {
     cambiaVisibilita('visible');
     await attendi();
     expect(segnaLetto(), 'tornata in primo piano, la chat non segna letto').toBe(1);
+    s.smonta();
+  }, 60000);
+
+  it('visibile ma senza il fuoco (browser dietro un altro programma): zero chiamate a mark-read; col fuoco parte', async () => {
+    fuoco = false;
+    const s = await apriIlFilo();
+    expect(segnaLetto(), 'visibile ma senza fuoco ha segnato letto all\'apertura').toBe(0);
+    messaggi = [M1, M2, M3];
+    scriviNelCampo(s.radice, 'x');
+    await attendi();
+    expect(segnaLetto(), 'il messaggio arrivato con la finestra senza fuoco è stato segnato letto').toBe(0);
+    fuoco = true;
+    act(() => { window.dispatchEvent(new window.Event('focus')); });
+    await attendi();
+    expect(segnaLetto(), 'preso il fuoco, la chat non segna letto').toBe(1);
+    s.smonta();
+  }, 60000);
+
+  it('se mark-read risponde non ok, si riprova al focus successivo', async () => {
+    rispostaOk = false;
+    const s = await apriIlFilo();
+    expect(segnaLetto()).toBe(1);
+    rispostaOk = true;
+    fuoco = false;
+    act(() => { window.dispatchEvent(new window.Event('blur')); });
+    fuoco = true;
+    act(() => { window.dispatchEvent(new window.Event('focus')); });
+    await attendi();
+    expect(segnaLetto(), 'dopo un errore la chat non riprova al focus').toBe(2);
     s.smonta();
   }, 60000);
 });
