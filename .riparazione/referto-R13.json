@@ -1,23 +1,23 @@
 {
   "sessione": "R13",
-  "aggiornato": "2026-11-13 13:05",
-  "finita": false,
-  "testa": "6f56a10df83465ec90b89f63cbf56b71c8847b6a",
+  "aggiornato": "2026-11-13 15:05",
+  "finita": true,
+  "testa": "a28ea36d19b8b2ca71212cd76ad179fab87ac7db",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "6f56a10df83465ec90b89f63cbf56b71c8847b6a",
-    "nota": "Lanciato con NODE_OPTIONS=--max-old-space-size=6144, perché senza tsc esaurisce la memoria anche sulla base. typecheck 0 errori, lint 0, vitest 1420 file e 9666 prove verdi. Le prove SQL (run.sh) sono verdi sulla base; la 371 è provata dalla sua prova SQL."
+    "testa": "a28ea36d19b8b2ca71212cd76ad179fab87ac7db",
+    "nota": "Con NODE_OPTIONS=--max-old-space-size=8192: typecheck 0 errori, lint 0, vitest 1426 file e 9714 prove verdi."
   },
   "voci": [
     {
       "id": "R13-001",
       "chiave": "qa-flussi|la cassa dice «troppo lontano» a chi abita in via roma o in via cavour, in pieno centro, e l'ordine non parte",
       "esito": "parziale",
-      "commit": "5fb08582",
+      "commit": "a28ea36d",
       "file_toccati": [
         "lib/geocodifica.ts",
-        "app/api/geocode/route.ts"
+        "tests/unit/riparazione-r13-geocodifica.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r13-geocodifica.test.ts"
@@ -31,24 +31,19 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5fb08582^ --file lib/geocodifica.ts,app/api/geocode/route.ts --prove tests/unit/riparazione-r13-geocodifica.test.ts --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "lib/geocodifica.ts ha ora una sola ricerca. La frase «via, CAP città, Italia» si divide in via, CAP e città; se la città manca vale Piacenza. La domanda a Nominatim è strutturata (street/city/postalcode, limit=5, addressdetails). Quando la città è Piacenza la ricerca resta chiusa nel riquadro (viewbox+bounded). Si tiene solo il risultato che cade nel comune scritto (city/town/village/municipality/hamlet/suburb, mai la provincia), con il CAP scritto per primo. Se nessun risultato è affidabile la risposta è null: l'ordine passa senza coordinate e il controllo dei 5 km non cambia. La rotta /api/geocode chiama la stessa coordinateDiUnIndirizzo, che ora accetta anche la frase così com'è. Così cassa, rubrica, negozio e server (cod e carta, che usavano già coordinateDiUnIndirizzo) ricevono la stessa risposta. Prova: Nominatim finto con più risultati e il primo fuori Piacenza (Podenzano, Gossolengo), più Milano, che resta fuori zona come prima. Nel commit di R13-006 ho cambiato questa prova (toMatchObject e un caso su luogo).",
-      "nota": "Gli indirizzi già salvati in rubrica con coordinate sbagliate, cercati prima di oggi, passano ancora per primi (coordinateDaIndirizziSalvati): vedi domande_per_nicola.",
-      "verificato_da": "collaudo (parziale): Ho rilanciato la prova (8 verdi), la prova rimessa con lo stesso comando (regge, uscita 0, albero pulito) e le 8 prove vicine che usano davvero la geocodifica o la zona (109 verdi). Ho letto il diff contro i punti ①-④ del fix e ho provato le varianti con una prova temporanea, già cancellata: «Via Roma, 10», città «Piacenza PC», «PIACENZA (PC)», città e CAP vuoti, CAP sbagliato «2912», frase senza virgole, frazione omonima («Quarto», CAP 29020). Il caso di Via Roma in centro regge sia dal server (contanti e carta) sia da /api/geocode (cassa, rubrica, negozio), e i file toccati sono in elenco. Nominatim vero non si raggiunge da qui (il proxy risponde 403), quindi il comportamento reale della domanda strutturata con riquadro non è verificato.",
-      "collaudo_difetti": [
+      "insieme_a": [
+        "5fb08582"
+      ],
+      "cosa_ho_fatto": "Correzione dal collaudo dei difetti 1 e 2 in lib/geocodifica.ts (il commit originale della voce è 5fb08582). Difetto 1: il CAP non serve più solo a mettere in ordine i risultati, ora un risultato con CAP DIVERSO da quello scritto si scarta come quello di un altro comune; fuori dal riquadro di Piacenza, con un CAP scritto, un risultato senza CAP non è affidabile (null); dentro il riquadro un risultato senza CAP vale ancora. Gestiti i CAP multipli delle mappe («29121;29122»). Così «Via Roma 15», Quarto 29020 non finisce più a Quarto di Napoli (80010): risposta null, l'ordine passa senza coordinate. Difetto 2: nuova eLaCittaServita() che riconosce Piacenza anche con la sigla provincia o un CAP storpiato attaccato («Piacenza PC», «2912 Piacenza», «Piacenza (PC)»), così la ricerca resta chiusa nel riquadro; «Piacenza d'Adige» resta fuori. Aggiunte 6 prove al file esistente (importa già i miei file). Verificate verdi anche le prove vicine: freno-nominatim, il-negozio-che-non-cerca, minori-s07-domanda-della-zona, minori-s07-note-dei-conti. Correzioni dal collaudo del lotto 5, fatte da un subagente nuovo: b9dc5e16 (dentro Piacenza un CAP della città, 29100/29121/29122, diverso da quello del risultato non scarta più l'indirizzo: l'aveva introdotto 2710016e) e a28ea36d (con un CAP di Piacenza a Nominatim non va postalcode, che serve solo a ordinare). Commit della voce: 5fb08582, 2710016e, b9dc5e16, a28ea36d.",
+      "cosa_resta": "Dal collaudo del lotto 5: (1) lib/shipping-coordinate.ts (non di R13): la modifica proposta in serve_file_altrui ignora solo i punti salvati fuori dal riquadro di Piacenza; deve ignorare anche un punto salvato dentro il riquadro ma a più di 5 km dal negozio. (2) components/checkout/ShippingAddressForm.tsx:62,96 (di R13) con app/checkout/page.tsx:484 (non di R13): useCoordinateDellaZona si fida delle lat/lng degli indirizzi salvati con la vecchia ricerca, quindi la cassa può restare bloccata per chi ha in rubrica un indirizzo con coordinate sbagliate. (3) app/api/orders/cod/route.ts:1115 e app/api/stripe/checkout/route.ts:598 (di R13): il controllo dei 5 km usa coordConsegna anche quando non è affidabile. Non fatto per il tetto di costo. (4) lib/geocodifica.ts: fuori Piacenza, senza CAP o con un CAP storpiato, vince l'omonimo lontano (Quarto → Napoli) invece di null. Serve una regola nuova, non una correzione piccola, perché la prova di R13-006 vuole «Via Roma 1, Milano» senza CAP → Milano.",
+      "serve_file_altrui": [
         {
-          "file": "lib/geocodifica.ts:120-125",
-          "cosa": "Il punto ③ del fix chiede di scartare i risultati con comune O CAP diversi da quelli scritti. Qui il CAP serve solo a mettere in ordine i risultati, e uno con CAP diverso viene accettato se il nome del comune combacia. Fuori da Piacenza il riquadro non c'è (riga 151), quindi resta aperto lo stesso difetto per le località omonime. Con la prova temporanea, «Via Roma 15», città «Quarto», CAP 29020 (frazione di Gossolengo) restituisce 40.87, 14.14, cioè Quarto in provincia di Napoli (CAP 80010): fuori zona e «troppo lontano», quando la risposta sicura (④) sarebbe null. Vale anche per San Nicolò (Rottofreno) e altre frazioni dal nome comune."
-        },
-        {
-          "file": "lib/geocodifica.ts:151",
-          "cosa": "Il riquadro scatta solo se la città normalizzata è esattamente «piacenza»: «Piacenza PC» o un CAP storpiato («2912 Piacenza») lo tolgono. Il filtro sul comune tiene comunque fuori gli altri comuni, quindi non si blocca nessuno, ma la ricerca non è più chiusa su Piacenza. Difetto minore."
-        },
-        {
-          "file": "app/api/orders/cod/route.ts:1091",
-          "cosa": "Resta aperto un caso che il riparatore ha dichiarato. Gli indirizzi salvati in rubrica prima della correzione, con le coordinate sbagliate della vecchia ricerca a testo libero, vincono ancora: coordinateDaIndirizziSalvati sta in lib/shipping-coordinate.ts, che è fuori elenco, ed è usata anche da app/api/stripe/checkout/route.ts:592. In cassa useCoordinateDellaZona prende le coordinate «conosciute». Chi ha Via Roma salvata con il punto di Podenzano vede ancora «troppo lontano» in cassa e sul server. Va deciso da Nicola: una migrazione che rifà o azzera le coordinate salvate, oppure serve_file_altrui."
+          "file": "lib/shipping-coordinate.ts",
+          "modifica": "In coordinateDaIndirizziSalvati, non fidarsi di una coordinata salvata che cade fuori dal riquadro di Piacenza (RIQUADRO_PIACENZA, lib/ordini/zona-di-consegna.ts): quando il punto salvato è fuori riquadro, ignorarlo (ritornare null) così la rotta ricade su coordinateDiUnIndirizzo (la ricerca strutturata nuova). In alternativa, decisione di Nicola: una migrazione che azzeri/ricalcoli user_addresses.lat/lng fuori riquadro."
         }
       ],
-      "cosa_resta": "lib/geocodifica.ts:120-125: Il punto ③ del fix chiede di scartare i risultati con comune O CAP diversi da quelli scritti. Qui il CAP serve solo a mettere in ordine i risultati, e uno con CAP diverso viene accettato se il nome del comune combacia. Fuori da Piacenza il riquadro non c'è (riga 151), quindi resta aperto lo stesso difetto per le località omonime. Con la prova temporanea, «Via Roma 15», città «Quarto», CAP 29020 (frazione di Gossolengo) restituisce 40.87, 14.14, cioè Quarto in provincia di Napoli (CAP 80010): fuori zona e «troppo lontano», quando la risposta sicura (④) sarebbe null. Vale anche per San Nicolò (Rottofreno) e altre frazioni dal nome comune.; lib/geocodifica.ts:151: Il riquadro scatta solo se la città normalizzata è esattamente «piacenza»: «Piacenza PC» o un CAP storpiato («2912 Piacenza») lo tolgono. Il filtro sul comune tiene comunque fuori gli altri comuni, quindi non si blocca nessuno, ma la ricerca non è più chiusa su Piacenza. Difetto minore.; app/api/orders/cod/route.ts:1091: Resta aperto un caso che il riparatore ha dichiarato. Gli indirizzi salvati in rubrica prima della correzione, con le coordinate sbagliate della vecchia ricerca a testo libero, vincono ancora: coordinateDaIndirizziSalvati sta in lib/shipping-coordinate.ts, che è fuori elenco, ed è usata anche da app/api/stripe/checkout/route.ts:592. In cassa useCoordinateDellaZona prende le coordinate «conosciute». Chi ha Via Roma salvata con il punto di Podenzano vede ancora «troppo lontano» in cassa e sul server. Va deciso da Nicola: una migrazione che rifà o azzera le coordinate salvate, oppure serve_file_altrui."
+      "nota": "Correzione dal collaudo del lotto 4. La voce resta parziale solo per il difetto 3, che vive in un file fuori elenco.",
+      "verificato_da": "collaudo lotto 4 (parziale) e collaudo lotto 5 (parziale, 5 difetti). La regressione del CAP e il rischio postalcode sono chiusi in b9dc5e16 e a28ea36d; ricontrollo del capo: prova 17/17 e prova rimessa uscita 0 rilanciate sull'albero pulito."
     },
     {
       "id": "R13-002",
@@ -115,61 +110,102 @@
     {
       "id": "R13-004",
       "chiave": "privacy-legale|il negozio può togliere il diritto di ripensamento a qualunque prodotto, anche a un maglione, e il sito rifiuta il reso dicendo al cliente che è la legge",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "parziale",
+      "commit": "72adeaeb",
+      "file_toccati": [
+        "lib/ordini/recesso.ts",
+        "app/api/returns/create/route.ts",
+        "lib/products/salvataggio-tracciato.ts",
+        "lib/promesse-pubbliche.ts",
+        "app/terms/page.tsx",
+        "migrations/373_l_esclusione_dal_recesso_solo_sugli_alimenti.sql",
+        "tests/sql/rls/riparazione-r13-recesso.test.sql",
+        "tests/unit/riparazione-r13-recesso.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-recesso.test.ts",
+        "tests/sql/rls/riparazione-r13-recesso.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-recesso.test.ts ; bash tests/sql/harness/apply.sh r13_prova && psql -q -X -d r13_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r13-recesso.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "TS: rosso_strutturale solo su lib/ordini/recesso.ts (gli altri 4 file mordono sul comportamento); difetto rimesso a mano (categoriaDaFreschi sempre true + vecchio testo «è la legge»): 5 prove su 8 rosse. Migrazione 373 con --sql: regge (0).",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 72adeaeb^ --file lib/ordini/recesso.ts,app/api/returns/create/route.ts,lib/products/salvataggio-tracciato.ts,lib/promesse-pubbliche.ts,app/terms/page.tsx --prove tests/unit/riparazione-r13-recesso.test.ts --json (uscita 3, strutturale su recesso.ts) ; poi --file migrations/373_l_esclusione_dal_recesso_solo_sugli_alimenti.sql --prove tests/sql/rls/riparazione-r13-recesso.test.sql --sql r13_rimessa --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Legata l'esclusione dal recesso alle sole categorie alimentari (freschi + su ordinazione = alimenti sul catalogo), con la stessa regola degli allergeni (richiede_dichiarazioni_alimentari risalendo i padri; senza la colonna, radice «alimentari»). Nuove in lib/ordini/recesso.ts: categoriaDaFreschi(), esclusioniAmmesse(), ESCLUSIONE_NON_AMMESSA; rifiutoDelRecesso non dice più «è fresco … è la legge» ma «il negozio lo indica come fresco/su ordinazione … art. 59». La rotta app/api/returns/create legge le categorie quando c'è una spunta e ignora l'esclusione su un prodotto non alimentare: il ripensamento passa. La porta del salvataggio (lib/products/salvataggio-tracciato) rifiuta con DaCompletare una spunta accesa su categoria non alimentare (anche spostando la categoria nello stesso salvataggio); togliere la spunta passa sempre. Migrazione 373: trigger BEFORE INSERT OR UPDATE OF non_recedibile, category_id che dà 23514 fuori dagli alimenti (vale anche per la chiave di servizio), e un UPDATE che spegne le spunte già messe su non alimentari. Allineati i testi: FRASE_RESO_ESCLUSO e i Termini dicono che lo indica il negozio e solo se la scheda lo dice prima dell'acquisto. Prova unitaria nuova (rotta vera + porta del salvataggio + frasi) e prova SQL nuova (7 controlli verdi). Verdi le 69 prove esistenti che importano i file toccati (recesso, salvataggio-tracciato, returns, promesse, terms).",
+      "cosa_resta": "1) Il modulo ProductForm mostra ancora la spunta per categorie non alimentari: al salvataggio viene rifiutata (dal server in modifica, dal trigger 373 nella creazione diretta dal browser), quindi il difetto legale è chiuso su ogni strada di scrittura, ma la spunta potrebbe essere nascosta a monte. Non l'ho fatto apposta: gating per categoria romperebbe le prove esistenti non-R13 che montano ProductForm con categorie piatte non alimentari (il-negozio-segna-i-prodotti-esclusi con slug 'forno-di-prova', minori-s06-scorta-in-modifica con 'panetteria'), e il difetto è già chiuso lato scrittura+DB+reso. 2) La lista delle categorie ammesse (solo alimenti) è in parte una scelta di Nicola: vedi la domanda sui beni non alimentari fatti su ordinazione.",
+      "domanda": "La spunta «escluso dal recesso» deve valere solo sugli alimenti (come ora) o anche su beni NON alimentari davvero fatti su misura/ordinazione (art. 59 lett. c)?",
+      "nota": "La rimessa TS esce 3 perché la prova importa i nomi nuovi di recesso.ts (categoriaDaFreschi, esclusioniAmmesse, ESCLUSIONE_NON_AMMESSA): rimesso il difetto a mano, 5 prove su 8 tornano rosse sul comportamento. La migrazione 373 provata con --sql regge (0).",
+      "verificato_da": "collaudo (parziale): Riletta la voce e il diff di 72adeaeb; rilanciate verdi tests/unit/riparazione-r13-recesso.test.ts (8/8) e la prova SQL su r13_collaudo (apply.sh + psql, 7 controlli verdi), più 12 prove esistenti vicine che importano i file toccati (90 prove verdi, fra cui riparazione-r07-reso-pane-server, sui-freschi-il-cambio-idea, minori-s01-resi-rotte, minori-s06-salvataggio-del-prodotto, minori-s08-testi-legali). Rimessa a mano il difetto in lib/ordini/recesso.ts (categoriaDaFreschi sempre true + vecchio testo «è la legge»): 5 prove su 8 rosse, come dichiarato; tolto il trigger della 373 su r13_collaudo: 3 controlli SQL rossi. Cercate le varianti: ordine misto, prodotto senza categoria, spostamento di categoria nello stesso salvataggio, e soprattutto la porta GEMELLA /api/returns/ripensamento, provata con una prova temporanea (tests/unit/zz-collaudo-r13-tmp.test.ts, poi cancellata) che dimostra il buco; albero riportato pulito con git checkout e rm.",
+      "collaudo_difetti": [
+        {
+          "file": "app/api/returns/ripensamento/route.ts:55",
+          "cosa": "La porta gemella di returns/create non è stata aggiornata: legge `products` grezzo e chiama `rifiutoDelRecesso` senza `esclusioniAmmesse`. Provato con una prova temporanea: su un maglione con non_recedibile=true e categoria 'abbigliamento' risponde ancora rifiuto = «Questo prodotto (Maglione di lana) è escluso dal recesso: il negozio lo indica come alimento fresco che si deteriora in fretta…». app/orders/[id]/return/page.tsx:358 usa quella risposta per DISABILITARE il radio «Ho cambiato idea» e stampare quel testo (riga 376), quindi finché la migrazione 373 non è applicata al database vero (e le migrazioni le applica Nicola a mano) il cliente non arriva nemmeno alla rotta riparata: il sintomo esatto della voce resta, con la frase nuova che per giunta chiama «alimento fresco» un maglione. Il file NON è nell'elenco di R13: andava dichiarato serve_file_altrui con la modifica esatta (leggere `categories` e applicare `esclusioniAmmesse` come in returns/create), invece non compare né in file_toccati né in cosa_resta."
+        },
+        {
+          "file": "lib/ordini/recesso.ts:84",
+          "cosa": "La regola scelta è «categoria alimentare» (categoriaDaFreschi / radice_con_obbligo_alimentare della 363), non «deperibile o su ordinazione» come chiede il fix della voce. Un alimentari può ancora spuntare «escluso» su un vasetto di miele o un pacco di pasta: la porta del salvataggio lo accetta, il trigger 373 (migrations/373_...:42) lo accetta, e la rotta risponde «il negozio lo indica come alimento fresco che si deteriora in fretta … il Codice del Consumo esclude il reso (art. 59)» su un bene che non è né deperibile né su ordinazione. È lo stesso difetto della voce, solo ristretto agli alimenti, e in cosa_resta non è detto (la `domanda` a Nicola parla solo del caso opposto, i non alimentari su ordinazione)."
+        },
+        {
+          "file": "app/admin/products/page.tsx:1",
+          "cosa": "Il fix della voce chiede anche «Mostrare la spunta all'admin e rimandare in approvazione chi la accende dopo»: sotto app/admin/ la stringa non_recedibile non compare da nessuna parte e nessuna revisione è stata aggiunta, quindi dentro gli alimenti la spunta resta un interruttore libero e non rivisto. Non è stato fatto e non è dichiarato in cosa_resta: il `parziale` non dice tutto quello che resta."
+        },
+        {
+          "file": "app/seller/products/new/page.tsx:217",
+          "cosa": "Sul prodotto NUOVO il browser scrive `products` direttamente, quindi l'unica difesa è il trigger 373, che alza 23514; lib/errors.ts:17 traduce 23514 in «Il valore inserito non è valido.». Un negozio non alimentare che lascia accesa la spunta ancora mostrata da ProductForm (components/seller/ProductForm.tsx:994) non salva il prodotto e legge un messaggio generico che non nomina la spunta, mentre il messaggio scritto apposta (ESCLUSIONE_NON_AMMESSA) esce solo dalla rotta di modifica. Il cosa_resta dice «rifiutata dal trigger 373 nella creazione diretta dal browser» ma non dice che il venditore perde il salvataggio con un errore opaco."
+        }
+      ]
     },
     {
       "id": "R13-005",
       "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il difetto grave descritto nella voce (corpo intero `expect(SENZA_AMBIENTE_DI_PROVA).toBe(false)`, verde a vuoto con la variabile accesa) era già riparato prima della base: le tre prove sono dichiarate test.skip(...) con corpo vuoto e non diventano più verdi (commit 73509406, antenato di a19ff892; già protetto da tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts e nessuna-prova-nel-browser-e-un-guscio-vuoto.test.ts). La parte mia (ci.yml) l'ho chiusa con una guardia vitest nuova che legge .github/workflows/ci.yml con un vero lettore YAML e tiene due invarianti: (a) nessun env della CI (workflow/lavoro/passo) ACCENDE E2E_DATI_DI_PROVA finché i corpi sono vuoti — la leva che riaprirebbe il «verde a vuoto»; leggerla in uno script per dire che è spenta resta permesso; (b) il lavoro e2e tiene un passo che gira SEMPRE (if: always()) e scrive nel riepilogo che le tre prove dell'acquisto vero non sono girate. Negativa verificata: iniettando un env E2E_DATI_DI_PROVA al passo Build del lavoro e2e, 2 controlli su 3 diventano rossi.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts",
+          "modifica": "Scrivere i corpi veri delle tre prove oggi `async () => {}` dichiarate test.skip (contrassegno: dal carrello seminato a POST /api/orders/cod, poi SELECT ordine stato NEW + totale + campanella del negozio; carta: Stripe test con webhook firmato e ordine PAID; consegna: giro release-payouts con transfer test-mode), attive solo quando E2E_DATI_DI_PROVA è acceso con l'ambiente di prova pronto; mai un'asserzione sulla variabile stessa. Aggiornare poi tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts e la mia guardia riparazione-r13-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts perché pretendano un ordine nato invece del salto. ANCHE (dal collaudo): La modifica proposta in serve_file_altrui, e anche cosa_resta, elenca contrassegno, «carta: Stripe webhook e ordine PAID» e bonifico, ma dimentica il corpo della seconda delle tre prove, «rifiuto del negozio su un ordine pagato: il rimborso esiste». Per quella la voce chiede espressamente «Rifiuto: rimborso registrato». La modifica non è esatta: manca il rimborso."
+        }
+      ],
+      "domanda": "Quando avrai pronto l'ambiente di prova (Supabase di PROVA + Stripe test), vuoi che un job CI dedicato accenda E2E_DATI_DI_PROVA e faccia girare i corpi veri delle tre prove?",
+      "verificato_da": "collaudo (parziale): Ho rilanciato la guardia nuova insieme a le-prove-della-cassa-non-passano-senza-aver-guardato e nessuna-prova-nel-browser-e-un-guscio-vuoto: 31 su 31 verdi; eslint verde. Ho confermato che 73509406 è antenato della base e che `git diff a19ff892 HEAD` su ci.yml e sullo spec 12 è vuoto. Poi ho modificato ci.yml per prova, rimettendolo ogni volta: un env al passo Build manda in rosso 2 controlli su 3 (la negativa dichiarata regge), ma accendere la variabile con `echo E2E_DATI_DI_PROVA=1 >> $GITHUB_ENV` oppure con `E2E_DATI_DI_PROVA=1 npm run test:e2e` lascia la guardia verde.",
+      "nota": "La guardia vitest aggiunta nel commit 221426fa è stata tolta con il revert 7c07ded2: il collaudo l'ha trovata già verde sulla base, e con una premessa falsa (i tre gusci dello spec sono test.skip senza condizione, quindi accendere E2E_DATI_DI_PROVA non li fa girare). Nessun pezzo della voce sta nei file di R13: la cura è tutta nello spec."
     },
     {
       "id": "R13-006",
       "chiave": "qa-flussi|la posizione del negozio può finire lontano da piacenza, o restare quella vecchia, e il modulo la salva lo stesso",
-      "esito": "parziale",
-      "commit": "45b185a5",
+      "esito": "riparato",
+      "commit": "7d68fd07",
       "file_toccati": [
-        "lib/ordini/zona-di-consegna.ts",
-        "lib/geocodifica.ts",
-        "app/api/geocode/route.ts",
-        "app/api/seller/apply/route.ts",
-        "app/seller/profile/page.tsx",
         "components/StoreLocationPicker.tsx",
-        "migrations/377_la_posizione_del_negozio_sta_nell_area_di_piacenza.sql",
-        "tests/unit/riparazione-r13-geocodifica.test.ts"
+        "tests/unit/riparazione-r13-posizione-negozio.test.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r13-posizione-negozio.test.tsx",
-        "tests/unit/riparazione-r13-geocodifica.test.ts",
-        "tests/sql/rls/riparazione-r13-posizione-negozio.test.sql"
+        "tests/unit/riparazione-r13-posizione-negozio.test.tsx"
       ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-posizione-negozio.test.tsx tests/unit/riparazione-r13-geocodifica.test.ts && bash tests/sql/harness/apply.sh r13_prova && psql -q -X -d r13_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r13-posizione-negozio.test.sql",
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-posizione-negozio.test.tsx tests/unit/il-negozio-che-non-cerca-l-indirizzo-non-finisce-a-roma.test.tsx",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "rosso_strutturale solo su lib/ordini/zona-di-consegna.ts (gli altri 5 file mordono sul comportamento); migrazione con --sql: regge (0)",
-        "uscita": 3,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45b185a5^ --file lib/ordini/zona-di-consegna.ts,lib/geocodifica.ts,app/api/geocode/route.ts,app/api/seller/apply/route.ts,app/seller/profile/page.tsx,components/StoreLocationPicker.tsx --prove tests/unit/riparazione-r13-posizione-negozio.test.tsx,tests/unit/riparazione-r13-geocodifica.test.ts --json ; poi --file migrations/377_la_posizione_del_negozio_sta_nell_area_di_piacenza.sql --prove tests/sql/rls/riparazione-r13-posizione-negozio.test.sql --sql r13_rimessa (uscita 0)"
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45b185a5^ --file lib/geocodifica.ts,app/api/geocode/route.ts,app/api/seller/apply/route.ts,app/seller/profile/page.tsx,components/StoreLocationPicker.tsx --prove tests/unit/riparazione-r13-posizione-negozio.test.tsx,tests/unit/riparazione-r13-geocodifica.test.ts --json"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nuovi in lib/ordini/zona-di-consegna.ts: RIQUADRO_PIACENZA (comune con le frazioni e la prima cintura), dentroAreaDiPiacenza e il messaggio per il negozio; geocodifica usa lo stesso riquadro. Selettore: a ogni cambio del testo «confermata» torna false e compare l'invito a ripremere Cerca. Dopo Cerca, un punto fuori area non si conferma e l'avviso dice dove è finito («Trovato: …»); un punto dentro mostra «Trovato: …». Il segnaposto ora dice «Via Roma 1, Piacenza». /api/geocode restituisce anche luogo (display_name). /api/seller/apply rifiuta con 400 una posizione fuori area prima di scrivere. Il profilo non salva una posizione CAMBIATA fuori area e lo dice con parole chiare. La migrazione 377 aggiunge un trigger: una posizione nuova o cambiata fuori dal riquadro dà errore 23514; vale anche per la chiave di servizio e lascia passare le posizioni vecchie che non cambiano. Rimessa 3 su zona-di-consegna.ts perché gli altri file ne importano i nomi nuovi. Ho rimesso il difetto a mano (dentroAreaDiPiacenza sempre vero): 3 prove su 7 diventano rosse (selettore Roma, iscrizione Roma, profilo Roma). Ho fatto girare anche le 14 prove SQL esistenti con store_lat: sono verdi.",
-      "verificato_da": "collaudo (parziale): Ho rilanciato le due prove unitarie (15 verdi), la migrazione 377 su r13_collaudo con la sua prova SQL (4 verdi) e le 13 prove SQL esistenti che usano store_lat (tutte verdi). Ho rilanciato anche le due prove rimesse: quella sul codice esce 3 solo per zona-di-consegna.ts, quella con --sql esce 0. Rimettendo il difetto a mano (dentroAreaDiPiacenza sempre vero) diventano rosse 3 prove: selettore Roma, iscrizione Roma, profilo Roma. Le 53 prove unitarie che importano i file toccati sono verdi. Con una prova temporanea, poi cancellata, ho cercato le varianti scomode: il testo cambiato mentre «Cerca» aspetta la risposta, una posizione già salvata lontano da Piacenza, il GPS a Milano. Per il profilo, finché la 377 non è applicata, il controllo resta solo nel browser.",
-      "collaudo_difetti": [
-        {
-          "file": "components/StoreLocationPicker.tsx:200",
-          "cosa": "Il secondo buco si riapre se il testo cambia mentre la ricerca è in corso, con un'attesa che arriva a qualche secondo per il freno di Nominatim e il timeout. Quando arriva la risposta, il selettore manda al modulo l'indirizzo di prima, preso nella chiusura (`address`), e lo segna confermata=true. Prova: si cerca «Via Roma 12» e durante l'attesa si scrive «Via Garibaldi 3, Piacenza». Il campo mostra Via Garibaldi, ma il modulo riceve {address:'Via Roma 12', lat:45.0505, lng:9.6905, confermata:true} e lo salva. Al ritorno della risposta il codice non controlla che il testo sia ancora quello cercato (indirizzoRef.current)."
-        },
-        {
-          "file": "components/StoreLocationPicker.tsx:48",
-          "cosa": "Una posizione già salvata lontano da Piacenza, per esempio 41.91,12.5 (Roma, ma non il vecchio punto di partenza), si apre confermata e senza nessun avviso. Il profilo e il trigger 377 la lasciano passare di proposito se non cambia. Così il negozio rimasto a Roma per il vecchio difetto (il danno del n. 113 che la voce richiama) continua a non ricevere ordini, e nessuno gli dice perché. Il selettore non mostra un avviso all'apertura, come fa invece per VECCHIO_PUNTO_DI_PARTENZA."
-        },
-        {
-          "file": "components/StoreLocationPicker.tsx:221",
-          "cosa": "«Usa la mia posizione attuale» (e allo stesso modo il tocco o il trascinamento sulla mappa, riga 117) conferma un punto fuori area senza nessun avviso. Prova: GPS a Milano 45.4642,9.19, il modulo riceve confermata=true e nessun alert. Il server dell'iscrizione e il controllo del profilo poi lo fermano, quindi il dato sbagliato non passa. Però il selettore usa il riquadro solo dopo «Cerca», e il negozio vede l'errore soltanto all'invio."
-        }
+      "copre_tutta_la_voce": true,
+      "insieme_a": [
+        "45b185a5"
       ],
-      "cosa_resta": "components/StoreLocationPicker.tsx:200: Il secondo buco si riapre se il testo cambia mentre la ricerca è in corso, con un'attesa che arriva a qualche secondo per il freno di Nominatim e il timeout. Quando arriva la risposta, il selettore manda al modulo l'indirizzo di prima, preso nella chiusura (`address`), e lo segna confermata=true. Prova: si cerca «Via Roma 12» e durante l'attesa si scrive «Via Garibaldi 3, Piacenza». Il campo mostra Via Garibaldi, ma il modulo riceve {address:'Via Roma 12', lat:45.0505, lng:9.6905, confermata:true} e lo salva. Al ritorno della risposta il codice non controlla che il testo sia ancora quello cercato (indirizzoRef.current).; components/StoreLocationPicker.tsx:48: Una posizione già salvata lontano da Piacenza, per esempio 41.91,12.5 (Roma, ma non il vecchio punto di partenza), si apre confermata e senza nessun avviso. Il profilo e il trigger 377 la lasciano passare di proposito se non cambia. Così il negozio rimasto a Roma per il vecchio difetto (il danno del n. 113 che la voce richiama) continua a non ricevere ordini, e nessuno gli dice perché. Il selettore non mostra un avviso all'apertura, come fa invece per VECCHIO_PUNTO_DI_PARTENZA.; components/StoreLocationPicker.tsx:221: «Usa la mia posizione attuale» (e allo stesso modo il tocco o il trascinamento sulla mappa, riga 117) conferma un punto fuori area senza nessun avviso. Prova: GPS a Milano 45.4642,9.19, il modulo riceve confermata=true e nessun alert. Il server dell'iscrizione e il controllo del profilo poi lo fermano, quindi il dato sbagliato non passa. Però il selettore usa il riquadro solo dopo «Cerca», e il negozio vede l'errore soltanto all'invio."
+      "cosa_ho_fatto": "Correzione dal collaudo dei tre difetti su components/StoreLocationPicker.tsx (commit originale della voce 45b185a5). Difetto 1 (StoreLocationPicker.tsx:200): la ricerca ora ricorda il testo cercato; quando la risposta arriva e nel frattempo il testo è cambiato, non si conferma l'indirizzo di prima e non si manda al modulo, si dice «premi di nuovo Cerca». Difetto 2 (:48): una posizione salvata lontano da Piacenza (es. 41.91,12.5), non il vecchio punto di partenza, ora apre il selettore con un avviso chiaro (resta confermata di proposito, perché profilo e trigger 377 lasciano passare la posizione vecchia che non cambia). Difetto 3 (:221): «Usa la mia posizione attuale», il tocco e il trascinamento sulla mappa ora passano da mettiIlPunto(), che conferma solo un punto dentro l'area di Piacenza e avvisa subito se è fuori (GPS a Milano: non confermato, avviso). Aggiunte 4 prove al file esistente; verdi anche le prove vicine che montano StoreLocationPicker (il-negozio-che-non-cerca, il-modulo-del-negozio-chiede-la-partita-iva, il-modulo-del-negozio-non-salva).",
+      "nota": "Correzione dal collaudo del lotto 4. La rimessa (base 45b185a5^, lista file e prove originali) regge: la correzione integrata morde ancora.",
+      "verificato_da": "collaudo (regge): Rilanciate la prova della voce e il-negozio-che-non-cerca (verdi), più le vicine il-modulo-del-negozio-chiede-la-partita-iva e il-modulo-del-negozio-non-salva-una-posizione-mai-data (verdi). Rilanciata la prova rimessa: uscita 0, regge. Con lo StoreLocationPicker riportato a 7d68fd07^, le 4 prove nuove diventano rosse, quindi mordono la correzione. Prova temporanea, poi cancellata: due ricerche in volo con Invio, tocco sulla mappa durante una ricerca, posizione a Roma con il testo cambiato. Nessun punto lontano e nessun punto vecchio arriva confermato al modulo. Due difetti di sola interfaccia, rari, che non salvano dati sbagliati. (a) Righe 199-201: se una ricerca vecchia arriva dopo una nuova già confermata, sostituisce «Trovato: …» con «premi di nuovo Cerca»; il dato resta giusto. (b) Righe 176-226: una risposta che arriva dopo un tocco sulla mappa sostituisce il punto messo a mano, dentro l'area e con lo stesso testo. La riga del riparatore non è coerente: esito «parziale» ma copre_tutta_la_voce=true e nessun cosa_resta. Non resta niente della voce, quindi va «riparato»."
     },
     {
       "id": "R13-007",
@@ -204,13 +240,13 @@
       "id": "R13-008",
       "chiave": "accessibilita|nella pagina del reclamo il bottone resta spento senza dire cosa manca",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-009",
       "chiave": "ai-endpoints|«genera con ai» riscrive la descrizione partendo solo dal nome e la sostituisce a quella del negoziante, senza la regola «non inventare»",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-010",
@@ -240,7 +276,7 @@
       "id": "R13-011",
       "chiave": "api-backend|doppio tocco sull annullo con la carta: il secondo dice «rimborso fallito» e manda agli amministratori un falso «carrello da sistemare a mano»",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-012",
@@ -404,7 +440,7 @@
           "modifica": "idem"
         }
       ],
-      "nota": "SHA da riprendere: 69b1cc57 (la voce). È tolta da 10708bcf (il revert). Rimessa 3 solo perché le rotte importano il nome nuovo motivoSenzaFascia; rimettendo il difetto a mano (motivoSenzaFascia restituisce sempre null) la prova diventa rossa in 4 casi su 6.",
+      "nota": "SHA da riprendere: 69b1cc57 (la voce). È tolta da 10708bcf (il revert). Rimessa 3 solo perché le rotte importano il nome nuovo motivoSenzaFascia; rimettendo il difetto a mano (motivoSenzaFascia restituisce sempre null) la prova diventa rossa in 4 casi su 6. Il commit 10708bcf è il revert automatico di R13-012 (69b1cc57): il suo primo rigo comincia con «Revert \"R13-012 …\"» invece che con «R13-012 …». Non si riscrive (decisione della quinta regista, 13/11): il rosso della guardia su quel messaggio va a Nicola come eccezione di una riga.",
       "verificato_da": "collaudo (parziale): Confermato che nel ramo la voce NON è chiusa: 10708bcf ha revertito 69b1cc57, fascia-consegna.ts non ha più motivoSenzaFascia/MANCA_LA_FASCIA, nessun riferimento penzolante, il file prova è stato rimosso. Verificata l'onestà del serve_file_altrui: applicato il fix al solo albero (git checkout 69b1cc57 -- i 3 file sorgente, tutti in elenco), lanciato un campione di 6 dei 34 test → 30 casi rossi, tutti per il 400 «Scegli quando vuoi ricevere l'ordine»; poi ripristinato con git checkout HEAD e riconfermato verde (31 casi). Controllato che i test elencati importano/mockano file fuori elenco (lib/constants, lib/coupons, lib/store-hours, lib/promotions, lib/email/*, lib/supabase/server, …) quindi sono davvero «comuni»; nessuno degli elenchi usa deliverySlot; la modifica descritta (aggiungere deliverySlot da lib/quando-arriva.ts + cherry-pick 69b1cc57) è esatta. Il fix (se ripreso) copre entrambe le rotte dopo lo spegnimento del ritiro. Albero pulito. Verdetto parziale perché la voce resta aperta nel ramo (revertita): handling onesto e corretto, ma non risolto.",
       "collaudo_difetti": []
     },
@@ -425,7 +461,7 @@
         "tests/unit/riparazione-r13-frase-della-zona.test.ts"
       ],
       "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-frase-della-zona.test.ts tests/unit/le-frasi-della-zona-dicono-il-confine-della-cassa.test.tsx",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -441,67 +477,67 @@
       "id": "R13-014",
       "chiave": "architettura|i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-015",
       "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-016",
       "chiave": "architettura|sul ramo carta l'annullo non prende il turno prima del rimborso: due annulli da strade diverse possono restituire il credito due volte",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-017",
       "chiave": "architettura|il segnale «tieni la chiave» ora vuol dire quattro cose diverse, e la regola nel file racconta ancora che vale solo per l invio gemello",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-018",
       "chiave": "architettura|interfacce zombie: shippingforeuro vale sempre 0 ma riceve 7 ingressi; promessaspedizione ha un argomento morto e campi sempre costanti",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-019",
       "chiave": "dati-analytics|il cruscotto del negozio segna «0 ordini oggi» finché gli ordini in contanti non sono consegnati",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-020",
       "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge «nessuna recensione», e le etichette sono in inglese",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-021",
       "chiave": "deploy-sre|manca il tasto per fermare tutti gli ordini in un colpo: oggi si può solo sospendere il negozio, e il fornaio riceve un avviso brusco",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-022",
       "chiave": "deploy-sre|la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-023",
       "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-024",
       "chiave": "frontend-ux|nella scheda ordine del negozio compaiono «il rider sta gestendo la consegna» su un ordine annullato e «il rider incassa» su uno già consegnato",
       "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "nota": "Non lavorata: tetto di costo. Dopo lo stop a 35 $, Nicola ha alzato il tetto a 90 $ (13/11 12:58). Con quei soldi sono andati prima il bloccante e i gravi (lotti 4-5, con le correzioni del collaudo). Questa voce minore era nei lotti 6-7 e non ci è stata (decisione della quinta regista: «ciò che non ci sta resta non_fatto tetto»)."
     },
     {
       "id": "R13-025",
@@ -562,10 +598,13 @@
     "Area dove può stare un negozio: ho scelto il riquadro lat 44.97–45.10, lng 9.57–9.86 (comune di Piacenza con le frazioni e la prima cintura: San Nicolò, Gossolengo, Pontenure). Podenzano e Caorso restano fuori. Va bene? La stessa cifra sta in lib/ordini/zona-di-consegna.ts e nella migrazione 377.",
     "Gli indirizzi salvati in rubrica prima di oggi possono avere coordinate sbagliate, cercate a testo libero (per esempio Via Roma a Podenzano). Le rotte d'ordine le usano per prime, quindi quei clienti restano bloccati finché non risalvano l'indirizzo. Vuoi azzerare lat/lng in user_addresses (o ricalcolarle)? È un'operazione sul database vero, da fare tu.",
     "Migrazione 377 (il trigger sulla posizione del negozio): la applichi tu quando decidi.",
-    "Il freno di Nominatim vale per tutto il sito solo con UPSTASH_REDIS_REST_URL/TOKEN impostati in produzione: senza, ogni copia del sito conta per sé."
+    "Il freno di Nominatim vale per tutto il sito solo con UPSTASH_REDIS_REST_URL/TOKEN impostati in produzione: senza, ogni copia del sito conta per sé.",
+    "R13-004: «Escluso dal recesso» oggi vale solo per gli ALIMENTI (categorie con richiede_dichiarazioni_alimentari, o radice «alimentari»), perché il fatto legale.recesso-esclusi nomina «freschi + fatti su ordinazione» e sul catalogo sono tutti alimenti. Un bene NON alimentare fatto davvero su misura/ordinazione (art. 59 lett. c, es. un mobile su commessa) con questa regola non può più essere segnato escluso: va bene così, o la lista delle categorie ammesse deve includere anche i non alimentari su ordinazione? È una scelta di business.",
+    "R13-001 (difetto 3 del collaudo): gli indirizzi già salvati in rubrica (user_addresses.lat/lng) con le coordinate sbagliate della vecchia ricerca a testo libero vincono ancora in cassa e sul server (coordinateDaIndirizziSalvati, lib/shipping-coordinate.ts, fuori dai miei file). Serve una tua scelta: una migrazione che azzeri/ricalcoli le coordinate salvate fuori dal riquadro di Piacenza, oppure la modifica indicata in serve_file_altrui.",
+    "R13-005: le tre prove e2e dell'acquisto vero (contrassegno, rimborso, bonifico) hanno ancora il corpo vuoto perché manca l'ambiente di prova: un progetto Supabase di PROVA + chiavi Stripe in modalità test + un job CI che accenda E2E_DATI_DI_PROVA. È una tua preparazione (non_codice). Finché non c'è, restano saltate col motivo e la mia guardia impedisce che la CI le renda verdi a vuoto."
   ],
   "conto": {
-    "agenti": 7,
-    "nota": "Tetto alzato da Nicola (13/11 12:58): 90 $ e fino a 22 subagenti. Fatti 7 (lotti 1-3 + una correzione); poi lotti 4-7."
+    "agenti": 16,
+    "nota": "Lotti 1-3: 3 riparatori, 3 collaudatori e 1 correzione su R13-007. Lotti 4-5: 2 riparatori e 6 revisori. In più 1 correzione su R13-001, ripresa una volta. Costo letto da get_session alla fine: vedi il messaggio alla regista."
   }
 }
