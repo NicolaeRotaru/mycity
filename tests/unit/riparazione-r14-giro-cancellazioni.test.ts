@@ -9,6 +9,11 @@
  * cancella, l'altro riceve dal servizio di accesso «utente non trovato» e lo
  * contava come cancellazione fallita: l'account era sparito, ma la notte finiva
  * rossa e agli amministratori arrivava «Cancellazioni account non eseguite».
+ *
+ * R14-012 — Quando la spiegazione dovuta a chi aspetta non si scrive nel suo
+ * pannello, la notte scriveva agli amministratori «Persone non avvisate del
+ * rinvio della cancellazione»: un allarme nuovo a ogni notte, uguale al
+ * precedente, e senza dire chi. La stessa classe era già chiusa per le email.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fintoGiroNotturno } from './aiuti/finto-giro-notturno';
@@ -121,5 +126,82 @@ describe('R14-015 — due giri della cancellazione partiti insieme', () => {
     expect(res.status).toBe(500);
     expect((await res.json()).failed).toBe(1);
     expect(giro.notifiche().filter((n) => n.title === 'Cancellazioni account non eseguite')).toHaveLength(1);
+  });
+});
+
+// ── un fattorino con la cassa aperta: la cancellazione si rinvia e gli si deve dire perché ──
+const LUCA = '00000000-0000-4000-8000-0000000000b2';
+const GIORNO = 86_400_000;
+
+/**
+ * La notte di Luca: ha chiesto la cancellazione, ma ha 120 € di contanti da
+ * versare. La pipeline vera lo rinvia e la notte gli deve la spiegazione nel
+ * pannello. `rifiutaIlPannelloDi`: il database rifiuta le notifiche scritte a
+ * quella persona (e solo a lei).
+ */
+function laNotteDiLuca(o: { rifiutaIlPannelloDi?: string } = {}) {
+  const giro = fintoGiroNotturno({
+    tabelle: {
+      profiles: [
+        { id: 'admin-1', role: 'admin' },
+        { id: LUCA, role: 'rider', deletion_requested_at: giorniFa(8) },
+      ],
+      notifications: [],
+      cron_heartbeats: [],
+      audit_logs: [],
+      cod_reconciliations: [
+        { rider_id: LUCA, for_date: '2026-11-01', collected_cents: 12_000, status: 'OPEN', remitted_at: null },
+      ],
+    },
+    rpc: {
+      process_expired_deletions: { data: [{ user_id: LUCA, deleted_at: giorniFa(8) }], error: null },
+    },
+  });
+  const base = giro.admin as unknown as { from(t: string): Record<string, unknown> };
+  mondo.admin = {
+    ...giro.admin,
+    auth: {
+      admin: {
+        getUserById: async () => ({ data: { user: { email: 'luca@example.it' } }, error: null }),
+        deleteUser: async () => ({ error: null }),
+      },
+    },
+    from(tabella: string) {
+      const q = base.from(tabella);
+      if (tabella === 'notifications' && o.rifiutaIlPannelloDi) {
+        const bersaglio = o.rifiutaIlPannelloDi;
+        const vera = (q.insert as (r: unknown) => unknown).bind(q);
+        q.insert = (righe: Record<string, unknown> | Record<string, unknown>[]) => {
+          const lista = Array.isArray(righe) ? righe : [righe];
+          if (!lista.some((r) => r.user_id === bersaglio)) return vera(righe);
+          return { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok({ data: null, error: { message: 'permission denied' } })) };
+        };
+      }
+      return q;
+    },
+  };
+  return giro;
+}
+
+describe('R14-012 — l allarme «persone non avvisate» è uno per stato e dice chi', () => {
+  beforeEach(() => {
+    const adesso = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(adesso);
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('tre notti col pannello di Luca che rifiuta: un allarme per amministratore, col suo identificativo', async () => {
+    const giro = laNotteDiLuca({ rifiutaIlPannelloDi: LUCA });
+
+    for (let notte = 0; notte < 3; notte++) {
+      const res = await unGiro();
+      expect((await res.json()).avvisiFalliti, 'premessa: la spiegazione a Luca non si scrive').toBe(1);
+      vi.setSystemTime(Date.now() + GIORNO);
+    }
+
+    const allarmi = giro.notifiche().filter((n) => n.title === 'Persone non avvisate del rinvio della cancellazione');
+    expect(allarmi, 'un allarme nuovo a ogni notte, uguale al precedente').toHaveLength(1);
+    expect(String(allarmi[0].body), 'l allarme non dice chi aspetta').toContain(LUCA);
   });
 });

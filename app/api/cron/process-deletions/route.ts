@@ -243,12 +243,23 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   if (verdetto.daSvegliare) await sveglia(admin, verdetto);
   const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
   if (avvisi.falliti > 0) {
+    // 13/11/2026 (R14-012) — UN ALLARME PER STATO, E DICE CHI. Era un allarme nuovo
+    // a ogni notte, uguale al precedente, e senza la persona: con l'avviso fermo per
+    // settimane il pannello si riempiva di copie e l'amministratore non sapeva a chi
+    // scrivere. Adesso, come per le email ferme: un identificativo ricavato dagli
+    // avvisi non recapitati (la notte dopo, con gli stessi, la riga c'è già) e il
+    // testo con chi aspetta. Se si aggiunge qualcuno, è uno stato nuovo e suona.
+    const chiDovuto = new Map(verdetto.dovuti.map((d) => [d.chiave, d.userId] as const));
+    const nonRecapitati = avvisi.esiti.filter((e) => e.esito === 'fallito').map((e) => e.chiave).sort();
+    const chi = [...new Set(nonRecapitati.map((k) => chiDovuto.get(k) ?? k))].sort();
     await avvisaAmministratori(
       admin,
       'Persone non avvisate del rinvio della cancellazione',
-      avvisi.falliti === 1
+      (avvisi.falliti === 1
         ? "Stanotte una persona che aspetta la cancellazione non ha ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese."
-        : `Stanotte ${avvisi.falliti} persone che aspettano la cancellazione non hanno ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese.`,
+        : `Stanotte ${avvisi.falliti} persone che aspettano la cancellazione non hanno ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese.`) +
+        ` Chi aspetta: ${chi.length === 1 ? "l'utente" : 'gli utenti'} ${chi.join(', ')}.`,
+      `persone-non-avvisate:${nonRecapitati.join(',')}`,
     );
   }
   // 27/10/2026 (terzo giro) — LA SPIEGAZIONE PER EMAIL CHE NON PARTE NON È UNA
