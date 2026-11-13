@@ -55,7 +55,11 @@ export function numeroWhatsApp(grezzo?: string | null): string | null {
   // Un numero vero non è tutto zeri dopo il prefisso internazionale. Il segnaposto sì, e così ogni
   // sua variante scritta a mano: 39 000…, 39 3000000000, e le altre che nascono copiando l'esempio.
   if (/^0+$/.test(cifre.slice(3))) return null;
-  return conPrefissoItaliano(String(grezzo ?? ''), cifre);
+  // R22-014 — Gli stessi controlli sul numero normalizzato: con 0039 davanti il segnaposto o i soli
+  // zeri sfuggivano ai controlli sulle cifre grezze.
+  const numero = conPrefissoItaliano(String(grezzo ?? ''), cifre);
+  if (numero === SEGNAPOSTO || /^0+$/.test(numero.slice(3))) return null;
+  return numero;
 }
 
 /**

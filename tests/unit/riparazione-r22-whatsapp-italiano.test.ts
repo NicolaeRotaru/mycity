@@ -31,4 +31,10 @@ describe('R22-014 · il WhatsApp di MyCity scritto senza +39', () => {
     expect(linkWhatsApp('300 000 0000')).toBeNull();
     expect(linkWhatsApp('393000000000')).toBeNull();
   });
+
+  it('il segnaposto con 0039 o +39 davanti resta senza link', () => {
+    for (const n of ['0039 300 0000000', '00393000000000', '0039 0000000000', '+39 000 0000000']) {
+      expect(linkWhatsApp(n), n).toBeNull();
+    }
+  });
 });
