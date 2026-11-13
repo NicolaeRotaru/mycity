@@ -1,13 +1,13 @@
 {
   "sessione": "R19",
-  "aggiornato": "2026-11-13 06:18",
+  "aggiornato": "2026-11-13 07:38",
   "finita": false,
-  "testa": "",
+  "testa": "c30d04d14441f4456363bc7201dc1fe2e8d25b29",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
+    "esito": "non_lanciato",
     "testa": "",
-    "nota": ""
+    "nota": "Per decisione della regista (tetto di costo superato) il verify finale e la chiusura si fanno dopo la risposta di Nicola. Prove lanciate nei lotti: tsc --noEmit verde dopo ogni voce; prove vicine verdi (ultimo giro: 101 file, 800 prove)."
   },
   "voci": [
     {
@@ -20,48 +20,109 @@
       "verificato_da": "capo squadra R19: letta la decisione in lib/auth/decisione-portiere.ts:262-263 e la riverifica del 6/11 nel registro"
     },
     {
-      "id": "R19-002",
-      "chiave": "api-backend|un documento del fattorino fra 4,4 e 8 mb viene rifiutato con un messaggio tecnico in inglese, anche se la pagina promette fino a 8 mb",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
-    },
-    {
       "id": "R19-003",
       "chiave": "flussi-conversione|in cassa, sul telefono, l'avviso «fuori zona» sta solo nel riepilogo in fondo: chi scrive lì l'indirizzo lo scopre all'ultimo tocco",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "esito": "riparato",
+      "commit": "fb3b7a7a808b1798dc1bdb5cccc81f66a3d3df80",
+      "file_toccati": [
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-fuori-zona-vicino-all-indirizzo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-fuori-zona-vicino-all-indirizzo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fb3b7a7a808b1798dc1bdb5cccc81f66a3d3df80^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-fuori-zona-vicino-all-indirizzo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima (b7070503): avviso role=alert con motivoFuoriZona subito dopo il modulo indirizzo. Correzione: se a bloccare c'è prima un altro motivo (scorte, varianti) l'avviso del passo 1 diventa informativo e «vai al primo blocco» porta al riquadro giusto. La prova ora monta la cassa: indirizzo salvato fuori zona → avviso nel riquadro del modulo; mattonella in zona → sparisce; indirizzo scritto con geocodifica finta fuori/in zona → compare/sparisce; fuori zona più scorte → il fuoco va alle scorte. Rimessa sul commit del salto; senza l'avviso le 4 prove cadono.",
+      "verificato_da": "collaudo lotto 4: cassa montata fuori/in zona → l'avviso compare e sparisce; prova debole. Il giro di correzione (fb3b7a7a) NON è stato ricollaudato: subagenti fermati dalla regista."
     },
     {
       "id": "R19-004",
       "chiave": "frontend-ux|in cassa da ospite il link «ho già un account» fa perdere indirizzo e telefono appena scritti, anche se la pagina promette che restano salvati",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
-    },
-    {
-      "id": "R19-005",
-      "chiave": "frontend-ux|nel profilo del fattorino il documento risulta «verificato» appena caricato, e l'attestato haccp resta «mancante» anche dopo il caricamento",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "esito": "riparato",
+      "commit": "b028f98ce19dfe7ef6d0f6aec3978318701e5698",
+      "file_toccati": [
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b028f98ce19dfe7ef6d0f6aec3978318701e5698^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima (e9259cfc): salvaLaBozzaPerAccesso() sul link «Ho già un account» e su «Ordina» da ospite. Correzione, solo in app/checkout/page.tsx con la prop savedAddresses che c'era già (ShippingAddressForm non toccato): se l'indirizzo della bozza non è fra i salvati compare come prima mattonella «Appena scritto», scelta; si può passare a un salvato e tornare; se la bozza è proprio un salvato, è scelta quella mattonella. La prova monta la cassa come chi rientra dall'accesso.",
+      "verificato_da": "collaudo lotto 4: con indirizzi salvati il modulo restava nascosto. Il giro di correzione (b028f98c) NON è stato ricollaudato: subagenti fermati dalla regista."
     },
     {
       "id": "R19-006",
       "chiave": "frontend-ux|il negoziante col negozio non ancora approvato vede «negozio» al posto della sua insegna nella lista condivisa e alla cassa",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "esito": "riparato",
+      "commit": "23cf610b566e8b9b2a3c26cb2e2200d81bee6c13",
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "app/shared-cart/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 23cf610b566e8b9b2a3c26cb2e2200d81bee6c13^ --file app/checkout/page.tsx,app/shared-cart/page.tsx --prove tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo lato client. Per i negozi che la vista pubblica non restituisce, il nome si legge da `profiles` (`id, store_name`), dove le regole fanno tornare solo la propria riga. Vale in cassa e nella lista condivisa. In cassa il nome è l'unico campo che cambia: coordinate e orari restano vuoti come prima. Nessuna vista, RLS o migrazione toccata.",
+      "verificato_da": "collaudo lotto 4: ricostruite le policy di select su profiles da tutte le migrazioni (restano solo propria riga e admin, la 161 toglie le letture pubbliche): nessuna esposizione; montaggio in lista condivisa e cassa, negozio non approvato vede la sua insegna, un altro cliente vede «Negozio» → regge (la prova legge il sorgente)."
     },
     {
       "id": "R19-007",
       "chiave": "layout-responsive|alla cassa, col testo del telefono al massimo, la scheda «contanti alla consegna» esce dallo schermo e la pagina scorre di lato",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "esito": "riparato",
+      "commit": "5d924702ee38a5c50dcca03e198966413e4bd0a6",
+      "file_toccati": [
+        "components/checkout/PaymentMethodSelector.tsx",
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-scheda-contanti-col-testo-grande.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-scheda-contanti-col-testo-grande.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d924702ee38a5c50dcca03e198966413e4bd0a6^ --file app/checkout/page.tsx,components/checkout/PaymentMethodSelector.tsx --prove tests/unit/riparazione-r19-scheda-contanti-col-testo-grande.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima (2577669a): min-w-0 break-words sui tre div flex-1: misurata, la pagina restava larga 444 px. Correzione: min-w-0 sul fieldset (teneva il min-content del browser) e sul titolo «Contanti alla consegna»; nella riga «Consegna a domicilio» del passo 2 min-w-0 break-words e gap-3, così a 360 px «6,00 €» non esce. La prova monta la cassa vera, compila il CSS col Tailwind del progetto e misura in Chromium (Playwright) a 360/375/390 px con html{font-size:200%}: scrollWidth uguale a innerWidth; prima della correzione 444 px.",
+      "nota": "La misura in Chromium usa describe.skipIf(!Chromium), come le prove PostgreSQL: dove il browser non c'è (il lavoro «Unit tests» della CI oggi non lo installa) si salta dichiarandolo, e resta sempre la prova leggera sulle classi del fieldset e del titolo. Qui gira (Chromium della macchina).",
+      "verificato_da": "collaudo lotto 4: misura reale in Chromium → la prima correzione non cambiava la larghezza. Il giro di correzione (5d924702) NON è stato ricollaudato da un subagente diverso: la regista ha fermato i subagenti per il tetto di costo."
     },
     {
       "id": "R19-008",
       "chiave": "mobile-pwa|quando la sessione scade da sola, il telefono perde le notifiche in silenzio e al nuovo accesso nessuno le riaccende",
-      "esito": "parziale",
-      "commit": "2f39930215ec90f80b78adb46f37d42b856e9b69",
+      "esito": "riparato",
+      "commit": "c30d04d14441f4456363bc7201dc1fe2e8d25b29",
       "file_toccati": [
-        "components/Navbar.tsx"
+        "components/Navbar.tsx",
+        "app/profile/settings/page.tsx",
+        "app/cookies/page.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r19-notifiche-spente-dette-al-rientro.test.ts"
@@ -72,18 +133,17 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2f39930215ec90f80b78adb46f37d42b856e9b69^ --file components/Navbar.tsx --prove tests/unit/riparazione-r19-notifiche-spente-dette-al-rientro.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c30d04d14441f4456363bc7201dc1fe2e8d25b29^ --file components/Navbar.tsx,app/profile/settings/page.tsx,app/cookies/page.tsx --prove tests/unit/riparazione-r19-notifiche-spente-dette-al-rientro.test.ts --json"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Via scelta: «lo si dice». Su SIGNED_OUT l'iscrizione si spegne come prima; se si spegne davvero, la barra lascia un segno in localStorage. Al rientro (SIGNED_IN, o INITIAL_SESSION con sessione) controlla due cose: il permesso è ancora 'granted' e l'iscrizione non c'è più. Se è così mostra una volta un avviso con «Riattiva», che porta a /profile/settings?tab=notifications, /seller/profile o /rider/profile. Le notifiche non si riaccendono da sole, perché chi rientra può essere un'altra persona. Il riferimento a K160 nella voce (middleware:436-441) è contesto: resta un difetto aperto a parte.",
-      "cosa_resta": "Il collaudo ha trovato due buchi: (1) il segno in localStorage è dell apparecchio, non della persona (components/Navbar.tsx:45-51 e :155): se entra un altro utente l avviso va a lui e chi ha perso le notifiche non lo sa; (2) «Riattiva» porta a /profile/settings?tab=notifications ma la pagina legge ?tab= solo al montaggio (app/profile/settings/page.tsx:136-139): se si è già lì la scheda non si apre. Giro di correzione nel lotto 5.",
-      "verificato_da": "collaudo lotto 2: prova 4/4, rimessa regge, 89 prove vicine verdi, sonda su apparecchio condiviso, localStorage che lancia, Notification assente, eventi ripetuti → parziale per i due buchi in cosa_resta."
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima (2f399302): a fine sessione, se l'iscrizione si spegneva davvero, un segno in localStorage; al rientro, con permesso concesso e iscrizione assente, un avviso con «Riattiva» (via scelta: «lo si dice», non si riaccendono da sole su un apparecchio che può essere condiviso). Correzione: (1) il segno è una mappa {id interno dell'account → scadenza a 30 giorni}; l'avviso va solo a chi le ha perse, per un altro il segno resta finché non scade; la Cookie policy dichiara mc_notifiche_spente_all_uscita (30 giorni). (2) Le impostazioni guardano ?tab= a ogni disegno e aprono la scheda se è cambiato. Dichiarato: le 4 prove di prima ora ricevono INITIAL_SESSION prima di SIGNED_OUT, come fa Supabase; nessuna asserzione tolta.",
+      "verificato_da": "collaudo lotto 2: apparecchio condiviso, localStorage che lancia, Notification assente, eventi ripetuti → parziale per i due buchi. Il giro di correzione (c30d04d1) NON è stato ricollaudato: subagenti fermati dalla regista."
     },
     {
       "id": "R19-009",
       "chiave": "privacy-legale|nome, telefono e indirizzo di chi non completa l'accesso restano nel browser senza scadenza, e chi apre la cassa dopo li trova già scritti",
-      "esito": "riparato",
-      "commit": "d25200a5f3d0e4dd7f48ad96a92685c92de44e79",
+      "esito": "parziale",
+      "commit": "8d9e830a95ab0ba3c2cd323958e0d2b374d8a7bb",
       "file_toccati": [
         "lib/bozza-checkout.ts",
         "app/checkout/page.tsx",
@@ -91,18 +151,22 @@
         "app/cookies/page.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r19-bozza-della-cassa-scade.test.ts"
+        "tests/unit/riparazione-r19-bozza-della-cassa-scade.test.ts",
+        "tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r19-bozza-della-cassa-scade.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-bozza-della-cassa-scade.test.ts tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d25200a5f3d0e4dd7f48ad96a92685c92de44e79^ --file lib/bozza-checkout.ts,app/checkout/page.tsx,components/Navbar.tsx,app/cookies/page.tsx --prove tests/unit/riparazione-r19-bozza-della-cassa-scade.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8d9e830a95ab0ba3c2cd323958e0d2b374d8a7bb^ --file app/checkout/page.tsx,components/Navbar.tsx,lib/bozza-checkout.ts,app/cookies/page.tsx --prove tests/unit/riparazione-r19-bozza-della-cassa-scade.test.ts,tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La bozza porta scadeIl (BOZZA_VALE_MS, 2 ore): scaduta non si rimette e la cassa la toglie dal browser. La Navbar, montata su ogni pagina, butta a ogni caricamento la bozza scaduta o senza scadenza, e a ogni uscita dall'account (SIGNED_OUT) la butta comunque, anche da sessionStorage; la logica R19-008 resta intatta. La Cookie policy elenca mc_checkout_draft fra gli strettamente necessari, con durata «2 ore». Prova con orologio finto: cassa vera montata, il fratello dopo 2 h 01 trova il modulo vuoto, Anna dopo 1 h lo ritrova pieno."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prima (d25200a5): scadeIl di 2 ore; la Navbar butta la bozza scaduta a ogni caricamento e ogni bozza a SIGNED_OUT; voce nella Cookie policy. Correzione: la bozza la scrive sempre un ospite, quindi un «id di chi l'ha scritta» non c'è; minimo onesto: se l'account appena entrato ha indirizzi salvati, nome e telefono vengono dal suo indirizzo predefinito e non dalla bozza (l'indirizzo scritto resta, per R19-004). scadenzaDellaBozzaValida rifiuta scadeIl oltre sceltaIl + 2 ore o oltre adesso + 2 ore. La Cookie policy dice «dopo 2 ore non si usa più e si cancella alla tua visita successiva al sito». Dichiarato: la prova di R19-004 ora attende il telefono dell'account.",
+      "cosa_resta": "Il caso dell'ospite non si chiude senza una scelta: (1) in un account senza indirizzi salvati la bozza di un altro torna intera (nome, telefono, indirizzo, note); (2) in un account con indirizzi salvati tornano ancora indirizzo e note, come mattonella «Appena scritto». Il browser non sa se chi entra è chi ha scritto la bozza.",
+      "domanda": "Per la bozza scritta da ospite, al rientro in un account: la cassa chiede «Riprendi i dati scritti prima dell'accesso?» prima di rimetterli, oppure si lega la bozza al giro d'accesso con un gettone monouso nel returnTo (tocca la pagina di accesso e la callback, che non sono di R19)?",
+      "verificato_da": "collaudo lotto 3: giro ospite→accesso→cassa, uscita, bozza scaduta/senza scadenza, memoria che lancia, render lato server, R19-008 intatto → parziale per l'utente diverso. Il giro di correzione (8d9e830a) NON è stato ricollaudato: subagenti fermati dalla regista."
     },
     {
       "id": "R19-010",
@@ -127,8 +191,10 @@
     {
       "id": "R19-011",
       "chiave": "qa-flussi|buco nelle prove: con la carta e piu' negozi torna «ogni negozio fa consegnare il proprio» e nessuna prova diventa rossa",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "esito": "gia_riparato_prima",
+      "prova": "app/checkout/page.tsx:1685 (ramo paymentMethod==='card' del riquadro «prodotti da N negozi diversi») dice «Un unico pagamento, N ordini separati, uno per negozio. La consegna è una sola: il fattorino passa da tutti in un giro solo.»; «fa consegnare il proprio» non compare in nessun ramo. Prova nuova che monta la bozza 'card' con 2 negozi: npx vitest run tests/unit/riparazione-r19-carta-con-piu-negozi.test.tsx (commit 26194dc25e5acad1496a051c0ba86304def9c9fe). Con la frase vecchia rimessa nel ramo carta la prova diventa rossa; provato a mano e poi tolto con git checkout.",
+      "nota": "La prova rimessa non si applica: nessuna correzione da togliere (decisione della regista). La prova accende la carta compilando la pagina con tests/unit/aiuti/compila.mjs e cambiando CARTA_ACCESA = false in true solo nella copia compilata, perché CARTA_ACCESA è false al lancio e il ramo carta non si monta con la pagina vera. Nessun file del sito cambia.",
+      "verificato_da": "collaudo lotto 4: frase sbagliata assente in app/components/lib; su copia git archive rimesso il testo vecchio nel ramo carta → la prova nuova diventa rossa (uscita 1)."
     },
     {
       "id": "R19-012",
@@ -150,7 +216,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed242caf4e988e0582a9b3da5070fd16a96e5d1b^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-bozza-con-gli-orari.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Indirizzo, codice e metodo della bozza si rimettono al montaggio come prima. Giorno e fasce si rimettono in un effetto che aspetta la lettura del carrello, quindi con gli orari veri dei negozi. Prova: mercoledì 21:30, bozza «Domani · 7:30–9:00» da un forno che apre alle 9. Prima veniva rimessa e poi spostata dal selettore; ora non si rimette e resta la fascia di partenza della cassa."
+      "cosa_ho_fatto": "Indirizzo, codice e metodo della bozza si rimettono al montaggio come prima. Giorno e fasce si rimettono in un effetto che aspetta la lettura del carrello, quindi con gli orari veri dei negozi. Prova: mercoledì 21:30, bozza «Domani · 7:30–9:00» da un forno che apre alle 9. Prima veniva rimessa e poi spostata dal selettore; ora non si rimette e resta la fascia di partenza della cassa.",
+      "verificato_da": "collaudo lotto 3: carrello che arriva dopo il montaggio, StrictMode senza doppio giro, carrello riletto dopo una scelta del cliente, carrello in errore → regge."
     },
     {
       "id": "R19-013",
@@ -173,19 +240,37 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4296db3a67a7012d5f5d8d49bde75f10d349f620^ --file app/checkout/page.tsx,components/checkout/PaymentMethodSelector.tsx --prove tests/unit/riparazione-r19-contanti-sopra-il-tetto.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La cassa usa TETTO_CONTANTI_CENTS di lib/ordini/tetto-dei-contanti.ts sul lordo prima del credito: sopra 4.999,99 € i contanti sono spenti con la frase che spiega perché, il pulsante si ferma con lo stesso motivo e l'invio non parte; con la carta accesa si passa alla carta. La rotta COD controlla già il tetto lato server."
+      "cosa_ho_fatto": "La cassa usa TETTO_CONTANTI_CENTS di lib/ordini/tetto-dei-contanti.ts sul lordo prima del credito: sopra 4.999,99 € i contanti sono spenti con la frase che spiega perché, il pulsante si ferma con lo stesso motivo e l'invio non parte; con la carta accesa si passa alla carta. La rotta COD controlla già il tetto lato server.",
+      "verificato_da": "collaudo lotto 3 (subagente diverso): cassa montata al limite esatto 4.999,99/5.000,00, credito 1.000 su 5.200, due negozi da 2.600, ramo carta accesa (CARTA_ACCESA=true su copia) → regge; app/product/[id] non si rompe; tolta la correzione su copia la prova cade per il comportamento."
     },
     {
       "id": "R19-014",
       "chiave": "qa-flussi|se la cassa non riesce a leggere il carrello, il pulsante è spento ma il riepilogo dice «subtotale 0,00 € · spedizione gratis · totale 0,00 €»",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "esito": "riparato",
+      "commit": "ddc874a85b38c51a3c00f6aade1bfdf6785c5589",
+      "file_toccati": [
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-cassa-non-legge-il-carrello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-cassa-non-legge-il-carrello.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ddc874a85b38c51a3c00f6aade1bfdf6785c5589^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-cassa-non-legge-il-carrello.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il riepilogo e il pulsante erano già a posto (R19 S07). Restava la riga «Consegna a domicilio … Gratis» del passo 2, che ora scrive «—» se il carrello non è letto. Il riquadro d'errore ha il titolo «Non riesco a leggere il carrello.» e il bottone «Riprova» che rilegge la cassa.",
+      "verificato_da": "collaudo lotto 4 (subagente diverso): cassa intera montata con la lettura del carrello caduta in tre modi, testo letto tutto (barra fissa compresa): nessun 0,00/Gratis; «Riprova» rilegge → regge."
     },
     {
       "id": "R19-015",
       "chiave": "qa-flussi|stesso carrello entro 12 ore con un'altra fascia o un altro indirizzo: la cassa risponde «fatto» con l'ordine di prima",
       "esito": "riparato",
-      "commit": "50535dc85b1a295eec326bcafc04e751d7a5afe6",
+      "commit": "5f97f524a2aff1d58cc7fd15f715022949e1182e",
       "file_toccati": [
         "app/checkout/page.tsx"
       ],
@@ -198,22 +283,17 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50535dc85b1a295eec326bcafc04e751d7a5afe6^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-ripetuto-con-altra-fascia.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5f97f524a2aff1d58cc7fd15f715022949e1182e^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-ripetuto-con-altra-fascia.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La chiave resta legata al carrello, quindi il doppio clic è ancora protetto e non nasce un secondo ordine dopo una risposta persa (la nota del 5/11 della voce dice che fascia e indirizzo nell'impronta erano stati provati e tolti per questo). La cassa ricorda fascia e indirizzo del primo invio con quella chiave; se la rotta risponde «ripetuto» con una scelta diversa, invece di «Ordine effettuato!» un avviso dice che l'ordine valido è quello di prima (con fascia e indirizzo) e come cambiarlo."
-    },
-    {
-      "id": "R19-016",
-      "chiave": "qa-flussi|un carrello condiviso con più di cinquanta righe perde le ultime in silenzio, anche quelle disponibili",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
+      "cosa_ho_fatto": "Prima (50535dc8): la chiave resta legata al carrello (doppio clic protetto, come vuole la nota del 5/11); con «ripetuto» e un'altra fascia o un altro indirizzo un avviso dice che l'ordine valido è quello di prima. Correzione dei due minori del collaudo: (a) mc_just_ordered solo per un ordine nuovo, niente coriandoli dopo l'avviso; (b) la consegna del primo invio ricorda il giorno (delivery_date) e il confronto è giorno di Roma più orario, quindi «Domani · 9–11» di venerdì e «Oggi · 9–11» dopo la mezzanotte sono la stessa consegna.",
+      "verificato_da": "collaudo lotto 3: risposta persa + altra fascia/indirizzo, ricaricamento, altra scheda, doppio invio uguale → regge, con due minori. Il giro di correzione (5f97f524) NON è stato ricollaudato: subagenti fermati dalla regista."
     },
     {
       "id": "R19-017",
       "chiave": "qa-flussi|con la cassa aperta a mezzanotte, «domani» passa da sabato a domenica senza avviso e l'ordine nasce per il giorno dopo",
-      "esito": "riparato",
-      "commit": "79034f639837ac10d54555414a632d311b918589",
+      "esito": "parziale",
+      "commit": "46eac696b53a6a0f05542fa8d80ec23de19e5bf3",
       "file_toccati": [
         "components/checkout/DeliverySlotPicker.tsx",
         "app/checkout/page.tsx"
@@ -227,10 +307,22 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 79034f639837ac10d54555414a632d311b918589^ --file app/checkout/page.tsx,components/checkout/DeliverySlotPicker.tsx --prove tests/unit/riparazione-r19-mezzanotte-in-cassa.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46eac696b53a6a0f05542fa8d80ec23de19e5bf3^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-mezzanotte-in-cassa.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Punti ①②③ della cura. Quando il giorno di Roma cambia a cassa aperta, «Domani · 9:00–11:00» scelto venerdì sera diventa «Oggi · 9:00–11:00» (sabato) con fasciaAlGiornoDellOrdine, e una riga lo dice nominando la data. Se la fascia non si può più servire, la riga lo dice e chiede di scegliere. Un «Ordina» dopo la mezzanotte, prima di qualunque ridisegno, viene fermato: la cassa ridisegna, lo dice e chiede di ripremere. Prova con orologio finto (venerdì 6/11 23:59:30 ora di Roma, +91 s e +40 s). Il punto ④ (data nella richiesta, controllata dalla rotta) copre chi invia alle 23:59:59: è R09-011/R23-005, di R23."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prima (79034f63): punti ①②③, cioè «Domani» resta sul giorno scelto e la cassa lo dice, e un «Ordina» dopo la mezzanotte senza ridisegno si ferma. Correzione (punto ④, lato cassa): le richieste COD e carta portano anche delivery_date «AAAA-MM-GG» del giorno di Roma della fascia (null col ritiro); gli schemi zod delle rotte non sono strict, quindi il campo in più non rompe niente. Prova con orologio finto: premuto venerdì 6/11 alle 23:59:59.9 → «Domani · 9:00–11:00» più 2026-11-07; dopo la mezzanotte → «Oggi · 9:00–11:00» più 2026-11-07.",
+      "cosa_resta": "Il lato rotta: oggi le rotte giudicano la fascia col loro orologio e ignorano delivery_date. È anche R23-005 (lib/store-hours.ts, di R23).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "aggiungere a Body delivery_date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional().nullable(); leggere delivery_date e giudicare la fascia (negozioPuoServire / eConsegnaVeloce / giorno dell'ordine) su quel giorno di Roma; se manca, come oggi"
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "stessa cosa: delivery_date nello schema; il giorno usato a riga ~204 (giornoDiPiacenza(new Date())) e nei controlli della fascia viene da delivery_date se c'è; se manca, come oggi"
+        }
+      ],
+      "verificato_da": "collaudo lotto 3: orologio finto alle 23:59:30 +91 s nei due cambi d'ora, domenica chiusa, invio dopo mezzanotte → ①②③ reggono; ④ scoperto. Il giro di correzione (46eac696) NON è stato ricollaudato: subagenti fermati dalla regista."
     },
     {
       "id": "R19-018",
@@ -309,18 +401,6 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Dopo il 200 la pagina mostra «Password cambiata: accedi con quella nuova», chiama supabase.auth.signOut({ scope: 'local' }) dentro un try e va a /sign-in?returnTo=%2Fprofile%2Fsettings. La rotta non cambia: continua a chiudere anche tutte le altre sessioni. Se la rotta dà errore la pagina resta com'era. La prova monta la pagina vera con un Supabase finto.",
       "verificato_da": "collaudo lotto 2: prova 2/2, rimessa regge, 99 prove vicine verdi, sonda di 6 casi (signOut che lancia o dà errore, 500/429/503, 200 senza JSON); l avviso resta visibile su /sign-in. Nota: con auth-js 2.106.1 signOut({scope:local}) chiama /logout e, se fallisce per rete o 5xx, non toglie la sessione locale (app/profile/settings/page.tsx:314-318): finestra stretta."
-    },
-    {
-      "id": "R19-022",
-      "chiave": "sicurezza-auth|commento e prova dicono che senza la chiave di servizio il drop spento risponde comunque 409, ma la rotta vera in quel caso risponde 503",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
-    },
-    {
-      "id": "R19-023",
-      "chiave": "stati-ui|se la lettura del profilo non riesce, il negoziante approvato legge che il suo account non è da venditore e gli viene proposto di iscriversi di nuovo",
-      "esito": "non_fatto",
-      "nota": "in attesa del lotto"
     }
   ],
   "nuovi_difetti_visti": [
@@ -351,15 +431,37 @@
       "severita": "minore",
       "file": "components/LocationPill.tsx:81",
       "descrizione": "Se localStorage lancia (navigazione privata o blocchi), la barra va in errore al montaggio. Visto dal collaudo del lotto 2."
+    },
+    {
+      "titolo": "La scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "app/product/[id]/page.tsx:1205",
+      "descrizione": "Il pulsante «Compra ora · paghi alla consegna» compare anche per un pezzo sopra 5.000 €; poi la cassa spegne i contanti e lo spiega. Visto dal collaudo del lotto 3."
+    },
+    {
+      "titolo": "Con il carrello non letto la tessera «Adesso» resta su «Sto controllando…» per sempre",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/checkout/page.tsx:686-688",
+      "descrizione": "Senza gruppi la risposta non viene mai messa. Visto dal collaudo del lotto 4."
+    },
+    {
+      "titolo": "Il lavoro «Unit tests» della CI non installa Chromium: la misura vera di R19-007 lì si salta",
+      "dimensione": "qa",
+      "severita": "minore",
+      "file": ".github/workflows/ci.yml:91-142",
+      "descrizione": "Il lavoro unit-tests non lancia npx playwright install chromium; la misura di R19-007 si salta dichiarandolo e resta la prova delle classi. Basta aggiungere npx playwright install --with-deps chromium prima di npm run test."
     }
   ],
   "domande_per_nicola": [
     "R19-001: riapriamo il reclutamento dei fattorini dal sito (il fattorino in attesa arriva al modulo dei documenti)? Oggi la decisione del 26/10 lo tiene fuori.",
     "R19-018: per il tetto di attesa del portiere sulla sessione vale «qualunque tessera → 10 s» o «10 s solo se la tessera scade entro 2 minuti, altrimenti 3 s»? (stessa domanda lasciata aperta da R06-008)",
-    "R19-009: la bozza della cassa (nome, telefono, indirizzo) ora scade dopo 2 ore. Va bene, o la teniamo fino al mattino dopo per chi conferma l email il giorno seguente (scenario R03-025)? Basta cambiare BOZZA_VALE_MS in lib/bozza-checkout.ts e la durata nella pagina dei cookie."
+    "R19-009: la bozza della cassa (nome, telefono, indirizzo) ora scade dopo 2 ore. Va bene, o la teniamo fino al mattino dopo per chi conferma l email il giorno seguente (scenario R03-025)? Basta cambiare BOZZA_VALE_MS in lib/bozza-checkout.ts e la durata nella pagina dei cookie.",
+    "R19-009: per la bozza scritta da ospite, al rientro in un account, la cassa chiede «Riprendi i dati scritti prima dell accesso?» prima di rimetterli, oppure si lega la bozza al giro d accesso con un gettone monouso?"
   ],
   "conto": {
-    "agenti": 4,
-    "nota": ""
+    "agenti": 9,
+    "nota": "Lotto 5 (R19-002, 005, 016, 022, 023) non partito: la regista ha fermato la sessione a 40,4 $ (tetto 35 $). Il giro di correzione non è stato ricollaudato. 9 subagenti su 12."
   }
 }
