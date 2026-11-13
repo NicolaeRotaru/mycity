@@ -244,27 +244,42 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       }
       return res.json();
     },
-    onSuccess: (_risposta, inviato) => {
-      // 13/11/2026 (R22-003) — Qui c'era `setText('')`: cancellava anche quello che si era scritto
-      // mentre il messaggio partiva. «Ciao», invio, « arrivo subito»: partiva solo «Ciao» e il
-      // resto spariva dal campo senza essere inviato. Si toglie solo il testo partito davvero.
-      setText((attuale) => {
-        const scritto = attuale.trimStart();
-        return scritto.startsWith(inviato) ? scritto.slice(inviato.length).trimStart() : attuale;
-      });
+    onSuccess: () => {
       // Niente refetch: il Realtime ci aggiorna; ma se per qualche motivo
       // non arriva subito, invalida dopo 1s come safety net.
       setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.messages.byParam(params.id) }), 1000);
+      invioFinito();
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown, inviato: string) => {
+      toast.error(friendlyError(err));
+      // Il campo si è svuotato all'invio: se l'invio cade il testo torna, davanti a quello nuovo.
+      setText((attuale) => (attuale ? `${inviato} ${attuale}` : inviato));
+      invioFinito();
+    },
   });
+
+  // 13/11/2026 (R22-003) — Il campo si svuota al momento dell'invio. Un secondo Invio mentre il
+  // primo è in volo va in coda e parte quando il primo finisce (prima veniva ignorato in silenzio,
+  // oppure `setText('')` a risposta arrivata cancellava anche il testo scritto nel frattempo).
+  const inVolo = useRef(false);
+  const coda = useRef<string[]>([]);
+  const partire = (testo: string) => {
+    inVolo.current = true;
+    sendMutation.mutate(testo);
+  };
+  function invioFinito() {
+    inVolo.current = false;
+    const prossimo = coda.current.shift();
+    if (prossimo !== undefined) partire(prossimo);
+  }
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = text.trim();
-    // Il doppio invio lo ferma questo controllo, non lo spegnimento del campo.
-    if (!trimmed || sendMutation.isPending) return;
-    sendMutation.mutate(trimmed);
+    if (!trimmed) return;
+    setText('');
+    if (inVolo.current) coda.current.push(trimmed);
+    else partire(trimmed);
   };
 
   if (!userId) return <LoadingState />;
@@ -436,7 +451,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           />
           <button
             type="submit"
-            disabled={sendMutation.isPending || !text.trim()}
+            disabled={!text.trim()}
             aria-label="Invia"
             className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white rounded-full p-3"
           >

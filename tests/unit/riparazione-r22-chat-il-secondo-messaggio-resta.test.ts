@@ -27,6 +27,7 @@ const CONVERSAZIONE = {
 const fetchDiPrima = globalThis.fetch;
 let inviati: string[] = [];
 let rispondi: (() => void) | null = null;
+let fallisci: (() => void) | null = null;
 
 function campo(radice: HTMLElement) {
   return radice.querySelector('input[aria-label="Scrivi un messaggio"]') as HTMLInputElement;
@@ -51,6 +52,7 @@ function invia(radice: HTMLElement) {
 beforeEach(() => {
   inviati = [];
   rispondi = null;
+  fallisci = null;
   window.HTMLElement.prototype.scrollIntoView = () => undefined;
   globalThis.fetch = ((url: unknown, init?: { body?: string }) => {
     if (!String(url).includes('/api/chat/messages')) return Promise.resolve({ ok: true, json: async () => ({}) });
@@ -58,6 +60,7 @@ beforeEach(() => {
     // La risposta del server arriva quando lo dice la prova: nel frattempo si scrive.
     return new Promise((ok) => {
       rispondi = () => ok({ ok: true, json: async () => ({ id: 'm9', createdAt: '2026-11-13T09:00:00Z' }) });
+      fallisci = () => ok({ ok: false, json: async () => ({ error: 'no' }) });
     });
   }) as unknown as typeof fetch;
   globali.__UTENTE__ = { id: 'assistenza' };
@@ -87,8 +90,9 @@ describe('R22-003 · quello che si scrive mentre il primo messaggio parte non sp
     await attendi();
     expect(inviati).toEqual(['Ciao']);
 
-    // Il primo è ancora in volo: si continua a scrivere.
-    scrivi(s.radice, 'Ciao arrivo subito');
+    // Il campo si è svuotato all'invio. Il primo è ancora in volo: si continua a scrivere.
+    expect(campo(s.radice).value).toBe('');
+    scrivi(s.radice, 'arrivo subito');
 
     // Arriva la risposta del primo.
     await act(async () => {
@@ -99,6 +103,63 @@ describe('R22-003 · quello che si scrive mentre il primo messaggio parte non sp
     expect(campo(s.radice).value, 'il testo scritto mentre il primo partiva è sparito dal campo senza essere inviato').toBe(
       'arrivo subito',
     );
+    s.smonta();
+  }, 60000);
+
+  it('campo riscritto con lo stesso inizio del messaggio partito: a invio riuscito il nuovo testo resta intero', async () => {
+    const mod = await monta('app/messages/[id]/page.tsx');
+    const s = accendi(mod.default, { params: { id: 'c1' } });
+    await attendi();
+    await attendi();
+    scrivi(s.radice, 'Sì');
+    invia(s.radice);
+    await attendi();
+    scrivi(s.radice, 'Sì, alle 10 va bene');
+    await act(async () => {
+      rispondi?.();
+      await Promise.all(globali.__MUTAZIONI_IN_VOLO__ as Promise<unknown>[]);
+    });
+    expect(campo(s.radice).value, 'il nuovo messaggio con lo stesso inizio è stato mutilato').toBe('Sì, alle 10 va bene');
+    s.smonta();
+  }, 60000);
+
+  it('se l\'invio fallisce il testo torna nel campo, senza sovrascrivere quello nuovo', async () => {
+    const mod = await monta('app/messages/[id]/page.tsx');
+    const s = accendi(mod.default, { params: { id: 'c1' } });
+    await attendi();
+    await attendi();
+    scrivi(s.radice, 'Ciao');
+    invia(s.radice);
+    await attendi();
+    scrivi(s.radice, 'arrivo subito');
+    await act(async () => {
+      fallisci?.();
+      await Promise.all(globali.__MUTAZIONI_IN_VOLO__ as Promise<unknown>[]);
+    });
+    expect(campo(s.radice).value).toBe('Ciao arrivo subito');
+    s.smonta();
+  }, 60000);
+
+  it('secondo Invio durante il volo: il secondo messaggio parte quando il primo finisce', async () => {
+    const mod = await monta('app/messages/[id]/page.tsx');
+    const s = accendi(mod.default, { params: { id: 'c1' } });
+    await attendi();
+    await attendi();
+    scrivi(s.radice, 'Ciao');
+    invia(s.radice);
+    await attendi();
+    scrivi(s.radice, 'arrivo subito');
+    expect((s.radice.querySelector('button[aria-label="Invia"]') as HTMLButtonElement).disabled).toBe(false);
+    invia(s.radice);
+    await attendi();
+    expect(inviati, 'il secondo parte solo quando il primo è finito').toEqual(['Ciao']);
+    expect(campo(s.radice).value).toBe('');
+    await act(async () => {
+      rispondi?.();
+      await Promise.all(globali.__MUTAZIONI_IN_VOLO__ as Promise<unknown>[]);
+    });
+    await attendi();
+    expect(inviati, 'il secondo messaggio è stato ignorato').toEqual(['Ciao', 'arrivo subito']);
     s.smonta();
   }, 60000);
 
