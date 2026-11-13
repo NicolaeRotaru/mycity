@@ -170,6 +170,15 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     expect(await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
   });
 
+  it('secondo collaudo · a Nominatim non va il CAP di Piacenza (29100), quello di un altro comune sì', async () => {
+    risposta = [CENTRO];
+    await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29100' });
+    expect(chiamate[0].searchParams.get('postalcode')).toBeNull();
+    risposta = [QUARTO_GOSSOLENGO];
+    await dalServer({ address: 'Via Roma 15', city: 'Quarto', zip: '29020' });
+    expect(chiamate[1].searchParams.get('postalcode')).toBe('29020');
+  });
+
   it('collaudo · «Piacenza PC» e un CAP storpiato («2912 Piacenza») restano chiusi nel riquadro', async () => {
     risposta = [CENTRO];
     await dalServer({ address: 'Via Roma 10', city: 'Piacenza PC', zip: '29121' });
@@ -195,7 +204,7 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     const p = chiamate[0].searchParams;
     expect(p.get('street')).toBe('Via Roma 10');
     expect(p.get('city')).toBe('Piacenza');
-    expect(p.get('postalcode')).toBe('29121');
+    expect(p.get('postalcode')).toBeNull(); // il CAP della città serve solo a ordinare i risultati
     expect(p.get('bounded')).toBe('1');
     expect(p.get('viewbox')).toBeTruthy();
     expect(Number(p.get('limit'))).toBeGreaterThan(1);

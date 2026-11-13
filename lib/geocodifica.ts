@@ -187,7 +187,9 @@ async function trovaLaPosizione(frase: string): Promise<PosizioneTrovata | null>
     addressdetails: '1',
     limit: '5',
   });
-  if (cercato.cap) params.set('postalcode', cercato.cap);
+  // 13/11/2026 (R13-001, secondo collaudo): a Piacenza un CAP della città non va alle mappe (29100
+  // non c'è più, e 29121 per una via in 29122 potrebbe svuotare la risposta): serve solo a ordinare.
+  if (cercato.cap && !(chiusaNelRiquadro && CAP_DELLA_CITTA.has(cercato.cap))) params.set('postalcode', cercato.cap);
   if (chiusaNelRiquadro) {
     const r = RIQUADRO_PIACENZA;
     params.set('viewbox', `${r.ovest},${r.nord},${r.est},${r.sud}`);
