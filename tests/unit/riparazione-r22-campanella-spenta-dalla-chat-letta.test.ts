@@ -18,7 +18,8 @@ const CONV = '33333333-3333-4333-8333-333333333333';
 const ALTRA = '44444444-4444-4444-8444-444444444444';
 
 type Riga = Record<string, unknown>;
-const db: { utente: { id: string }; conv: Riga; notifiche: Riga[]; ruoli: Riga[] } = {
+const db: { utente: { id: string }; conv: Riga; notifiche: Riga[]; ruoli: Riga[]; letturaNelMezzo: boolean } = {
+  letturaNelMezzo: false,
   utente: { id: BUYER },
   conv: {},
   notifiche: [],
@@ -65,6 +66,8 @@ function client() {
                 // Il trigger della 026: alza il contatore di chi riceve.
                 if (m.sender_id === db.conv.buyer_id) db.conv.seller_unread_count = Number(db.conv.seller_unread_count) + 1;
                 else db.conv.buyer_unread_count = Number(db.conv.buyer_unread_count) + 1;
+                // Corsa: chi riceve ha la chat aperta e legge prima che la campanella sia scritta.
+                if (db.letturaNelMezzo) { db.conv.seller_unread_count = 0; db.conv.buyer_unread_count = 0; }
                 return { data: { id: `m-${Math.random()}`, created_at: '2026-11-13T09:00:00Z' }, error: null };
               },
             }),
@@ -107,6 +110,7 @@ const vociAccese = (utente: string, link: string) =>
   db.notifiche.filter((n) => n.user_id === utente && n.link === link && n.is_read === false).length;
 
 beforeEach(() => {
+  db.letturaNelMezzo = false;
   db.conv = { id: CONV, buyer_id: BUYER, seller_id: SELLER, buyer_unread_count: 0, seller_unread_count: 0 };
   db.ruoli = [{ id: BUYER, role: 'buyer' }, { id: SELLER, role: 'seller' }];
   db.notifiche = [
@@ -144,5 +148,13 @@ describe('R22-009 · aprire la chat spegne anche la sua voce in campanella', () 
     expect(vociAccese(SELLER, `/messages/${CONV}`)).toBe(0);
     expect(vociAccese(SELLER, `/messages/${ALTRA}`)).toBe(1);
     expect(vociAccese(BUYER, `/messages/${CONV}`)).toBe(1);
+  });
+
+  it('corsa: se chi riceve ha già letto (contatore a 0) la voce non si crea', async () => {
+    db.letturaNelMezzo = true;
+    db.utente = { id: BUYER };
+    const r = await chiama(inviaMessaggio, '/api/chat/messages', { conversationId: CONV, body: 'Avete il pane?' });
+    expect(r.status).toBe(200);
+    expect(vociAccese(SELLER, `/messages/${CONV}`), 'voce accesa per una chat già letta').toBe(0);
   });
 });
