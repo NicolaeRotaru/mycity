@@ -8,13 +8,15 @@ interface Props {
   description?: string;
   icon?: ReactNode;
   defaultOpen?: boolean;
+  /** R21-004 — Si apre da sola quando dentro c'è qualcosa da correggere. */
+  forzaApertura?: boolean;
   children: ReactNode;
 }
 
 /** Sezione collassabile per l'editor vetrina (native <details> = accessibile). */
-export default function CustomizationSection({ title, description, icon, defaultOpen = false, children }: Props) {
+export default function CustomizationSection({ title, description, icon, defaultOpen = false, forzaApertura = false, children }: Props) {
   return (
-    <details open={defaultOpen} className="group border border-cream-300 rounded-xl bg-white overflow-hidden">
+    <details open={defaultOpen || forzaApertura} className="group border border-cream-300 rounded-xl bg-white overflow-hidden">
       <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:bg-cream-50">
         {icon && <span className="text-primary-600 shrink-0">{icon}</span>}
         <span className="flex-1 min-w-0">
