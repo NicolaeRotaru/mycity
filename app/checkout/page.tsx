@@ -1513,6 +1513,14 @@ export default function CheckoutPage() {
               onSubmit={handleSubmit}
               onApplySavedAddress={applySavedAddress}
             />
+            {/* R19-003 — L'avviso «fuori zona» sta anche qui, accanto all'indirizzo: sul telefono il
+                riepilogo è in fondo e chi scrive l'indirizzo lo scoprirebbe all'ultimo tocco. */}
+            {fuoriZona && (
+              <div role="alert" data-avviso="fuori-zona" className="mt-3 flex items-start gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span>{motivoFuoriZona(gruppoFuoriZona?.storeName)}</span>
+              </div>
+            )}
           </StepCard>
 
           {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
