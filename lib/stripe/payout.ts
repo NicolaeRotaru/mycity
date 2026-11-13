@@ -1161,6 +1161,10 @@ async function addebitaQuotaVenditoreSeNonPagato(
   giaStornato: number,
 ): Promise<number> {
   if (giaStornato !== 0 || sellerShare <= 0 || order.payout_status === 'TRANSFERRED') return giaStornato;
+  // 13/11/2026 (R17-024) — Il bonifico è già uscito e uno storno di prima non è riuscito: il giro non lo
+  // paga più, quindi una quota «tolta dal bonifico da fare» resterebbe solo sulla carta. Si riprende a
+  // mano (vedi `refundOrder`), come fa il rimborso dal cruscotto (rimborsi-da-fuori.ts, 'a-mano').
+  if (order.payout_status === 'REVERSAL_FAILED') return giaStornato;
 
   /**
    * 16/10/2026 (quinto riesame del lotto) — LA QUOTA SI SOMMA A QUELLA DI ADESSO.
@@ -2242,7 +2246,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // giro — e si scrive DOPO lo storno, come prima della semplificazione: scritto
   // col segno, un tentativo morto in mezzo lasciava «REVERSED» senza storno, e la
   // ripresa non chiamava piu' Stripe (`reverseOrderTransfer` guarda TRANSFERRED).
-  const statoDelNegozio = isFull ? { payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED' } : {};
+  // 13/11/2026 (R17-024) — Su REVERSAL_FAILED (bonifico uscito, uno storno di prima non riuscito) lo stato
+  // non si tocca: è il segno «da recuperare a mano», e REFUNDED lo cancellava.
+  const statoDelNegozio = isFull && order.payout_status !== 'REVERSAL_FAILED'
+    ? { payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED' }
+    : {};
 
   // 17/10/2026 — L'avviso del bonifico da fare, con tutto quello che serve per
   // pagare (lib/rimborsi/bonifici-da-fare.ts). Una riga per amministratore, con
@@ -2475,6 +2483,28 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
   const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  // 13/11/2026 (R17-024) — IL BONIFICO E' USCITO E UNO STORNO DI PRIMA NON E' RIUSCITO: SI DICE, A MANO.
+  // Lo storno qui sopra parte solo su TRANSFERRED e la quota non scende dal bonifico (già partito): senza
+  // questo avviso i soldi restavano al negozio e nessuno lo sapeva. Col rimborso pieno la cifra è tutto
+  // quello che il negozio tiene ancora (il netto meno quanto è già rientrato), non solo questa quota.
+  if (order.payout_status === 'REVERSAL_FAILED' && sellerShare > 0) {
+    const daRiprendere = isFull ? Math.max(0, sellerNet - Number(order.seller_payout_reversed_cents ?? 0)) : sellerShare;
+    try {
+      await notifyAdmins(
+        '⚠️ Quota del negozio da recuperare a mano',
+        `Il rimborso di ${formatPriceFromCents(safeAmountCents)} sull'ordine ${order.id} è uscito. Il bonifico al negozio era già partito e uno storno ` +
+          `precedente su questo ordine non è riuscito: ` +
+          (isFull
+            ? `l'ordine è rimborsato per intero e al negozio vanno ripresi in tutto ${formatPriceFromCents(daRiprendere)} (il netto meno quanto è già rientrato). `
+            : `ai soldi da riprendere al negozio si aggiungono ${formatPriceFromCents(daRiprendere)}. `) +
+          "Prima di stornarli a mano, guarda su Stripe (Connect → il bonifico dell'ordine → Storni) quanto è già rientrato.",
+        '/admin/orders',
+        { unaVoltaPer: `quota-a-mano:${order.id}:${chiave}` },
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso della quota da recuperare a mano non inviato', { orderId: order.id, centesimi: daRiprendere, e });
+    }
+  }
   if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
     await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
   }
