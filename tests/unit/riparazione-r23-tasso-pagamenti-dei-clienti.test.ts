@@ -109,12 +109,14 @@ describe('R23-008 — il tasso dei pagamenti è quello dei clienti', () => {
 
     const righe = stato.db.tabelle.payment_attempts ?? [];
     expect(righe.map((r) => r.payment_intent_id), 'i pagamenti dei negozi sono finiti nel tasso dei clienti').toEqual(['pi_ordine', 'pi_buono']);
+    // Il tentativo del buono sa di chi è, come quello dell'ordine.
+    expect(righe.map((r) => r.user_id), 'il tentativo del buono resta senza cliente').toEqual(['u1', 'cliente-1']);
     expect(tasso(), '2 su 4 = la cassa dei clienti sembra rotta a metà').toMatchObject({ riusciti: 2, tentativi: 2, tasso: 1 });
   });
 
   it('la cassa del buono regalo mette il segno anche sul pagamento, non solo sulla sessione', async () => {
     await pagamentoDelBuono();
-    expect(stato.parametriCassa?.payment_intent_data?.metadata).toMatchObject({ kind: 'gift_card', buyer_id: 'cliente-1' });
+    expect(stato.parametriCassa?.payment_intent_data?.metadata).toMatchObject({ kind: 'gift_card', buyer_user_id: 'cliente-1' });
     // E la sessione resta com'era: il webhook del buono la riconosce dal suo `kind`.
     expect(stato.parametriCassa?.metadata?.kind).toBe('gift_card');
   });

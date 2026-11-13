@@ -91,8 +91,9 @@ export const POST = withAuthRateLimit(
             message: (body.message ?? '').slice(0, 500),
           },
           // R23-008 — Il segno arriva anche sul pagamento: il tasso dei pagamenti riusciti conta
-          // il buono come acquisto di un cliente (lib/stripe/webhook/pagamenti.ts).
-          payment_intent_data: { metadata: { kind: 'gift_card', buyer_id: user.id } },
+          // il buono come acquisto di un cliente (lib/stripe/webhook/pagamenti.ts). Il cliente col
+          // nome che legge il registro dei tentativi, come la cassa degli ordini: `buyer_user_id`.
+          payment_intent_data: { metadata: { kind: 'gift_card', buyer_user_id: user.id } },
           success_url: `${env.appUrl()}/profile/gift-cards?giftcard=success`,
           cancel_url: `${env.appUrl()}/profile/gift-cards?giftcard=canceled`,
         },
