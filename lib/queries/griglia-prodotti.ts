@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { attachSellerProfiles, fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { NEW_PRODUCT_DAYS } from '@/lib/constants';
 
 /**
  * LA LETTURA CHE STA SOTTO OGNI GRIGLIA DI PRODOTTI DEL SITO.
@@ -52,6 +53,8 @@ export interface DomandaGriglia {
   apertiOra?: string[];
   /** Prodotti con voto almeno N (già risolti dal chiamante) — assente = filtro spento. */
   idsColVoto?: string[];
+  /** Solo i prodotti pubblicati da questo istante in poi (ISO) — assente = filtro spento. */
+  creatiDal?: string;
   /** Quante righe chiedere al database. */
   tetto: number;
   /**
@@ -75,6 +78,19 @@ export interface DomandaGriglia {
 }
 
 const COLONNE = 'id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id';
+
+/**
+ * 13/11/2026 (R15-011) — LA FINESTRA DELLE NOVITÀ.
+ *
+ * «Novità» era il catalogo intero ordinato per data. Una novità è un prodotto «Nuovo» come lo
+ * dice la scheda (`NEW_PRODUCT_DAYS`, 14 giorni): l'inizio della finestra si arrotonda all'ora
+ * perché finisce nella chiave della cache e non deve cambiare a ogni render.
+ */
+export function inizioFinestraNovita(adesso: Date = new Date(), giorni: number = NEW_PRODUCT_DAYS): string {
+  const dal = new Date(adesso.getTime() - giorni * 86_400_000);
+  dal.setUTCMinutes(0, 0, 0);
+  return dal.toISOString();
+}
 
 /** Quanti risultati chiedere alla ricerca del database: mai più della finestra a schermo. */
 const TETTO_PERTINENZA = 200;
@@ -118,6 +134,25 @@ async function conLeSueSottocategorie(supabase: SupabaseClient, id: string): Pro
   if (error) return [id];
   const figlie = ((data ?? []) as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
   return [id, ...figlie];
+}
+
+/** I filtri che la lettura e il conteggio devono applicare uguali. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; or: any }>(
+  q: Q,
+  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
+  categorie: string[] | null,
+): Q {
+  if (categorie) q = q.in('category_id', categorie);
+  if (d.sellerId) q = q.eq('seller_id', d.sellerId);
+  if (d.maxPrice !== undefined) q = q.lte('price', d.maxPrice);
+  if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
+  // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
+  // disponibilità illimitata.
+  if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
+  if (d.apertiOra !== undefined) q = q.in('seller_id', d.apertiOra);
+  if (d.creatiDal) q = q.gte('created_at', d.creatiDal);
+  return q;
 }
 
 export async function leggiProdottiDellaGriglia(
@@ -177,16 +212,9 @@ export async function leggiProdottiDellaGriglia(
     // una riga saltata o una riga vista due volte fra una pagina e l'altra.
     q = q.order('id', { ascending: false });
 
-    if (categorieDaLeggere) q = q.in('category_id', categorieDaLeggere);
-    if (d.sellerId) q = q.eq('seller_id', d.sellerId);
+    q = applicaFiltriComuni(q, d, categorieDaLeggere);
     // Col ramo pertinenza il filtro sul testo l'ha già fatto il database, meglio di così.
     if (termine && !perPertinenza) q = q.ilike('name', `%${termine}%`);
-    if (d.maxPrice !== undefined) q = q.lte('price', d.maxPrice);
-    if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
-    // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
-    // disponibilità illimitata.
-    if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
-    if (d.apertiOra !== undefined) q = q.in('seller_id', d.apertiOra);
     if (soloConVoto && !perPertinenza) q = q.in('id', d.idsColVoto!);
     return q;
   };
@@ -241,4 +269,34 @@ export async function leggiProdottiDellaGriglia(
     'id, store_name, store_hours, is_approved',
   );
   return attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved) as RigaGriglia[];
+}
+
+/**
+ * 13/11/2026 (R15-011) — QUANTI SONO DAVVERO, NON QUANTI NE SONO ARRIVATI.
+ *
+ * Il numero sopra la griglia contava le schede già caricate (96, poi 192…): su 345 prodotti
+ * diceva «96». Qui il database conta tutti quelli che passano gli stessi filtri della lettura
+ * (senza la pertinenza: con un testo si conta per nome). `null` = non lo so: chi chiama ripiega
+ * sulle schede caricate invece di scrivere «0».
+ */
+export async function contaProdottiDellaGriglia(
+  supabase: SupabaseClient,
+  d: Omit<DomandaGriglia, 'sort' | 'tetto' | 'finestra'>,
+): Promise<number | null> {
+  if (d.apertiOra !== undefined && d.apertiOra.length === 0) return 0;
+  if (d.idsColVoto !== undefined && d.idsColVoto.length === 0) return 0;
+  const categorie =
+    d.categoryIds && d.categoryIds.length > 0
+      ? d.categoryIds
+      : d.categoryId
+        ? await conLeSueSottocategorie(supabase, d.categoryId)
+        : null;
+  let q = supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'available');
+  q = applicaFiltriComuni(q, d, categorie);
+  const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
+  if (termine) q = q.ilike('name', `%${termine}%`);
+  if (d.idsColVoto !== undefined) q = q.in('id', d.idsColVoto);
+  const { count, error } = await q;
+  if (error || count == null) return null;
+  return count;
 }
