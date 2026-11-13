@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { Camera, Eye, Trash2, Upload, Clock } from 'lucide-react';
@@ -20,9 +20,18 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 /** Il magazzino delle storie. La sua regola sta in lib/storage/regole-secchi.ts, non qui. */
 const SECCHIO_STORIE = 'stories';
+
+/**
+ * R16-011 — Il link della storia porta solo a una pagina di MyCity. La regola è quella dei ritorni
+ * dopo l'accesso (lib/safe-redirect.ts); la usa anche il visore delle storie, e il database la
+ * controlla con un CHECK (migrazione 403).
+ */
+const LINK_NON_VALIDO =
+  'Il link deve portare a una pagina di MyCity: scrivi la parte dell\'indirizzo che comincia con «/», per esempio /promozioni. I siti esterni non si possono collegare.';
 
 /**
  * Seller: gestione Storie (instagram-like, 24h).
@@ -54,6 +63,12 @@ export default function SellerStoriesPage() {
   const [caption, setCaption] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  /**
+   * 13/11/2026 (R16-012) — Il freno del doppio clic. Il bottone guardava solo `uploading`, che si
+   * accendeva dentro la mutazione DOPO la lettura dell'utente: al secondo tocco il bottone era
+   * ancora attivo, e la stessa storia si pubblicava due volte. Questo si accende subito, nel clic.
+   */
+  const pubblicazioneInCorso = useRef(false);
 
   const queryStories = useQuery({
     queryKey: queryKeys.seller.myStories,
@@ -79,10 +94,14 @@ export default function SellerStoriesPage() {
   const create = useMutation({
     mutationFn: async () => {
       if (!image) throw new Error('Seleziona un\'immagine');
+      // R16-011 — prima si salvava qualunque indirizzo, anche un sito esterno. Si controlla prima di
+      // caricare la foto, così un link sbagliato non lascia una foto orfana nel magazzino.
+      const link = linkUrl.trim();
+      const linkInterno = link ? safeInternalPath(link, '') : '';
+      if (link && !linkInterno) throw new Error(LINK_NON_VALIDO);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      setUploading(true);
       /**
        * 8/9/2026 — LA STORIA NON SI COSTRUISCE PIU' DA SOLA IL PERCORSO NE' LA REGOLA.
        *
@@ -122,7 +141,7 @@ export default function SellerStoriesPage() {
         seller_id: user.id,
         image_url: publicUrl,
         caption: caption.trim() || null,
-        link_url: linkUrl.trim() || null,
+        link_url: linkInterno || null,
       });
       if (error) throw error;
     },
@@ -136,8 +155,18 @@ export default function SellerStoriesPage() {
       qc.invalidateQueries({ queryKey: queryKeys.seller.storiesActive });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
-    onSettled: () => setUploading(false),
+    onSettled: () => {
+      pubblicazioneInCorso.current = false;
+      setUploading(false);
+    },
   });
+
+  function pubblica() {
+    if (pubblicazioneInCorso.current) return;
+    pubblicazioneInCorso.current = true;
+    setUploading(true);
+    create.mutate();
+  }
 
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -152,9 +181,19 @@ export default function SellerStoriesPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  /**
+   * 13/11/2026 (R16-013) — Attiva o scaduta si decide con la stessa regola dei clienti: la storia
+   * si vede finché `expires_at` è dopo adesso (il carosello in home e la regola di lettura del
+   * database). Prima lo diceva un numero di ore arrotondato: sotto la mezz'ora faceva 0, e il negozio
+   * leggeva «scaduta» una storia che i clienti vedevano ancora. Le ore rimaste si arrotondano per
+   * eccesso: «1h» vuol dire «entro un'ora».
+   */
+  function storiaAttiva(expiresAt: string): boolean {
+    return new Date(expiresAt).getTime() > Date.now();
+  }
   function hoursLeft(expiresAt: string): number {
     const ms = new Date(expiresAt).getTime() - Date.now();
-    return Math.max(0, Math.round(ms / 3600_000));
+    return Math.max(0, Math.ceil(ms / 3600_000));
   }
 
   const vista = vistaDaQuery(queryStories);
@@ -191,7 +230,7 @@ export default function SellerStoriesPage() {
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {stories.map((s) => {
             const hours = hoursLeft(s.expires_at);
-            const active = hours > 0;
+            const active = storiaAttiva(s.expires_at);
             return (
               <li key={s.id} className="relative bg-white border border-cream-300 rounded-xl overflow-hidden">
                 <div className="relative aspect-[3/4]">
@@ -238,7 +277,7 @@ export default function SellerStoriesPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
-            <Button onClick={() => create.mutate()} disabled={uploading || !image} icon={Upload}>
+            <Button onClick={pubblica} disabled={create.isPending || uploading || !image} icon={Upload}>
               {uploading ? 'Carico…' : 'Pubblica (24h)'}
             </Button>
           </>
@@ -265,7 +304,7 @@ export default function SellerStoriesPage() {
                 )}
               </div>
               <Textarea
-                label="Caption (1 frase)"
+                label="Scritta sotto la foto (una frase)"
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 maxLength={140}
@@ -274,10 +313,12 @@ export default function SellerStoriesPage() {
                 className="bg-cream-50 resize-none"
               />
               <Input
-                label="Link prodotto/categoria (facoltativo)"
+                // R16-007 — l'esempio è un link che la regola del salvataggio accetta (R16-011).
+                label="Pagina del sito (facoltativo)"
+                hint="Il bottone «Scopri di più» porta a una pagina di MyCity: copia il suo indirizzo dal primo «/» dopo il nome del sito, per esempio /promozioni."
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="/category/alimentari"
+                placeholder="/promozioni"
                 className="bg-cream-50"
               />
           </div>

@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
@@ -70,7 +70,10 @@ function NewProductInner() {
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
 
-  const { data: categories = [] } = useQuery({
+  // R16-021 — Il ripiego `= []` faceva passare una lettura caduta per «non ci sono categorie»:
+  // il modulo chiedeva di sceglierne una che non c'era. Come in «Modifica prodotto», senza
+  // categorie il modulo non si apre e la pagina lo dice con «Riprova».
+  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, refetch: rileggiCategorie } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase
@@ -273,8 +276,18 @@ function NewProductInner() {
         </>
       )}
 
-      {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura ? (
+      {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura ? (
         <LoadingState />
+      ) : categorieNonLette && categories.length === 0 ? (
+        <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
+          <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
+          <p className="text-sm mb-3">
+            Senza l&apos;elenco delle categorie non puoi scegliere dove mettere il prodotto. Riprova fra un momento.
+          </p>
+          <button type="button" onClick={() => { void rileggiCategorie(); }} className="text-sm font-semibold text-rose-700 underline">
+            Riprova
+          </button>
+        </div>
       ) : fromId && variantiNonLette ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1">Non riesco a leggere le taglie del prodotto da duplicare</p>

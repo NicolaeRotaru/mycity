@@ -7,7 +7,8 @@
  * applicarlo al DB. Gli unit test non lo vedono; i test d'integrazione coprono
  * solo gli effetti delle migration di sicurezza. Questo script chiude il cerchio
  * confrontando i nomi dei file con la tabella di tracking di Supabase
- * (supabase_migrations.schema_migrations).
+ * (supabase_migrations.schema_migrations), e il contenuto dove quella tabella
+ * tiene l'impronta del file (vedi #46 · R16-003 qui sotto).
  *
  * Uso:
  *   SUPABASE_DB_URL="postgresql://...:5432/postgres" node scripts/check-migration-drift.mjs
@@ -35,25 +36,22 @@ const MIGRATIONS_DIR = path.resolve(process.cwd(), 'migrations');
 const NAME_RE = /^(\d{3}[a-z]?)_([a-z0-9_]+)\.sql$/;
 
 /**
- * #46 — Si confronta il PREFISSO NUMERICO oltre al nome. Il contenuto NO: si
- * calcola e si stampa soltanto.
+ * #46 — Si confronta il PREFISSO NUMERICO oltre al nome.
  *
  * Prima il confronto era `applied.has(m.name)`, cioe' solo la parte descrittiva
  * del nome file, e due migrazioni con lo stesso nome e numero diverso (capita:
  * `108_x` e `108b_x`) risultavano la stessa cosa. Quello e' chiuso: sotto si
  * guardano tutti e due.
  *
- * ⚠️ QUELLO CHE QUESTO CONTROLLO NON PRENDE, detto qui perche' fin qui il
- * commento prometteva piu' di quanto il codice facesse (misurato il 6/9/2026).
- * Una migrazione MODIFICATA dopo essere stata applicata passa verde: il numero
- * e il nome nel database ci sono ancora, e nessuno confronta il contenuto. Sotto
- * si calcola l'impronta md5 di ogni file, ma serve solo a stamparne cinque nel
- * log — non entra in nessun confronto. Per confrontarla davvero servirebbe una
- * colonna dove conservarla in `supabase_migrations.schema_migrations`, che oggi
- * non c'e': e' una modifica al database, cioe' una decisione da firmare, non una
- * riga da aggiungere qui. Finche' quella colonna non esiste, la frase giusta e'
- * «il database conosce queste migrazioni», non «il database e' allineato al
- * codice».
+ * 13/11/2026 (R16-003) — E IL CONTENUTO, DOVE IL REGISTRO LO TIENE. Prima
+ * l'impronta md5 di ogni file si calcolava e si stampava soltanto: una
+ * migrazione MODIFICATA dopo essere stata applicata passava verde. Adesso lo
+ * script del rilascio (scripts/applica-migrazioni-mancanti.sh) scrive
+ * l'impronta del file nella colonna `statements` del registro, come commento
+ * SQL «-- md5:<impronta>», e `esitoDelConfronto` la confronta con quella del
+ * file di oggi: se sono diverse, e' deriva. Le migrazioni registrate prima (o
+ * da altre strade, senza impronta) si riconoscono solo per numero e nome, e il
+ * verdetto dice per quante il contenuto e' stato davvero confrontato.
  */
 /**
  * 15/10/2026 (R53) — PERCHE' IL CONTROLLO NON SI COLLEGAVA, DETTO A CHI LO LEGGE.
@@ -257,9 +255,19 @@ export const USCITA = Object.freeze({ ALLINEATO: 0, NON_HO_CONTROLLATO: 1, DERIV
 /**
  * Il verdetto del confronto, separato dal database perche' sia provabile.
  * @param {Array<{prefix: string, name: string, file: string, impronta?: string}>} repo i file in migrations/
- * @param {Array<{version: string, name: string}>} applicate le righe di supabase_migrations.schema_migrations
- * @returns {{ codice: number, mancanti: string[], righe: string[], errore: boolean }}
+ * @param {Array<{version: string, name: string, statements?: string[] | null}>} applicate le righe di supabase_migrations.schema_migrations
+ * @returns {{ codice: number, mancanti: string[], modificate: string[], righe: string[], errore: boolean }}
  */
+/** L'impronta che lo script del rilascio scrive nel registro (`statements`): «-- md5:<32 cifre>». */
+function improntaRegistrata(statements) {
+  if (!Array.isArray(statements)) return null;
+  for (const istruzione of statements) {
+    const m = String(istruzione ?? '').trim().match(/^--\s*md5:([0-9a-f]{32})$/i);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
+}
+
 export function esitoDelConfronto(repo, applicate) {
   // R01-024 (12/11/2026) — Il nome vale solo per una rinumerazione vera: se la riga con quel nome
   // ha il numero di UN ALTRO file del deposito, e' la migrazione omonima vecchia, non questa.
@@ -276,26 +284,52 @@ export function esitoDelConfronto(repo, applicate) {
   // pretendere entrambi darebbe falsi allarmi su tutto il passato.
   const missing = repo.filter((m) => !perNome.has(m.name) && !perVersione.has(m.prefix));
 
-  if (missing.length === 0) {
-    const righe = [`✅ check-migration-drift: tutte le ${repo.length} migrazioni risultano applicate.`];
-    // #46 — L'impronta del contenuto, STAMPATA e non confrontata (vedi la nota
-    // in testa al file). Il registro di Supabase non ha una colonna dove
-    // conservarla, quindi resta un appiglio per chi indaga a mano: si confronta
-    // l'impronta di oggi con quella scritta nel log del rilascio in cui la
-    // migrazione e' stata applicata, e si vede se il file e' stato toccato da
-    // allora. Un occhio umano, non un cancello.
-    for (const m of repo.slice(-5)) righe.push(`   ${m.file} · md5 ${m.impronta}`);
-    return { codice: USCITA.ALLINEATO, mancanti: [], righe, errore: false };
+  // R16-003 — Il contenuto: dove la riga con lo stesso numero tiene l'impronta del file
+  // (vedi la nota in testa), deve essere quella del file di oggi.
+  const rigaPerNumero = new Map(applicate.map((a) => [String(a.version ?? ''), a]));
+  let confrontate = 0;
+  const modificate = [];
+  for (const m of repo) {
+    const registrata = improntaRegistrata(rigaPerNumero.get(String(m.prefix))?.statements);
+    if (!registrata || !m.impronta) continue;
+    confrontate += 1;
+    if (registrata !== String(m.impronta).toLowerCase()) modificate.push({ file: m.file, registrata, oggi: m.impronta });
   }
 
-  const righe = [`❌ check-migration-drift: ${missing.length} migration NON applicate al DB:`];
-  for (const m of missing) righe.push(`   - ${m.file}`);
-  righe.push(
-    '\nApplicale (Supabase SQL editor / CLI / MCP apply_migration) e rilancia.',
-    'Nota: migration storiche pre-tracking potrebbero comparire qui; in tal caso',
-    'verifica manualmente e, se gia\' applicate, ignorale.',
-  );
-  return { codice: USCITA.DERIVA, mancanti: missing.map((m) => m.file), righe, errore: true };
+  if (missing.length === 0 && modificate.length === 0) {
+    const righe = [
+      `✅ check-migration-drift: tutte le ${repo.length} migrazioni risultano applicate.`,
+      confrontate === repo.length
+        ? '   Contenuto confrontato per tutte: nessuna e\' cambiata dopo essere stata applicata.'
+        : `   Contenuto confrontato per ${confrontate} su ${repo.length}: le altre sono registrate senza impronta e si riconoscono solo per numero e nome.`,
+    ];
+    return { codice: USCITA.ALLINEATO, mancanti: [], modificate: [], righe, errore: false };
+  }
+
+  const righe = [];
+  if (missing.length > 0) {
+    righe.push(`❌ check-migration-drift: ${missing.length} migration NON applicate al DB:`);
+    for (const m of missing) righe.push(`   - ${m.file}`);
+  }
+  if (modificate.length > 0) {
+    righe.push(`❌ check-migration-drift: ${modificate.length} migrazioni modificate dopo essere state applicate:`);
+    for (const x of modificate) righe.push(`   - ${x.file} (md5 registrato ${x.registrata}, oggi ${x.oggi})`);
+    righe.push('   Una migrazione applicata non si cambia: rimetti il file com\'era e porta la correzione in una migrazione nuova.');
+  }
+  if (missing.length > 0) {
+    righe.push(
+      '\nApplicale (Supabase SQL editor / CLI / MCP apply_migration) e rilancia.',
+      'Nota: migration storiche pre-tracking potrebbero comparire qui; in tal caso',
+      'verifica manualmente e, se gia\' applicate, ignorale.',
+    );
+  }
+  return {
+    codice: USCITA.DERIVA,
+    mancanti: missing.map((m) => m.file),
+    modificate: modificate.map((x) => x.file),
+    righe,
+    errore: true,
+  };
 }
 
 /**
@@ -323,7 +357,8 @@ function repoMigrationNames() {
     .filter(Boolean)
     .map((m) => {
       const file = `${m[1]}_${m[2]}.sql`;
-      const contenuto = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+      // I byte del file, come `md5sum` nello script del rilascio: le due impronte devono coincidere.
+      const contenuto = fs.readFileSync(path.join(MIGRATIONS_DIR, file));
       return {
         prefix: m[1],
         name: m[2],
@@ -375,9 +410,14 @@ async function main() {
   let applicate;
   try {
     // `version` e' il prefisso numerico, `name` la parte descrittiva: servono
-    // tutti e due per riconoscere una migrazione (#46).
-    const res = await client.query('SELECT version, name FROM supabase_migrations.schema_migrations');
-    applicate = res.rows.map((r) => ({ version: String(r.version ?? ''), name: String(r.name ?? '') }));
+    // tutti e due per riconoscere una migrazione (#46). `statements` porta
+    // l'impronta del file, dove lo script del rilascio l'ha scritta (R16-003).
+    const res = await client.query('SELECT version, name, statements FROM supabase_migrations.schema_migrations');
+    applicate = res.rows.map((r) => ({
+      version: String(r.version ?? ''),
+      name: String(r.name ?? ''),
+      statements: Array.isArray(r.statements) ? r.statements : null,
+    }));
   } catch (err) {
     // 5/11/2026 — Collegati, ma il registro non si legge: si dice cosa fare, non la traccia nuda.
     for (const riga of spiegaIlRegistroIlleggibile(err)) console.error(riga);

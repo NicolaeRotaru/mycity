@@ -7,6 +7,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { buildShippingLabel } from '@/lib/shipping-etichetta/label';
 import { withSellerAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +24,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
       id, seller_id, total_price, payment_method,
       delivery_full_name, delivery_address, delivery_zip, delivery_city,
       delivery_phone, delivery_notes,
+      delivery_slot, created_at, pickup_in_store,
       profiles!orders_seller_id_fkey ( store_name )
     `)
     .eq('id', params.id)
@@ -45,6 +47,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     sellerName,
     totalCents: Math.round(Number(order.total_price ?? 0) * 100),
     isCod,
+    consegna: fasciaLeggibile(order),
   });
 
   // Cast a Uint8Array per compatibilità BodyInit di NextResponse

@@ -24,24 +24,52 @@ const RECESSO_SEGNABILE = '__recessoSegnabile';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
+/** R16-020 — Un no detto dalla pagina stessa (non collegato, prodotto di un altro negozio): riprovare non serve. */
+class LetturaNegata extends Error {}
+
+/**
+ * R16-004 — IL PRODOTTO COM'ERA, PER I CAMPI CHE IL SALVATAGGIO HA SCRITTO.
+ * Se le varianti cadono dopo che il prodotto è già scritto, la pagina rimanda
+ * questi valori (letti all'apertura) e il salvataggio resta tutto o niente.
+ * La scorta torna indietro solo se in banca dati c'è ancora quella appena
+ * scritta: una vendita arrivata nel frattempo non si cancella.
+ */
+function comEraPrima(prima: Record<string, unknown>, payload: Record<string, unknown>): Record<string, unknown> {
+  const indietro: Record<string, unknown> = {};
+  for (const colonna of Object.keys(payload)) {
+    if (colonna === 'stock_visto' || colonna === 'stock_confermato') continue;
+    indietro[colonna] = prima[colonna];
+  }
+  if (typeof payload.stock === 'number') indietro.stock_visto = payload.stock;
+  return indietro;
+}
+
 export default function EditProductPage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
+  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto } = useQuery({
     queryKey: queryKeys.seller.product(id),
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      // R16-020 — Senza rete getUser risponde con un errore: è una lettura caduta (con «Riprova»),
+      // non «Non autenticato». Solo la sessione davvero mancante dice «Non autenticato».
+      if (erroreUtente && (erroreUtente as { name?: string }).name !== 'AuthSessionMissingError') throw erroreUtente;
+      if (!user) throw new LetturaNegata('Non autenticato');
       const { data, error } = await supabase
         .from('products')
         .select('id, name, description, price, compare_at_price, unit, condition, stock, category_id, images, attributes, tags, express_enabled, seller_id, status')
         .eq('id', id)
         .single();
-      if (error) throw error;
+      // R16-020 — Solo «nessuna riga» (PGRST116) vuol dire che il prodotto non c'è: ogni altro
+      // errore è una lettura caduta, e la pagina offre «Riprova» invece di «Prodotto non trovato».
+      if (error) {
+        if ((error as { code?: string }).code === 'PGRST116') return null;
+        throw error;
+      }
       if ((data as { seller_id?: string }).seller_id !== user.id) {
-        throw new Error('Non puoi modificare un prodotto che non è tuo');
+        throw new LetturaNegata('Non puoi modificare un prodotto che non è tuo');
       }
       // 31/10/2026 — «Escluso dal recesso» (migrazione 180) si legge a parte, con `*`:
       // prima della 180 la colonna non c'e', la riga arriva senza e la spunta resta
@@ -73,7 +101,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     refetchOnMount: 'always',
   });
 
-  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette, refetch: rileggiVarianti } = useQuery({
     queryKey: [...queryKeys.seller.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     refetchOnMount: 'always',
@@ -153,7 +181,25 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       // Sincronizza le varianti (insert/update/delete); il trigger DB riallinea
       // products.stock e has_variants. Con le scorte viste all'apertura: una
       // variante venduta mentre il modulo era aperto non torna in magazzino.
-      await saveProductVariants(id, nextVariants, scorteViste);
+      try {
+        await saveProductVariants(id, nextVariants, scorteViste);
+      } catch (errore) {
+        // R16-004 — TUTTO O NIENTE: le varianti non sono passate (una taglia
+        // venduta fra il controllo e la scrittura, la rete caduta), quindi nome,
+        // prezzo e il resto tornano com'erano all'apertura, dalla stessa porta.
+        try {
+          await salvaProdottoDalBrowser({
+            prodottoId: id,
+            payload: comEraPrima(product ?? {}, payload as unknown as Record<string, unknown>),
+            origine: 'venditore-modulo-annullato',
+          });
+        } catch {
+          throw new Error(
+            'Le varianti non si sono salvate, ma le altre modifiche sì e non sono riuscito ad annullarle: riapri il prodotto, controlla e salva di nuovo.',
+          );
+        }
+        throw errore;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
@@ -207,16 +253,26 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    * ordini gia' fatti la riga perdeva la taglia (order_items.variant_id a NULL).
    */
   if (error || erroreVarianti || !product) {
+    // R16-020 — Una lettura caduta (rete, errore del database) non è «Prodotto non trovato»:
+    // lo dice con parole semplici e offre «Riprova». «Non trovato» solo se la lettura è riuscita.
+    const letturaCaduta = error ? !(error instanceof LetturaNegata) : Boolean(erroreVarianti);
     return (
-      <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
+      <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
         <p className="text-sm mb-3">
-          {error instanceof Error
+          {error instanceof LetturaNegata
             ? error.message
-            : erroreVarianti
-              ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
-              : 'Prodotto non trovato'}
+            : error
+              ? 'Non riesco a leggere il prodotto: controlla la connessione e riprova.'
+              : erroreVarianti
+                ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
+                : 'Prodotto non trovato'}
         </p>
+        {letturaCaduta && (
+          <button type="button" onClick={() => { void rileggiProdotto(); void rileggiVarianti(); }} className="text-sm font-semibold text-rose-700 underline mr-4">
+            Riprova
+          </button>
+        )}
         <Link href="/seller/products" className="text-sm font-semibold text-rose-700 hover:underline">
           ← Torna ai miei prodotti
         </Link>

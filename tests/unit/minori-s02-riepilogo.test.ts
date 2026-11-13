@@ -12,11 +12,13 @@ const euro = (c: number) => `${(c / 100).toFixed(2)} €`;
 const testo = (r: ReturnType<typeof riepilogoOrdine>) => r.voci.map((v) => `${v.etichetta} ${cifraDellaVoce(v, euro)}`).join(' | ');
 
 describe('il riepilogo dell ordine', () => {
-  it('1970 · consegna null e 3 € nel totale: niente «GRATUITA», la consegna c è e il totale torna', () => {
+  it('1970 · consegna null e 3 € nel totale: niente «GRATUITA», e il riepilogo dice che i 3 € non li spiega', () => {
     const r = riepilogoOrdine({ total_price: 23, shipping_cost: 0, delivery_fee_cents: null, discount_amount: 0, wallet_applied_cents: 0 }, 2000);
     expect(testo(r)).not.toMatch(/GRATUITA|Gratis/);
-    expect(r.voci.some((v) => v.centesimi === 300)).toBe(true);
-    expect(r.torna).toBe(true);
+    // 13/11/2026 (R16-015) — Prima la consegna si ricavava per differenza e il totale «tornava» sempre:
+    // una consegna non letta non si inventa, e la differenza si dichiara.
+    expect(r.torna).toBe(false);
+    expect(Math.abs(r.differenzaCentesimi)).toBe(300);
   });
 
   it('1970 · consegna null e nessun costo nel totale: resta gratis, ed è vero', () => {

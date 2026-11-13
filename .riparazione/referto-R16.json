@@ -1,0 +1,590 @@
+{
+  "sessione": "R16",
+  "aggiornato": "2026-11-13 14:05",
+  "finita": true,
+  "testa": "0628993d24e87d455ab2cab2afce4bf339f92830",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "0628993d24e87d455ab2cab2afce4bf339f92830",
+    "nota": "Typecheck, lint e 1433 file di prova verdi (9768 casi, 1 saltato) sull'ultimo commit di codice."
+  },
+  "voci": [
+    {
+      "id": "R16-001",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
+          "modifica": "Prova comune (usa anche file di altre sessioni). Sostituire il caso it('il dialogo di conferma resta al futuro, com’era giusto', () => { … expect(sos).toContain('Verrà avviata la chiamata al'); }) con: it('anche il dialogo di conferma non promette la chiamata: dice che CHIAMA lo preme il fattorino', () => { expect(sos).not.toContain('Verrà avviata la chiamata al'); expect(sos).toMatch(/già scritto: la chiamata parte solo quando premi tu CHIAMA/); }). Alla base quel caso vincola proprio la frase sbagliata della voce."
+        },
+        {
+          "file": "components/rider/SOSButton.tsx",
+          "modifica": "(file di R16, ma la correzione non può stare sul ramo senza la modifica alla prova comune.) Nel dialogo di conferma: «<span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>» diventa «<span>Si apre il telefono con il <strong>112 (numero unico emergenze)</strong> già scritto: la chiamata parte solo quando premi tu CHIAMA</span>»; «<span>La tua posizione GPS verrà condivisa con MyCity</span>» diventa «<span>La tua posizione GPS viene mandata a MyCity, se il telefono riesce a darla</span>»; il commento «Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto…» diventa «R16-001 (13/11/2026) — Anche il dialogo di conferma prometteva «Verra' avviata la chiamata al 112»: adesso dice che si apre il telefono col 112 gia' scritto e che CHIAMA lo premi tu.». È il commit 94efda01 (con la prova tests/unit/riparazione-r16-sos-testo.test.tsx, che morde: prova rimessa uscita 0), tolto dal ramo con debafe63 su richiesta della regista: si riprende con `git revert debafe63`, che si applica pulito e rimette insieme dialogo, prova comune e prova riparazione-r16-sos-testo (git cherry-pick 94efda01 dà un conflitto banale sul commento vicino al blocco di R16-009)."
+        }
+      ],
+      "nota": "Riparazione fatta e provata (prova comando eseguita, prova rimessa regge su 94efda01), poi tolta dal ramo perché la prova comune vincola la frase sbagliata e la tocca solo la regista. Sulla base i tre messaggi toast dicevano già il vero; resta il dialogo di conferma. Va in cucitura, o con l'eccezione firmata da Nicola.",
+      "verificato_da": "revisore wf_e8c81381 grave: confermato. Sulla testa SOSButton = base + solo R16-009 e la prova comune = base; la patch rimessa sopra la testa è verde (8 file che leggono SOSButton, 40/40, e suite intera), la prova rimessa su 94efda01 regge (uscita 0), il testo nuovo dice il vero (tel:112 apre solo il telefono; la posizione si aspetta al massimo 5,5 s). Fragilità minore: il caso nuovo della prova comune cerca la frase anche nei commenti."
+    },
+    {
+      "id": "R16-009",
+      "chiave": "mobile-pwa|il pulsante sos chiede la posizione dopo aver aperto il tastierino del 112: l'avviso a mycity potrebbe partire spesso senza coordinate",
+      "esito": "riparato",
+      "commit": "6935611b4f4e9886db95e112f2d34102b9a5f981",
+      "commit_voce": [
+        "e12cbb7638a04a7b40e010ffec05da0a677aae5f",
+        "6935611b4f4e9886db95e112f2d34102b9a5f981"
+      ],
+      "file_toccati": [
+        "components/rider/SOSButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-sos-posizione.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-sos-posizione.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6935611b^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r16-sos-posizione.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La posizione (getCurrentPosition più watchPosition, se c'è) si chiede quando il fattorino preme SOS e si apre il dialogo, e resta pronta; alla conferma tel:112 si apre subito senza attese e l'avviso usa la posizione già arrivata o quella che arriva entro il tempo massimo. Il watch si ferma alla chiusura del dialogo e allo smontaggio; con un GPS finto asincrono la richiesta parte all'apertura, prima della conferma, e l'avviso ha le coordinate anche se dopo tel: il GPS tace. Da provare ancora su un telefono vero.",
+      "verificato_da": "nessun revisore nel giro di completamento: voce minore (la regola delle 12:58 chiede il revisore solo per gravi e bloccanti) e tetto di costo raggiunto; prova eseguita e prova rimessa uscita 0; npm run verify verde su 0628993d."
+    },
+    {
+      "id": "R16-018",
+      "chiave": "rls-database|un negozio sospeso può rimettersi da solo in coda per l'approvazione rimandando il modulo da /sell",
+      "esito": "riparato",
+      "commit": "7f1eb2a733ff1ebd08cc9495d796582da6d609db",
+      "file_toccati": [
+        "migrations/400_il_negozio_sospeso_non_si_rimette_in_coda.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r16-negozio-sospeso.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh r16_a_prova && psql -X -d r16_a_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r16-negozio-sospeso.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7f1eb2a7^ --file migrations/400_il_negozio_sospeso_non_si_rimette_in_coda.sql --prove tests/sql/rls/riparazione-r16-negozio-sospeso.test.sql --sql r16_rimessa_018 --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La migrazione 400 ridefinisce enforce_profile_update_rules partendo dal corpo della 365, che è l'ultima a definirla, con un solo controllo in più: se lo stato di partenza è 'suspended', chi non è staff non lo cambia (né verso pending né verso vuoto). /sell e /api/seller/apply rifiutavano già il sospeso dal lato pagina, quindi la pagina non si tocca. Non applicata a nessun database vero.",
+      "verificato_da": "revisore wf_e8c81381 lotto A: 365 è davvero l'ultima definizione prima della 400, i due corpi differiscono solo per il controllo del sospeso; prova SQL 6/6 su database locale (196 migrazioni), rossa col corpo della 365; run.sh intero verde."
+    },
+    {
+      "id": "R16-010",
+      "chiave": "qa-flussi|indirizzo, cap e città del profilo non si correggono più",
+      "esito": "parziale",
+      "commit": "4584606f22a9be6f9e38eac12fc9e8363fdbf32a",
+      "file_toccati": [
+        "app/sell/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-residenza-dal-profilo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-residenza-dal-profilo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4584606f^ --file app/sell/page.tsx --prove tests/unit/riparazione-r16-residenza-dal-profilo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La causa è nel modulo, non nel trigger. Tenuta la scelta della scheda 178 (il Profilo non chiede più indirizzo, CAP e città): /sell non precompila più la residenza da quei campi vecchi e non correggibili, usa solo legal_residence_*, che il negoziante corregge nel modulo stesso.",
+      "verificato_da": "revisore wf_e8c81381 lotto A: parziale, vedi cosa_resta.",
+      "cosa_resta": "Il titolo della voce resta vero: indirizzo, CAP e città del profilo stanno ancora nel database e l'utente non li vede, non li corregge e non li cancella (app/profile/page.tsx:19-25 ha solo nome e telefono); l'esportazione dei dati (app/api/account/export/route.ts:144, select('*')) li consegna ancora. Serve la scelta già chiesta a Nicola: rimettere i campi nel Profilo o cancellare le colonne. Anche prima della correzione, in /sell il valore precompilato si poteva correggere."
+    },
+    {
+      "id": "R16-014",
+      "chiave": "qa-flussi|lo specchio activity_events chiama «azione admin» anche le azioni degli utenti",
+      "esito": "riparato",
+      "commit": "8d6ec52fad3c0a292951edadd230f91c642b27a4",
+      "file_toccati": [
+        "lib/audit.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-specchio-audit.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-specchio-audit.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8d6ec52f^ --file lib/audit.ts --prove tests/unit/riparazione-r16-specchio-audit.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "writeAudit legge profiles.role di chi agisce, in parallelo alla scrittura in audit_logs. Lo specchio scrive action 'admin' e «Azione admin: …» solo per role admin, «Azione utente: …» per gli altri, e «Azione: …» senza action se il ruolo non si legge. Le 67 prove che usano lib/audit sono verdi.",
+      "verificato_da": "revisore wf_e8c81381 lotto A: 68 file di prova che usano writeAudit verdi (557 casi); activity_events.action non ha CHECK né NOT NULL; nessun lettore filtra action='admin'; la prova è rossa sul codice vecchio."
+    },
+    {
+      "id": "R16-015",
+      "chiave": "qa-flussi|nel riepilogo dell'ordine la consegna ricavata fa sempre «torna» il totale",
+      "esito": "riparato",
+      "commit": "97dcba9356cd945811cc601c4ac9753357a11a3d",
+      "file_toccati": [
+        "lib/ordini/riepilogo-ordine.ts",
+        "tests/unit/minori-s02-riepilogo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-riepilogo-consegna.test.ts",
+        "tests/unit/minori-s02-riepilogo.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-riepilogo-consegna.test.ts tests/unit/minori-s02-riepilogo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 97dcba93^ --file lib/ordini/riepilogo-ordine.ts --prove tests/unit/riparazione-r16-riepilogo-consegna.test.ts,tests/unit/minori-s02-riepilogo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con delivery_fee_cents nullo la consegna non si ricava più per differenza: se nel totale non resta niente da spiegare vale zero, altrimenti torna=false e differenzaCentesimi dice quanto manca. I prezzi non cambiano. La prova minori-s02-riepilogo (importa il file, dichiarata) ora si aspetta torna=false e 3 € di differenza.",
+      "verificato_da": "revisore wf_e8c81381 lotto A: 33 file di prova verdi (326 casi); delivery_fee_cents è NOT NULL DEFAULT 0 (091), il caso nullo viene solo dal select di riserva della pagina ordine del negozio, che mostra già la nota quando torna=false; i totali e il contante da pagare non cambiano."
+    },
+    {
+      "id": "R16-011",
+      "chiave": "qa-flussi|il link «scopri di più» delle storie accetta qualunque indirizzo, anche un sito esterno, senza nessun controllo",
+      "esito": "riparato",
+      "commit": "c6e09c0ffb0dc006f46a45739dd15ebd37a42882",
+      "commit_correzione": "20187e40f17913d6158c0c73f98c7ab67e1b39c0",
+      "file_toccati": [
+        "app/seller/stories/page.tsx",
+        "components/StoryViewer.tsx",
+        "migrations/403_il_link_delle_storie_porta_solo_dentro_mycity.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-storie-link.test.tsx",
+        "tests/sql/rls/riparazione-r16-link-storie.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-storie-link.test.tsx && tests/sql/harness/apply.sh r16_b_prova && psql -X -d r16_b_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r16-link-storie.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6e09c0f^ --file app/seller/stories/page.tsx,components/StoryViewer.tsx --prove tests/unit/riparazione-r16-storie-link.test.tsx --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6e09c0f^ --file migrations/403_il_link_delle_storie_porta_solo_dentro_mycity.sql --prove tests/sql/rls/riparazione-r16-link-storie.test.sql --sql r16_rimessa_011 --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina del negozio e il visore usano la regola già esistente safeInternalPath (lib/safe-redirect.ts): la pagina rifiuta un link esterno prima di caricare la foto e dice perché, il visore non mostra un link che non passa. La migrazione 403 aggiunge un CHECK (comincia con / ma non con // né /\\, niente caratteri di controllo): prima toglie il link alle storie vecchie fuori regola dicendo quante sono, poi valida (niente NOT VALID, come chiede la prova 14). Non applicata a nessun database vero.",
+      "verificato_da": "revisore wf_e8c81381 lotto B: prove unitaria e SQL verdi e rimessa rilanciata; note minori in nuovi_difetti_visti (caratteri C1 accettati dalla pagina ma rifiutati dal CHECK; l'indirizzo intero del sito stesso viene rifiutato)."
+    },
+    {
+      "id": "R16-019",
+      "chiave": "rls-database|chiunque abbia un account può riempire i 30 posti del carosello delle storie in home e svuotarlo per tutti",
+      "esito": "riparato",
+      "commit": "d5441d45739688a8e232a7506a7033d29168005e",
+      "file_toccati": [
+        "migrations/404_le_storie_le_scrive_solo_un_negozio_approvato.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh r16_b_prova && psql -X -d r16_b_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d5441d45^ --file migrations/404_le_storie_le_scrive_solo_un_negozio_approvato.sql --prove tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql --sql r16_rimessa_019 --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La 404 sostituisce seller_stories_owner_write (035) con quattro regole: scrivere o modificare una storia solo se negozio approvato (ruolo seller e is_approved, come i prodotti nella 119); leggere e cancellare le proprie resta all'autore. Il carosello filtrava già i non-negozi prima del taglio a 30 (StoriesCarousel.tsx:75-80, dal 5/11), quindi non si tocca. Non applicata a nessun database vero.",
+      "verificato_da": "revisore wf_e8c81381 lotto B: prova SQL verde e run.sh intero verde sul database ricostruito; la 404 lascia al negozio leggere e cancellare le proprie storie; nota minore in nuovi_difetti_visti (l'admin nell'area negozio lascia una foto orfana)."
+    },
+    {
+      "id": "R16-012",
+      "chiave": "qa-flussi|un doppio clic su «pubblica (24h)» pubblica la stessa storia due volte, e i clienti le vedono tutte e due",
+      "esito": "riparato",
+      "commit": "b11990d5fb9081a2470d73cf8840653f2cbd7ea4",
+      "file_toccati": [
+        "app/seller/stories/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-storie-doppio-clic.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-storie-doppio-clic.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b11990d5^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r16-storie-doppio-clic.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il freno è un useRef che scatta nel clic, prima di create.mutate(); setUploading(true) è nel clic, prima di ogni await, e il bottone ha disabled={create.isPending || uploading || !image}. Il freno si toglie in onSettled, così dopo un errore si riprova. La prova fa due clic di fila: una sola foto caricata e un solo inserimento.",
+      "verificato_da": "revisore wf_e8c81381 lotto B: prova rilanciata, due clic = un inserimento; regge."
+    },
+    {
+      "id": "R16-013",
+      "chiave": "qa-flussi|una storia a meno di mezz'ora dalla scadenza risulta «scaduta» al negozio, mentre i clienti la vedono ancora",
+      "esito": "riparato",
+      "commit": "c73f3d4378ac487651b95829fe2c8d44760cda3c",
+      "file_toccati": [
+        "app/seller/stories/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-storie-scadenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-storie-scadenza.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c73f3d43^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r16-storie-scadenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina del negozio decide attiva o scaduta con expires_at > adesso, la stessa regola del carosello e del database; le ore rimaste si arrotondano per eccesso. La prova ferma l'orologio alle 10:00 con una storia che scade alle 10:20: il negozio la vede attiva («1h») e il carosello la mostra.",
+      "verificato_da": "revisore wf_e8c81381 lotto B: prova con orologio finto rilanciata; stessa regola expires_at > adesso di carosello e database; regge."
+    },
+    {
+      "id": "R16-007",
+      "chiave": "microcopy|nella schermata delle storie il negoziante trova «caption» e un indirizzo da programmatore come esempio",
+      "esito": "riparato",
+      "commit": "0b1f3e32d4c74dec879fe0cd32bbcbda1eb3cbb2",
+      "file_toccati": [
+        "app/seller/stories/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-storie-testi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-storie-testi.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0b1f3e32^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r16-storie-testi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Caption (1 frase)» diventa «Scritta sotto la foto (una frase)»; il link diventa «Pagina del sito (facoltativo)» con una spiegazione e l'esempio /promozioni, che la regola della 011 accetta. La prova controlla che «Caption» non ci sia e che l'esempio passi safeInternalPath.",
+      "verificato_da": "revisore wf_e8c81381 lotto B: «Caption» sparito, esempio /promozioni accettato dalla regola della 011; regge."
+    },
+    {
+      "id": "R16-004",
+      "chiave": "frontend-ux|il salvataggio fa due passi: se una variante è cambiata, nome e prezzo del prodotto restano salvati e le varianti no",
+      "esito": "parziale",
+      "commit": "0628993d24e87d455ab2cab2afce4bf339f92830",
+      "commit_voce": [
+        "66e466b9320b31e283653addaafd1e0825901da5",
+        "0628993d24e87d455ab2cab2afce4bf339f92830"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r16-salvataggio-unico.test.sql",
+        "tests/unit/riparazione-r16-salvataggio-tutto-o-niente.test.tsx"
+      ],
+      "prova_comando": "export PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres; tests/sql/harness/apply.sh r16_f_prova && psql -q -X -d r16_f_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r16-salvataggio-unico.test.sql && tests/sql/harness/run.sh r16_f_prova",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0628993d^ --file migrations/405_prodotto_e_varianti_si_salvano_insieme.sql --prove tests/sql/rls/riparazione-r16-salvataggio-unico.test.sql --sql r16_rimessa_004 --json",
+        "nota": "La prova SQL chiama salva_prodotto_e_varianti, che nasce solo con la 405: per prova-rimessa il rosso è di struttura (succede sempre con una funzione nuova). Il comportamento lo prova la prova SQL stessa (caso ②: prezzo e avviso di ribasso scritti dentro la chiamata, alla fine non resta niente). La rimessa di pagina e rotta non c'è: non sono collegate."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 405 (non applicata): la funzione salva_prodotto_e_varianti (SECURITY INVOKER, search_path public, REVOKE da PUBLIC e anon, GRANT a authenticated e service_role) in una transazione sola blocca prima le varianti e poi il prodotto (lo stesso ordine di reserve_stock), controlla proprietario approvato o chiave di servizio, lista chiusa delle colonne, prezzo maggiore di zero per il negozio, scorta vista del prodotto e delle taglie, poi scrive prodotto e varianti (queste passando da salva_varianti). La prova SQL ha 16 controlli verdi: se una variante non va, nome, prezzo e scorta non cambiano e non resta nessun avviso di ribasso, anche quando il rifiuto arriva dopo che prezzo e avviso erano già scritti dentro la chiamata; un altro negozio e l'anonimo non possono usarla; il caso buono salva tutto. Pagina e rotta non sono ancora collegate: collegarle rompe prove comuni.",
+      "cosa_resta": "Collegare la funzione a pagina e rotta admin, e solo dopo togliere il ripristino di 66e466b9 (che fino ad allora resta, con i limiti già scritti: È un ripristino, non una transazione: (1) gli effetti dei trigger della prima scrittura non si annullano. Provato in locale: trg_product_price_drop manda ai clienti dei preferiti un avviso di ribasso …). Rotta admin: quando ci sono le varianti, una sola admin.rpc('salva_prodotto_e_varianti', {p_product_id: id, p_prodotto: patch, p_scorta_vista: condizione ?? null, p_varianti: variants, p_scorte_viste: scorteViste ?? null}) al posto di controllaScorteVarianti + update + saveProductVariantsServer + rimettiComEra; scorta_prodotto_cambiata e scorta_variante_cambiata danno 409 con i messaggi di oggi, gli altri errori 500 «Non ho salvato niente». Pagina: quando il prodotto ha o aveva varianti, una sola salvaProdottoDalBrowser con varianti e scorteViste, passando dalla porta del negozio che con le varianti scrive con la funzione. Poi si tolgono comEraPrima e rimettiComEra, si aggiorna tests/unit/riparazione-r16-salvataggio-tutto-o-niente.test.tsx e si rifà la prova rimessa di pagina e rotta. Servono prima le modifiche ai file altrui in serve_file_altrui. DIFETTI DEL REVISORE sulla 405, da correggere prima del collegamento: (a) migrations/405_prodotto_e_varianti_si_salvano_insieme.sql:183-187 — una variante con l'id di un ALTRO prodotto cade nel ramo «nuova» e viene inserita nel prodotto come riga in più (duplicato silenzioso, nessuna scrittura sul prodotto altrui): deve dare variante_non_valida; (b) un controllo della 405 va allineato alla 179 (dettaglio riservato: vedi nuovi_difetti_visti); (c) la prova SQL non copre negozio non approvato o sospeso, prezzo ≤ 0, id di variante di un altro prodotto, il percorso dell'amministratore e il ritorno indietro del registro attività (il revisore li ha provati fuori dal deposito: passano).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/salva-varianti-finta.ts",
+          "modifica": "salvaVariantiFinta accetta anche il nome 'salva_prodotto_e_varianti', con carico {p_product_id, p_prodotto, p_scorta_vista, p_varianti, p_scorte_viste}. (1) Se p_prodotto ha 'stock', p_scorta_vista != null e la riga di from('products') con quell'id ha stock !== p_scorta_vista, risponde {data:null, error:{code:'P0001', message:'scorta_prodotto_cambiata', details: JSON.stringify({vista, adesso})}} senza scrivere niente. (2) Con p_varianti: legge from('product_variants').select('id, stock').eq('product_id', id); per una variante con id esistente la scorta si scrive solo se è diversa da p_scorte_viste[id]; se si scrive e la vista è diversa dalla scorta attuale, risponde {code:'P0001', message:'scorta_variante_cambiata', details: JSON.stringify({id, label, vista, adesso})} prima di scrivere; si cancellano solo gli id non più in elenco che compaiono in p_scorte_viste (tutti, se p_scorte_viste è null). (3) Se p_prodotto non è vuoto: from('products').update(p_prodotto).eq('id', id). (4) Le varianti passano dal ramo 'salva_varianti' che c'è già (position = indice). Senza questa modifica collegare la rotta admin fa 4 rossi in la-porta-del-catalogo-non-scrive-una-scorta-che-nel-frattempo-e-cambiata.test.ts e la-scorta-si-confronta-con-quella-vista-non-con-quella-scritta.test.ts («rpc inattesa nella prova: salva_prodotto_e_varianti»)."
+        },
+        {
+          "file": "lib/products/salvataggio-tracciato.ts",
+          "modifica": "salvaProdottoTracciato accetta varianti?: ProductVariant[] e scorteViste?: Record<string, number>. Con le varianti non esce quando daScrivere è vuoto, e la scrittura delle righe 500-517 diventa await opts.db.rpc('salva_prodotto_e_varianti', {p_product_id: prodottoId, p_prodotto: daScrivere, p_scorta_vista: condizione ?? null, p_varianti: varianti, p_scorte_viste: scorteViste ?? null}); ClientDelCatalogo prende rpc come campo opzionale. Errori: scorta_prodotto_cambiata → new ScortaCambiata(condizione, JSON.parse(details).adesso); scorta_variante_cambiata → new DaCompletare(`La scorta di «${label}» è cambiata mentre modificavi: avevi davanti ${vista} pezzi, ora sono ${adesso}. Riapri il prodotto, controlla il numero e salva di nuovo.`, ['scorta']); prodotto_non_tuo → new ProdottoNonTuo(). Senza varianti resta l'update di oggi. Controllo della scheda (cosaMancaPerVendere) e registro restano qui."
+        },
+        {
+          "file": "app/api/seller/products/[id]/route.ts",
+          "modifica": "Legge corpo.varianti (array di {id?: string, options: object, label: string, stock: intero >= 0}) e corpo.scorteViste (record id → intero) e li passa a salvaProdottoTracciato. Con le varianti, un payload vuoto non risponde più «Nessuna modifica da salvare»."
+        },
+        {
+          "file": "lib/products/salva-dal-browser.ts",
+          "modifica": "salvaProdottoDalBrowser accetta varianti? e scorteViste? e li mette nel corpo JSON accanto a payload."
+        },
+        {
+          "file": "tests/unit/minori-s06-scorta-in-modifica.test.ts",
+          "modifica": "Il controllo «2478 — la pagina di modifica lo chiama prima di salvare il prodotto» (righe 148-153) diventa: la pagina chiama salvaProdottoDalBrowser( con varianti e scorteViste, e non chiama più né saveProductVariants( né controllaScorteVariantiDalBrowser( (il controllo lo fa la funzione dentro la transazione)."
+        },
+        {
+          "file": "tests/unit/la-pagina-di-modifica-salva-le-varianti-senza-rimettere-in-magazzino-il-venduto.test.ts",
+          "modifica": "Non aspetta più la PATCH seguita da salva_varianti sul client finto: guarda che l'unica PATCH a /api/seller/products/prod-focaccia porti varianti [v-s stock 2, v-m stock 3] e scorteViste {v-s: 2, v-m: 3}. Che la S venduta resti a 1 lo prova il caso ⑥ di tests/sql/rls/riparazione-r16-salvataggio-unico.test.sql."
+        }
+      ],
+      "file_toccati": [
+        "migrations/405_prodotto_e_varianti_si_salvano_insieme.sql"
+      ],
+      "verificato_da": "revisore sul modello grande (in una worktree, sul Postgres locale): 22 controlli d'attacco impersonando i ruoli, tutti bloccati (altro negozio, non approvato, sospeso, cliente, colonne fuori lista, prezzo ≤ 0, scorta negativa); atomicità confermata (prodotto, varianti, notifications e activity_events tornano indietro; i trigger sono solo database); run.sh intero verde (63 file, comprese 14 e 27). Verdetto da_correggere per i difetti scritti in cosa_resta."
+    },
+    {
+      "id": "R16-005",
+      "chiave": "frontend-ux|«seminuovo», «come nuovo» e «non nuovo», letti dalla foto o dall assistente, entrano come «nuovo»: un oggetto usato può arrivare in vetrina come nuovo",
+      "esito": "riparato",
+      "commit": "0d427245dbe431d0585adb557724f65ce6bbef1b",
+      "commit_voce": [
+        "c4015952e1fa945f300e153794286e873deedd7c",
+        "0d427245dbe431d0585adb557724f65ce6bbef1b"
+      ],
+      "file_toccati": [
+        "lib/products/schema.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-condizione-usata.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-condizione-usata.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d427245^ --file lib/products/schema.ts --prove tests/unit/riparazione-r16-condizione-usata.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "normalizeCondition segue una regola, non una lista: «nuovo» (nuov…/new) vale solo senza una negazione (non, not, mai…) né un paragone (come, quasi, pari, simile, pare, sembra, tipo, praticamente, fosse, like, as, nearly) davanti; «mai/non usato» vale nuovo solo se subito dopo non c'è una misura di tempo o quantità (da/per/negli anni, dal 2019, molto, più), e «troppo»/«tanto» altrove non contano. La prova ha tutte le frasi del revisore; verdi le prove che importano lo schema.",
+      "verificato_da": "nessun revisore nel giro di completamento: voce minore (la regola delle 12:58 chiede il revisore solo per gravi e bloccanti) e tetto di costo raggiunto; prova eseguita e prova rimessa uscita 0; npm run verify verde su 0628993d."
+    },
+    {
+      "id": "R16-020",
+      "chiave": "stati-ui|se la lettura del prodotto non riesce, la pagina di modifica dice «prodotto non trovato» e non offre «riprova»",
+      "esito": "riparato",
+      "commit": "27b1a9ce5d1becfaadf109a6bdf5f068c9ada809",
+      "commit_voce": [
+        "d368bfe2b7a1a0fce5ee6e6bc49acd6217da9ee4",
+        "27b1a9ce5d1becfaadf109a6bdf5f068c9ada809"
+      ],
+      "file_toccati": [
+        "app/seller/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27b1a9ce^ --file \"app/seller/products/[id]/edit/page.tsx\" --prove tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo PGRST116 vale «Prodotto non trovato»; ogni altro errore di lettura, compreso l'errore di getUser quando cade la rete (nome diverso da AuthSessionMissingError), mostra «Non riesco a leggere il prodotto…» con «Riprova». La sessione davvero mancante resta «Non autenticato», il prodotto di un altro negozio resta col suo messaggio.",
+      "verificato_da": "nessun revisore nel giro di completamento: voce minore (la regola delle 12:58 chiede il revisore solo per gravi e bloccanti) e tetto di costo raggiunto; prova eseguita e prova rimessa uscita 0; npm run verify verde su 0628993d."
+    },
+    {
+      "id": "R16-021",
+      "chiave": "stati-ui|se le categorie non arrivano, il modulo «nuovo prodotto» mostra un elenco vuoto e poi chiede di scegliere una categoria che non c'è",
+      "esito": "riparato",
+      "commit": "0834f8e1e16c1ede8420fb497cadb07d2d68c640",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0834f8e1^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge isError, isLoading e refetch delle categorie: mentre carica mostra il caricamento; se la lettura fallisce e l'elenco è vuoto, al posto del modulo compare l'avviso «Non riesco a leggere le categorie» con «Riprova», come nella pagina di modifica.",
+      "verificato_da": "revisore wf_e8c81381 lotto C: prova rilanciata, avviso con Riprova al posto del modulo vuoto; regge."
+    },
+    {
+      "id": "R16-003",
+      "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
+      "esito": "parziale",
+      "commit": "30486fd5cee15b7f927254ae857ea4543a9a4160",
+      "file_toccati": [
+        "scripts/check-migration-drift.mjs",
+        "scripts/applica-migrazioni-mancanti.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-deriva-contenuto.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-deriva-contenuto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 30486fd5^ --file scripts/check-migration-drift.mjs,scripts/applica-migrazioni-mancanti.sh --prove tests/unit/riparazione-r16-deriva-contenuto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Lo script del rilascio scrive nel registro (colonna statements) il commento SQL «-- md5:<impronta>» del file; esitoDelConfronto (funzione pura esportata) lo confronta con l'impronta del file di oggi: diverse = deriva, e il verdetto dice per quante migrazioni il confronto c'è davvero. Il commento in testa ora dice il vero. Provato con la funzione pura e con lo script su un Postgres locale usa e getta, mai sul database vero.",
+      "cosa_resta": "Applicazione e registrazione stanno ancora in due psql separati: unirle rompe la prova comune tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts (il suo psql finto esce appena vede -f). Le due modifiche vanno fatte insieme, dalla regista: (1) in scripts/applica-migrazioni-mancanti.sh i due psql dopo `impronta=...` diventano uno: psql \"$DB\" -q -v ON_ERROR_STOP=1 --single-transaction -f \"$f\" -c \"INSERT INTO supabase_migrations.schema_migrations (version, name, statements) VALUES ('$versione', '$descrizione', ARRAY['-- md5:$impronta']) ON CONFLICT (version) DO NOTHING\"; (2) nella prova comune la riga del psql finto `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; exit 0; fi` diventa `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; case \"$query\" in *INSERT*) echo \"REGISTRATO\" >> \"$REGISTRO_PSQL\" ;; esac; exit 0; fi`.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts",
+          "modifica": "Nel psql finto, la riga `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; exit 0; fi` diventa `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; case \"$query\" in *INSERT*) echo \"REGISTRATO\" >> \"$REGISTRO_PSQL\" ;; esac; exit 0; fi`, insieme alla modifica (1) dello script descritta in cosa_resta."
+        }
+      ],
+      "verificato_da": "revisore wf_e8c81381 lotto C: esito parziale confermato."
+    },
+    {
+      "id": "R16-008",
+      "chiave": "microcopy|le ore scritte dal server escono nell'ora di londra: la pagina stato dice 14:54 quando a piacenza sono le 16:54",
+      "esito": "riparato",
+      "commit": "0270677f47fb1e7648e3d56c1ff4a3390b98a26a",
+      "file_toccati": [
+        "lib/format.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-ore-di-roma.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-ore-di-roma.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0270677f^ --file lib/format.ts --prove tests/unit/riparazione-r16-ore-di-roma.test.ts"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base app/status/page.tsx:73 e lib/shipping-etichetta/label.ts:115 avevano già timeZone 'Europe/Rome'; mancava formatDate in lib/format.ts, che ora lo ha. Prova con l'orologio finto: 22:30 UTC di agosto esce «4 agosto», 23:30 UTC di dicembre esce «1 gennaio». Le 27 prove che importano lib/format restano verdi, nessuna toccata.",
+      "verificato_da": "revisore wf_e8c81381 lotto D: regge; la prova non fissa il fuso del processo, quindi morde solo se il processo non gira già con TZ=Europe/Rome (in CI gira in UTC e morde)."
+    },
+    {
+      "id": "R16-016",
+      "chiave": "qa-flussi|l'etichetta da attaccare alla busta non dice quando consegnare: né «veloce» né la fascia",
+      "esito": "riparato",
+      "commit": "de11b93a4439f0ac08b70e0b847772efe9a41d12",
+      "file_toccati": [
+        "lib/shipping-etichetta/label.ts",
+        "app/api/seller/orders/[id]/label/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-etichetta-consegna.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-etichetta-consegna.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de11b93a^ --file lib/shipping-etichetta/label.ts,app/api/seller/orders/[id]/label/route.ts --prove tests/unit/riparazione-r16-etichetta-consegna.test.ts"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "LabelData ha il campo consegna: la veloce esce «CONSEGNA VELOCE» in grande, la fascia esce «CONSEGNA:» col giorno vero e le ore (ora di Roma). La rotta legge delivery_slot, created_at e pickup_in_store e usa fasciaLeggibile già esistente. La prova legge il testo stampato nel PDF e prova la rotta con un database finto.",
+      "verificato_da": "revisore wf_e8c81381 lotto D: prova del testo stampato e della rotta rilanciate; regge."
+    },
+    {
+      "id": "R16-002",
+      "chiave": "dati-analytics|negozio del mese: la classifica dei voti mostra tutti i negozi a zero voti in fila, e «nessun voto» non compare mai",
+      "esito": "gia_riparato_prima",
+      "prova": "app/admin/shop-of-month/page.tsx:91 `classifica.filter((r) => Number(r.vote_count) > 0)` e :199 «Nessun voto registrato»; il mese di Piacenza nella vista è già in migrations/322_la_classifica_conta_il_mese_di_piacenza.sql (mese_di_piacenza(), usata per month e per contare i voti)",
+      "verificato_da": "revisore wf_e8c81381 lotto D: confermato, il filtro vote_count > 0 e «Nessun voto registrato» ci sono già sulla base."
+    },
+    {
+      "id": "R16-006",
+      "chiave": "layout-responsive|sul telefono la tabella dei clienti esce dallo schermo: spesa, ultimo ordine e targhetta vip si vedono solo trascinandola di lato",
+      "esito": "riparato",
+      "commit": "bca20010f7eda3c30727656534ecad274163fc60",
+      "commit_voce": [
+        "4419056ee5a7c073d10e0dd5bd8b8983d9b3f0f3",
+        "11b21b997fd4717c31837415cc75d6b4de19e5fd",
+        "bca20010f7eda3c30727656534ecad274163fc60"
+      ],
+      "file_toccati": [
+        "app/seller/customers/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-clienti-schede-telefono.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-clienti-schede-telefono.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bca20010^ --file app/seller/customers/page.tsx --prove tests/unit/riparazione-r16-clienti-schede-telefono.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sul telefono una scheda per cliente al posto della tabella da 700 px (che resta da md in su), con filtri, ricerca e link alti 44 px; la riga «ID:» è tolta da schede e tabella. Lo spazio in fondo è pb-36 md:pb-0 (con py-6 = 192 px, oltre i 152 px del pulsante assistenza); la prova controlla che «ID: xxxxxxxx» non compaia e la classe dello spazio.",
+      "verificato_da": "nessun revisore nel giro di completamento: voce minore (la regola delle 12:58 chiede il revisore solo per gravi e bloccanti) e tetto di costo raggiunto; prova eseguita e prova rimessa uscita 0; npm run verify verde su 0628993d."
+    },
+    {
+      "id": "R16-017",
+      "chiave": "qa-flussi|prova con un nome che promette il contrario",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": "Riga 139 (sulla base e sulla testa): rinominare il caso da 'il pannello admin riceve 409 e non scrive nessun drop, anche senza chiave di servizio' a 'il pannello admin riceve 409 e non scrive nessun drop: il gestore si ferma prima di chiedere getAdminSupabase (middleware finto)'. Nella rotta vera senza chiave risponde 503 già withAdminAuth, prima del freno; il caso prova solo che il gestore non chiama getAdminSupabase. Il file non importa né legge per nome nessun file di R16."
+        }
+      ],
+      "verificato_da": "revisore wf_e8c81381 lotto D: il file non è di R16 (confermato); corretti la riga (139, non 137) e il nome nuovo, che prima lasciava ancora capire il 409 senza chiave."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il dialogo dell SOS dice che gli amministratori ricevono l avviso «subito», ma il push parte solo se la scrittura riesce entro 15 secondi",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "components/rider/SOSButton.tsx:230",
+      "descrizione": "Da rileggere con chi conosce /api/rider/sos/avvisa; non toccato perché fuori dalle due voci (R16-001, R16-009)."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "Il carosello delle storie legge 200 storie e poi taglia a 30: un solo negozio approvato con 200 storie in 24 ore spingerebbe fuori gli altri",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "components/home/StoriesCarousel.tsx:75-80",
+      "descrizione": "Resto stretto di R16-019 (la 404 limita la scrittura ai negozi approvati). Un filtro !inner sui negozi nella query è evitato apposta dal sito (lib/queries/fasce-prodotti.ts:262-265) e romperebbe il database finto di tests/unit/aiuti/database-della-vetrina.ts (non di R16). Un tetto di storie per negozio al giorno chiuderebbe il caso."
+    },
+    {
+      "titolo": "La pagina delle storie accetta caratteri di controllo C1 nel link che poi il database rifiuta, lasciando una foto orfana",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/safe-redirect.ts:57",
+      "descrizione": "safeInternalPath rifiuta solo C0 e DEL, il CHECK della 403 ([[:cntrl:]]) anche i C1 (es. U+0085): la foto si carica, poi l'inserimento fallisce con «Il valore inserito non è valido.». Molto improbabile."
+    },
+    {
+      "titolo": "Il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/seller/stories/page.tsx:318",
+      "descrizione": "Coerente con la regola «solo percorsi»; togliere l'origine quando coincide con quella del sito eviterebbe l'errore. La 403 cancella anche questi link dalle storie vecchie."
+    },
+    {
+      "titolo": "Un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/seller/layout.tsx:39",
+      "descrizione": "L'area negozio lascia entrare l'admin; la foto si carica prima dell'inserimento, che fallisce con «Non hai i permessi per questa azione.»."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    }
+  ],
+  "domande_per_nicola": [
+    "R16-010: profiles.address, city e zip restano nel database ma nessuna pagina li legge o li corregge più. Si cancellano (minimizzazione dei dati) o si rimettono nel Profilo, annullando la scelta della scheda 178?",
+    "R16-015: con la consegna non letta il riepilogo ora dice «le voci non fanno il totale (X di differenza)» invece di mostrare una riga «Consegna MyCity» ricavata. Va bene così, o preferisci una riga «stimata»? Servirebbe toccare le due pagine dell ordine, che non sono di R16.",
+    "R16-003: va bene che lo script del rilascio scriva per ogni migrazione nuova il commento '-- md5:<impronta>' nella colonna statements di supabase_migrations.schema_migrations? È un commento SQL (rieseguito non fa niente); le righe vecchie restano senza impronta e si confrontano solo per numero e nome. È la modifica al registro che il 5/11 era stata rimandata come «da firmare»."
+  ],
+  "conto": {
+    "agenti": 14,
+    "nota": "4 riparatori di lotto (A-D) + 1 correzione (R16-006) + 5 revisori (workflow wf_e8c81381) + lotto E (sonnet) + lotto F (R16-004) + 1 revisore di R16-004 sul modello grande = 14 su 18. Costo da get_session: 65,80 $ su un tetto di 66 $."
+  }
+}
