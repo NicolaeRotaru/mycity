@@ -425,6 +425,28 @@ export async function runMessage<TInput = unknown>(
   }
 }
 
+/**
+ * 13/11/2026 (R21-001) — IL TEMPO DI UNA CHIAMATA DEVE STARE DENTRO QUELLO DELLA ROTTA.
+ *
+ * Il client (lib/ai/client.ts) ritenta una volta, anche dopo un tempo scaduto:
+ * con 60 s per tentativo una chiamata muta durava 60 + 0,5 + 60 = 120,5 s, cioè
+ * più dei 120 s che Vercel dà alle rotte
+ * `app/api/ai/**`. Vercel spegneva la funzione prima che `mapAiError` scrivesse
+ * l'errore, e il negozio leggeva solo «il server non ha risposto».
+ *
+ * Qui il tempo di UN tentativo cresce con la risposta chiesta (15 s più 10 ms per
+ * token, circa 100 token al secondo) e non supera 40 s. Il conto nel caso
+ * peggiore, con una rotta che fa due chiamate (il filtro da 128 token e la
+ * chiamata vera): filtro 2 × 16,3 + 0,5 = 33 s, chiamata vera 2 × 40 + 0,5 =
+ * 80,5 s. Fanno 113,6 s, sotto i 120 s della rotta.
+ */
+const TEMPO_MASSIMO_TENTATIVO_MS = 40_000;
+
+export function tempoPerChiamataMs(maxTokens: number): number {
+  const tokens = Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 0;
+  return Math.min(TEMPO_MASSIMO_TENTATIVO_MS, 15_000 + 10 * tokens);
+}
+
 async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessageResult<TInput>> {
   const client = getAnthropic(); // può lanciare AiConfigError (gestito a monte)
   // Dal 30/11/2026 un modello ritirato ancora in uso si vede nei log d.errore.
@@ -432,14 +454,19 @@ async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessage
 
   let response: Anthropic.Message;
   try {
-    response = await client.messages.create({
-      model: args.model,
-      max_tokens: args.max_tokens,
-      ...(args.system !== undefined ? { system: buildSystem(args.system) } : {}),
-      messages: args.messages,
-      ...(args.tools ? { tools: withToolCache(args.tools) } : {}),
-      ...(args.tool_choice ? { tool_choice: args.tool_choice } : {}),
-    });
+    response = await client.messages.create(
+      {
+        model: args.model,
+        max_tokens: args.max_tokens,
+        ...(args.system !== undefined ? { system: buildSystem(args.system) } : {}),
+        messages: args.messages,
+        ...(args.tools ? { tools: withToolCache(args.tools) } : {}),
+        ...(args.tool_choice ? { tool_choice: args.tool_choice } : {}),
+      },
+      // R21-001 — il tempo di un tentativo dipende dalla risposta chiesta, così
+      // la chiamata (con il suo ritentativo) finisce prima della rotta.
+      { timeout: tempoPerChiamataMs(args.max_tokens) },
+    );
   } catch (err) {
     throw new AiCallError(args.feature, extractStatus(err), err, extractRetryAfter(err));
   }
