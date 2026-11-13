@@ -499,7 +499,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const optionGroups = hasVariants ? deriveOptionGroups(variants) : [];
   const allOptionsChosen = optionGroups.length > 0 && optionGroups.every((g) => selectedOptions[g.name]);
   const selectedVariant = allOptionsChosen ? findVariant(variants, selectedOptions) : null;
-  const needsVariantChoice = hasVariants && !selectedVariant;
+  // R24-018 — Tutte le opzioni scelte ma nessuna variante con quella coppia (il negozio non l'ha
+  // creata): non è «scegli le opzioni», è una combinazione che non c'è, e la scheda lo dice.
+  const combinazioneMancante = allOptionsChosen && !selectedVariant;
+  const needsVariantChoice = hasVariants && !selectedVariant && !combinazioneMancante;
+  const COMBINAZIONE_CHE_NON_CE = 'Questa combinazione non c\'è: prova un\'altra opzione.';
 
   const stock: number | undefined = hasVariants
     ? (selectedVariant ? selectedVariant.stock : undefined)
@@ -519,7 +523,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const tutteLeVariantiEsaurite =
     hasVariants && variants.length > 0 && variants.every((v) => v.stock === 0);
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
-  const canAdd = !isOutOfStock && !needsVariantChoice && mayPurchase;
+  const canAdd = !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
 
   // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
   // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
@@ -567,6 +571,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
       return;
     }
+    if (combinazioneMancante) {
+      toast.error(COMBINAZIONE_CHE_NON_CE);
+      return;
+    }
     // R02-008 — Il pulsante resta raggiungibile da tastiera anche quando non si può comprare
     // (aria-disabled): premuto, dice perché invece di aggiungere.
     if (isOutOfStock) {
@@ -603,6 +611,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     }
     if (needsVariantChoice) {
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
+      return;
+    }
+    if (combinazioneMancante) {
+      toast.error(COMBINAZIONE_CHE_NON_CE);
       return;
     }
     // R02-008 (dopo il collaudo) — Anche «Compra ora» resta nel giro del Tab quando non si può
@@ -1000,6 +1012,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       // di sceglierlo, anche a chi usa il lettore di schermo.
                       const conQuestoValore = variants.filter((v) => v.options?.[g.name] === val);
                       const esaurito = conQuestoValore.length > 0 && conQuestoValore.every((v) => v.stock === 0);
+                      // R24-018 — Con le altre scelte già fatte, questo valore ha una variante? Se no
+                      // si spegne (barrato, e lo sente anche il lettore di schermo) prima di sceglierlo.
+                      const altreScelte = Object.entries(selectedOptions).filter(([k, s]) => k !== g.name && s);
+                      const senzaVariante = altreScelte.length > 0 && !conQuestoValore.some(
+                        (v) => altreScelte.every(([k, s]) => v.options?.[k] === s),
+                      );
                       return (
                         <button
                           key={val}
@@ -1010,10 +1028,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                           className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
                             active
                               ? 'border-primary-600 bg-primary-50 text-primary-800'
-                              : 'border-surface-300 bg-white text-ink-700 hover:border-primary-300'
+                              : senzaVariante
+                                ? 'border-dashed border-surface-300 bg-white text-ink-500 line-through hover:border-primary-300'
+                                : 'border-surface-300 bg-white text-ink-700 hover:border-primary-300'
                           }`}
                         >
                           {val}
+                          {senzaVariante && (
+                            <span className="sr-only">, non disponibile con {altreScelte.map(([, s]) => s).join(' e ')}</span>
+                          )}
                         </button>
                       );
                     })}
@@ -1028,6 +1051,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <p className="text-xs text-ink-500">
                   Scegli {optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} per vedere la disponibilità.
                 </p>
+              ) : combinazioneMancante ? (
+                <p className="text-xs font-semibold text-secondary-700">{COMBINAZIONE_CHE_NON_CE}</p>
               ) : selectedVariant && selectedVariant.stock === 0 ? (
                 <p className="text-xs font-semibold text-secondary-700">Variante esaurita — prova un&apos;altra combinazione.</p>
               ) : selectedVariant && selectedVariant.stock <= LOW_STOCK_THRESHOLD ? (
@@ -1133,6 +1158,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <span className="text-ink-600 font-semibold">
                   Scegli le opzioni per vedere la disponibilità
                 </span>
+              ) : combinazioneMancante ? (
+                <span className="text-secondary-700 font-bold">Combinazione non disponibile</span>
               ) : isLowStock ? (
                 <span className="text-secondary-700 font-bold inline-flex items-center gap-1"><Flame size={13} strokeWidth={2.4} aria-hidden /> {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}</span>
               ) : (
@@ -1186,7 +1213,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               className="aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:shadow-none aria-disabled:cursor-not-allowed aria-disabled:hover:bg-cream-200 aria-disabled:hover:shadow-none"
               icon={canAdd ? ShoppingCart : undefined}
             >
-              {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
+              {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock || combinazioneMancante ? 'Non disponibile' : 'Aggiungi al carrello'}
             </Button>
 
             <button
