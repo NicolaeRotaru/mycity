@@ -2161,12 +2161,23 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // vale anche per i contanti, dove lo storno stava senza nessuna protezione.
   const sellerNet = order.seller_payout_cents ?? 0;
   const quotaDichiarata = opts.quotaNegozioCents;
+  // 13/11/2026 (R17-013) — IL RIMBORSO CHE CHIUDE L'ORDINE PRENDE QUELLO CHE RESTA AL NEGOZIO.
+  // La proporzione si fa sul lordo intero e sul netto intero del negozio. Ma un rimborso di prima può
+  // avergli tolto meno della sua proporzione: l'euro della veloce (quota 0, è di MyCity). Ordine da
+  // 19 €, al forno 13,50 €, bonifico partito: l'euro torna senza toccare il forno, poi il reso pieno di
+  // 18 € gli toglieva 18 × 13,50 / 19 = 12,79 €, e 71 centesimi restavano al forno su un ordine
+  // rimborsato tutto. Adesso il rimborso che porta l'ordine al lordo pieno prende quello che al negozio
+  // resta (13,50 €). Con un recupero caduto (REVERSAL_FAILED) quello che resta non si sa (lo recupera
+  // una persona): lì resta la proporzione.
+  const restaAlNegozio = Math.max(0, sellerNet - Number(order.seller_payout_reversed_cents ?? 0));
   const sellerShare =
     typeof quotaDichiarata === 'number' && Number.isFinite(quotaDichiarata)
       ? Math.max(0, Math.min(Math.round(quotaDichiarata), safeAmountCents, sellerNet))
-      : grossCents > 0
-        ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet)
-        : 0;
+      : isFull && order.payout_status !== 'REVERSAL_FAILED'
+        ? restaAlNegozio
+        : grossCents > 0
+          ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet)
+          : 0;
 
   let stornatoAlNegozio = 0;
   let recuperoNonRiuscito: string | null = null;
