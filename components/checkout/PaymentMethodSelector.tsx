@@ -124,7 +124,7 @@ export function PaymentMethodSelector({
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
             <CreditCard size={20} aria-hidden />
           </span>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1 break-words">
             <p className="font-bold text-ink-900">Carta di credito / debito</p>
             <p className="text-sm text-ink-600">
               Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
@@ -160,7 +160,7 @@ export function PaymentMethodSelector({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Banknote size={20} aria-hidden />
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1 break-words">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-bold text-ink-900">Contanti alla consegna</p>
             <Badge variant="cod">Zero rischio</Badge>
@@ -200,7 +200,7 @@ export function PaymentMethodSelector({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
           <Store size={20} aria-hidden />
         </span>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1 break-words">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
             {pickupInStore && pickupDiscount > 0 ? (
