@@ -188,9 +188,8 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   }
   // 31/10/2026 — I CONTANTI PAGATI A MANO NON SI PAGANO UNA SECONDA VOLTA.
   // Al lancio il bonifico al negozio dei contanti lo fa Nicola a mano
-  // (registro dei fatti, `pagamenti.al-lancio`), e l'ordine resta HELD finché
-  // un amministratore non lo segna «Bonifico fatto» (PAID_MANUALLY, migrazione
-  // 410; prima il sito non aveva nemmeno quel modo). Il giorno in cui la
+  // (registro dei fatti, `pagamenti.al-lancio`), e l'ordine resta HELD: il sito
+  // non ha un modo di segnarlo «pagato con bonifico». Il giorno in cui la
   // chiave Stripe entra su Vercel, il giro li avrebbe pagati tutti di nuovo dal
   // saldo della piattaforma. Adesso un contrassegno passa da qui solo se è
   // stato consegnato dal giorno scritto in PAGAMENTI_CONTANTI_DA_STRIPE_DAL:
@@ -1453,19 +1452,12 @@ async function laParteDeiRimborsiSenzaOrdine(
  * amministratori con negozio, cifra e ordine: «togli 18,00 € dal prossimo bonifico». Una volta
  * per rimborso (`unaVoltaPer` sulla chiave). Un avviso che non parte non ferma il rimborso, già
  * uscito: resta nel log, col testo.
- *
- * R17-002 — E SE IL BONIFICO DEL LUNEDÌ È GIÀ SEGNATO? Con la migrazione 410 Nicola segna il
- * bonifico fatto a mano (PAID_MANUALLY). È proprio il caso «rimborso dopo il bonifico»: l'avviso
- * partiva solo su HELD e lì taceva, e la quota del negozio si perdeva in silenzio. Adesso parte
- * anche lì (`pagatoAMano`), e dice che il bonifico è già uscito. Il giro Stripe un ordine pagato a
- * mano non lo paga più, quindi la regola dei contanti pagati da Stripe qui non lo ferma.
  */
 async function avvisaDellaQuotaDaTrattenere(
   admin: ReturnType<typeof getAdminSupabase>,
   orderId: string,
   quotaCents: number,
   chiave: string,
-  pagatoAMano = false,
 ): Promise<void> {
   let negozio = 'il negozio';
   try {
@@ -1473,7 +1465,7 @@ async function avvisaDellaQuotaDaTrattenere(
     // Collaudo K04 — se i contanti di quell'ordine li paga Stripe (contantiPagabiliDaStripe), il
     // bonifico automatico scala già la quota scritta sull'ordine: l'avviso la farebbe togliere due
     // volte. L'avviso serve solo al bonifico fatto a mano.
-    if (!pagatoAMano && o && contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at)) return;
+    if (o && contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at)) return;
     const sellerId = (o as { seller_id?: string | null } | null)?.seller_id ?? null;
     if (sellerId) {
       const { data: p } = await admin.from('profiles').select('store_name').eq('id', sellerId).maybeSingle();
@@ -1485,12 +1477,10 @@ async function avvisaDellaQuotaDaTrattenere(
   }
   const cifra = formatPriceFromCents(quotaCents);
   const titolo = `💶 Togli ${cifra} dal prossimo bonifico a ${negozio}`;
-  const testo = pagatoAMano
-    ? `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
-      `Il bonifico di quell'ordine a ${negozio} è già segnato come fatto a mano: togli ${cifra} dal prossimo bonifico.`
-    : `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
-      `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
-      'se non è ancora partito, versa solo il resto.';
+  const testo =
+    `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
+    `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
+    'se non è ancora partito, versa solo il resto.';
   let arrivato = false;
   try {
     arrivato = (await notifyAdmins(titolo, testo, '/admin/cod-remittance', { unaVoltaPer: `quota-da-trattenere:${chiave}` })) !== 'nessuno';
@@ -1833,10 +1823,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // se l'accredito cadeva, il negozio aveva gia' pagato. Adesso il blocco e'
   // uno solo per tutti i modi: prima il cliente, poi — a soldi usciti — il
   // negozio. La classe di difetto «riparato in un ramo solo» non ha piu' due rami.
-  // R17-002 — Il bonifico del lunedì fatto a mano (PAID_MANUALLY, migrazione 410) è un bonifico
-  // già uscito come quello di Stripe: sul rimborso pieno la partita col negozio si chiude come
-  // «stornato» (REVERSED), non come «rimborsato prima di pagarlo» (REFUNDED).
-  const bonificoGiaUscito = order.payout_status === 'TRANSFERRED' || order.payout_status === 'PAID_MANUALLY';
+  const wasTransferred = order.payout_status === 'TRANSFERRED';
   // Lo stato del pagamento dopo questo rimborso: per il bonifico dei contanti si
   // scrive col segno, nella stessa scrittura.
   const statoDelPagamento = { payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED' };
@@ -1846,7 +1833,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // giro — e si scrive DOPO lo storno, come prima della semplificazione: scritto
   // col segno, un tentativo morto in mezzo lasciava «REVERSED» senza storno, e la
   // ripresa non chiamava piu' Stripe (`reverseOrderTransfer` guarda TRANSFERRED).
-  const statoDelNegozio = isFull ? { payout_status: bonificoGiaUscito ? 'REVERSED' : 'REFUNDED' } : {};
+  const statoDelNegozio = isFull ? { payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED' } : {};
 
   // 17/10/2026 — L'avviso del bonifico da fare, con tutto quello che serve per
   // pagare (lib/rimborsi/bonifici-da-fare.ts). Una riga per amministratore, con
@@ -2066,13 +2053,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // 21/8/2026 — Se il bonifico al negozio non e' ancora partito, la sua quota
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
-  // R17-002 — Su un ordine pagato a mano (PAID_MANUALLY) Stripe non ha niente da stornare: la quota
-  // scritta qui è lo storno da riprendere a mano dal prossimo bonifico, come quello che Stripe
-  // riprende su TRANSFERRED, e l'avviso qui sotto lo dice a Nicola.
   const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
-  const pagatoAMano = order.payout_status === 'PAID_MANUALLY';
-  if (tipo === 'contanti' && (order.payout_status === 'HELD' || pagatoAMano) && sellerShare > 0) {
-    await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave, pagatoAMano);
+  if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
+    await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
   }
   // R03-005 — il segno del rimborso in credito finito (vedi sopra, `wallet:<chiave>`): si scrive
   // dopo la quota del negozio, cosi' una ripresa che lo trova sa che non manca niente.

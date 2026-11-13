@@ -88,7 +88,7 @@ const STATI_CON_BONIFICO = ['TRANSFERRED', 'PAID_MANUALLY', 'HELD', 'PENDING_SEL
  * R11-004 — IL BONIFICO DEL LUNEDÌ FATTO A MANO È UN BONIFICO VERSATO.
  *
  * Al lancio i contanti li versa Nicola a mano, ogni lunedì: l'ordine passa da
- * HELD a PAID_MANUALLY (migrazione 410, `segna_bonifico_manuale`). Prima non
+ * HELD a PAID_MANUALLY (migrazione 350, `segna_bonifico_manuale`). Prima non
  * esisteva nessuno stato per quel bonifico: restava HELD, e il negozio leggeva
  * «0,00 € già versati» con l'«in arrivo» che cresceva ogni settimana.
  */
@@ -230,7 +230,7 @@ export type OrdineDelPannello = {
 };
 
 /**
- * Gli stessi cancelli del giro automatico e della funzione della 410: contestazione in banca, reclamo
+ * Gli stessi cancelli del giro automatico e della funzione 350: contestazione in banca, reclamo
  * sull'ordine, rimborso pieno, e reso o reclamo aperto nelle loro tabelle. Il totale mostrato e gli
  * ordini che «Bonifico fatto» segna devono essere lo stesso insieme.
  */
