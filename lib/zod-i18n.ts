@@ -39,6 +39,10 @@ export const FRASI_ZOD = {
   massimoCaratteri: (n: number | bigint) => `Massimo ${quanti(n, 'carattere', 'caratteri')}`,
   minimo: (n: number | bigint) => `Valore minimo: ${n}`,
   massimo: (n: number | bigint) => `Valore massimo: ${n}`,
+  // Giro di correzione (R24-019) — Il limite escluso: positive() rifiuta lo 0, che non è
+  // «Valore minimo: 0».
+  maggioreDi: (n: number | bigint) => `Deve essere maggiore di ${n}`,
+  minoreDi: (n: number | bigint) => `Deve essere minore di ${n}`,
   almenoElementi: (n: number | bigint) => `Seleziona almeno ${quanti(n, 'elemento', 'elementi')}`,
   email: 'Email non valida',
   url: 'URL non valido',
@@ -60,7 +64,7 @@ z.setErrorMap((issue, ctx) => {
         return { message: FRASI_ZOD.almenoCaratteri(issue.minimum) };
       }
       if (issue.type === 'number') {
-        return { message: FRASI_ZOD.minimo(issue.minimum) };
+        return { message: issue.inclusive ? FRASI_ZOD.minimo(issue.minimum) : FRASI_ZOD.maggioreDi(issue.minimum) };
       }
       if (issue.type === 'array') {
         return { message: FRASI_ZOD.almenoElementi(issue.minimum) };
@@ -72,7 +76,7 @@ z.setErrorMap((issue, ctx) => {
         return { message: FRASI_ZOD.massimoCaratteri(issue.maximum) };
       }
       if (issue.type === 'number') {
-        return { message: FRASI_ZOD.massimo(issue.maximum) };
+        return { message: issue.inclusive ? FRASI_ZOD.massimo(issue.maximum) : FRASI_ZOD.minoreDi(issue.maximum) };
       }
       break;
 

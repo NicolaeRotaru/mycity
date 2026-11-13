@@ -30,6 +30,21 @@ describe('il traduttore di Zod parla italiano corretto', () => {
     expect(msg).toMatch(/^Valore non valido/);
   });
 
+  it('il limite escluso non si dice come un minimo: positive() su 0 vuole «maggiore di 0»', () => {
+    expect(primo(z.number().positive().safeParse(0))).toBe('Deve essere maggiore di 0');
+    expect(primo(z.number().gt(5).safeParse(5))).toBe('Deve essere maggiore di 5');
+    expect(primo(z.number().negative().safeParse(0))).toBe('Deve essere minore di 0');
+    expect(primo(z.number().lt(10).safeParse(10))).toBe('Deve essere minore di 10');
+    // Il limite compreso resta «Valore minimo/massimo».
+    expect(primo(z.number().min(1).safeParse(0))).toBe('Valore minimo: 1');
+    expect(primo(z.number().nonnegative().safeParse(-1))).toBe('Valore minimo: 0');
+    expect(primo(z.number().max(10).safeParse(11))).toBe('Valore massimo: 10');
+  });
+
+  it('«Massimo 1 carattere», al singolare', () => {
+    expect(primo(z.string().max(1).safeParse('ab'))).toBe('Massimo 1 carattere');
+  });
+
   it('le frasi giuste restano quelle di prima', () => {
     expect(primo(z.string().max(120).safeParse('a'.repeat(121)))).toBe('Massimo 120 caratteri');
     expect(primo(z.string().min(1).safeParse(''))).toBe('Campo obbligatorio');
