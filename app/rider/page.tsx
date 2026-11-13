@@ -262,12 +262,14 @@ export default function RiderDashboardPage() {
       if (!user) return { count: 0, earned: 0 };
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .select('shipping_cost, rider_fee_cents, delivered_at')
         .eq('rider_id', user.id)
         .eq('delivery_status', 'DELIVERED')
         .gte('delivered_at', start.toISOString());
+      // R20-004 — Una lettura caduta non è «oggi 0,00 €»: l'errore sale e il riquadro dice «—».
+      if (error) throw error;
       // 22/8/2026 — IL TOTALE DELLA GIORNATA SOMMAVA `shipping_cost`, cioe'
       // quanto ha pagato il CLIENTE per la spedizione: sopra i 30 euro e' zero.
       // Il fattorino chiudeva una giornata di consegne con un totale piu' basso
@@ -471,8 +473,9 @@ export default function RiderDashboardPage() {
       {/* Stat di oggi: 3-up */}
       <div className="mb-[18px] grid grid-cols-3 gap-2 px-4">
         {[
-          ['Oggi', formatPrice(today?.earned ?? 0)],
-          ['Consegne', String(today?.count ?? 0)],
+          // R20-004 — «—» finché non c'è un numero (in caricamento o con la lettura caduta), non 0.
+          ['Oggi', today ? formatPrice(today.earned) : '—'],
+          ['Consegne', today ? String(today.count) : '—'],
           ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-cream-300 bg-surface-0 px-3 py-2.5 text-center">
