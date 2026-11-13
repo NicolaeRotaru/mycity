@@ -389,7 +389,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   let codSaldoInsufficiente = false;
   // 31/10/2026 — SI CERCANO SOLO I CONTANTI CHE STRIPE PUO' PAGARE.
   // Al lancio il negozio i contanti li riceve con un bonifico a mano di Nicola
-  // e l'ordine resta HELD: releaseOrderPayout li rifiuta (contantiPagabiliDaStripe),
+  // e l'ordine resta HELD finché non lo si segna «Bonifico fatto» (PAID_MANUALLY,
+  // migrazione 410): releaseOrderPayout li rifiuta (contantiPagabiliDaStripe),
   // ma qui sotto il controllo del saldo li sommava lo stesso. Senza la data
   // l'avviso «saldo insufficiente» partiva per bonifici che Stripe non fara'
   // mai; con la data, i contanti vecchi gonfiavano il conto e fermavano quelli

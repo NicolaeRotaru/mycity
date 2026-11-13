@@ -188,8 +188,9 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   }
   // 31/10/2026 — I CONTANTI PAGATI A MANO NON SI PAGANO UNA SECONDA VOLTA.
   // Al lancio il bonifico al negozio dei contanti lo fa Nicola a mano
-  // (registro dei fatti, `pagamenti.al-lancio`), e l'ordine resta HELD: il sito
-  // non ha un modo di segnarlo «pagato con bonifico». Il giorno in cui la
+  // (registro dei fatti, `pagamenti.al-lancio`), e l'ordine resta HELD finché
+  // un amministratore non lo segna «Bonifico fatto» (PAID_MANUALLY, migrazione
+  // 410; prima il sito non aveva nemmeno quel modo). Il giorno in cui la
   // chiave Stripe entra su Vercel, il giro li avrebbe pagati tutti di nuovo dal
   // saldo della piattaforma. Adesso un contrassegno passa da qui solo se è
   // stato consegnato dal giorno scritto in PAGAMENTI_CONTANTI_DA_STRIPE_DAL:
