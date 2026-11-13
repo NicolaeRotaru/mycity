@@ -1,13 +1,13 @@
 {
   "sessione": "R20",
-  "aggiornato": "2026-11-13 06:58",
+  "aggiornato": "2026-11-13 07:40",
   "finita": true,
-  "testa": "49336f1e5b74a50e3a5ae362bda8a6881b666d49",
+  "testa": "a23283e8170733f5ebd9c770b166091c4afc61a9",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "49336f1e5b74a50e3a5ae362bda8a6881b666d49",
-    "nota": "Lanciato con NODE_OPTIONS=--max-old-space-size=8192: col tetto di memoria di base di Node, tsc --noEmit si ferma per memoria esaurita (uscita 134), una condizione della macchina e non del codice. typecheck, lint e test verdi: 1433 file e 9700 prove passati, 1 file saltato che era già saltato sulla base. Log nello scratchpad della sessione."
+    "testa": "a23283e8170733f5ebd9c770b166091c4afc61a9",
+    "nota": "Lanciato con NODE_OPTIONS=--max-old-space-size=8192: col tetto di memoria di base di Node, tsc --noEmit si ferma per memoria esaurita (uscita 134), una condizione della macchina e non del codice. typecheck, lint e test verdi: 1432 file e 9698 prove passati, 1 file saltato che era già saltato sulla base. guardia-ramo HEAD R20 verde."
   },
   "voci": [
     {
@@ -120,15 +120,20 @@
       "id": "R20-005",
       "chiave": "frontend-ux|un link del menu lasciato vuoto blocca «salva sito» anche quando il menu è spento e il campo non si vede",
       "esito": "riparato",
-      "commit": "6e6cde80e9c3ade9477390c7f4f147e5cb10257f",
+      "commit": "167784086f42323cb51b3ee3db097620b80ba45d",
+      "commit_della_voce": [
+        "c2a7a39e9ca568a8d4ca6a0b15b72cc7ec508f91",
+        "6e6cde80e9c3ade9477390c7f4f147e5cb10257f",
+        "167784086f42323cb51b3ee3db097620b80ba45d"
+      ],
       "file_toccati": [
         "lib/store-site.ts",
-        "tests/unit/minori-s06-vetrina-non-salvata.test.ts"
+        "tests/unit/riparazione-r20-menu-spento.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r20-menu-spento.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r20-menu-spento.test.ts --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-menu-spento.test.ts tests/unit/minori-s06-vetrina-non-salvata.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -137,13 +142,8 @@
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c2a7a39e^ --file lib/store-site.ts --prove tests/unit/riparazione-r20-menu-spento.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nello schema del sito (lib/store-site.ts) con il menu spento i link incompleti si scartano prima del controllo, quelli completi restano; con il menu acceso il controllo è identico e resolveMenu non è toccato. MenuEditor.tsx non serviva modificarlo. Due commit con lo stesso id: il secondo (6e6cde80) corregge la prova esistente tests/unit/minori-s06-vetrina-non-salvata.test.ts, che importa storeSiteSchema e partiva da un menu senza enabled (quindi spento): ora parte da enabled:true (stessa asserzione sul testo «Menu, link 1», non indebolita). Dichiarata come prova esistente modificata.",
-      "verificato_da": "qa: letto il diff (preprocess scarta solo i link incompleti a menu spento, acceso identico), prova, prova rimessa uscita 0, 54 file di prove collegate verdi, tsc pulito; la prova esistente s06 aggiornata e dichiarata, asserzione non indebolita",
-      "commit_della_voce": [
-        "c2a7a39e9ca568a8d4ca6a0b15b72cc7ec508f91",
-        "6e6cde80e9c3ade9477390c7f4f147e5cb10257f"
-      ],
-      "prova_esistente_modificata": "tests/unit/minori-s06-vetrina-non-salvata.test.ts (importa storeSiteSchema da lib/store-site.ts): il sito di partenza ha enabled:true, stessa asserzione"
+      "cosa_ho_fatto": "In lib/store-site.ts i link incompleti si scartano prima del controllo solo quando il menu in input è spento in modo esplicito (enabled === false); se enabled manca o è true il controllo resta com'era. La prova comune minori-s06-vetrina-non-salvata è tornata identica alla base e passa senza modifiche; alla prova R20 (che usava già enabled:false) ho aggiunto il caso «senza enabled il link vuoto è ancora rifiutato». Controllato MenuEditor.tsx: la casella scrive enabled:false (:45), «Aggiungi link» e i campi si vedono solo col menu acceso (:48), defaultSite ha enabled:false (store-site.ts:345).",
+      "verificato_da": "qa: letto il diff (preprocess scarta solo i link incompleti a menu spento, acceso identico), prova, prova rimessa uscita 0, 54 file di prove collegate verdi, tsc pulito; la prova esistente s06 aggiornata e dichiarata, asserzione non indebolita · dopo la guardia (prova comune minori-s06 rimessa com’era): qa: voce letta intera; diff del lotto (store-site.ts:280 `enabled === true` diventato `enabled !== false`, alt del banner R20-003 non toccato); MenuEditor.tsx:44-48 confermato: la casella scrive enabled:false, i link e «Aggiungi link» compaiono solo col menu acceso, defaultSite ha enabled:false (store-site.ts:346), lo stato dell'editor viene da normalizeSite quindi enabled è sempre booleano; minori-s06 identica alla base (git diff a19ff892 HEAD vuoto); `npx vitest run tests/unit/riparazione-r20-menu-spento.test.ts tests/unit/minori-s06-vetrina-non-salvata.test.ts --reporter=dot` verde (2 file, 10 prove); le 7 prove che importano lib/store-site verdi (47 prove); rimessa `--base c2a7a39e^ --file lib/store-site.ts --prove tests/unit/riparazione-r20-menu-spento.test.ts` uscita 0 «regge» (il caso «senza enabled» cade con la versione c2a7a39e); tsc --noEmit uscita 0; nessun indice unico o altro chiamante rotto (SiteEditor e la rotta PUT passano dallo stesso schema)."
     },
     {
       "id": "R20-006",
@@ -348,28 +348,23 @@
     {
       "id": "R20-015",
       "chiave": "qa-flussi|salvando le taglie, se la scorta cambia a metà il negozio legge «riapri e salva di nuovo», ma le taglie tolte sono già cancellate",
-      "esito": "riparato",
-      "commit": "33fc7ac356326c6366cf097c62f8fd05e5a162ad",
-      "file_toccati": [
-        "lib/products/persistVariantsServer.ts",
-        "tests/unit/riparazione-r20-taglie-tolte.test.ts",
-        "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts"
+      "esito": "serve_file_altrui",
+      "commit": "a23283e8170733f5ebd9c770b166091c4afc61a9",
+      "commit_della_voce": [
+        "33fc7ac356326c6366cf097c62f8fd05e5a162ad",
+        "a23283e8170733f5ebd9c770b166091c4afc61a9"
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r20-taglie-tolte.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r20-taglie-tolte.test.ts tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts --reporter=dot",
-      "prova_tipo": "comando",
+      "prova_comando": "npx vitest run tests/unit/chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta.test.ts tests/unit/dopo-una-scorta-cambiata-lista-e-modulo-ripartono-dalla-banca-dati.test.tsx tests/unit/in-amministrazione-il-modulo-non-si-apre-senza-le-varianti.test.tsx tests/unit/la-modifica-del-prodotto-non-si-apre-senza-le-varianti.test.tsx tests/unit/la-pagina-di-modifica-salva-le-varianti-senza-rimettere-in-magazzino-il-venduto.test.ts tests/unit/la-porta-del-catalogo-non-scrive-una-scorta-che-nel-frattempo-e-cambiata.test.ts tests/unit/la-scorta-si-confronta-con-quella-vista-non-con-quella-scritta.test.ts tests/unit/la-spunta-del-recesso-si-salva-anche-in-modifica.test.tsx tests/unit/la-variante-mai-vista-non-si-cancella.test.ts tests/unit/minori-s05-prodotto-admin.test.tsx tests/unit/minori-s06-scorta-in-modifica.test.ts tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts --reporter=dot",
       "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 33fc7ac356326c6366cf097c62f8fd05e5a162ad^ --file lib/products/persistVariantsServer.ts --prove tests/unit/riparazione-r20-taglie-tolte.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La strada principale era già atomica dal 12/11: R08-008 usa la funzione salva_varianti della migrazione 323, che non è detto sia applicata. Restava il difetto nel ripiego a pezzi (PGRST202), che cancellava per primo. Ora fa prima gli aggiornamenti condizionati sulla scorta, poi quelli senza condizione, e solo dopo cancellazioni e inserimenti (seconda strada indicata dal fix del registro). Quando tutto va bene il risultato finale è identico: id distinti e nessun vincolo unique su product_variants. Prova con un client finto che registra l'ordine delle chiamate. Dichiaro di aver cambiato una prova esistente che importa il mio file: tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts, caso «ripiego». Diceva expect(aPezzi[0]).toBe('delete v-l'), cioè fissava il difetto; ora controlla che la L non sia cancellata al conflitto. La prova è più stretta, non più debole.",
-      "verificato_da": "qa: confrontato il diff con la voce, che indica come seconda strada prima i condizionati e poi cancellazioni e inserimenti. In migrations/080 e nelle successive product_variants non ha vincoli unique, quindi riordinare gli aggiornamenti dà lo stesso stato finale. Prova nuova 3/3 verde, rimessa con --base 33fc7ac3^: uscita 0. La modifica a riparazione-r08 è ammessa (importa persistVariantsServer) e stringe, non indebolisce: prima fissava 'delete v-l' come primo passo. Resta, come la voce accetta, che un aggiornamento condizionato riuscito prima del conflitto (S) resta scritto. La strada principale salva_varianti è atomica. 44 prove vicine verdi.",
-      "prova_esistente_modificata": "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts (importa persistVariantsServer): l’asserzione che fissava «delete v-l» come prima scrittura ora controlla che la L non sia cancellata al conflitto"
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts",
+          "modifica": "Nel caso «ripiego: se la funzione non c’è ancora (PGRST202) il salvataggio si fa come prima, a pezzi» sostituire le due righe\n    // a pezzi la L era già cancellata prima del conflitto: è il comportamento di prima, dichiarato\n    expect(db.aPezzi[0]).toBe('delete v-l');\ncon le quattro righe\n    // R20-015 — a pezzi gli aggiornamenti condizionati vanno prima: al conflitto la L tolta non è\n    // ancora cancellata (prima qui si dichiarava `delete v-l` come prima scrittura).\n    expect(db.aPezzi).not.toContain('delete v-l');\n    expect(db.stato().map((r) => r.label)).toContain('L');\nDA APPLICARE INSIEME al riordino del ripiego a pezzi in lib/products/persistVariantsServer.ts (prima gli aggiornamenti condizionati sulla scorta, poi cancellazione e inserimenti) e alla prova tests/unit/riparazione-r20-taglie-tolte.test.ts: tutti e tre si riprendono insieme con `git revert a23283e8170733f5ebd9c770b166091c4afc61a9` (il revert rimette anche questa modifica alla prova r08, identica a quella di 33fc7ac3; controllato: git diff 33fc7ac3 a23283e8^ sui tre file è vuoto)."
+        }
+      ],
+      "nota": "La strada principale è già atomica da R08-008 (salva_varianti, migrazione 323). Secondo la regista la 323 è già applicata sul database vero (onda 1): oggi il riordino servirebbe solo al ripiego a pezzi (PGRST202), che parte se la funzione manca. Il riordino era nel commit 33fc7ac3 ma rendeva rossa per forza la prova comune riparazione-r08, che R20 non può toccare: il commit a23283e8 lo toglie, con la scelta della regista. Sul ramo persistVariantsServer.ts, la prova r08 e la prova r20-taglie-tolte sono identiche alla base. Non c’è una rimessa perché sul ramo non resta una correzione.",
+      "cosa_ho_fatto": "Riordino del ripiego a pezzi fatto e collaudato (33fc7ac3), poi tolto (a23283e8) perché cambiava una prova comune. Si riprende alla cucitura con git revert a23283e8 insieme alla modifica della prova r08 scritta in serve_file_altrui.",
+      "verificato_da": "qa lotto 2 sul riordino: qa: confrontato il diff con la voce, che indica come seconda strada prima i condizionati e poi cancellazioni e inserimenti. In migrations/080 e nelle successive product_variants non ha vincoli unique, quindi riordinare gli aggiornamenti dà lo stesso stato finale. Prova nuova 3/3 verde, rimessa con --base 33fc7ac3^: uscita 0. La modifica a riparazione-r08 è ammessa (importa persistVariantsServer) e stringe, non indebolisce: prima fissava 'delete v-l' come primo passo. Resta, come la voce accetta, che un aggiornamento condizionato riuscito prima del conflitto (S) resta scritto. La strada principale salva_varianti è atomica. 44 prove vicine verdi. · dopo la guardia: qa: voce letta intera; git diff a19ff892 HEAD sui tre file (persistVariantsServer, prova r08, prova r20-taglie-tolte) vuoto; la modifica serve_file_altrui è identica, carattere per carattere, a git show 33fc7ac3 sulla prova r08; git diff 33fc7ac3 a23283e8^ sui tre file vuoto e `git apply --check -R` di a23283e8 pulito; in un worktree temporaneo (poi tolto) `git revert --no-commit a23283e8` dà r08 e r20-taglie-tolte verdi (8 prove), mentre col persistVariantsServer della base 3 prove rosse sul comportamento (delete v-l per primo, L sparita); niente indice unico su product_variants, quindi il riordino non crea conflitti; migrazione 323 confermata atomica (RAISE scorta_cambiata annulla anche la DELETE); le 12 prove che importano persistVariantsServer o salva-varianti-finta verdi (60 prove). Nota sul referto: prova_comando contiene il segnaposto «<e le altre 11 prove…>» e non l'elenco vero dei file."
     },
     {
       "id": "R20-016",
@@ -480,7 +475,7 @@
     }
   ],
   "conto": {
-    "agenti": 8,
-    "nota": "4 subagenti che riparano (lotti 1-2 modello grande, 3-4 sonnet) e 4 revisori (1-2 modello grande, 3-4 sonnet); il giro di correzione di R20-004 l’ha fatto il subagente nuovo del lotto 2"
+    "agenti": 10,
+    "nota": "4 subagenti che riparano (lotti 1-2 modello grande, 3-4 sonnet), 4 revisori (1-2 modello grande, 3-4 sonnet), più 1 riparatore e 1 revisore per il giro chiesto dalla guardia (prove comuni di R20-005 e R20-015). Il giro di correzione di R20-004 l’ha fatto il subagente del lotto 2."
   }
 }
