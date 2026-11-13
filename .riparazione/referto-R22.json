@@ -1,0 +1,272 @@
+{
+  "sessione": "R22",
+  "aggiornato": "2026-11-13 07:05",
+  "finita": false,
+  "testa": "8ec99f57725946ec683102dd360b3b1f851702de",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R22-001",
+      "chiave": "api-backend|se il servizio di posta risponde oltre dieci secondi, la coda rimanda la stessa email cinque minuti dopo",
+      "esito": "riparato",
+      "insieme_a": "R22-011",
+      "commit": "1e923271be7c2579596d826c4d713e73d56467be",
+      "file_toccati": [
+        "lib/email/client.ts",
+        "app/api/cron/send-emails/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-coda-email-timeout.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-coda-email-timeout.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1e923271^ --file lib/email/client.ts,app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r22-coda-email-timeout.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "sendEmail accetta una idempotencyKey e la passa a Resend come intestazione Idempotency-Key (resend 3.5 non ha l'opzione: la chiave va nelle intestazioni dell'SDK, conservando la chiave d'accesso); la coda passa una chiave stabile per riga (email-queue/<id>), così la riga ripresa 5 minuti dopo un timeout non viene rispedita. Prova: giro vero, client vero, SDK vero, fetch finto che fa come Resend con la chiave.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-011",
+      "chiave": "qa-flussi|dopo un timeout di resend la coda può spedire due volte la stessa email",
+      "esito": "riparato",
+      "insieme_a": "R22-001",
+      "commit": "1e923271be7c2579596d826c4d713e73d56467be",
+      "file_toccati": [
+        "lib/email/client.ts",
+        "app/api/cron/send-emails/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-coda-email-timeout.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-coda-email-timeout.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1e923271^ --file lib/email/client.ts,app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r22-coda-email-timeout.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa cura e stesso commit di R22-001: chiave di idempotenza stabile per riga di coda verso Resend, senza aggiornare il pacchetto resend. La prova copre l'email di servizio e la promozione (corpo che cambia a ogni giro): una sola consegna in tutti e due i casi.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-002",
+      "chiave": "deploy-sre|alla riaccensione della posta, le email ormai scadute fanno la fila davanti a quelle nuove",
+      "esito": "riparato",
+      "commit": "dce0a2434d0cc490a69dedca3579c8a8f13c68a4",
+      "file_toccati": [
+        "app/api/cron/send-emails/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dce0a243^ --file app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo codice, niente migrazione, 165 intatta: prima della presa il giro chiude in blocco (col motivo) le righe non spedite e non annullate con scade_at passato, lasciando stare quelle prenotate da un giro in corso; se la scrittura cade il giro va avanti come prima. Prova: coda in memoria che fa come la 165, 100 scadute e 1 fresca: la fresca parte al primo giro.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-007",
+      "chiave": "privacy-legale|l'annulla iscrizione con un clic da gmail si perde senza traccia dopo 30 richieste in dieci minuti dallo stesso indirizzo",
+      "esito": "riparato",
+      "commit": "e40ac48ef79a5d5123400f3f86ce79fa957e1e71",
+      "file_toccati": [
+        "app/api/unsubscribe/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-disiscrizione-da-gmail.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-disiscrizione-da-gmail.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e40ac48e^ --file app/api/unsubscribe/route.ts --prove tests/unit/riparazione-r22-disiscrizione-da-gmail.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il gettone si verifica prima del freno: senza gettone valido resta il freno per IP (30/10 min); con gettone valido il freno è per indirizzo (sha256 di email e ambito, niente indirizzo in chiaro) e quando scatta lascia un logger.error. Prova: 40 gettoni diversi dallo stesso IP di Google, tutte e 40 disiscritte.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-010",
+      "chiave": "qa-flussi|quando un cliente scrive al negozio, l'email al negozio non parte: la funzione è pronta ma nessuno la chiama",
+      "esito": "riparato",
+      "commit": "a8251fb7f75b89c335eeb7309e51ef2754f938fa",
+      "file_toccati": [
+        "app/api/chat/messages/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a8251fb7^ --file app/api/chat/messages/route.ts --prove tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "avvisaChiRiceve chiama avvisaNegozioMessaggioNuovo(admin, {conversationId, senderId}) solo quando scrive il cliente a un negozio (non nella chat con l'Assistenza), via dopoLaRisposta: l'email non rallenta né fa fallire il messaggio; freno e raccolta restano quelli della funzione. Prova con funzione finta: chiamata sì dal cliente, no dal negozio né in chat Assistenza; con l'email che cade il messaggio risponde 200.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-009",
+      "chiave": "qa-flussi|la campanella del negozio accumula una voce a ogni giro di messaggi, anche per una chat già letta",
+      "esito": "riparato",
+      "commit": "8c57475ee6e326b0dfdfc46200939c3f63fe75b0",
+      "file_toccati": [
+        "app/api/chat/mark-read/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-campanella-spenta-dalla-chat-letta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-campanella-spenta-dalla-chat-letta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8c57475e^ --file app/api/chat/mark-read/route.ts --prove tests/unit/riparazione-r22-campanella-spenta-dalla-chat-letta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "mark-read segna lette anche le voci di campanella di chi legge con link /messages/<id> (con log se cade). Prova: le due rotte vere per cinque giri «il cliente scrive, il negozio legge»: nessuna voce resta accesa, e quelle di altre chat e altre persone non si toccano.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-012",
+      "chiave": "qa-flussi|una chat lasciata aperta in sottofondo sul computer del negozio segna come letti i messaggi appena arrivano",
+      "esito": "riparato",
+      "commit": "183389ac41500b5f21a57c2e2be83db17a26866e",
+      "file_toccati": [
+        "app/messages/[id]/page.tsx",
+        "app/api/chat/mark-read/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-chat-in-sottofondo-non-segna-letto.test.ts",
+        "tests/unit/riparazione-r22-chat-letta-dice-l-esito.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-chat-in-sottofondo-non-segna-letto.test.ts tests/unit/riparazione-r22-chat-letta-dice-l-esito.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 183389ac^ --file app/messages/[id]/page.tsx,app/api/chat/mark-read/route.ts --prove tests/unit/riparazione-r22-chat-in-sottofondo-non-segna-letto.test.ts,tests/unit/riparazione-r22-chat-letta-dice-l-esito.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina segna letto solo con document.visibilityState 'visible' e lo rifà a ogni visibilitychange; mark-read legge l'esito dell'azzeramento del contatore e se cade risponde 500. Prova: la pagina vera montata con la scheda nascosta non segna letto il messaggio che arriva; la chiamata parte al ritorno in primo piano.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-003",
+      "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
+      "esito": "riparato",
+      "commit": "830b7ab3342bb0a98b28e655024ac159a3b0c887",
+      "file_toccati": [
+        "app/messages/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 830b7ab3^ --file app/messages/[id]/page.tsx --prove tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A invio riuscito onSuccess toglie dal campo solo il testo partito invece di svuotare tutto. Prova: pagina vera con l'invio vero: «Ciao» parte, « arrivo subito» scritto mentre il primo era in volo resta nel campo.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-013",
+      "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+      "esito": "riparato",
+      "commit": "8ec99f57725946ec683102dd360b3b1f851702de",
+      "file_toccati": [
+        "app/notifications/page.tsx",
+        "components/hooks/useNotificationsCount.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-campanella-senza-promozioni-spente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-campanella-senza-promozioni-spente.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 39581a49^ --file app/notifications/page.tsx,components/hooks/useNotificationsCount.ts --prove tests/unit/riparazione-r22-campanella-senza-promozioni-spente.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Lista di /notifications e conteggio del campanello leggono la preferenza già salvata (profiles.notif_promos) ed escludono category='promo' se non è accesa; se la preferenza non si legge, la lettura lancia e si riprova. Due commit della stessa voce: 39581a49 (il filtro) e 8ec99f57 (l'errore della preferenza ora si legge); la rimessa dalla base 39581a49^ regge.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R22-018",
+      "chiave": "stati-ui|le notifiche non lette più vecchie delle ultime cinquanta restano sul campanello e non si possono né vedere né segnare",
+      "esito": "riparato",
+      "commit": "6e1baeee8e39a744164be77b45f1c7b2b40df791",
+      "file_toccati": [
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-campanello-oltre-le-cinquanta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-campanello-oltre-le-cinquanta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6e1baeee^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r22-campanello-oltre-le-cinquanta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Segna tutte come lette» compare anche quando il conteggio vero (useNotificationsCount) è sopra zero (la scrittura segnava già tutte le non lette); «Carica altre» alza il limite di 50 in 50 tenendo l'elenco a video. Prova: 50 lette più 10 vecchie non lette: «Segna tutte» le segna tutte e 60, «Carica altre» arriva alle 10.",
+      "verificato_da": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il primo messaggio mandato insieme all'apertura della conversazione non avvisa il negozio",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/chat/conversations/route.ts:96-102",
+      "descrizione": "Con firstMessage la rotta inserisce il messaggio direttamente: niente campanella e niente email al negozio. Oggi ContactSellerButton non manda firstMessage, quindi è latente; diventa vero se un client lo usa."
+    },
+    {
+      "titolo": "Il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/SellerShell.tsx:104-120",
+      "descrizione": "useNotifUnread (chiave 'seller-bell') conta tutte le notifiche non lette senza guardare profiles.notif_promos: è lo stesso filtro messo in useNotificationsCount con R22-013, in un file fuori dal territorio di R22."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 2,
+    "nota": ""
+  }
+}
