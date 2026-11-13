@@ -229,7 +229,11 @@ export function vistaDelleCampagne(
   q: LetturaQuery<ElencoCampagne>,
   filtro: FiltroCampagne,
 ): VistaCampagne {
-  const lette = Array.isArray(q.data?.campagne) ? (q.data as ElencoCampagne).campagne : [];
+  // R17-008 — lo stato mostrato si deriva dalla data di fine: una campagna `active` scaduta e' `ended`.
+  const adesso = new Date();
+  const lette = Array.isArray(q.data?.campagne)
+    ? (q.data as ElencoCampagne).campagne.map((c) => ({ ...c, status: statoEffettivoDellaCampagna(c, adesso) }))
+    : [];
   const v = vistaDaQuery<ElencoCampagne>(q, { quanti: lette.length });
 
   // «Guardato» vuol dire: la lettura è arrivata e non è caduta. Solo di qui in avanti si possono
