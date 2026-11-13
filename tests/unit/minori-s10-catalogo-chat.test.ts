@@ -150,13 +150,15 @@ describe('oltre i 100 prodotti la chat lo sa (610)', () => {
 });
 
 describe('il Copilot ha token per tutto il catalogo (250)', () => {
-  it('con 200 prodotti concede più dei 4096 di prima, ma non oltre quello che arriva in 60 s', async () => {
+  // R21-002 — Il tetto sale con il catalogo, ma non oltre quello che un fornitore lento (40 token al
+  // secondo) scrive in un tentativo da 80 s: 3200. I 6000 di prima non stavano in nessun tempo.
+  it('con 200 prodotti concede più dei 2048 di una chat, ma non oltre quello che arriva in un tentativo', async () => {
     db.catalogo = Array.from({ length: 200 }, (_, i) => prodotto(i + 1));
     db.totale = 200;
     await copilot(richiesta('/api/ai/copilot', { instruction: 'aggiungi il tag pane a tutto' }));
     const tetto = runMessageMock.mock.calls[0][0].max_tokens;
-    expect(tetto).toBeGreaterThan(4096);
-    expect(tetto).toBeLessThanOrEqual(6000);
+    expect(tetto).toBeGreaterThan(2048);
+    expect(tetto).toBeLessThanOrEqual(3200);
   });
 });
 
