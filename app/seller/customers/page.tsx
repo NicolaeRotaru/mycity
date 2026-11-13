@@ -142,8 +142,38 @@ export default function SellerCustomersPage() {
         />
       </div>
 
-      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden overflow-x-auto">
-        <table className="w-full text-sm min-w-[700px]">
+      {/* R16-006 — Sul telefono una scheda per cliente: spesa, ultimo ordine e targhetta si vedono senza trascinare. */}
+      <ul data-testid="clienti-schede" className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <li className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-400">Nessun cliente</li>
+        ) : (
+          filtered.map((c) => {
+            const daysAgo = Math.floor((Date.now() - new Date(c.lastOrderAt).getTime()) / 86400000);
+            const isVip = c.ordersCount >= 5;
+            const isInactive = daysAgo > 30;
+            return (
+              <li key={c.userId} className="bg-white border border-cream-300 rounded-xl p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-ink-900">{c.fullName ?? 'Cliente'}</p>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {isVip && <span className="inline-flex items-center gap-1 bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Star size={12} className="text-accent-500" aria-hidden /> VIP</span>}
+                    {isInactive && <span className="inline-flex items-center gap-1 bg-secondary-100 text-secondary-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Moon size={12} className="text-secondary-500" aria-hidden /> Inattivo</span>}
+                    {!isInactive && !isVip && <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">Attivo</span>}
+                  </div>
+                </div>
+                <p className="text-sm text-ink-600">
+                  <span className="font-bold">{c.ordersCount}</span> {c.ordersCount === 1 ? 'ordine' : 'ordini'} · speso{' '}
+                  <span className="font-semibold text-olive-700">{formatPrice(c.totalSpent)}</span>
+                </p>
+                <p className="text-xs text-ink-500">Ultimo ordine: {formatDate(c.lastOrderAt)} ({daysAgo} giorni fa)</p>
+              </li>
+            );
+          })
+        )}
+      </ul>
+
+      <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-hidden overflow-x-auto">
+        <table className="hidden md:table w-full text-sm min-w-[700px]">
           <thead className="bg-cream-50 border-b border-cream-200 text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Cliente</th>
