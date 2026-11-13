@@ -1,8 +1,8 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-13 05:58",
+  "aggiornato": "2026-11-13 06:35",
   "finita": false,
-  "testa": "6b0b78cf846816721ff32d74c48442ea82cdf012",
+  "testa": "28a4f5a775814e91285ef9224ff5c7d1f2a5c2ac",
   "verifica": {
     "comando": "npm run verify",
     "esito": "",
@@ -13,31 +13,18 @@
     {
       "id": "R17-002",
       "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
-      "esito": "riparato",
-      "commit": "b912629d804074b7fdc03f2356db62043bd7817a",
-      "file_toccati": [
-        "migrations/410_il_bonifico_del_lunedi_si_segna_per_l_importo_versato.sql",
-        "app/admin/payouts/page.tsx",
-        "lib/stripe/payout.ts",
-        "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx",
-        "lib/database.types.ts"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "(commit da riprendere con cherry-pick, in quest’ordine)",
+          "modifica": "git cherry-pick b912629d804074b7fdc03f2356db62043bd7817a d282dda3 6b0b78cf846816721ff32d74c48442ea82cdf012 — migrazione 410, app/admin/payouts/page.tsx, lib/stripe/payout.ts, lib/database.types.ts (3 righe payout_manual_ref), prove r17, commenti 350→410 in lib/guadagni/negozio.ts, lib/stripe/payout.ts:191, app/api/cron/release-payouts/route.ts:392. Tolti dal ramo col revert dc9609c4 perché il pannello contraddice una prova comune. d282dda3 si applica dopo c6713b6b (R17-001), che è sul ramo."
+        },
+        {
+          "file": "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx",
+          "modifica": "(1) nel finto rpc: `return { data: stato.segnati, error: null };` → `return { data: { ok: true, segnati: stato.segnati }, error: null };` (la funzione della 410 risponde con un esito, tutto o niente). (2) nel primo caso: `vi.stubGlobal(prompt, () => TRN-1);` → `const risposte = [18,00, TRN-1]; vi.stubGlobal(prompt, () => risposte.shift() ?? null);` (prima la cifra versata, poi il riferimento). (3) nel secondo caso: `vi.stubGlobal(prompt, () => TRN-2);` → `const risposte = [36,00, TRN-2]; vi.stubGlobal(prompt, () => risposte.shift() ?? null);`. Asserzioni uguali. È il diff di quel file nel commit b912629d."
+        }
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts",
-        "tests/sql/rls/riparazione-r17-bonifico-del-lunedi.test.sql",
-        "tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql"
-      ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-bonifico-del-lunedi.test.sql && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file lib/stripe/payout.ts,app/admin/payouts/page.tsx --prove tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file migrations/410_il_bonifico_del_lunedi_si_segna_per_l_importo_versato.sql --prove tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql --sql r17_rimessa --json",
-        "nota": "La prova SQL piena (riparazione-r17-bonifico-del-lunedi.test.sql) chiama segna_bonifico_manuale, che sulla base non esiste (la 350 è stata tolta): con --sql la macchina esce 3 per costruzione. Per la 410 la rimessa che decide è su riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql (vincolo PAID_MANUALLY). La funzione è stata collaudata a mano: rimessa col comportamento della 350 (solo id, segna in silenzio una parte), la prova piena dà 15 controlli rossi P0001."
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Migrazione 410 (non applicata): stato PAID_MANUALLY, payout_manual_ref e segna_bonifico_manuale(negozio, ordini, importo_cents, riferimento), solo is_admin(), righe bloccate FOR UPDATE, tutto o niente: con gli stessi cancelli del giro automatico, un ordine fermo, una cifra diversa dai netti meno gli storni o un riferimento ripetuto non segnano niente; una riga in audit_logs. Il pannello chiede la cifra versata, la manda e mostra ogni rifiuto. refundOrder tratta PAID_MANUALLY come bonifico già uscito (avviso «togli la quota», REVERSED sul rimborso pieno). Prova esistente toccata, dichiarata: tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx importa app/admin/payouts/page.tsx; cambiati solo i finti (prompt cifra+riferimento, rpc {ok,segnati}), asserzioni uguali. Tipi generati: le 3 righe di orders.payout_manual_ref in lib/database.types.ts, nel commit 6b0b78cf «R17-002»; il file è assegnato a R17 dalla regia dell’onda 2 (piano.json e scheda, 13/11 06:46)."
+      "nota": "Anche ripresa, la voce resta PARZIALE (revisore grande da solo + regia, 13/11). Tre punti, decisi parziale dalla regia (13/11): (1) il caso 36/18 da un’altra strada: Nicola versa 36 €, su un ordine si apre un reso DOPO il bonifico, quell’ordine non si può segnare (stessi cancelli del giro), Nicola segna 18 €; se il reso viene respinto, il lunedì dopo l’ordine chiede di nuovo 18 € e si paga due volte (migrations/410…sql:151). Chiuderlo vuol dire segnare come pagato anche un ordine fermo che Nicola ha davvero pagato: è la domanda 1 per Nicola. (2) Il FOR UPDATE (migrations/410…sql:122) chiude la corsa con uno storno in arrivo, ma nessuna prova lo controlla: tolto, le prove restano verdi. (3) Nel caso della storia il rifiuto del pannello (app/admin/payouts/page.tsx:186) non nomina l’ordine fermo né dice di non ripagarlo; il consiglio compare solo nel rifiuto ORDINI_CAMBIATI (riga 130). Prove della patch: npx vitest run --reporter=dot tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-bonifico-del-lunedi.test.sql && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql; prova rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file lib/stripe/payout.ts,app/admin/payouts/page.tsx --prove tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file migrations/410_il_bonifico_del_lunedi_si_segna_per_l_importo_versato.sql --prove tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql --sql r17_rimessa --json → uscita 0 (la prova SQL piena chiama una funzione che sulla base non esiste: uscita 3 per costruzione; collaudo a mano con il comportamento della 350 rimesso: 15 rossi). Revisione: revisore grande (subagente), da solo: rilanciate le prove dichiarate (12/12 unitarie, SQL verdi, run.sh 61 file verdi, 104 file vicini con 843 prove verdi) e le due prove rimesse (0 e 0) da una copia separata; rimesso nella 410 il comportamento della 350: 15 rossi sul comportamento; corse a mano con due sessioni psql (due clic insieme, storno in arrivo), negozi diversi, importi zero/negativi/nulli, stati TRANSFERRED/REFUNDED/REVERSED, ruoli negozio/anon/service_role, SECURITY DEFINER con search_path, GRANT, doppia applicazione, database pieno: reggono. Verdetto parziale per i tre punti di cosa_resta."
     },
     {
       "id": "R17-001",
@@ -47,8 +34,7 @@
       "file_toccati": [
         "app/seller/earnings/page.tsx",
         "lib/guadagni/negozio.ts",
-        "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts",
-        "tests/unit/minori-s01-numeri-del-negozio.test.ts"
+        "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts"
@@ -62,7 +48,45 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6713b6b939b016752bee8bafa89d99d05790750^ --file app/seller/earnings/page.tsx,lib/guadagni/negozio.ts --prove tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "riepilogoNegozio conta anche il contrassegno consegnato: lordo (col credito MyCity), commissione application_fee_cents, netto seller_payout_cents meno gli storni, conteggio per metodo; versato = TRANSFERRED/PAID_MANUALLY, in attesa = HELD/PROCESSING/PENDING più il contante ancora dal fattorino. La pagina mostra torre, grafico e storico anche coi contanti, dice «in attesa del bonifico del lunedì» e, finché CARTA_ACCESA è false, toglie frase e rinvio al conto Stripe. Il ritiro pagato al banco (CASH_IN_STORE) resta fuori dalla torre (commissione dovuta, non trattenuta: la mostra il riquadro dei contanti). Prova esistente toccata, dichiarata: tests/unit/minori-s01-numeri-del-negozio.test.ts:57 legge per nome la pagina; ora guarda incassoPerGiorno(riepilogo.contati) al posto di activeCard, stesso senso. Commenti «migrazione 350» → «410» nel commit a parte d282dda3 (R17-varie)."
+      "cosa_ho_fatto": "riepilogoNegozio conta anche il contrassegno consegnato: lordo (col credito MyCity), commissione application_fee_cents, netto seller_payout_cents meno gli storni, conteggio per metodo; versato = TRANSFERRED/PAID_MANUALLY, in attesa = HELD/PROCESSING/PENDING più il contante ancora dal fattorino. La pagina mostra torre, grafico e storico anche coi contanti, dice «in attesa del bonifico del lunedì» e, finché CARTA_ACCESA è false, toglie frase e rinvio al conto Stripe. Il ritiro pagato al banco (CASH_IN_STORE) resta fuori dalla torre (commissione dovuta, non trattenuta: la mostra il riquadro dei contanti). Nessuna prova esistente toccata: la prova comune tests/unit/minori-s01-numeri-del-negozio.test.ts, che legge la pagina per nome, è tornata uguale alla base nel commit 28a4f5a7 «R17-001» (la pagina passa di nuovo activeCard, che ora vale gli ordini attivi del riepilogo, carta e contanti). La prova rimessa è stata rilanciata sullo stato finale (base c6713b6b^): uscita 0. "
+    },
+    {
+      "id": "R17-003",
+      "chiave": "privacy-legale|il negozio può chiudere un recesso senza rimborso dopo 14 giorni anche se il cliente ha riportato o spedito la merce, perché il cliente non ha modo di dirlo",
+      "esito": "parziale",
+      "commit": "63eae464111b74a30a163134cca21863dca31947",
+      "file_toccati": [
+        "app/api/returns/[id]/avanza/route.ts",
+        "components/seller/ReturnRequestCard.tsx",
+        "lib/database.types.ts",
+        "migrations/411_il_cliente_dice_di_aver_rispedito_il_reso.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-recesso-merce-spedita.test.ts",
+        "tests/sql/rls/riparazione-r17-recesso-merce-spedita.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-recesso-merce-spedita.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-recesso-merce-spedita.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63eae464111b74a30a163134cca21863dca31947^ --file app/api/returns/[id]/avanza/route.ts,components/seller/ReturnRequestCard.tsx,lib/database.types.ts --prove tests/unit/riparazione-r17-recesso-merce-spedita.test.ts,tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63eae464111b74a30a163134cca21863dca31947^ --file migrations/411_il_cliente_dice_di_aver_rispedito_il_reso.sql --prove tests/sql/rls/riparazione-r17-recesso-merce-spedita.test.sql --sql r17_rimessa --json",
+        "nota": "Nella corsa SQL, alla base, i controlli 1a-1c e 5a cadono sul comportamento (il recesso con la merce in viaggio si chiudeva davvero); i controlli 4a-4g cadono per struttura (42703, la colonna nasce con la 411). L'uscita 0 la decide il comportamento. riparazione-r11-tipi-che-possono-restare-vuoti è solo usata come prova, non toccata."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_resta": "Il modulo lato cliente «Ho rispedito la merce» (app/orders/[id]/return/page.tsx) e le due colonne nella lettura del reso della pagina ordine del negozio (app/seller/orders/[id]/page.tsx): senza il primo il cliente non ha ancora un tasto; senza la seconda la scheda del negozio non riceve la dichiarazione. Vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/orders/[id]/return/page.tsx",
+          "modifica": "Nel ramo `if (resoAperto)` (righe 237-270), quando `resoAperto.status === 'APPROVED'`, aggiungi un blocco sopra «Ritira la richiesta»: titolo «Hai già rispedito la merce?», testo «Dillo al negozio: da quando lo segnali il reso non si può chiudere senza rimborso. Tieni la ricevuta della spedizione.», un <input type=\"date\"> «Giorno della spedizione» (obbligatorio, max = oggi), un <input type=\"text\" maxLength={100}> «Numero di spedizione (se ce l'hai)», e un bottone «Ho rispedito la merce» (spento senza data o durante l'invio). Nuovi stati: speditoIl, numeroSpedizione, dichiarazioneInCorso. Al clic: stesse intestazioni di `ritira()` (bearer di supabase.auth.getSession()), `fetch(`/api/returns/${resoAperto.id}/avanza`, { method: 'POST', body: JSON.stringify({ stato: 'SHIPPED_BACK', speditoIl, ...(numeroSpedizione.trim() ? { numeroSpedizione: numeroSpedizione.trim() } : {}) }) })`; se !r.ok → `throw new Error(apiErrorMessage(data, 'La spedizione non si è segnata.'))` con toast.error(friendlyError(e)); se ok → toast.success('Spedizione segnalata al negozio') e router.push(`/orders/${params.id}`). La rotta risponde 400 con il motivo (data mancante, futura o prima della richiesta), 409 se il reso non è APPROVED."
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "Riga 266, la select di `letturaReso`: aggiungi `, tracking_number, customer_shipped_back_on` (i campi nuovi di ReturnRow). `tracking_number` esiste dalla 024. `customer_shipped_back_on` nasce con la 411: finché la 411 non è applicata, chiedila con un ripiego (se l'errore ha code 42703, rileggi senza quella colonna), altrimenti la lettura cade e la scheda del reso sparisce."
+        }
+      ],
+      "cosa_ho_fatto": "La rotta avanza lascia al cliente dell'ordine il passo APPROVED → SHIPPED_BACK, col giorno (non futuro, non prima della richiesta) e il numero di spedizione in tracking_number; negozio e amministratore ricevono 403 se mandano quei campi; avviso al negozio; prima della 411 un ripiego senza la colonna. Da SHIPPED_BACK la regola esistente (percheIlRecessoNonSiChiude, regole-del-rimborso.ts:393-397) nega già la chiusura e il cron (OPEN_RETURN_STATUSES, release-payouts:83, righe 232 e 491) tiene fermo il bonifico: quei due file non servivano. La scheda del negozio mostra la dichiarazione. Migrazione 411 (non applicata): la colonna customer_shipped_back_on e un guardiano della riga (la dichiarazione si scrive solo in quel passo e poi non cambia; un recesso SHIPPED_BACK o RECEIVED non diventa mai CANCELED o REJECTED). lib/database.types.ts: solo le righe del generatore (file assegnato a R17 dalla regia)."
     }
   ],
   "nuovi_difetti_visti": [
@@ -79,14 +103,24 @@
       "severita": "minore",
       "file": "lib/stripe/payout.ts:1838",
       "descrizione": "Corsa fra refundOrder e segna_bonifico_manuale: l’avviso «togli la quota» parte comunque (i soldi non si perdono), ma lo stato mostrato è sbagliato. Stessa famiglia di R17-025."
+    },
+    {
+      "titolo": "Ogni tappa del reso cancella la nota del negozio, anche quando la tappa la fa il cliente",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/returns/[id]/avanza/route.ts:391",
+      "descrizione": "L’update del turno scrive decision_notes: body.note ?? null anche nel ritiro del cliente, in SHIPPED_BACK e in RECEIVED senza nota: si perde la nota di approvazione (per esempio l’indirizzo per il reso)."
     }
   ],
   "domande_per_nicola": [
     "R17-002: un ordine che hai già pagato a mano ma che riceve un reso prima di segnarlo oggi non si segna (stessi cancelli del giro); il pannello dice di annotarlo e non ripagarlo. Vuoi poterlo segnare PAID_MANUALLY anche se è fermo? Toglierebbe del tutto il rischio di pagarlo due volte.",
-    "R17-002: vuoi che il database tenga il conto delle quote da trattenere dopo un rimborso su un ordine già pagato a mano, così «Da versare lunedì» le toglie da solo? Oggi parte solo un avviso."
+    "R17-002: vuoi che il database tenga il conto delle quote da trattenere dopo un rimborso su un ordine già pagato a mano, così «Da versare lunedì» le toglie da solo? Oggi parte solo un avviso.",
+    "R17-003: il cliente dichiara di aver spedito ma il pacco non arriva mai: oggi nessuno può chiudere il recesso senza rimborso, né il negozio né l’amministratore (lo blocca la rotta e, con la 411, il database). Vuoi una strada per l’amministratore, dopo aver sentito il cliente?",
+    "R17-003: l’art. 56 c.3 del Codice del consumo dice che con la prova della spedizione il rimborso è dovuto anche prima che la merce arrivi. Oggi si rimborsa solo da RECEIVED. La dichiarazione con il numero di spedizione deve valere come prova, cioè rimborso già da SHIPPED_BACK?",
+    "R17-003: una dichiarazione di spedizione fatta dopo i 14 giorni oggi è accettata, purché il reso sia ancora APPROVED (scelta prudente). Va bene così?"
   ],
   "conto": {
-    "agenti": 3,
+    "agenti": 5,
     "nota": ""
   }
 }
