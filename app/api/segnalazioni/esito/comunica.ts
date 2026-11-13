@@ -75,55 +75,12 @@ async function venditoreDi(admin: ClientServizio, s: Segnalazione): Promise<stri
   return data?.seller_id ?? 'nessuno';
 }
 
-type ColonnaCanale = 'esito_email_at' | 'esito_notifica_at' | 'esito_venditore_at';
-
-/**
- * R14-021 — «Prendere» un canale prima di usarlo: l'UPDATE condizionato (`... IS NULL`) lo vince una
- * chiamata sola, anche se ne partono due insieme. `gia` = l'esito e' gia' partito su quel canale.
- * `non_tracciabile` = le colonne della migrazione 385 non ci sono (schema indietro) o il client non
- * sa scriverle: si comunica come prima. Un errore vero del database NON spedisce (meglio un nuovo
- * tentativo che un doppione).
- */
-async function prendiCanale(admin: ClientServizio, id: string, colonna: ColonnaCanale): Promise<'preso' | 'gia' | 'non_tracciabile' | 'errore'> {
-  try {
-    const { data, error }: Risposta<Array<{ id: string }>> = await admin
-      .from('segnalazioni')
-      .update({ [colonna]: new Date().toISOString() })
-      .eq('id', id)
-      .is(colonna, null)
-      .select('id');
-    if (error) {
-      const e = error as { code?: string; message?: string };
-      if (e.code === '42703' || e.code === 'PGRST204' || (e.message ?? '').includes(colonna)) return 'non_tracciabile';
-      logger.error(new Error(`[segnalazioni] canale dell'esito non preso: ${error.message}`), { segnalazione: id, colonna });
-      return 'errore';
-    }
-    return (data ?? []).length > 0 ? 'preso' : 'gia';
-  } catch {
-    return 'non_tracciabile';
-  }
-}
-
-/** Un canale fallito si rimette libero: il nuovo tentativo lo rifa', gli altri no. */
-async function rilasciaCanale(admin: ClientServizio, id: string, colonna: ColonnaCanale): Promise<void> {
-  try {
-    const { error }: Risposta<unknown> = await admin.from('segnalazioni').update({ [colonna]: null }).eq('id', id);
-    if (error) logger.error(new Error(`[segnalazioni] canale non rimesso libero: ${error.message}`), { segnalazione: id, colonna });
-  } catch {
-    // niente da rimettere: il canale non era tracciato
-  }
-}
-
-async function notifica(admin: ClientServizio, userId: string, title: string, body: string, link: string | null, s: Segnalazione, colonna: ColonnaCanale): Promise<Canale> {
-  const presa = await prendiCanale(admin, s.id, colonna);
-  if (presa === 'gia') return 'inviata';
-  if (presa === 'errore') return 'fallita';
+async function notifica(admin: ClientServizio, userId: string, title: string, body: string, link: string | null, s: Segnalazione): Promise<Canale> {
   const { error } = await admin.from('notifications').insert({
     user_id: userId, title, body, link, category: 'system',
   });
   if (error) {
     logger.error(new Error(`[segnalazioni] notifica dell'esito non scritta: ${error.message}`), { segnalazione: s.id });
-    if (presa === 'preso') await rilasciaCanale(admin, s.id, colonna);
     return 'fallita';
   }
   return 'inviata';
@@ -149,12 +106,7 @@ export async function comunicaEsito(admin: ClientServizio, id: string): Promise<
   const link = linkOggetto(s);
 
   let segnalanteEmail: Canale = 'nessun_recapito';
-  const emailPresa = s.email_contatto ? await prendiCanale(admin, s.id, 'esito_email_at') : 'non_tracciabile';
-  if (s.email_contatto && emailPresa === 'gia') {
-    segnalanteEmail = 'inviata';
-  } else if (s.email_contatto && emailPresa === 'errore') {
-    segnalanteEmail = 'fallita';
-  } else if (s.email_contatto) {
+  if (s.email_contatto) {
     const r = await sendEmail({
       to: s.email_contatto,
       subject: 'Esito della tua segnalazione',
@@ -167,14 +119,11 @@ export async function comunicaEsito(admin: ClientServizio, id: string): Promise<
       tipo: 'transazionale',
     });
     segnalanteEmail = r.ok ? 'inviata' : 'fallita';
-    if (!r.ok) {
-      logger.error(new Error('[segnalazioni] email dell\'esito non partita'), { segnalazione: s.id });
-      if (emailPresa === 'preso') await rilasciaCanale(admin, s.id, 'esito_email_at');
-    }
+    if (!r.ok) logger.error(new Error('[segnalazioni] email dell\'esito non partita'), { segnalazione: s.id });
   }
 
   const segnalanteNotifica: Canale = s.segnalante_id
-    ? await notifica(admin, s.segnalante_id, 'Esito della tua segnalazione', `Decisione ${decisione}. ${motivazione}\n\n${COME_CONTESTARE}`, link, s, 'esito_notifica_at')
+    ? await notifica(admin, s.segnalante_id, 'Esito della tua segnalazione', `Decisione ${decisione}. ${motivazione}\n\n${COME_CONTESTARE}`, link, s)
     : 'nessun_recapito';
 
   let venditore: Canale = 'non_previsto';
@@ -187,7 +136,7 @@ export async function comunicaEsito(admin: ClientServizio, id: string): Promise<
             admin, sellerId,
             s.tipo === 'prodotto' ? 'Decisione su una segnalazione di un tuo prodotto' : 'Decisione su una segnalazione del tuo negozio',
             `Una segnalazione per «${motivoLeggibile(s.motivo)}» è stata ${decisione}. Motivazione: ${motivazione}\n\n${COME_CONTESTARE}`,
-            link, s, 'esito_venditore_at',
+            link, s,
           )
         : 'fallita';
   }
