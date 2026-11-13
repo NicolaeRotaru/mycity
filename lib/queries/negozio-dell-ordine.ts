@@ -68,14 +68,16 @@ export async function conNegozioSePossibile<T extends { seller_id?: string | nul
   supa: LettoreVista,
   righe: T[],
   colonne: string,
-): Promise<{ righe: Array<T & { seller: NegozioDellOrdine | null }>; negoziNonLetti: boolean }> {
+  seLaVistaCade?: () => void,
+): Promise<Array<T & { seller: NegozioDellOrdine | null }>> {
   try {
-    return { righe: await conNegozioDellOrdine(supa, righe, colonne), negoziNonLetti: false };
+    return await conNegozioDellOrdine(supa, righe, colonne);
   } catch (e) {
     logger.warn('[ordini] negozi non letti dalla vetrina: righe mostrate senza negozio', e);
-    // R20-007 — La lettura resta in piedi ma si dice che è parziale: chi chiama la riprova
-    // dopo pochi secondi, invece di aspettare il giro dopo col negozio vuoto.
-    return { righe: righe.map((r) => ({ ...r, seller: null })), negoziNonLetti: true };
+    // R20-007 — La lettura resta in piedi ma chi chiama sa che è parziale, e può riprovarla
+    // dopo pochi secondi invece di aspettare il giro dopo col negozio vuoto.
+    seLaVistaCade?.();
+    return righe.map((r) => ({ ...r, seller: null }));
   }
 }
 

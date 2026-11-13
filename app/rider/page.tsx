@@ -168,10 +168,12 @@ export default function RiderDashboardPage() {
       // 18/10/2026 — Il negozio delle consegne prese arriva dalla vetrina pubblica,
       // non da `profiles` (lib/queries/negozio-dell-ordine.ts): regge anche quando
       // `profiles` si chiude.
-      const { righe: mieiColNegozio, negoziNonLetti } = await conNegozioSePossibile(
+      let negoziNonLetti = false;
+      const mieiColNegozio = await conNegozioSePossibile(
         supabase,
         (miei.data ?? []) as unknown as Array<Omit<AvailableOrder, 'seller'> & { seller_id: string | null; rider_id: string | null }>,
         'id, store_name, store_logo, store_address',
+        () => { negoziNonLetti = true; },
       );
 
       return {
