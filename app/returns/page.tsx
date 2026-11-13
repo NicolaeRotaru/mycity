@@ -31,15 +31,17 @@ export default function ReturnsPage() {
       </header>
 
       {/* Callout 14 giorni — card cream-bordered */}
-      <div className="mb-10 rounded-2xl border border-cream-300 bg-white p-6">
-        <div className="flex items-start gap-4">
+      {/* 13/11/2026 (R15-008) — Col testo ingrandito al massimo icona e testo affiancati non ci stavano
+          (394px su 360): ora, se il testo non sta accanto all'icona, va sotto. */}
+      <div className="mb-10 rounded-2xl border border-cream-300 bg-white p-4 sm:p-6">
+        <div className="flex flex-wrap items-start gap-4">
           <span
             className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-700"
             aria-hidden
           >
             <Calendar size={24} strokeWidth={2.2} />
           </span>
-          <div>
+          <div className="min-w-0 flex-1 basis-40">
             <h2 className="mb-1 font-serif text-lg font-bold text-ink-900">14 giorni di diritto di recesso</h2>
             <p className="text-sm text-ink-700">
               Per legge (D.Lgs. 206/2005 - Codice del Consumo) hai 14 giorni dalla consegna per restituire un
