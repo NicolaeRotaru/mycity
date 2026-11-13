@@ -78,6 +78,14 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     return ApiErrors.internal(esito.errore ?? 'Cancellazione non riuscita');
   }
 
+  // 13/11/2026 (R14-007) — Due cancellazioni dello stesso account partite insieme
+  // (doppio clic, due amministratori): una chiude l'account, l'altra trova
+  // «utente non trovato». Prima la seconda rispondeva con un errore falso; ora
+  // risponde che l'account non c'e' piu', senza una seconda riga nel registro.
+  if (esito.giaCancellato) {
+    return NextResponse.json({ ok: true, giaCancellato: true, deleted: { id: targetId, role: targetProfile.role } });
+  }
+
   await writeAudit({
     actorId: caller.id,
     action: 'user.delete',
