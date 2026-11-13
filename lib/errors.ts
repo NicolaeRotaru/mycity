@@ -101,6 +101,13 @@ export function traduciErroreAuth(msg: string): string | null {
   // I quattro della registrazione e del cambio password, che prima uscivano in inglese.
   if (m.includes('user already registered') || m.includes('already been registered'))
     return 'Esiste già un account con questa email. Prova ad accedere.';
+  // 13/11/2026 (R24-008) — «Password is known to be weak and easy to guess» è la password
+  // comune o già finita negli elenchi rubati (reasons: pwned): usciva in inglese sotto il
+  // campo della registrazione. Le frasi sono quelle di /reset-password, una sola per lo
+  // stesso errore (lib/auth/errori-nuova-password.ts). Sta PRIMA della lunghezza, come là:
+  // se Supabase dice «corta» e «rubata» insieme, allungare la stessa password non basta.
+  if (m.includes('known to be weak') || m.includes('pwned') || m.includes('leaked password'))
+    return PASSWORD_RUBATA;
   if (m.includes('password should be at least')) {
     const n = m.match(/at least (\d+)/)?.[1];
     return n ? `La password deve essere di almeno ${n} caratteri` : 'La password è troppo corta';
@@ -111,12 +118,7 @@ export function traduciErroreAuth(msg: string): string | null {
   // «troppe email a questo indirizzo» lo leggeva anche chi non ne aveva mai ricevuta una.
   if (m.includes('email rate limit exceeded'))
     return 'In questo momento non riusciamo a mandare email: riprova fra qualche minuto.';
-  // 13/11/2026 (R24-008) — «Password is known to be weak and easy to guess» è la password
-  // comune o già finita negli elenchi rubati (reasons: pwned): usciva in inglese sotto il
-  // campo della registrazione. Le frasi sono quelle di /reset-password, una sola per lo
-  // stesso errore (lib/auth/errori-nuova-password.ts).
-  if (m.includes('known to be weak') || m.includes('pwned') || m.includes('leaked password'))
-    return PASSWORD_RUBATA;
+  // R24-008 — La password troppo semplice (la rubata è più sopra, prima della lunghezza).
   if (m.includes('weak password') || m.includes('password is too weak') || m.includes('password should contain'))
     return PASSWORD_SEMPLICE;
   if (m.includes('new password should be different'))

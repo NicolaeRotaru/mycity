@@ -6,7 +6,7 @@ import { act, type ComponentType } from 'react';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
 import { friendlyError, traduciErroreAuth } from '@/lib/errors';
-import { traduciErroreNuovaPassword } from '@/lib/auth/errori-nuova-password';
+import { PASSWORD_RUBATA, traduciErroreNuovaPassword } from '@/lib/auth/errori-nuova-password';
 
 /**
  * 13/11/2026 (R24-008) — LA PASSWORD TROPPO COMUNE SI SPIEGAVA IN INGLESE.
@@ -21,6 +21,8 @@ import { traduciErroreNuovaPassword } from '@/lib/auth/errori-nuova-password';
 
 const PWNED = 'Password is known to be weak and easy to guess, please choose a different one.';
 const SEMPLICE = 'Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789';
+// Supabase mette in fila i motivi: corta E rubata insieme.
+const CORTA_E_RUBATA = `Password should be at least 12 characters. ${PWNED}`;
 
 describe('la password debole si spiega in italiano', () => {
   it('traduciErroreAuth riconosce la password comune, con la frase di /reset-password', () => {
@@ -32,7 +34,14 @@ describe('la password debole si spiega in italiano', () => {
   it('friendlyError col codice weak_password non lascia passare l’inglese', () => {
     const msg = friendlyError({ code: 'weak_password', status: 422, message: PWNED });
     expect(msg).not.toMatch(/weak|guess/i);
-    expect(msg).toMatch(/password/i);
+    expect(msg).toBe(PASSWORD_RUBATA);
+  });
+
+  it('corta e rubata insieme: conta «rubata», come su /reset-password (allungarla non basta)', () => {
+    const atteso = traduciErroreNuovaPassword({ message: CORTA_E_RUBATA, code: 'weak_password', reasons: ['length', 'pwned'] });
+    expect(atteso).toBe(PASSWORD_RUBATA);
+    expect(traduciErroreAuth(CORTA_E_RUBATA)).toBe(atteso);
+    expect(friendlyError({ code: 'weak_password', status: 422, message: CORTA_E_RUBATA })).toBe(atteso);
   });
 
   it('la password troppo semplice ha il suo consiglio, uguale a /reset-password', () => {
@@ -49,7 +58,10 @@ describe('la password debole si spiega in italiano', () => {
 
 describe('sulla pagina di iscrizione vera', () => {
   type Pagina = ComponentType<Record<string, unknown>>;
-  const g = globalThis as unknown as Record<string, unknown> & { __NAVIGAZIONI__?: unknown[] };
+  const g = globalThis as unknown as Record<string, unknown> & {
+    __NAVIGAZIONI__?: unknown[];
+    __AUTH_FINTA__?: Record<string, (...a: unknown[]) => unknown>;
+  };
   let Registrazione: Pagina;
   const montate: Array<{ smonta: () => void }> = [];
 
@@ -60,6 +72,7 @@ describe('sulla pagina di iscrizione vera', () => {
     while (montate.length) montate.pop()!.smonta();
     delete g.__QUERY_FINTA__;
     delete g.__NAVIGAZIONI__;
+    delete g.__AUTH_FINTA__;
     vi.unstubAllGlobals();
   });
 
@@ -81,11 +94,24 @@ describe('sulla pagina di iscrizione vera', () => {
   }
 
   it('IL CASO CHE ROMPEVA — «Password123!» rifiutata: sotto il campo si legge cosa cambiare, in italiano', async () => {
-    vi.stubGlobal('fetch', async () => ({
-      ok: false,
-      status: 422,
-      json: async () => ({ ok: false, error: { code: 'weak_password', message: PWNED } }),
-    }));
+    // Supabase rifiuta la password come la rifiuta davvero (AuthWeakPasswordError). La risposta è
+    // la stessa per le due strade: `signUp` dal browser, oggi, e la rotta di R24-020 quando la
+    // regista la cuce.
+    const rifiuti: string[] = [];
+    g.__AUTH_FINTA__ = {
+      signUp: () => {
+        rifiuti.push('signUp');
+        return {
+          data: { user: null, session: null },
+          error: { name: 'AuthWeakPasswordError', status: 422, code: 'weak_password', reasons: ['pwned'], message: PWNED },
+        };
+      },
+    };
+    vi.stubGlobal('fetch', async (dove: unknown) => {
+      if (String(dove) !== '/api/auth/registrazione') return { ok: true, status: 200, json: async () => ({}) };
+      rifiuti.push('rotta');
+      return { ok: false, status: 422, json: async () => ({ ok: false, error: { code: 'weak_password', message: PWNED } }) };
+    });
     g.__NAVIGAZIONI__ = [];
     window.history.replaceState(null, '', '/sign-up');
     g.__QUERY_FINTA__ = '';
@@ -104,8 +130,9 @@ describe('sulla pagina di iscrizione vera', () => {
     await aspettaChe(() => !!s.radice.querySelector('[role="alert"]'));
 
     const avviso = testoVisibile(s.radice.querySelector('[role="alert"]'));
+    expect(rifiuti, 'la pagina non ha chiesto a nessuno di creare l’account').toHaveLength(1);
     expect(avviso, 'nessun avviso: la prova non guarda niente').not.toBe('');
     expect(avviso).not.toMatch(/weak|guess/i);
-    expect(avviso).toMatch(/password/i);
+    expect(avviso).toBe(PASSWORD_RUBATA);
   }, 30000);
 });
