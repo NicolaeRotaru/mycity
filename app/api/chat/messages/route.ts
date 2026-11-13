@@ -7,6 +7,8 @@ import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
+import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { avvisaNegozioMessaggioNuovo } from '@/lib/email/avviso-messaggio-negozio';
 
 export const runtime = 'nodejs';
 
@@ -69,7 +71,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
  * dell'insert). Trenta messaggi di fila = una campanella, non trenta.
  *
  * Il messaggio è GIÀ salvato: un guasto qui non fa fallire l'invio, ma si logga.
- * Email e push al negozio non partono da qui (lib/email/ è un altro cantiere).
+ * La push la fa il giro send-push dalla campanella; l'email al negozio parte da qui (R22-010).
  */
 async function avvisaChiRiceve(conversationId: string, mittente: string, testo: string): Promise<void> {
   try {
@@ -87,6 +89,9 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
     const destinatario = scriveIlCliente ? conv.seller_id : conv.buyer_id;
     const nonLetti = scriveIlCliente ? conv.seller_unread_count : conv.buyer_unread_count;
     if (!destinatario || destinatario === mittente) return;
+    // R22-009 — Il trigger ha appena portato il contatore ad almeno 1: se vale 0, chi riceve ha
+    // gia' letto nel frattempo (chat aperta e visibile) e la voce non serve.
+    if (nonLetti === 0) return;
     // S10 (5/11/2026) — Il contatore riletto qui dopo l'insert vale 2 per tutte
     // e due le richieste quando due messaggi arrivano quasi insieme, e allora
     // nessuna scriveva la campanella. Adesso si salta solo se una voce non letta
@@ -101,8 +106,10 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
       .eq('is_read', false)
       .limit(1);
     // Revisione S10 — si salta solo se TUTTE E DUE le cose dicono «gia' avvisato»:
-    // il contatore e' oltre 1 e c'e' una voce non letta. Le voci si segnano
-    // lette solo da /notifications: da sole non bastano a dire «giro vecchio».
+    // il contatore e' oltre 1 e c'e' una voce non letta. Dal 13/11 (R22-009) le voci di
+    // questa chat le spegne anche /api/chat/mark-read, ma li' e' best effort (se quella
+    // scrittura cade la voce resta accesa): per questo la voce da sola non basta ancora
+    // a dire «giro vecchio».
     const vocePendente = !errGia && Array.isArray(giaAvvisato) && giaAvvisato.length > 0;
     if (typeof nonLetti === 'number' && nonLetti > 1 && (errGia || vocePendente)) return;
     // S10 (5/11/2026) — Nella chat con l'account Assistenza le due parti non
@@ -118,6 +125,17 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
           : scriveIlCliente
             ? 'Nuovo messaggio da un cliente'
             : 'Il negozio ti ha risposto';
+    // 13/11/2026 (R22-010) — E L'EMAIL AL NEGOZIO, CHE ERA PRONTA E NESSUNO CHIAMAVA.
+    // La campanella diventa una push solo se il negozio ha acceso le notifiche del browser:
+    // senza, il fornaio scopriva il messaggio alla prossima visita. Solo quando scrive il
+    // cliente a un negozio (non nella chat con l'Assistenza). Una email per giro di non letti
+    // e niente se il negozio è in chat: lo decide `avvisaNegozioMessaggioNuovo`. Parte dopo la
+    // risposta e non lancia: un guasto della posta non fa fallire il messaggio, già salvato.
+    if (scriveIlCliente && ruoloDi(mittente) !== 'admin' && ruoloDi(destinatario) !== 'admin') {
+      dopoLaRisposta(async () => {
+        await avvisaNegozioMessaggioNuovo(admin, { conversationId, senderId: mittente });
+      }, 'email al negozio per un messaggio nuovo');
+    }
     const { error: errN } = await admin.from('notifications').insert({
       category: 'system',
       user_id: destinatario,

@@ -134,7 +134,7 @@ export default function RiderReviewsPage() {
                       key={star}
                       type="button"
                       onClick={() => setFilter(filter === star ? 'all' : (star as 5 | 4 | 3 | 2 | 1))}
-                      className={`flex w-full items-center gap-3 rounded px-1.5 py-1 transition-colors hover:bg-white/50 ${filter === star ? 'bg-white/70' : ''}`}
+                      className={`flex w-full items-center gap-3 min-h-11 rounded px-1.5 py-1 transition-colors hover:bg-white/50 ${filter === star ? 'bg-white/70' : ''}`}
                     >
                       <span className="w-8 text-right text-xs font-semibold">{star}★</span>
                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/40">
@@ -150,7 +150,7 @@ export default function RiderReviewsPage() {
             {filter !== 'all' && (
               <div className="mb-3 flex items-center justify-between rounded-lg border border-accent-200 bg-accent-50 px-3.5 py-2 text-sm">
                 <span>Filtro: {filter}★</span>
-                <button onClick={() => setFilter('all')} className="font-semibold text-accent-700 hover:underline">Mostra tutte</button>
+                <button onClick={() => setFilter('all')} className="min-h-11 font-semibold text-accent-700 hover:underline">Mostra tutte</button>
               </div>
             )}
 
@@ -159,10 +159,10 @@ export default function RiderReviewsPage() {
               {filtered.map((r) => (
                 <article key={r.id} className="rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3">
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <strong className="text-[13px] text-ink-900">{r.autore_nome ?? 'Cliente'}</strong>
+                    <strong className="min-w-0 break-words text-[13px] text-ink-900">{r.autore_nome ?? 'Cliente'}</strong>
                     <Stars rating={r.rating} size={12} />
                   </div>
-                  {r.comment && <p className="text-[13px] leading-relaxed text-ink-600">{r.comment}</p>}
+                  {r.comment && <p className="break-words [overflow-wrap:anywhere] text-[13px] leading-relaxed text-ink-600">{r.comment}</p>}
                   <p className="mt-1 text-[11px] text-ink-400">{formatDate(r.created_at)}</p>
                 </article>
               ))}

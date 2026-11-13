@@ -1,0 +1,762 @@
+{
+  "sessione": "R22",
+  "aggiornato": "2026-11-13 09:55",
+  "finita": true,
+  "testa": "edacdd69d9b095e211e377e3d6ff7a00fe72f864",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "edacdd69d9b095e211e377e3d6ff7a00fe72f864",
+    "nota": "typecheck, lint e vitest: 1435 file passati, 1 saltato (9713 prove); lanciato con NODE_OPTIONS=--max-old-space-size=6144 e aspettato nello stesso turno. guardia-ramo verde sullo stesso SHA."
+  },
+  "voci": [
+    {
+      "id": "R22-001",
+      "chiave": "api-backend|se il servizio di posta risponde oltre dieci secondi, la coda rimanda la stessa email cinque minuti dopo",
+      "esito": "riparato",
+      "insieme_a": [
+        "R22-011"
+      ],
+      "commit": "0ad9803aae9534e5e0ebb950a11f20552001dfb1",
+      "file_toccati": [
+        "lib/email/client.ts",
+        "app/api/cron/send-emails/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-coda-email-timeout.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-coda-email-timeout.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0ad9803a^ --file lib/email/client.ts --prove tests/unit/riparazione-r22-coda-email-timeout.test.ts --json (giro di correzione; la cura prima, 1e923271, reggeva con --base 1e923271^ --file lib/email/client.ts,app/api/cron/send-emails/route.ts)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "sendEmail accetta una idempotencyKey e la passa a Resend come intestazione Idempotency-Key (resend 3.5 non ha l'opzione: la chiave va nelle intestazioni dell'SDK, conservando la chiave d'accesso); la coda passa una chiave stabile per riga (email-queue/<id>), così la riga ripresa 5 minuti dopo un timeout non viene rispedita. Prova: giro vero, client vero, SDK vero, fetch finto che fa come Resend con la chiave. Inseparabili: è la stessa riga di codice (la chiave di idempotenza passata dalla coda a sendEmail); 001 è il sintomo nella coda, 011 il doppio invio dopo il timeout. Giro di correzione (0ad9803a, chiesto dal revisore): il 409 invalid_idempotent_request con chiave presente vale «già accettato» ({ ok: true }, logger.warn senza dati personali), così la promozione ripresa (corpo diverso per il gettone con IV casuale) si segna spedita e non finisce annullata; concurrent_idempotent_requests resta da ritentare; warn anche sul ripiego { idempotencyKey }.",
+      "verificato_da": "revisore A in un worktree a 5fd4ce74: sonda con promozione oltre i 10 s al primo giro → giri 2-5 in 409 e riga annullata pur consegnata (difetto della cura, verdetto «parziale»); corretto in 0ad9803a, prova rafforzata (secondo giro sent=1, errors=0, sent_at e mai cancelled_at), rimessa uscita 0, 183 prove vicine verdi.",
+      "commit_della_voce": [
+        "1e923271be7c2579596d826c4d713e73d56467be",
+        "0ad9803aae9534e5e0ebb950a11f20552001dfb1"
+      ]
+    },
+    {
+      "id": "R22-011",
+      "chiave": "qa-flussi|dopo un timeout di resend la coda può spedire due volte la stessa email",
+      "esito": "riparato",
+      "insieme_a": [
+        "R22-001"
+      ],
+      "commit": "0ad9803aae9534e5e0ebb950a11f20552001dfb1",
+      "file_toccati": [
+        "lib/email/client.ts",
+        "app/api/cron/send-emails/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-coda-email-timeout.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-coda-email-timeout.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0ad9803a^ --file lib/email/client.ts --prove tests/unit/riparazione-r22-coda-email-timeout.test.ts --json (giro di correzione; la cura prima, 1e923271, reggeva con --base 1e923271^ --file lib/email/client.ts,app/api/cron/send-emails/route.ts)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa cura e stesso commit di R22-001: chiave di idempotenza stabile per riga di coda verso Resend, senza aggiornare il pacchetto resend. La prova copre l'email di servizio e la promozione (corpo che cambia a ogni giro): una sola consegna in tutti e due i casi. Inseparabili: è la stessa riga di codice (la chiave di idempotenza passata dalla coda a sendEmail); 001 è il sintomo nella coda, 011 il doppio invio dopo il timeout. Giro di correzione (0ad9803a, chiesto dal revisore): il 409 invalid_idempotent_request con chiave presente vale «già accettato» ({ ok: true }, logger.warn senza dati personali), così la promozione ripresa (corpo diverso per il gettone con IV casuale) si segna spedita e non finisce annullata; concurrent_idempotent_requests resta da ritentare; warn anche sul ripiego { idempotencyKey }.",
+      "verificato_da": "revisore A in un worktree a 5fd4ce74: sonda con promozione oltre i 10 s al primo giro → giri 2-5 in 409 e riga annullata pur consegnata (difetto della cura, verdetto «parziale»); corretto in 0ad9803a, prova rafforzata (secondo giro sent=1, errors=0, sent_at e mai cancelled_at), rimessa uscita 0, 183 prove vicine verdi.",
+      "commit_della_voce": [
+        "1e923271be7c2579596d826c4d713e73d56467be",
+        "0ad9803aae9534e5e0ebb950a11f20552001dfb1"
+      ]
+    },
+    {
+      "id": "R22-002",
+      "chiave": "deploy-sre|alla riaccensione della posta, le email ormai scadute fanno la fila davanti a quelle nuove",
+      "esito": "riparato",
+      "commit": "dce0a2434d0cc490a69dedca3579c8a8f13c68a4",
+      "file_toccati": [
+        "app/api/cron/send-emails/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dce0a243^ --file app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo codice, niente migrazione, 165 intatta: prima della presa il giro chiude in blocco (col motivo) le righe non spedite e non annullate con scade_at passato, lasciando stare quelle prenotate da un giro in corso; se la scrittura cade il giro va avanti come prima. Prova: coda in memoria che fa come la 165, 100 scadute e 1 fresca: la fresca parte al primo giro.",
+      "verificato_da": "revisore A in un worktree a 5fd4ce74, verdetto «regge»: Ho rilanciato riparazione-r22-scadute-fuori-dalla-fila.test.ts: verde. Le prove vicine sono verdi, tra cui la-coda-email-non-spedisce-quello-che-e-scaduto e minori-s03-coda-email. Ho confrontato con la presa della 165: claimed_at più vecchio di 15 minuti, attempts<5, sent_at e cancelled_at vuoti. La chiusura in blocco usa gli stessi 15 minuti e filtra sent_at IS NULL, cancelled_at IS NULL e scade_at <= adesso, con cl…",
+      "nota": "La chiusura in blocco usa la colonna scade_at della 165: sul database senza la 165 non ha effetto (degrada alla chiusura riga per riga di prima, e il logger.warn si ripete a ogni giro). La 165 va applicata prima di riaccendere la posta: lo decide Nicola."
+    },
+    {
+      "id": "R22-007",
+      "chiave": "privacy-legale|l'annulla iscrizione con un clic da gmail si perde senza traccia dopo 30 richieste in dieci minuti dallo stesso indirizzo",
+      "esito": "riparato",
+      "commit": "e40ac48ef79a5d5123400f3f86ce79fa957e1e71",
+      "file_toccati": [
+        "app/api/unsubscribe/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-disiscrizione-da-gmail.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-disiscrizione-da-gmail.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e40ac48e^ --file app/api/unsubscribe/route.ts --prove tests/unit/riparazione-r22-disiscrizione-da-gmail.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il gettone si verifica prima del freno: senza gettone valido resta il freno per IP (30/10 min); con gettone valido il freno è per indirizzo (sha256 di email e ambito, niente indirizzo in chiaro) e quando scatta lascia un logger.error. Prova: 40 gettoni diversi dallo stesso IP di Google, tutte e 40 disiscritte.",
+      "verificato_da": "revisore A in un worktree a 5fd4ce74, verdetto «regge»: Ho rilanciato riparazione-r22-disiscrizione-da-gmail.test.ts: verde. Usa il freno vero e la verifica del gettone vera. Verdi anche disiscrizione-la-rotta-che-gira, minori-s03-disiscrizione, le-porte-pubbliche-che-scrivono-hanno-un-freno e chi-vuole-cancellarsi-trova-una-strada-che-funziona. Sul codice: con un gettone valido il freno per IP non si applica più. Il freno per indirizzo usa la chiave sha256(email:ambito) …"
+    },
+    {
+      "id": "R22-010",
+      "chiave": "qa-flussi|quando un cliente scrive al negozio, l'email al negozio non parte: la funzione è pronta ma nessuno la chiama",
+      "esito": "riparato",
+      "commit": "a8251fb7f75b89c335eeb7309e51ef2754f938fa",
+      "file_toccati": [
+        "app/api/chat/messages/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a8251fb7^ --file app/api/chat/messages/route.ts --prove tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "avvisaChiRiceve chiama avvisaNegozioMessaggioNuovo(admin, {conversationId, senderId}) solo quando scrive il cliente a un negozio (non nella chat con l'Assistenza), via dopoLaRisposta: l'email non rallenta né fa fallire il messaggio; freno e raccolta restano quelli della funzione. Prova con funzione finta: chiamata sì dal cliente, no dal negozio né in chat Assistenza; con l'email che cade il messaggio risponde 200.",
+      "verificato_da": "revisore A in un worktree a 5fd4ce74, verdetto «regge»: Ho rilanciato riparazione-r22-email-al-negozio-dalla-chat.test.ts: verde. Verdi anche le prove vicine, tra cui il-negozio-sa-che-un-cliente-gli-ha-scritto, il-negozio-sa-quando-un-cliente-gli-scrive, la-campanella-del-negozio-non-si-perde e minori-s10-campanella. Sul codice: la chiamata parte solo se scriveIlCliente e nessuna delle due parti è admin. avvisaChiRiceve viene attesa dentro la richiesta (riga 56), quindi …"
+    },
+    {
+      "id": "R22-009",
+      "chiave": "qa-flussi|la campanella del negozio accumula una voce a ogni giro di messaggi, anche per una chat già letta",
+      "esito": "riparato",
+      "commit": "8f2b277137deab3b73e23e62ba823f72d2c66a02",
+      "file_toccati": [
+        "app/api/chat/mark-read/route.ts",
+        "app/api/chat/messages/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-campanella-spenta-dalla-chat-letta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-campanella-spenta-dalla-chat-letta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8f2b2771^ --file app/api/chat/messages/route.ts --prove tests/unit/riparazione-r22-campanella-spenta-dalla-chat-letta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "mark-read segna lette anche le voci di campanella di chi legge con link /messages/<id> (con log se cade). Prova: le due rotte vere per cinque giri «il cliente scrive, il negozio legge»: nessuna voce resta accesa, e quelle di altre chat e altre persone non si toccano. Giro di correzione (8f2b2771, dal revisore): commento delle righe 105-107 reso vero e `if (nonLetti === 0) return;` dopo il controllo sul destinatario, così la corsa con la chat aperta non lascia una voce accesa; caso «contatore a 0: nessuna voce».",
+      "verificato_da": "revisore B/C/D in un worktree a 5fd4ce74, verdetto «regge»: Ho letto il diff 8c57475e e il route.ts mark-read com'è a HEAD 5fd4ce74. Ho rilanciato la prova: verde, 2 test. Mutazione: tolto .eq('user_id', user.id) alla riga 66, la prova muore per comportamento (il secondo test vede spenta la voce del cliente). PERMESSI:… I difetti trovati sono stati corretti nel giro di correzione (rimessa uscita 0, guardia-ramo verde, verify sull'ultimo commit); le correzioni non hanno avuto un secondo revisore.",
+      "commit_della_voce": [
+        "8c57475ee6e326b0dfdfc46200939c3f63fe75b0",
+        "8f2b277137deab3b73e23e62ba823f72d2c66a02"
+      ]
+    },
+    {
+      "id": "R22-012",
+      "chiave": "qa-flussi|una chat lasciata aperta in sottofondo sul computer del negozio segna come letti i messaggi appena arrivano",
+      "esito": "riparato",
+      "commit": "cf5e6a776dfca505cd36a7de2fc8325702dc3562",
+      "file_toccati": [
+        "app/messages/[id]/page.tsx",
+        "app/api/chat/mark-read/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-chat-in-sottofondo-non-segna-letto.test.ts",
+        "tests/unit/riparazione-r22-chat-letta-dice-l-esito.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-chat-in-sottofondo-non-segna-letto.test.ts tests/unit/riparazione-r22-chat-letta-dice-l-esito.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cf5e6a77^ --file \"app/messages/[id]/page.tsx\" --prove tests/unit/riparazione-r22-chat-in-sottofondo-non-segna-letto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina segna letto solo con document.visibilityState 'visible' e lo rifà a ogni visibilitychange; mark-read legge l'esito dell'azzeramento del contatore e se cade risponde 500. Prova: la pagina vera montata con la scheda nascosta non segna letto il messaggio che arriva; la chiamata parte al ritorno in primo piano. Giro di correzione (cf5e6a77, chiesto dal revisore: la voce nomina anche hasFocus): la pagina conta come vista solo con visibilityState 'visible' e document.hasFocus(), ascolta visibilitychange, focus e blur (tolti nel cleanup) e se mark-read risponde non ok riprova al focus o visibilitychange successivo; casi «visibile ma senza fuoco: zero chiamate» e «riprova dopo errore».",
+      "verificato_da": "revisore B/C/D in un worktree a 5fd4ce74, verdetto «parziale»: Ho letto i diff 183389ac (page.tsx e mark-read). Ho rilanciato le due prove: verdi. La prova monta la pagina vera con visibilityState 'hidden': il messaggio arrivato non viene segnato letto, e al ritorno in primo piano parte esattamente 1 chiamata. Chiamate ri… I difetti trovati sono stati corretti nel giro di correzione (rimessa uscita 0, guardia-ramo verde, verify sull'ultimo commit); le correzioni non hanno avuto un secondo revisore.",
+      "commit_della_voce": [
+        "183389ac41500b5f21a57c2e2be83db17a26866e",
+        "cf5e6a776dfca505cd36a7de2fc8325702dc3562"
+      ]
+    },
+    {
+      "id": "R22-003",
+      "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
+      "esito": "parziale",
+      "commit": "edacdd69d9b095e211e377e3d6ff7a00fe72f864",
+      "file_toccati": [
+        "app/messages/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 830b7ab3^ --file \"app/messages/[id]/page.tsx\" --prove tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "A invio riuscito onSuccess toglie dal campo solo il testo partito invece di svuotare tutto. Prova: pagina vera con l'invio vero: «Ciao» parte, « arrivo subito» scritto mentre il primo era in volo resta nel campo. Giri di correzione (15b96735, poi edacdd69): il campo si svuota all'invio, se l'invio cade il testo torna davanti a quello nuovo senza sovrascriverlo, il pulsante si spegne solo col campo vuoto; il secondo Invio in volo resta fermo dalla guardia vera `if (!trimmed || sendMutation.isPending) return;` (la vuole la prova comune minori-s05-editor-home, rimessa identica alla base) e il suo testo resta nel campo. Prova con react-query vero.",
+      "verificato_da": "revisore B/C/D in un worktree a 5fd4ce74, verdetto «parziale»: Ho letto il diff 830b7ab3. Ho rilanciato la prova: verde. Il referto dice che la rimessa regge (setText('') fa morire la prova). Invio fallito: onError fa solo toast e setText non viene toccato, quindi il testo resta. Ho seguito handleSend e il pulsante: duran… I difetti trovati sono stati corretti nel giro di correzione (rimessa uscita 0, guardia-ramo verde, verify sull'ultimo commit); le correzioni non hanno avuto un secondo revisore.",
+      "commit_della_voce": [
+        "830b7ab3342bb0a98b28e655024ac159a3b0c887",
+        "15b96735ed5bdc49e3d1e2a64a0f6d86b79b4af6",
+        "edacdd69d9b095e211e377e3d6ff7a00fe72f864"
+      ],
+      "cosa_resta": "Il secondo Invio fatto mentre il primo è in volo non va in coda e non avvisa: viene ignorato (il testo resta nel campo, niente si perde). La coda chiesta dalla voce contraddice la prova comune tests/unit/minori-s05-editor-home.test.tsx:77, che pretende la guardia `if (!trimmed || sendMutation.isPending) return;`.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s05-editor-home.test.tsx",
+          "modifica": "riga 77: invece di pretendere `if (!trimmed || sendMutation.isPending) return;`, controllare che il campo non si spenga durante l'invio e che il secondo messaggio non si perda (per esempio /if \\(inVolo\\.current\\) coda\\.current\\.push\\(trimmed\\);/); poi in app/messages/[id]/page.tsx si rimette la coda di 15b96735 (inVolo, coda, invio in onSettled)."
+        }
+      ]
+    },
+    {
+      "id": "R22-013",
+      "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+      "esito": "parziale",
+      "commit": "8ec99f57725946ec683102dd360b3b1f851702de",
+      "file_toccati": [
+        "app/notifications/page.tsx",
+        "components/hooks/useNotificationsCount.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-campanella-senza-promozioni-spente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-campanella-senza-promozioni-spente.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 39581a49^ --file app/notifications/page.tsx,components/hooks/useNotificationsCount.ts --prove tests/unit/riparazione-r22-campanella-senza-promozioni-spente.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Lista di /notifications e conteggio del campanello leggono la preferenza già salvata (profiles.notif_promos) ed escludono category='promo' se non è accesa; se la preferenza non si legge, la lettura lancia e si riprova. Due commit della stessa voce: 39581a49 (il filtro) e 8ec99f57 (l'errore della preferenza ora si legge); la rimessa dalla base 39581a49^ regge.",
+      "verificato_da": "revisore B in un worktree a 5fd4ce74, verdetto «parziale»: Ho letto tutti e due i commit (39581a49 filtro, 8ec99f57 errore della preferenza). Ho rilanciato la prova: verde. Mutazione: tolto il filtro neq nel hook (riga 47), la prova muore. La preferenza è davvero quella salvata: app/profile/settings/page.tsx:245 scrive profiles.notif_promos e la lista e il conteggio leggono la stessa colonna. Valore predefinito: notif_promos è NOT NULL (054) con DEFAULT false dalla 119:603, …",
+      "commit_della_voce": [
+        "39581a49",
+        "8ec99f57725946ec683102dd360b3b1f851702de"
+      ],
+      "cosa_resta": "Il campanello del pannello venditore (components/seller/SellerShell.tsx, useNotifUnread) conta ancora le promozioni anche a chi le ha spente: file fuori dal territorio di R22.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/SellerShell.tsx",
+          "modifica": "in useNotifUnread (righe 104-122) leggere prima profiles.notif_promos (select('notif_promos').eq('id', userId).maybeSingle(), con throw se c'è errore) e aggiungere .neq('category', 'promo') quando notif_promos !== true, come useNotificationsCount; alla riga 118 lanciare l'errore invece di return 0. In alternativa usare direttamente useNotificationsCount."
+        }
+      ]
+    },
+    {
+      "id": "R22-018",
+      "chiave": "stati-ui|le notifiche non lette più vecchie delle ultime cinquanta restano sul campanello e non si possono né vedere né segnare",
+      "esito": "riparato",
+      "commit": "6e1baeee8e39a744164be77b45f1c7b2b40df791",
+      "file_toccati": [
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-campanello-oltre-le-cinquanta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-campanello-oltre-le-cinquanta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6e1baeee^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r22-campanello-oltre-le-cinquanta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Segna tutte come lette» compare anche quando il conteggio vero (useNotificationsCount) è sopra zero (la scrittura segnava già tutte le non lette); «Carica altre» alza il limite di 50 in 50 tenendo l'elenco a video. Prova: 50 lette più 10 vecchie non lette: «Segna tutte» le segna tutte e 60, «Carica altre» arriva alle 10.",
+      "verificato_da": "revisore B in un worktree a 5fd4ce74, verdetto «regge»: Ho letto il diff 6e1baeee e la pagina com'è a HEAD. Ho rilanciato la prova: verde, 3 test. Mutazione: hasUnread di nuovo deciso solo dalla lista (riga 187), la prova muore. «Segna tutte» (righe 127-143) scrive update is_read=true con eq user_id e eq is_read=false, senza limite: segna tutte le non lette lato server, comprese quelle oltre la lista e le promo nascoste. Restano solo le proprie grazie al filtro user_id e …"
+    },
+    {
+      "id": "R22-004",
+      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+      "esito": "serve_file_altrui",
+      "prova": "La parte della barra è gia_riparato_prima (commit aae1c76d del 5/11): app/product/[id]/page.tsx:486 `const price = scontoPromo > 0 ? discountedUnitCents(prezzoPieno, scontoPromo) / 100 : prezzoPieno;` e :1522-1523 `<StickyAddToCart price={price}`; components/StickyAddToCart.tsx:106 (totale = price × qty), :132 («{qty} × {formatPrice(price)}») e :134 stampano quel prezzo scontato. Nella barra non resta niente da riparare.",
+      "serve_file_altrui": [
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "Riga 39: la queryFn applica la promozione come components/cart/CartUpsell.tsx:50-54: `queryFn: async (): Promise<Item[]> => { const righe = await leggiSimili(supabase, { productId, categoryId, sellerId }); if (righe.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 })); }` con `import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';`. Così :94 `formatPrice(p.price)` stampa il prezzo che si paga."
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "Riga 72: `queryFn: async (): Promise<Item[]> => { const righe = await leggiVistiDiRecente(supabase, { userId: userId! }); if (righe.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, righe.map((it) => it.product.id)).catch(() => new Map<string, number>()); return righe.map((it) => ({ ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } })); }` più lo stesso import da '@/lib/promotions'. Il prezzo stampato è a :110."
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "Righe 35-36: `queryFn: async (): Promise<SponsoredItem[]> => { const righe = await leggiSponsorizzati(supabase, { placement, categorySlug, oggi: new Date().toISOString().slice(0, 10) }); const ids = righe.flatMap((it) => (it.product ? [it.product.id] : [])); if (ids.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>()); return righe.map((it) => (it.product ? { ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } } : it)); }` più l'import. Il prezzo stampato è a :122."
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "Riga 48 (carosello non nominato dalla voce ma con lo stesso prezzo pieno, :120 `formatPrice(p.price)` con `p = it.product`): `queryFn: async (): Promise<Trending[]> => { const righe = await leggiTendenze(supabase); if (righe.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, righe.map((it) => it.product.id)).catch(() => new Map<string, number>()); return righe.map((it) => ({ ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } })); }` più l'import."
+        },
+        {
+          "file": "components/products/FrequentlyBoughtTogether.tsx",
+          "modifica": "Riga 47 (fascia della scheda prodotto non nominata dalla voce, :100 `formatPrice(Number(p.price))`): come SimilarProducts, `const righe = await leggiSpessoCompratiInsieme(supabase, { productId, sellerId }); … return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));` più l'import; così anche addOne mette nel carrello il prezzo che si paga, come CartUpsell."
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "Riga 56 (la voce la nomina, :242 allora, :244 oggi): `queryFn: async (): Promise<Suggestion[]> => { const righe = await leggiSuggerimentiRicerca(supabase, debounced); const ids = righe.flatMap((s) => (s.kind === 'product' ? [s.id] : [])); if (ids.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>()); return righe.map((s) => (s.kind === 'product' ? { ...s, price: discountedUnitCents(s.price, sconti.get(s.id) ?? 0) / 100 } : s)); }` più l'import."
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "modifica": "Righe 582-583 e 625: `price: prezzoPieno` diventa `price` (il prezzo unitario già scontato di :486), e il commento di :582 dice perché: il carrello (app/cart/page.tsx:424-431) e la cassa (app/checkout/page.tsx:303-308) confrontano il prezzo salvato con quello scontato di oggi, e col pieno scrivono «Buona notizia: il prezzo è sceso» / «Il prezzo è cambiato» su un prodotto in promozione appena aggiunto (la parte addToCart e carrello della descrizione della voce). Nessun doppio sconto: carrello e cassa ripartono dal prezzo del database (app/cart/page.tsx:312-316, app/checkout/page.tsx:192-296). Insieme va cambiata tests/unit/minori-s09-scheda-prodotto.test.ts:91-93, che fissa due `price: prezzoPieno,` col motivo «non due volte»: deve fissare due `price,` (o meglio montare la scheda e leggere il prezzo salvato nel carrello)."
+        }
+      ],
+      "nota": "Verificato sulla base di oggi (dopo i lotti 1 e 2): la barra mostra già il prezzo scontato; i prezzi pieni restano in SimilarProducts:94, RecentlyViewed:110, SponsoredCarousel:122, SearchBar:244, e anche in TrendingNow:120 e FrequentlyBoughtTogether:100, che la voce non nomina. ProductCard.tsx:55-61 con ProductGrid.tsx:362 è il modello che applica già la promozione.",
+      "verificato_da": "revisore C (sonnet) in un worktree a 5fd4ce74, verdetto «esito_giusto»: Letto il codice: la barra e gia_riparato_prima (aae1c76d del 5/11 esiste; app/product/[id]/page.tsx:486 price scontato, :1522-1523 StickyAddToCart price={price}; StickyAddToCart.tsx:106 e :132 stampano quel prezzo). Righe citate verificate una per una (SimilarProducts:39/94, RecentlyViewed:72/110, SponsoredCarousel:35-36/122, TrendingNow:48/120, FrequentlyBoughtTogether:47/100, SearchBar:56/244): tutte esatte e ancor…"
+    },
+    {
+      "id": "R22-015",
+      "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
+      "esito": "parziale",
+      "cosa_resta": "dipende da R17-002: il bonifico del lunedì al negozio non si può ancora segnare (la riparazione è su un altro ramo e la sua migrazione non è sul database vero), ed è proprio lì che va compensato il 10% dei ritiri pagati al banco. Poi, per accenderlo: (1) interruttore: lib/ritiro-in-negozio.ts:22 `RITIRO_IN_NEGOZIO_ATTIVO = false` → true, col commento :7-20 da riscrivere (il motivo «coi negozi non se n'è ancora parlato» non vale più; resta il controllo che le migrazioni 124 e 179 siano applicate in produzione, come dice :19-20). Lo leggono: app/api/orders/cod/route.ts:365 e app/api/stripe/checkout/route.ts:133 (lo spengono lato server), app/checkout/page.tsx:1411, components/checkout/PaymentMethodSelector.tsx:175, lib/store-hours.ts:375, lib/store-customization.ts:127, lib/ordini/zona-di-consegna.ts:65, lib/promesse-pubbliche.ts:67-147, lib/email/templates.ts:766, lib/order-status.ts:44, app/admin/delivery/page.tsx:140-143, app/store/[id]/layout.tsx:43. (2) Cassa: la tessera del ritiro (PaymentMethodSelector.tsx:175-205) promette «Sconto {pickupDiscountPercent}%» e «Niente spedizione, sconto subito» mentre PICKUP_DISCOUNT_PERCENT vale 0 (lib/constants.ts:87): accesa scriverebbe «Sconto 0%». Va detto «gratis, nessun costo di consegna» (la consegna a zero col ritiro c'è già, lib/shipping.ts:79); il commento :162-173 è vecchio. (3) Contanti al banco: la scelta dei contanti dice solo «Contanti alla consegna · Paghi al rider quando ricevi il pacco» (PaymentMethodSelector.tsx:154-158), nessun testo per chi ritira e paga al banco; lato database contanti + ritiro diventa già CASH_IN_STORE (migrations/179:206). (4) Compensazione del 10%: lib/guadagni/negozio.ts calcola commissioneDovutaCents ma nessun codice la scala dal bonifico del lunedì né segna sull'ordine che è stata scalata (serve colonna + funzione, già detto nel parziale di R11-005); il resto nella fattura del mese con l'abbonamento non esiste; i ritiri al banco poi rimborsati restano contati. (5) Payout: app/api/cron/release-payouts/route.ts non tratta CASH_IN_STORE; il bonifico del lunedì fatto a mano (segna_bonifico_manuale, migrazione 350) è quello di R17-002. (6) Testi: app/admin/delivery/page.tsx:139-143 dice «Messo da parte: non se n’è ancora parlato coi negozi» e, acceso, «− 0%». (7) Prove che fissano lo spento, da girare insieme all'interruttore: tests/unit/ritiro-in-negozio-messo-da-parte.test.ts:22-33 e tests/unit/le-promesse-che-il-sito-non-mantiene.test.ts:65. Da verificare prima di accendere anche il codice di ritiro al banco (il #30 citato dalla voce; app/orders/[id]/page.tsx:213 e confirm_pickup_by_seller ci sono).",
+      "nota": "Decisione della regista: in quest'onda il ritiro non si accende e lib/ritiro-in-negozio.ts non si modifica; nessun commit. Il fatto deciso è nel registro-fatti di ad-mycity, voce ritiro.in-negozio (Nicola, 1/11 12:19): acceso dal lancio, gratis per il cliente, carta online o contanti al banco, 10% compensato sul bonifico del lunedì (se in una settimana non basta, il resto nella fattura del mese con l'abbonamento). Le prove che importano ritiro-in-negozio.ts restano come sono.",
+      "verificato_da": "revisore C (sonnet) in un worktree a 5fd4ce74, verdetto «esito_giusto»: Verificato: nessun commit R22 su lib/ritiro-in-negozio.ts (ultimi commit 610aec54 e fe01273a, precedenti); l'interruttore e ancora `false` a :22. Elenco dei lettori confrontato con grep su app/components/lib: tutti e 12 presenti (cod:365, stripe:133, checkout page:1411, PaymentMethodSelector:175, store-hours:375, store-customization:127, zona-di-consegna:65, promesse-pubbliche, templates:766, order-status:44, admin/d…"
+    },
+    {
+      "id": "R22-014",
+      "chiave": "qa-flussi|whatsapp senza +39 anche nel contatto del negozio",
+      "esito": "riparato",
+      "commit": "27977a4b2c8b8a4f5bf0593cbfbc20f4e5f6d99c",
+      "file_toccati": [
+        "lib/contatto-whatsapp.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-whatsapp-italiano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-whatsapp-italiano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27977a4b^ --file lib/contatto-whatsapp.ts --prove tests/unit/riparazione-r22-whatsapp-italiano.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "numeroWhatsApp, dopo i controlli del segnaposto, mette il 39 con la stessa regola di numeroWhatsappItaliano (la 580): 0039 e +39 restano 39, un 3… o uno 0… scritti senza prefisso lo prendono, un numero straniero col + resta suo; così linkWhatsApp('333 1234567') apre wa.me/393331234567 nel piè di pagina, in Contattaci e nelle tre pagine d'aiuto. La regola è scritta nel file e non importata da lib/store-customization.ts per non portare zod nel piè di pagina di ogni pagina; il-numero-whatsapp-che-non-esiste e minori-s06-social-del-negozio restano verdi. Giro di correzione (27977a4b): i controlli del segnaposto e degli zeri girano anche sul numero normalizzato: '0039 300 0000000', '00393000000000', '0039 0000000000' e '+39 000 0000000' non danno link.",
+      "verificato_da": "revisore B/C/D in un worktree a 5fd4ce74, verdetto «parziale»: Rilanciato la prova nuova + il-numero-whatsapp-che-non-esiste + minori-s06-social-del-negozio: 26 verdi. Tabella di 37 ingressi confrontata con numeroWhatsappItaliano (580): identica su +39/0039/senza prefisso, fissi 02/06/0523, stranieri col + (+33, +1, +44),… I difetti trovati sono stati corretti nel giro di correzione (rimessa uscita 0, guardia-ramo verde, verify sull'ultimo commit); le correzioni non hanno avuto un secondo revisore.",
+      "commit_della_voce": [
+        "5c3ebbe2ff0abaff1dbf6c05cfa33e3501f9059c",
+        "27977a4b2c8b8a4f5bf0593cbfbc20f4e5f6d99c"
+      ]
+    },
+    {
+      "id": "R22-016",
+      "chiave": "qa-flussi|due guardie sulla veloce controllano il testo del sorgente e non il comportamento",
+      "esito": "parziale",
+      "commit": "5aa1e173c7fce6cd7260d91a3a88797ec95f33a9",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts",
+        "tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "cosa_resta": "Le due guardie sul testo restano nelle prove vecchie: nessuna delle due importa o legge per nome un file del territorio di R22 (leggono app/checkout/page.tsx, components/checkout/DeliverySlotPicker.tsx, le due rotte d'ordine e app/cart/page.tsx), quindi non le ho toccate. Vanno sostituite dalle due prove nuove di comportamento, già nel ramo: vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts",
+          "modifica": "Togliere il caso «la cassa offre «Adesso» solo con il sì del server» (righe 135-145; i controlli sul testo sono alle 137-144: `const expressAvailable = expressSiPuo(ora) && veloceDisponibile === true;` in DeliverySlotPicker.tsx, `/api/consegna/veloce?negozi=`, `veloceDisponibile={veloceDisponibile}` e `useState<{ negozi: string; possibile: boolean } | null>(null)` in app/checkout/page.tsx). Lo sostituisce tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts, che monta la cassa e prova: la domanda al server porta i negozi del carrello (uno e due); finché il server non risponde «Adesso» non si offre; col sì si offre e si sceglie; col no, con una risposta illeggibile o rotta e con la rete giù no; col sì ma alle 21:30 di Roma (telefono a Londra) no. L'import di readFileSync resta, lo usano gli altri casi."
+        },
+        {
+          "file": "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+          "modifica": "Togliere il caso «la fascia si ricontrolla anche AL MOMENTO di ordinare» (righe 324-333: dopo `const handleSubmit` cerca `consegnaScelta(`, alla riga 330-331 `ora: romeNow().getHours()` e `if (!siPuoConfermare(`). Lo sostituisce tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts, che monta la cassa, manda avanti l'orologio senza ridisegnare e preme «Ordina»: «Oggi · 19:30–21:00» scelta alle 19:55 parte alle 19:58 e non alle 20:05 (e lo dice); «Adesso» col sì e il telefono a Londra parte alle 20:58 di Roma e non alle 21:05 di Roma (le 20:05 sul telefono)."
+        }
+      ],
+      "nota": "Guardie, non riparazioni: le prove nuove passano sulla base di oggi (11 casi verdi, anche insieme alle due prove vecchie e a la-veloce-resta-scelta-dopo-l-accesso), quindi niente prova rimessa, che per costruzione darebbe 1. Che mordano l'ho controllato a mano con mutazioni temporanee, rimesse com'erano con git checkout: DeliverySlotPicker con `veloceDisponibile !== false` o senza `expressSiPuo(ora)`, cassa che prende per sì una risposta illeggibile o la rete giù, domanda con un negozio solo → la prima prova è rossa; invio con `new Date().getHours()`, invio senza il ricontrollo, invio con l'ora di apertura → la seconda è rossa. Il caso accanto «le due rotte rifiutano «Adesso» con un 409» (righe 125-133 della prima prova) è anch'esso un controllo sul testo, ma la voce ne nomina due e la scheda dà 137-144: non l'ho toccato.",
+      "verificato_da": "revisore C (sonnet) in un worktree a 5fd4ce74, verdetto «esito_giusto»: Rilanciate le 2 prove nuove + le 2 vecchie (50 verdi in totale, log in scratchpad rev-C-016.log). Sette mutazioni temporanee, ognuna rimessa con git checkout: M1 DeliverySlotPicker.tsx:181 `veloceDisponibile !== false` -> rossa (finche il server non risponde Adesso non si offre); M2 senza expressSiPuo(ora) -> rossa (21:30 Roma); M3 cassa checkout/page.tsx:599-600 'sempre si' -> 2 rosse; M4 risposta illeggibile = si -…"
+    },
+    {
+      "id": "R22-008",
+      "chiave": "qa-flussi|il prompt dell'ai chiama «fee di consegna» quella di un carrello con un solo pezzo",
+      "esito": "riparato",
+      "commit": "b44d989938480788136ca94420672a07088fb76b",
+      "file_toccati": [
+        "app/api/ai/improve-product/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-consegna-nel-prompt.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-consegna-nel-prompt.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b44d9899^ --file app/api/ai/improve-product/route.ts --prove tests/unit/riparazione-r22-consegna-nel-prompt.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La riga del contesto era già stata riparata da R04-021 (route.ts:313 manda regolaConsegnaPerAi(), con le cifre prese da tariffaConsegnaCents, cioè da PLATFORM_DELIVERY_FEE_CENTS e dalla soglia del carrello): restava il SYSTEM (riga 50), che elencava «la fee di consegna» fra le cose su cui ragionare per il netto del venditore. Ora dice la regola della consegna: si paga sul carrello intero e non sul singolo prodotto, la paga l'acquirente e non tocca il netto; nessuna cifra scritta a mano, nessun prezzo cambiato. La prova passa dalla rotta vera (runMessage finto) e guarda SYSTEM e contesto; le altre 8 prove della rotta restano verdi.",
+      "verificato_da": "revisore C (sonnet) in un worktree a 5fd4ce74, verdetto «regge»: Prova rilanciata: verde (rev-C-008.log). Le 9 prove che importano improve-product (grep) verdi: 62 test. Mutazione: ripristinata la riga 50 del SYSTEM a b44d9899^ -> la prova diventa rossa (not.toMatch(/fee di consegna/) fallisce): muore per il comportamento. Il diff tocca una sola riga del SYSTEM e non scrive cifre: nessun numero a mano nel prompt (le cifre arrivano da regolaConsegnaPerAi(), economics.ts:79-88, da t…"
+    },
+    {
+      "id": "R22-005",
+      "chiave": "layout-responsive|nelle recensioni del fattorino un commento con una parola lunga fa scorrere la pagina di lato sul telefono piccolo, e i filtri per stelle sono alti 24 pixel",
+      "esito": "riparato",
+      "commit": "56f67701aa7ea88897a08b1c44c17b8dd5902225",
+      "file_toccati": [
+        "app/rider/reviews/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-recensioni-fattorino-telefono.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-recensioni-fattorino-telefono.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 56f67701^ --file app/rider/reviews/page.tsx --prove tests/unit/riparazione-r22-recensioni-fattorino-telefono.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il commento ha break-words [overflow-wrap:anywhere] e il nome dell'autore min-w-0 break-words; le righe dei filtri per stelle e «Mostra tutte» hanno min-h-11 (44 px). Prova leggera sulle classi, come le prove R09 sui bersagli da 44 px; non misurata in un browser a 360 px.",
+      "verificato_da": "revisore D (sonnet) in un worktree a 5fd4ce74, verdetto «regge»: Prova rilanciata: 2/2 verdi. Letto diff e pagina app/rider/reviews/page.tsx. Il commento ha break-words e [overflow-wrap:anywhere]; ho compilato il CSS con Tailwind 3.4.19 e la classe arbitraria esce dopo break-words, quindi vale 'anywhere'. Il contenitore padre (RiderShell: colonna flex con un div flex-1 a blocco) non è un problema: in una colonna flex il min-width automatico vale solo sull'asse principale, e gli ar…"
+    },
+    {
+      "id": "R22-006",
+      "chiave": "navigazione-gerarchia|su notifiche e messaggi i titoli saltano dal titolo principale al terzo livello",
+      "esito": "parziale",
+      "commit": "83f1deb72021628bcee3087605eb028ea3f78af2",
+      "file_toccati": [
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-titoli-notifiche-messaggi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-titoli-notifiche-messaggi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cd9e77cf^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r22-titoli-notifiche-messaggi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'h3 delle righe di notifiche è diventato h2 con text-lg leading-snug (aspetto invariato) e la prova R22 lo controlla; app/messages/page.tsx è tornato h3 e la prova comune la-chat-con-l-assistenza-a-video resta identica alla base e verde.",
+      "verificato_da": "revisore D (sonnet) a 5fd4ce74: h2 senza classe di dimensione (aspetto cambiato) e prova comune la-chat-con-l-assistenza-a-video rossa (verdetto «parziale»); corretto in cd9e77cf+83f1deb7: h2 con text-lg leading-snug solo in notifiche, /messages torna h3, prova comune identica alla base e verde; rimessa uscita 0 (base cd9e77cf^), guardia-ramo verde.",
+      "commit_precedente": "cd9e77cfacb74b5764562974012d05abdf7f0a80",
+      "cosa_resta": "app/messages/page.tsx:212 h3→h2 (con text-lg leading-snug) aspetta che la prova comune la-chat-con-l-assistenza-a-video.test.ts (righe 112-113 e 125) cerchi h2 invece di h3",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-chat-con-l-assistenza-a-video.test.ts",
+          "modifica": "riga 113 querySelector('h3') → 'h2' e commento della riga 112; riga 125 querySelectorAll('h3') → 'h2'; insieme a app/messages/page.tsx:212 h3 → h2 con text-lg leading-snug"
+        }
+      ]
+    },
+    {
+      "id": "R22-017",
+      "chiave": "stati-ui|se la lettura del prodotto non va, la pagina di modifica dell'amministrazione dice che il prodotto non esiste",
+      "esito": "riparato",
+      "commit": "4e48718ff7ab37b111b0536ef861cc1a7cb97017",
+      "file_toccati": [
+        "app/admin/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-prodotto-admin-lettura-caduta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-prodotto-admin-lettura-caduta.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4e48718f^ --file \"app/admin/products/[id]/edit/page.tsx\" --prove tests/unit/riparazione-r22-prodotto-admin-lettura-caduta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La lettura usa .maybeSingle() (come app/admin/orders/[id]/page.tsx) e un id senza forma di UUID vale «non trovato» senza leggere; un errore di lettura mostra «Non riesco a leggere questo prodotto…» con «Riprova»; nessuna riga e nessun errore → «Prodotto non trovato». La prova monta la pagina con un errore come oggetto e con una tabella vuota. Giro di correzione (4e48718f): la query delle varianti ha enabled: FORMA_UUID.test(id); con id 'abc' la pagina dice «Prodotto non trovato», senza testo sulle taglie, senza «Riprova» e con zero letture delle varianti.",
+      "verificato_da": "revisore B/C/D in un worktree a 5fd4ce74, verdetto «parziale»: Prova rilanciata: 3/3 verdi. Anche le 4 prove esistenti che importano la pagina passano (10/10). Funziona: errore come oggetto non-Error mostra il testo di lettura fallita con 'Riprova'; 'Riprova' chiama refetch e rilegge davvero (la prova conta le letture); r… I difetti trovati sono stati corretti nel giro di correzione (rimessa uscita 0, guardia-ramo verde, verify sull'ultimo commit); le correzioni non hanno avuto un secondo revisore.",
+      "commit_della_voce": [
+        "5fd4ce74fba69686ed0f6607bcfe9bb1aa5c8a16",
+        "4e48718ff7ab37b111b0536ef861cc1a7cb97017"
+      ]
+    },
+    {
+      "id": "R22-019",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/funnel/page.tsx",
+          "modifica": "riga 440: tracking-wider → tracking-label; riga 447: tracking-wider → tracking-label; riga 451: tracking-wider → tracking-label; riga 469: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/search/page.tsx",
+          "modifica": "riga 239: tracking-wider → tracking-label; riga 254: tracking-wider → tracking-label; riga 286: tracking-wider → tracking-label; riga 313: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "riga 126: tracking-wider → tracking-label; riga 144: tracking-wider → tracking-label; riga 162: tracking-wider → tracking-label; riga 189: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/category/[slug]/page.tsx",
+          "modifica": "riga 200: tracking-wider → tracking-label; riga 219: tracking-wider → tracking-label; riga 246: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/profile/loyalty/page.tsx",
+          "modifica": "riga 155: tracking-wider → tracking-label; riga 220: tracking-wider → tracking-label; riga 230: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/rider/availability/page.tsx",
+          "modifica": "riga 197: tracking-[0.03em] → tracking-label; riga 251: tracking-[0.03em] → tracking-label; riga 314: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "components/home-sections/HomeSectionRenderer.tsx",
+          "modifica": "riga 236: tracking-wider → tracking-label; riga 326: tracking-wider → tracking-label; riga 358: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/seller/analytics/page.tsx",
+          "modifica": "riga 382: tracking-wider → tracking-label; riga 530: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/rider/profile/page.tsx",
+          "modifica": "riga 245: tracking-[0.03em] → tracking-label; riga 274: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/page.tsx",
+          "modifica": "riga 109: tracking-[0.03em] → tracking-label; riga 448: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/earnings/page.tsx",
+          "modifica": "riga 129: tracking-[0.06em] → tracking-label; riga 209: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "components/LiveActivityFeed.tsx",
+          "modifica": "riga 60: tracking-wider → tracking-label; riga 158: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/admin/AdminUI.tsx",
+          "modifica": "riga 27: tracking-[0.06em] → tracking-label; riga 40: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "components/admin/AdminSidebar.tsx",
+          "modifica": "riga 93: tracking-[0.08em] → tracking-label; riga 130: tracking-[0.08em] → tracking-label"
+        },
+        {
+          "file": "components/seller/SellerShell.tsx",
+          "modifica": "riga 309: tracking-[0.08em] → tracking-label; riga 363: tracking-[0.08em] → tracking-label"
+        },
+        {
+          "file": "components/ProductQA.tsx",
+          "modifica": "riga 223: tracking-wider → tracking-label; riga 238: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/admin/disputes/page.tsx",
+          "modifica": "riga 327: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/admin/today/page.tsx",
+          "modifica": "riga 184: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/admin/sponsored/page.tsx",
+          "modifica": "riga 147: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/admin/payouts/page.tsx",
+          "modifica": "riga 353: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "riga 565: tracking-widest → tracking-label"
+        },
+        {
+          "file": "app/seller/orders/page.tsx",
+          "modifica": "riga 214: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/seller/earnings/page.tsx",
+          "modifica": "riga 375: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/seller/promotions/page.tsx",
+          "modifica": "riga 244: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/seller/products/page.tsx",
+          "modifica": "riga 436: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/orders/[id]/page.tsx",
+          "modifica": "riga 623: tracking-widest → tracking-label"
+        },
+        {
+          "file": "app/orders/page.tsx",
+          "modifica": "riga 325: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/profile/page.tsx",
+          "modifica": "riga 99: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/profile/returns/page.tsx",
+          "modifica": "riga 42: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/profile/achievements/page.tsx",
+          "modifica": "riga 155: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/profile/gift-cards/page.tsx",
+          "modifica": "riga 226: tracking-wider → tracking-label"
+        },
+        {
+          "file": "app/profile/referral/page.tsx",
+          "modifica": "riga 126: tracking-widest → tracking-label"
+        },
+        {
+          "file": "app/profile/addresses/page.tsx",
+          "modifica": "riga 153: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/returns/page.tsx",
+          "modifica": "riga 26: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/rider/history/page.tsx",
+          "modifica": "riga 149: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/orders/[id]/page.tsx",
+          "modifica": "riga 527: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/rider/help/page.tsx",
+          "modifica": "riga 116: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "app/favorites/page.tsx",
+          "modifica": "riga 105: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "app/come-funziona/page.tsx",
+          "modifica": "riga 56: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/seller/SellerHealthScore.tsx",
+          "modifica": "riga 172: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/seller/SellerPageTitle.tsx",
+          "modifica": "riga 37: tracking-[0.06em] → tracking-label"
+        },
+        {
+          "file": "components/store-sections/HoursSection.tsx",
+          "modifica": "riga 58: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/account/AccountSidebar.tsx",
+          "modifica": "riga 143: tracking-[0.08em] → tracking-label"
+        },
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "riga 179: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "riga 79: tracking-[0.05em] → tracking-label"
+        },
+        {
+          "file": "components/home/PromoDeals.tsx",
+          "modifica": "riga 43: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/home/HowItWorks.tsx",
+          "modifica": "riga 62: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "riga 64: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/home/DropOfDay.tsx",
+          "modifica": "riga 116: tracking-wider → tracking-label"
+        },
+        {
+          "file": "components/products/VendutoDa.tsx",
+          "modifica": "riga 59: tracking-[0.03em] → tracking-label"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "riga 98: tracking-wider → tracking-label"
+        }
+      ],
+      "nota": "In tailwind.config.ts il token c'è già e non manca niente: label '0.04em' e wide '0.04em' (S10, 5/11), quindi tracking-wide e tracking-label coincidono; il config non è stato toccato (ridefinire wider/widest cambierebbe anche usi su testo non maiuscolo). Dopo i 2 file propri restano 77 occorrenze in 51 file; l'elenco li riporta tutti. Le altre si trovano con: grep -rnE 'uppercase' app components --include=*.tsx --include=*.ts | grep -E 'tracking-(wider|widest|\\[0\\.0[3568]em\\])'. Non vede le className spezzate su più righe.",
+      "verificato_da": "revisore D (sonnet) a 5fd4ce74: due etichette nel territorio di R22 non corrette e 13 file mancanti dall'elenco (verdetto «esito_da_cambiare»); corretto in f3da9d3d (tracking-label nelle due pagine, prova nuova, rimessa uscita 0) ed elenco serve_file_altrui portato a 51 file controllati con grep.",
+      "commit": "f3da9d3dcc31f064dea33709a807f5faf329cb11",
+      "file_toccati": [
+        "app/messages/page.tsx",
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r22-etichette-maiuscole-spaziatura.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r22-etichette-maiuscole-spaziatura.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f3da9d3dcc31f064dea33709a807f5faf329cb11^ --file app/notifications/page.tsx,app/messages/page.tsx --prove tests/unit/riparazione-r22-etichette-maiuscole-spaziatura.test.ts --json"
+      },
+      "cosa_resta": "77 occorrenze di etichette maiuscole in 51 file fuori da R22 usano ancora tracking-wider, tracking-widest o tracking-[0.03/0.05/0.06/0.08em] invece di tracking-label",
+      "cosa_ho_fatto": "Nei due file propri (messages/page.tsx:164, notifications/page.tsx:195) tracking-[0.05em] è diventato tracking-label; prova leggera sulle due pagine. Le altre 77 occorrenze in 51 file sono di altri e restano in serve_file_altrui."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il primo messaggio mandato insieme all'apertura della conversazione non avvisa il negozio",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/chat/conversations/route.ts:96-102",
+      "descrizione": "Con firstMessage la rotta inserisce il messaggio direttamente: niente campanella e niente email al negozio. Oggi ContactSellerButton non manda firstMessage, quindi è latente; diventa vero se un client lo usa."
+    },
+    {
+      "titolo": "Il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/SellerShell.tsx:104-120",
+      "descrizione": "useNotifUnread (chiave 'seller-bell') conta tutte le notifiche non lette senza guardare profiles.notif_promos: è lo stesso filtro messo in useNotificationsCount con R22-013, in un file fuori dal territorio di R22."
+    },
+    {
+      "titolo": "Il testo della consegna per l'AI scrive a mano la soglia dei 10 €",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/products/economics.ts:80-84",
+      "descrizione": "regolaConsegnaPerAi prende le cifre da tariffaConsegnaCents ma la soglia la scrive a mano (merceCents 999/1000 e «da 10 € in su» / «sotto i 10 €») invece di usare SPESA_SENZA_SUPPLEMENTO_CENTS (lib/constants.ts:140): se la soglia cambia, il testo per l'AI resta sbagliato."
+    }
+  ],
+  "domande_per_nicola": [
+    "R22-002: la chiusura in blocco delle email scadute usa la colonna scade_at della migrazione 165, che nel database vero non è ancora applicata. Prima di riaccendere la posta va applicata la 165: la applichi tu quando decidi?"
+  ],
+  "conto": {
+    "agenti": 11,
+    "nota": "4 lotti (3 opus, 1 sonnet), 4 revisori in un workflow (2 opus, 2 sonnet), 3 giri di correzione (1 opus, 2 sonnet). Costo della sessione intorno ai 31 $ su un tetto di 35 $."
+  }
+}

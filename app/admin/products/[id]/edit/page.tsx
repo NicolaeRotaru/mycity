@@ -18,6 +18,8 @@ import { type ProductVariant } from '@/lib/products/variants';
 import { loadProductVariants } from '@/lib/products/persistVariants';
 import type { ExternalData } from '@/lib/products/externalSyncShared';
 
+const FORMA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
 export default function AdminEditProductPage(props: { params: Promise<{ id: string }> }) {
@@ -29,16 +31,20 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   // ogni nuovo «Salva» ridava lo stesso errore finché non si usciva.
   const [versioneModulo, setVersioneModulo] = useState(0);
 
-  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
+  const { data: product, isLoading, error, refetch: rileggiProdotto, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
     queryKey: queryKeys.admin.product(id),
     queryFn: async () => {
+      // R22-017 — Un id che non ha la forma di un codice non è un guasto: il prodotto non c'è.
+      if (!FORMA_UUID.test(id)) return null;
       const { data, error } = await supabase
         .from('products')
         .select('id, name, description, price, compare_at_price, unit, condition, stock, category_id, images, attributes, tags, express_enabled, seller_id, status, external_source_url, external_marketplace, external_data, external_synced_at')
         .eq('id', id)
-        .single();
+        .maybeSingle();
+      // R22-017 — Con maybeSingle la riga mancante è «nessun errore, nessuna riga» (non trovato);
+      // un errore vero resta un errore e la pagina dice che la lettura non è riuscita.
       if (error) throw error;
-      return data as Record<string, unknown>;
+      return (data ?? null) as Record<string, unknown> | null;
     },
     // 31/10/2026 — IL MODULO SI APRE SOLO CON LA SCORTA DELLA BANCA DATI.
     // Il modulo tiene la scorta vista all'apertura e la manda accanto a quella
@@ -52,6 +58,9 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
+    // R22-017 — Con un id che non ha la forma di un codice il database risponderebbe con un errore di
+    // sintassi e la pagina parlerebbe di taglie: non si legge, la pagina dice «Prodotto non trovato».
+    enabled: FORMA_UUID.test(id),
     refetchOnMount: 'always',
   });
 
@@ -134,12 +143,17 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
         <p className="text-sm mb-3">
-          {error instanceof Error
-            ? error.message
+          {error
+            ? 'Non riesco a leggere questo prodotto. Non vuol dire che non esista: vuol dire che non l’ho potuto guardare. Riprova fra un momento.'
             : erroreVarianti
               ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
               : 'Prodotto non trovato'}
         </p>
+        {error && (
+          <button type="button" onClick={() => { void rileggiProdotto(); }} className="mr-4 text-sm font-semibold text-rose-700 hover:underline">
+            Riprova
+          </button>
+        )}
         <Link href="/admin/products" className="text-sm font-semibold text-rose-700 hover:underline">← Torna ai prodotti</Link>
       </div>
     );
