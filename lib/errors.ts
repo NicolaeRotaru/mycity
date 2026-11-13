@@ -178,23 +178,39 @@ function traduciTestoDiZod(messaggio: string): { frase: string | null; tecnico: 
   if (m === 'Required') return { frase: FRASI_ZOD.obbligatorio, tecnico: true };
   if ((r = m.match(/^Expected (\w+), received (\w+)$/)))
     return { frase: r[2] === 'undefined' || r[2] === 'null' ? FRASI_ZOD.obbligatorio : FRASI_ZOD.tipo(r[1]), tecnico: true };
-  if ((r = m.match(/^String must contain (?:at least|over) (\d+) character(?:\(s\))?$/)))
+  // Giro di correzione — il limite compreso («at least», «or equal to») e quello escluso
+  // («over», «more than», «greater than» da solo) non sono la stessa frase: «Number must be
+  // greater than 0» non è «Valore minimo: 0». I conteggi sono interi: «over 5» = almeno 6.
+  if ((r = m.match(/^String must contain at least (\d+) character(?:\(s\))?$/)))
     return { frase: FRASI_ZOD.almenoCaratteri(Number(r[1])), tecnico: true };
-  if ((r = m.match(/^String must contain (?:at most|under) (\d+) character(?:\(s\))?$/)))
+  if ((r = m.match(/^String must contain over (\d+) character(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoCaratteri(Number(r[1]) + 1), tecnico: true };
+  if ((r = m.match(/^String must contain at most (\d+) character(?:\(s\))?$/)))
     return { frase: FRASI_ZOD.massimoCaratteri(Number(r[1])), tecnico: true };
-  if ((r = m.match(/^Number must be greater than (?:or equal to )?(-?\d+(?:\.\d+)?)$/)))
+  if ((r = m.match(/^String must contain under (\d+) character(?:\(s\))?$/)) && Number(r[1]) > 1)
+    return { frase: FRASI_ZOD.massimoCaratteri(Number(r[1]) - 1), tecnico: true };
+  if ((r = m.match(/^Number must be greater than or equal to (-?\d+(?:\.\d+)?)$/)))
     return { frase: FRASI_ZOD.minimo(Number(r[1])), tecnico: true };
-  if ((r = m.match(/^Number must be less than (?:or equal to )?(-?\d+(?:\.\d+)?)$/)))
+  if ((r = m.match(/^Number must be greater than (-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.maggioreDi(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Number must be less than or equal to (-?\d+(?:\.\d+)?)$/)))
     return { frase: FRASI_ZOD.massimo(Number(r[1])), tecnico: true };
-  if ((r = m.match(/^Array must contain (?:at least|more than) (\d+) element(?:\(s\))?$/)))
+  if ((r = m.match(/^Number must be less than (-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.minoreDi(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Array must contain at least (\d+) element(?:\(s\))?$/)))
     return { frase: FRASI_ZOD.almenoElementi(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Array must contain more than (\d+) element(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoElementi(Number(r[1]) + 1), tecnico: true };
   if (m === 'Invalid email') return { frase: FRASI_ZOD.email, tecnico: true };
   if (m === 'Invalid url') return { frase: FRASI_ZOD.url, tecnico: true };
   if (m === 'Invalid uuid') return { frase: FRASI_ZOD.uuid, tecnico: true };
   if (m === 'Invalid') return { frase: FRASI_ZOD.formato, tecnico: true };
   if (/^Invalid enum value\. Expected /.test(m)) return { frase: FRASI_ZOD.scelta, tecnico: true };
+  // Giro di correzione — «Expected 'a' | 'b', received number» (un elenco con un valore del
+  // tipo sbagliato) e «Invalid datetime/cuid/time…» passavano in inglese: il `\b` dopo «date»
+  // non scatta dentro «datetime». Le validazioni di Zod sono elencate per intero, a fine testo.
   const tecnico =
-    /^(String must contain|Number must be|Array must contain|Set must contain|Date must be|Invalid (literal value|discriminator value|date|enum value|arguments|return type)\b|Unrecognized key\(s\) in object|Intersection results could not be merged)/.test(
+    /^(String must contain|Number must be|BigInt must be|Array must contain|Set must contain|Date must be|Expected .+, received \S+$|Invalid (literal value|discriminator value|enum value|arguments|return type|function arguments|function return type|input: must)\b|Invalid (email|url|emoji|uuid|nanoid|cuid2?|ulid|regex|datetime|date|time|duration|ip|cidr|base64(url)?|jwt)$|Unrecognized key\(s\) in object|Intersection results could not be merged)/.test(
       m,
     );
   return { frase: null, tecnico };
