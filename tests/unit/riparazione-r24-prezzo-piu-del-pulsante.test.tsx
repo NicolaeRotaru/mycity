@@ -44,6 +44,10 @@ describe('R24-009 — il prezzo comanda sul pulsante «+»', () => {
     expect(bottone).toBeTruthy();
     expect(bottone.className, 'quadrato pieno colorato').not.toMatch(/(^|\s)bg-primary-(500|600|700)(\s|$)/);
     expect(bottone.className).toMatch(/(^|\s)border/);
+    // Il contorno deve vedersi: 3:1 sul bianco (WCAG 1.4.11) vuole almeno primary-600 e spessore 2.
+    expect(bottone.className, 'contorno troppo spesso/chiaro: sparisce sul bianco').toMatch(/(^|\s)border-2(\s|$)/);
+    expect(bottone.className, 'contorno chiaro (primary-200): con questo il «+» sparisce').toMatch(/(^|\s)border-primary-(600|700|800)(\s|$)/);
+    expect(bottone.className).not.toMatch(/(^|\s)border-primary-(50|100|200|300|400)(\s|$)/);
     expect(bottone.className).toMatch(/\bh-11\b/);
     expect(bottone.className).toMatch(/\bw-11\b/);
     root.unmount();
