@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
  *    eterogenei → rischio ban);
  *  - nessun rate-limit né timeout né fallback.
  * Qui centralizziamo: User-Agent corretto, timeout, rate-limit per IP, e una
- * risposta minimale { lat, lng }. Se Nominatim è giù/lento, rispondiamo 200 con
+ * risposta minimale { lat, lng, luogo }. Se Nominatim è giù/lento, rispondiamo 200 con
  * { lat: null, lng: null } (fallback morbido: il checkout prosegue senza coord).
  */
 export async function POST(req: Request) {
@@ -37,5 +37,6 @@ export async function POST(req: Request) {
   // della zona, la rubrica degli indirizzi, il negozio che fissa la posizione) riceve ora la
   // risposta che userà il server. «Non so» resta 200 con { lat: null, lng: null }.
   const trovato = await coordinateDiUnIndirizzo(q);
-  return NextResponse.json({ lat: trovato?.lat ?? null, lng: trovato?.lng ?? null });
+  // `luogo` (R13-006): il nome del posto trovato, che il selettore del negozio mostra sotto il campo.
+  return NextResponse.json({ lat: trovato?.lat ?? null, lng: trovato?.lng ?? null, luogo: trovato?.luogo ?? null });
 }

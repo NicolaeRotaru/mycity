@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { dentroAreaDiPiacenza } from '@/lib/ordini/zona-di-consegna';
 
 // 31/10/2026 — LA MAPPA SI APRE SU PIACENZA, E QUEL PUNTO NON È IL NEGOZIO.
 // Prima si apriva su Roma e il selettore mandava subito quelle coordinate al modulo: chi scriveva
@@ -62,6 +63,10 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   const indirizzoRef = useRef(address);
   const [confermata, setConfermata] = useState(posizioneSalvataVera);
   const [coords, setCoords] = useState(initialCoords);
+  // 13/11/2026 (R13-006) — Dove è finita la ricerca («Trovato: Via Roma, Piacenza…»), o cosa
+  // fare dopo aver cambiato l'indirizzo. Prima il negozio non leggeva da nessuna parte in che
+  // città era finito il punto.
+  const [nota, setNota] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(
@@ -112,6 +117,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       const updatePos = (lat: number, lng: number) => {
         setCoords({ lat, lng });
         setConfermata(true);
+        setNota(null);
         onChange({ address: indirizzoRef.current, lat, lng, confermata: true });
       };
 
@@ -178,6 +184,17 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         setError('Posizione non valida ricevuta dal servizio. Sposta il pin sulla mappa.');
         return;
       }
+      const luogo = typeof data.luogo === 'string' && data.luogo.trim() ? data.luogo.trim() : null;
+      // 13/11/2026 (R13-006) — «Via Roma 12» senza la città tornava la prima Via Roma d'Italia, e
+      // il selettore la confermava subito. Un punto fuori dall'area di Piacenza non si conferma:
+      // si dice dove è finito e cosa fare.
+      if (!dentroAreaDiPiacenza(lat, lng)) {
+        setError(
+          `${luogo ? `Trovato: ${luogo}. ` : ''}È fuori dall'area di Piacenza che serviamo: scrivi anche la città (es. «Via Roma 12, Piacenza») e premi di nuovo «Cerca», oppure tocca la mappa sul negozio.`,
+        );
+        return;
+      }
+      setNota(luogo ? `Trovato: ${luogo}` : null);
       setCoords({ lat, lng });
       setConfermata(true);
       onChange({ address, lat, lng, confermata: true });
@@ -200,6 +217,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setCoords(newCoords);
         setConfermata(true);
+        setNota(null);
         onChange({ ...newCoords, address: indirizzoRef.current, confermata: true });
         setLocating(false);
       },
@@ -228,7 +246,13 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
             onChange={(e) => {
               setAddress(e.target.value);
               indirizzoRef.current = e.target.value;
-              onChange({ address: e.target.value, lat: coords.lat, lng: coords.lng, confermata });
+              // 13/11/2026 (R13-006) — Il testo nuovo partiva con le coordinate vecchie e
+              // `confermata` com'era: chi correggeva «Via Roma 12» in «Via Roma 12, Piacenza» e
+              // salvava senza ripremere «Cerca» teneva il negozio nell'altra città. Un indirizzo
+              // cambiato va rimesso sulla mappa.
+              if (confermata) setNota('Hai cambiato l\'indirizzo: premi «Cerca» per rimettere il negozio sulla mappa, oppure tocca la mappa nel punto giusto.');
+              setConfermata(false);
+              onChange({ address: e.target.value, lat: coords.lat, lng: coords.lng, confermata: false });
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -236,7 +260,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
                 searchAddress();
               }
             }}
-            placeholder="Es. Via Roma 1, Milano"
+            placeholder="Es. Via Roma 1, Piacenza"
             className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           <Button
@@ -272,6 +296,12 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
           {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
         </span>
       </div>
+
+      {nota && !error && (
+        <p role="status" className="text-sm text-ink-600">
+          {nota}
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="text-sm font-medium text-secondary-600 bg-secondary-50 border border-secondary-200 rounded p-2">

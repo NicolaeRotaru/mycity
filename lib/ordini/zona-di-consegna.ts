@@ -66,3 +66,32 @@ export function motivoFuoriZona(nomeNegozio?: string | null): string {
     ? `${troppoLontano} Puoi ritirare in negozio.`
     : `${troppoLontano} Prova con un negozio più vicino a te.`;
 }
+
+/**
+ * DOVE PUÒ STARE UN NEGOZIO — Piacenza e dintorni.
+ *
+ * 13/11/2026 (R13-006) — Nessun punto della catena sapeva dove sta Piacenza: il selettore
+ * della posizione, il geocodificatore, il modulo e il server prendevano per buono qualunque
+ * numero. Un negozio che scriveva «Via Roma 12» senza la città finiva a Roma con la posizione
+ * confermata; veniva approvato, e poi ogni ordine era «fuori zona» senza che nessuno gli
+ * dicesse perché. Il raggio di consegna si guardava solo al momento dell'ordine.
+ *
+ * Il riquadro tiene il comune di Piacenza con le sue frazioni (Mucinasso, Roncaglia,
+ * Borghetto, San Bonico…) e la prima cintura (San Nicolò, Gossolengo, Pontenure). È lo stesso
+ * dove si cercano gli indirizzi di Piacenza (lib/geocodifica.ts). Lo leggono il selettore
+ * (avviso dopo «Cerca»), l'iscrizione (/api/seller/apply) e il profilo del negozio; il database
+ * ha la stessa regola (migrazione 377).
+ *
+ * 🟢 Pura: nessuna rete, nessun orologio.
+ */
+export const RIQUADRO_PIACENZA = { ovest: 9.57, sud: 44.97, est: 9.86, nord: 45.1 } as const;
+
+export function dentroAreaDiPiacenza(lat: number | null | undefined, lng: number | null | undefined): boolean {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const r = RIQUADRO_PIACENZA;
+  return lat >= r.sud && lat <= r.nord && lng >= r.ovest && lng <= r.est;
+}
+
+/** Cosa si dice al negozio la cui posizione cade fuori dall'area servita. */
+export const POSIZIONE_NEGOZIO_FUORI_AREA =
+  "La posizione del negozio è fuori dall'area di Piacenza che serviamo. Cerca l'indirizzo con la città (es. «Via Roma 12, Piacenza») o tocca la mappa sul negozio.";

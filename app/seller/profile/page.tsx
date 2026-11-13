@@ -16,6 +16,7 @@ import VendorForm, { type VendorFormData } from '@/components/VendorForm';
 import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import DatiPerIBonifici from '@/components/seller/DatiPerIBonifici';
+import { dentroAreaDiPiacenza, POSIZIONE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
 
 /**
  * Profilo negozio = dati di CONTATTO + impostazioni operative/private.
@@ -56,6 +57,17 @@ export default function SellerProfilePage() {
     mutationFn: async (form: VendorFormData) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      // 13/11/2026 (R13-006) — Le coordinate si scrivevano così come arrivavano dal selettore:
+      // un indirizzo cercato senza la città metteva il negozio a Roma, e ogni ordine poi era
+      // «fuori zona». Fuori dall'area di Piacenza non si salva (il database ha la stessa
+      // regola, migrazione 377: qui si dice prima, e con parole chiare). Come nel database, si
+      // guarda solo una posizione CAMBIATA: chi salva telefono e orari non viene fermato da una
+      // posizione già salvata.
+      const prima = queryProfile.data;
+      const posizioneCambiata = form.storeLat !== prima?.store_lat || form.storeLng !== prima?.store_lng;
+      if (posizioneCambiata && !dentroAreaDiPiacenza(form.storeLat, form.storeLng)) {
+        throw new Error(POSIZIONE_NEGOZIO_FUORI_AREA);
+      }
       const { error } = await supabase.from('profiles').update({
         store_phone:   form.storePhone,
         store_address: form.storeAddress,

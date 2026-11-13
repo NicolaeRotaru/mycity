@@ -60,7 +60,7 @@ async function dallaRotta(q: string) {
     headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.0.0.1' },
     body: JSON.stringify({ q }),
   }));
-  return { status: res.status, corpo: (await res.json()) as { lat: number | null; lng: number | null } };
+  return { status: res.status, corpo: (await res.json()) as { lat: number | null; lng: number | null; luogo?: string | null } };
 }
 
 function fuori(c: { lat: number | null; lng: number | null } | null): boolean {
@@ -71,7 +71,7 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
   it('il server dell\'ordine sceglie la Via Roma di Piacenza anche se il primo risultato è a Podenzano', async () => {
     risposta = [PODENZANO, CENTRO];
     const c = await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' });
-    expect(c).toEqual({ lat: 45.0505, lng: 9.6905 });
+    expect(c).toMatchObject({ lat: 45.0505, lng: 9.6905 });
     expect(fuori(c)).toBe(false);
   });
 
@@ -79,7 +79,7 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     risposta = [PODENZANO, CENTRO];
     const { status, corpo } = await dallaRotta('Via Roma 10, 29121 Piacenza, Italia');
     expect(status).toBe(200);
-    expect(corpo).toEqual({ lat: 45.0505, lng: 9.6905 });
+    expect(corpo).toMatchObject({ lat: 45.0505, lng: 9.6905 });
     expect(fuori(corpo)).toBe(false);
   });
 
@@ -93,20 +93,26 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     risposta = [PODENZANO];
     expect(await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' })).toBeNull();
     const { corpo } = await dallaRotta('Via Roma 10, 29121 Piacenza, Italia');
-    expect(corpo).toEqual({ lat: null, lng: null });
+    expect(corpo).toMatchObject({ lat: null, lng: null });
   });
 
   it('senza città scritta si intende Piacenza (il negozio che scrive solo la via)', async () => {
     risposta = [PODENZANO, CENTRO];
     const { corpo } = await dallaRotta('Via Roma 12, Italia');
-    expect(corpo).toEqual({ lat: 45.0505, lng: 9.6905 });
+    expect(corpo).toMatchObject({ lat: 45.0505, lng: 9.6905 });
   });
 
   it('un indirizzo di Milano resta a Milano: il controllo dei 5 km lo ferma come prima', async () => {
     risposta = [MILANO];
     const c = await dalServer({ address: 'Via Roma 1', city: 'Milano', zip: '20121' });
-    expect(c).toEqual({ lat: 45.4642, lng: 9.19 });
+    expect(c).toMatchObject({ lat: 45.4642, lng: 9.19 });
     expect(fuori(c)).toBe(true);
+  });
+
+  it('R13-006 · la rotta dice anche il nome del posto trovato, da mostrare al negozio', async () => {
+    risposta = [MILANO];
+    const { corpo } = await dallaRotta('Via Roma 1, Milano');
+    expect(corpo).toEqual({ lat: 45.4642, lng: 9.19, luogo: MILANO.display_name });
   });
 
   it('la domanda è strutturata e, per Piacenza, chiusa nel riquadro della città', async () => {

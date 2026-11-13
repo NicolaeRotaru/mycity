@@ -1,5 +1,7 @@
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+// Piacenza e dintorni: il riquadro dove si cerca quando la città è Piacenza.
+import { RIQUADRO_PIACENZA } from '@/lib/ordini/zona-di-consegna';
 
 /**
  * Trovare le coordinate di un indirizzo, dal server.
@@ -22,7 +24,7 @@ import { logger } from '@/lib/logger';
  */
 export async function coordinateDiUnIndirizzo(
   indirizzo: { address: string; city: string; zip: string } | string,
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<PosizioneTrovata | null> {
   // La rotta /api/geocode passa la frase così come le arriva; il server dell'ordine i tre campi,
   // che diventano la stessa frase della cassa («via, CAP città, Italia»).
   if (typeof indirizzo === 'string') return trovaLaPosizione(indirizzo);
@@ -52,9 +54,6 @@ export async function coordinateDiUnIndirizzo(
  * che fissa la sua posizione). Stessa frase, stessa risposta.
  */
 
-/** Piacenza e dintorni, il riquadro dove si cerca quando la città è Piacenza. */
-export const RIQUADRO_PIACENZA = { ovest: 9.57, sud: 44.97, est: 9.86, nord: 45.1 } as const;
-
 /** La città che serviamo: quella che si intende quando l'indirizzo non ne scrive una. */
 const CITTA_SERVITA = 'Piacenza';
 
@@ -69,7 +68,12 @@ type RisultatoNominatim = {
   address?: Partial<Record<string, string>>;
 };
 
-type PosizioneTrovata = { lat: number; lng: number };
+/**
+ * `luogo` è il nome del posto trovato, come lo scrivono le mappe («Via Roma, Piacenza, …»):
+ * 13/11/2026 (R13-006) il negozio che fissa la sua posizione lo legge sotto il campo, e vede
+ * subito se è finito in un'altra città.
+ */
+export type PosizioneTrovata = { lat: number; lng: number; luogo: string | null };
 
 function normalizza(s: string): string {
   return s
@@ -121,7 +125,7 @@ function scegliIlRisultato(
   for (const r of ordinati) {
     const lat = r.lat != null ? parseFloat(r.lat) : NaN;
     const lng = r.lon != null ? parseFloat(r.lon) : NaN;
-    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng, luogo: r.display_name ?? null };
   }
   return null;
 }

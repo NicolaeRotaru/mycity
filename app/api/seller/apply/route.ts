@@ -11,6 +11,7 @@ import { getClientIp } from '@/lib/rate-limit';
 import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
+import { dentroAreaDiPiacenza, POSIZIONE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
 
 export const runtime = 'nodejs';
 
@@ -130,6 +131,13 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
     }
     const f = esito.data;
+
+    // 13/11/2026 (R13-006) — Qui passava qualunque numero finito: un negozio cercato senza la
+    // città («Via Roma 12») arrivava con le coordinate di Roma e veniva approvato, poi ogni
+    // ordine era «fuori zona». La posizione deve cadere nell'area di Piacenza che serviamo.
+    if (!dentroAreaDiPiacenza(f.storeLat, f.storeLng)) {
+      return ApiErrors.invalidRequest(POSIZIONE_NEGOZIO_FUORI_AREA);
+    }
 
     const eta = controlloEta(f.legalBirthDate);
     if (!eta.ok) return ApiErrors.invalidRequest(eta.messaggio ?? 'Controlla la data di nascita.');
