@@ -226,8 +226,14 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       }
       return res.json();
     },
-    onSuccess: () => {
-      setText('');
+    onSuccess: (_risposta, inviato) => {
+      // 13/11/2026 (R22-003) — Qui c'era `setText('')`: cancellava anche quello che si era scritto
+      // mentre il messaggio partiva. «Ciao», invio, « arrivo subito»: partiva solo «Ciao» e il
+      // resto spariva dal campo senza essere inviato. Si toglie solo il testo partito davvero.
+      setText((attuale) => {
+        const scritto = attuale.trimStart();
+        return scritto.startsWith(inviato) ? scritto.slice(inviato.length).trimStart() : attuale;
+      });
       // Niente refetch: il Realtime ci aggiorna; ma se per qualche motivo
       // non arriva subito, invalida dopo 1s come safety net.
       setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.messages.byParam(params.id) }), 1000);
