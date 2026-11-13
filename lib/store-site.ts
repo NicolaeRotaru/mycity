@@ -155,6 +155,8 @@ const richTextConfig = z.object({
 
 const bannerConfig = z.object({
   imageUrl: optionalHttpsUrl,
+  // Testo alternativo della foto (facoltativo: i siti già salvati non lo hanno). Vuoto = foto di sfondo.
+  alt: shortText(160),
   heading: shortText(120),
   subheading: shortText(200),
   overlay: z.enum(['light', 'dark', 'none']).default('dark'),
