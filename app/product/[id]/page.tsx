@@ -117,7 +117,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const cuorePremibile = siPuoPremere(statoCuore);
 
   // Form recensione
-  const [reviewRating, setReviewRating] = useState(5);
+  // R24-003 — Le stelle partono vuote: con 5 già scelte, chi non le toccava lasciava cinque stelle
+  // senza averle scelte. «Pubblica» resta spento finché non si vota, e dopo l'invio si torna a zero.
+  const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
 
@@ -267,7 +269,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       void trackReviewSubmitted(id, reviewRating, reviewPhotos.length > 0);
       qc.invalidateQueries({ queryKey: queryKeys.reviews.detail(id) });
       setReviewComment('');
-      setReviewRating(5);
+      setReviewRating(0);
       setReviewPhotos([]);
       toast.success(
         // 5/11/2026 — I punti sono spenti al lancio: si promettono solo se l'interruttore è acceso.
@@ -277,7 +279,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       );
     },
     onError: (err: unknown) => {
-      if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
+      if (err instanceof Error && err.message === 'REDIRECT') return;
+      // R24-003 — La seconda recensione urta il vincolo (product_id, user_id): si dice cosa è
+      // successo, invece di «Questo valore è già stato usato».
+      if ((err as { code?: string } | null)?.code === '23505') {
+        toast.error('Hai già recensito questo prodotto: resta pubblicata la recensione di prima.');
+        return;
+      }
+      toast.error(friendlyError(err));
     },
   });
 
@@ -1340,7 +1349,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <p className="text-sm text-ink-600">Puoi recensire questo prodotto dopo averlo ricevuto.</p>
           ) : (
             <form
-              onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
+              onSubmit={(e) => { e.preventDefault(); if (reviewRating >= 1) submitReview.mutate(); }}
               className="space-y-3"
             >
               {/* #142 — Le stelle erano cinque pulsanti senza stato: si sentiva
@@ -1380,7 +1389,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   onUploaded={setReviewPhotos}
                 />
               )}
-              <Button type="submit" loading={submitReview.isPending} size="sm">Pubblica recensione</Button>
+              {reviewRating < 1 && <p className="text-xs text-ink-500">Tocca le stelle per votare.</p>}
+              <Button type="submit" loading={submitReview.isPending} disabled={reviewRating < 1} size="sm">Pubblica recensione</Button>
             </form>
           )}
         </div>
