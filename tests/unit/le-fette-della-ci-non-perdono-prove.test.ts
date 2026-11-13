@@ -8,13 +8,13 @@
  * il reporter json di vitest, playwright test --list e il suo reporter json).
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-import { principale, ricuciVitest, ricuciPlaywright, leggiFette } from '@/scripts/ricuci-fette-ci.mjs';
+import { principale, ricuciVitest, ricuciPlaywright, leggiFette } from '@/scripts/ricuci-fette-ci.lib.mjs';
 
 const RADICE = '/home/runner/work/mycity/mycity';
 const COMMIT = 'abc123';
@@ -123,6 +123,29 @@ describe('le fette delle prove unitarie si rimettono insieme', () => {
     scriviFetta(c, 'referto-unitari-0', { indice: 0, totale: 2 }, universoVitest(), esitoVitest(FILE.slice(0, 2)));
     scriviFetta(c, 'referto-unitari-1', { indice: 1, totale: 2 }, universoVitest(FILE.slice(0, 3)), esitoVitest(FILE.slice(2)));
     expect(ricuciCartellaVitest(c).problemi.join('\n')).toMatch(/non vedevano le stesse prove/);
+  });
+
+  it('una fetta che non e\' la prima vede un file in piu\', che nessuna esegue: rosso', () => {
+    const c = nuovaCartella();
+    scriviFetta(c, 'referto-unitari-0', { indice: 0, totale: 2 }, universoVitest(), esitoVitest(FILE.slice(0, 2)));
+    scriviFetta(c, 'referto-unitari-1', { indice: 1, totale: 2 }, universoVitest([...FILE, 'tests/unit/nuovo.test.ts']), esitoVitest(FILE.slice(2)));
+    expect(ricuciCartellaVitest(c).problemi.join('\n')).toMatch(/non vedevano le stesse prove \(0 in meno, 1 in piu'/);
+  });
+
+  it('un referto che dice di essere una fetta in piu\' di quelle dichiarate: rosso', () => {
+    const c = nuovaCartella();
+    treFetteVitestSane(c);
+    scriviFetta(c, 'referto-unitari-3', { indice: 3, totale: 3 }, universoVitest(), esitoVitest([]));
+    expect(ricuciCartellaVitest(c).problemi.join('\n')).toMatch(/«referto-unitari-3» non dice bene quale fetta e' \(indice 3, totale 3\)/);
+  });
+
+  it('un referto che non dice su quale commit, o in quale cartella, ha girato: rosso', () => {
+    const senzaCommit = nuovaCartella();
+    scriviFetta(senzaCommit, 'referto-unitari-0', { indice: 0, totale: 1, commit: '' }, universoVitest(), esitoVitest(FILE));
+    expect(ricuciCartellaVitest(senzaCommit).problemi.join('\n')).toMatch(/non dice su quale commit ha girato/);
+    const senzaRadice = nuovaCartella();
+    scriviFetta(senzaRadice, 'referto-unitari-0', { indice: 0, totale: 1, radice: '' }, universoVitest(), esitoVitest(FILE));
+    expect(ricuciCartellaVitest(senzaRadice).problemi.join('\n')).toMatch(/non dice in quale cartella ha girato/);
   });
 
   it('l\'esito di un file che nell\'elenco non c\'e\': rosso', () => {
@@ -251,6 +274,33 @@ describe('le fette delle prove nel browser si rimettono insieme', () => {
     dueFettePw(c, [a, { ...b, stato: 'unexpected' }], [cc, d]);
     expect(ricuciCartellaPw(c).problemi.join('\n')).toMatch(/1 prove nel browser rosse: negozio\.spec\.ts › la ricerca risponde/);
   });
+
+  it('una prova con un esito che non conosco non conta come «ha guardato»: rosso', () => {
+    const c = nuovaCartella();
+    const [a, b, cc, d] = PROVE_PW;
+    dueFettePw(c, [a, b], [cc, { ...d, stato: 'interrupted' }]);
+    expect(ricuciCartellaPw(c).problemi.join('\n')).toMatch(/la cassa vera» ha un esito che non conosco: interrupted/);
+  });
+
+  it('la seconda fetta vede una prova in piu\', che nessuna esegue: rosso', () => {
+    const c = nuovaCartella();
+    const [a, b, cc, d] = PROVE_PW;
+    scriviFetta(c, 'referto-browser-0', { indice: 0, totale: 2 }, suitePw(PROVE_PW, false), suitePw([a, b], true));
+    scriviFetta(c, 'referto-browser-1', { indice: 1, totale: 2 }, suitePw([...PROVE_PW, { titolo: 'nuova', linea: 30 }], false), suitePw([cc, d], true));
+    expect(ricuciCartellaPw(c).problemi.join('\n')).toMatch(/non vedevano le stesse prove \(0 in meno, 1 in piu'/);
+  });
+
+  it('fette del browser su commit diversi, o due con lo stesso numero: rosso', () => {
+    const [a, b, cc, d] = PROVE_PW;
+    const commit = nuovaCartella();
+    scriviFetta(commit, 'referto-browser-0', { indice: 0, totale: 2 }, suitePw(PROVE_PW, false), suitePw([a, b], true));
+    scriviFetta(commit, 'referto-browser-1', { indice: 1, totale: 2, commit: 'un-altro' }, suitePw(PROVE_PW, false), suitePw([cc, d], true));
+    expect(ricuciCartellaPw(commit).problemi.join('\n')).toMatch(/commit diversi/);
+    const doppia = nuovaCartella();
+    scriviFetta(doppia, 'referto-browser-0', { indice: 0, totale: 2 }, suitePw(PROVE_PW, false), suitePw([a, b], true));
+    scriviFetta(doppia, 'referto-browser-1', { indice: 0, totale: 2 }, suitePw(PROVE_PW, false), suitePw([cc, d], true));
+    expect(ricuciCartellaPw(doppia).problemi.join('\n')).toMatch(/due referti dicono di essere la fetta 1/);
+  });
 });
 
 // ---------------------------------------------------------------- da riga di comando
@@ -277,6 +327,26 @@ describe('lo script da riga di comando', () => {
     const r = spawnSync(process.execPath, [SCRIPT, 'vitest', c], { encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: '' } });
     expect(r.status).toBe(1);
     expect(r.stdout).toMatch(/^::error::manca il referto della fetta 3 di 3/m);
+  });
+
+  it('esce 1 quando un referto non si legge (manca il suo esito)', () => {
+    const c = nuovaCartella();
+    treFetteVitestSane(c);
+    rmSync(join(c, 'referto-unitari-1', 'esito.json'));
+    const r = spawnSync(process.execPath, [SCRIPT, 'vitest', c], { encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: '' } });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/^::error::il referto «referto-unitari-1» non ha esito\.json/m);
+  });
+
+  it('lanciato da un collegamento simbolico controlla lo stesso, e non esce verde a vuoto', () => {
+    const c = nuovaCartella();
+    treFetteVitestSane(c);
+    rmSync(join(c, 'referto-unitari-2'), { recursive: true });
+    const collegamento = join(nuovaCartella(), 'ricuci.mjs');
+    symlinkSync(SCRIPT, collegamento);
+    const r = spawnSync(process.execPath, [collegamento, 'vitest', c], { encoding: 'utf8', env: { ...process.env, GITHUB_STEP_SUMMARY: '' } });
+    expect(r.status, r.stdout + r.stderr).toBe(1);
+    expect(r.stdout).toMatch(/manca il referto della fetta 3 di 3/);
   });
 
   it('senza argomenti, o con un tipo che non conosce, non da\' il via libera', () => {
@@ -326,6 +396,24 @@ describe('nella CI le fette sono collegate a chi le rimette insieme', () => {
       expect(passoCon(lavoro, /scripts\/ricuci-fette-ci\.mjs/)?.run).toContain(`ricuci-fette-ci.mjs ${tipo} `);
     });
   }
+
+  it('la cache di Next porta solo la compilazione, mai i dati che il sito salva mentre gira', () => {
+    // Il collaudo del 13/11 l'ha riprodotto: con `path: .next/cache` passava da
+    // un giro all'altro anche .next/cache/fetch-cache, cioe' la home gia'
+    // calcolata dal sito acceso; una home rotta usciva con la copia vecchia e
+    // la prova «renders hero + CTA» restava verde invece di diventare rossa.
+    const permessi = new Set(['.next/cache/webpack', '.next/cache/swc', '.next/cache/.tsbuildinfo']);
+    const cacheDiNext = Object.entries(CI.jobs).flatMap(([id, lavoro]) =>
+      (lavoro.steps ?? [])
+        .filter((p) => p.uses?.startsWith('actions/cache') && String(p.with?.path ?? '').includes('.next'))
+        .map((p) => ({ id, righe: String(p.with?.path).split('\n').map((r) => r.trim()).filter(Boolean) })),
+    );
+    expect(cacheDiNext.map((c) => c.id).sort()).toEqual(['a11y', 'e2e-senza-chiavi', 'lint-and-typecheck']);
+    for (const c of cacheDiNext) {
+      const fuori = c.righe.filter((r) => !permessi.has(r));
+      expect(fuori, `${c.id}: la cache di Next prende anche ${fuori.join(', ')}`).toEqual([]);
+    }
+  });
 
   it('il cancello «Main» aspetta anche chi rimette insieme le fette', () => {
     const needs = CI.jobs['cancello-main'].needs as string[];

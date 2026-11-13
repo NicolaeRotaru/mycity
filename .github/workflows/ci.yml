@@ -86,8 +86,9 @@ jobs:
       # ricompila solo cio' che e' cambiato. Cosa si costruisce non cambia.
       #
       # La chiave: su main una per commit, cosi' l'ultima e' sempre la piu'
-      # fresca; su un ramo o una richiesta una per ramo, cosi' la si salva una
-      # volta sola e i giri dopo non perdono tempo a ricaricarla. Chi non trova
+      # fresca; su un ramo o una richiesta una per ramo, cosi' si salva al primo
+      # giro (la prima fetta che finisce; le altre trovano il posto preso e
+      # passano oltre) e i giri dopo non perdono tempo a ricaricarla. Chi non trova
       # la sua riparte dalla piu' recente disponibile (`restore-keys`): per una
       # richiesta nuova, quella dell'ultimo commit di main.
       #
@@ -96,13 +97,25 @@ jobs:
       # variabili di un altro lavoro fa ricompilare molti pezzi. Misurato il
       # 13/11: con la cache comune le fette del browser costruivano in 73-113
       # secondi, questo lavoro con la sua in 66.
+      #
+      # SOLO LA COMPILAZIONE, MAI I DATI DEL SITO ACCESO. In .next/cache Next
+      # scrive anche quello che il sito salva mentre gira (fetch-cache: per
+      # esempio la home gia' calcolata; images: le foto ridimensionate). Se
+      # passassero da un giro all'altro, una home rotta da una richiesta
+      # potrebbe uscire con la copia del giro prima e le prove resterebbero
+      # verdi: il collaudo l'ha riprodotto il 13/11. Per questo si tengono
+      # solo webpack, swc e il registro del controllo dei tipi (.tsbuildinfo),
+      # e la chiave e' passata a v2 per non riprendere le cache di prima.
       - name: Riprendi la cache di compilazione di Next
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: .next/cache
-          key: next-build-v1-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+          path: |
+            .next/cache/webpack
+            .next/cache/swc
+            .next/cache/.tsbuildinfo
+          key: next-build-v2-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v1-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v2-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # Storybook 8.x dichiara peer deps su React 18 + ecc, ma il monorepo usa
       # react-dom 18.3 risolto via Next 14; senza --legacy-peer-deps fallisce.
@@ -213,7 +226,8 @@ jobs:
             "$FETTA_INDICE" "$FETTE_TOTALI" "$COMMIT" "$PWD" > "$REFERTO/fetta.json"
           npx vitest list --filesOnly --json="$REFERTO/universo.json" > /dev/null
           npm run test -- --shard="$((FETTA_INDICE + 1))/$FETTE_TOTALI" \
-            --reporter=default --reporter=json --outputFile.json="$REFERTO/esito.json"
+            --reporter=default --reporter=github-actions --reporter=json \
+            --outputFile.json="$REFERTO/esito.json"
 
       - name: Consegna il referto della fetta
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -633,10 +647,13 @@ jobs:
       - name: Riprendi la cache di compilazione di Next
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: .next/cache
-          key: next-build-v1-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+          path: |
+            .next/cache/webpack
+            .next/cache/swc
+            .next/cache/.tsbuildinfo
+          key: next-build-v2-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v1-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v2-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
       # versione di Playwright (fissata da package-lock.json) vuole lo stesso
@@ -848,10 +865,13 @@ jobs:
       - name: Riprendi la cache di compilazione di Next
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: .next/cache
-          key: next-build-v1-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+          path: |
+            .next/cache/webpack
+            .next/cache/swc
+            .next/cache/.tsbuildinfo
+          key: next-build-v2-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v1-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v2-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
       # versione di Playwright (fissata da package-lock.json) vuole lo stesso
@@ -957,7 +977,9 @@ jobs:
       - name: Checkout (solo lo script che rimette insieme le fette)
         uses: actions/checkout@v4
         with:
-          sparse-checkout: scripts/ricuci-fette-ci.mjs
+          sparse-checkout: |
+            scripts/ricuci-fette-ci.mjs
+            scripts/ricuci-fette-ci.lib.mjs
           sparse-checkout-cone-mode: false
 
       - name: Prendi i referti delle fette
@@ -984,7 +1006,9 @@ jobs:
       - name: Checkout (solo lo script che rimette insieme le fette)
         uses: actions/checkout@v4
         with:
-          sparse-checkout: scripts/ricuci-fette-ci.mjs
+          sparse-checkout: |
+            scripts/ricuci-fette-ci.mjs
+            scripts/ricuci-fette-ci.lib.mjs
           sparse-checkout-cone-mode: false
 
       - name: Prendi i referti delle fette
