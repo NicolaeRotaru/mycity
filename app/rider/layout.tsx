@@ -8,7 +8,7 @@ import RiderShell from '@/components/rider/RiderShell';
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, isLoading, isRider, isAdmin } = useProfile();
+  const { profile, isAuthenticated, isLoading, isRider, isAdmin } = useProfile();
   const allowed = isRider || isAdmin;
 
   useEffect(() => {
@@ -35,5 +35,7 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
   // Shell mobile "phone-shaped" con bottom tab bar dedicata. La chrome globale
   // (Navbar/Footer/MobileTabBar) si nasconde su /rider come per /seller e /admin.
   // SOS solo per rider veri (P0-7): un admin che ispeziona /rider non lo vede.
-  return <RiderShell showSOS={isRider}>{children}</RiderShell>;
+  // R19-001 — E solo per chi è approvato: il fattorino in attesa entra nel
+  // modulo dei documenti e nel profilo, non consegna e non ha un SOS da mandare.
+  return <RiderShell showSOS={isRider && !!profile?.is_approved}>{children}</RiderShell>;
 }

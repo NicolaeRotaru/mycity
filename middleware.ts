@@ -29,6 +29,7 @@ import {
   motivoLeggibile,
   decidiAccessoArea,
   PAGINA_ATTESA_NEGOZIO,
+  type AccessoArea,
 } from '@/lib/auth/decisione-portiere';
 import {
   chiediConTettoSuScritturaDiSessione,
@@ -69,6 +70,25 @@ const ROLE_PROTECTED: Array<{ prefix: string; allowed: ('admin' | 'seller' | 'ri
   { prefix: '/seller', allowed: ['seller', 'admin'] },
   { prefix: '/rider',  allowed: ['rider', 'admin'] },
 ];
+
+/**
+ * R19-001 — IL FATTORINO IN ATTESA ARRIVA AL MODULO DEI DOCUMENTI.
+ *
+ * Il fattorino non ancora approvato veniva rimandato alla home da ogni pagina
+ * /rider, compreso l'unico modulo dove manda documento, patente e data di
+ * nascita per farsi approvare: lo staff non aveva mai niente da verificare.
+ * Ora entra SOLO lì e nel profilo (da cui si torna dal modulo e si esce); il
+ * resto dell'area — consegne, guadagni, turni, storico — lo rimanda al modulo.
+ */
+const PAGINA_DOCUMENTI_FATTORINO = '/rider/onboarding';
+const PAGINE_DEL_FATTORINO_IN_ATTESA = [PAGINA_DOCUMENTI_FATTORINO, '/rider/profile'];
+
+function accessoDelFattorinoInAttesa(pathname: string): AccessoArea {
+  const percorso = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  return PAGINE_DEL_FATTORINO_IN_ATTESA.includes(percorso)
+    ? { azione: 'entra' }
+    : { azione: 'rimanda', verso: PAGINA_DOCUMENTI_FATTORINO };
+}
 
 // Rotte che richiedono solo l'autenticazione (qualsiasi ruolo), non un ruolo
 // specifico. 🟠-18: /profile/** era senza guard server-side (protezione
@@ -698,7 +718,12 @@ export async function middleware(req: NextRequest) {
         }),
       );
     }
-    const accesso = decidiAccessoArea({ role, approved, allowed: roleRule.allowed, pathname });
+    // R19-001 — «Ruolo giusto ma non approvato», per il fattorino: il modulo
+    // dei documenti e il profilo si aprono, il resto lo rimanda al modulo.
+    const fattorinoInAttesa = roleRule.prefix === '/rider' && role === 'rider' && !approved;
+    const accesso = fattorinoInAttesa
+      ? accessoDelFattorinoInAttesa(pathname)
+      : decidiAccessoArea({ role, approved, allowed: roleRule.allowed, pathname });
     if (accesso.azione === 'rimanda') {
       const url = req.nextUrl.clone();
       url.pathname = accesso.verso;
