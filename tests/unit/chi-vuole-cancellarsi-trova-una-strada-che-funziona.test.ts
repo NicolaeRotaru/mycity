@@ -411,7 +411,11 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
   });
 
   it("se la posta del supporto c è, il messaggio arriva a una persona anche senza database", async () => {
-    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    // 13/11/2026 (R24-010) — Il modulo inoltra solo dove la porta dice che arriva
+    // (ilModuloArrivaSenzaDatabase): casella sul dominio dei contatti e posta accesa.
+    process.env.SUPPORT_EMAIL = "supporto@mycity-marketplace.com";
+    process.env.RESEND_API_KEY = "re_di_prova";
+    process.env.RESEND_FROM = "MyCity <no-reply@mycity-marketplace.com>";
     inviaEmail.mockResolvedValueOnce({ ok: true });
     const res = await scriviAiContatti(messaggio("7.0.0.2"));
     expect(res.status).toBe(200);
@@ -436,7 +440,11 @@ describe("un messaggio dovuto che non parte non passa per partito", () => {
 
   it("il modulo non dice ok se la mail al supporto non è partita", async () => {
     stato.senzaChiave = true;
-    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    // 13/11/2026 (R24-010) — Il modulo inoltra solo dove la porta dice che arriva
+    // (ilModuloArrivaSenzaDatabase): casella sul dominio dei contatti e posta accesa.
+    process.env.SUPPORT_EMAIL = "supporto@mycity-marketplace.com";
+    process.env.RESEND_API_KEY = "re_di_prova";
+    process.env.RESEND_FROM = "MyCity <no-reply@mycity-marketplace.com>";
     inviaEmail.mockResolvedValueOnce({ ok: false, skipped: true, reason: "non configurata" } as { ok: boolean });
     const res = await scriviAiContatti(messaggio("7.0.0.3"));
     expect(inviaEmail).toHaveBeenCalledTimes(1);
@@ -446,7 +454,11 @@ describe("un messaggio dovuto che non parte non passa per partito", () => {
 
   it("il modulo non dice ok se la mail al supporto lancia", async () => {
     stato.senzaChiave = true;
-    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    // 13/11/2026 (R24-010) — Il modulo inoltra solo dove la porta dice che arriva
+    // (ilModuloArrivaSenzaDatabase): casella sul dominio dei contatti e posta accesa.
+    process.env.SUPPORT_EMAIL = "supporto@mycity-marketplace.com";
+    process.env.RESEND_API_KEY = "re_di_prova";
+    process.env.RESEND_FROM = "MyCity <no-reply@mycity-marketplace.com>";
     inviaEmail.mockRejectedValueOnce(new Error("rete giù"));
     const res = await scriviAiContatti(messaggio("7.0.0.4"));
     expect(res.status).toBe(503);
@@ -838,9 +850,11 @@ describe("con la posta spenta l'allarme suona una volta per stato, non ogni nott
 describe("il modulo dei contatti e l'allarme non si fanno ingannare", () => {
   it("il modulo non dice ok quando Resend risponde con un errore vero ({ ok:false, error })", async () => {
     stato.senzaChiave = true;
-    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    // 13/11/2026 (R24-010) — Il modulo inoltra solo dove la porta dice che arriva
+    // (ilModuloArrivaSenzaDatabase): casella sul dominio dei contatti e posta accesa.
+    process.env.SUPPORT_EMAIL = "supporto@mycity-marketplace.com";
     process.env.RESEND_API_KEY = "re_di_prova";
-    process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+    process.env.RESEND_FROM = "MyCity <no-reply@mycity-marketplace.com>";
     inviaEmail.mockResolvedValueOnce({ ok: false, error: "Resend 422: dominio non verificato" } as { ok: boolean });
     const res = await scriviAiContatti(richiestaAlModulo("7.0.0.21"));
     expect(inviaEmail).toHaveBeenCalledTimes(1);
