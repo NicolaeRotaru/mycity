@@ -209,7 +209,7 @@ export default function MessagesListPage() {
                           si leggeva «Assistenza MyCity Uff…», cioè sparivano proprio le lettere
                           che distinguono l'Assistenza vera da un negozio con lo stesso nome. */}
                       <div className="flex min-w-0 items-baseline gap-1.5">
-                        <h2 className={`font-semibold truncate ${unread > 0 ? 'text-ink-900' : 'text-ink-700'}`}>
+                        <h2 className={`font-semibold text-lg leading-snug truncate ${unread > 0 ? 'text-ink-900' : 'text-ink-700'}`}>
                           {inArrivo ? (
                             <>
                               <span aria-hidden="true">{counterpartName}</span>

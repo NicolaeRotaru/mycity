@@ -19,7 +19,7 @@ describe('R22-006 · i titoli non saltano un livello', () => {
   }
 
   it('le righe di notifiche e conversazioni usano h2', () => {
-    expect(readFileSync('app/notifications/page.tsx', 'utf8')).toMatch(/<h2 className=\{`font-semibold \$\{n\.is_read/);
-    expect(readFileSync('app/messages/page.tsx', 'utf8')).toMatch(/<h2 className=\{`font-semibold truncate/);
+    expect(readFileSync('app/notifications/page.tsx', 'utf8')).toMatch(/<h2 className=\{`font-semibold text-lg leading-snug \$\{n\.is_read/);
+    expect(readFileSync('app/messages/page.tsx', 'utf8')).toMatch(/<h2 className=\{`font-semibold text-lg leading-snug truncate/);
   });
 });

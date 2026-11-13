@@ -109,8 +109,8 @@ describe('la chat con l\'Assistenza, a video', () => {
     const falsa = riga('Offerta!');
     expect(vera.querySelector('svg'), 'l\'Assistenza vera ha perso l\'icona').not.toBeNull();
     expect(vera.textContent).toContain('Ufficiale');
-    // Dentro l'h3 (che ha `truncate`) sui telefoni si leggeva «Assistenza MyCity Uff…».
-    expect(vera.querySelector('h3')?.textContent ?? '', 'il segno è dentro il titolo che si taglia').not.toContain('Ufficiale');
+    // Dentro l'h2 (che ha `truncate`) sui telefoni si leggeva «Assistenza MyCity Uff…».
+    expect(vera.querySelector('h2')?.textContent ?? '', 'il segno è dentro il titolo che si taglia').not.toContain('Ufficiale');
     expect((vera.textContent ?? '').match(/ufficiale/gi)?.length, 'il lettore di schermo diceva «ufficiale» due volte').toBe(1);
     expect(falsa.querySelector('svg'), 'un negozio qualunque ha preso il segno dell\'Assistenza').toBeNull();
     expect(falsa.textContent).not.toContain('Ufficiale');
@@ -122,7 +122,7 @@ describe('la chat con l\'Assistenza, a video', () => {
     globali.__ESITO_QUERY__ = (o: { queryKey: unknown[] }) =>
       (eIdAssistenza(o.queryKey) ? { data: undefined, isLoading: true, isPending: true, isSuccess: false, failureCount: 0 } : undefined);
     const s = await apriElenco();
-    const titoli = Array.from(s.radice.querySelectorAll('h3'));
+    const titoli = Array.from(s.radice.querySelectorAll('h2'));
     expect(titoli.map(visibile)).toEqual(['…', 'Pane Quotidiano']);
     expect(titoli[0].querySelector('.sr-only')?.textContent).toBe('Caricamento del nome');
     expect(s.radice.textContent).not.toContain('Utente');

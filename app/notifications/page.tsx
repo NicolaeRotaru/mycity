@@ -238,7 +238,7 @@ export default function NotificationsPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-baseline justify-between gap-2">
-                    <h2 className={`font-semibold ${n.is_read ? 'text-ink-700' : 'text-ink-900'}`}>
+                    <h2 className={`font-semibold text-lg leading-snug ${n.is_read ? 'text-ink-700' : 'text-ink-900'}`}>
                       {n.title}
                     </h2>
                     <span className="whitespace-nowrap text-xs text-ink-400">
