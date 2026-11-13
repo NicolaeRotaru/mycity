@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
 
 /**
@@ -100,9 +101,9 @@ function SignUpInner() {
   };
 
   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
-  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
-  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
-  // comunque sul server, quindi non si apre nessun buco.
+  // estensione che lo taglia, guasto loro), si dice cosa e' successo e cosa fare.
+  // 13/11/2026 (R24-016) — Non si promette piu' «puoi provare lo stesso»: senza
+  // gettone la rotta del server rifiuta sempre, ed era un giro senza uscita.
   const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // S10 (5/11/2026) — Gli errori restano accanto al campo (con aria-invalid e
@@ -120,8 +121,8 @@ function SignUpInner() {
       requestAnimationFrame(() => document.getElementById('signup-consenso')?.focus());
       return;
     }
-    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) {
-      toast.error('Completa il controllo anti-bot');
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      toast.error(captchaRotto ? 'Il controllo anti-robot non si è caricato: ricarica la pagina o registrati con Google.' : 'Completa il controllo anti-bot');
       return;
     }
     setIsLoading(true);
@@ -328,9 +329,10 @@ function SignUpInner() {
           </div>
         )}
         {captchaRotto && (
-          <p className="text-center text-sm text-ink-600">
-            {captchaRotto} Puoi provare lo stesso a registrarti: se non funziona,
-            ricarica la pagina o scrivici da <Link href="/contact" className="underline">Contatti</Link>.
+          <p role="alert" className="text-center text-sm text-ink-600">
+            {captchaRotto} Senza questo controllo l&apos;iscrizione con email non può partire:
+            ricarica la pagina, oppure registrati con Google qui sotto. Se non funziona, scrivici a{' '}
+            <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
           </p>
         )}
 
