@@ -74,8 +74,7 @@ describe('altre pagine (lettura del sorgente)', () => {
     const src = readFileSync('app/messages/[id]/page.tsx', 'utf8');
     const campo = src.slice(src.indexOf('placeholder="Scrivi un messaggio…"') - 200, src.indexOf('placeholder="Scrivi un messaggio…"') + 500);
     expect(campo).not.toMatch(/disabled=\{sendMutation\.isPending\}\s*\n\s*(\/\/[^\n]*\n\s*)*className="flex-1/);
-    // R22-003: il doppio invio non si ferma più (il secondo va in coda), il campo però resta acceso.
-    expect(src).toMatch(/if \(inVolo\.current\) coda\.current\.push\(trimmed\);/);
+    expect(src).toMatch(/if \(!trimmed \|\| sendMutation\.isPending\) return;/);
   });
   it('291: nel menu del pannello ci sono Segnalazioni e Prodotti', () => {
     const src = readFileSync('components/admin/AdminSidebar.tsx', 'utf8');

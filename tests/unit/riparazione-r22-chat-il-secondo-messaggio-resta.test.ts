@@ -140,26 +140,42 @@ describe('R22-003 · quello che si scrive mentre il primo messaggio parte non sp
     s.smonta();
   }, 60000);
 
-  it('secondo Invio durante il volo: il secondo messaggio parte quando il primo finisce', async () => {
-    const mod = await monta('app/messages/[id]/page.tsx');
-    const s = accendi(mod.default, { params: { id: 'c1' } });
+  it('secondo Invio durante il volo: non parte e il testo resta nel campo; dopo, un nuovo Invio lo manda', async () => {
+    // Il finto di react-query non tiene `isPending`: qui si usa quello vero, con la memoria
+    // già piena (nessuna lettura parte) e un utente finto che arriva da `supabase` finto.
+    const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+    const { queryKeys } = await import('@/lib/queries/keys');
+    const { createElement } = await import('react');
+    const mod = await monta('app/messages/[id]/page.tsx', { veri: ['@tanstack/react-query'] });
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData(queryKeys.messages.conversationByParam('c1'), CONVERSAZIONE);
+    qc.setQueryData(queryKeys.messages.byParam('c1'), []);
+    qc.setQueryData(queryKeys.messages.idAssistenza('assistenza'), 'assistenza');
+    const Pagina = mod.default as React.ComponentType<{ params: Promise<{ id: string }> }>;
+    const s = accendi(
+      (p: { params: { id: string } }) => createElement(QueryClientProvider, { client: qc }, createElement(Pagina, p as never)),
+      { params: { id: 'c1' } },
+    );
     await attendi();
     await attendi();
     scrivi(s.radice, 'Ciao');
     invia(s.radice);
     await attendi();
     scrivi(s.radice, 'arrivo subito');
-    expect((s.radice.querySelector('button[aria-label="Invia"]') as HTMLButtonElement).disabled).toBe(false);
     invia(s.radice);
     await attendi();
-    expect(inviati, 'il secondo parte solo quando il primo è finito').toEqual(['Ciao']);
-    expect(campo(s.radice).value).toBe('');
+    expect(inviati, 'il secondo non deve partire mentre il primo è in volo').toEqual(['Ciao']);
+    expect(campo(s.radice).value, 'il testo del secondo Invio ignorato deve restare nel campo').toBe('arrivo subito');
     await act(async () => {
       rispondi?.();
-      await Promise.all(globali.__MUTAZIONI_IN_VOLO__ as Promise<unknown>[]);
+      await new Promise((r) => setTimeout(r, 20));
     });
     await attendi();
-    expect(inviati, 'il secondo messaggio è stato ignorato').toEqual(['Ciao', 'arrivo subito']);
+    expect(campo(s.radice).value).toBe('arrivo subito');
+    invia(s.radice);
+    await attendi();
+    expect(inviati).toEqual(['Ciao', 'arrivo subito']);
+    expect(campo(s.radice).value).toBe('');
     s.smonta();
   }, 60000);
 
