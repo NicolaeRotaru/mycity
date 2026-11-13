@@ -255,11 +255,13 @@ export default function RiderDashboardPage() {
   const incassiDaDichiarare = riquadroIncassi.incassi;
 
   // Statistiche di oggi: consegne completate + incasso del giorno.
-  const { data: today } = useQuery({
+  const letturaOggi = useQuery({
     queryKey: queryKeys.rider.todayStats,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { count: 0, earned: 0 };
+      // R20-004 — Senza rete getUser() risponde «nessun utente» con un errore: non è «oggi 0,00 €».
+      // La lettura cade (il riquadro dice «—») e si rilegge quando la rete torna o col «Riprova».
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      if (!user) throw erroreUtente ?? new Error('Non autenticato');
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const { data, error } = await supabase
@@ -280,6 +282,7 @@ export default function RiderDashboardPage() {
     },
     staleTime: 30_000,
   });
+  const today = letturaOggi.data;
 
   // Priorità per zona: gli ordini che cadono in una zona preferita vanno PRIMA
   // (la disponibilità promette "riceverai prima le consegne in queste zone").
@@ -410,7 +413,8 @@ export default function RiderDashboardPage() {
       <ErrorState
         title="Non riesco a leggere gli ordini"
         description="La lettura non è riuscita, quindi non so quali consegne ci sono. Non vuol dire che non ce ne siano: riprova fra un momento."
-        onRetry={() => { void letturaBacheca.refetch(); }}
+        // R20-004 — Il «Riprova» rilegge anche gli incassi di oggi: aperti senza rete, restavano «—».
+        onRetry={() => { void letturaOggi.refetch(); void letturaBacheca.refetch(); }}
       />
     );
   }

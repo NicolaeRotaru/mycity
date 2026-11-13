@@ -17,6 +17,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mondo = vi.hoisted(() => ({
   oggi: 'risponde' as 'risponde' | 'cade' | 'in-volo',
+  /** 'giu': supabase.auth.getUser() risponde «nessun utente» con l'errore di rete (AuthRetryableFetchError). */
+  rete: 'su' as 'su' | 'giu',
 }));
 
 vi.mock('sonner', () => ({ toast: { error: () => {}, success: () => {} } }));
@@ -59,7 +61,12 @@ vi.mock('@/lib/supabase/client', () => {
     supabase: {
       from: catena,
       rpc: async () => ({ data: null, error: null }),
-      auth: { getUser: async () => ({ data: { user: { id: 'luca' } }, error: null }) },
+      auth: {
+        getUser: async () =>
+          mondo.rete === 'giu'
+            ? { data: { user: null }, error: Object.assign(new Error('Failed to fetch'), { name: 'AuthRetryableFetchError', status: 0 }) }
+            : { data: { user: { id: 'luca' } }, error: null },
+      },
     },
   };
 });
@@ -96,6 +103,7 @@ const valoreDi = (d: HTMLElement, etichetta: string) => {
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   mondo.oggi = 'risponde';
+  mondo.rete = 'su';
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ incassi: [] }), { status: 200 })));
 });
 
@@ -126,5 +134,32 @@ describe('R20-004 — «Oggi» e «Consegne» sulla bacheca del fattorino', () =
     const d = await accendi();
     expect(valoreDi(d, 'Oggi'), 'durante il caricamento la giornata sembra a zero euro').toBe('—');
     expect(valoreDi(d, 'Consegne')).toBe('—');
+  }, 30000);
+
+  // Giro di correzione: senza rete getUser() dà «nessun utente» con un errore, e la lettura
+  // «riusciva» a zero. Aperta la bacheca senza rete, tornata la rete, i riquadri restavano a zero.
+  it('aperta senza rete: col «Riprova» e la rete tornata mostra il compenso vero, non 0,00 €', async () => {
+    mondo.rete = 'giu';
+    const d = await accendi();
+    const riprova = d.querySelector<HTMLButtonElement>('[role="alert"] button');
+    expect(riprova, 'senza rete la bacheca dovrebbe mostrare il «Riprova»: la prova girerebbe a vuoto').not.toBeNull();
+    mondo.rete = 'su';
+    await act(async () => { riprova!.click(); });
+    await gira();
+    expect(valoreDi(d, 'Oggi'), 'tornata la rete i riquadri restano a zero: la lettura di oggi non si rilegge').toMatch(/6,00/);
+    expect(valoreDi(d, 'Consegne')).toBe('2');
+  }, 30000);
+
+  it('aperta senza rete: quando la rete torna rilegge gli incassi di oggi, non resta a 0,00 €', async () => {
+    mondo.rete = 'giu';
+    const d = await accendi();
+    mondo.rete = 'su';
+    await act(async () => {
+      window.dispatchEvent(new Event('offline'));
+      window.dispatchEvent(new Event('online'));
+    });
+    await gira();
+    expect(valoreDi(d, 'Oggi'), 'tornata la rete i riquadri restano a zero: senza utente la lettura «riusciva» a zero').toMatch(/6,00/);
+    expect(valoreDi(d, 'Consegne')).toBe('2');
   }, 30000);
 });
