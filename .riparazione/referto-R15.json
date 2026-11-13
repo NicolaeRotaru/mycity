@@ -1,0 +1,436 @@
+{
+ "sessione": "R15",
+ "aggiornato": "2026-11-13 06:59",
+ "finita": false,
+ "testa": "fc54d5a60151f01fa170f4c68cbaf221fa34e589",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "",
+  "testa": "",
+  "nota": "non ancora lanciato: passaggio di consegne per il tetto di costo, prima del lotto 3"
+ },
+ "voci": [
+  {
+   "id": "R15-001",
+   "chiave": "immagini-media|le tessere delle categorie in home sono foto d'archivio scritte a mano nel codice",
+   "esito": "parziale",
+   "commit": "116e2134aa54021973cfc2252b11851d0c007996",
+   "file_toccati": [
+    "components/CategoryShowcase.tsx",
+    "tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 116e2134aa54021973cfc2252b11851d0c007996^ --file components/CategoryShowcase.tsx --prove tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Sulla base le undici foto Pexels non c'erano già più: la foto sta in categories.image_url (migrazione 159) e onError scrive nei log. Restava un pezzo del «silenzio». Le tessere arrivano nell'HTML del server, quindi una foto sparita fallisce quasi sempre prima dell'idratazione: lì onError non scatta, e il ramo ref (CategoryShowcase.tsx:317-321) la nascondeva con display:none senza scrivere niente. Ora anche quel ramo scrive logger.warn con slug e indirizzo, una volta sola per foto. La prova morde: senza la correzione l'avviso non c'è.",
+   "cosa_resta": "La foto non si cambia ancora dal pannello admin di MyCity. app/api/admin/categories/route.ts non accetta image_url (zod lo scarta) e app/admin/categories/page.tsx non ha il campo. Oggi la si cambia solo dal database, senza ripubblicare il sito. Che la migrazione 159 sia applicata in produzione lo decide Nicola (non_codice). Dal collaudo: 1) l'avviso nuovo è logger.warn nel browser, cioè solo console.warn. Non arriva a Sentry né ai log del server, quindi chi gestisce il sito non vede ancora una foto sparita: manca un canale, per esempio un controllo dal server sugli image_url. 2) In una corsa (ridisegno fra l'immagine rotta e l'evento error) l'avviso esce due volte invece di una (components/CategoryShowcase.tsx:252-259). 3) Nella modifica proposta per la rotta admin, fotoDiCategoria accetta anche qualunque *.supabase.co (lib/immagine-categoria.ts:59), non solo gli host della CSP.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/admin/categories/route.ts",
+     "modifica": "In baseFields aggiungere image_url: z.string().trim().max(500).nullable().optional(), con .refine((v) => !v || fotoDiCategoria({ image_url: v }).src !== null, 'Foto non ammessa: https:// su un host della CSP, oppure percorso del sito /…'), importando fotoDiCategoria da '@/lib/immagine-categoria'. In POST e PATCH salvare la stringa vuota come null. Il vincolo della migrazione 159 resta come seconda cintura."
+    },
+    {
+     "file": "app/admin/categories/page.tsx",
+     "modifica": "Nel modulo di creazione e modifica aggiungere un campo testo «Foto della tessera (https://… o /…)» legato a image_url, mandato nel corpo di POST e PATCH a /api/admin/categories, e mostrare il valore attuale nella riga della categoria."
+    }
+   ],
+   "nota": "Prova che le foto fisse non c'erano già: npx vitest run tests/unit/la-foto-della-categoria-la-decide-il-dato-non-il-codice.test.ts (verde), più grep -rni pexels in components/CategoryShowcase.tsx, che trova solo un commento.",
+   "verificato_da": "revisore generico che prova a smentire (lotto 1): verdetto «parziale»; ha rilanciato la prova e cercato varianti (diff, hydrateRoot, browser con Supabase finto)"
+  },
+  {
+   "id": "R15-002",
+   "chiave": "navigazione-gerarchia|home, piè di pagina e mappa per google mettono in mostra categorie vuote: otto su nove non hanno prodotti",
+   "esito": "parziale",
+   "commit": "3b8a85a628a1ba2d4339ccb9dc4fb17fef08a66a",
+   "file_toccati": [
+    "components/Footer.tsx",
+    "tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx",
+    "tests/unit/riparazione-r15-il-piede-non-elenca-categorie-vuote-nell-html.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx tests/unit/la-vetrina-delle-categorie-esce-piena-nell-html-del-server.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb848e563a72757f142702ffd395753b80c3d961 --file components/Footer.tsx --prove tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx --json > /tmp/r15-rimessa-R15-002.json 2>&1; echo uscita=$?  → uscita=0, «② components/Footer.tsx alla base: rossa, sul comportamento»"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Tolta la regressione di fa97898e: finché non sa quali categorie sono piene il piede torna a elencarle tutte (l'elenco vero, o la riserva), come il 1/11 (dfad0263); nell'HTML del server non resta più senza categorie (con next dev e Supabase finto la 404 ha le 8 di riserva e «Tutte le categorie»). La variante scomoda è chiusa: se le piene sono note ma l'elenco è caduto o è arrivato [], il piede non ripiega più sulle 8 di riserva (senza id passavano intere, 7 vuote) e lascia solo «Tutte le categorie»; il ramo `|| isErroreCategorie` non serve più ed è tolto. Rispetto alla base bb848e56 la logica cambia solo in quel caso (Footer.tsx: `pieneNote ? soloLePiene(madriLette, pieneNote) : madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA`). Per la nuova regola della regista la prova comune la-vetrina…test.tsx è rimessa identica alla base a19ff892 (git diff a19ff892 vuoto) ed è VERDE col codice nuovo (3/3); la prova di fa97898e, che chiedeva il comportamento sbagliato, è tolta e sostituita da una prova nuova di R15 (6 casi, disegno vero sul server con QueryClient vero): Alimentari c'è con le sole categorie lette, la riserva c'è senza nessuna lettura, l'elenco intero se cade la lettura delle piene, solo le piene quando sono note, nessuna riserva con l'elenco caduto o vuoto. Mutazioni a mano, una per ramo: rimettere la riserva quando le piene sono note → 2 rossi; [] quando non si sa → 3 rossi; sempre la riserva quando non si sa → 2 rossi; niente filtro → 1 rosso. Controlli: tsc (6 GB) 0, eslint 0, 19 file di prove vicine (Footer, CategoryShowcase, categorie-piene) 188/188. La strada preferita (piede componente server) non si può fare: la prova comune e altri 7 file di prova disegnano `createElement(Footer)` in modo sincrono, e un file client nuovo darebbe comunque 3 alla prova rimessa.",
+   "cosa_resta": "Nell'HTML del server piede, vetrina della home e chip dell'eroe mostrano ancora le categorie vuote, perché il server non consegna le piene prima che si disegnino. ATTENZIONE: il precarico proposto al primo giro (domandaCategoriePiene dentro precaricaHome) da solo NON basta: CategoryBar, nel menu, crea la domanda ['categories','con-prodotti'] nel QueryClient prima della pagina, e la HydrationBoundary della home (dentro la pagina) trova una domanda già esistente e la riempie solo in un effetto, cioè mai sul server. Provato con una prova usa-e-getta: CategoryBar + HydrationBoundary della home + CategoryShowcase → la vetrina mostra ancora /category/elettronica; senza CategoryBar (la prova del revisore) la filtra. Il precarico giusto sta nel layout, SOPRA il menu, con le due chiavi che piede, menu e vetrina leggono davvero: ['categories','tree'] e ['categories','con-prodotti'] (prima modifica di serve_file_altrui, che sostituisce quella su precaricaHome). Provato in un worktree: con quel precarico piede, vetrina e chip dell'eroe nell'HTML del server mostrano solo /category/alimentari; tsc 0, eslint 0, 65 file di prove vicine 672/672. Poi, non miei: i chip dell'eroe scritti nel codice (HomeSectionRenderer.tsx:67-72,155-170, 3 vuote su 4); la tendina della ricerca «Sfoglia per categoria» (components/SearchBar.tsx:61-73,315-323) che elenca fino a 8 principali senza filtro; la descrizione del sito (lib/site-branding.ts:81) e di /stores (app/stores/layout.tsx:7) che promettono casa, elettronica e libri. Le modifiche esatte sono in serve_file_altrui; il diff completo provato sta in /tmp/claude-0/-home-user-mycity/ac5c5bce-d77c-5008-9900-2c8dc498dca7/scratchpad/proposte.diff (più il file nuovo ChipDelleCategorie.proposta.tsx nella stessa cartella). Mappa del sito e noindex delle categorie vuote erano già a posto.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/queries/precarico.ts",
+     "modifica": "Dopo la riga 6 (import di leggiSchedaPerIlGuscio) aggiungere `import { domandaCategoriePiene } from '@/lib/queries/categorie-piene';`. Dopo precaricaHome (righe 67-70, che restano come sono) aggiungere:\n/** Le categorie che menu, piede e vetrina leggono su OGNI pagina: l'elenco intero e quelle piene. Va consegnato SOPRA il menu (app/layout.tsx): CategoryBar crea queste domande appena si disegna, e una HydrationBoundary che arriva dopo le riempie solo nel browser, non nell'HTML. */\nexport function precaricaSito(): Promise<DehydratedState> {\n  return precarica((supa, qc) =>\n    insieme(qc, [\n      {\n        queryKey: ['categories', 'tree'],\n        staleTime: 10 * 60_000,\n        queryFn: async () => {\n          const { data, error } = await supa.from('categories').select('id, slug, name, parent_id, icon').order('name');\n          if (error) throw error;\n          return data ?? [];\n        },\n      },\n      domandaCategoriePiene(supa),\n    ]),\n  );\n}\n(Stessa select e stesso ordine di CategoryBar.tsx:127-136 e Footer.tsx:163-175, che condividono la chiave.) Sostituisce la modifica del primo giro su precaricaHome, che da sola non arriva nell'HTML."
+    },
+    {
+     "file": "app/layout.tsx",
+     "modifica": "Dopo la riga 29 (import di APP_INSTALLABILE_ACCESA) aggiungere:\nimport { HydrationBoundary } from '@tanstack/react-query';\nimport { unstable_cache } from 'next/cache';\nimport { precaricaSito } from '@/lib/queries/precarico';\nimport { SECONDI_CATALOGO_FRESCO } from '@/lib/queries/cache-pubblica';\n\n/** Le categorie di menu, piede e vetrina, lette una volta per tutti (R15-002). */\nconst precaricoDelSito = unstable_cache(precaricaSito, ['sito-precarico'], {\n  revalidate: SECONDI_CATALOGO_FRESCO,\n  tags: ['sito-precarico'],\n});\nIn RootLayout, dopo `const messages = await getMessages();` (riga 201): `// Un precarico non riuscito non ferma la pagina: menu, piede e vetrina leggono dal browser come prima.` e `const precarico = await precaricoDelSito().catch(() => undefined);` (il .catch serve: fuori da Next unstable_cache lancia, e tests/unit/riparazione-r10-manifest-nel-head.test.tsx chiama il layout). Poi avvolgere i figli di <QueryProvider> (righe 249-261): subito dopo `<QueryProvider>` aprire `<HydrationBoundary state={precarico}>` (prima di `<Navbar />`), e subito prima di `</QueryProvider>` (dopo `{APP_INSTALLABILE_ACCESA && <PWAInstallBanner />}`) chiudere `</HydrationBoundary>`. Deve stare sopra <Navbar />: più in basso CategoryBar crea già le domande e il riempimento slitta al browser. Costo: l'elenco intero delle categorie (~72 righe) entra nel payload di ogni pagina; la lettura parte una volta ogni 60 secondi, non a ogni visita. Con questa modifica piede, vetrina e chip filtrano già nell'HTML del server, senza cambiare precaricaHome."
+    },
+    {
+     "file": "components/home-sections/HomeSectionRenderer.tsx",
+     "modifica": "Dopo la riga 24 (import di HomeCtaLink, che resta: serve ai bottoni dell'eroe) aggiungere `import ChipDelleCategorie from '@/components/home-sections/ChipDelleCategorie';`. Sostituire tutto il blocco delle righe 155-170 (da `{showChips && (` alla sua `)}` di chiusura, cioè il <div className=\"flex flex-wrap gap-2 pt-1\"> con HERO_CHIPS.map e i HomeCtaLink) con la riga `{showChips && <ChipDelleCategorie chips={HERO_CHIPS} heroVariant={heroVariant} />}`. HERO_CHIPS (righe 67-72) resta. E creare il file nuovo components/home-sections/ChipDelleCategorie.tsx con questo contenuto esatto:\n'use client';\n\nimport { useQuery } from '@tanstack/react-query';\nimport HomeCtaLink from '@/components/home/HomeCtaLink';\nimport { supabase } from '@/lib/supabase/client';\nimport { domandaCategoriePiene } from '@/lib/queries/categorie-piene';\n\ntype Chip = { slug: string; label: string };\ntype Categoria = { id: string; slug: string };\n\n/**\n * I chip di categoria dell'eroe: solo quelle con qualcosa dentro (stesse chiavi di menu, piede e\n * vetrina, quindi nessuna lettura in più). Finché non si sa quali sono piene, tutti, come prima;\n * se si sa ma manca l'elenco per riconoscerle, nessuno.\n */\nexport default function ChipDelleCategorie({ chips, heroVariant }: { chips: readonly Chip[]; heroVariant: string }) {\n  const { data: categorie } = useQuery({\n    queryKey: ['categories', 'tree'],\n    staleTime: 10 * 60_000,\n    queryFn: async (): Promise<Categoria[]> => {\n      const { data, error } = await supabase.from('categories').select('id, slug, name, parent_id, icon').order('name');\n      if (error) throw error;\n      return (data ?? []) as Categoria[];\n    },\n  });\n  const piene = useQuery(domandaCategoriePiene(supabase));\n  const pieneNote = piene.isError ? null : piene.data;\n  const idDi = new Map((categorie ?? []).map((c) => [c.slug, c.id]));\n  const visibili = pieneNote\n    ? chips.filter((c) => pieneNote.includes(idDi.get(c.slug) ?? ''))\n    : chips;\n  if (visibili.length === 0) return null;\n  return (\n    <div className=\"flex flex-wrap gap-2 pt-1\">\n      {visibili.map((cat) => (\n        <HomeCtaLink\n          key={cat.slug}\n          href={`/category/${cat.slug}`}\n          ctaId={`hero_chip_${cat.slug}`}\n          location=\"hero_chips\"\n          variant={heroVariant}\n          className=\"inline-flex items-center bg-white text-ink-700 hover:text-primary-700 border border-cream-300 hover:border-primary-300 px-3 py-1.5 rounded-full text-sm font-medium transition-colors\"\n        >\n          {cat.label}\n        </HomeCtaLink>\n      ))}\n    </div>\n  );\n}\n"
+    },
+    {
+     "file": "components/SearchBar.tsx",
+     "modifica": "Dopo la riga 15 (import di leggiSuggerimentiRicerca) aggiungere `import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';`. Nella domanda ['search','zero-categories'] (righe 61-73): il tipo di ritorno e il cast diventano `{ id: string; slug: string; name: string }[]`, `.select('slug, name')` diventa `.select('id, slug, name')`, e si toglie `.limit(8)` (`.order('name');` chiude la catena: col filtro, una categoria piena oltre l'ottava sparirebbe; il taglio a 8 resta al disegno). Subito dopo la domanda aggiungere:\n  // Come menu, piede e vetrina: solo le categorie con qualcosa dentro. Se non si sa, tutte.\n  const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: open });\n  const catPiene = soloLePiene(topCats, piene.isError ? null : piene.data);\nAlla riga 315 `{topCats.length > 0 && (` diventa `{catPiene.length > 0 && (` e alla riga 319 `{topCats.slice(0, 8).map((c) => (` diventa `{catPiene.slice(0, 8).map((c) => (`."
+    },
+    {
+     "file": "lib/site-branding.ts",
+     "modifica": "Riga 81, DESCRIZIONE_DEL_SITO: da `Compra online dai negozi di Piacenza: alimentari, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.` a `Compra online dai negozi di Piacenza. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`"
+    },
+    {
+     "file": "app/stores/layout.tsx",
+     "modifica": "Riga 7: da 'Scopri tutti i negozi di Piacenza su MyCity: alimentari, casa, elettronica e altro. Compra online dai commercianti della tua città.' a 'Scopri tutti i negozi di Piacenza su MyCity. Compra online dai commercianti della tua città.'"
+    }
+   ],
+   "nota": "Commit della voce: bb848e56 (R15-varie, preparazione: non revertito, CategoryShowcase e sitemap lo usano e R15-002 regge senza toccare la prova comune), fa97898e (primo giro) e 3b8a85a6 (questo). La prova comune tests/unit/la-vetrina-delle-categorie-esce-piena-nell-html-del-server.test.tsx è rimessa com'era sulla base a19ff892 con git checkout, nel commit 3b8a85a6: rispetto alla base non cambia niente, quindi niente prove_esistenti_modificate. Tolta tests/unit/riparazione-r15-il-piede-non-elenca-categorie-vuote-nell-html.test.tsx: era la prova di fa97898e (R15) e chiedeva la regressione. Le sei modifiche altrui sono state messe tutte insieme in un worktree usa-e-getta (poi tolto): tsc 0, eslint 0 (un solo avviso già esistente, autoFocus in SearchBar.tsx:142), 65 file di prove 672/672, e una prova usa-e-getta col precarico vero (precaricaSito con un client anonimo finto) dà solo /category/alimentari in piede, vetrina e chip. La prova comune la-vetrina…test.tsx, toccata da fa97898e, è identica alla base a19ff892 (git diff vuoto) e non conta fra i file toccati.",
+   "verificato_da": "revisore generico che prova a smentire (lotto 1, verdetto «parziale»): ha trovato la regressione del piede e la variante; la correzione 3b8a85a6 si rivede nel collaudo finale"
+  },
+  {
+   "id": "R15-005",
+   "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
+   "esito": "parziale",
+   "commit": "b66f29ddf99487cd4161aec600c25fa55ede7201",
+   "file_toccati": [
+    "app/not-found.tsx",
+    "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b66f29dd^ --file app/not-found.tsx --prove tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts --json (con base f880877f^ esce 3 per costruzione, perché lì metadata non c'era; il difetto rimesso a mano con metadata = {} fa cadere la prova sul comportamento, 4 su 5)"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "app/not-found.tsx: openGraph e twitter partono da quelli della radice, letti da app/layout.tsx (`import { metadata as metadatiDellaRadice } from './layout'` e spread), non ricopiati a mano; cambiano solo titolo e descrizione. Tolto `robots: { index: false }`: Next scrive già da sé il noindex sulle 404 (NonIndex in node_modules/next/dist/server/app-render/app-render.js:155-167), e usciva doppio. Con next dev e Supabase finto, /zzz-non-esiste risponde 404 con <title>Pagina non trovata · MyCity</title>, og:title e og:description della 404, og:site_name MyCity, og:locale it_IT, og:type website, twitter:card summary_large_image, e UNA sola meta robots noindex. La prova importa `metadata` da app/not-found.tsx e da app/layout.tsx (caratteri e lingua di Next finti) e controlla titolo, descrizione, og:site_name/locale/type uguali alla radice, twitter:card summary_large_image, nessun robots. tsc (6 GB) 0, eslint 0, la prova e quella che importa il layout (riparazione-r10-manifest-nel-head) 8/8. Rimessa: con la base chiesta (f880877f^) esce 3, perché lì `metadata` in not-found non esisteva ancora e la prova lo nomina; rimesso il difetto com'è scritto nella voce (not-found con `metadata = {}`, cioè titolo e anteprima della home) la prova va rossa sul comportamento, 4 su 5; e la rimessa con base b66f29dd^ (il not-found del primo giro, og che sostituisce e noindex doppio) esce 0, «rossa, sul comportamento» (/tmp/r15-rimessa-R15-005-secondo-giro.json).",
+   "cosa_resta": "Il codice 200 al posto di 404 su /product, /store, /category, /u e /store/<id>/<pagina> inesistenti. Lo tengono DUE scheletri di caricamento, nessuno dei due risolto qui: app/loading.tsx (mio) sta alla radice, quindi tutto sotto il layout radice è dentro il suo Suspense, e in Next 15.5 lo scheletro parte subito con 200: un notFound() che arriva dopo (anche quello che /u chiama già) aggiunge solo noindex. Per /store/<id> e /store/<id>/<pagina> c'è anche app/store/loading.tsx (non mio), che avvolge app/store/[id]/layout.tsx: il revisore ha provato con next dev che senza lo scheletro della radice e con notFound() nel layout del negozio la risposta resta 200, e diventa 404 solo togliendo anche app/store/loading.tsx. Le strade. (a) Togliere tutti e due gli scheletri: le pagine senza scheletro proprio perdono «Stiamo caricando…» e il negozio il suo ScheletroNegozio, il primo byte aspetta le letture del server, e tests/unit/minori-s09-aspetto.test.ts:219-224 sorveglia la scritta di app/loading.tsx; insieme, i layout di prodotto, negozio, pagina del negozio e categoria devono chiamare notFound() solo quando la riga sicuramente non esiste, letta col client di servizio: il client anonimo non vede il prodotto o il negozio non approvato che il venditore apre per guardarlo. (b) Un controllo in middleware.ts (non mio) che per un id inesistente fa NextResponse.rewrite verso un percorso che non esiste, con status 404: il revisore l'ha provato e dà 404 ANCHE con app/loading.tsx al suo posto (la frase del primo giro, «con app/loading.tsx alla radice non dà il 404», era sbagliata). Il rischio vero della strada (b) è un altro: il middleware deve sapere con certezza che la riga non esiste. Letto col client anonimo, un prodotto o un negozio non ancora approvato o nascosto risulta «inesistente», e la pagina che il suo venditore apre per guardarlo gli risponderebbe 404; per evitarlo serve una lettura col client di servizio (o una funzione del database che dica solo «esiste sì/no»), cioè una lettura in più nel middleware a ogni richiesta di quelle pagine.",
+   "domanda": "Per avere il 404 vero sulle pagine inesistenti, Nicola sceglie fra: (a) togliere tutti e due gli scheletri di caricamento, quello della radice (app/loading.tsx, «Stiamo caricando…») e quello del negozio (app/store/loading.tsx), accettando che il primo byte di quelle pagine aspetti le letture del server; oppure (b) un controllo nel middleware, una lettura in più a ogni richiesta di prodotto, negozio e categoria, da fare col client di servizio perché i venditori non ricevano 404 sulle loro pagine ancora nascoste?",
+   "verificato_da": "revisore generico che prova a smentire (lotto 1, verdetto «parziale»): ha provato next dev, curl e la strada del middleware; la correzione b66f29dd si rivede nel collaudo finale",
+   "nota": "Il primo commit della voce è f880877f; questo è b66f29dd. L'import di ./layout da not-found è stato provato anche in Next vero (next dev con Supabase finto: la 404 si compila e si disegna)."
+  },
+  {
+   "id": "R15-006",
+   "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+   "esito": "parziale",
+   "commit": "fc54d5a60151f01fa170f4c68cbaf221fa34e589",
+   "file_toccati": [
+    "components/ProductGrid.tsx",
+    "app/promozioni/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fc54d5a6^ --file components/ProductGrid.tsx,app/promozioni/page.tsx --prove tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Le file di ProductGrid (home, sezioni categoria, «Ti potrebbe interessare») non marcano più nessuna foto come urgente. In /promozioni le urgenti passano da sei a quattro, la prima riga. PromoDeals e CollectionSection erano già a priority false, e la prova lo tiene fermo.",
+   "cosa_resta": "La griglia «tutti i prodotti» nella vetrina del negozio (components/StoreProductExplorer.tsx) usa ProductGrid con il valore di serie e chiede ancora quattro foto urgenti, anche se sta sotto le sezioni del negozio. Il file non è mio.",
+   "serve_file_altrui": [
+    {
+     "file": "components/StoreProductExplorer.tsx",
+     "modifica": "Nel <ProductGrid ...> alla riga ~223 aggiungere la prop prioritaPrimeFoto={false}."
+    }
+   ],
+   "nota": "Le file prima delle sezioni di una categoria non hanno più foto urgenti: se la prima fila di una pagina categoria fosse sopra la piega, la scelta si rivede. La prova è leggera (controlla testo, classi o sorgente), ma è un comando vitest eseguito."
+  },
+  {
+   "id": "R15-008",
+   "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
+   "esito": "parziale",
+   "commit": "f007952cf4d139c58ca9ab40e6e5f55550746eb2",
+   "file_toccati": [
+    "components/Footer.tsx",
+    "app/lavora-con-noi/page.tsx",
+    "app/returns/page.tsx",
+    "app/faq/page.tsx",
+    "tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f007952cf4d139c58ca9ab40e6e5f55550746eb2^ --file components/Footer.tsx,app/lavora-con-noi/page.tsx,app/returns/page.tsx,app/faq/page.tsx --prove tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Misurato in Chrome vero (next dev con Supabase finto, 360px, html{font-size:200%}), prima e dopo. Il piede aveva due colonne fisse: ora ogni colonna è larga almeno 8rem e al massimo mezza riga, e il marchio va su col-span-full. Così una colonna col testo grande, due col testo normale a 320, 360 e 700px, cinque dal computer: verificato. «Dichiarazione accessibilità» e «Tutte le categorie» non escono più su nessuna pagina. /lavora-con-noi passa da 473 a 360px: riquadri con min-w-0 e p-4 sm:p-6, testo del bottone che va a capo, e il titolo «commercio» a 72px con break-words hyphens-auto (era il vero colpevole dei 473). /returns da 399 a 360: il riquadro dei 14 giorni manda il testo sotto l'icona solo quando non ci sta. /faq da 405 a 360: bottone Contattaci.",
+   "cosa_resta": "Le pagine non mie nominate dalla voce scorrono ancora, misurate col piede già corretto: /help 391px (riquadri Email e Form contatti), /contact 429px (colonna implicita del grid allargata dagli input; il Turnstile da 300px si vede solo con la chiave del sito), /terms 393px («sponsorizzati»). Dal collaudo, altre pagine pubbliche che scorrono ancora a 360px col testo al 200% (file non di R15): la home, 422px (components/home-sections/HomeSectionRenderer.tsx:403, il bottone «Diventa venditore» con whitespace-nowrap, e un po' la riga 279); /about, 466px (app/about/page.tsx:118, grid-cols-2 fissa più l'h1); /come-funziona, 447px (app/come-funziona/page.tsx:75, i riquadri p-5); /privacy, 415px (components/ui/LegalLayout.tsx:41, l'h1). A 320px anche /faq, /lavora-con-noi e /returns scorrono ancora un poco (344, 341, 357 su 320); la voce misura a 360, e lì reggono. Col testo al 130% il piede passa a una colonna sola.",
+   "serve_file_altrui": [
+    {
+     "file": "app/help/page.tsx",
+     "modifica": "Riga 104: «bg-cream-50 border border-cream-300 rounded-2xl p-6» diventa «… p-4 sm:p-6». Righe 109, 117, 125: il <div> del testo accanto all'icona diventa <div className=\"min-w-0\">. Riga 111: «text-xs text-ink-500» (l'indirizzo email) diventa «text-xs text-ink-500 [overflow-wrap:anywhere]»."
+    },
+    {
+     "file": "app/contact/page.tsx",
+     "modifica": "Riga 94: «container mx-auto px-6 py-10 max-w-5xl» diventa «container mx-auto px-4 sm:px-6 py-10 max-w-5xl». Riga 139: «grid md:grid-cols-5 gap-8» diventa «grid grid-cols-1 md:grid-cols-5 gap-8». Nel modulo, la griglia Nome/Email «grid sm:grid-cols-2 gap-4» diventa «grid grid-cols-1 sm:grid-cols-2 gap-4». Righe 140, 218, 241: «p-6» diventa «p-4 sm:p-6». Verificato nel browser applicando lo stile alla pagina: grid-cols-1 sui due grid porta la pagina da 429 a circa 360px."
+    },
+    {
+     "file": "components/Turnstile.tsx",
+     "modifica": "In window.turnstile.render(ref.current, { sitekey: siteKey, theme, … }) (righe 76-78) aggiungere size: ref.current.clientWidth < 300 ? 'compact' : 'normal'. Il widget normale è largo 300px fissi, quello compatto 150px."
+    },
+    {
+     "file": "components/ui/LegalLayout.tsx",
+     "modifica": "Riga 124, in LegalSection: <div className=\"space-y-4\"> diventa <div className=\"space-y-4 break-words hyphens-auto\">. Sistema «sponsorizzati» in /terms. Non basta per /privacy (415px), che scorre per il titolo h1 della riga 41: lì serve anche break-words hyphens-auto sull'h1."
+    }
+   ],
+   "nota": "La prova è leggera sulle classi; le misure vere sono state fatte a mano con Playwright e Chrome nella cartella scratchpad/misura. Il server di prova girava con Supabase finto (127.0.0.1:59999), nessun database vero, e l'ho spento dopo. La prova è leggera (controlla testo, classi o sorgente), ma è un comando vitest eseguito.",
+   "verificato_da": "revisore generico che prova a smentire (lotto 1): verdetto «parziale»; ha rilanciato la prova e cercato varianti (diff, hydrateRoot, browser con Supabase finto)"
+  },
+  {
+   "id": "R15-009",
+   "chiave": "microcopy|la pagina dei più recensiti presenta 40 prodotti come «scelti dai clienti» anche quando nessuno ha una recensione",
+   "esito": "riparato",
+   "commit": "e92ee472d61dfc4cc7fd90e973f68f481327a926",
+   "file_toccati": [
+    "components/ProductGrid.tsx",
+    "app/piu-venduti/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-piu-recensiti-solo-recensiti.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-piu-recensiti-solo-recensiti.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e92ee472^ --file components/ProductGrid.tsx,app/piu-venduti/page.tsx --prove tests/unit/riparazione-r15-piu-recensiti-solo-recensiti.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Ho aggiunto a ProductGrid la prop soloRecensiti, che il database traduce in prodotti con almeno una recensione (prodotti_con_voto_almeno(0)), e la pagina dei più recensiti la usa. Così non compaiono prodotti a zero recensioni, e quelli molto recensiti ma vecchi non restano più fuori dai 40. Se non ce n'è nessuno, c'è lo stato vuoto. Le altre pagine non cambiano: la prop è opt-in e il percorso del voto minimo è identico.",
+   "nota": "La prova è leggera perché ProductGrid non si monta in una prova. La prova è leggera (controlla testo, classi o sorgente), ma è un comando vitest eseguito."
+  },
+  {
+   "id": "R15-010",
+   "chiave": "navigazione-gerarchia|l'indice delle categorie mostra giocattoli come le altre anche se non ha nessun prodotto, e cliccandola si trova il vuoto",
+   "esito": "riparato",
+   "commit": "37e5e07c5fcf5db26d12ed9d62871c6a79879f76",
+   "file_toccati": [
+    "app/categorie/page.tsx",
+    "app/category/[slug]/page.tsx",
+    "tests/unit/riparazione-r15-l-indice-delle-categorie-mostra-solo-le-piene.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-l-indice-delle-categorie-mostra-solo-le-piene.test.tsx"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-l-indice-delle-categorie-mostra-solo-le-piene.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 37e5e07c5fcf5db26d12ed9d62871c6a79879f76^ --file app/categorie/page.tsx,app/category/[slug]/page.tsx --prove tests/unit/riparazione-r15-l-indice-delle-categorie-mostra-solo-le-piene.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "/categorie usa la stessa lettura di vetrina, piede e menu (domandaCategoriePiene + soloLePiene, nessun filtro nuovo). Madri e figlie vuote non compaiono più. La pagina aspetta la risposta dietro il caricamento che già mostra, così Giocattoli non compare e poi sparisce. Se la lettura fallisce le mostra tutte, come prima. Così indice e piede vanno d'accordo. Sulla pagina di una categoria vuota, «Non abbiamo trovato questo prodotto» (la frase della ricerca, search.noResultsDescription) diventa una frase da categoria, in tutti e due i punti (righe 363 e 526).",
+   "nota": "messages/it.json non è cambiato: la frase della ricerca resta giusta per /search. La frase nuova sta scritta in app/category/[slug]/page.tsx, come le altre frasi italiane di quella pagina. messages/en.json non è mio, e il cambio di lingua è spento (Footer.tsx, LocaleSwitcher non esposto).",
+   "verificato_da": "revisore generico che prova a smentire (lotto 1): verdetto «regge»; ha rilanciato la prova e cercato varianti (diff, hydrateRoot, browser con Supabase finto)"
+  },
+  {
+   "id": "R15-011",
+   "chiave": "qa-flussi|la pagina novità mostra tutto il catalogo, anche un prodotto di tre mesi fa, e il numero in alto conta solo i prodotti già caricati",
+   "esito": "riparato",
+   "commit": "715b96dcc02d71222d2c69a973797e2aa78d4b0d",
+   "file_toccati": [
+    "lib/queries/griglia-prodotti.ts",
+    "components/ProductGrid.tsx",
+    "app/novita/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-novita-finestra.test.ts",
+    "tests/unit/riparazione-r15-novita-conteggio.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-novita-finestra.test.ts tests/unit/riparazione-r15-novita-conteggio.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 715b96dc^ --file lib/queries/griglia-prodotti.ts,components/ProductGrid.tsx,app/novita/page.tsx --prove tests/unit/riparazione-r15-novita-finestra.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La finestra è fissata: ho usato NEW_PRODUCT_DAYS = 14 di lib/constants.ts, quella del badge «Nuovo». La lettura accetta creatiDal e la pagina Novità passa soloNovita a ProductGrid. Il numero in alto viene da un conteggio vero del database (contaProdottiDellaGriglia) e non dalle schede caricate. Le altre griglie non cambiano.",
+   "nota": "La prova rimessa copre la finestra e il testo dei tre file. Il conteggio e il calcolo dei 14 giorni, con orologio finto, sono nella seconda prova: usa funzioni nuove, quindi non può entrare nella prova rimessa. 14 giorni è la regola del badge «Nuovo»: se Nicola vuole un'altra finestra per Novità si cambia in un punto solo. La finestra di 14 giorni non è inventata: è NEW_PRODUCT_DAYS di lib/constants.ts, la regola del badge «Nuovo», già fissata nel codice (per questo non è andata a Nicola)."
+  },
+  {
+   "id": "R15-016",
+   "chiave": "qa-flussi|cercando una parola a metà il sito trova solo una parte dei prodotti, e dentro la vetrina di un negozio può dire «nessun risultato»",
+   "esito": "serve_file_altrui",
+   "cosa_ho_fatto": "Ho fatto la correzione in lib/queries/griglia-prodotti.ts: il supplemento con la ricerca per nome parte sempre, non solo con un filtro che stringe. Con la prova nuova «foca» trovava «Focaccia» e anche «Focaccia genovese». Poi ho tolto la correzione e la prova, perché fa diventare rossa una prova esistente comune.",
+   "cosa_resta": "La correzione non è nel ramo. La prova tests/unit/cercare-per-pertinenza-non-e-ordinare-per-data.test.ts (caso «trova il prodotto che ha la parola cercata solo nella descrizione») si aspetta che con «pane» esca solo «Focaccia dei Colli». Importa tests/unit/aiuti/finto-postgrest.ts, che non è mio, quindi è comune e non la tocco. Il caso è identico a quello della voce: la funzione trova un prodotto e il nome di un altro contiene la parola.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/cercare-per-pertinenza-non-e-ordinare-per-data.test.ts",
+     "modifica": "Nel primo caso («trova il prodotto che ha la parola cercata solo nella descrizione») il risultato atteso diventa ['Focaccia dei Colli', 'Ciabatta di pane comune']: prima quello della funzione del database, sotto quello che ha la parola nel nome. In lib/queries/griglia-prodotti.ts, nel ramo pertinenza, la riga 'if (termine && filtroCheStringe) {' diventa 'if (termine) {' e si toglie la costante filtroCheStringe, che non serve più."
+    }
+   ],
+   "copre_tutta_la_voce": false,
+   "nota": "Prova che avrei committato: la funzione trova solo p-1 per «foca» su 'Focaccia', 'Focaccia genovese', 'Focaccia classica', e il risultato deve contenerli tutti e tre con 'Focaccia' per primo. Il caso in vetrina del negozio passa già sulla base grazie al supplemento del 5/11."
+  },
+  {
+   "id": "R15-017",
+   "chiave": "qa-flussi|il commento di lib/queries/griglia-prodotti.ts:154 sui categoryids",
+   "esito": "riparato",
+   "commit": "a6227b42938e4e2d91007b77027d9fd50ecb91d1",
+   "file_toccati": [
+    "lib/queries/griglia-prodotti.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-commento-categoryids.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-commento-categoryids.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a6227b42^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r15-commento-categoryids.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il commento ora dice che categoryIds ha la precedenza su categoryId e non allarga alle figlie. Dice anche che lo passano due pagine per motivi opposti: Regali, con le figlie già dentro, e «Altri prodotti» della categoria, solo la madre.",
+   "nota": "La prova è leggera (controlla testo, classi o sorgente), ma è un comando vitest eseguito."
+  },
+  {
+   "id": "R15-018",
+   "chiave": "qa-flussi|ordinando per «prezzo crescente» alcuni prodotti spariscono dalla lista",
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Ho provato con il finto database: 250 prodotti con prezzi ripetuti, ordinati per prezzo crescente e letti a pagine da 96. Sono usciti tutti e 250, senza doppioni e senza buchi, grazie al secondo criterio d'ordine sull'id. Non ho trovato nessun punto in cui il prezzo crescente faccia sparire prodotti. Non ho committato nulla.",
+   "copre_tutta_la_voce": false,
+   "nota": "Non riprodotto. Ho provato con il finto database: 250 prodotti con prezzi ripetuti, ordinati per prezzo crescente e letti a pagine da 96. Sono usciti tutti e 250, senza doppioni e senza buchi, grazie al secondo criterio d'ordine sull'id. Non ho trovato nessun punto in cui il prezzo crescente faccia sparire prodotti. Non ho committato nulla. Resta da confermare il difetto sul sito vero. L'unico meccanismo che ho visto nel codice vale per ogni ordinamento: la pagina torna accorciata se il filtro finale sui negozi approvati scarta righe, e allora «Carica altri» si ferma. Nel database le regole di accesso nascondono già quei prodotti, quindi di norma non succede."
+  },
+  {
+   "id": "R15-019",
+   "chiave": "stati-ui|la pagina novità vuota dice di cambiare filtri che non ci sono e non offre nessuna strada per uscire",
+   "esito": "riparato",
+   "commit": "9bbd606a7492328c797235d68080d478673947a7",
+   "file_toccati": [
+    "app/novita/page.tsx",
+    "app/piu-venduti/page.tsx",
+    "app/regali/RegaliClient.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r15-vuoto-con-via-d-uscita.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r15-vuoto-con-via-d-uscita.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9bbd606a^ --file app/novita/page.tsx,app/piu-venduti/page.tsx,app/regali/RegaliClient.tsx --prove tests/unit/riparazione-r15-vuoto-con-via-d-uscita.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Le tre pagine ora passano alla griglia emptyTitle, emptyDescription ed emptySuggestions, con due link: «Sfoglia tutti i prodotti» (/search) e «Vai alle categorie» (/categorie). Novità dice «nessuna novità negli ultimi 14 giorni», Più recensiti «ancora nessun prodotto recensito», Regali «nessuna idea regalo per ora». Lo stato vuoto storico di ProductGrid non è cambiato.",
+   "nota": "Le parole sono nelle props delle pagine, non in messages/it.json, come le altre pagine di collezione. Ho incluso Più recensiti e Regali perché la voce li nomina come stesso riquadro. La prova è leggera (controlla testo, classi o sorgente), ma è un comando vitest eseguito."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Col testo ingrandito al massimo anche la pagina Chi siamo scorre di lato (466px su 360)",
+   "severita": "minore",
+   "dimensione": "layout-responsive",
+   "file": "app/about/page.tsx",
+   "descrizione": "Misurato in Chrome a 360px con html{font-size:200%}, col piede già corretto. Il titolo text-4xl ha una parola più larga dello schermo, e la griglia dei numeri «grid grid-cols-2 lg:grid-cols-4 gap-4» con riquadri px-5 arriva a 418px. Cura possibile: break-words hyphens-auto sull'h1, e colonne come nel piede (grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_1rem)/2)),1fr))]) oppure p-3 sm:px-5 sui riquadri.",
+   "riservato": false
+  },
+  {
+   "titolo": "Gli avvisi scritti nel browser non arrivano a nessuno: logger.warn lato client è solo console.warn",
+   "dimensione": "tutto il sito, lato browser",
+   "severita": "minore",
+   "file": "lib/logger.ts",
+   "descrizione": "Ogni logger.warn che gira nel browser (tessere di categoria, rotta delle categorie in cache e altri) finisce solo nella console del visitatore. Non arriva né a Sentry (manca anche il DSN) né al server. I commenti nel codice (CategoryShowcase.tsx:144-148, lib/immagine-categoria.ts:24-28) li presentano come «nei log», come se qualcuno li leggesse."
+  },
+  {
+   "titolo": "fetchPriority in camelCase su React 18.3.1 fa scrivere un avviso a React a ogni disegno delle tessere",
+   "dimensione": "una riga",
+   "severita": "minore",
+   "file": "components/CategoryShowcase.tsx",
+   "descrizione": "Riga 249: React 18 non riconosce la prop `fetchPriority` (la conosce dalla versione 19) e scrive «React does not recognize the `fetchPriority` prop». L'attributo arriva lo stesso, ma è rumore nella console proprio dove dovrebbe leggersi l'avviso della foto rotta. C'era già sulla base (riga 327)."
+  },
+  {
+   "titolo": "La tendina della ricerca «Sfoglia per categoria» elenca anche le categorie vuote",
+   "dimensione": "navigazione-gerarchia",
+   "severita": "minore",
+   "file": "components/SearchBar.tsx:61,315-323",
+   "descrizione": "topCats arriva da una sua lettura delle categorie, senza domandaCategoriePiene e senza soloLePiene. Fino a 8 categorie principali, quasi tutte vuote, si offrono nella tendina della ricerca. Non sta nell'elenco di R15."
+  },
+  {
+   "titolo": "Le pagine di una categoria madre mostrano chip verso sottocategorie vuote",
+   "dimensione": "navigazione-gerarchia",
+   "severita": "minore",
+   "file": "app/category/[slug]/page.tsx",
+   "descrizione": "Su /category/alimentari la sezione «Sottocategorie» e le file elencano anche le figlie senza prodotti (es. /category/pasta), mentre ora l'indice /categorie e il piede le nascondono con soloLePiene. Un clic porta a una pagina vuota."
+  },
+  {
+   "titolo": "La home e /about scorrono di lato col testo grande sul telefono",
+   "dimensione": "layout-responsive",
+   "severita": "minore",
+   "file": "components/home-sections/HomeSectionRenderer.tsx",
+   "descrizione": "A 360px con html{font-size:200%}: home 422px (bottone «Diventa venditore» whitespace-nowrap, riga 403), /about 466px (app/about/page.tsx:118 grid-cols-2 fissa e h1), /come-funziona 447px (app/come-funziona/page.tsx:75), /privacy 415px (components/ui/LegalLayout.tsx:41 h1). Nessuno di questi file è nell'elenco di R15."
+  },
+  {
+   "titolo": "Lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/store/loading.tsx",
+   "descrizione": "app/store/loading.tsx avvolge app/store/[id]/layout.tsx in un Suspense: un notFound() nel layout del negozio non può più dare 404. Togliere solo app/loading.tsx non basta per /store/<id> e /store/<id>/<pagina> (provato con next dev)."
+  },
+  {
+   "titolo": "La vetrina della home non può filtrare le categorie vuote nell'HTML del server col precarico della sola home",
+   "dimensione": "navigazione-gerarchia",
+   "severita": "minore",
+   "file": "components/CategoryBar.tsx:140",
+   "descrizione": "CategoryBar sta nel menu, prima della pagina, e appena si disegna crea nel QueryClient la domanda ['categories','con-prodotti']. La HydrationBoundary della home (app/page.tsx:200) arriva dopo, trova la domanda già creata (vuota) e la riempie solo in un effetto: sul server la vetrina non vede le piene. Qualunque precarico delle piene messo dentro una pagina ha lo stesso limite; quello nel layout, sopra il menu, funziona (provato con prove usa-e-getta). È già nel cosa_resta e nel serve_file_altrui di R15-002."
+  },
+  {
+   "titolo": "Se il filtro finale sui negozi approvati scarta righe, «Carica altri» si ferma",
+   "severita": "minore",
+   "file": "lib/queries/griglia-prodotti.ts",
+   "dimensione": "qa-flussi",
+   "riservato": false,
+   "descrizione": "leggiProdottiDellaGriglia taglia con .range() e poi scarta le righe senza negozio approvato. Se la pagina torna con meno righe del previsto, pagineSuccessiva in ProductGrid la prende per l'ultima. Di norma le regole di accesso del database nascondono già quei prodotti, quindi è un caso raro."
+  },
+  {
+   "titolo": "Con i più recensiti la lettura filtra .in('id', …) su tutti gli id recensiti senza spezzarli a blocchi: con molte centinaia di prodotti recensiti l'indirizzo diventa troppo lungo",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/queries/griglia-prodotti.ts",
+   "descrizione": "Stesso rischio dell'indirizzo troppo lungo (#93) che esiste già per il voto minimo; nato con R15-009 (e92ee472). Va spezzato a blocchi quando i recensiti crescono."
+  }
+ ],
+ "domande_per_nicola": [
+  "R15-005 · Per avere il 404 vero sulle pagine inesistenti, Nicola sceglie fra: (a) togliere tutti e due gli scheletri di caricamento, quello della radice (app/loading.tsx, «Stiamo caricando…») e quello del negozio (app/store/loading.tsx), accettando che il primo byte di quelle pagine aspetti le letture del server; oppure (b) un controllo nel middleware, una lettura in più a ogni richiesta di prodotto, negozio e categoria, da fare col client di servizio perché i venditori non ricevano 404 sulle loro pagine ancora nascoste?"
+ ],
+ "conto": {
+  "agenti": 6,
+  "nota": "6 subagenti su 12: lotto 1 = 1 riparatore e 3 revisori, 1 giro di correzione (R15-002, R15-005), lotto 2 = 1 riparatore sonnet. Costo della sessione 33,5 $ su 35 $ dopo il lotto 2: passaggio di consegne (regola 6). Restano il lotto 3 (R15-015, R15-013, R15-003, R15-004, R15-007, R15-014, R15-012), il collaudo del lotto 2 e delle correzioni 3b8a85a6 (R15-002) e b66f29dd (R15-005), npm run verify e valida-referto."
+ }
+}
