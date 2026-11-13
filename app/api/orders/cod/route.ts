@@ -30,7 +30,7 @@ import { decisioneSuChiaveOccupata, MESSAGGIO_ORDINE_IN_CORSO } from '@/lib/ordi
 import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
-import { campoFasciaConsegna, motivoSenzaFascia } from '@/lib/ordini/fascia-consegna';
+import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
@@ -455,11 +455,6 @@ export const POST = withAuthRateLimit(
     // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
     // falso e non c'e' un punto che possa sfuggire.
     body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
-
-    // 13/11/2026 (R13-012) — Una consegna a domicilio ha sempre un orario: senza fascia l'ordine
-    // nasceva senza `delivery_slot`. Dopo lo spegnimento del ritiro, che qui diventa consegna.
-    const senzaFascia = motivoSenzaFascia({ ritiroInNegozio: body.pickupInStore, fascia: body.deliverySlot });
-    if (senzaFascia) return ApiErrors.invalidRequest(senzaFascia);
 
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
