@@ -50,6 +50,17 @@ export type RunMessageArgs = {
    * bene. Chi non dice niente ottiene il comportamento sicuro.
    */
   seTagliata?: 'rifiuta' | 'accetta';
+  /**
+   * R21-002 — Tempo di UN tentativo, per chi sa di chiedere una risposta lunga.
+   * Assente = `tempoPerChiamataMs(max_tokens)`. Chi lo alza deve fare il conto
+   * con il tempo della rotta (vedi lib/ai/regole-copilot.ts).
+   */
+  timeoutMs?: number;
+  /**
+   * R21-002 — Nessun ritentativo: una chiamata lunga che scade non ha più il tempo
+   * per rifarsi, e ogni tentativo è una generazione intera da pagare.
+   */
+  senzaRitentativi?: boolean;
 };
 
 export type RunMessageResult<TInput = unknown> = {
@@ -465,7 +476,10 @@ async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessage
       },
       // R21-001 — il tempo di un tentativo dipende dalla risposta chiesta, così
       // la chiamata (con il suo ritentativo) finisce prima della rotta.
-      { timeout: tempoPerChiamataMs(args.max_tokens) },
+      {
+        timeout: args.timeoutMs ?? tempoPerChiamataMs(args.max_tokens),
+        ...(args.senzaRitentativi ? { maxRetries: 0 } : {}),
+      },
     );
   } catch (err) {
     throw new AiCallError(args.feature, extractStatus(err), err, extractRetryAfter(err));
