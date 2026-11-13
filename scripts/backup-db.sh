@@ -353,6 +353,13 @@ riapri_una_foto() {
 
   primo="${elenco%%$'\n'*}"
   if [[ -z "$primo" ]]; then
+    # R15-004 — Un secchio che prima della sincronia aveva file e adesso e' vuoto non e' «ancora
+    # senza foto»: l'origine e' stata svuotata (o non si legge piu) e `sync` ha spostato tutto
+    # nello storico. Il controllo sul totale lo lasciava passare se un altro secchio si riapriva.
+    if [[ "${PRIMA_PIENO:-no}" == "si" ]]; then
+      echo "[backup] esito-foto: fallita — il secchio ${secchio} aveva file nella copia e dopo la sincronia e' vuoto: l'origine e' stata svuotata o non si legge piu. I file sono nello storico (${STORICO_FOTO}/${TS}/${secchio}), non persi." >&2
+      return 1
+    fi
     echo "[backup] Il secchio ${secchio} non ha nessun file nella copia: niente da riaprire."
     return 0
   fi
@@ -425,6 +432,10 @@ else
   for secchio in $SECCHI_FOTO; do
     echo "[backup] Foto: ${SORGENTE_FOTO}${secchio} → ${DESTINAZIONE_FOTO}/${secchio}"
     echo "[backup] Le foto sparite dall'origine finiscono in ${STORICO_FOTO}/${TS}/${secchio}, non nel cestino."
+    PRIMA_PIENO="no"
+    if [[ -n "$(rclone lsf --files-only --recursive "${DESTINAZIONE_FOTO}/${secchio}" 2>/dev/null | head -n 1)" ]]; then
+      PRIMA_PIENO="si"
+    fi
     if ! rclone sync "${SORGENTE_FOTO}${secchio}" "${DESTINAZIONE_FOTO}/${secchio}" \
          --backup-dir "${STORICO_FOTO}/${TS}/${secchio}"; then
       echo "[backup] esito-foto: fallita — il secchio ${secchio} non e' stato copiato. Le foto NON sono al sicuro." >&2
