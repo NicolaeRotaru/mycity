@@ -38,7 +38,7 @@ export default function SellerHealthScore() {
           store_name, store_description, store_logo,
           store_lat, store_lng, store_phone,
           billing_iban, business_pec, store_address,
-          stripe_payouts_enabled, stripe_charges_enabled
+          stripe_account_id, stripe_payouts_enabled, stripe_charges_enabled
         `)
         .eq('id', userId!)
         .single();

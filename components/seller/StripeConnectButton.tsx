@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackSellerOnboardingStarted } from '@/lib/analytics/events';
+import { stripePronto } from '@/components/seller/pronto-a-incassare';
 
 /**
  * Bottone onboarding Stripe Connect per seller.
@@ -106,7 +107,7 @@ export default function StripeConnectButton() {
   // Una lettura caduta non diventa «completa prima la verifica».
   if (isError && !status) return <StatoPagamentiNonLetto onRiprova={() => { void refetch(); }} />;
 
-  const isActive = !!status?.stripe_charges_enabled && !!status?.stripe_payouts_enabled;
+  const isActive = stripePronto(status);
   const isPendingVerification = !!status?.stripe_account_id && !isActive;
   const kycApproved = status?.approval_status === 'approved';
 
