@@ -189,9 +189,6 @@ export default function SellerEarningsPage() {
   const heldCents = riepilogo.inArrivoCents;
   const paidCents = riepilogo.versatiCents;
   const stornatiCents = riepilogo.stornatiCents;
-  // R17-001 (completamento) — Il lordo comprende la consegna, che al negozio non arriva: lordo meno
-  // commissione non è il netto. La differenza si dice col suo nome, così i tre numeri tornano.
-  const consegnaCents = Math.max(0, grossCents - feeCents - nettoCents);
 
   // Contanti (COD): ordini pagati alla consegna e consegnati nel periodo.
   //
@@ -281,11 +278,7 @@ export default function SellerEarningsPage() {
         <Stat
           label="Commissione MyCity"
           value={'− ' + formatPrice(feeCents / 100)}
-          hint={
-            consegnaCents > 0
-              ? `Già tolta. Il lordo comprende anche ${formatPrice(consegnaCents / 100)} di consegna, che non va al negozio: a te ${formatPrice(nettoCents / 100)} netti`
-              : `Già tolta: a te ${formatPrice(nettoCents / 100)} netti`
-          }
+          hint={`Già tolta: a te ${formatPrice(nettoCents / 100)} netti`}
           tone="secondary"
         />
         <Stat
@@ -383,9 +376,7 @@ export default function SellerEarningsPage() {
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            {/* R17-001 (completamento) — Con la carta spenta i soldi arrivano col bonifico sull'IBAN, ogni
-                lunedì: il pulsante che manda a Stripe Connect a «collegare il conto» qui non serve. */}
-            {CARTA_ACCESA && <StripeConnectButton />}
+            <StripeConnectButton />
             {CARTA_ACCESA && <StripeDashboardButton />}
           </div>
         </div>
