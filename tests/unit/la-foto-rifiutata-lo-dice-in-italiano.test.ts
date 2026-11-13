@@ -43,7 +43,8 @@ describe('① le frasi del deposito arrivano al negoziante in italiano', () => {
   it('il formato che il deposito non accetta', () => {
     const detto = friendlyError({ message: 'mime type image/svg+xml is not supported' });
     expect(detto, "il negoziante leggeva l'inglese e non sapeva che bastava un PNG").not.toMatch(/mime type/i);
-    expect(detto).toBe('Formato non accettato: usa una foto JPG, PNG o WEBP.');
+    // 13/11/2026 (R24-017) — i sette formati della porta, non i tre di prima.
+    expect(detto).toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF.');
   });
 
   it('la foto troppo pesante, in tutti e due i modi in cui il deposito lo dice', () => {
