@@ -20,9 +20,18 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 /** Il magazzino delle storie. La sua regola sta in lib/storage/regole-secchi.ts, non qui. */
 const SECCHIO_STORIE = 'stories';
+
+/**
+ * R16-011 — Il link della storia porta solo a una pagina di MyCity. La regola è quella dei ritorni
+ * dopo l'accesso (lib/safe-redirect.ts); la usa anche il visore delle storie, e il database la
+ * controlla con un CHECK (migrazione 403).
+ */
+const LINK_NON_VALIDO =
+  'Il link deve portare a una pagina di MyCity: scrivi la parte dell\'indirizzo che comincia con «/», per esempio /promozioni. I siti esterni non si possono collegare.';
 
 /**
  * Seller: gestione Storie (instagram-like, 24h).
@@ -79,6 +88,11 @@ export default function SellerStoriesPage() {
   const create = useMutation({
     mutationFn: async () => {
       if (!image) throw new Error('Seleziona un\'immagine');
+      // R16-011 — prima si salvava qualunque indirizzo, anche un sito esterno. Si controlla prima di
+      // caricare la foto, così un link sbagliato non lascia una foto orfana nel magazzino.
+      const link = linkUrl.trim();
+      const linkInterno = link ? safeInternalPath(link, '') : '';
+      if (link && !linkInterno) throw new Error(LINK_NON_VALIDO);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
@@ -122,7 +136,7 @@ export default function SellerStoriesPage() {
         seller_id: user.id,
         image_url: publicUrl,
         caption: caption.trim() || null,
-        link_url: linkUrl.trim() || null,
+        link_url: linkInterno || null,
       });
       if (error) throw error;
     },
