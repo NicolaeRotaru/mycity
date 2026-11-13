@@ -143,8 +143,8 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     expect(await dalServer({ address: 'Via Roma 15', city: 'Quarto', zip: '29020' })).toBeNull();
   });
 
-  it('collaudo · anche a Piacenza un CAP diverso si scarta, ma senza CAP dentro il riquadro vale', async () => {
-    risposta = [{ ...CENTRO, address: { ...CENTRO.address, postcode: '29122' } }];
+  it('collaudo · anche a Piacenza un CAP di un altro comune si scarta, ma senza CAP dentro il riquadro vale', async () => {
+    risposta = [{ ...CENTRO, address: { ...CENTRO.address, postcode: '29027' } }];
     expect(await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' })).toBeNull();
     const senzaCap = { ...CENTRO.address } as Record<string, string>;
     delete senzaCap.postcode;
@@ -152,6 +152,22 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     expect(await dalServer({ address: 'Via Roma 11', city: 'Piacenza', zip: '29121' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
     risposta = [{ ...CENTRO, address: { ...CENTRO.address, postcode: '29121;29122' } }];
     expect(await dalServer({ address: 'Via Roma 12', city: 'Piacenza', zip: '29122' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
+  });
+
+  it('secondo collaudo · dentro Piacenza un CAP della città diverso da quello del risultato non scarta l\'indirizzo', async () => {
+    risposta = [CENTRO];
+    expect(await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29100' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
+    const { corpo } = await dallaRotta('Via Roma 10, 29100 Piacenza, Italia');
+    expect(corpo).toMatchObject({ lat: 45.0505, lng: 9.6905 });
+    expect(fuori(corpo)).toBe(false);
+    risposta = [{ ...CENTRO, address: { ...CENTRO.address, postcode: '29122' } }];
+    expect(await dalServer({ address: 'Via Roma 12', city: 'Piacenza', zip: '29121' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
+  });
+
+  it('secondo collaudo · il CAP della città mette solo in ordine: vince il risultato col CAP scritto', async () => {
+    const ALTRO_CAP = { ...CENTRO, lat: '45.0400', lon: '9.7000', address: { ...CENTRO.address, postcode: '29122' } };
+    risposta = [ALTRO_CAP, CENTRO];
+    expect(await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
   });
 
   it('collaudo · «Piacenza PC» e un CAP storpiato («2912 Piacenza») restano chiusi nel riquadro', async () => {

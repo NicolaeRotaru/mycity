@@ -62,6 +62,9 @@ const CITTA_SERVITA = 'Piacenza';
 // NON la provincia (`county`): la provincia di Piacenza si chiama Piacenza anche a Podenzano.
 const CAMPI_DEL_COMUNE = ['city', 'town', 'village', 'municipality', 'hamlet', 'suburb'] as const;
 
+// I CAP della città di Piacenza: i due di oggi e il vecchio CAP unico, che molti scrivono ancora.
+const CAP_DELLA_CITTA = new Set(['29100', '29121', '29122']);
+
 type RisultatoNominatim = {
   lat?: string;
   lon?: string;
@@ -113,6 +116,11 @@ function pezziDellaFrase(frase: string): { via: string; cap: string; citta: stri
  * Gossolengo) trovava Quarto in provincia di Napoli (CAP 80010): fuori zona, «troppo lontano».
  * Un risultato SENZA CAP vale solo se la ricerca è chiusa nel riquadro di Piacenza; fuori, con
  * un CAP scritto, il CAP deve combaciare. Nessuno affidabile: null.
+ *
+ * 13/11/2026 (R13-001, secondo collaudo) — Ma dentro Piacenza un CAP DELLA CITTÀ diverso da
+ * quello del risultato non dice «altro comune»: chi scrive il vecchio CAP unico 29100 (che il
+ * sito stesso suggeriva) o 29121 per una via in 29122 restava di nuovo senza indirizzo. Lì il
+ * CAP mette solo in ordine; scarta solo quando è di un altro comune.
  */
 function scegliIlRisultato(
   risultati: RisultatoNominatim[],
@@ -132,6 +140,13 @@ function scegliIlRisultato(
   const ordinati = cercato.cap
     ? [
         ...nelComuneScritto.filter((r) => capDelRisultato(r).includes(cercato.cap)),
+        // Piacenza scritta con un CAP della città: un altro CAP della città viene dopo, non si scarta.
+        ...(chiusaNelRiquadro && CAP_DELLA_CITTA.has(cercato.cap)
+          ? nelComuneScritto.filter(
+              (r) =>
+                !capDelRisultato(r).includes(cercato.cap) && capDelRisultato(r).some((c) => CAP_DELLA_CITTA.has(c)),
+            )
+          : []),
         ...(chiusaNelRiquadro ? nelComuneScritto.filter((r) => capDelRisultato(r).length === 0) : []),
       ]
     : nelComuneScritto;
