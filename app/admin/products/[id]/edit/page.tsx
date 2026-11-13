@@ -58,6 +58,9 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
+    // R22-017 — Con un id che non ha la forma di un codice il database risponderebbe con un errore di
+    // sintassi e la pagina parlerebbe di taglie: non si legge, la pagina dice «Prodotto non trovato».
+    enabled: FORMA_UUID.test(id),
     refetchOnMount: 'always',
   });
 

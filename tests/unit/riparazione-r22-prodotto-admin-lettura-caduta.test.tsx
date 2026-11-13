@@ -24,6 +24,7 @@ const stato = vi.hoisted(() => ({
   variantiRotte: false,
   letturaProdottoRotta: false,
   letture: 0,
+  lettureVarianti: 0,
 }));
 
 vi.mock('react', async (importOriginal) => {
@@ -75,7 +76,10 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 vi.mock('@/lib/products/salva-dal-browser', () => ({ salvaProdottoDalBrowser: async () => [] }));
 vi.mock('@/lib/products/persistVariants', () => ({
-  loadProductVariants: async () => {
+  loadProductVariants: async (id: string) => {
+    stato.lettureVarianti++;
+    // Come il database: un id che non è un uuid dà un errore di sintassi.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('invalid input syntax for type uuid');
     if (stato.variantiRotte) throw new Error('Failed to fetch');
     return [
       { id: 'v-m', options: { Taglia: 'M' }, label: 'M', stock: 3, position: 0 },
@@ -124,6 +128,7 @@ beforeEach(() => {
   stato.variantiRotte = false;
   stato.letturaProdottoRotta = false;
   stato.letture = 0;
+  stato.lettureVarianti = 0;
   radice = document.createElement('div');
   document.body.appendChild(radice);
   root = createRoot(radice);
@@ -135,11 +140,11 @@ afterEach(() => {
 });
 
 
-async function apri() {
+async function apri(id: string = ID) {
   const { default: Pagina } = await import('@/app/admin/products/[id]/edit/page');
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   act(() =>
-    root!.render(createElement(QueryClientProvider, { client: qc }, createElement(Pagina as never, { params: { valore: { id: ID } } }))),
+    root!.render(createElement(QueryClientProvider, { client: qc }, createElement(Pagina as never, { params: { valore: { id } } }))),
   );
   await finche(() => stato.aperture.length > 0 || (radice!.textContent ?? '').includes('Errore'));
 }
@@ -168,6 +173,15 @@ describe('R22-017 · lettura caduta e prodotto assente si dicono diversi', () =>
     expect(testo()).toMatch(/Prodotto non trovato/);
     expect(testo()).not.toMatch(/Non riesco a leggere questo prodotto/);
     expect([...radice!.querySelectorAll('button')].some((b) => b.textContent === 'Riprova')).toBe(false);
+  });
+
+  it('con un codice storto («abc») dice «Prodotto non trovato», senza parlare di taglie e senza leggere le varianti', async () => {
+    await apri('abc');
+    await finche(() => testo().includes('Prodotto non trovato'));
+    expect(testo()).toMatch(/Prodotto non trovato/);
+    expect(testo()).not.toMatch(/taglie|varianti/i);
+    expect([...radice!.querySelectorAll('button')].some((b) => b.textContent === 'Riprova')).toBe(false);
+    expect(stato.lettureVarianti, 'le varianti sono state lette con un id che non è un codice').toBe(0);
   });
 
   it('controprova: con il prodotto letto il modulo si apre', async () => {
