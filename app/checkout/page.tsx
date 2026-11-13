@@ -542,7 +542,12 @@ export default function CheckoutPage() {
       if (!raw) return;
       // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
       const bozza = bozzaLetta(JSON.parse(raw), new Date());
-      if (!bozza) return;
+      // R19-009 — Scaduta (o illeggibile): non si rimette e non resta nel browser.
+      if (!bozza) {
+        localStorage.removeItem('mc_checkout_draft');
+        sessionStorage.removeItem('mc_checkout_draft');
+        return;
+      }
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
 
       // Lo sconto: si rimette il CODICE, e la verifica che c'è già nella pagina lo ricontrolla sul

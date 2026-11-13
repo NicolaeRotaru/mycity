@@ -59,6 +59,38 @@ function prendiSegnoNotificheSpente(): boolean {
   }
 }
 
+/**
+ * 13/11/2026 (R19-009) — LA BOZZA DELLA CASSA NON RESTA NEL BROWSER DI CHI VIENE DOPO.
+ *
+ * Chi compila la cassa da ospite e va all'accesso lascia nel browser una bozza col suo nome,
+ * l'indirizzo, il telefono e le note (`mc_checkout_draft`, lib/bozza-checkout.ts). Si cancellava solo
+ * riaprendo la cassa: chi rinunciava la lasciava lì per sempre. La barra è montata su ogni pagina:
+ * a ogni caricamento butta la bozza scaduta (o senza scadenza, cioè scritta prima che ce l'avesse),
+ * e a ogni uscita dall'account la butta comunque.
+ */
+const BOZZA_DELLA_CASSA = 'mc_checkout_draft';
+
+function buttaLaBozzaDellaCassa(soloSeScaduta: boolean): void {
+  try {
+    for (const memoria of [window.localStorage, window.sessionStorage]) {
+      const scritta = memoria.getItem(BOZZA_DELLA_CASSA);
+      if (scritta === null) continue;
+      if (soloSeScaduta) {
+        let scadeIl: unknown;
+        try {
+          scadeIl = (JSON.parse(scritta) as { scadeIl?: unknown } | null)?.scadeIl;
+        } catch {
+          scadeIl = undefined;
+        }
+        if (typeof scadeIl === 'number' && Date.now() <= scadeIl) continue;
+      }
+      memoria.removeItem(BOZZA_DELLA_CASSA);
+    }
+  } catch {
+    /* memoria chiusa: non c'è niente da buttare */
+  }
+}
+
 async function diciSeLeNotificheSonoSpente(dove: () => string, vai: (href: string) => void): Promise<void> {
   if (!prendiSegnoNotificheSpente()) return;
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -145,8 +177,12 @@ export default function Navbar() {
   }, [isSeller, isRider]);
 
   useEffect(() => {
+    // R19-009 — la bozza scaduta della cassa si butta a ogni caricamento, su qualunque pagina.
+    buttaLaBozzaDellaCassa(true);
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
       if (evento === 'SIGNED_OUT') {
+        // R19-009 — e a ogni uscita dall'account, scaduta o no.
+        buttaLaBozzaDellaCassa(false);
         void scollegaQuestoDispositivo().then((esito) => {
           if (esito.disiscritto) segnaNotificheSpente();
         });
