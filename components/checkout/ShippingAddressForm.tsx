@@ -143,7 +143,6 @@ export function ShippingAddressForm({
   // Un modulo con errori si mostra sempre: e' la sola cosa che permette di
   // correggerli.
   const conErrori = Object.values(errors).some(Boolean);
-  const editing = manualOpen || conErrori || savedAddresses.length === 0;
   const setEditing = setManualOpen;
 
   // 6/9/2026 — Finche' gli indirizzi salvati non sono arrivati, `savedAddresses`
@@ -164,6 +163,14 @@ export function ShippingAddressForm({
       a.city === form.city &&
       (a.full_name ?? '') === form.fullName,
   )?.id;
+
+  // 13/11/2026 (R13-025) — Chi scriveva un indirizzo da ospite e tornava dall'accesso con degli
+  // indirizzi salvati trovava il modulo chiuso e tutte le mattonelle spente: la bozza era tornata
+  // nel modulo (e il predefinito non si applica sopra un modulo già pieno), ma il modulo si chiude
+  // appena esistono indirizzi salvati. L'ordine partiva verso un indirizzo che non era a schermo.
+  // Un indirizzo scritto che non è nessuna mattonella si mostra: è quello dove arriverà la spesa.
+  const indirizzoNonSalvato = savedAddresses.length > 0 && form.address.trim() !== '' && !activeId;
+  const editing = manualOpen || conErrori || savedAddresses.length === 0 || indirizzoNonSalvato;
 
   const selectTile = (id: string) => {
     onApplySavedAddress(id);
