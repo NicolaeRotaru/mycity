@@ -59,22 +59,6 @@ function passa(riga: Riga, f: Filtro): boolean {
   return confronta(v, f.valore) > 0;
 }
 
-/**
- * R23-007 — Un guasto che il finto sa dare, al posto di quello che ogni prova che parla col
- * `ClienteAvvisi` si riscriveva a mano. Si legge a ogni richiesta, quindi una prova può aggiungerlo
- * o toglierlo a notte in corso (`finto.guasti.push(...)`).
- *  · `select`: scatta se la lettura filtra con `eq(colonna, valore)` come in `seFiltro` (o sempre, se manca);
- *  · `insert`: scatta se almeno una riga da scrivere passa `seRiga` (o sempre, se manca).
- */
-export type Guasto = {
-  tabella: string;
-  azione: 'select' | 'insert';
-  messaggio: string;
-  codice?: string;
-  seFiltro?: [colonna: string, valore: unknown];
-  seRiga?: (riga: Riga) => boolean;
-};
-
 class FintaQuery {
   private filtri: Filtro[] = [];
   private azione: 'select' | 'update' | 'delete' | 'insert' | 'upsert' = 'select';
@@ -87,8 +71,6 @@ class FintaQuery {
     private readonly db: Tabelle,
     private readonly diario: Voce[],
     private readonly errori: Record<string, string>,
-    private readonly guasti: Guasto[] = [],
-    private readonly chiaviUniche = false,
   ) {}
 
   private conta = false;
@@ -137,29 +119,9 @@ class FintaQuery {
     return this.tetto == null ? scelte : scelte.slice(0, this.tetto);
   }
 
-  /** `.single()` come lo usa la pagina dell'account: la prima riga che passa i filtri, o null. */
-  single() {
-    return this.then((r) => ({ data: Array.isArray(r.data) ? (r.data[0] ?? null) : null, error: r.error }));
-  }
-  maybeSingle() { return this.single(); }
-
-  private guastoDaDare(): Guasto | undefined {
-    const azione = this.azione === 'select' ? 'select' : this.azione === 'insert' || this.azione === 'upsert' ? 'insert' : null;
-    if (!azione) return undefined;
-    return this.guasti.find((g) => {
-      if (g.tabella !== this.tabella || g.azione !== azione) return false;
-      if (azione === 'select') {
-        return !g.seFiltro || this.filtri.some((f) => f.tipo === 'eq' && f.colonna === g.seFiltro![0] && f.valore === g.seFiltro![1]);
-      }
-      return !g.seRiga || this.daScrivere.some(g.seRiga);
-    });
-  }
-
-  then<T>(risolvi: (v: { data: Riga[] | null; error: { message: string; code?: string } | null; count?: number | null }) => T): Promise<T> {
+  then<T>(risolvi: (v: { data: Riga[] | null; error: { message: string } | null; count?: number | null }) => T): Promise<T> {
     const guasto = this.errori[this.tabella];
     if (guasto) return Promise.resolve(risolvi({ data: null, error: { message: guasto } }));
-    const dato = this.guastoDaDare();
-    if (dato) return Promise.resolve(risolvi({ data: null, error: { message: dato.messaggio, ...(dato.codice ? { code: dato.codice } : {}) } }));
 
     if (this.azione === 'select') {
       const righe = this.righe();
@@ -167,16 +129,6 @@ class FintaQuery {
         return Promise.resolve(risolvi({ data: this.soloTesta ? null : righe, error: null, count: righe.length }));
       }
       return Promise.resolve(risolvi({ data: righe, error: null }));
-    }
-    if (this.azione === 'insert' && this.chiaviUniche) {
-      // Come la chiave primaria vera: un `id` già presente respinge l'inserimento, e il doppione si vede.
-      const presenti = this.db[this.tabella] ?? [];
-      if (this.daScrivere.some((n) => n.id != null && presenti.some((r) => r.id === n.id))) {
-        return Promise.resolve(risolvi({
-          data: null,
-          error: { message: `duplicate key value violates unique constraint "${this.tabella}_pkey"`, code: '23505' },
-        }));
-      }
     }
     if (this.azione === 'insert' || this.azione === 'upsert') {
       this.db[this.tabella] = [...(this.db[this.tabella] ?? []), ...this.daScrivere];
@@ -208,12 +160,6 @@ export type Scenario = {
    * per trovare le copie orfane: senza `list` quel passo cadrebbe e la notte
    * suonerebbe l'allarme. Vuoto per difetto.
    */
-  /** R23-007 — Le email degli utenti, per `auth.admin.getUserById` (l'indirizzo a cui parte la spiegazione). */
-  indirizzi?: Record<string, string>;
-  /** R23-007 — Guasti da dare a richiesta (vedi `Guasto`). La lista si può cambiare a notte in corso. */
-  guasti?: Guasto[];
-  /** R23-007 — Il doppione sulla chiave `id` respinge l'inserimento, come la chiave primaria vera. */
-  chiaviUniche?: boolean;
   secchi?: Record<string, Record<string, Array<{ name: string; id: string | null; created_at?: string | null }>>>;
 };
 
@@ -223,10 +169,9 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
   const errori = scenario.errori ?? {};
   /** Ogni elenco chiesto allo storage, in ordine: «secchio:cartella». Fuori dal diario, che resta com'era. */
   const elenchi: string[] = [];
-  const guasti: Guasto[] = scenario.guasti ?? [];
 
   const admin = {
-    from: (tabella: string) => new FintaQuery(tabella, db, diario, errori, guasti, scenario.chiaviUniche === true),
+    from: (tabella: string) => new FintaQuery(tabella, db, diario, errori),
     rpc: async (nome: string, _argomenti?: Record<string, unknown>) => {
       diario.push({ op: 'rpc', nome });
       return scenario.rpc?.[nome] ?? { data: [], error: null };
@@ -245,22 +190,13 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
         },
       }),
     },
-    auth: {
-      admin: {
-        deleteUser: async () => ({ error: null }),
-        getUserById: async (id: string) => {
-          const email = scenario.indirizzi?.[id];
-          return { data: { user: email ? { id, email } : null }, error: null };
-        },
-      },
-    },
+    auth: { admin: { deleteUser: async () => ({ error: null }) } },
   };
 
   return {
     db,
     diario,
     elenchi,
-    guasti,
     admin,
     /** Le righe di una tabella, come stanno DOPO il giro. */
     righe: (tabella: string) => db[tabella] ?? [],
