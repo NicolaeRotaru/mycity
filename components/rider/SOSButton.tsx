@@ -20,7 +20,8 @@ import { captureError } from '@/lib/analytics/sentry';
  *
  * Flusso:
  *   1. Click SOS → dialog di conferma
- *   2. Conferma → subito il tastierino col 112 (tel:), sincrono, senza attese
+ *   2. Conferma → parte la richiesta della posizione (non si aspetta), poi subito il tastierino
+ *      col 112 (tel:), sincrono, senza attese
  *   3. Poi, con un tempo massimo: insert in rider_sos_events con posizione GPS
  *      → il trigger del database crea una notifica nel pannello per gli admin
  *      e /api/rider/sos/avvisa manda subito un push agli admin (R01-004)
@@ -68,8 +69,11 @@ async function leggiPosizione(): Promise<{ lat: number; lng: number } | null> {
  * L'utente si legge dalla sessione salvata sul telefono (getSession), senza chiamata di rete:
  * chi puo' scrivere lo decide comunque la regola del database (rider_id = auth.uid()).
  */
-async function inviaAvvisoSOS(orderId: string | undefined): Promise<boolean> {
-  const [{ data: { session } }, posizione] = await Promise.all([supabase.auth.getSession(), leggiPosizione()]);
+async function inviaAvvisoSOS(
+  orderId: string | undefined,
+  posizioneRichiesta: Promise<{ lat: number; lng: number } | null>,
+): Promise<boolean> {
+  const [{ data: { session } }, posizione] = await Promise.all([supabase.auth.getSession(), posizioneRichiesta]);
   const user = session?.user;
   if (!user) return false;
   const riga = {
@@ -120,6 +124,14 @@ export default function SOSButton({ orderId }: Props) {
     //
     // R16-001 (13/11/2026) — Anche il dialogo di conferma prometteva «Verra' avviata la chiamata
     // al 112»: adesso dice che si apre il telefono col 112 gia' scritto e che CHIAMA lo premi tu.
+    //
+    // R16-009 (13/11/2026) — La posizione si chiede PRIMA del tastierino, e non si aspetta.
+    // Prima si chiedeva dopo: col 112 aperto la pagina va in secondo piano, e il telefono puo' non
+    // dare piu' la posizione, cosi' l'avviso a MyCity partiva senza coordinate. Adesso la richiesta
+    // parte qui, con la pagina ancora davanti (getCurrentPosition si chiama subito, in modo
+    // sincrono); il tastierino si apre nella riga dopo, senza nessuna attesa e dentro il gesto del
+    // fattorino. L'avviso aspetta la posizione al massimo TEMPO_MASSIMO_GPS_MS, poi parte comunque.
+    const posizioneRichiesta = leggiPosizione();
     window.location.href = 'tel:112';
     setSending(true);
 
@@ -130,7 +142,7 @@ export default function SOSButton({ orderId }: Props) {
     // secondi l'evento c'è. Si distingue «non è partito» (errore) da «non lo so ancora» (tempo scaduto).
     let tempoScaduto = false;
     try {
-      alertSent = await conTempoMassimo(inviaAvvisoSOS(orderId), TEMPO_MASSIMO_AVVISO_MS);
+      alertSent = await conTempoMassimo(inviaAvvisoSOS(orderId, posizioneRichiesta), TEMPO_MASSIMO_AVVISO_MS);
     } catch (e) {
       tempoScaduto = e instanceof Error && e.message.startsWith('SOS: nessuna risposta');
       captureError(e, { context: 'SOSButton' });
