@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,25 @@ export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, window
     .from('conversations')
     .update({ [counterField]: 0 })
     .eq('id', parsed.data.conversationId);
+
+  // 13/11/2026 (R22-009) — IL «LETTO» HA DUE SEGNI, E QUI SE NE AZZERAVA UNO SOLO.
+  // Il contatore della chat tornava a zero, ma la voce in campanella («Nuovo messaggio da un
+  // cliente») restava non letta: si segnava solo da /notifications. A ogni giro di messaggi il
+  // contatore ripartiva da 1 e la rotta dei messaggi aggiungeva una voce nuova: cinque scambi
+  // letti subito, cinque voci accese per una chat già letta. Aprire la chat spegne anche le voci
+  // di chi legge per questa conversazione. Best effort: i messaggi sono già segnati letti.
+  const { error: erroreCampanella } = await supa
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', user.id)
+    .eq('link', `/messages/${parsed.data.conversationId}`)
+    .eq('is_read', false);
+  if (erroreCampanella) {
+    logger.warn('[chat/mark-read] voci della campanella non segnate lette', {
+      conversationId: parsed.data.conversationId,
+      message: erroreCampanella.message,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 });
