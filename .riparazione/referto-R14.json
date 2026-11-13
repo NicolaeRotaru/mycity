@@ -1,6 +1,6 @@
 {
   "sessione": "R14",
-  "aggiornato": "2026-11-13 07:58",
+  "aggiornato": "2026-11-13 13:50",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -79,7 +79,7 @@
           "modifica": "crons: { \"path\": \"/api/cron/operational-alerts\", \"schedule\": \"*/15 * * * *\" } → \"*/5 * * * *\" (senza, il primo allarme arriva fra 5 e 20 minuti, non a 5)"
         }
       ],
-      "nota": "La riparazione c'era (240530aa: allarme ORDINE_DA_ACCETTARE|id dopo 5 minuti, prova rimessa che reggeva), ma cambiava la prova comune minori-s03-sorvegliante. Per la regola dell'onda 2 il codice è tolto col commit 5d8f2762 e la prova comune torna alla base. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert 5d8f2762`. Revisore sul codice tolto (240530aa): prova e prova rimessa reggono. Prima di rimetterlo va corretto un difetto: in app/api/cron/operational-alerts/route.ts:127-128 `order desc` + `limit(20)` vengono prima del filtro delle sei ore. Con più di 20 ordini NEW insieme, i più vecchi non ricevono mai ORDINE_DA_ACCETTARE: provato con 25 ordini, 5 restano senza avviso. Basta ordinare per nascita crescente fra quelli non ancora avvisati, o togliere dalla lettura quelli già suonati."
+      "nota": "La riparazione c'era (240530aa: allarme ORDINE_DA_ACCETTARE|id dopo 5 minuti, prova rimessa che reggeva), ma cambiava la prova comune minori-s03-sorvegliante. Per la regola dell'onda 2 il codice è tolto col commit 5d8f2762 e la prova comune torna alla base. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert 5d8f2762`. Correzione esatta chiesta dal revisore, da fare quando si rimette il codice: in app/api/cron/operational-alerts/route.ts (testo di 240530aa, righe 126-128) sostituire `// I più recenti per primi: sono quelli che non hanno ancora suonato.` + `.order('created_at', { ascending: false })` + `.limit(20);` con `.order('created_at', { ascending: true })` + `.limit(500);`. L'allarme suona già una volta sola per ordine grazie alla chiave ORDINE_DA_ACCETTARE|id in operational_alert_log, quindi leggere tutta la finestra di 6 ore non ripete niente. Coi più vecchi prima, nessun ordine resta senza avviso finché non ce ne sono più di 500 insieme. Prova da aggiungere in tests/unit/riparazione-r14-allarmi-ordini.test.ts: 25 ordini NEW nati in 4 minuti → al primo giro 25 chiavi ORDINE_DA_ACCETTARE (oggi 20, e i 5 più vecchi non suonano mai). Il revisore ha confermato su 240530aa che prova e prova rimessa reggono, che la modifica alla scheda 7 non indebolisce la prova, e che l'ordine con carta nasce NEW solo dopo il pagamento."
     },
     {
       "id": "R14-004",
@@ -138,6 +138,82 @@
       "verificato_da": "revisore: ha ricostruito il database dalle migrazioni. Prova R14 12/12 verdi, prova rimessa --sql «regge» (uscita 0), run.sh 61/61 verdi; la 382 regge anche su un database pieno. Ha provato il deleteUser vero (supabase_auth_admin, senza claims) su un cliente con un ordine passato per tutte le tappe, più reso, chat, recensione e contestazione: passa. Un browser dentro un grilletto col profilo già sparito resta respinto (42501). La 179 è l'ultima definizione e nessuna funzione esistente può ottenere lo stesso stacco."
     },
     {
+      "id": "R14-006",
+      "chiave": "api-backend|un doppio clic su «conferma i contanti ricevuti» registra due rimesse invece di una",
+      "esito": "riparato",
+      "commit": "288f46375fd2",
+      "file_toccati": [
+        "app/admin/cod-remittance/page.tsx",
+        "app/api/admin/cod-remittance/route.ts",
+        "migrations/383_la_seconda_conferma_della_rimessa_non_e_una_rimessa.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-doppia-rimessa.test.ts",
+        "tests/sql/rls/riparazione-r14-doppia-rimessa.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-doppia-rimessa.test.ts && bash tests/sql/harness/apply.sh r14_l5_prova && psql -q -X -d r14_l5_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r14-doppia-rimessa.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 288f46375fd2^ --file app/admin/cod-remittance/page.tsx,app/api/admin/cod-remittance/route.ts --prove tests/unit/riparazione-r14-doppia-rimessa.test.ts --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 288f46375fd2^ --file migrations/383_la_seconda_conferma_della_rimessa_non_e_una_rimessa.sql --prove tests/sql/rls/riparazione-r14-doppia-rimessa.test.sql --sql r14_l5_rimessa --json (tutte e due uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Pagina: un segno (useRef) alzato nel clic blocca il secondo invio finché la risposta non arriva. Rotta: niente seconda riga cod.remittance_confirm se la conferma non rilascia ordini e non chiude la giornata. Migrazione 383 (dalla 381): la conferma su una giornata già versata che non rilascia niente non riscrive remitted_at/remitted_by e risponde versata_ora=false.",
+      "nota": "La 383 va applicata da Nicola dopo la 381. Una conferma che non rilascia niente perché tutti gli ordini aspettano l'incasso non lascia più una riga nel registro delle azioni (non è una rimessa): la pagina lo dice con un avviso."
+    },
+    {
+      "id": "R14-007",
+      "chiave": "api-backend|due cancellazioni dello stesso account partite insieme danno un errore falso o una riga doppia nel registro",
+      "esito": "riparato",
+      "commit": "214adc53de82",
+      "insieme_a": [
+        "R14-015"
+      ],
+      "file_toccati": [
+        "lib/account/cancellazione.ts",
+        "app/api/admin/users/[id]/delete/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-cancella-utente.test.ts",
+        "tests/unit/riparazione-r14-giro-cancellazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-cancella-utente.test.ts tests/unit/riparazione-r14-giro-cancellazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 214adc53de82^ --file lib/account/cancellazione.ts,app/api/admin/users/[id]/delete/route.ts --prove tests/unit/riparazione-r14-cancella-utente.test.ts,tests/unit/riparazione-r14-giro-cancellazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "deleteUser che risponde «utente non trovato» (404/user_not_found) vale come account già chiuso da una cancellazione parallela: la pipeline va avanti col profilo e risponde ok con giaCancellato; la rotta risponde 200 senza una seconda riga user.delete. L'annotazione del conto Stripe collegato ha un id ricavato da persona e conto, e il doppione vale come già annotato.",
+      "nota": "Insieme a R14-015: vivono nella stessa riga di deleteUser in lib/account/cancellazione.ts."
+    },
+    {
+      "id": "R14-008",
+      "chiave": "api-backend|la rotta che cancella un utente accetta anche un amministratore, mentre la pagina nasconde il bottone",
+      "esito": "riparato",
+      "commit": "5b8c0b71561f",
+      "file_toccati": [
+        "app/api/admin/users/[id]/delete/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-cancella-utente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-cancella-utente.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5b8c0b71561f^ --file app/api/admin/users/[id]/delete/route.ts --prove tests/unit/riparazione-r14-cancella-utente.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta, letto il profilo, risponde 403 se il bersaglio ha ruolo admin (prima gli si toglie il ruolo): la stessa regola della pagina che nasconde il bottone, ora dove non si aggira. La pagina non cambia."
+    },
+    {
       "id": "R14-010",
       "chiave": "api-backend|il giro che annulla legge al massimo 100 ordini fermi, senza un ordine: una veloce scaduta può restare fuori dal giro",
       "esito": "riparato",
@@ -173,6 +249,102 @@
       "nota": "La riparazione c'era (2e81dd8d: turno sulla chiave primaria di operational_alert_log prima di campanella ed email, prova rimessa che reggeva), ma cambiava la prova comune l-allarme-che-non-parte-non-si-spaccia-per-spedito. È tolta col commit 6df692ca. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert 6df692ca`."
     },
     {
+      "id": "R14-012",
+      "chiave": "api-backend|allarme 'persone non avvisate' riscritto ogni notte, senza dire chi: la stessa classe chiusa per le email resta aperta qui",
+      "esito": "riparato",
+      "commit": "6b35624bdff5",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-giro-cancellazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-giro-cancellazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6b35624bdff5^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r14-giro-cancellazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'allarme «Persone non avvisate» passa dal ramo con chiave di avvisaAmministratori: identificativo ricavato dagli avvisi non recapitati (stessi avvisi la notte dopo = nessuna copia; uno nuovo = allarme nuovo) e il testo dice gli identificativi di chi aspetta.",
+      "nota": "Il codice di stato non cambia: con avvisi non recapitati la notte resta rossa (500) come prima; cambia solo la copia per notte e il testo."
+    },
+    {
+      "id": "R14-013",
+      "chiave": "api-backend|avvisi ed email in un giro senza tetto di tempo: con posta appesa e ~15 in attesa, gli ultimi non hanno nemmeno l'avviso nel pannello",
+      "esito": "riparato",
+      "commit": "5e2aa09fef11",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts",
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-giro-cancellazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-giro-cancellazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5e2aa09fef11^ --file app/api/cron/process-deletions/route.ts,lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r14-giro-cancellazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "recapitaAvvisi scrive prima il pannello di tutti e poi le email; oltre una scadenza nessuna email nuova comincia (conto emailFuoriTempo, restano dovute e la notte dopo si riparte da lì). Il giro passa scadenza = inizio + 240 s (lavoro da 300 s, margine per l'ultima email e per gli allarmi) e risponde avvisiEmailFuoriTempo.",
+      "nota": "240 s è un margine tecnico ricavato da maxDuration 300 di vercel.json, non una regola di business. Il ciclo delle cancellazioni prima degli avvisi resta senza tetto (fuori dalla voce)."
+    },
+    {
+      "id": "R14-014",
+      "chiave": "api-backend|l'allarme 'scrivile tu' si chiude solo se l'email parte: se la persona annulla o viene cancellata resta aperto per sempre col suo id",
+      "esito": "riparato",
+      "commit": "fdd02e1b87da",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-giro-cancellazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-giro-cancellazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fdd02e1b87da^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r14-giro-cancellazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ogni notte (anche quelle senza nessuno da cancellare, dove finisce chi ha annullato) si leggono gli allarmi «scrivile tu» aperti degli amministratori, si ricava la persona dalla riga «Chi aspetta: l'utente <id>» scritta dallo stesso file, e se la persona non ha più profilo (cancellata) o non ha più richiesta (annullata) l'allarme si segna letto. Chi aspetta ancora lo tiene; se il profilo non si legge non si chiude niente.",
+      "nota": "La persona si ricava dal testo dell'allarme perché notifications non ha una colonna per i dati: titolo e frase stanno in due costanti accanto alla scrittura. Gli allarmi già scritti hanno la stessa frase, quindi si chiudono anche quelli."
+    },
+    {
+      "id": "R14-015",
+      "chiave": "api-backend|se due giri della cancellazione account partono insieme, l'account sparisce ma agli amministratori arriva un falso allarme di cancellazione fallita",
+      "esito": "riparato",
+      "commit": "214adc53de82",
+      "insieme_a": [
+        "R14-007"
+      ],
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-giro-cancellazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-giro-cancellazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 214adc53de82^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r14-giro-cancellazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due giri notturni insieme (prova con Promise.all sulla rotta vera e la pipeline vera): il secondo trova «utente non trovato», che ora è un account già chiuso e non una cancellazione fallita. Niente sveglia «Cancellazioni account non eseguite», failed 0, notte verde; un errore vero del servizio di accesso sveglia ancora.",
+      "nota": "Nessuna presa del turno per account nel giro: non serve più, perché ogni passo della pipeline si può ripetere (Stripe resource_missing, file già tolti, annotazione con id derivato, deleteUser 404). Il ciclo del giro non cambia."
+    },
+    {
       "id": "R14-016",
       "chiave": "api-backend|la notifica del nuovo ordine fa la fila dietro le promozioni",
       "esito": "serve_file_altrui",
@@ -183,6 +355,29 @@
         }
       ],
       "nota": "La riparazione c'era (ba36f97a: prima le notifiche order e system, poi le altre; prova rimessa che reggeva), ma cambiava la prova comune minori-s03-push. È tolta col commit c81987f0. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert c81987f0`."
+    },
+    {
+      "id": "R14-019",
+      "chiave": "api-backend|se il cliente ritira il reso mentre il negozio lo approva con rimborso, il reso resta annullato coi soldi gia' usciti",
+      "esito": "riparato",
+      "commit": "ef3e59716d0a",
+      "file_toccati": [
+        "app/api/returns/[id]/decide/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-reso-ritirato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-reso-ritirato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ef3e59716d0a^ --file app/api/returns/[id]/decide/route.ts --prove tests/unit/riparazione-r14-reso-ritirato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il turno resta preso prima del rimborso (niente rimborsi doppi). Se dopo il rimborso partito la scrittura finale non trova più APPROVED perché il cliente ha ritirato il reso (CANCELED), si scrive REFUNDED sopra il ritiro (refund_id, importo, nota del negozio); ogni altro stato resta all'avviso per chi amministra. Se il rimborso non parte, il ritiro resta com'è.",
+      "nota": "Il ritiro da APPROVED resta permesso in avanza (file non del lotto): con questa correzione il rimborso partito nella finestra di pochi secondi viene registrato sul reso invece di sparire."
     },
     {
       "id": "R14-020",
@@ -271,13 +466,69 @@
       "severita": "minore",
       "file": "lib/account/cancellazione.ts:674",
       "descrizione": "Confermato dal revisore di R14-002. Su una giornata riaperta dopo un versamento parziale la guardia somma l'incassato di tutta la giornata, ordini già versati compresi: il fattorino legge «risultano 82,00 € non versati» quando da versare ci sono 20,50 €. La cancellazione si ferma comunque. Il testo è fissato da una prova di altri (chi-aspetta-la-cancellazione-sa-perche-aspetta)."
+    },
+    {
+      "titolo": "Il giro notturno delle cancellazioni non ha un tetto di tempo nemmeno sul ciclo degli account scaduti",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts (ciclo for (const riga of scadute))",
+      "descrizione": "R14-013 mette il tetto alle email degli avvisi, ma prima c'è il ciclo che chiama cancellaAccount per ogni account scaduto (storage, Stripe, servizio di accesso), senza un tetto: con molti account o Stripe/storage lenti il lavoro può arrivare ai 300 s prima di sveglia e avvisi. Servirebbe la stessa scadenza anche lì (gli account non fatti restano per la notte dopo)."
+    },
+    {
+      "titolo": "Il negozio riceve «il cliente ha ritirato il reso» anche quando il rimborso approvato nello stesso momento è poi partito",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/returns/[id]/avanza/route.ts (ritiro da APPROVED, PARTENZE_DEL_RITIRO)",
+      "descrizione": "Con R14-019 la decisione con rimborso scrive REFUNDED sopra il ritiro del cliente arrivato durante il rimborso, ma avanza ha già mandato al negozio la campanella «↩ Il cliente ha ritirato la richiesta di reso», e fra il ritiro e la scrittura il giro dei bonifici vede l'ordine senza reso aperto per qualche secondo. Più pulito: avanza non accetta il ritiro di un reso APPROVED con decided_at di pochi secondi fa e refund_amount_cents valorizzato (rimborso in volo)."
     }
   ],
   "domande_per_nicola": [
     "R14-004: dopo quanto tempo un ordine fermo su «accettato» (mai «Pronto») o su «ritirato» va annullato e rimborsato da solo? Alla fine della fascia più quante ore (e senza fascia dopo quante), oppure mai, solo l'allarme?"
   ],
   "conto": {
-    "agenti": 9,
-    "nota": "4 riparatori (L1-L4) + 5 revisori dei gravi su 12; L5, L6 e il revisore dei minori restano alla sessione che riprende. Fermata a 39,2 $ (soglia 33 $): le voci senza esito, cioè non presenti in questo referto, le riprende una sessione nuova dalla testa del ramo: R14-006, R14-007, R14-008, R14-009, R14-012, R14-013, R14-014, R14-015, R14-017, R14-018, R14-019, R14-021, R14-022, R14-023, R14-024, R14-025. Piano previsto per loro: L5 (006, 007, 008, 015, 012, 013, 014, 019) sul modello grande, L6 (009, 017, 018, 021, 022, 023, 024, 025) sul modello piccolo, migrazioni libere 380, 383-389. Restano 3 subagenti su 12 (2 riparatori + 1 revisore dei minori)."
+    "agenti": 13,
+    "nota": "12 della prima parte (4 riparatori + 5 revisori dei gravi, 3 non usati) + L5 dei 10 in più; la sessione 2.0 riprende con 9 subagenti a disposizione"
+  },
+  "passaggio": {
+    "quando": "2026-11-13 13:50",
+    "voci_fatte": [
+      "R14-001 riparato",
+      "R14-002 riparato",
+      "R14-003 serve_file_altrui",
+      "R14-004 parziale",
+      "R14-005 riparato",
+      "R14-006 riparato",
+      "R14-007 riparato",
+      "R14-008 riparato",
+      "R14-010 riparato",
+      "R14-011 serve_file_altrui",
+      "R14-012 riparato",
+      "R14-013 riparato",
+      "R14-014 riparato",
+      "R14-015 riparato",
+      "R14-016 serve_file_altrui",
+      "R14-019 riparato",
+      "R14-020 riparato"
+    ],
+    "voci_senza_esito": [
+      "R14-009",
+      "R14-017",
+      "R14-018",
+      "R14-021",
+      "R14-022",
+      "R14-023",
+      "R14-024",
+      "R14-025"
+    ],
+    "in_corso": "niente: L1-L5 chiusi, commit spinti",
+    "giri_aperti": [
+      "L6a (modello piccolo): R14-009, R14-021, R14-022, R14-024, R14-025",
+      "L6b (modello grande, permessi/dati): R14-017, R14-018 (le 17 rotte app/api/ai/* non sono di R14: parziale + serve_file_altrui), R14-023 (migrazione 384 con prova SQL)",
+      "revisori dei minori (al massimo 6 voci ciascuno): 006, 007, 008, 010, 012, 013, 014, 015, 019, 020 più quelli di L6a/L6b; i gravi 001, 002, 004, 005 sono già rivisti",
+      "alla fine: npm run verify (NODE_OPTIONS=--max-old-space-size=8192) sull'ultimo commit di codice, verifica.testa, finita true, guardia-ramo e valida-referto verdi"
+    ],
+    "migrazioni_libere": "380, 384-389 (381, 382, 383 già usate)",
+    "spesa": "56,0 $ su 80 $ alla fine di L5 (usage.cost_usd); subagenti: 12 della prima parte + 1 dei 10 in più (L5); restano 9",
+    "note": "R14-003, R14-011, R14-016 restano serve_file_altrui per la cucitura. R14-004 aspetta Nicola. La falla riservata (pagamenti) l'hanno avuta le registe in chat."
   }
 }
