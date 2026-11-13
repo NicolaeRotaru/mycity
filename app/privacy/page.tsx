@@ -205,6 +205,13 @@ export default function PrivacyPage() {
               {/* 5/11/2026 — I messaggi del modulo Contatti non avevano una riga: i 24 mesi
                   comparivano solo dentro la frase sull'IBAN. Il numero è quello della potatura. */}
               <tr><td className="border px-3 py-2">Assistenza clienti (messaggi dal modulo Contatti)</td><td className="border px-3 py-2">Legittimo interesse a rispondere e a tenere traccia delle richieste (art. 6.1.f)</td><td className="border px-3 py-2">{MESI_DEI_MESSAGGI_DEI_CONTATTI} mesi</td></tr>
+              {/* 13/11/2026 (R21-010) — La chat col negozio non aveva una riga: né base giuridica né
+                  tempo. Il tempo è quello che fa il codice: i messaggi cadono con l'account di chi li
+                  ha scritti (messages.sender_id ON DELETE CASCADE, migrazione 026; il testo lo azzera
+                  prima lib/account/cancellazione.ts) e l'anteprima della conversazione torna
+                  all'ultimo messaggio rimasto (migrazione 215). Una scadenza in mesi non c'è:
+                  la sceglie Nicola. */}
+              <tr><td className="border px-3 py-2">Chat col negozio (messaggi fra cliente e negozio)</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b)</td><td className="border px-3 py-2">Ogni messaggio resta finché chi l&apos;ha scritto non cancella il proprio account: allora viene cancellato</td></tr>
               {/* 13/11/2026 (R21-007) — L'email e il testo di chi segnala restavano per sempre, e qui
                   non c'era la riga. I mesi sono quelli della potatura notturna (lib/privacy/potature-ritenzione.ts):
                   la prova riparazione-r21-segnalazioni-email fa girare la potatura e pretende lo stesso numero. */}
