@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useRef, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -33,22 +33,48 @@ import { conFattorinoDellOrdine, conNegozioDellOrdine } from '@/lib/queries/nego
  * sono due — il negozio e il fattorino — e sentirseli annunciare tutti e due
  * «Il tuo voto» non dice quale dei due si sta compilando.
  */
-const StarRating = ({ value, onChange, etichetta }: { value: number; onChange: (v: number) => void; etichetta: string }) => (
-  <div className="flex gap-1" role="group" aria-label={etichetta}>
-    {[1, 2, 3, 4, 5].map((n) => (
-      <button
-        key={n}
-        type="button"
-        onClick={() => onChange(n)}
-        aria-pressed={n <= value}
-        className="text-4xl transition-transform hover:scale-110"
-        aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
-      >
-        <span className={n <= value ? 'text-accent-700' : 'text-ink-400'}>★</span>
-      </button>
-    ))}
-  </div>
-);
+/*
+ * R24-012 — Col Tab si arrivava su «1 stella», ma le frecce non spostavano né il fuoco né il voto
+ * (andava solo Tab più Invio, stella per stella). Ora nel giro del Tab entra una stella sola, quella
+ * scelta o la prima, e le frecce (Home e Fine agli estremi) cambiano il voto e portano il fuoco.
+ */
+const StarRating = ({ value, onChange, etichetta }: { value: number; onChange: (v: number) => void; etichetta: string }) => {
+  const conLeFrecce = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const da = Number(e.currentTarget.dataset.stella) || value || 1;
+    const a =
+      e.key === 'ArrowRight' || e.key === 'ArrowUp' ? Math.min(5, da + 1)
+        : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? Math.max(1, da - 1)
+          : e.key === 'Home' ? 1
+            : e.key === 'End' ? 5
+              : null;
+    if (a === null) return;
+    e.preventDefault();
+    onChange(a);
+    e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-stella="${a}"]`)?.focus();
+  };
+  return (
+    <div className="flex gap-1" role="group" aria-label={etichetta}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          onKeyDown={conLeFrecce}
+          aria-pressed={n <= value}
+          data-stella={n}
+          tabIndex={n === (value || 1) ? 0 : -1}
+          className="text-4xl transition-transform hover:scale-110"
+          aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
+        >
+          <span className={n <= value ? 'text-accent-700' : 'text-ink-400'}>★</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+/** R24-012 — Il commento aveva campo libero senza tetto né contatore: il tetto e il conto, come nel reclamo. */
+const TETTO_COMMENTO = 1000;
 
 export default function OrderReviewPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -60,6 +86,10 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
   const [storeComment, setStoreComment] = useState('');
   const [riderRating, setRiderRating] = useState(0);
   const [riderComment, setRiderComment] = useState('');
+  // R24-012 — Il freno al doppio clic. `submit.isPending` diventa vero solo al disegno dopo: due clic
+  // nello stesso istante arrivavano tutti e due a `mutate`, il secondo urtava il vincolo (order_id,
+  // user_id) e il cliente alla sua prima recensione leggeva «Avevi già recensito».
+  const inviando = useRef(false);
 
   type OrderForReview = {
     id: string;
@@ -224,10 +254,12 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
             value={storeComment}
             onChange={(e) => setStoreComment(e.target.value)}
             rows={2}
+            maxLength={TETTO_COMMENTO}
             placeholder="Scrivi un commento (opzionale)…"
             containerClassName="mt-3"
             className="resize-none"
           />
+          <p className="text-xs text-ink-500 mt-1 text-right">{storeComment.length}/{TETTO_COMMENTO}</p>
         </div>
       </div>
       )}
@@ -245,17 +277,23 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
               value={riderComment}
               onChange={(e) => setRiderComment(e.target.value)}
               rows={2}
+              maxLength={TETTO_COMMENTO}
               placeholder="Scrivi un commento (opzionale)…"
               containerClassName="mt-3"
               className="resize-none"
             />
+            <p className="text-xs text-ink-500 mt-1 text-right">{riderComment.length}/{TETTO_COMMENTO}</p>
           </div>
         </div>
       )}
 
       {manca && <p className="text-center text-sm text-ink-500">Tocca le stelle per votare.</p>}
       <Button
-        onClick={() => submit.mutate()}
+        onClick={() => {
+          if (inviando.current) return;
+          inviando.current = true;
+          submit.mutate(undefined, { onSettled: () => { inviando.current = false; } });
+        }}
         loading={submit.isPending}
         disabled={manca}
         fullWidth
