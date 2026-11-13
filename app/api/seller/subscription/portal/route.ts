@@ -12,8 +12,10 @@ export const runtime = 'nodejs';
 
 /**
  * Apre il Billing Portal Stripe per il venditore: da lì può aggiornare la carta,
- * scaricare le fatture o disdire l'abbonamento mensile. Richiede un
- * stripe_customer_id già creato (cioè un abbonamento attivato almeno una volta).
+ * scaricare le fatture o disdire l'abbonamento mensile. Richiede uno
+ * stripe_customer_id: nasce al primo clic su «attiva» (R23-011, anche se la cassa
+ * resta abbandonata), quindi NON vuol dire «ha un abbonamento». Chi ha un
+ * abbonamento lo dice subscription_status: lo legge il bottone (lib/abbonamento-portale.ts).
  * Rate limit: 10 / 10 min per utente.
  */
 export const POST = withAuthRateLimit(

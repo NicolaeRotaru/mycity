@@ -21,8 +21,14 @@ type Cassa = {
 const stato = vi.hoisted(() => ({
   clienti: [] as Array<{ id: string; email: string; metadata: Record<string, string>; chiave?: string }>,
   casse: [] as Cassa[],
-  abbonamenti: [] as Array<{ id: string; customer: string; status: string }>,
+  abbonamenti: [] as Array<{ id: string; customer: string; status: string; metadata?: Record<string, string> }>,
   profilo: {} as Record<string, unknown>,
+  /** Quante volte ancora la preparazione del cliente Stripe cade (rete, Stripe giù). */
+  clienteCade: 0,
+  /** La creazione del cliente risponde 409: un'altra scheda con la stessa chiave è in corso. */
+  conflittoSulCliente: false,
+  /** Il salvataggio del cliente sul profilo cade. */
+  salvataggioCade: false,
 }));
 
 vi.mock('@/lib/funzioni-al-lancio', async (orig) => ({
@@ -39,6 +45,20 @@ vi.mock('@/lib/api/middleware', () => ({
     h({ user: { id: 's1', email: 'forno@example.com' }, req }),
 }));
 vi.mock('@/lib/supabase/server', () => ({
+  // Il client admin del sito: salva il cliente Stripe sul profilo, senza coprirne uno già scritto.
+  getAdminSupabase: () => ({
+    from: () => ({
+      update: (valori: Record<string, unknown>) => ({
+        eq: () => ({
+          is: async (colonna: string, valore: unknown) => {
+            if (stato.salvataggioCade) return { error: { code: '57014', message: 'timeout' } };
+            if ((stato.profilo[colonna] ?? null) === valore) Object.assign(stato.profilo, valori);
+            return { error: null };
+          },
+        }),
+      }),
+    }),
+  }),
   getServerSupabase: async () => ({
     from: (tabella: string) => tabella === 'orders'
       // Un negozio che ha già incassato (R10-020): la cassa si apre.
@@ -50,8 +70,17 @@ vi.mock('@/lib/stripe/client', () => ({
   isStripeConfigured: () => true,
   getStripe: () => ({
     customers: {
-      list: async (p: { email?: string }) => ({ data: stato.clienti.filter((c) => c.email === p.email) }),
+      list: async (p: { email?: string }) => {
+        if (stato.clienteCade > 0) { stato.clienteCade -= 1; throw new Error('Stripe non risponde'); }
+        return { data: stato.clienti.filter((c) => c.email === p.email) };
+      },
       create: async (p: { email: string; metadata?: Record<string, string> }, o?: { idempotencyKey?: string }) => {
+        if (stato.conflittoSulCliente) {
+          // Come Stripe: la richiesta gemella, con la stessa chiave, sta creando il cliente adesso.
+          stato.conflittoSulCliente = false;
+          stato.clienti.push({ id: 'cus_gemello', email: p.email, metadata: p.metadata ?? {}, chiave: o?.idempotencyKey });
+          throw Object.assign(new Error('idempotency conflict'), { statusCode: 409, type: 'StripeIdempotencyError' });
+        }
         const gia = o?.idempotencyKey ? stato.clienti.find((c) => c.chiave === o.idempotencyKey) : undefined;
         if (gia) return gia;
         const nuovo = { id: `cus_${stato.clienti.length + 1}`, email: p.email, metadata: p.metadata ?? {}, chiave: o?.idempotencyKey };
@@ -61,6 +90,10 @@ vi.mock('@/lib/stripe/client', () => ({
     },
     subscriptions: {
       list: async (p: { customer: string }) => ({ data: stato.abbonamenti.filter((a) => a.customer === p.customer) }),
+      search: async (p: { query: string }) => {
+        const id = /metadata\['seller_id'\]:'([^']+)'/.exec(p.query)?.[1];
+        return { data: stato.abbonamenti.filter((a) => !!id && a.metadata?.seller_id === id) };
+      },
     },
     checkout: {
       sessions: {
@@ -105,7 +138,7 @@ function paga(url: string): string {
   }
   cassa.status = 'complete';
   const sub = `sub_${stato.abbonamenti.length + 1}`;
-  stato.abbonamenti.push({ id: sub, customer: cliente, status: 'active' });
+  stato.abbonamenti.push({ id: sub, customer: cliente, status: 'active', metadata: { seller_id: cassa.metadata.seller_id ?? '' } });
   return sub;
 }
 
@@ -114,6 +147,9 @@ beforeEach(() => {
   stato.clienti = [];
   stato.casse = [];
   stato.abbonamenti = [];
+  stato.clienteCade = 0;
+  stato.conflittoSulCliente = false;
+  stato.salvataggioCade = false;
   // Primo abbonamento: il webhook non ha ancora scritto niente sul profilo.
   stato.profilo = { role: 'seller', is_approved: true, stripe_customer_id: null, subscription_status: null };
 });
@@ -174,5 +210,53 @@ describe('R23-011 — due schede, un abbonamento solo', () => {
     expect(prima.status).toBe(200);
     expect(stato.casse[0]!.customer).toBe('cus_vecchio');
     expect(stato.clienti).toHaveLength(1);
+  });
+
+  it('se il cliente Stripe non si prepara la cassa non parte: una caduta e poi la seconda scheda non fanno due clienti', async () => {
+    stato.clienteCade = 1;
+    vi.setSystemTime(new Date('2026-11-13T10:00:00.000+01:00'));
+    const prima = await apriScheda();
+    expect(prima.status, 'la cassa parte con customer_email e Stripe crea un cliente nuovo').toBe(503);
+    expect(prima.url).toBeUndefined();
+    expect(stato.casse).toHaveLength(0);
+
+    vi.setSystemTime(new Date('2026-11-13T10:20:00.000+01:00'));
+    const seconda = await apriScheda();
+    expect(seconda.status).toBe(200);
+    expect(stato.casse.map((c) => c.customer_email), 'una cassa senza cliente fa un cliente nuovo al pagamento').toEqual([null]);
+    paga(seconda.url!);
+    expect(new Set(stato.abbonamenti.map((a) => a.customer)).size).toBe(1);
+  });
+
+  it('il cliente Stripe si salva subito sul profilo: la cancellazione dell account lo trova anche a cassa abbandonata', async () => {
+    vi.setSystemTime(new Date('2026-11-13T10:00:00.000+01:00'));
+    expect((await apriScheda()).status).toBe(200);
+    expect(stato.profilo.stripe_customer_id, 'il cliente resta su Stripe senza filo verso il profilo').toBe(stato.clienti[0]!.id);
+    expect(stato.casse[0]!.customer).toBe(stato.clienti[0]!.id);
+  });
+
+  it('se il cliente non si salva sul profilo, la cassa non parte', async () => {
+    stato.salvataggioCade = true;
+    vi.setSystemTime(new Date('2026-11-13T10:00:00.000+01:00'));
+    expect((await apriScheda()).status).toBe(503);
+    expect(stato.casse).toHaveLength(0);
+  });
+
+  it('due schede nello stesso istante: la seconda riceve il 409 di Stripe e ritrova il cliente della prima', async () => {
+    stato.conflittoSulCliente = true;
+    vi.setSystemTime(new Date('2026-11-13T10:00:00.000+01:00'));
+    const scheda = await apriScheda();
+    expect(scheda.status).toBe(200);
+    expect(stato.casse[0]!.customer).toBe('cus_gemello');
+    expect(stato.profilo.stripe_customer_id).toBe('cus_gemello');
+  });
+
+  it('un abbonamento vivo su un altro cliente (orfano di prima) si vede: niente cassa nuova', async () => {
+    stato.clienti.push({ id: 'cus_orfano', email: 'altra@example.com', metadata: {} });
+    stato.abbonamenti.push({ id: 'sub_orfano', customer: 'cus_orfano', status: 'active', metadata: { seller_id: 's1' } });
+    vi.setSystemTime(new Date('2026-11-13T10:00:00.000+01:00'));
+    const scheda = await apriScheda();
+    expect(scheda.status, 'il negozio paga già 50 € al mese su un altro cliente').toBe(409);
+    expect(stato.casse).toHaveLength(0);
   });
 });

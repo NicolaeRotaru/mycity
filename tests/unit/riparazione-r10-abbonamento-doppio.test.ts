@@ -51,6 +51,8 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: () => stato.evento },
+    // R23-011 — La cassa prepara il cliente Stripe del negozio prima di aprirsi.
+    customers: { list: async () => ({ data: [] }), create: async () => ({ id: 'cus_1' }) },
     subscriptions: {
       retrieve: async (id: string) => ({ id, status: stato.suStripe[id] ?? 'canceled', current_period_end: 1_802_000_000 }),
       cancel: async (id: string) => { stato.annullati.push(id); return { id, status: 'canceled' }; },
