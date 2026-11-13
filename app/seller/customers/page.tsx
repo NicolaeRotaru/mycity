@@ -92,7 +92,7 @@ export default function SellerCustomersPage() {
   }
 
   return (
-    <div className="space-y-6 pb-24 md:pb-0">
+    <div className="space-y-6 pb-36 md:pb-0">
       <SellerPageTitle
         eyebrow="Relazioni"
         title="Clienti"
@@ -195,7 +195,6 @@ export default function SellerCustomersPage() {
                   <tr key={c.userId} className="border-t border-cream-200 hover:bg-cream-50">
                     <td className="p-3">
                       <p className="font-semibold text-ink-900">{c.fullName ?? 'Cliente'}</p>
-                      <p className="text-xs text-ink-400">ID: {c.userId.slice(0, 8)}…</p>
                     </td>
                     <td className="p-3 text-right font-bold">{c.ordersCount}</td>
                     <td className="p-3 text-right font-semibold text-olive-700">{formatPrice(c.totalSpent)}</td>

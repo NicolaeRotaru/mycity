@@ -54,7 +54,7 @@ describe('R16-006 clienti sul telefono', () => {
     globale.__ESITO_QUERY__ = () => undefined;
     globale.__DATI_QUERY__ = () => ({
       ordiniLetti: 1,
-      clienti: [{ userId: 'u1', fullName: 'Cliente Uno', totalSpent: 10, ordersCount: 1, lastOrderAt: '2026-11-10T10:00:00Z', lastOrderId: 'a', firstOrderAt: '2026-11-10T10:00:00Z' }],
+      clienti: [{ userId: '6f784816-aaaa-4bbb-8ccc-000000000000', fullName: 'Cliente Uno', totalSpent: 10, ordersCount: 1, lastOrderAt: '2026-11-10T10:00:00Z', lastOrderId: 'a', firstOrderAt: '2026-11-10T10:00:00Z' }],
     });
     const s = accendi(pagina, {});
     await attendi();
@@ -68,7 +68,9 @@ describe('R16-006 clienti sul telefono', () => {
     expect(link.className, 'link basso').toContain('min-h-11');
     expect(link.className).toContain('inline-flex');
     const contenitore = s.radice.querySelector('div.space-y-6') as HTMLElement;
-    expect(contenitore.className, 'niente spazio in fondo').toMatch(/pb-24/);
+    expect(contenitore.className, 'niente spazio in fondo').toMatch(/pb-36/);
+    // py-6 (48 px) + pb-36 (144 px) = 192 px: più dei 152 px del pulsante assistenza (bottom 96 + alto 56).
+    expect(s.radice.textContent ?? '').not.toMatch(/ID: [0-9a-f]{8}/);
     s.smonta();
   }, 30000);
 });
