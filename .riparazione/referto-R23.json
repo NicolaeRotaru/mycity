@@ -1,13 +1,13 @@
 {
   "sessione": "R23",
-  "aggiornato": "2026-11-13 08:10",
-  "finita": false,
-  "testa": "4e04aa4318f4ab3df546a0d42a8256d0ed9fad05",
+  "aggiornato": "2026-11-13 13:20",
+  "finita": true,
+  "testa": "0d499c53e2ded00b3ab343fe1793c03634ea9a05",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "verde",
-    "testa": "4e04aa4318f4ab3df546a0d42a8256d0ed9fad05",
-    "nota": "1428 file di prova verdi, 1 saltato; lint 0 errori, 91 avvisi; tsc ha bisogno di 8 GB di memoria, con quelli di default esce per memoria finita"
+    "testa": "0d499c53e2ded00b3ab343fe1793c03634ea9a05",
+    "nota": "1433 file di prova verdi, 1 saltato (9752 prove); lint 0 errori e 91 avvisi; tsc verde con 8 GB (con la memoria di default esce per memoria finita)"
   },
   "voci": [
     {
@@ -55,8 +55,9 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Tolti i 4 try/catch su getAdminSupabase() di POST/DELETE/GET della cancellazione e del GET dell'esportazione: il gancio seMancaLaChiave di withAuth risponde prima, quindi non scattavano mai. senzaChiave e sullaPorta diventano una funzione sola, sullaPortaDeiDiritti, nel file nuovo lib/privacy/porta-dei-diritti.ts. La riga d'errore dell'esportazione ora dice utente e diritto.",
-      "cosa_resta": "Nel codice niente: manca il verdetto del collaudo sulla prova rimessa. Rimettendo alla base ognuna delle due rotte la prova cade sul comportamento (3 prove rosse su 7, AssertionError). Togliendo il file nuovo, le rotte che lo importano non si caricano e la macchina esce 3. Se il collaudo lo conferma, la voce passa a riparato.",
-      "nota": "La copia unica non poteva stare in lib/api/middleware.ts: 7 prove comuni lo fingono senza altri nomi. Non smentito da un revisore: tetto di costo raggiunto."
+      "cosa_resta": "Nel codice niente: manca il verdetto del collaudo sulla prova rimessa, che esce 3 solo perché il file nuovo lib/privacy/porta-dei-diritti.ts, tolto da solo, rompe le rotte che lo importano. Con la rotta dell'esportazione alla base la prova cade sul comportamento (la riga d'errore non dice utente e diritto). Con la cancellazione alla base cade solo sul controllo del testo, perché lì è riordino. Il revisore la dà «regge».",
+      "nota": "La copia unica non poteva stare in lib/api/middleware.ts: 7 prove comuni lo fingono senza altri nomi.",
+      "verificato_da": "qa: prova 7/7, 17 file vicini verdi (401 senza accesso, 503 senza chiave, giro normale); export alla base cade sul comportamento, delete alla base solo sul controllo del testo (lì è riordino, catch davvero morti: getAdminSupabase tiene il client già fatto)"
     },
     {
       "id": "R23-003",
@@ -120,7 +121,47 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La libreria era server-only, non dichiarata né installata: reggeva solo per l'alias interno di Next. Il suo import non dava nessuna funzione, solo il segnale «del server», quindi l'ho tolto dai due file senza aggiungere librerie. I due moduli li usano solo /status, due rotte API e un lavoro periodico, nessun componente 'use client'.",
-      "nota": "Non serve toccare le dipendenze. Alternativa, se Nicola vuole di nuovo l'errore al build quando un componente del browser importa questi moduli: dichiarare \"server-only\": \"0.0.1\" in dependencies (package.json + package-lock.json, alla cucitura) e rimettere le due righe. Non smentito da un revisore: tetto di costo raggiunto."
+      "nota": "Non serve toccare le dipendenze. Alternativa, se Nicola vuole di nuovo l'errore al build quando un componente del browser importa questi moduli: dichiarare \"server-only\": \"0.0.1\" in dependencies (package.json + package-lock.json, alla cucitura) e rimettere le due righe.",
+      "verificato_da": "qa: prova 2/2, rimessa (0); ricostruiti gli importatori a catena, nessun file 'use client'; nessun'altra libreria non dichiarata"
+    },
+    {
+      "id": "R23-005",
+      "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+      "esito": "parziale",
+      "commit": "0d499c53",
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "tests/unit/riparazione-r23-fascia-domani-dopo-mezzanotte.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r23-fascia-domani-dopo-mezzanotte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r23-fascia-domani-dopo-mezzanotte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d499c53^ --file lib/store-hours.ts --prove tests/unit/riparazione-r23-fascia-domani-dopo-mezzanotte.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "negozioPuoServire e ultimoRitiroDellaFascia accettano un 4° parametro opzionale propostaIl (di base: adesso): il «domani» si conta dal giorno in cui la cassa ha proposto la fascia, per il verdetto e per la scadenza del ritiro. Con l'orologio finto: proposta lunedì 23:59, richiesta martedì 00:01, negozio aperto solo martedì, risultato true (alla base false). Commit b1e87bbf e 0d499c53, rimessa uscita 0 su tutti e due.",
+      "cosa_resta": "Le rotte oggi non ricevono l'istante della proposta, quindi in produzione non cambia ancora niente: servono tre file non di R23, scritti in serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "leggere dal body l'istante della proposta (es. deliverySlotProposedAt, ISO), da ignorare se nel futuro o più vecchio di circa 26 ore, e passare romeNow(new Date(istante)) come 4° argomento di negozioPuoServire"
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "la stessa cosa; il checkout mette già giornoDiPiacenza(new Date()) nell'impronta, e va usato lo stesso istante"
+        },
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "mandare, insieme a deliverySlot, l'istante in cui la cassa ha proposto la fascia, e aggiungere il campo allo schema zod delle due rotte"
+        }
+      ],
+      "verificato_da": "qa: grep di tutti i chiamanti di negozioPuoServire (senza il 4° parametro identico), prova e rimessa (0); trovato ultimoRitiroDellaFascia senza propostaIl, corretto in 0d499c53 (rimessa 0, 57 file di store-hours verdi)"
     },
     {
       "id": "R23-006",
@@ -153,6 +194,32 @@
         {
           "file": "package.json (devDependencies) + package-lock.json",
           "modifica": "aggiungere \"@typescript-eslint/eslint-plugin\": \"^8.60.0\" a devDependencies (npm install -D @typescript-eslint/eslint-plugin@^8.60.0); 8.60.0 è la versione già installata da eslint-config-next 15.5.18"
+        }
+      ],
+      "verificato_da": "qa: prova 5/5, rimessa (0); confronto JSON next lint contro script nuovo: 0 differenze; errori finti in app, lib e components fanno rosso il lint"
+    },
+    {
+      "id": "R23-007",
+      "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+      "esito": "serve_file_altrui",
+      "commit": "217b6055",
+      "cosa_ho_fatto": "Avevo esteso l'aiutante col finto unico (commit 2a5754cf: chiaviUniche, indirizzi, guasti, single e maybeSingle, con 5 prove). La guardia però tratta tests/unit/aiuti/finto-giro-notturno.ts come prova comune, anche se la scheda lo dà a R23, quindi l'ho tolto intero col revert 217b6055.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-giro-notturno.ts",
+          "modifica": "riapplicare il commit 2a5754cf del ramo claude/magical-hamilton-xouwr8-m23 (git show 2a5754cf): scenario.chiaviUniche (doppione su id → 'duplicate key … _pkey' 23505), scenario.indirizzi (auth.admin.getUserById), scenario.guasti (Guasto{tabella, azione select|insert, messaggio, codice, seFiltro, seRiga}, modificabile a notte in corso), FintaQuery.single()/maybeSingle(). Tutto opzionale: le 13 prove che lo usano restano verdi. Con lui torna la prova tests/unit/riparazione-r23-finto-clienteavvisi.test.ts."
+        },
+        {
+          "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+          "modifica": "togliere adminDiProva (:70) e le patch a mano di insert/eq/select/single (rifiutaAvvisiA, rifiutaLetturaDi, registroInviiRotto, registroInviiRifiutaLeRighe, getUserById) usando fintoGiroNotturno({indirizzi, guasti}); spostare in file propri le due prove di rotta e di scansione del sorgente (:560-576)"
+        },
+        {
+          "file": "tests/unit/la-spiegazione-per-email-che-non-parte-si-riprova-la-notte-dopo.test.ts",
+          "modifica": "sostituire databaseVero()/cliente (:26-75) con fintoGiroNotturno({chiaviUniche:true, guasti}).admin as unknown as ClienteAvvisi; `rotte` diventa push/pop su `finto.guasti`"
+        },
+        {
+          "file": "tests/unit/chi-aspetta-la-cancellazione-sa-perche-aspetta.test.ts",
+          "modifica": "sostituire letturaVuota() (:293) e i clienti inline `inCorsa`/`rotto` (:223-252) con fintoGiroNotturno({guasti:[{tabella:'notifications',azione:'select',messaggio:…}]}).admin"
         }
       ]
     },
@@ -205,7 +272,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il segreto atteso CRON_SECRET ora si ripulisce come il gettone in withCronAuth, /api/health e /api/health/ready: con un «a capo» finale il giro a mano entra. Un segreto fatto solo di spazi conta come assente (503).",
-      "nota": "Facoltativo per Nicola: ripulire comunque il valore di CRON_SECRET su Vercel. Non smentito da un revisore: tetto di costo raggiunto."
+      "nota": "Facoltativo per Nicola: ripulire comunque il valore di CRON_SECRET su Vercel.",
+      "verificato_da": "qa: prova 7/7, 312 file vicini verdi, rimessa (0); provati \\r\\n e segreto di soli spazi"
+    },
+    {
+      "id": "R23-010",
+      "chiave": "frontend-ux|con «aperti ora» acceso, l'elenco dei negozi non si aggiorna all'orario di chiusura e tiene in lista negozi con scritto «chiuso ora»",
+      "esito": "riparato",
+      "commit": "9ec7e9a9a5fa7afb5a6a7463891d88cad019c641",
+      "file_toccati": [
+        "app/stores/page.tsx",
+        "tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9ec7e9a9a5fa7afb5a6a7463891d88cad019c641^ --file app/stores/page.tsx --prove tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina usa useOraDiPiacenza() e lo passa a chiaveDiOggi e isOpenNow dentro il useMemo `filtered`, con `adesso` nelle dipendenze: l'elenco si rifà al minuto. Prova montata con l'orologio finto: alle 12:59:30 il forno aperto 9-13 è in lista, dopo 60 secondi esce.",
+      "verificato_da": "qa: prova e rimessa (0), prove esistenti di app/stores/page.tsx verdi; adesso null prima dell'idratazione usa l'orologio di prima; il battito si ferma a scheda nascosta"
     },
     {
       "id": "R23-011",
@@ -283,7 +375,57 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Le misure web-vitals si accendevano al montaggio e track() le buttava senza consenso: alla prima visita FCP, TTFB e LCP andavano perse. Ora si accendono quando c'è il consenso statistico (subito, o al suo arrivo), una volta sola, e leggono le voci già registrate dal browser. Niente librerie nuove: web-vitals era già dichiarata.",
-      "cosa_resta": "Che qualcuno misuri davvero lo decide Nicola: PostHog è spento al lancio (POSTHOG_ACCESO=false in lib/funzioni-al-lancio.ts, file non di R23). Per accenderlo servono l'interruttore e NEXT_PUBLIC_POSTHOG_KEY nelle variabili Production di Vercel."
+      "cosa_resta": "Che qualcuno misuri davvero lo decide Nicola: PostHog è spento al lancio (POSTHOG_ACCESO=false in lib/funzioni-al-lancio.ts, file non di R23). Per accenderlo servono l'interruttore e NEXT_PUBLIC_POSTHOG_KEY nelle variabili Production di Vercel.",
+      "verificato_da": "qa: prova 5/5, 18 file vicini verdi, rimessa (0); senza consenso nessuna misura; consenso tolto e ridato registra una volta sola"
+    },
+    {
+      "id": "R23-014",
+      "chiave": "qa-flussi|l'orologio della consegna gira anche dove il riquadro non si vede",
+      "esito": "riparato",
+      "commit": "5091f9aed62303fabcd6cd08e685f13777aa84a2",
+      "file_toccati": [
+        "components/ui/DeliveryCutoff.tsx",
+        "components/home/HeroStoreCard.tsx",
+        "tests/unit/riparazione-r23-orologio-dove-non-si-vede.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r23-orologio-dove-non-si-vede.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r23-orologio-dove-non-si-vede.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5091f9aed62303fabcd6cd08e685f13777aa84a2^ --file components/ui/DeliveryCutoff.tsx,components/home/HeroStoreCard.tsx --prove tests/unit/riparazione-r23-orologio-dove-non-si-vede.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "useOraDiPiacenza(attivo = true) non avvia l'intervallo se attivo è false, e HeroStoreCard passa `schermoGrande`. Prova in jsdom: a 390 px nessun intervallo da 60 secondi, a 1024 px sì. La prova esistente r08 sul riquadro nascosto resta verde.",
+      "verificato_da": "qa: prova e rimessa (0, morde su entrambi i file); il passaggio da schermo piccolo a grande fa ripartire l'orologio; gli altri 5 chiamanti di useOraDiPiacenza sono invariati"
+    },
+    {
+      "id": "R23-015",
+      "chiave": "qa-flussi|il negozio aperto fino a mezzanotte non riesce a salvare 18:00–00:00, e il messaggio non dice di scrivere 23:59",
+      "esito": "riparato",
+      "commit": "21fdd994dd96f968d87204fc4cb7f9757c3996ba",
+      "file_toccati": [
+        "components/seller/orari-validi.ts",
+        "tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 21fdd994dd96f968d87204fc4cb7f9757c3996ba^ --file components/seller/orari-validi.ts --prove tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "erroreDelleFasce legge la chiusura «00:00» (con apertura dopo mezzanotte) come mezzanotte, come già fanno lib/store-hours.ts e la migrazione 231. 00:00–00:00 e le chiusure invertite restano errori, e la sovrapposizione vede la fascia fino a 24:00. Il messaggio d'errore ora cita «00:00 o 23:59».",
+      "verificato_da": "qa: prova e rimessa (0); varianti 00:00–00:00 (errore), 23:00–00:00 con 22:00–23:30 (sovrapposte), 00:00–08:00 e 08:00–12:00 + 18:00–00:00 (ok); stessa regola di intervalloInMinuti in lib/store-hours.ts"
     },
     {
       "id": "R23-016",
@@ -313,7 +455,34 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "In produzione, senza URL o token di Upstash, il freno non ripiega più in silenzio sul contatore in memoria: scrive una riga d'errore una volta per copia, dice quale metà manca (mai i valori) e continua a frenare. /api/health elencava già la coppia fra le importanti.",
-      "cosa_resta": "Nicola: mettere UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN, tutti e due e senza «a capo», nelle variabili Production di Vercel, e ripubblicare. Solo così il contatore è condiviso fra le copie."
+      "cosa_resta": "Nicola: mettere UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN, tutti e due e senza «a capo», nelle variabili Production di Vercel, e ripubblicare. Solo così il contatore è condiviso fra le copie.",
+      "verificato_da": "qa: prova 3/3, 130 file sul freno verdi, rimessa (0); tutte le rotte passano da rateLimitAsync; variante con URL o token con spazi non resta muta"
+    },
+    {
+      "id": "R23-018",
+      "chiave": "stati-ui|nella pagina dei punti i numeri sono scritti senza il punto delle migliaia e, se la lettura non riesce, la pagina mostra zero punti",
+      "esito": "riparato",
+      "commit": "1f38eb7841ea1d289af4b84e0f73708eb0ec18df",
+      "file_toccati": [
+        "app/profile/loyalty/page.tsx",
+        "lib/loyalty.ts",
+        "tests/unit/riparazione-r23-punti-numeri-e-errore.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r23-punti-numeri-e-errore.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r23-punti-numeri-e-errore.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1f38eb7841ea1d289af4b84e0f73708eb0ec18df^ --file app/profile/loyalty/page.tsx,lib/loyalty.ts --prove tests/unit/riparazione-r23-punti-numeri-e-errore.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Saldo, «mancano», movimenti e punti convertibili passano da Intl.NumberFormat('it-IT') (12.345, +15.000 pt). Se la lettura del conto non riesce la pagina mostra un errore con «Riprova», e lo stesso per i movimenti: mai «0 punti» né «Nessun movimento». «Al Oro» diventa «All'Oro».",
+      "nota": "Con it-IT i numeri a 4 cifre restano senza punto (1234): è la regola ICU, la stessa dei prezzi.",
+      "verificato_da": "qa: prova e rimessa (0); fetchLoyaltyAccount ha un solo chiamante, che ora mostra ErrorState; gli altri usi di lib/loyalty importano solo touchLoyaltyStreak e TIER_META"
     }
   ],
   "nuovi_difetti_visti": [
@@ -344,6 +513,13 @@
       "severita": "minore",
       "file": "lib/api/middleware.ts:692 · lib/rate-limit.ts:335 · app/api/track/route.ts:75",
       "descrizione": "INTERNAL_API_SECRET ed EDGE_TRUST_SECRET si confrontano col valore grezzo di process.env, mentre le intestazioni arrivano già ripulite dagli spazi. Con un «a capo» in fondo il confronto non combacia mai: è la stessa trappola di R23-009, ma la voce nomina solo il segreto dei lavori."
+    },
+    {
+      "titolo": "Al consenso statistico PostHog si avvia due o tre volte in parallelo",
+      "dimensione": "performance",
+      "severita": "minore",
+      "file": "lib/analytics/posthog.tsx:398-428",
+      "descrizione": "getPosthog non tiene l'avvio già in corso: al consenso partono 2-3 avvii in parallelo. Difetto che c'era già, fuori da R23-013. Correzione: tenere da parte la promessa dell'avvio e restituire sempre quella."
     }
   ],
   "domande_per_nicola": [
@@ -351,7 +527,7 @@
     "R23-016: nei festivi (quali: i nazionali? il patrono di Piacenza, Sant'Antonino il 4 luglio?) i negozi si considerano chiusi, e un negozio può scegliere di restare aperto?"
   ],
   "conto": {
-    "agenti": 4,
-    "nota": "Tetto di costo raggiunto (35,1 $): la regista ha fermato i subagenti nuovi. Fatti: lotto 1 (riparazione, revisione, correzione) e lotto 2 (riparazione, senza revisione). Il lotto 3 non è partito: R23-005, R23-007, R23-010, R23-014, R23-015, R23-018 restano senza esito, fuori dal referto."
+    "agenti": 9,
+    "nota": "lotto 1: riparazione, revisione, correzione. lotto 2: riparazione, revisione. lotto 3: riparazione e revisione col modello piccolo, più una correzione piccola su R23-005. R23-011 tolta per le prove comuni di R10; R23-007 tolta perché la guardia tratta come comune l'aiutante tests/unit/aiuti/finto-giro-notturno.ts, anche se la scheda lo dà a R23."
   }
 }
