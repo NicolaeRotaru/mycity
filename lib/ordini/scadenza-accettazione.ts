@@ -290,7 +290,12 @@ export function rigaScadenzaPerIlNegozio(
   const annullo = scadenzaAccettazione(ordine, ORE_PER_ACCETTARE, orari);
   if (!annullo) return null;
   // 30/10/2026 (ondata 24) — Col ritiro non più possibile la riga lo dice: mai «entro le 16:30».
-  if (ultimoMomentoDelRitiro(ordine, orari) !== null && adesso.getTime() >= annullo.getTime()) {
+  // R18-015 — Un ordine nato senza nessun momento per il ritiro non lo è mai stato, qualunque ora
+  // segni il telefono: prima la riga lo diceva solo da `created_at` in poi, e col telefono del
+  // negozio 30 secondi indietro usciva «entro le 12:46» (l'ora di nascita, che `entroQuandoAccettare`
+  // restituisce per «impossibile»).
+  const ritiro = ultimoMomentoDelRitiro(ordine, orari);
+  if (ritiro === 'impossibile' || (ritiro !== null && adesso.getTime() >= annullo.getTime())) {
     return 'Il ritiro per questa fascia non è più possibile: l’ordine si sta annullando da solo.';
   }
   // 30/10/2026 (ondata 17) — Mai una scadenza già passata: dopo l'ora scritta la riga dice cosa
