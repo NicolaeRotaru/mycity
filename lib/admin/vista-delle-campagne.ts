@@ -37,6 +37,7 @@ import { NON_LETTO } from '@/lib/letture-cruscotto';
 import { vistaDaQuery, type LetturaQuery } from '../vista-query';
 import type { StatoVista } from '../stato-vista';
 import { formatPriceFromCents } from '../format';
+import { giornoPiacenza } from '../tempo-piacenza';
 
 export type StatoCampagna = 'active' | 'paused' | 'ended';
 export type FiltroCampagne = 'all' | StatoCampagna;
@@ -146,6 +147,37 @@ export const ETICHETTA_FILTRO: Record<FiltroCampagne, string> = {
   paused: maiuscola(NOME_BREVE.paused),
   ended: maiuscola(NOME_BREVE.ended),
 };
+
+/**
+ * R17-008 — Nessun codice scrive `ended` sulla riga: una campagna oltre la data di fine resta
+ * `active` nel database. Lo stato che si mostra (e che filtra) si deriva dalla data di fine,
+ * nel giorno di Piacenza: la data di fine e' inclusa, il giorno dopo la campagna e' finita.
+ * Una campagna in pausa resta in pausa.
+ */
+export function statoEffettivoDellaCampagna(
+  c: { status: StatoCampagna; end_date: string },
+  adesso: Date = new Date(),
+): StatoCampagna {
+  if (c.status === 'active' && typeof c.end_date === 'string' && c.end_date.slice(0, 10) < giornoPiacenza(adesso)) {
+    return 'ended';
+  }
+  return c.status;
+}
+
+/**
+ * Il filtro dell'amministrazione sullo stato mostrato, nella forma che la lettura sa applicare:
+ * `attive` = stato active e fine non passata; `finite` = ended oppure active con fine passata.
+ */
+export function condizioneDelFiltro(
+  filtro: FiltroCampagne,
+  adesso: Date = new Date(),
+): { status?: StatoCampagna; fineDaOggi?: string; oppure?: string } {
+  const oggi = giornoPiacenza(adesso);
+  if (filtro === 'active') return { status: 'active', fineDaOggi: oggi };
+  if (filtro === 'ended') return { oppure: `status.eq.ended,and(status.eq.active,end_date.lt.${oggi})` };
+  if (filtro === 'paused') return { status: 'paused' };
+  return {};
+}
 
 /** Come si chiama lo stato di UNA campagna, nel suo cartellino. */
 export function etichettaStato(stato: StatoCampagna): string {

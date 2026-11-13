@@ -27,6 +27,8 @@ import {
   vistaDelleCampagne,
   nomeDellaCampagna,
   etichettaStato,
+  statoEffettivoDellaCampagna,
+  condizioneDelFiltro,
   ETICHETTA_FILTRO,
   type Campagna,
   type ElencoCampagne,
@@ -88,7 +90,10 @@ export default function AdminSponsoredPage() {
           { count: 'exact' },
         )
         .order('created_at', { ascending: false });
-      if (filter !== 'all') q = q.eq('status', filter);
+      const cond = condizioneDelFiltro(filter);
+      if (cond.status) q = q.eq('status', cond.status);
+      if (cond.fineDaOggi) q = q.gte('end_date', cond.fineDaOggi);
+      if (cond.oppure) q = q.or(cond.oppure);
       const { data, error, count } = await q;
       if (error) throw error;
       return {
@@ -209,6 +214,7 @@ export default function AdminSponsoredPage() {
                 <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">{vista.frasePerTabellaVuota}</td></tr>
               ) : vista.campagne.map((l) => {
                 const nome = nomeDellaCampagna(l);
+                const stato = statoEffettivoDellaCampagna(l);
                 const ctr = l.impressions > 0 ? percentuale((l.clicks / l.impressions) * 100) : '—';
                 return (
                   <tr key={l.id} className="hover:bg-cream-50">
@@ -225,10 +231,10 @@ export default function AdminSponsoredPage() {
                     <td className="px-4 py-3 text-right">{l.impressions.toLocaleString('it-IT')}</td>
                     <td className="px-4 py-3 text-right">{ctr}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[l.status]}`}>{etichettaStato(l.status)}</span>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[stato]}`}>{etichettaStato(stato)}</span>
                     </td>
                     <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
-                      {l.status === 'active' && (
+                      {stato === 'active' && (
                         <button
                           type="button"
                           onClick={() => setStatus.mutate({ campagna: l, status: 'paused' })}
