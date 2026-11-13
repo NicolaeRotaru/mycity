@@ -6,7 +6,7 @@ import { sendEmail } from '@/lib/email/client';
 import { bonificoDaFareTemplate, refundIssuedTemplate } from '@/lib/email/templates';
 import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { escapeHtml } from '@/lib/html-escape';
-import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import { COLONNE_124, COLONNE_126_DEI_TURNI, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { compensoDalContante } from '@/lib/shipping';
 import { formatPriceFromCents } from '@/lib/format';
 import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
@@ -162,6 +162,42 @@ export function contantiPagabiliDaStripe(
   return !Number.isNaN(consegna) && consegna >= inizio;
 }
 
+/**
+ * 13/11/2026 (R17-017) — IL BONIFICO DI QUESTO TENTATIVO C'E' GIA' SU STRIPE?
+ *
+ * La chiave di idempotenza Stripe la tiene 24 ore: dopo, un bonifico partito con la risposta persa
+ * e ritentato (l'ordine torna HELD, il turno appeso torna in coda) ne crea un secondo. L'elenco dei
+ * bonifici del gruppo dell'ordine invece Stripe lo tiene per sempre: si guarda prima di ogni
+ * bonifico, al negozio e al fattorino, e quello dello stesso tentativo si registra invece di rifarlo.
+ *
+ * E se l'elenco non risponde? Decide il database: `turnoDiPrima` è l'ora del turno di un giro
+ * precedente (`payout_claimed_at`, `rider_payout_claimed_at`), scritta PRIMA di chiamare Stripe.
+ * Se c'è, una richiesta di bonifico può essere arrivata a Stripe: non se ne fa un'altra alla cieca,
+ * si lancia e l'ordine torna in coda per il giro dopo. Se non c'è, nessun bonifico può esistere e
+ * la chiave basta.
+ */
+async function bonificoGiaFatto(
+  stripe: ReturnType<typeof getStripe>,
+  q: { gruppo: string; ordineId: string; tentativo: number; delFattorino: boolean; turnoDiPrima: string | null },
+): Promise<{ id: string } | null> {
+  try {
+    const esistenti = await stripe.transfers.list({ transfer_group: q.gruppo, limit: 100 });
+    const trovato = (esistenti.data ?? []).find(
+      (t) =>
+        t.metadata?.order_id === q.ordineId &&
+        (t.metadata?.kind === 'rider_fee') === q.delFattorino &&
+        (t.metadata?.tentativo ?? '0') === String(q.tentativo),
+    );
+    return trovato ? { id: trovato.id } : null;
+  } catch (e) {
+    if (q.turnoDiPrima) {
+      throw new Error(`elenco dei bonifici non consultabile dopo un turno di prima: non rifaccio il bonifico alla cieca (${q.ordineId})`);
+    }
+    logger.warn('[stripe] elenco bonifici non consultabile prima del versamento', { orderId: q.ordineId, e });
+    return null;
+  }
+}
+
 export async function releaseOrderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
   // 046 — serve anche quanto è già stato addebitato al venditore: il payout
@@ -169,11 +205,12 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   // Il ripiego copre la finestra fra l'unione del codice e la firma sulla
   // migrazione 124: senza, una `select` che nomina una colonna inesistente
   // fallisce e nessun pagamento partirebbe (lib/db/migrazione-124.ts).
-  const COLONNE_PAYOUT = 'id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_charge_id, stripe_transfer_group, delivery_status, payment_method, delivered_at';
+  // R17-017 — `payout_claimed_at`: dice se un turno di prima ha già chiesto un bonifico (vedi `bonificoGiaFatto`).
+  const COLONNE_PAYOUT = 'id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, payout_claimed_at, stripe_charge_id, stripe_transfer_group, delivery_status, payment_method, delivered_at';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (payout venditore)',
     () => admin.from('orders').select(COLONNE_PAYOUT).eq('id', orderId).single(),
-    () => admin.from('orders').select(senzaColonne(COLONNE_PAYOUT, COLONNE_124)).eq('id', orderId).single(),
+    () => admin.from('orders').select(senzaColonne(COLONNE_PAYOUT, [...COLONNE_124, ...COLONNE_126_DEI_TURNI])).eq('id', orderId).single(),
   );
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
@@ -306,41 +343,36 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
      * all'infinito, ma toglie anche la rete che Stripe tendeva da sola: con una
      * chiave nuova, un bonifico che era PASSATO davvero e la cui risposta si e'
      * persa per strada verrebbe rifatto. Sono soldi che escono due volte.
+     * Si guarda se per QUESTO tentativo un bonifico esiste gia' e, se c'e', lo
+     * si registra invece di farne un altro. Il numero del tentativo sta
+     * nell'etichetta del bonifico apposta: dopo una contestazione vinta quel
+     * numero sale, e il bonifico vecchio — che era stato stornato — non viene
+     * scambiato per quello nuovo.
      *
-     * L'importo puo' cambiare solo quando al negozio e' gia' stata addebitata
-     * una quota, quindi il controllo serve solo in quel caso: si guarda se per
-     * QUESTO tentativo un bonifico esiste gia' e, se c'e', lo si registra
-     * invece di farne un altro. Il numero del tentativo sta nell'etichetta del
-     * bonifico apposta: dopo una contestazione vinta quel numero sale, e il
-     * bonifico vecchio — che era stato stornato — non viene scambiato per
-     * quello nuovo.
+     * 13/11/2026 (R17-017) — SEMPRE, NON SOLO QUANDO L'IMPORTO E' CAMBIATO.
+     * Il controllo girava solo con una quota gia' tolta al negozio: nel caso
+     * comune l'unica difesa era la chiave, che Stripe tiene 24 ore. Bonifico
+     * partito con la risposta persa, ordine tornato HELD, un reso aperto lo
+     * ferma fino a mercoledi': il giro di mercoledi' ne faceva un secondo. Ora
+     * l'elenco di Stripe si guarda prima di ogni bonifico (`bonificoGiaFatto`).
      */
-    if ((importiDelTurno.seller_payout_reversed_cents ?? 0) > 0) {
-      const gruppo = order.stripe_transfer_group ?? `order_${order.id}`;
-      try {
-        const esistenti = await stripe.transfers.list({ transfer_group: gruppo, limit: 100 });
-        const giaFatto = (esistenti.data ?? []).find(
-          (t) =>
-            t.metadata?.order_id === order.id &&
-            t.metadata?.kind !== 'rider_fee' &&
-            (t.metadata?.tentativo ?? '0') === String(tentativo),
-        );
-        if (giaFatto) {
-          logger.warn('[stripe] bonifico al negozio gia esistente: registrato invece di rifarlo', {
-            orderId: order.id, transferId: giaFatto.id,
-          });
-          const { error: errGia } = await admin
-            .from('orders')
-            .update({ stripe_transfer_id: giaFatto.id, payout_status: 'TRANSFERRED', payout_at: new Date().toISOString() })
-            .eq('id', order.id);
-          if (errGia) logger.error('[stripe] bonifico ritrovato ma stato non aggiornato', errGia);
-          return { ok: true, transferId: giaFatto.id };
-        }
-      } catch (e) {
-        // Se l'elenco non risponde si tira dritto: la chiave di idempotenza
-        // copre comunque il ritentativo con lo stesso importo.
-        logger.warn('[stripe] elenco bonifici non consultabile prima del versamento', { orderId: order.id, e });
-      }
+    const gia = await bonificoGiaFatto(stripe, {
+      gruppo: order.stripe_transfer_group ?? `order_${order.id}`,
+      ordineId: order.id,
+      tentativo,
+      delFattorino: false,
+      turnoDiPrima: (order as { payout_claimed_at?: string | null }).payout_claimed_at ?? null,
+    });
+    if (gia) {
+      logger.warn('[stripe] bonifico al negozio gia esistente: registrato invece di rifarlo', {
+        orderId: order.id, transferId: gia.id,
+      });
+      const { error: errGia } = await admin
+        .from('orders')
+        .update({ stripe_transfer_id: gia.id, payout_status: 'TRANSFERRED', payout_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (errGia) logger.error('[stripe] bonifico ritrovato ma stato non aggiornato', errGia);
+      return { ok: true, transferId: gia.id };
     }
 
     const transfer = await stripe.transfers.create(
@@ -427,11 +459,11 @@ export const FILTRO_RIDER_RITENTABILI =
 
 export async function releaseRiderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
-  const COLONNE_RIDER = 'id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, stripe_charge_id, stripe_transfer_group, total_price, pickup_in_store, cash_confirmed_at';
+  const COLONNE_RIDER = 'id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, rider_payout_claimed_at, stripe_charge_id, stripe_transfer_group, total_price, pickup_in_store, cash_confirmed_at';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (compenso fattorino)',
     () => admin.from('orders').select(COLONNE_RIDER).eq('id', orderId).single(),
-    () => admin.from('orders').select(senzaColonne(COLONNE_RIDER, COLONNE_124)).eq('id', orderId).single(),
+    () => admin.from('orders').select(senzaColonne(COLONNE_RIDER, [...COLONNE_124, ...COLONNE_126_DEI_TURNI])).eq('id', orderId).single(),
   );
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
@@ -553,6 +585,26 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
 
   try {
     const stripe = getStripe();
+    const tentativoRider = (order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0;
+    // R17-017 — Come per il negozio: l'elenco di Stripe prima del bonifico, la chiave dura 24 ore.
+    const giaVersato = await bonificoGiaFatto(stripe, {
+      gruppo: order.stripe_transfer_group ?? `order_${order.id}`,
+      ordineId: order.id,
+      tentativo: tentativoRider,
+      delFattorino: true,
+      turnoDiPrima: (order as { rider_payout_claimed_at?: string | null }).rider_payout_claimed_at ?? null,
+    });
+    if (giaVersato) {
+      logger.warn('[stripe] compenso del fattorino gia esistente: registrato invece di rifarlo', {
+        orderId: order.id, transferId: giaVersato.id,
+      });
+      const { error: errGiaRider } = await admin
+        .from('orders')
+        .update({ rider_transfer_id: giaVersato.id, rider_payout_status: 'TRANSFERRED', rider_payout_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (errGiaRider) logger.error('[stripe] compenso ritrovato ma stato non aggiornato', errGiaRider);
+      return { ok: true, transferId: giaVersato.id };
+    }
     const transfer = await stripe.transfers.create(
       {
         amount: daVersareCents,
@@ -560,12 +612,14 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
         destination: rider.stripe_account_id,
         ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
         transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
-        metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee' },
+        // R17-017 — il tentativo nell'etichetta, come per il negozio: l'elenco distingue il bonifico
+        // di adesso da uno vecchio già stornato.
+        metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee', tentativo: String(tentativoRider) },
       },
       // 158 — Come per il venditore: il numero del tentativo entra nella chiave.
       // R050 — E l'importo con lui: un compenso ricalcolato non deve trovare la
       // porta chiusa dalla chiave del tentativo precedente.
-      { idempotencyKey: `payout_rider_${order.id}_t${(order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0}_c${daVersareCents}` },
+      { idempotencyKey: `payout_rider_${order.id}_t${tentativoRider}_c${daVersareCents}` },
     );
 
     const { error: errFineRider } = await admin
