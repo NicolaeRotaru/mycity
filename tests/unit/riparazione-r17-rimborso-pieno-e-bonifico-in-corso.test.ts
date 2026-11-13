@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { creaLibro, creaStripe, ordineConCarta, type Libro, type StripeFinto } from './aiuti/libro-dei-rimborsi-finto';
+import { creaLibro, creaStripe, ordineConCarta, type Libro, type StripeFinto } from './aiuti/riparazione-r17-libro-dei-rimborsi-finto';
 import type { Riga } from './aiuti/finto-database-dei-pagamenti';
 
 /**

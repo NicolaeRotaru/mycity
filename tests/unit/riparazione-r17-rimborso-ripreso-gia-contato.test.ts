@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 import { TIMEOUT } from './aiuti/finto-database-dei-pagamenti';
-import { creaLibro, creaStripe, ordineConCarta, type Libro, type StripeFinto } from './aiuti/libro-dei-rimborsi-finto';
+import { creaLibro, creaStripe, ordineConCarta, type Libro, type StripeFinto } from './aiuti/riparazione-r17-libro-dei-rimborsi-finto';
 
 /**
  * R17-019 — Il rimborso è uscito, ma non è arrivato all'elenco dei rimborsi dell'ordine.

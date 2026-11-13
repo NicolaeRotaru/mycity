@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
-import { creaLibro, creaStripe, type Libro, type StripeFinto } from './aiuti/libro-dei-rimborsi-finto';
+import { creaLibro, creaStripe, type Libro, type StripeFinto } from './aiuti/riparazione-r17-libro-dei-rimborsi-finto';
 
 /**
  * R17-016 — Il giro del freno che muore fra la prenotazione dell'euro e Stripe.
