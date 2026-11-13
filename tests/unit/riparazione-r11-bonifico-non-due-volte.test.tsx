@@ -23,7 +23,8 @@ vi.mock('@/lib/supabase/client', () => ({
     from: (t: string) => (t === 'orders' ? catena(() => stato.ordini, stato.ordini.length) : t === 'returns' ? catena(() => stato.resi) : catena(() => [])),
     rpc: vi.fn(async (_n: string, args: unknown) => {
       stato.chiamate.push(args);
-      return { data: stato.segnati, error: null };
+      // R17-002 — la funzione della 410 risponde con un esito, tutto o niente.
+      return { data: { ok: true, segnati: stato.segnati }, error: null };
     }),
   },
 }));
@@ -60,7 +61,9 @@ describe('R11-001/004 — il bonifico a mano non paga due volte', () => {
     const host = await apri();
     const riquadri = Array.from(host.querySelectorAll('p.text-\\[26px\\]')).map((p) => p.textContent ?? '');
     expect(riquadri[0], 'l ordine col reso aperto entra nel totale da versare').toMatch(/18,00/);
-    vi.stubGlobal('prompt', () => 'TRN-1');
+    // R17-002 — prima la cifra versata (quella degli ordini segnabili), poi il riferimento.
+    const risposte = ['18,00', 'TRN-1'];
+    vi.stubGlobal('prompt', () => risposte.shift() ?? null);
     stato.segnati = 1;
     const tasto = Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.includes('Bonifico fatto'));
     await act(async () => { tasto!.click(); await new Promise((ok) => setTimeout(ok, 20)); });
@@ -71,7 +74,8 @@ describe('R11-001/004 — il bonifico a mano non paga due volte', () => {
     stato.ordini = [riga('a1'), riga('a2')];
     stato.resi = [];
     const host = await apri();
-    vi.stubGlobal('prompt', () => 'TRN-2');
+    const risposte = ['36,00', 'TRN-2'];
+    vi.stubGlobal('prompt', () => risposte.shift() ?? null);
     stato.segnati = 1;
     const tasto = Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.includes('Bonifico fatto'));
     await act(async () => { tasto!.click(); await new Promise((ok) => setTimeout(ok, 20)); });

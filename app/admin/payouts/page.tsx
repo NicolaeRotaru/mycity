@@ -16,7 +16,7 @@ import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannell
  *
  * R11-001 / R11-004 — Al lancio i contanti li versa Nicola a mano il lunedì: la
  * pagina dice quanto versare a ogni negozio («Da versare lunedì») e il tasto
- * «Bonifico fatto» lo registra (migrazione 350). La carta resta automatica.
+ * «Bonifico fatto» lo registra (migrazione 410, tutto o niente per la cifra versata). La carta resta automatica.
  *
  * Legge la tabella `orders` (netto, storni, stato del bonifico) e raggruppa per negozio. La regola
  * degli stati sta in lib/guadagni/negozio.ts (`gruppoDelPannello`): contanti con la rimessa
@@ -97,9 +97,59 @@ function maskIban(iban: string | null): string | null {
 const TETTO_PAYOUT = 1000;
 
 /**
- * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
- * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
- * 350), riservata agli amministratori: da qui parte solo la richiesta.
+ * R17-002 — La risposta di `segna_bonifico_manuale` (migrazione 410): tutto o niente.
+ * Il tipo sta qui perché lib/database.types.ts non conosce ancora la funzione.
+ */
+type EsitoDelBonifico =
+  | { ok: true; segnati: number; gia_segnati?: number }
+  | { ok: false; reason: string; atteso_cents?: number; dichiarato_cents?: number; non_segnabili?: string[] };
+
+function eEsitoDelBonifico(x: unknown): x is EsitoDelBonifico {
+  return !!x && typeof x === 'object' && typeof (x as { ok?: unknown }).ok === 'boolean';
+}
+
+/** «36», «36,00», «36.00», «1.234,56», «€ 36» → centesimi. Tutto il resto (anche 0) → null. */
+function centesimiScritti(testo: string): number | null {
+  let t = testo.replace(/[€\s]/g, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+  const c = Math.round(Number(t) * 100);
+  return c > 0 ? c : null;
+}
+
+const sigla = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
+
+/** Perché il server non ha segnato niente, detto a chi ha appena fatto il bonifico. */
+function motivoDelRifiuto(e: Extract<EsitoDelBonifico, { ok: false }>, versatoCents: number): string {
+  if (e.reason === 'ORDINI_CAMBIATI') {
+    const fermi = (e.non_segnabili ?? []).map(sigla);
+    const chi = fermi.length === 1 ? `l’ordine ${fermi[0]} nel frattempo ha` : `gli ordini ${fermi.join(', ') || 'chiesti'} nel frattempo hanno`;
+    return (
+      `Non ho segnato niente: ${chi} un reso, un reclamo, una contestazione o un rimborso (o risulta già segnato), ` +
+      'e finché non si chiude non si può segnare. Se il tuo bonifico lo comprendeva, segna ora solo gli altri scrivendo la loro ' +
+      'cifra, e annota quell’ordine: quando si sblocca non va ripagato.'
+    );
+  }
+  if (e.reason === 'IMPORTO_DIVERSO') {
+    return (
+      `Non ho segnato niente: hai scritto ${formatPrice(versatoCents / 100)}, ma per questi ordini il sito ora conta ` +
+      `${formatPrice((e.atteso_cents ?? 0) / 100)}. Nel frattempo è cambiato qualcosa (un rimborso o uno storno): controlla gli ordini qui sotto prima di segnare.`
+    );
+  }
+  return 'Non ho segnato niente: mancano la cifra, il riferimento o gli ordini. Riprova.';
+}
+
+/**
+ * R11-004 / R17-002 — «Bonifico fatto»: segna come pagati a mano i contanti con la
+ * rimessa confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale`
+ * (migrazione 410), riservata agli amministratori: da qui parte solo la richiesta.
+ *
+ * Collaudo K04 — il tasto non sapeva quanto Nicola aveva versato davvero: letti 36 €,
+ * versati 36 €, un reso aperto nel frattempo e l'aggiornamento ogni minuto portava il
+ * tasto a 18 €, che segnava un ordine solo senza dire niente. Il lunedì dopo l'altro
+ * chiedeva di nuovo 18 €. Adesso Nicola scrive la cifra del suo bonifico: se non è
+ * quella degli ordini segnabili non parte niente, e lo stesso controllo lo rifà il
+ * database con le righe bloccate (tutto o niente). Ogni rifiuto si legge qui.
  */
 function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
   sellerId: string;
@@ -109,33 +159,59 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
 }) {
   const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
   const [esito, setEsito] = useState<string | null>(null);
+  const [avviso, setAvviso] = useState<string | null>(null);
   // R11-001 — si segnano gli stessi ordini di «Da versare lunedì»: quelli di questa settimana aspettano il prossimo.
   const daSegnare = ordiniDaVersareLunedi(ordini, new Date());
-  if (daSegnare.length === 0) return esito ? <p role="status" className="mt-1.5 text-xs text-ink-600">{esito}</p> : null;
+  const messaggi = (
+    <>
+      {esito && <p role="status" className="mt-1 text-xs text-ink-600">{esito}</p>}
+      {avviso && <p role="alert" className="mt-1 max-w-xs text-xs font-semibold text-secondary-700">{avviso}</p>}
+    </>
+  );
+  if (daSegnare.length === 0) return esito || avviso ? <div className="mt-1.5">{messaggi}</div> : null;
   const totale = daSegnare.reduce((s, o) => s + netto(o), 0);
   const segna = async () => {
-    const riferimento = window.prompt(
-      `Bonifico a ${storeName}: ${formatPrice(totale / 100)} per ${daSegnare.length} ordini in contanti.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
+    setEsito(null);
+    setAvviso(null);
+    const scritto = window.prompt(
+      `Bonifico a ${storeName}: il sito conta ${formatPrice(totale / 100)} per ${daSegnare.length} ordini in contanti.\n` +
+        'Quanto hai versato? Scrivi la cifra del tuo bonifico (es. 36,00). Se hai tolto una quota da trattenere per un rimborso, scrivi la cifra prima di toglierla.',
     );
+    if (scritto === null) return;
+    const versatoCents = centesimiScritti(scritto);
+    if (versatoCents === null) {
+      setAvviso('Cifra non valida: non ho segnato niente. Scrivi la cifra del bonifico, per esempio 36,00.');
+      return;
+    }
+    if (versatoCents !== totale) {
+      setAvviso(
+        `Non ho segnato niente: hai scritto ${formatPrice(versatoCents / 100)}, ma per gli ordini che si possono segnare adesso ` +
+          `il sito conta ${formatPrice(totale / 100)} (${daSegnare.length} ordini). Da quando hai letto la cifra qualcosa è cambiato: ` +
+          'un ordine può avere un reso, un reclamo, una contestazione o un rimborso. Controlla gli ordini qui sotto prima di segnare.',
+      );
+      return;
+    }
+    const riferimento = window.prompt(`Bonifico di ${formatPrice(versatoCents / 100)} a ${storeName}.\nScrivi il riferimento del bonifico (CRO/TRN o data):`);
     if (!riferimento || riferimento.trim().length < 3) return;
     setStato('invio');
-    const { data: segnati, error } = await supabase.rpc('segna_bonifico_manuale', {
+    const { data, error } = await supabase.rpc('segna_bonifico_manuale', {
       p_seller: sellerId,
       p_order_ids: daSegnare.map((o) => o.id),
+      p_importo_cents: versatoCents,
       p_riferimento: riferimento.trim(),
     } as never);
-    if (error) {
+    if (error || !eEsitoDelBonifico(data)) {
       setStato('errore');
       return;
     }
-    // Collaudo K04 — la funzione dice quanti ne ha segnati davvero: se sono meno, lo si dice.
-    const n = typeof segnati === 'number' ? segnati : 0;
-    setEsito(
-      n === daSegnare.length
-        ? `Segnati ${n} ordini come pagati.`
-        : `Attenzione: segnati ${n} ordini su ${daSegnare.length}. Gli altri nel frattempo hanno un reso, un reclamo o una contestazione e restano da versare: controlla il bonifico fatto.`,
-    );
     setStato('pronto');
+    if (!data.ok) {
+      setAvviso(motivoDelRifiuto(data, versatoCents));
+    } else {
+      const n = data.segnati + (data.gia_segnati ?? 0);
+      if (n === daSegnare.length) setEsito(data.segnati === 0 ? `Già segnato: ${n} ordini risultano pagati con questo riferimento.` : `Segnati ${n} ordini come pagati.`);
+      else setAvviso(`Attenzione: segnati ${n} ordini su ${daSegnare.length}. Controlla il bonifico fatto prima di versare ancora.`);
+    }
     quandoFatto();
   };
   return (
@@ -148,9 +224,12 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
       >
         {stato === 'invio' ? 'Segno…' : `Bonifico fatto · ${formatPrice(totale / 100)}`}
       </button>
-      {esito && <p role="status" className="mt-1 text-xs text-ink-600">{esito}</p>}
+      {messaggi}
       {stato === 'errore' && (
-        <p role="alert" className="mt-1 text-xs text-secondary-700">Non sono riuscito a segnarlo: riprova.</p>
+        <p role="alert" className="mt-1 text-xs text-secondary-700">
+          Non sono riuscito a segnarlo (nessuna risposta o errore del database): riprova con lo stesso riferimento. Se era già
+          segnato te lo dico, e non si segna due volte.
+        </p>
       )}
     </div>
   );
@@ -182,8 +261,8 @@ export default function AdminPayoutsPage() {
       // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
       const righe = (data ?? []) as unknown as PayoutOrder[];
       // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
-      // funzione 350: senza, un contante con un reso aperto entrava nei «Da versare», la 350 lo saltava
-      // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
+      // funzione del bonifico (410): senza, un contante con un reso aperto entrava nei «Da versare» e il
+      // tasto lo chiedeva, ma il database non lo segna. Una lettura caduta li ferma tutti.
       const contantiHeld = righe.filter((o) => o.payment_method === 'cod' && o.payout_status === 'HELD').map((o) => o.id);
       const aperti = new Set<string>();
       let letturaCaduta = false;
