@@ -1,8 +1,19 @@
 name: CI
 
+# 13/11/2026 — UNA CORSA SOLA PER OGNI AGGIORNAMENTO DI UNA RICHIESTA.
+#
+# Prima la CI partiva anche a ogni invio su un ramo claude/**: sui rami con una
+# richiesta aperta lo stesso commit veniva provato due volte, una per il ramo e
+# una per la richiesta. Divise in fette, le due corse chiedevano insieme 34
+# macchine, e l'account ne da' circa 20: meta' dei lavori aspettava in coda e
+# la CI superava i 4 minuti (corse 43365332694 e 43365403658). Nicola ha
+# deciso il 13/11 di tenere solo la corsa della richiesta: prova il codice gia'
+# unito a main, a ogni aggiornamento. Su main non cambia niente: ogni unione fa
+# girare la CI, e il rilascio parte dal suo esito. Un ramo senza richiesta
+# aperta non ha controlli finche' la richiesta non si apre.
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -66,6 +77,56 @@ jobs:
           node-version: "24"
           cache: "npm"
 
+      # 13/11/2026 — LA CACHE DI COMPILAZIONE DI NEXT.
+      #
+      # Tre lavori costruiscono il sito (questo, le prove nel browser e axe), e
+      # ognuno ricompilava tutto da zero: circa 2 minuti a testa, il pezzo piu'
+      # lungo dopo le prove. Next tiene in .next/cache quello che ha gia'
+      # compilato e consiglia di conservarlo fra un giro e l'altro della CI: si
+      # ricompila solo cio' che e' cambiato. Cosa si costruisce non cambia.
+      #
+      # La chiave: una per commit, su main e sulle richieste. Si riparte dalla
+      # piu' recente dello stesso ramo e, se non c'e', dalla piu' recente in
+      # assoluto (`restore-keys`); a fine lavoro si salva quella del commit (la
+      # prima fetta che finisce; le altre trovano il posto preso e passano oltre).
+      # 13/11/2026 — Prima, su una richiesta, la chiave era una per ramo: salvata
+      # al primo giro, non si rinnovava piu'. Bastava un commit che cambiasse
+      # next.config.js perche' tutte le corse dopo ricompilassero da zero (fetta
+      # 7 della corsa 43375560588, tentativo 2: 102 secondi di costruzione).
+      #
+      # Ogni tipo di costruzione ha la sua cache (lint, browser, axe): le tre
+      # costruiscono con variabili pubbliche diverse, e una cache fatta con le
+      # variabili di un altro lavoro fa ricompilare molti pezzi. Misurato il
+      # 13/11: con la cache comune le fette del browser costruivano in 73-113
+      # secondi, questo lavoro con la sua in 66.
+      #
+      # SOLO LA COMPILAZIONE, MAI I DATI DEL SITO ACCESO. In .next/cache Next
+      # scrive anche quello che il sito salva mentre gira (fetch-cache: per
+      # esempio la home gia' calcolata; images: le foto ridimensionate). Se
+      # passassero da un giro all'altro, una home rotta da una richiesta
+      # potrebbe uscire con la copia del giro prima e le prove resterebbero
+      # verdi: il collaudo l'ha riprodotto il 13/11. Per questo si tengono
+      # solo webpack, swc, il registro del controllo dei tipi (.tsbuildinfo) e
+      # le due chiavi che Next genera alla prima costruzione (.rscinfo e
+      # .previewinfo). Quelle due servono: senza, Next ne crea di nuove, le
+      # mette dentro i pezzi compilati e la cache di webpack non vale piu'
+      # (misurato: compilazione da 24 a 68 secondi). Sono chiavi delle
+      # costruzioni di prova, la produzione la costruisce Vercel con le sue.
+      # La chiave e' a v3 per non riprendere le cache di prima.
+      - name: Riprendi la cache di compilazione di Next
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .next/cache/webpack
+            .next/cache/swc
+            .next/cache/.tsbuildinfo
+            .next/cache/.rscinfo
+            .next/cache/.previewinfo
+          key: next-build-v3-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            next-build-v3-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.head_ref || github.ref_name }}-
+            next-build-v3-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       # Storybook 8.x dichiara peer deps su React 18 + ecc, ma il monorepo usa
       # react-dom 18.3 risolto via Next 14; senza --legacy-peer-deps fallisce.
       - name: Install deps
@@ -87,11 +148,33 @@ jobs:
           # Variables). Mai mettere chiavi reali qui.
         run: npm run build
 
+  # 13/11/2026 — LE PROVE UNITARIE GIRANO IN SEI FETTE, NELLO STESSO MOMENTO.
+  #
+  # In un lavoro solo il passo «Test» durava 6 minuti (corsa 43359816356 su
+  # main): era lui a tenere la CI di ogni richiesta fra 5 minuti e mezzo e 7 e
+  # mezzo. Adesso gli stessi ~1.400 file si dividono in sei macchine con lo
+  # sharding di vitest: ognuna fa girare un sesto dei file, con la stessa
+  # configurazione, lo stesso PostgreSQL e lo stesso obbligo di non saltarlo.
+  #
+  # Quale fetta e quante sono le dice GitHub (`strategy.job-index` e
+  # `strategy.job-total`): per avere piu' fette si allunga l'elenco `fetta` e
+  # basta, non c'e' un secondo numero da tenere d'accordo a mano.
+  #
+  # Dividere apre un buco che il lavoro unico non aveva: una fetta che prende la
+  # parte sbagliata lascia dei file senza esito, e ogni fetta da sola esce
+  # verde. Per questo ognuna consegna il suo referto e il lavoro
+  # «unit-tests-insieme» li rimette insieme: si ferma rosso se un file
+  # dell'elenco non ha girato, o ha girato due volte.
   unit-tests:
-    name: Unit tests
+    name: Unit tests (fetta ${{ matrix.fetta }})
     runs-on: ubuntu-latest
     # R01-011 — 15 e non 10: adesso girano anche le prove che accendono un PostgreSQL usa e getta.
     timeout-minutes: 15
+    strategy:
+      # Una fetta rossa non ferma le altre: si vede subito tutto quello che e' rotto.
+      fail-fast: false
+      matrix:
+        fetta: [1, 2, 3, 4, 5, 6]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -135,11 +218,34 @@ jobs:
           echo "PostgreSQL c'e' e risponde: le prove col database vero girano."
 
       # Unit test + guardia integrita' file migration + le prove col database vero.
+      # Questa fetta fa girare la sua parte dei file; prima scrive l'elenco di
+      # TUTTI i file (vitest list), cosi' chi rimette insieme le fette sa
+      # cosa doveva girare.
       - name: Test
         env:
           # Per i file di prova che lo leggono: qui saltare per mancanza di PostgreSQL e' un errore.
           PROVE_POSTGRES_OBBLIGATORIE: "1"
-        run: npm run test
+          FETTA_INDICE: ${{ strategy.job-index }}
+          FETTE_TOTALI: ${{ strategy.job-total }}
+          COMMIT: ${{ github.sha }}
+          REFERTO: ${{ runner.temp }}/referto-unitari
+        run: |
+          set -euo pipefail
+          mkdir -p "$REFERTO"
+          printf '{"indice":%s,"totale":%s,"commit":"%s","radice":"%s"}\n' \
+            "$FETTA_INDICE" "$FETTE_TOTALI" "$COMMIT" "$PWD" > "$REFERTO/fetta.json"
+          npx vitest list --filesOnly --json="$REFERTO/universo.json" > /dev/null
+          npm run test -- --shard="$((FETTA_INDICE + 1))/$FETTE_TOTALI" \
+            --reporter=default --reporter=github-actions --reporter=json \
+            --outputFile.json="$REFERTO/esito.json"
+
+      - name: Consegna il referto della fetta
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: referto-unitari-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/referto-unitari
+          if-no-files-found: error
+          retention-days: 3
 
   integration-tests:
     name: Integration tests (DB)
@@ -515,12 +621,24 @@ jobs:
   # prove davvero eseguite e fallisce se sono zero, cosi' una suite che si
   # auto-salta per intero non puo' piu' uscire con la stessa spunta di una che
   # ha guardato. Le saltate sono elencate con il loro motivo, una per una.
+  #
+  # 13/11/2026 — OTTO FETTE, NELLO STESSO MOMENTO. Le 76 prove giravano una
+  # dopo l'altra in 3 minuti, dopo 2 di costruzione del sito. Adesso ogni
+  # fetta costruisce il sito e fa girare un ottavo delle prove (sharding di
+  # Playwright). Il conto di cosa ha guardato resta in ogni fetta, ed e' piu'
+  # severo di prima: una fetta che non apre nessuna pagina si ferma rossa da
+  # sola. Il lavoro «e2e-senza-chiavi-insieme» rimette insieme i referti e si
+  # ferma rosso se una prova dell'elenco non ha girato in nessuna fetta.
   e2e-senza-chiavi:
-    name: Prove nel browser (senza chiavi) — non si spegne mai
+    name: Prove nel browser (senza chiavi) — non si spegne mai (fetta ${{ matrix.fetta }})
     # 13/11/2026 — Ubuntu 24.04 fisso: su 26.04 Playwright non installa Chromium
     # («Playwright does not support chromium on ubuntu26.04-x64»).
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        fetta: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -531,21 +649,68 @@ jobs:
           node-version: "24"
           cache: "npm"
 
+      # 13/11/2026 — La cache di compilazione di Next (.next/cache) si
+      # riprende dall'ultima costruzione fatta: e' quella che Next stesso
+      # consiglia di tenere fra un giro e l'altro della CI. Non cambia cosa si
+      # costruisce, solo quanto si ricompila da zero. Quale chiave e perche':
+      # vedi il commento al lavoro «lint-and-typecheck».
+      - name: Riprendi la cache di compilazione di Next
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .next/cache/webpack
+            .next/cache/swc
+            .next/cache/.tsbuildinfo
+            .next/cache/.rscinfo
+            .next/cache/.previewinfo
+          key: next-build-v3-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            next-build-v3-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.head_ref || github.ref_name }}-
+            next-build-v3-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
+      # versione di Playwright (fissata da package-lock.json) vuole lo stesso
+      # Chromium, e riscaricarlo e scompattarlo a ogni giro rubava tempo e
+      # processore alla costruzione del sito. `playwright install --with-deps`
+      # piu' sotto gira lo stesso: installa le librerie di sistema e, se il
+      # browser in cache mancasse, lo riscarica.
+      - name: Riprendi Chromium dalla cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-playwright-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install deps
         run: npm ci --legacy-peer-deps
-
-      - name: Installa Chromium per Playwright
-        run: npx playwright install --with-deps chromium
 
       # Variabili finte, scritte in chiaro qui dentro: non sono un segreto
       # dimenticato, sono la scelta. Il giorno che qualcuno togliesse un segreto
       # dalle impostazioni del repository, questo lavoro girerebbe identico.
-      - name: Build con variabili finte
+      #
+      # Chromium si scarica mentre Next costruisce il sito: sono due attese che
+      # non dipendono l'una dall'altra, e prima si facevano in fila. Se Chromium
+      # non si installa, il passo si ferma rosso e stampa perche'.
+      - name: Installa Chromium e costruisci il sito con variabili finte
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
-        run: npm run build
+          # 13/11/2026 — Nicola, «ok 1 e 2»: stile e tipi qui non si
+          # ricontrollano, li controlla una volta il lavoro «Lint + Typecheck +
+          # Build», che Main aspetta. Vale solo dentro GitHub Actions: vedi
+          # next.config.js e stile-e-tipi-si-controllano-una-volta-nella-ci.test.ts.
+          MYCITY_COSTRUZIONE_PER_LE_PROVE: "1"
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &
+          CHROMIUM=$!
+          npm run build
+          if ! wait "$CHROMIUM"; then
+            cat "$RUNNER_TEMP/chromium.log"
+            echo "::error::Chromium non si e' installato: le prove nel browser non possono partire."
+            exit 1
+          fi
+          tail -n 5 "$RUNNER_TEMP/chromium.log"
 
       # Un passo solo: accende il sito, lo percorre col browser, conta cosa ha
       # provato davvero e poi decide. Sta tutto insieme apposta — un passo di
@@ -559,7 +724,20 @@ jobs:
           E2E_BASE_URL: "http://localhost:3000"
           CRON_SECRET: "ci-e2e-cron-secret"
           PLAYWRIGHT_JSON_OUTPUT_NAME: "esito-prove-browser.json"
+          FETTA_INDICE: ${{ strategy.job-index }}
+          FETTE_TOTALI: ${{ strategy.job-total }}
+          COMMIT: ${{ github.sha }}
+          REFERTO: ${{ runner.temp }}/referto-browser
         run: |
+          # Il referto della fetta: quale fetta e', l'elenco di TUTTE le prove
+          # (per chi rimette insieme le fette) e, piu' sotto, il suo esito.
+          mkdir -p "$REFERTO"
+          printf '{"indice":%s,"totale":%s,"commit":"%s","radice":"%s"}\n' \
+            "$FETTA_INDICE" "$FETTE_TOTALI" "$COMMIT" "$PWD" > "$REFERTO/fetta.json"
+          PLAYWRIGHT_JSON_OUTPUT_NAME="$REFERTO/universo.json" \
+            npx playwright test --list --project=chromium --reporter=json > /dev/null \
+            || { echo "::error::non riesco a elencare le prove nel browser"; exit 1; }
+
           # `npm start` lancia un figlio (il server Next): chiudendo solo npm il
           # server resta vivo e il lavoro finisce in timeout. Si chiude il gruppo.
           set -m
@@ -576,10 +754,12 @@ jobs:
             exit 1
           fi
           set +e
-          npm run test:e2e -- --project=chromium --reporter=github,json
+          npm run test:e2e -- --project=chromium --reporter=github,json \
+            --shard="$((FETTA_INDICE + 1))/$FETTE_TOTALI"
           STATUS=$?
           kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
           set -e
+          cp esito-prove-browser.json "$REFERTO/esito.json" 2>/dev/null || true
 
           # Il conto vero: quante prove hanno guardato, quante sono rosse e
           # quali sono state saltate — con il motivo scritto accanto a ognuna.
@@ -617,7 +797,7 @@ jobs:
           const hannoGuardato = prove.length - saltate.length;
 
           const righe = [];
-          righe.push('### Prove nel browser (senza chiavi)');
+          righe.push(`### Prove nel browser (senza chiavi) — fetta ${Number(process.env.FETTA_INDICE) + 1} di ${process.env.FETTE_TOTALI}`);
           righe.push('');
           righe.push(`- **${passate.length} passate** su ${prove.length} scritte`);
           righe.push(`- **${rosse.length} rosse**`);
@@ -656,6 +836,14 @@ jobs:
           FINE_SCRIPT
           node /tmp/riassumi-prove-browser.mjs esito-prove-browser.json "$STATUS"
 
+      - name: Consegna il referto della fetta
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: referto-browser-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/referto-browser
+          if-no-files-found: error
+          retention-days: 3
+
   # 31/8/2026 (R102) — L'ACCESSIBILITA' HA UN LAVORO SUO, E NON PUO' SPEGNERSI.
   #
   # axe viveva dentro il lavoro qui sopra, dove ogni passo e' appeso a
@@ -690,22 +878,65 @@ jobs:
           node-version: "24"
           cache: "npm"
 
+      # 13/11/2026 — Stessa cache di compilazione di Next delle prove nel
+      # browser: vedi il commento al lavoro «lint-and-typecheck».
+      - name: Riprendi la cache di compilazione di Next
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .next/cache/webpack
+            .next/cache/swc
+            .next/cache/.tsbuildinfo
+            .next/cache/.rscinfo
+            .next/cache/.previewinfo
+          key: next-build-v3-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            next-build-v3-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.head_ref || github.ref_name }}-
+            next-build-v3-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
+      # versione di Playwright (fissata da package-lock.json) vuole lo stesso
+      # Chromium, e riscaricarlo e scompattarlo a ogni giro rubava tempo e
+      # processore alla costruzione del sito. `playwright install --with-deps`
+      # piu' sotto gira lo stesso: installa le librerie di sistema e, se il
+      # browser in cache mancasse, lo riscarica.
+      - name: Riprendi Chromium dalla cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-playwright-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install deps
         run: npm ci --legacy-peer-deps
-
-      - name: Installa Chromium per Playwright
-        run: npx playwright install --with-deps chromium
 
       # Variabili finte, scritte in chiaro qui dentro: non sono un segreto
       # dimenticato, sono la scelta. Il giorno che qualcuno rimuovesse un
       # segreto dalle impostazioni del repository, questo lavoro continuerebbe a
       # girare identico.
-      - name: Build con variabili finte
+      #
+      # 13/11/2026 — Chromium si scarica mentre Next costruisce il sito, come
+      # nelle prove nel browser: prima le due attese si facevano in fila.
+      - name: Installa Chromium e costruisci il sito con variabili finte
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://accessibilita-senza-database.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-il-cancello-accessibilita"
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
-        run: npm run build
+          # 13/11/2026 — Nicola, «ok 1 e 2»: stile e tipi qui non si
+          # ricontrollano, li controlla una volta il lavoro «Lint + Typecheck +
+          # Build», che Main aspetta. Vale solo dentro GitHub Actions: vedi
+          # next.config.js e stile-e-tipi-si-controllano-una-volta-nella-ci.test.ts.
+          MYCITY_COSTRUZIONE_PER_LE_PROVE: "1"
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &
+          CHROMIUM=$!
+          npm run build
+          if ! wait "$CHROMIUM"; then
+            cat "$RUNNER_TEMP/chromium.log"
+            echo "::error::Chromium non si e' installato: axe non puo' aprire le pagine."
+            exit 1
+          fi
+          tail -n 5 "$RUNNER_TEMP/chromium.log"
 
       - name: Apri ogni pagina con axe
         env:
@@ -743,6 +974,81 @@ jobs:
           {
             echo "✅ **Accessibilita (axe)**: girata su $pagine pagine, senza nessun segreto e senza nessuna condizione."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # 13/11/2026 — LE FETTE SI RIMETTONO INSIEME, E NESSUNA PROVA SI PERDE.
+  #
+  # Le prove unitarie e quelle nel browser girano divise in fette. Ogni fetta,
+  # da sola, puo' uscire verde anche se un pezzo di prove non ha girato da
+  # nessuna parte: una fetta che prende la parte sbagliata, o una in meno di
+  # quelle che servono. Con un lavoro unico non poteva succedere.
+  #
+  # Questi due lavori leggono il referto di ogni fetta e si fermano ROSSI se:
+  # manca una fetta o ce n'e' una doppia, le fette non hanno girato sullo
+  # stesso commit o non vedevano lo stesso elenco di prove, una prova
+  # dell'elenco non ha girato o ha girato due volte. Lo fa
+  # scripts/ricuci-fette-ci.mjs, e la prova
+  # tests/unit/le-fette-della-ci-non-perdono-prove.test.ts lo rompe apposta in
+  # ognuno di quei modi.
+  #
+  # Nessun `if:` qui: se una fetta e' rossa questi lavori non partono, e il
+  # cancello «Main» si ferma comunque sulla fetta rossa, che aspetta anche lei.
+  unit-tests-insieme:
+    name: Unit tests — le fette messe insieme
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Serve solo lo script che rimette insieme le fette: niente pacchetti npm,
+      # basta il Node che la macchina di GitHub ha gia'.
+      - name: Checkout (solo lo script che rimette insieme le fette)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/ricuci-fette-ci.mjs
+            scripts/ricuci-fette-ci.lib.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Prendi i referti delle fette
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: referto-unitari-*
+          path: ${{ runner.temp }}/referti-unitari
+
+      - name: Ogni file di prova ha girato, una volta sola
+        env:
+          REFERTI: ${{ runner.temp }}/referti-unitari
+        run: |
+          node --version
+          node scripts/ricuci-fette-ci.mjs vitest "$REFERTI"
+
+  e2e-senza-chiavi-insieme:
+    name: Prove nel browser — le fette messe insieme
+    needs: e2e-senza-chiavi
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Serve solo lo script che rimette insieme le fette: niente pacchetti npm,
+      # basta il Node che la macchina di GitHub ha gia'.
+      - name: Checkout (solo lo script che rimette insieme le fette)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/ricuci-fette-ci.mjs
+            scripts/ricuci-fette-ci.lib.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Prendi i referti delle fette
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: referto-browser-*
+          path: ${{ runner.temp }}/referti-browser
+
+      - name: Ogni prova nel browser ha girato, una volta sola
+        env:
+          REFERTI: ${{ runner.temp }}/referti-browser
+        run: |
+          node --version
+          node scripts/ricuci-fette-ci.mjs playwright "$REFERTI"
 
   # 15/10/2026 (R57) — LA REGOLA «MAIN» ASPETTAVA UN CONTROLLO CHE NON ARRIVAVA MAI.
   #
@@ -789,6 +1095,8 @@ jobs:
       - e2e-tests
       - e2e-senza-chiavi
       - a11y
+      - unit-tests-insieme
+      - e2e-senza-chiavi-insieme
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
