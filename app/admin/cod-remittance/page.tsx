@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -90,6 +90,11 @@ export default function AdminCodRemittancePage() {
   const [aperta, setAperta] = useState<string | null>(null);
   const [contati, setContati] = useState('');
   const [nota, setNota] = useState('');
+  // 13/11/2026 (R14-006) — Il bottone si spegne quando React ridisegna con la
+  // conferma in corso, cioe' dopo: un doppio clic (o Invio premuto due volte)
+  // arrivava prima e mandava due conferme. Questo segno si alza nel clic stesso
+  // e si abbassa solo quando la risposta e' arrivata.
+  const inviando = useRef(false);
 
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.codRemittances,
@@ -140,7 +145,7 @@ export default function AdminCodRemittancePage() {
   const confirm = useMutation({
     mutationFn: async ({ riderId, date, contatiCents, attesiCents, nota: notaInviata }: {
       riderId: string; date: string; contatiCents: number; attesiCents: number; nota?: string;
-    }): Promise<{ rilasciati: number; saltati: number }> => {
+    }): Promise<{ rilasciati: number; saltati: number; registrata: boolean }> => {
       // Cookie-based (niente Bearer): l'RPC confirm_cod_remittance verifica
       // is_admin() leggendo l'auth.uid() dell'admin via getServerSupabase.
       const res = await fetch('/api/admin/cod-remittance', {
@@ -153,12 +158,14 @@ export default function AdminCodRemittancePage() {
       return {
         rilasciati: (data.released as number) ?? 0,
         saltati: (data.saltatiSenzaIncasso as number) ?? 0,
+        registrata: data.registrata !== false,
       };
     },
-    onSuccess: ({ rilasciati, saltati }) => {
+    onSuccess: ({ rilasciati, saltati, registrata }) => {
       setAperta(null); setContati(''); setNota('');
       qc.invalidateQueries({ queryKey: queryKeys.admin.codRemittances });
-      toast.success(`Rimessa confermata · ${rilasciati} ordini rilasciati al payout`);
+      if (registrata) toast.success(`Rimessa confermata · ${rilasciati} ordini rilasciati al payout`);
+      else toast.warning('Nessuna nuova rimessa: questa giornata era già confermata, oppure i suoi ordini aspettano ancora l\'incasso.');
       // Gli ordini senza incasso registrato non si pagano al buio: si dicono.
       if (saltati > 0) {
         toast.warning(
@@ -168,6 +175,7 @@ export default function AdminCodRemittancePage() {
       }
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
+    onSettled: () => { inviando.current = false; },
   });
 
   // Con l'elenco tagliato il gruppo del giorno più vecchio letto può essere a metà, ma la
@@ -245,7 +253,8 @@ export default function AdminCodRemittancePage() {
                       className="w-full border-t border-cream-200 pt-3 space-y-2"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        if (!pronto || contatiCents === null) return;
+                        if (!pronto || contatiCents === null || inviando.current) return;
+                        inviando.current = true;
                         confirm.mutate({
                           riderId: g.riderId, date: g.date, contatiCents, attesiCents: g.toRemitCents,
                           nota: diverso ? nota.trim() : undefined,

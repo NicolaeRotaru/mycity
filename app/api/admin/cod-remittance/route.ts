@@ -53,9 +53,18 @@ export const POST = withAdminAuth(async ({ req, user }): Promise<NextResponse> =
   // 22/8/2026 — la funzione risponde con due numeri invece di uno: quelli
   // rilasciati e quelli SALTATI perche' l'incasso non era stato registrato. I
   // saltati vanno visti: sono contante di cui non esiste traccia.
-  const esito = (data ?? {}) as { rilasciati?: number; saltati_senza_incasso?: number } | number;
+  const esito = (data ?? {}) as
+    | { rilasciati?: number; saltati_senza_incasso?: number; versata_ora?: boolean }
+    | number;
   const rilasciati = typeof esito === 'number' ? esito : esito.rilasciati ?? 0;
   const saltati = typeof esito === 'number' ? 0 : esito.saltati_senza_incasso ?? 0;
+  // 13/11/2026 (R14-006) — Una rimessa e' registrata se questa conferma ha
+  // rilasciato degli ordini o ha chiuso la giornata (`versata_ora`, migrazione
+  // 383). Il doppio clic manda una seconda conferma uguale: in fila dietro la
+  // prima (lucchetto della 381) non rilascia niente e non chiude niente, e prima
+  // lasciava lo stesso una seconda riga «rimessa confermata» nel registro delle
+  // azioni. Adesso quella conferma risponde e basta, senza registrare una rimessa.
+  const registrata = rilasciati > 0 || (typeof esito === 'object' && esito.versata_ora === true);
 
   // 13/11/2026 (R14-002) — La giornata di cassa si ricalcola subito dopo la
   // rimessa. Se la rimessa la lascia aperta (resta un ordine da versare, migrazione
@@ -75,6 +84,13 @@ export const POST = withAdminAuth(async ({ req, user }): Promise<NextResponse> =
     });
   }
 
+  if (!registrata) {
+    return NextResponse.json(
+      { ok: true, released: 0, saltatiSenzaIncasso: saltati, registrata: false },
+      { status: 200 },
+    );
+  }
+
   await writeAudit({
     actorId: user.id,
     action: 'cod.remittance_confirm',
@@ -90,5 +106,5 @@ export const POST = withAdminAuth(async ({ req, user }): Promise<NextResponse> =
     },
   });
 
-  return NextResponse.json({ ok: true, released: rilasciati, saltatiSenzaIncasso: saltati }, { status: 200 });
+  return NextResponse.json({ ok: true, released: rilasciati, saltatiSenzaIncasso: saltati, registrata: true }, { status: 200 });
 });
