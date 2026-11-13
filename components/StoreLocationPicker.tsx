@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { dentroAreaDiPiacenza } from '@/lib/ordini/zona-di-consegna';
+import { dentroAreaDiPiacenza, POSIZIONE_NEGOZIO_FUORI_AREA } from '@/lib/ordini/zona-di-consegna';
 
 // 31/10/2026 — LA MAPPA SI APRE SU PIACENZA, E QUEL PUNTO NON È IL NEGOZIO.
 // Prima si apriva su Roma e il selettore mandava subito quelle coordinate al modulo: chi scriveva
@@ -53,6 +53,11 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   const hadInvalidStoredCoords =
     (defaultValue?.lat !== undefined || defaultValue?.lng !== undefined) &&
     !isValidLatLng(defaultValue?.lat, defaultValue?.lng);
+  // 13/11/2026 (R13-006, dal collaudo) — Un negozio rimasto lontano da Piacenza (per esempio a Roma,
+  // ma non sul vecchio punto di partenza) apriva il selettore senza nessun avviso, e continuava a non
+  // ricevere ordini senza sapere perché. La posizione resta confermata (il profilo e il database
+  // lasciano passare quella vecchia che non cambia, per non bloccare il resto del modulo), ma si dice.
+  const salvataFuoriArea = posizioneSalvataVera && !dentroAreaDiPiacenza(initialCoords.lat, initialCoords.lng);
 
   // Generato, non scritto a mano: il modulo compare in piu' schermate e due campi con lo stesso
   // identificativo farebbero leggere al lettore di schermo sempre il primo.
@@ -74,7 +79,9 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       ? 'Le coordinate salvate non sono valide. Cerca di nuovo l\'indirizzo o trascina il pin sulla mappa, poi salva.'
       : eraIlVecchioPuntoDiPartenza
         ? 'La posizione salvata non è il tuo negozio: era il punto in cui si apriva la mappa, a Roma. Cerca l\'indirizzo o tocca la mappa sul negozio, poi salva.'
-        : null
+        : salvataFuoriArea
+          ? `${POSIZIONE_NEGOZIO_FUORI_AREA} Finché resta lì, i clienti non possono ordinarti la consegna.`
+          : null
   );
 
   // Sincronizza il parent con le coord (eventualmente sanificate) all'avvio
@@ -114,12 +121,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
 
       const marker = L.marker([coords.lat, coords.lng], { draggable: true }).addTo(map);
 
-      const updatePos = (lat: number, lng: number) => {
-        setCoords({ lat, lng });
-        setConfermata(true);
-        setNota(null);
-        onChange({ address: indirizzoRef.current, lat, lng, confermata: true });
-      };
+      const updatePos = (lat: number, lng: number) => mettiIlPunto(lat, lng);
 
       marker.on('dragend', () => {
         const p = marker.getLatLng();
@@ -156,16 +158,36 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
     }
   }, [coords.lat, coords.lng]);
 
+  /**
+   * 13/11/2026 (R13-006, dal collaudo) — Il GPS, il tocco e il trascinamento sulla mappa
+   * confermavano anche un punto fuori dall'area di Piacenza (GPS a Milano: confermata, nessun
+   * avviso), e il negozio scopriva l'errore solo all'invio. Come dopo «Cerca»: un punto fuori area
+   * si mostra sulla mappa ma non si conferma, e si dice perché.
+   */
+  function mettiIlPunto(lat: number, lng: number) {
+    const dentro = dentroAreaDiPiacenza(lat, lng);
+    setCoords({ lat, lng });
+    setConfermata(dentro);
+    setNota(null);
+    setError(dentro ? null : POSIZIONE_NEGOZIO_FUORI_AREA);
+    onChange({ address: indirizzoRef.current, lat, lng, confermata: dentro });
+  }
+
   const searchAddress = async () => {
-    if (!address.trim()) {
+    // 13/11/2026 (R13-006, dal collaudo) — La risposta vale solo per il testo cercato: se il negozio
+    // lo cambia mentre la ricerca è in corso (Nominatim può metterci qualche secondo), la risposta
+    // vecchia non si conferma col testo nuovo, né si manda al modulo il testo di prima.
+    const cercato = address;
+    const ancoraLoStesso = () => indirizzoRef.current === cercato;
+    if (!cercato.trim()) {
       setError('Inserisci un indirizzo prima di cercare');
       return;
     }
     setSearching(true);
     setError(null);
     try {
-      const hasCountry = /italia|italy/i.test(address);
-      const parts = [address];
+      const hasCountry = /italia|italy/i.test(cercato);
+      const parts = [cercato];
       if (!hasCountry) parts.push('Italia');
       // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
       const res = await fetch('/api/geocode', {
@@ -174,6 +196,10 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         body: JSON.stringify({ q: parts.join(', ') }),
       });
       const data = await res.json();
+      if (!ancoraLoStesso()) {
+        setNota('Hai cambiato l\'indirizzo mentre cercavo: premi di nuovo «Cerca».');
+        return;
+      }
       if (!data || data.lat == null || data.lng == null) {
         setError('Indirizzo non trovato. Prova ad essere più specifico o sposta il pin sulla mappa.');
         return;
@@ -197,9 +223,9 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       setNota(luogo ? `Trovato: ${luogo}` : null);
       setCoords({ lat, lng });
       setConfermata(true);
-      onChange({ address, lat, lng, confermata: true });
+      onChange({ address: cercato, lat, lng, confermata: true });
     } catch {
-      setError('Errore di rete durante la ricerca. Riprova.');
+      if (ancoraLoStesso()) setError('Errore di rete durante la ricerca. Riprova.');
     } finally {
       setSearching(false);
     }
@@ -214,11 +240,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
     setError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setCoords(newCoords);
-        setConfermata(true);
-        setNota(null);
-        onChange({ ...newCoords, address: indirizzoRef.current, confermata: true });
+        mettiIlPunto(pos.coords.latitude, pos.coords.longitude);
         setLocating(false);
       },
       (err) => {

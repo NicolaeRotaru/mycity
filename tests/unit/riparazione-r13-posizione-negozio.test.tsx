@@ -23,6 +23,7 @@ const stato = vi.hoisted(() => ({
   modulo: {} as Record<string, unknown>,
   profilo: {} as Record<string, unknown>,
   errori: [] as string[],
+  click: null as null | ((e: { latlng: { lat: number; lng: number } }) => void),
 }));
 
 vi.mock('leaflet/dist/leaflet.css', () => ({}));
@@ -35,7 +36,12 @@ vi.mock('leaflet', () => {
   };
   const L = {
     Icon: { Default: { prototype: {}, mergeOptions: () => undefined } },
-    map: () => sempreSe({}),
+    map: () => sempreSe({
+      on: (evento: string, fn: (e: { latlng: { lat: number; lng: number } }) => void) => {
+        if (evento === 'click') stato.click = fn;
+        return undefined;
+      },
+    }),
     tileLayer: () => sempreSe({}),
     marker: () => sempreSe({ getLatLng: () => ({ lat: 0, lng: 0 }) }),
   };
@@ -149,6 +155,67 @@ async function cerca(radice: HTMLElement) {
   await act(async () => { bottone.click(); });
   await attendi();
 }
+
+describe('R13-006 · dal collaudo: il selettore', () => {
+  const confermateA = (s: { onChange: { mock: { calls: Array<[StoreLocation]> } } }, lat: number) =>
+    s.onChange.mock.calls.map((c) => c[0]).filter((l) => l.confermata && l.lat === lat);
+
+  it('la risposta che arriva dopo un cambio del testo non conferma l\'indirizzo di prima', async () => {
+    const s = await apriSelettore({ address: undefined, lat: undefined, lng: undefined });
+    const campo = s.radice.querySelector('input[type=text]') as HTMLInputElement;
+    scrivi(campo, 'Via Roma 12');
+    let rispondi: (r: Response) => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((ok) => { rispondi = ok; })));
+    const bottone = Array.from(s.radice.querySelectorAll('button')).find((b) => b.textContent?.includes('Cerca'))!;
+    await act(async () => { bottone.click(); });
+    scrivi(campo, 'Via Garibaldi 3, Piacenza');
+    await act(async () => {
+      rispondi(new Response(JSON.stringify({ lat: 45.0505, lng: 9.6905, luogo: 'Via Roma, Piacenza, Italia' }), { status: 200 }));
+    });
+    await attendi();
+    expect(confermateA(s, 45.0505), 'la posizione di Via Roma è arrivata al modulo come confermata').toEqual([]);
+    expect(s.ultima()).toMatchObject({ address: 'Via Garibaldi 3, Piacenza', confermata: false });
+    expect(s.radice.textContent).toContain('premi di nuovo «Cerca»');
+  });
+
+  it('una posizione salvata lontano da Piacenza si apre con un avviso', async () => {
+    const s = await apriSelettore({ address: 'Via del Corso 5', lat: 41.91, lng: 12.5 });
+    expect(s.radice.querySelector('[role=alert]')?.textContent ?? '').toContain("fuori dall'area di Piacenza");
+    // Resta confermata di proposito: il profilo e il database lasciano passare quella che non cambia.
+    expect(s.ultima().confermata).toBe(true);
+    const dentro = await apriSelettore({ address: 'Via Cavour 3', lat: 45.051, lng: 9.695 });
+    expect(dentro.radice.querySelector('[role=alert]')).toBeNull();
+  });
+
+  it('il GPS a Milano non conferma la posizione, e lo dice subito', async () => {
+    const s = await apriSelettore({ address: 'Via Cavour 3', lat: 45.051, lng: 9.695 });
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition: (ok: (p: { coords: { latitude: number; longitude: number } }) => void) => ok({ coords: { latitude: 45.4642, longitude: 9.19 } }) },
+    });
+    try {
+      const gps = Array.from(s.radice.querySelectorAll('button')).find((b) => b.textContent?.includes('posizione attuale'))!;
+      await act(async () => { gps.click(); });
+      await attendi();
+    } finally {
+      delete (navigator as unknown as Record<string, unknown>).geolocation;
+    }
+    expect(confermateA(s, 45.4642), 'il punto di Milano è arrivato al modulo come confermato').toEqual([]);
+    expect(s.ultima()).toMatchObject({ lat: 45.4642, confermata: false });
+    expect(s.radice.querySelector('[role=alert]')?.textContent ?? '').toContain('Piacenza');
+  });
+
+  it('il tocco sulla mappa fuori area non conferma; un tocco dentro conferma e toglie l\'avviso', async () => {
+    const s = await apriSelettore({ address: 'Via del Corso 5', lat: 41.91, lng: 12.5 });
+    expect(stato.click, 'la mappa finta non ha registrato il tocco').toBeTypeOf('function');
+    act(() => stato.click!({ latlng: { lat: 45.4642, lng: 9.19 } }));
+    expect(s.ultima()).toMatchObject({ lat: 45.4642, confermata: false });
+    expect(s.radice.querySelector('[role=alert]')?.textContent ?? '').toContain('Piacenza');
+    act(() => stato.click!({ latlng: { lat: 45.06, lng: 9.7 } }));
+    expect(s.ultima()).toEqual({ address: 'Via del Corso 5', lat: 45.06, lng: 9.7, confermata: true });
+    expect(s.radice.querySelector('[role=alert]')).toBeNull();
+  });
+});
 
 describe('R13-006 ① il selettore della posizione', () => {
   it('cambiare l\'indirizzo toglie la conferma alla posizione vecchia', async () => {
