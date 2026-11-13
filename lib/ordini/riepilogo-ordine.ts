@@ -71,9 +71,16 @@ export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: 
   const totale = inCentesimi(ordine.total_price);
   // 5/11/2026 — La consegna non letta (null: la select di riserva senza delivery_fee_cents) non è
   // «zero»: contata come zero, il riepilogo scriveva «Spedizione GRATUITA» sopra un totale che i 3 €
-  // li conteneva. Se manca si ricava da quello che il totale non spiega.
+  // li conteneva.
+  //
+  // 13/11/2026 (R16-015) — Ricavarla per differenza però faceva SEMPRE tornare il totale: qualunque
+  // cifra che le altre voci non spiegavano diventava «Consegna MyCity», e il controllo `torna` non
+  // poteva più cadere proprio sugli ordini letti a metà. Adesso una consegna non letta resta non
+  // letta: se il totale non ha niente di non spiegato è davvero zero (e si può dire «Gratis»);
+  // altrimenti non si inventa una riga, e il riepilogo dice che le voci non fanno il totale.
   const consegnaLetta = ordine.delivery_fee_cents == null ? null : Math.round(Number(ordine.delivery_fee_cents)) || 0;
-  const consegna = consegnaLetta ?? Math.max(0, totale - (subtotaleCentesimi + spedizione - sconto - credito));
+  const nonSpiegato = totale - (subtotaleCentesimi + spedizione - sconto - credito);
+  const consegna = consegnaLetta ?? (nonSpiegato === 0 ? 0 : null);
 
   const voci: VoceRiepilogo[] = [{ etichetta: 'Subtotale', centesimi: subtotaleCentesimi, segno: 'piu' }];
   // 27/10/2026 (terzo giro) — LA RIGA «SPEDIZIONE» A ZERO SCRIVEVA «GRATUITA» SOPRA I 3 EURO DI
@@ -93,7 +100,7 @@ export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: 
   }
   // Le voci a zero non si mostrano: una riga «Sconto codice 0,00» non aggiunge niente e allunga la
   // colonna. Quelle diverse da zero invece devono esserci TUTTE, o il totale non si spiega.
-  if (consegna !== 0) voci.push({ etichetta: VOCE_CONSEGNA, centesimi: consegna, segno: 'piu' });
+  if (consegna != null && consegna !== 0) voci.push({ etichetta: VOCE_CONSEGNA, centesimi: consegna, segno: 'piu' });
   if (sconto !== 0) voci.push({ etichetta: 'Sconto codice', centesimi: sconto, segno: 'meno' });
   if (credito !== 0) voci.push({ etichetta: 'Credito MyCity', centesimi: credito, segno: 'meno' });
 
