@@ -166,6 +166,10 @@ function funzioneMancante(e: { code?: string; message?: string }): boolean {
 /**
  * Il salvataggio di prima della migrazione 323, in tre giri: resta solo come ripiego.
  * Qui le righe già scritte prima di un conflitto non tornano indietro.
+ *
+ * R20-015 — Per questo prima vanno gli aggiornamenti condizionati sulla scorta (gli unici che
+ * possono dire «è cambiata»), e solo se passano tutti le cancellazioni e gli inserimenti: prima
+ * la L tolta era già cancellata quando il negoziante leggeva «riapri e salva di nuovo».
  */
 async function salvaInTreGiri(
   supabase: SupabaseClient,
@@ -173,11 +177,8 @@ async function salvaInTreGiri(
   toUpdate: Array<{ id: string; row: Record<string, unknown>; vista?: number; label: string }>,
   toInsert: Array<Record<string, unknown>>,
 ): Promise<void> {
-  if (toDelete.length > 0) {
-    const { error } = await supabase.from('product_variants').delete().in('id', toDelete);
-    if (error) throw error;
-  }
-  for (const u of toUpdate) {
+  const condizionatiPrima = [...toUpdate.filter((u) => u.vista !== undefined), ...toUpdate.filter((u) => u.vista === undefined)];
+  for (const u of condizionatiPrima) {
     if (u.vista === undefined) {
       const { error } = await supabase.from('product_variants').update(u.row).eq('id', u.id);
       if (error) throw error;
@@ -191,6 +192,10 @@ async function salvaInTreGiri(
       .select('id');
     if (error) throw error;
     if (!data || data.length === 0) throw scortaVarianteCambiata(u.label, u.vista, undefined);
+  }
+  if (toDelete.length > 0) {
+    const { error } = await supabase.from('product_variants').delete().in('id', toDelete);
+    if (error) throw error;
   }
   if (toInsert.length > 0) {
     const { error } = await supabase.from('product_variants').insert(toInsert);

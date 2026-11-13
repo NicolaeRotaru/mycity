@@ -99,8 +99,10 @@ describe('R08-008 — le varianti si salvano tutte o nessuna', () => {
   it('ripiego: se la funzione non c’è ancora (PGRST202) il salvataggio si fa come prima, a pezzi', async () => {
     const db = bancaDati({ funzione: 'manca' });
     await expect(saveProductVariantsServer(db.client, PRODOTTO, MODULO as never, VISTE)).rejects.toBeInstanceOf(DaCompletare);
-    // a pezzi la L era già cancellata prima del conflitto: è il comportamento di prima, dichiarato
-    expect(db.aPezzi[0]).toBe('delete v-l');
+    // R20-015 — a pezzi gli aggiornamenti condizionati vanno prima: al conflitto la L tolta non è
+    // ancora cancellata (prima qui si dichiarava `delete v-l` come prima scrittura).
+    expect(db.aPezzi).not.toContain('delete v-l');
+    expect(db.stato().map((r) => r.label)).toContain('L');
   });
 
   it('una funzione che manca DENTRO salva_varianti (42883 su un altro nome) non fa ripiegare in silenzio', async () => {
