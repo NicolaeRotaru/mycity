@@ -45,6 +45,8 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/
  * chiave). Se non parte, o torna meno di 1 €, il
  * cliente legge «te lo rendiamo a mano entro un giorno» e gli amministratori lo sanno. Al lancio
  * la carta è spenta. I negozi che avevano accettato e il fattorino assegnato ricevono la fascia nuova.
+ * 13/11/2026 (R17-010) — Se la parte pagata con la carta non copre l'euro (spesa pagata tutta o quasi
+ * col credito MyCity), l'euro torna sul credito e il conto dell'ordine si riscrive come sui contanti.
  */
 
 const COLONNE =
@@ -172,6 +174,10 @@ export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCent
       return `${inizio} e l’euro della veloce non lo paghi: ${formatPriceFromCents(credito)} ti torna sul credito MyCity e ${porta}. ${fine}`;
     }
     return `${inizio} e l’euro della veloce non lo paghi: alla porta paghi ${formatPriceFromCents(a.totaleCents)}. ${fine}`;
+  }
+  // 13/11/2026 (R17-010) — Con la carta che non copriva l'euro, l'euro è tornato sul credito MyCity.
+  if (a.euro === 'tolto-carta' && (a.sulCreditoCents ?? 0) > 0) {
+    return `${inizio} e l’euro della veloce non lo paghi: ${formatPriceFromCents(a.sulCreditoCents ?? 0)} ti torna sul credito MyCity. ${fine}`;
   }
   if (a.euro === 'tolto-carta') return `${inizio} e l’euro della veloce non lo paghi: ti torna sulla carta. ${fine}`;
   return `${inizio}. L’euro della veloce te lo rendiamo a mano entro un giorno. ${fine}`;
@@ -467,6 +473,8 @@ async function spostaIlCarrello(
   // ⑦ Il rimborso è fatto solo se `refundOrder` dice di aver reso tutto l'euro (`importoCents`).
   const conLEuro = (conto?.righe ?? []).filter((r) => r.deltaCents !== 0);
   const rimborsoNonFatto: typeof conLEuro = [];
+  // 13/11/2026 (R17-010) — Gli ordini con la carta il cui euro torna sul credito (vedi sotto).
+  const sulCreditoConLaCarta = new Set<string>();
   let resiCents = 0;
   if (euro === 'tolto-carta') {
     const { refundOrder } = await import('@/lib/stripe/payout');
@@ -501,6 +509,14 @@ async function spostaIlCarrello(
         // un'altra causa, e l'avviso lo dice così (la frase dipende dallo stato: una volta sola).
         fatto.push(`sull’ordine ${codiceDi(r.id)} c’era già un rimborso di ${formatPriceFromCents(giaResi)} che non è l’euro della veloce: il freno non ne ha prenotato un altro`);
         rimborsoNonFatto.push(r);
+        continue;
+      }
+      // 13/11/2026 (R17-010) — La parte di questo ordine pagata con la carta non copre l'euro: lordo
+      // 19 €, credito MyCity 18,40 €, carta 0,60 €. Il rimborso di 1 € sulla carta Stripe lo rifiuta
+      // (o lo prende dalla parte di un altro ordine del carrello), e finiva a mano. L'euro torna sul
+      // credito, come la parte dei contanti che il credito copriva (⑨): lo fa la scrittura qui sotto.
+      if (giaResi === 0 && lui && Math.max(0, centesimi(lui.total_price)) < -r.deltaCents) {
+        sulCreditoConLaCarta.add(r.id);
         continue;
       }
       try {
@@ -549,12 +565,14 @@ async function spostaIlCarrello(
   let sulCreditoCents = 0;
   const scritti: RigaVeloce[] = [];
   for (const [i, c] of daSpostare.entries()) {
-    const riga = euro === 'tolto-contanti' ? conto?.righe.find((r) => r.id === c.id) : undefined;
+    const conCredito = sulCreditoConLaCarta.has(c.id);
+    const riga = euro === 'tolto-contanti' || conCredito ? conto?.righe.find((r) => r.id === c.id) : undefined;
     let delta = riga?.deltaCents ?? 0;
     const valori: Record<string, unknown> = { delivery_slot: fascia };
     // La parte dell'euro che i contanti non coprono è stata pagata col credito: torna lì (⑨).
+    // R17-010 — Con la carta che non copre l'euro, torna lì tutto l'euro (la carta resta com'è).
     const cassa = Math.max(0, centesimi(c.total_price));
-    const dalCredito = Math.max(0, -delta - cassa);
+    const dalCredito = conCredito ? Math.max(0, -delta) : Math.max(0, -delta - cassa);
     if (dalCredito > 0 && !(await rendiSulCredito(admin, c, dalCredito))) delta = 0;
     if (dalCredito > 0 && delta !== 0) {
       fatto.push(`${formatPriceFromCents(dalCredito)} già tornato sul credito MyCity per l’ordine ${codiceDi(c.id)}`);
@@ -674,13 +692,17 @@ async function spostaIlCarrello(
   // rimborso parziale è tornato per intero (carta, sopra). Altrimenti il cliente non legge «non lo paghi».
   let rimasti: typeof conLEuro = [];
   if (euro === 'tolto-contanti') rimasti = conLEuro.filter((r) => deltaScritti.get(r.id) !== r.deltaCents);
-  if (euro === 'tolto-carta') rimasti = rimborsoNonFatto;
+  // R17-010 — Anche l'euro che doveva tornare sul credito e non c'è tornato.
+  if (euro === 'tolto-carta') rimasti = [...rimborsoNonFatto, ...conLEuro.filter((r) => sulCreditoConLaCarta.has(r.id) && deltaScritti.get(r.id) !== r.deltaCents)];
   const euroFinale: ComeVaLEuro = rimasti.length > 0 ? 'a-mano' : euro;
 
   const daFare: string[] = [];
   if (rimasti.length > 0) {
     const codici = rimasti.map((r) => codiceDi(r.id)).join(', ');
-    daFare.push(carta
+    const sulCredito = rimasti.filter((r) => sulCreditoConLaCarta.has(r.id)).map((r) => codiceDi(r.id)).join(', ');
+    daFare.push(carta && sulCredito === codici
+      ? `L’euro della veloce sull’ordine ${codici}, pagato con la carta solo in piccola parte, doveva tornare sul credito MyCity, ma il credito non si è potuto riaccreditare o l’ordine è cambiato nel frattempo: rendilo a mano al cliente entro un giorno.${rimasti.some((r) => accreditati.has(r.id)) ? ' Su questo ordine l’euro è già tornato sul credito MyCity: non va reso di nuovo.' : ''}`
+      : carta
       ? `Il rimborso automatico di 1 € sull’ordine ${codici} non è tornato per intero, o sull’ordine c’era già un altro rimborso: guarda su Stripe se l’euro è già uscito e, se no, rendilo a mano al cliente entro un giorno.`
       : `L’euro della veloce sta sull’ordine ${codici}, cambiato nel frattempo o pagato col credito MyCity che non si è potuto riaccreditare, e non si è potuto togliere: rendilo a mano al cliente entro un giorno.${rimasti.some((r) => accreditati.has(r.id)) ? ' Su questo ordine l’euro è già tornato sul credito MyCity: non va reso di nuovo.' : ''}`);
   } else if (euroFinale === 'a-mano') {
