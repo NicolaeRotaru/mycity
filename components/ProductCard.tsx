@@ -4,7 +4,6 @@ import { memo, useEffect, useState } from 'react';
 import { classiCuore } from '@/lib/design/cuore-preferito';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -19,6 +18,7 @@ import { useProfile } from './hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 
 interface ProductCardProps {
   id: string;
@@ -166,7 +166,7 @@ const ProductCard = ({
       {/* FOTO dominante (~3/5) — object-cover su sfondo bianco: la foto riempie
           il riquadro quadrato (come le demo), niente bande beige sulle foto dei negozi. */}
       <div className="relative aspect-square w-full overflow-hidden bg-white pointer-events-none">
-        <Image
+        <FotoConRipiego
           src={img}
           /* 27/8/2026 (R117) — qui c'era `alt={name}`, e il nome del prodotto
              finiva detto tre volte per ogni scheda: nel link che copre la card,
