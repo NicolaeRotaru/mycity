@@ -1,6 +1,5 @@
 'use client';
 
-import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { useRef, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -12,9 +11,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, PasswordInput, Checkbox } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
-import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
-import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
 
 /**
@@ -33,7 +31,6 @@ const ROLES: { value: Role; Icon: LucideIcon; title: string; subtitle: string }[
 ];
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? '';
 
 function isRole(v: string | null): v is Role {
   return v === 'buyer' || v === 'seller' || v === 'rider';
@@ -141,28 +138,44 @@ function SignUpInner() {
        * sta nel percorso di ritorno, non fra i parametri che la rotta
        * riscrive, così sopravvive anche al giro da /accetta-condizioni.
        */
-      const base = APP_URL || window.location.origin;
-      const emailRedirectTo = ritornoDopoLaConferma(base, returnTo, 'email');
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // #79 — L'accettazione di Termini e Informativa non veniva registrata
-          // da nessuna parte: c'era la spunta nel modulo e basta. Il giorno in
-          // cui qualcuno contesta una condizione — un reso, una commissione —
-          // non c'e' modo di dimostrare che l'aveva accettata, ne' QUALE
-          // versione del testo aveva davanti. La versione viaggia con la
-          // registrazione e il server la mette a verbale al primo accesso.
-          data: {
-            role,
-            full_name: fullName.trim() || undefined,
-            versione_testi_accettati: VERSIONE_TESTI_LEGALI,
-          },
+      // 13/11/2026 (R24-020) — L'ISCRIZIONE PASSA DAL SERVER. Qui si chiamava
+      // `supabase.auth.signUp` dal browser: il freno sulle iscrizioni e la verifica
+      // del gettone anti-robot non vedevano mai passare nessuno. Adesso la rotta
+      // `/api/auth/registrazione` fa tutte e due le cose, e porta con sé quello che
+      // prima metteva la pagina: ruolo, nome, ritorno dopo la conferma e (#79) la
+      // versione di Termini e Informativa accettata, che il server mette a verbale
+      // al primo accesso.
+      const risposta = await fetch('/api/auth/registrazione', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          role,
+          fullName: fullName.trim() || undefined,
+          accettaTermini: acceptTos,
+          returnTo,
           captchaToken: captchaToken || undefined,
-          emailRedirectTo,
-        },
+        }),
       });
-      if (error) throw error;
+      const corpo = (await risposta.json().catch(() => null)) as
+        | { ok?: boolean; session?: { access_token?: string; refresh_token?: string } | null; error?: { code?: unknown } }
+        | null;
+      if (!risposta.ok) {
+        // Codice e testo di Supabase arrivano come prima: li traduce friendlyError, qui sotto.
+        throw Object.assign(new Error(apiErrorMessage(corpo, '')), {
+          code: typeof corpo?.error?.code === 'string' ? corpo.error.code : undefined,
+          status: risposta.status,
+        });
+      }
+      // Con la conferma dell'email spenta la sessione arriva dal server: si installa qui.
+      if (corpo?.session?.access_token && corpo.session.refresh_token) {
+        const { error: errSessione } = await supabase.auth.setSession({
+          access_token: corpo.session.access_token,
+          refresh_token: corpo.session.refresh_token,
+        });
+        if (errSessione) throw errSessione;
+      }
 
       // S10 (5/11/2026) — Qui l'invito si scriveva dal browser nella tabella
       // `referrals`, senza nessuna rotta a controllarlo. Dalla migrazione 186 il
