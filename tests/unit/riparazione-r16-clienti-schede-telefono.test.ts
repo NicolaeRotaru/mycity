@@ -46,4 +46,29 @@ describe('R16-006 clienti sul telefono', () => {
     expect(tabella.className).toContain('md:table');
     s.smonta();
   }, 30000);
+
+  it('R16-006 tocchi: filtri, ricerca e link alti 44 px sul telefono, e spazio in fondo per il pulsante assistenza', async () => {
+    const pagina = (await monta('app/seller/customers/page.tsx')).default;
+    globale.__CLIENT_SUPABASE__ = {};
+    globale.__UTENTE__ = { id: 'n1' };
+    globale.__ESITO_QUERY__ = () => undefined;
+    globale.__DATI_QUERY__ = () => ({
+      ordiniLetti: 1,
+      clienti: [{ userId: 'u1', fullName: 'Cliente Uno', totalSpent: 10, ordersCount: 1, lastOrderAt: '2026-11-10T10:00:00Z', lastOrderId: 'a', firstOrderAt: '2026-11-10T10:00:00Z' }],
+    });
+    const s = accendi(pagina, {});
+    await attendi();
+    const filtri = Array.from(s.radice.querySelectorAll('button[aria-pressed]')) as HTMLElement[];
+    expect(filtri.length).toBeGreaterThan(0);
+    for (const b of filtri) expect(b.className, 'filtro basso').toContain('min-h-11');
+    const ricerca = s.radice.querySelector('input[type="search"]') as HTMLElement;
+    expect(ricerca.className, 'ricerca bassa').toContain('min-h-11');
+    const link = s.radice.querySelector('a[href="/terms#venditori"]') as HTMLElement;
+    expect(link.textContent).toBe('Punto 9 delle condizioni');
+    expect(link.className, 'link basso').toContain('min-h-11');
+    expect(link.className).toContain('inline-flex');
+    const contenitore = s.radice.querySelector('div.space-y-6') as HTMLElement;
+    expect(contenitore.className, 'niente spazio in fondo').toMatch(/pb-24/);
+    s.smonta();
+  }, 30000);
 });

@@ -92,7 +92,7 @@ export default function SellerCustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 md:pb-0">
       <SellerPageTitle
         eyebrow="Relazioni"
         title="Clienti"
@@ -125,7 +125,7 @@ export default function SellerCustomersPage() {
             type="button"
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
-            className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
+            className={`px-3 py-1.5 min-h-11 md:min-h-0 rounded-full font-semibold transition-colors ${
               filter === f.key ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
@@ -138,7 +138,7 @@ export default function SellerCustomersPage() {
           aria-label="Cerca un cliente per nome"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"
+          className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 min-h-11 md:min-h-0 text-sm flex-1 sm:flex-none sm:w-56"
         />
       </div>
 
@@ -229,7 +229,7 @@ export default function SellerCustomersPage() {
         Questi nomi ti arrivano per gestire gli ordini: puoi usarli per preparare,
         consegnare e assistere chi ha comprato da te. Per mandare pubblicità serve il
         consenso di quella persona, raccolto da te.{' '}
-        <Link href="/terms#venditori" className="underline">Punto 9 delle condizioni</Link>.
+        <Link href="/terms#venditori" className="underline inline-flex items-center min-h-11 md:min-h-0">Punto 9 delle condizioni</Link>.
       </p>
     </div>
   );
