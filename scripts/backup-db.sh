@@ -408,7 +408,17 @@ else
     if rclone mkdir "$STORICO_FOTO" >/dev/null 2>&1; then
       echo "[backup] Storico delle foto pronto: $STORICO_FOTO"
     else
-      echo "[backup] ATTENZIONE: lo storico $STORICO_FOTO non esiste e non sono riuscito a crearlo. Se la copia qui sotto fallisce, e' questo: serve il secchio gia' creato presso il fornitore con una chiave che possa scriverci, oppure STORAGE_SYNC_STORICO che punti a uno che esiste." >&2
+      if [[ -z "${STORAGE_SYNC_STORICO:-}" ]]; then
+        # R15-003 — Il secchio «-storico» era un valore predefinito mai verificato: se non esiste e
+        # la chiave non puo' crearlo, `--backup-dir` fa fallire la prima copia in cui una foto sparisce
+        # dall'origine. Qui si ripiega su una cartella DENTRO la destinazione (accanto ai secchi, non
+        # dentro uno di loro: rclone non vede sovrapposizione). Protegge meno di un secchio a parte,
+        # ma protegge: meglio uno storico nello stesso posto che nessuna copia nuova. Dirlo forte.
+        STORICO_FOTO="${DEST_PULITA}/_storico"
+        echo "[backup] ATTENZIONE: il secchio dello storico non esiste e non sono riuscito a crearlo: uso la cartella ${STORICO_FOTO} dentro la destinazione. Per uno storico fuori dal secchio della copia: crea il secchio presso il fornitore oppure imposta STORAGE_SYNC_STORICO." >&2
+      else
+        echo "[backup] ATTENZIONE: lo storico $STORICO_FOTO non esiste e non sono riuscito a crearlo. Se la copia qui sotto fallisce, e' questo: serve il secchio gia' creato presso il fornitore con una chiave che possa scriverci, oppure STORAGE_SYNC_STORICO che punti a uno che esiste." >&2
+      fi
     fi
   fi
 
