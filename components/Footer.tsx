@@ -157,7 +157,7 @@ const Footer = () => {
   // Stessa chiave e stessa domanda di CategoryBar: dove il piede si disegna, il
   // menu in alto ha già chiesto le categorie e la risposta è condivisa. Dove il
   // piede non si disegna — le pagine di lavoro — non si chiede niente.
-  const { data: categorie } = useQuery({
+  const { data: categorie, isError: isErroreCategorie } = useQuery({
     queryKey: ['categories', 'tree'],
     staleTime: 10 * 60_000,
     enabled: !areaPro && !isSellerArea,
@@ -172,14 +172,21 @@ const Footer = () => {
   });
 
   // 1/11/2026 — Il piede elencava nove categorie, otto senza un prodotto. Adesso restano solo
-  // quelle con qualcosa dentro (stessa lettura e stessa chiave della vetrina in home). Finché la
-  // risposta non c'è si elencano tutte, come prima: il server non precarica le piene, e un piede
-  // senza categorie nell'HTML del server toglieva a Google anche quelle vere. Se la lettura
-  // fallisce si torna all'elenco intero.
+  // quelle con qualcosa dentro (stessa lettura e stessa chiave della vetrina in home). Se la
+  // lettura fallisce si torna all'elenco intero.
+  // 13/11/2026 (R15-002) — Finché la risposta non c'è NON si elenca niente: prima si elencavano
+  // tutte, e siccome il server non sa quali sono piene, l'HTML del server (quello che legge Google,
+  // e il primo disegno) portava sempre le otto di riserva, sette vuote. Le categorie vere Google le
+  // trova lo stesso: la mappa del sito manda solo quelle piene, e «Tutte le categorie» resta.
   const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: !areaPro && !isSellerArea });
   const madriLette = (categorie ?? []).filter((c) => c.parent_id === null);
   const madriTutte = madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
-  const madri = soloLePiene(madriTutte, piene.isError ? null : piene.data);
+  // Si sa quali mostrare quando sono arrivate le piene e anche l'elenco (o la sua lettura è
+  // fallita: allora la riserva). Se è fallita la lettura delle piene, tutte, come prima.
+  const elencoNoto = categorie !== undefined || isErroreCategorie;
+  const madri = piene.isError
+    ? madriTutte
+    : piene.data && elencoNoto ? soloLePiene(madriTutte, piene.data) : [];
 
   if (areaPro) return null;
 
