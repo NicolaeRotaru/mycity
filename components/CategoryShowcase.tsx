@@ -78,6 +78,25 @@ const VELO_SENZA_FOTO = 'from-black/55 via-black/30 to-transparent';
 
 const chiaveFoto = (slug: string, src: string | null) => `${slug}|${src ?? ''}`;
 
+/**
+ * 13/11/2026 (R15-001) — UNA FOTO ROTTA SI DICE UNA VOLTA SOLA, PER TUTTA LA VITA DELLA PAGINA.
+ *
+ * Due rami la riconoscono: il `ref` (foto fallita prima dell'idratazione, o vista rotta a un
+ * ridisegno) e `onError`. Prima il ricordo stava nello stato del componente: se la tessera si
+ * ridisegnava fra il momento in cui l'immagine diventava rotta e l'evento error, il `ref` la diceva
+ * e poi `onError` la ridiceva (non guardava il ricordo, e il `ref` non sapeva dell'errore in coda).
+ * E a ogni rimontaggio — si torna in home — lo stato ripartiva vuoto e la stessa foto era di nuovo
+ * «nuova». Adesso il ricordo sta qui, fuori dal componente, e passano tutti e due di qui. Sul
+ * server non si riempie mai: `ref` ed eventi girano solo nel browser.
+ */
+const fotoRotteGiaDette = new Set<string>();
+const diLaFotoRotta = (slug: string, src: string | null) => {
+  const chiave = chiaveFoto(slug, src);
+  if (fotoRotteGiaDette.has(chiave)) return;
+  fotoRotteGiaDette.add(chiave);
+  logger.warn('[categorie] la foto della tessera non si è caricata', { slug, src });
+};
+
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 
 /**
@@ -231,15 +250,13 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                 // non scatta. Al montaggio un'immagine «completa» con larghezza zero è una foto rotta.
                 // 13/11/2026 (R15-001) — E va detta anche qui, non solo in onError: le tessere arrivano
                 // nell'HTML del server, quindi una foto sparita fallisce quasi sempre prima
-                // dell'idratazione, e questo ramo la nascondeva in silenzio. Una volta sola per foto.
+                // dell'idratazione, e questo ramo la nascondeva in silenzio. Una volta sola per foto
+                // (`diLaFotoRotta`, lo stesso ricordo di onError).
                 ref={(el) => {
                   if (el && el.complete && el.naturalWidth === 0) {
                     el.style.display = 'none';
-                    const chiave = chiaveFoto(c.slug, foto.src);
-                    if (!fotoRotte.has(chiave)) {
-                      logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
-                    }
-                    segnaRotta(chiave);
+                    diLaFotoRotta(c.slug, foto.src);
+                    segnaRotta(chiaveFoto(c.slug, foto.src));
                   }
                 }}
                 src={sizedImage(foto.src, 'card')}
@@ -256,7 +273,7 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                   // che nessuno lo sapesse.
                   e.currentTarget.style.display = 'none';
                   segnaRotta(chiaveFoto(c.slug, foto.src));
-                  logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
+                  diLaFotoRotta(c.slug, foto.src);
                 }}
               />
             )}

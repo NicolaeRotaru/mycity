@@ -35,8 +35,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { warn: (...a: unknown[]) => { avvisi.push(a); }, error: () => {}, info: () => {}, debug: () => {} },
 }));
 
-const { default: CategoryShowcase } = await import('@/components/CategoryShowcase');
-const Vetrina = CategoryShowcase as (p: { titolo?: string }) => ReturnType<typeof CategoryShowcase>;
+type Componente = typeof import('@/components/CategoryShowcase').default;
+let CategoryShowcase: Componente;
+let Vetrina: (p: { titolo?: string }) => ReturnType<Componente>;
 
 // jsdom non scarica le immagini: qui ogni foto è «completa» e larga zero, cioè già fallita
 // prima dell'idratazione, il caso in cui onError non scatta più.
@@ -44,7 +45,12 @@ Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: tr
 
 let radice: Root;
 let contenitore: HTMLDivElement;
-beforeEach(() => {
+beforeEach(async () => {
+  // Ogni prova è una pagina appena aperta: le foto rotte già dette valgono per tutta la vita della
+  // pagina (R15-001, secondo giro), quindi il componente si ricarica da capo.
+  vi.resetModules();
+  ({ default: CategoryShowcase } = await import('@/components/CategoryShowcase'));
+  Vetrina = CategoryShowcase as typeof Vetrina;
   avvisi.length = 0;
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   contenitore = document.createElement('div');
