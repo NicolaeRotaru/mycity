@@ -542,6 +542,8 @@ export default function CheckoutPage() {
   // «Oggi · 16:30–18:00» a un forno chiuso. Qui si legge la bozza al montaggio, e la parte della
   // consegna si rimette nell'effetto sotto, quando gli orari ci sono.
   const consegnaDellaBozza = useRef<Bozza | null>(null);
+  // R19-004 — L'indirizzo che la bozza ha rimesso nel modulo (vedi `mattonellaDellaBozza`).
+  const [indirizzoDellaBozza, setIndirizzoDellaBozza] = useState<Partial<typeof form> | null>(null);
   useEffect(() => {
     try {
       // #112 — La bozza dell'ordine stava nella memoria della SCHEDA
@@ -561,6 +563,7 @@ export default function CheckoutPage() {
         return;
       }
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
+      setIndirizzoDellaBozza(bozza.form as Partial<typeof form>);
 
       // Lo sconto: si rimette il CODICE, e la verifica che c'è già nella pagina lo ricontrolla sul
       // carrello di adesso. Se nel frattempo il carrello è cambiato, lo dice invece di mostrarlo.
@@ -593,8 +596,41 @@ export default function CheckoutPage() {
     if (domani) setSlotTomorrowTime(domani);
   }, [cartData, orariNegozi]);
 
+  /**
+   * 13/11/2026 (R19-004, giro di correzione) — LA BOZZA TORNAVA IN UN MODULO NASCOSTO.
+   *
+   * Chi ha già indirizzi salvati vede le mattonelle, e il modulo resta nascosto finché non tocca
+   * «Inserisci nuovo indirizzo». Tornando dall'accesso, la bozza rimetteva nel modulo l'indirizzo
+   * scritto da ospite: nessuna mattonella combaciava, nessuna era scelta, e si ordinava su un
+   * indirizzo che non si vedeva. Ora l'indirizzo della bozza, se non è già uno di quelli salvati,
+   * compare come prima mattonella («Appena scritto»), scelta: si vede dove arriva l'ordine, e si
+   * può passare a un indirizzo salvato e tornare indietro.
+   */
+  const ID_INDIRIZZO_DELLA_BOZZA = 'indirizzo-della-bozza';
+  const viaDellaBozza = String(indirizzoDellaBozza?.address ?? '');
+  const cittaDellaBozza = String(indirizzoDellaBozza?.city ?? '');
+  const nomeDellaBozza = String(indirizzoDellaBozza?.fullName ?? '');
+  const mattonellaDellaBozza =
+    viaDellaBozza.trim()
+    && savedAddresses.length > 0
+    && !savedAddresses.some((a) => a.address === viaDellaBozza && a.city === cittaDellaBozza && (a.full_name ?? '') === nomeDellaBozza)
+      ? {
+        id: ID_INDIRIZZO_DELLA_BOZZA,
+        label: 'Appena scritto',
+        full_name: nomeDellaBozza,
+        address: viaDellaBozza,
+        city: cittaDellaBozza,
+        is_default: false,
+      }
+      : null;
+  const indirizziDaMostrare = mattonellaDellaBozza ? [mattonellaDellaBozza, ...savedAddresses] : savedAddresses;
+
   const applySavedAddress = (id: string) => {
     if (!id) return;
+    if (id === ID_INDIRIZZO_DELLA_BOZZA && indirizzoDellaBozza) {
+      setForm((prev) => ({ ...prev, ...indirizzoDellaBozza }));
+      return;
+    }
     const a = savedAddresses.find((x) => x.id === id);
     if (!a) return;
     setForm({
@@ -1518,7 +1554,7 @@ export default function CheckoutPage() {
           <StepCard n={1} icon={MapPin} title="Indirizzo di consegna">
             <ShippingAddressForm
               form={form}
-              savedAddresses={savedAddresses}
+              savedAddresses={indirizziDaMostrare}
               caricamento={nonSoAncoraGliIndirizzi}
               errors={errors}
               onChange={handleChange}
