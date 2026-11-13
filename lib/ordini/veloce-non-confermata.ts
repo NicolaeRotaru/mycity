@@ -496,6 +496,17 @@ async function spostaIlCarrello(
           rimborsoNonFatto.push(r);
         }
       } catch (err) {
+        // 13/11/2026 (R17-011) — Due giri del freno sovrapposti (uno lento accavallato al successivo)
+        // prenotavano tutti e due l'euro: Stripe con la stessa chiave lo rendeva una volta, il libro ne
+        // segnava due. Dalla 412 il secondo trova la prenotazione del primo e `refundOrder` si ferma
+        // (RimborsoGiaInCorso). Allora questo giro non tocca niente: niente fascia, niente «a mano» al
+        // cliente né agli amministratori. Il carrello lo finisce il giro che sta rendendo l'euro; se
+        // muore, l'ordine resta «Adesso» e lo riprende il giro dopo. (Per nome: chi prova il freno può
+        // simulare `refundOrder` senza la classe.)
+        if ((err as { name?: unknown } | null)?.name === 'RimborsoGiaInCorso') {
+          logger.warn('[veloce-non-confermata] un altro giro sta già rendendo l euro: questo giro non tocca il carrello', { orderId: r.id });
+          return 'riprova';
+        }
         logger.error('[veloce-non-confermata] rimborso dell euro della veloce NON partito', { orderId: r.id, err });
         rimborsoNonFatto.push(r);
       }
