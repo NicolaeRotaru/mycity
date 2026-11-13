@@ -345,12 +345,13 @@ export function ultimoRitiroDellaFascia(
   storeHours: unknown,
   fascia?: string | null,
   now: Date = romeNow(),
+  propostaIl: Date = now,
 ): UltimoRitiro | null {
   const hours = orariImpostati(storeHours);
   if (!hours) return null;
   const scelta = leggiFinestraConsegna(fascia);
   if (!scelta || scelta.giorno === 'adesso') return null;
-  const ritiro = finestraDelRitiro(hours, scelta, now);
+  const ritiro = finestraDelRitiro(hours, scelta, now, propostaIl);
   const ultimo = ultimoInizioDelRitiro(ritiro.intervals, ritiro.da, ritiro.a);
   if (ultimo === null) return null;
   const minuto: number = ultimo;

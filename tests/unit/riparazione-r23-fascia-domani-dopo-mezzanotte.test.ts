@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { negozioPuoServire, romeNow, type StoreHours } from '@/lib/store-hours';
+import { negozioPuoServire, romeNow, ultimoRitiroDellaFascia, type StoreHours } from '@/lib/store-hours';
 
 /**
  * R23-005 — «Domani» si conta da quando la cassa ha proposto la fascia, non da quando la rotta la giudica.
@@ -32,5 +32,22 @@ describe('R23-005 — la fascia «domani» proposta prima di mezzanotte', () => 
     vi.setSystemTime(new Date('2026-11-09T20:00:00Z'));
     const adesso = romeNow();
     expect(negozioPuoServire(SOLO_MARTEDI, DOMANI, adesso, adesso)).toBe(true);
+  });
+});
+
+describe('R23-005 — anche la scadenza del ritiro conta il domani dal momento della proposta', () => {
+  it('fascia «Domani» proposta lunedì 23:59, scadenza calcolata martedì 00:01: è quella del martedì', () => {
+    vi.useFakeTimers();
+    const proposta = romeNow(new Date('2026-11-09T22:59:00Z'));
+    vi.setSystemTime(new Date('2026-11-09T23:01:00Z'));
+    const ritiro = ultimoRitiroDellaFascia(SOLO_MARTEDI, DOMANI, romeNow(), proposta);
+    expect(ritiro).not.toBeNull();
+    expect(ritiro?.giorno).toBe('domani');
+  });
+
+  it('senza istante di proposta resta la regola di prima', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-09T23:01:00Z'));
+    expect(ultimoRitiroDellaFascia(SOLO_MARTEDI, DOMANI)).toBeNull();
   });
 });
