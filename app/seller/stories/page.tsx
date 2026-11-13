@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { Camera, Eye, Trash2, Upload, Clock } from 'lucide-react';
@@ -63,6 +63,12 @@ export default function SellerStoriesPage() {
   const [caption, setCaption] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  /**
+   * 13/11/2026 (R16-012) — Il freno del doppio clic. Il bottone guardava solo `uploading`, che si
+   * accendeva dentro la mutazione DOPO la lettura dell'utente: al secondo tocco il bottone era
+   * ancora attivo, e la stessa storia si pubblicava due volte. Questo si accende subito, nel clic.
+   */
+  const pubblicazioneInCorso = useRef(false);
 
   const queryStories = useQuery({
     queryKey: queryKeys.seller.myStories,
@@ -96,7 +102,6 @@ export default function SellerStoriesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      setUploading(true);
       /**
        * 8/9/2026 — LA STORIA NON SI COSTRUISCE PIU' DA SOLA IL PERCORSO NE' LA REGOLA.
        *
@@ -150,8 +155,18 @@ export default function SellerStoriesPage() {
       qc.invalidateQueries({ queryKey: queryKeys.seller.storiesActive });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
-    onSettled: () => setUploading(false),
+    onSettled: () => {
+      pubblicazioneInCorso.current = false;
+      setUploading(false);
+    },
   });
+
+  function pubblica() {
+    if (pubblicazioneInCorso.current) return;
+    pubblicazioneInCorso.current = true;
+    setUploading(true);
+    create.mutate();
+  }
 
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -252,7 +267,7 @@ export default function SellerStoriesPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
-            <Button onClick={() => create.mutate()} disabled={uploading || !image} icon={Upload}>
+            <Button onClick={pubblica} disabled={create.isPending || uploading || !image} icon={Upload}>
               {uploading ? 'Carico…' : 'Pubblica (24h)'}
             </Button>
           </>
