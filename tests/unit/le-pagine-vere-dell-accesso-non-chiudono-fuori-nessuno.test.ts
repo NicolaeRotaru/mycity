@@ -125,13 +125,14 @@ afterEach(() => {
 
 describe('① Maria si iscrive dal checkout', () => {
   it('IL CASO CHE ROMPEVA — la registrazione lascia la sua email e la porta alla verifica, verso il checkout', async () => {
-    // 13/11/2026 (R24-020) — L'iscrizione passa dalla rotta del server: con la conferma
-    // dell'email accesa, la rotta crea l'utente ma NON restituisce una sessione.
     const iscrizioni: unknown[] = [];
-    vi.stubGlobal('fetch', async (dove: unknown, opzioni?: { body?: string }) => {
-      if (String(dove) === '/api/auth/registrazione') iscrizioni.push(JSON.parse(opzioni?.body ?? '{}'));
-      return { ok: true, status: 201, json: async () => ({ ok: true, session: null }) };
-    });
+    g.__AUTH_FINTA__ = {
+      // Con la conferma dell'email accesa, Supabase crea l'utente ma NON apre la sessione.
+      signUp: (dati) => {
+        iscrizioni.push(dati);
+        return { data: { user: { id: 'maria', email: 'maria.rossi@esempio.it' }, session: null }, error: null };
+      },
+    };
     const s = apri(Registrazione, '/sign-up?returnTo=/checkout');
     await aspettaChe(() => !!s.radice.querySelector('#signup-email'));
 
