@@ -259,12 +259,14 @@ export default function FaqPage() {
         })}
       </div>
 
-      <div className="mt-12 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl p-8 text-center">
+      {/* 13/11/2026 (R15-008) — Col testo ingrandito al massimo il bottone «Contattaci» arrivava a 405px
+          su 360: meno margine sul telefono, e la parola può andare a capo invece di uscire. */}
+      <div className="mt-12 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl px-4 py-8 sm:p-8 text-center">
         <h3 className="text-xl font-bold mb-2">Non hai trovato la risposta?</h3>
         <p className="text-primary-100 mb-4">Il nostro team risponde entro 24 ore lavorative.</p>
         {/* R04-004 — Sul fondo terracotta l'anello di fuoco terracotta non si vedeva: bianco, come nelle barre in alto. */}
-        <Link href="/contact" className="inline-flex items-center gap-2 bg-white text-primary-800 px-6 py-3 rounded-lg font-bold hover:bg-primary-50 transition-colors focus-visible:outline-white">
-          <Mail size={18} aria-hidden /> Contattaci
+        <Link href="/contact" className="inline-flex max-w-full items-center gap-2 bg-white text-primary-800 px-4 sm:px-6 py-3 rounded-lg font-bold hover:bg-primary-50 transition-colors focus-visible:outline-white">
+          <Mail size={18} className="shrink-0" aria-hidden /> <span className="min-w-0 [overflow-wrap:anywhere]">Contattaci</span>
         </Link>
       </div>
     </div>

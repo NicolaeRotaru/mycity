@@ -14,96 +14,11 @@ import { sizedImage } from '@/lib/image-url';
 import { domandaCategoriePubbliche } from '@/lib/queries/categorie-pubbliche';
 import { fotoDiCategoria, motivoDaSegnalare } from '@/lib/immagine-categoria';
 import { logger } from '@/lib/logger';
+import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
-/**
- * 1/11/2026 — IN VETRINA SOLO LE CATEGORIE CON QUALCOSA DENTRO.
- *
- * Delle nove categorie principali solo Alimentari aveva prodotti: la home ne mostrava sei, cinque
- * vuote, e il piede ne elencava nove, otto vuote. Ogni tessera vuota è un clic che porta a una
- * pagina senza niente. Adesso una categoria si mostra se ha almeno un prodotto disponibile, suo o
- * di una sua sottocategoria (lo stesso conto della mappa del sito, `app/sitemap.ts`).
- *
- * La risposta è l'elenco degli id «pieni». La chiave è condivisa tra la home e il piede: sulla
- * stessa pagina la lettura parte una volta sola. Se la lettura fallisce si mostrano tutte, come
- * prima: un errore di rete non deve far sparire le categorie vere.
- */
-export const CHIAVE_CATEGORIE_PIENE = ['categories', 'con-prodotti'] as const;
-
-/**
- * Quanti prodotti si guardano al massimo per sapere quali categorie sono piene, e in pagine da
- * quante righe: il database ne restituisce al massimo mille per domanda (`max_rows`), quindi un
- * `limit(5000)` secco ne portava mille, in un ordine qualunque, e oltre una categoria vera poteva
- * sparire. Ora si sfoglia per id, mille alla volta.
- */
-const PRODOTTI_LETTI_PER_LE_CATEGORIE = 5000;
-const RIGHE_PER_PAGINA = 1000;
-
-/** Le categorie che hanno un prodotto: la sua e tutte quelle sopra di lei. */
-export function categorieConProdotti(
-  categorie: ReadonlyArray<{ id: string; parent_id?: string | null }>,
-  prodotti: ReadonlyArray<{ category_id?: string | null }>,
-): string[] {
-  const madreDi = new Map(categorie.map((c) => [c.id, c.parent_id ?? null]));
-  const piene = new Set<string>();
-  for (const p of prodotti) {
-    let id = p.category_id ?? null;
-    // Il tetto ai passi tiene fermo il giro se una categoria finisse per essere madre di sé stessa.
-    for (let passi = 0; id && !piene.has(id) && passi < 10; passi += 1) {
-      piene.add(id);
-      id = madreDi.get(id) ?? null;
-    }
-  }
-  return [...piene];
-}
-
-type ClientPiene = { from: (tabella: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-export function domandaCategoriePiene(supa: ClientPiene) {
-  return {
-    queryKey: CHIAVE_CATEGORIE_PIENE,
-    staleTime: 10 * 60_000,
-    queryFn: async (): Promise<string[]> => {
-      // 5/11/2026 — Contano solo i prodotti dei negozi approvati, come nella mappa del sito: un
-      // venditore collegato vede anche i suoi prodotti per le regole del database, e per lui una
-      // categoria con soli prodotti di un negozio non approvato risultava piena.
-      const [cat, negozi] = await Promise.all([
-        supa.from('categories').select('id, parent_id'),
-        supa.from('seller_public_profiles').select('id').limit(2000),
-      ]);
-      if (cat.error) throw cat.error;
-      if (negozi.error) throw negozi.error;
-      const approvati = new Set(((negozi.data ?? []) as { id: string }[]).map((n) => n.id));
-      const prodotti: { id: string; category_id: string | null; seller_id: string | null }[] = [];
-      let ultimo: string | null = null;
-      while (prodotti.length < PRODOTTI_LETTI_PER_LE_CATEGORIE) {
-        let q = supa
-          .from('products')
-          .select('id, category_id, seller_id')
-          .eq('status', 'available')
-          .order('id', { ascending: true })
-          .limit(RIGHE_PER_PAGINA);
-        if (ultimo) q = q.gt('id', ultimo);
-        const pagina = await q;
-        if (pagina.error) throw pagina.error;
-        const righe = (pagina.data ?? []) as typeof prodotti;
-        prodotti.push(...righe);
-        if (righe.length < RIGHE_PER_PAGINA) break;
-        ultimo = righe[righe.length - 1].id;
-      }
-      return categorieConProdotti(cat.data ?? [], prodotti.filter((p) => !!p.seller_id && approvati.has(p.seller_id)));
-    },
-  };
-}
-
-/**
- * Tiene solo le categorie piene. `piene` assente (lettura fallita) = tutte, come prima.
- * Una categoria senza id (la riserva scritta nel codice) non si può controllare: resta.
- */
-export function soloLePiene<T extends { id?: string }>(categorie: T[], piene: ReadonlyArray<string> | null | undefined): T[] {
-  if (!piene) return categorie;
-  const insieme = new Set(piene);
-  return categorie.filter((c) => !c.id || insieme.has(c.id));
-}
+// Le categorie «piene» (vetrina, piede, menu, mappa del sito): vivono in un modulo che anche il
+// server può chiamare. Qui si riesportano con gli stessi nomi.
+export { CHIAVE_CATEGORIE_PIENE, categorieConProdotti, domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   abbigliamento:  Shirt,
@@ -162,6 +77,25 @@ const VELO_SULLA_FOTO = 'from-black/70 via-black/15 to-black/25';
 const VELO_SENZA_FOTO = 'from-black/55 via-black/30 to-transparent';
 
 const chiaveFoto = (slug: string, src: string | null) => `${slug}|${src ?? ''}`;
+
+/**
+ * 13/11/2026 (R15-001) — UNA FOTO ROTTA SI DICE UNA VOLTA SOLA, PER TUTTA LA VITA DELLA PAGINA.
+ *
+ * Due rami la riconoscono: il `ref` (foto fallita prima dell'idratazione, o vista rotta a un
+ * ridisegno) e `onError`. Prima il ricordo stava nello stato del componente: se la tessera si
+ * ridisegnava fra il momento in cui l'immagine diventava rotta e l'evento error, il `ref` la diceva
+ * e poi `onError` la ridiceva (non guardava il ricordo, e il `ref` non sapeva dell'errore in coda).
+ * E a ogni rimontaggio — si torna in home — lo stato ripartiva vuoto e la stessa foto era di nuovo
+ * «nuova». Adesso il ricordo sta qui, fuori dal componente, e passano tutti e due di qui. Sul
+ * server non si riempie mai: `ref` ed eventi girano solo nel browser.
+ */
+const fotoRotteGiaDette = new Set<string>();
+const diLaFotoRotta = (slug: string, src: string | null) => {
+  const chiave = chiaveFoto(slug, src);
+  if (fotoRotteGiaDette.has(chiave)) return;
+  fotoRotteGiaDette.add(chiave);
+  logger.warn('[categorie] la foto della tessera non si è caricata', { slug, src });
+};
 
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 
@@ -314,9 +248,14 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                 key={foto.src}
                 // Una foto fallita PRIMA dell'idratazione: React 18 non ripete quell'errore, e onError
                 // non scatta. Al montaggio un'immagine «completa» con larghezza zero è una foto rotta.
+                // 13/11/2026 (R15-001) — E va detta anche qui, non solo in onError: le tessere arrivano
+                // nell'HTML del server, quindi una foto sparita fallisce quasi sempre prima
+                // dell'idratazione, e questo ramo la nascondeva in silenzio. Una volta sola per foto
+                // (`diLaFotoRotta`, lo stesso ricordo di onError).
                 ref={(el) => {
                   if (el && el.complete && el.naturalWidth === 0) {
                     el.style.display = 'none';
+                    diLaFotoRotta(c.slug, foto.src);
                     segnaRotta(chiaveFoto(c.slug, foto.src));
                   }
                 }}
@@ -334,7 +273,7 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                   // che nessuno lo sapesse.
                   e.currentTarget.style.display = 'none';
                   segnaRotta(chiaveFoto(c.slug, foto.src));
-                  logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
+                  diLaFotoRotta(c.slug, foto.src);
                 }}
               />
             )}

@@ -126,7 +126,9 @@ export default function PromozioniPage() {
               discountPercent={it.discount_percent}
               stock={it.stock ?? undefined}
               hasVariants={it.has_variants ?? undefined}
-              priority={i < 6}
+              // 13/11/2026 (R15-006) — Urgenti solo le foto della prima riga (4 colonne): le altre due
+              // erano già sotto la piega.
+              priority={i < 4}
             />
           ))}
         </div>

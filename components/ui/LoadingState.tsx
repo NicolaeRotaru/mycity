@@ -70,7 +70,9 @@ export function LoadingState({ variant = 'spinner', message, description, rows =
 
   // skeleton
   return (
-    <div role="status" aria-live="polite" aria-label={msg} className={cn('space-y-3', className)}>
+    <div role="status" aria-live="polite" className={cn('space-y-3', className)}>
+      {/* R15-014 — una regione viva annuncia il suo CONTENUTO, non il nome: il testo va dentro. */}
+      <span className="sr-only">{msg}</span>
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
