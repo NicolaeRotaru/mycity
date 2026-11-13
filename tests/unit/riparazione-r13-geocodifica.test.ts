@@ -30,6 +30,16 @@ const MILANO: Risultato = {
   address: { road: 'Via Roma', city: 'Milano', postcode: '20121' },
 };
 
+// Quarto: frazione di Gossolengo (CAP 29020) e comune in provincia di Napoli (CAP 80010).
+const QUARTO_NAPOLI: Risultato = {
+  lat: '40.8770', lon: '14.1420', display_name: 'Via Roma, Quarto, Napoli, Campania, 80010, Italia',
+  address: { road: 'Via Roma', town: 'Quarto', county: 'Napoli', postcode: '80010' },
+};
+const QUARTO_GOSSOLENGO: Risultato = {
+  lat: '45.0110', lon: '9.6390', display_name: 'Via Roma, Quarto, Gossolengo, Piacenza, Emilia-Romagna, 29020, Italia',
+  address: { road: 'Via Roma', hamlet: 'Quarto', town: 'Gossolengo', county: 'Piacenza', postcode: '29020' },
+};
+
 let risposta: Risultato[] = [];
 let chiamate: URL[] = [];
 
@@ -113,6 +123,54 @@ describe('R13-001 · Via Roma in centro non è fuori zona', () => {
     risposta = [MILANO];
     const { corpo } = await dallaRotta('Via Roma 1, Milano');
     expect(corpo).toEqual({ lat: 45.4642, lng: 9.19, luogo: MILANO.display_name });
+  });
+
+  it('collaudo · un CAP diverso da quello scritto si scarta: Quarto (29020) non finisce a Napoli', async () => {
+    risposta = [QUARTO_NAPOLI];
+    expect(await dalServer({ address: 'Via Roma 15', city: 'Quarto', zip: '29020' })).toBeNull();
+    const { corpo } = await dallaRotta('Via Roma 15, 29020 Quarto, Italia');
+    expect(corpo).toMatchObject({ lat: null, lng: null });
+    expect(fuori(corpo)).toBe(false);
+  });
+
+  it('collaudo · la Quarto col CAP scritto si trova anche se le mappe mettono prima quella di Napoli', async () => {
+    risposta = [QUARTO_NAPOLI, QUARTO_GOSSOLENGO];
+    expect(await dalServer({ address: 'Via Roma 15', city: 'Quarto', zip: '29020' })).toMatchObject({ lat: 45.011, lng: 9.639 });
+  });
+
+  it('collaudo · fuori dal riquadro, con il CAP scritto, un risultato senza CAP non è affidabile', async () => {
+    risposta = [{ ...QUARTO_NAPOLI, address: { road: 'Via Roma', town: 'Quarto', county: 'Napoli' } }];
+    expect(await dalServer({ address: 'Via Roma 15', city: 'Quarto', zip: '29020' })).toBeNull();
+  });
+
+  it('collaudo · anche a Piacenza un CAP diverso si scarta, ma senza CAP dentro il riquadro vale', async () => {
+    risposta = [{ ...CENTRO, address: { ...CENTRO.address, postcode: '29122' } }];
+    expect(await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '29121' })).toBeNull();
+    const senzaCap = { ...CENTRO.address } as Record<string, string>;
+    delete senzaCap.postcode;
+    risposta = [{ ...CENTRO, address: senzaCap }];
+    expect(await dalServer({ address: 'Via Roma 11', city: 'Piacenza', zip: '29121' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
+    risposta = [{ ...CENTRO, address: { ...CENTRO.address, postcode: '29121;29122' } }];
+    expect(await dalServer({ address: 'Via Roma 12', city: 'Piacenza', zip: '29122' })).toMatchObject({ lat: 45.0505, lng: 9.6905 });
+  });
+
+  it('collaudo · «Piacenza PC» e un CAP storpiato («2912 Piacenza») restano chiusi nel riquadro', async () => {
+    risposta = [CENTRO];
+    await dalServer({ address: 'Via Roma 10', city: 'Piacenza PC', zip: '29121' });
+    await dalServer({ address: 'Via Roma 10', city: 'Piacenza', zip: '2912' });
+    await dallaRotta('Via Roma 10, 29121 Piacenza (PC), Italia');
+    expect(chiamate).toHaveLength(3);
+    for (const url of chiamate) {
+      expect(url.searchParams.get('bounded')).toBe('1');
+      expect(url.searchParams.get('viewbox')).toBeTruthy();
+      expect(url.searchParams.get('city')).toBe('Piacenza');
+    }
+  });
+
+  it('collaudo · «Piacenza d\'Adige» non è Piacenza: niente riquadro', async () => {
+    risposta = [];
+    await dalServer({ address: 'Via Roma 1', city: "Piacenza d'Adige", zip: '35040' });
+    expect(chiamate[0].searchParams.get('bounded')).toBeNull();
   });
 
   it('la domanda è strutturata e, per Piacenza, chiusa nel riquadro della città', async () => {

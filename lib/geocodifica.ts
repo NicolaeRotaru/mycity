@@ -106,9 +106,18 @@ function pezziDellaFrase(frase: string): { via: string; cap: string; citta: stri
   return { via: parti.join(', '), cap, citta: citta || CITTA_SERVITA };
 }
 
+/**
+ * 13/11/2026 (R13-001, dal collaudo) — Il CAP scritto non serve solo a mettere in ordine: un
+ * risultato con un CAP DIVERSO da quello scritto si scarta, come quello di un altro comune. Fuori
+ * da Piacenza il riquadro non c'è, e un nome di frazione comune («Quarto», CAP 29020, a
+ * Gossolengo) trovava Quarto in provincia di Napoli (CAP 80010): fuori zona, «troppo lontano».
+ * Un risultato SENZA CAP vale solo se la ricerca è chiusa nel riquadro di Piacenza; fuori, con
+ * un CAP scritto, il CAP deve combaciare. Nessuno affidabile: null.
+ */
 function scegliIlRisultato(
   risultati: RisultatoNominatim[],
   cercato: { cap: string; citta: string },
+  chiusaNelRiquadro: boolean,
 ): PosizioneTrovata | null {
   const scritta = ` ${normalizza(cercato.citta)} `;
   const nelComuneScritto = risultati.filter((r) =>
@@ -117,10 +126,13 @@ function scegliIlRisultato(
       return nome.length > 0 && scritta.includes(` ${nome} `);
     }),
   );
+  // Le mappe a volte scrivono più CAP per la stessa via («29121;29122»).
+  const capDelRisultato = (r: RisultatoNominatim) =>
+    (r.address?.postcode ?? '').split(/[;,]/).map((c) => c.trim()).filter(Boolean);
   const ordinati = cercato.cap
     ? [
-        ...nelComuneScritto.filter((r) => r.address?.postcode === cercato.cap),
-        ...nelComuneScritto.filter((r) => r.address?.postcode !== cercato.cap),
+        ...nelComuneScritto.filter((r) => capDelRisultato(r).includes(cercato.cap)),
+        ...(chiusaNelRiquadro ? nelComuneScritto.filter((r) => capDelRisultato(r).length === 0) : []),
       ]
     : nelComuneScritto;
   for (const r of ordinati) {
@@ -132,6 +144,18 @@ function scegliIlRisultato(
 }
 
 /**
+ * La città scritta è Piacenza? Anche con la sigla della provincia o un CAP storpiato
+ * attaccato («Piacenza PC», «2912 Piacenza»): 13/11/2026 (R13-001, dal collaudo) prima il
+ * riquadro scattava solo per «Piacenza» esatto, e la ricerca non era più chiusa sulla città.
+ */
+function eLaCittaServita(citta: string): boolean {
+  const parole = normalizza(citta)
+    .split(' ')
+    .filter((p) => p && !/^\d+$/.test(p) && !/^[a-z]{2}$/.test(p));
+  return parole.join(' ') === normalizza(CITTA_SERVITA);
+}
+
+/**
  * Dove sta l'indirizzo scritto in una frase, secondo le mappe. null = non si sa (non
  * trovato, nessun risultato nel comune scritto, rete giù): chi chiama non deve bloccare.
  */
@@ -139,16 +163,17 @@ async function trovaLaPosizione(frase: string): Promise<PosizioneTrovata | null>
   const cercato = pezziDellaFrase(frase.trim().slice(0, 300));
   if (cercato.via.length < 3) return null;
 
+  const chiusaNelRiquadro = eLaCittaServita(cercato.citta);
   const params = new URLSearchParams({
     street: cercato.via,
-    city: cercato.citta,
+    city: chiusaNelRiquadro ? CITTA_SERVITA : cercato.citta,
     countrycodes: 'it',
     format: 'json',
     addressdetails: '1',
     limit: '5',
   });
   if (cercato.cap) params.set('postalcode', cercato.cap);
-  if (normalizza(cercato.citta) === normalizza(CITTA_SERVITA)) {
+  if (chiusaNelRiquadro) {
     const r = RIQUADRO_PIACENZA;
     params.set('viewbox', `${r.ovest},${r.nord},${r.est},${r.sud}`);
     params.set('bounded', '1');
@@ -157,7 +182,7 @@ async function trovaLaPosizione(frase: string): Promise<PosizioneTrovata | null>
   try {
     const chiave = `${normalizza(cercato.via)}|${normalizza(cercato.citta)}|${cercato.cap}`;
     const risultati = await chiediANominatim(chiave, params);
-    return risultati ? scegliIlRisultato(risultati, cercato) : null;
+    return risultati ? scegliIlRisultato(risultati, cercato, chiusaNelRiquadro) : null;
   } catch {
     // Un indirizzo che non si trova non è un ordine da bloccare: si prosegue
     // senza la mappa, come si faceva prima.
