@@ -19,7 +19,7 @@ import type Stripe from 'stripe';
 import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { senzaCampi } from '@/lib/db/migrazione-124';
+import { memoriaDiPostgrestVecchia, senzaCampi } from '@/lib/db/migrazione-124';
 import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148';
 import { formatPriceFromCents } from '@/lib/format';
 import { findOrdersForDispute, notifyAdmins } from './comune';
@@ -50,6 +50,11 @@ export { promemoriaOTotale };
  * cioè con la stessa chiave anti-doppione del bonifico già stornato, e Stripe
  * avrebbe restituito quello invece di farne uno nuovo. Il negozio vinceva la
  * contestazione e non veniva pagato.
+ *
+ * R23-003 — Lo stesso danno veniva dalla memoria di PostgREST vecchia: un PGRST204 su
+ * `payout_tentativo` con la 124 applicata toglieva il tentativo lo stesso. Prima di togliere
+ * un gruppo si chiede al database se la colonna c'è (`memoriaDiPostgrestVecchia`): se c'è,
+ * niente ripiego, resta l'errore e Stripe riprova quando lo schema è ricaricato.
  */
 async function scriviConRipiego<T extends { error: unknown }>(
   dove: string,
@@ -62,6 +67,7 @@ async function scriviConRipiego<T extends { error: unknown }>(
   let esito = await esegui(campi);
   for (const gruppo of colonneRecenti) {
     if (!esito.error || !colonnaNonTrovata(esito.error as ErroreDatabase)) return esito;
+    if (await memoriaDiPostgrestVecchia(esito.error, dove)) return esito;
     logger.warn('[stripe] colonna nuova non ancora nel database: riscrivo senza', {
       dove, senza: gruppo, codice: (esito.error as { code?: string }).code ?? null,
     });
@@ -262,7 +268,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
         });
         // R11-021 — Un promemoria perso per un errore vero (non la 126 che manca) non si riscrive:
         // al prossimo passaggio lo storno non si rifà. Chi chiude la contestazione deve sapere la cifra.
-        if (!colonnaNonTrovata(errPromemoria as ErroreDatabase)) {
+        // R23-003 — Anche la 126 applicata con la memoria di PostgREST vecchia è un promemoria perso.
+        if (!colonnaNonTrovata(errPromemoria as ErroreDatabase) || (await memoriaDiPostgrestVecchia(errPromemoria, 'promemoria della contestazione'))) {
           daControllare.push({
             orderId: o.id,
             testo: `ordine ${o.id.slice(0, 8)}: per questa contestazione sono stati stornati ${formatPriceFromCents(stornatoVenditore)} al negozio, ma il promemoria non è stato scritto. Se la contestazione si vince, al negozio va restituita questa cifra, non tutto lo stornato.`,

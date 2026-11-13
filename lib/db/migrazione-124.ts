@@ -1,4 +1,6 @@
+import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { requireSupabaseService } from '@/lib/env';
 
 /**
  * IL CODICE DEVE REGGERE ANCHE PRIMA CHE LA MIGRAZIONE SIA APPLICATA.
@@ -144,30 +146,50 @@ function nominaUnaColonna124(errore: unknown): boolean {
  * paletti sui soldi, scritti «se il lordo c'è», non fermavano più niente.
  *
  * Adesso, prima di rinunciare alla colonna, si chiede al database con una LETTURA della sola
- * colonna, sulla stessa tabella e con le stesse credenziali della scrittura: una lettura arriva a
- * PostgreSQL, non si ferma alla memoria di PostgREST. Se la colonna c'è, niente ripiego: resta
- * l'errore, e si vede. Se la lettura dice che non c'è, o non si può fare (la richiesta non è di
- * PostgREST), si fa come prima. `leggiAGradini` fa solo letture, che PostgREST non ferma con
- * PGRST204: lì il caso non nasce.
+ * colonna: una lettura arriva a PostgreSQL, non si ferma alla memoria di PostgREST. Tabella e
+ * colonna si prendono dal messaggio del PGRST204, non dalla richiesta: chi avvolge la scrittura
+ * in una funzione (il turno del bonifico in `lib/stripe/payout.ts`) non passa una richiesta da
+ * interrogare, e il controllo prima non partiva. Si legge con le credenziali del client admin del
+ * sito (`lib/supabase/server.ts` lo crea così): quel file non si può importare da qui, perché
+ * questo modulo lo usano anche pagine del browser (`app/stores/page.tsx`) e lui porta
+ * `next/headers`. Nel browser la chiave non c'è: niente lettura, si fa come prima.
+ * Se la colonna c'è, niente ripiego: resta l'errore, e si vede. Se la lettura dice che non c'è,
+ * o non si può fare, si fa come prima. `leggiAGradini` fa solo letture, che PostgREST non ferma
+ * con PGRST204: lì il caso non nasce.
  */
-async function colonnaCheIlDatabaseHa(richiesta: unknown, errore: unknown): Promise<boolean> {
-  const colonna = colonnaNuovaNominata(errore);
-  const r = richiesta as { url?: unknown; headers?: unknown; fetch?: unknown } | null;
-  if (!colonna || !r?.url || typeof r.fetch !== 'function') return false;
+const MESSAGGIO_PGRST204 = /Could not find the '([^']+)' column of '([^']+)' in the schema cache/;
+
+async function colonnaCheIlDatabaseHa(tabella: string, colonna: string): Promise<boolean> {
+  if (typeof window !== 'undefined') return false;
   try {
-    const scrittura = new URL(String(r.url));
-    const lettura = new URL(scrittura.pathname, scrittura.origin);
-    lettura.searchParams.set('select', colonna);
-    lettura.searchParams.set('limit', '1');
-    const intestazioni = new Headers(r.headers as HeadersInit | undefined);
-    const schema = intestazioni.get('Content-Profile');
-    for (const nome of ['Prefer', 'Content-Type', 'Content-Profile']) intestazioni.delete(nome);
-    if (schema) intestazioni.set('Accept-Profile', schema);
-    const risposta = await (r.fetch as typeof fetch)(lettura.toString(), { method: 'GET', headers: intestazioni });
-    return risposta.ok;
+    const { url, key } = requireSupabaseService();
+    const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await admin.from(tabella).select(colonna).limit(1);
+    return !error;
   } catch {
     return false;
   }
+}
+
+/**
+ * R23-003 — Questo PGRST204 nomina una colonna che il database HA? Allora non è lo schema
+ * indietro, è la memoria di PostgREST vecchia: nessun ripiego deve togliere quella colonna.
+ * Per `conRipiegoSchema` e per i ripieghi fatti a mano che riconoscono l'errore con
+ * `eSchemaIndietro` o `colonnaNonTrovata` (lib/db/migrazione-148.ts). Lo annota lei.
+ */
+export async function memoriaDiPostgrestVecchia(errore: unknown, dove: string): Promise<boolean> {
+  const e = errore as { code?: unknown; message?: unknown } | null;
+  if (e?.code !== 'PGRST204' || typeof e.message !== 'string') return false;
+  const trovato = MESSAGGIO_PGRST204.exec(e.message);
+  if (!trovato) return false;
+  const [, colonna, tabella] = trovato;
+  if (!(await colonnaCheIlDatabaseHa(tabella, colonna))) return false;
+  logger.error(
+    "[db] PostgREST ha in memoria uno schema vecchio: la colonna c'è nel database ma la scrittura è rifiutata. " +
+      "Niente ripiego (salterebbe la colonna): la scrittura resta rifiutata finché lo schema non si ricarica (NOTIFY pgrst, 'reload schema')",
+    { dove, tabella, colonna, codice: 'PGRST204' },
+  );
+  return true;
 }
 
 export function eSchemaIndietro(errore: unknown): boolean {
@@ -192,17 +214,10 @@ export async function conRipiegoSchema<T extends { error: unknown }>(
   conNuovo: () => PromiseLike<T>,
   senzaNuovo: () => PromiseLike<T>,
 ): Promise<T> {
-  const richiesta = conNuovo();
-  const primo = await richiesta;
+  const primo = await conNuovo();
   if (!primo.error || !eSchemaIndietro(primo.error)) return primo;
   // R23-003 — PostgREST non vede una colonna che il database ha: la sua memoria è vecchia, non la migrazione.
-  if ((primo.error as { code?: string }).code === 'PGRST204' && (await colonnaCheIlDatabaseHa(richiesta, primo.error))) {
-    logger.error("[db] PostgREST ha in memoria uno schema vecchio: niente ripiego, va ricaricato (NOTIFY pgrst, 'reload schema')", {
-      dove,
-      codice: 'PGRST204',
-    });
-    return primo;
-  }
+  if (await memoriaDiPostgrestVecchia(primo.error, dove)) return primo;
 
   logger.warn('[db] migrazione 124 non ancora applicata: proseguo senza i campi nuovi', {
     dove,
