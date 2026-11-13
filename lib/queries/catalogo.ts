@@ -25,7 +25,6 @@
 import { queryKeys } from '@/lib/queries/keys';
 import { conRipiegoSchema, senzaColonne, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 import { fetchSellerPublicMap, negozioApprovato } from '@/lib/queries/seller-public-profiles';
-import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 
 /** Il minimo che serve per fare una lettura: vale per il client del browser e per quello del server. */
 export type ClientDiLettura = {
@@ -53,8 +52,6 @@ export type SchedaProdotto = {
   category_id: string | null;
   stock: number | null;
   attributes: Record<string, unknown> | null;
-  /** Solo i tag che accendono «Km 0» e «Artigianale»: vedi `tagDeiMarchiDellaScheda`. */
-  tags?: string[] | null;
   unit: string | null;
   compare_at_price: number | string | null;
   condition: string | null;
@@ -76,7 +73,7 @@ export type SchedaProdotto = {
  */
 export const COLONNE_SCHEDA_PRODOTTO = `
         id, name, description, price, images, seller_id, status, created_at, category_id,
-        stock, attributes, tags, unit, compare_at_price, condition, express_enabled, has_variants,
+        stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
         external_source_url,
         categories ( slug, name )
       `;
@@ -123,21 +120,6 @@ export function domandaCategorie(supa: ClientDiLettura) {
 /** Il codice di Postgres per «questo testo non è un valore del tipo della colonna». */
 const TESTO_NON_VALIDO_PER_IL_TIPO = '22P02';
 
-/**
- * Dei tag del prodotto, alla scheda arrivano solo quelli che accendono «Km 0» e
- * «Artigianale»: sono marchi che esistono solo come tag. Bio, Vegano, Senza
- * glutine e Senza lattosio devono venire soltanto dalle caselle del negoziante
- * (i tag li puo' scrivere anche l'assistente AI, le caselle no).
- */
-export function tagDeiMarchiDellaScheda(tags: unknown): string[] {
-  if (!Array.isArray(tags)) return [];
-  return tags.filter((t): t is string => {
-    if (typeof t !== 'string') return false;
-    const marchi = deriveQualityMarks({ tags: [t] });
-    return marchi.length > 0 && marchi.every((m) => m.key === 'km0' || m.key === 'artigianale');
-  });
-}
-
 /** La riga del prodotto, senza il negozio. `null` se il prodotto non c'e' (o chi guarda non lo vede). */
 export type RigaDelProdotto = Omit<SchedaProdotto, 'profiles'>;
 
@@ -162,9 +144,7 @@ export async function leggiRigaDelProdotto(supa: ClientDiLettura, id: string): P
   // Il collegamento alla categoria e' uno a uno: PostgREST lo restituisce
   // come oggetto, ma con le colonne elencate per nome i tipi generati lo
   // descrivono come elenco. Si dichiara la forma vera.
-  const riga = (data as unknown as RigaDelProdotto | null) ?? null;
-  if (!riga) return null;
-  return { ...riga, tags: tagDeiMarchiDellaScheda(riga.tags) };
+  return (data as unknown as RigaDelProdotto | null) ?? null;
 }
 
 /**
