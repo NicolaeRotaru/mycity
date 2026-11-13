@@ -1,8 +1,8 @@
 {
   "sessione": "R18",
-  "aggiornato": "2026-11-13 07:02",
+  "aggiornato": "2026-11-13 07:53",
   "finita": false,
-  "testa": "ad9dce85062d4a9640f548a8d5a9bb55f6a4b19d",
+  "testa": "b7c2d0dbe780e8ef4f2666632bf320786e8676fb",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_lanciato",
@@ -71,6 +71,52 @@
       "nota": "La pagina d'import l'ha già chiusa R09-006 (346e8147): app/seller/products/import/page.tsx:181 chiama caricaSulServer, nessun insert nella pagina. Il precedente R09 copriva solo l'UPDATE; la voce nomina anche l'insert di new/page.tsx, quindi servono la rotta nuova e DROP+REVOKE dell'INSERT. Dopo la migrazione le scritture col client amministrativo lasciano actor NULL nel registro attività (il trigger usa auth.uid()); chi ha scritto resta in audit_logs e activity_events via writeAudit. CARICAMENTO_DA_FILE_ACCESO=false (lib/funzioni-al-lancio.ts:79): oggi la rotta d'import non è viva."
     },
     {
+      "id": "R18-003",
+      "chiave": "deploy-sre|la prova «migrazione su database pieno» mette ancora i file nell'ordine vecchio",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "diff <(ls migrations/*.sql | sort -V) <(ls migrations/*.sql | LC_ALL=C sort) ; grep -n 'sort -V' tests/sql/harness/migrazione-su-database-pieno.sh",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il difetto c'e' ancora: righe 42 e 50 usano sort -V, che mette 052b prima di 052 e 108b prima di 108 (diff delle due liste: due coppie invertite). L'ordine giusto e' quello di tests/sql/harness/apply.sh:34 e scripts/applica-migrazioni-mancanti.sh:230, `LC_ALL=C sort`. Provata la copia corretta dello script (in una cartella di lavoro, puntata all'impalcatura vera): verde, ultima migrazione 425 su un database con un ordine.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/sql/harness/migrazione-su-database-pieno.sh",
+          "modifica": "Riga 42: `ULTIMA=\"$(ls \"$MIG\"/*.sql | sort -V | tail -1)\"` → `ULTIMA=\"$(ls \"$MIG\"/*.sql | LC_ALL=C sort | tail -1)\"`. Riga 50: `for f in $(ls \"$MIG\"/*.sql | sort -V); do` → `for f in $(ls \"$MIG\"/*.sql | LC_ALL=C sort); do`. Patch pronta: /home/user/r18-attrezzi/lotti/r18-003-serve-file-altrui.patch."
+        }
+      ]
+    },
+    {
+      "id": "R18-007",
+      "chiave": "privacy-legale|i nomi di sedici account cancellati restano nel registro delle azioni",
+      "esito": "non_codice",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/minori-s05-moderazione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/minori-s05-moderazione.test.ts -t registro --reporter=verbose",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "prova": "La parte di codice era gia' chiusa prima della base (S05, 5/11): app/api/admin/users/[id]/moderate/route.ts:316-324 scrive nel registro solo { role, reason } (niente store_name ne' full_name), app/api/admin/users/[id]/delete/route.ts:75-77 solo { role }; lo specchio activity_events (lib/audit.ts:69-80) copia gli stessi metadati. Le prove esistenti tests/unit/minori-s05-moderazione.test.ts «113/125» (rotta di moderazione, nessun 'name' e nessun cognome nei metadati) e «125» (rotta di cancellazione) sono verdi sulla base: 2 passate.",
+      "cosa_ho_fatto": "Controllato la rotta e il registro: nessun nome in chiaro viene piu' scritto quando si sospende, si riattiva, si approva, si rifiuta o si cancella un account. Nessun commit: nel mio file non c'e' niente da cambiare, e una prova nuova sarebbe verde anche senza correzione (quella esistente copre gia' il comportamento). Resta il passato, che e' nel database vero, e l'informativa, che non e' mia.",
+      "nota": "Per Nicola, sul database vero (io non l'ho interrogato): (1) togliere il nome dalle 20 righe vecchie e dalle loro copie: `UPDATE public.audit_logs SET metadata = metadata - 'name' WHERE target_table = 'profiles' AND metadata ? 'name' AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id::text = audit_logs.target_id);` e lo stesso su public.activity_events (category = 'moderation', target_table = 'profiles'); prima contale con la stessa condizione in un SELECT count(*) (atteso 20 e 20). Se si preferisce aspettare, la potatura notturna azzera metadata dopo 12 mesi (lib/privacy/potature-ritenzione.ts:296, giugno-luglio 2027), solo se il giro notturno e' acceso. (2) togliere dal contenitore products l'unico file con un proprietario che non esiste piu' (storage.objects con owner non in auth.users).",
+      "serve_file_altrui": [
+        {
+          "file": "app/privacy/page.tsx",
+          "modifica": "Nella tabella «Finalità, basi giuridiche e periodi di conservazione» (dopo la riga 157, «Sicurezza, anti-frode») aggiungere una riga: «Registro delle azioni dell'amministrazione (approvazioni, sospensioni, cancellazioni di account) | Legittimo interesse a rendere conto delle decisioni prese (art. 6.1.f) | 12 mesi: dopo, i dettagli della riga vengono azzerati e l'indirizzo IP tolto; il registro non conserva il nome della persona». È quello che fa lib/privacy/potature-ritenzione.ts (audit_logs.ip e audit_logs.metadata a 12 mesi)."
+        },
+        {
+          "file": "lib/account/cancellazione.ts",
+          "modifica": "Facoltativo, solo per le righe scritte prima del 5/11: nella cancellazione completa, dopo deleteUser, `UPDATE audit_logs SET metadata = metadata - 'name' WHERE target_table = 'profiles' AND target_id = <id>` e lo stesso su activity_events, col client di servizio, best-effort con un logger.error se fallisce. Le righe nuove il nome non lo hanno piu'."
+        }
+      ]
+    },
+    {
       "id": "R18-016",
       "chiave": "qa-flussi|il nome scritto alla registrazione si perde e il profilo resta senza nome",
       "esito": "parziale",
@@ -93,6 +139,32 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Migrazione 421: handle_new_user copia NULLIF(left(btrim(raw_user_meta_data->>'full_name'), 200), '') in profiles.full_name, il resto identico alla 161 ('pending' compreso). Nello stesso giro get_referral_leaderboard da' solo il nome di battesimo, come nomi_pubblici e rider_reviews_ricevute: il 5/11 la copia del nome era stata tolta proprio perche' la classifica degli inviti l'avrebbe mostrata intera a ogni utente con l'accesso. La prova simula l'iscrizione con una riga in auth.users coi dati dell'account (come lo shim) e guarda il profilo che nasce e la classifica vista da un altro.",
       "cosa_resta": "I profili gia' nati restano senza nome: il recupero da auth.users e' una scrittura sui dati veri e la voce la vuole con la firma di Nicola. La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della migrazione 421."
+    },
+    {
+      "id": "R18-018",
+      "chiave": "rls-database|chi non ha fatto l'accesso non vede la pagina eventi: legge «non riesco a leggere gli eventi» perché la regola dell'amministratore blocca anche la sola lettura",
+      "esito": "riparato",
+      "commit": "554a60dd854a640a00aaf9dcb9d88902943544dc",
+      "file_toccati": [
+        "migrations/422_la_regola_dell_amministratore_non_ferma_la_lettura_degli_eventi.sql",
+        "app/events/page.tsx",
+        "tests/sql/rls/riparazione-r18-eventi-da-visitatore.test.sql",
+        "tests/unit/riparazione-r18-eventi-con-la-data.test.tsx"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-eventi-da-visitatore.test.sql",
+        "tests/unit/riparazione-r18-eventi-con-la-data.test.tsx"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-eventi-da-visitatore.test.sql && bash tests/sql/harness/run.sh r18_prova ; npx vitest run tests/unit/riparazione-r18-eventi-con-la-data.test.tsx tests/unit/minori-s04-eventi.test.tsx tests/unit/storie-drop-ed-eventi-reggono-con-i-profili-chiusi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 554a60dd^ --file migrations/422_la_regola_dell_amministratore_non_ferma_la_lettura_degli_eventi.sql --prove tests/sql/rls/riparazione-r18-eventi-da-visitatore.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 554a60dd^ --file app/events/page.tsx --prove tests/unit/riparazione-r18-eventi-con-la-data.test.tsx --json (0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 422: su marketplace_events la regola FOR ALL events_admin_write (034:95-99, sottodomanda su profiles coi permessi di chi chiede) lascia il posto a quattro regole TO authenticated con (SELECT public.is_admin()): scrittura (INSERT, UPDATE, DELETE) e la lettura completa dell'amministratore, che la pagina admin usa per gli annullati e senza la quale UPDATE e DELETE non troverebbero la riga. La lettura pubblica events_public_read resta com'e'. Con la stessa domanda sulle altre FOR ALL che leggono profiles: stessa cura su shop_of_month (negozio del mese in home, letto dai visitatori) e cashback_campaigns (lettura pubblica delle campagne attive); rider_sos_events e zone_codes restano (i visitatori non le leggono). Prova SQL: toglie ad anon SELECT su profiles come in produzione, poi da visitatore legge evento, negozio del mese e campagna senza errori e non scrive; il cliente non scrive; l'amministratore vede l'annullato, lo rimette in programma, crea e cancella. Pagina: accanto a «Inizia tra…/Termina tra…» data e ora di Piacenza (dataEOraPiacenza di lib/admin/etichette.ts, Intl con timeZone Europe/Rome: «31 dic 2026, 20:00» e «1 gen 2027, 12:00»), «tra meno di un minuto» invece di «tra 0 min», e un ridisegno ogni 30 secondi che toglie l'evento appena finito senza aspettare la rilettura. Lo stato d'errore resta com'era: con la 422 non scatta piu' per i visitatori (e la prova S04 ne pretende il testo). Vitest con orologio finto e TZ America/New_York."
     },
     {
       "id": "R18-019",
@@ -142,6 +214,41 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Migrazione 424: chiavi esterne verso orders(id) sulle tre colonne della voce, NOT VALID poi VALIDATE (se ci sono orfani resta NOT VALID con un avviso e le domande per trovarli). disputes.order_id ON DELETE RESTRICT (un reclamo non sparisce con l'ordine e non resta senza; nel sito un ordine si cancella solo nel ripiego subito dopo averlo creato). loyalty_transactions.order_id e zone_code_uses.order_id ON DELETE SET NULL, come le altre order_id che possono restare vuote (cashback_redemptions, rider_sos_events); per loro due anche l'indice (controllo 4 di tests/sql/rls/14). La prova scrive su un ordine inventato (rifiutato) e cancella ordini con righe legate."
+    },
+    {
+      "id": "R18-021",
+      "chiave": "rls-database|su un progetto supabase nuovo le migrazioni girano, ma i visitatori non leggono quasi nessuna tabella: i permessi non sono scritti",
+      "esito": "parziale",
+      "commit": "516cc5f533c94524b0a14832747b1fdff21d6795",
+      "file_toccati": [
+        "migrations/425_i_permessi_del_sito_sono_scritti_nelle_migrazioni.sql",
+        "tests/sql/rls/riparazione-r18-permessi-scritti.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-permessi-scritti.test.sql"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-permessi-scritti.test.sql && bash tests/sql/harness/run.sh r18_prova && bash tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh r18_harness ; e sul progetto nuovo simulato: impalcatura senza le righe 156-162 (ALTER DEFAULT PRIVILEGES … GRANT), migrazioni LC_ALL=C con e senza la 425, poi la stessa prova e tutte le tests/sql/rls/*.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_morde",
+        "uscita": 1,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 516cc5f5^ --file migrations/425_i_permessi_del_sito_sono_scritti_nelle_migrazioni.sql --prove tests/sql/rls/riparazione-r18-permessi-scritti.test.sql --sql r18_rimessa --json (1: l'impalcatura di oggi concede ALL di partenza, quindi senza la 425 i permessi ci sono lo stesso)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 425: i permessi che il sito vero ha, scritti. Generati dal database ricostruito da tutte le migrazioni fino alla 424 coi permessi di partenza di una volta (come e' nato il sito vero), con tre strette e nessuna aggiunta: niente TRIGGER/TRUNCATE/REFERENCES ad anon e authenticated, niente SELECT su profiles ad anon (R18-024), delle sequenze solo USAGE su product_views_id_seq. Tabelle (103 righe), due colonne (UPDATE di conversations.buyer/seller_unread_count e notifications.is_read), 9 viste, service_role lettura/scrittura su tutto, EXECUTE per nome sulle 86 funzioni non-grilletto che lo hanno oggi (anon/authenticated/service_role). Ogni oggetto mancante si salta con un avviso (la prova la-158 costruisce un database senza la 158: con GRANT secchi la 425 si fermava). Controllo finale: si ferma se una tabella senza RLS risultasse aperta ad anon o authenticated (oggi 77 tabelle su 77 hanno RLS). Sul database ricostruito la 425 e' un no-op esatto (confronto di relacl, attacl, proacl e nspacl prima e dopo: nessuna differenza). Prova SQL: visitatore (catalogo, vetrina, categorie, eventi, visita, contatti, segnalazione; niente prezzi), cliente (preferito, is_read si', titolo no), negozio (prezzo suo), server (stripe_event_log, email_queue, profiles), nessuna tabella senza RLS aperta. Progetto nuovo simulato (impalcatura senza ALTER DEFAULT PRIVILEGES … GRANT): senza la 425 76 tabelle su 77 senza SELECT per anon, la prova 6 rossi su 13 e 28 file SQL rossi; con la 425 la prova 13/13 e tutti i file SQL verdi, salvo 19 e 34 che leggono profiles da anon (sotto). Verdi anche: run.sh, la-158/159/160, lo-script…, semine, pieno, le 59 prove unitarie che leggono migrations/ (515 passate, compresa nessuna-funzione-potente…).",
+      "cosa_resta": "La prova morde solo quando l'impalcatura smette di concedere ALL di partenza: va tolto il blocco ALTER DEFAULT PRIVILEGES di tests/sql/harness/00_shim_supabase.sql (non mio) e, nello stesso passo, corrette le prove 19 e 34 (insieme a R18-024). Poi rifare la prova rimessa --sql della 425: deve dare 0.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/sql/harness/00_shim_supabase.sql",
+          "modifica": "Togliere le righe 156-162 (il commento «grant di default (vedi sopra)» e i tre ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES / GRANT ALL ON SEQUENCES / GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role) e riscrivere l'intestazione (riga 9 «…e i loro grant di default» → «…, SENZA grant di default»; righe 13-16 «IMPORTANTE — i grant di default…» → il perche' della 425). Patch pronta, si applica con git apply: /home/user/r18-attrezzi/lotti/r18-021-shim-serve-file-altrui.patch. Va insieme alla patch delle prove 19 e 34, altrimenti quelle due diventano rosse. Da guardare dopo: .github/workflows/backup-db.yml:670 monta la stessa impalcatura prima di pg_restore (con un dump che porta i suoi GRANT non cambia niente; senza -x i permessi arrivano dal dump)."
+        },
+        {
+          "file": "tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql + tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
+          "modifica": "Come in R18-024: /home/user/r18-attrezzi/lotti/r18-024-prove-19-e-34-serve-file-altrui.patch."
+        }
+      ],
+      "insieme_a": "R18-024"
     },
     {
       "id": "R18-022",
@@ -206,6 +313,77 @@
       "copre_tutta_la_voce": true,
       "prova": "migrations/230_un_ordine_con_lo_stato_vuoto_conta.sql:60-61 — check_coupon conta gli ordini con delivery_status IS DISTINCT FROM 'CANCELED' AND payment_status IS DISTINCT FROM 'FAILED', la stessa regola della cassa (lib/coupons.ts:125-126); la 185 l'aveva gia' allineata. Sulla base ricostruita tests/sql/rls/44 e' verde (Maria con solo un ordine annullato riceve il benvenuto) e torna rossa rimettendo la funzione della 114.",
       "nota": "Il difetto vive solo nella produzione, ferma alla 161: la cura e' applicare le migrazioni pendenti (185 e 230 comprese) col riallineamento a mano, prima di riaccendere i codici sconto (CODICI_SCONTO_IN_CASSA). Nessuna 428: una copia della funzione della 230 non cambierebbe nessun comportamento e la prova rimessa darebbe 1 (non morde)."
+    },
+    {
+      "id": "R18-024",
+      "chiave": "rls-database|sul sito vero i visitatori non possono leggere la tabella dei profili, ma nessuna migrazione lo dice",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-profili-chiusi-ai-visitatori.test.sql"
+      ],
+      "prova_comando": "git cherry-pick d7e40adc && export PGHOST=/var/run/postgresql && bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-profili-chiusi-ai-visitatori.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "commit_pronto": "d7e40adc0419437e899aa2e71bd04e2cec362496",
+      "tolto_con": "b7c2d0dbe780e8ef4f2666632bf320786e8676fb",
+      "rimessa_sul_commit_pronto": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7e40adc^ --file migrations/426_i_visitatori_non_leggono_la_tabella_dei_profili.sql --prove tests/sql/rls/riparazione-r18-profili-chiusi-ai-visitatori.test.sql --sql r18_rimessa --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 426: REVOKE SELECT ON public.profiles FROM anon (sul sito vero un no-op). Controllato prima che niente di pubblico legga la tabella da anon: le viste che i visitatori leggono e che guardano profiles (seller_public_profiles, shop_of_month_leaderboard, live_activity_public) sono security_invoker=off; le funzioni che leggono profiles sono tutte SECURITY DEFINER (nessuna funzione INVOKER di public la nomina); pagine e rotte pubbliche leggono i negozi da seller_public_profiles e i profili pubblici col client di servizio (app/u/[handle]/page.tsx:46), il resto dei .from('profiles') e' dietro l'accesso o col client di servizio, nessun aggancio profiles!… da pagine pubbliche; le regole FOR ALL degli amministratori su eventi, negozio del mese e campagne non leggono piu' profiles coi permessi di chi chiede (422, che viene prima). Prova SQL: da visitatore la lettura di profiles e' negata (non solo vuota) e vetrina, catalogo, eventi e negozio del mese si leggono; il cliente legge il suo profilo e solo quello. Rimessa --sql sul commit d7e40adc: regge. Il commit e' stato tolto dal ramo con b7c2d0db: con la 426 run.sh diventa rosso su due prove esistenti non mie, che contano le righe di profiles da anon (19:178-181 e 34:155-158, piu' 34:162-167 col vecchio aggancio): con la lettura negata danno «permission denied» invece di 0. Con la patch qui sotto tutte le prove SQL sono verdi con la 426 (provato file per file).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql",
+          "modifica": "Righe 178-181 (controllo ⑨ «la tabella dei profili resta chiusa a un visitatore», SELECT count(*) FROM public.profiles da anon): diventano un blocco DO che conta le righe e, se la lettura e' negata (EXCEPTION WHEN insufficient_privilege), scrive l'esito verde con 'lettura negata: ' || SQLERRM. Zero righe resta verde, una riga letta resta rossa: non si indebolisce niente."
+        },
+        {
+          "file": "tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
+          "modifica": "Righe 155-158 (controllo ⑦, stesso cambio della 19) e righe 162-167 (controllo ⑧, il vecchio aggancio LEFT JOIN LATERAL su profiles da anon: blocco DO, verde se torna vuoto o se e' negato). Patch delle due prove, si applica con git apply: /home/user/r18-attrezzi/lotti/r18-024-prove-19-e-34-serve-file-altrui.patch. Poi `git cherry-pick d7e40adc` nello stesso passo."
+        }
+      ],
+      "insieme_a": "R18-021"
+    },
+    {
+      "id": "R18-025",
+      "chiave": "sicurezza-auth|sospendere un fattorino non gli toglie le consegne in corso: continua a vedere i recapiti, ritirare e consegnare",
+      "esito": "parziale",
+      "commit": "11a97f7ae7fd54836d4c8734e5495584c8dc0e85",
+      "file_toccati": [
+        "migrations/420_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql",
+        "app/api/admin/users/[id]/moderate/route.ts",
+        "tests/sql/rls/riparazione-r18-rider-sospeso.test.sql",
+        "tests/unit/riparazione-r18-sospensione-rider.test.ts",
+        "tests/unit/riparazione-r08-moderazione.test.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r18-rider-sospeso.test.sql",
+        "tests/unit/riparazione-r18-sospensione-rider.test.ts"
+      ],
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-rider-sospeso.test.sql && bash tests/sql/harness/run.sh r18_prova ; npx vitest run tests/unit/riparazione-r18-sospensione-rider.test.ts tests/unit/riparazione-r08-moderazione.test.ts tests/unit/minori-s05-moderazione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a97f7a^ --file migrations/420_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql --prove tests/sql/rls/riparazione-r18-rider-sospeso.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11a97f7a^ --file 'app/api/admin/users/[id]/moderate/route.ts' --prove tests/unit/riparazione-r18-sospensione-rider.test.ts --json (0)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato prima: nessuna migrazione dopo la 215 aveva messo l'approvazione nelle due funzioni o nella regola di lettura (ultime versioni: verify_pickup_code 127 riscritta dalla 215 senza faccine, verify_delivery_code 215, regola 215:761). Migrazione 420 (CREATE OR REPLACE con la stessa firma, permessi invariati, testo copiato dalla versione in vigore): is_rider_approvato() entra nella condizione di verify_pickup_code e di verify_delivery_code (il sospeso riceve i codici che il pannello conosce gia': NOT_ASSIGNED_OR_WRONG_STATUS e WRONG_STATUS) e nella regola di lettura «Riders can view available and own orders» (stessa regola della 215 con (SELECT public.is_rider_approvato()) davanti). Lo storico dei compensi non cambia (rider_consegne_storico gira coi permessi del creatore). Rotta di sospensione: per un fattorino, dopo aver scritto la sospensione, rimette in bacheca gli ASSIGNED (READY, rider_id e posizione a NULL, col client di servizio che il guardiano degli ordini lascia passare; i grilletti gia' trattano ASSIGNED->READY senza ripetere «ordine pronto» al cliente) e risponde rimesse_in_bacheca; il conteggio di prima resta e ora conta solo quelle con la merce in mano (PICKED_UP, OUT_FOR_DELIVERY), che l'avviso gia' nominava; se la bacheca non si riempie l'avviso lo dice e il conteggio comprende le ASSIGNED. Prova SQL: due fattorini, uno sospeso: il sospeso non legge i recapiti, non ritira e non consegna (stati fermi), l'approvato si'. Vitest: ordini in memoria coi filtri veri. Prova esistente toccata (importa la rotta): tests/unit/riparazione-r08-moderazione.test.ts, al finto Supabase degli ordini si aggiunge update (la rotta ora lo chiama); nessun controllo indebolito. La 420 regge anche un database con dentro un ordine, applicata due volte.",
+      "cosa_resta": "Le rotte del fattorino che leggono col client di servizio e non passano dalla regola di lettura ne' dalle due funzioni: cash-confirm e cliente-assente (file non miei, sotto). Fino ad allora un sospeso con un ordine gia' ritirato puo' ancora dichiarare l'incasso o segnare «cliente assente» (annullo con rimborso).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/rider/cash-confirm/route.ts",
+          "modifica": "Dopo la riga 130 (`if (!order || !order.rider_id) return ApiErrors.notFound('Ordine non trovato');`) aggiungere: `// R18-025 — Un fattorino sospeso non registra incassi: lo fa l'amministrazione al suo posto (/api/admin/cod-incasso-dichiarato).` poi `const { data: io } = await admin.from('profiles').select('role, is_approved').eq('id', user.id).maybeSingle();` e `if (!io || io.role !== 'rider' || io.is_approved !== true) return ApiErrors.forbidden('Il tuo profilo fattorino è sospeso: l’incasso lo registra l’assistenza.');`"
+        },
+        {
+          "file": "app/api/rider/orders/[id]/cliente-assente/route.ts",
+          "modifica": "Dopo la riga 55 (`if (order.rider_id !== user.id) return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');`) aggiungere: `const { data: io } = await admin.from('profiles').select('role, is_approved').eq('id', user.id).maybeSingle();` e `if (!io || io.role !== 'rider' || io.is_approved !== true) return ApiErrors.forbidden('Il tuo profilo fattorino è sospeso: questa consegna la chiude l’assistenza.');` Con una prova che monta la rotta con un profilo is_approved=false e pretende 403 senza annullo."
+        }
+      ]
     }
   ],
   "nuovi_difetti_visti": [
@@ -222,6 +400,20 @@
       "severita": "minore",
       "file": "migrations/114_hardening_radiografia.sql (increment_coupon_usage)",
       "descrizione": "Nessun codice del sito la chiama piu' (app/api/orders/cod/route.ts:1779), ma esiste ancora e fa uses_count + 1 senza il controllo max_uses di claim_coupon. Con la 423 una chiamata oltre il massimo viene fermata dal paletto (errore invece che contatore storto); resta una funzione morta da togliere o allineare a claim_coupon."
+    },
+    {
+      "titolo": "Altre quattro prove dell'impalcatura SQL mettono ancora le migrazioni nell'ordine di sort -V",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh:54 · la-159-non-lascia-la-tabella-scoperta.sh:61 · la-160-regge-un-ordine-annullato.sh:45 · lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh:55",
+      "descrizione": "Stesso difetto di R18-003 fuori dal file della voce: sort -V invece di LC_ALL=C sort (052b prima di 052, 108b prima di 108). Oggi innocuo. In scripts/applica-migrazioni-mancanti.sh:11 c'e' ancora sort -V nel commento d'uso. Cura: LC_ALL=C sort in tutti e quattro."
+    },
+    {
+      "titolo": "Altre regole degli amministratori leggono profiles coi permessi di chi chiede invece di usare is_admin()",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "rider_sos_admin_all (FOR ALL) · zone_codes_admin_write (FOR ALL) · audit_admin_read · contact_admin_read · contact_admin_update · disputes_party_read · disputes_admin_update",
+      "descrizione": "Stessa costruzione di R18-018 su tabelle che i visitatori non leggono: per anon (che in produzione non legge profiles) una domanda su quelle tabelle da' errore invece di zero righe, e per tutti la sottodomanda gira riga per riga. Nessuna pagina si spegne oggi. Cura: (SELECT public.is_admin()) TO authenticated, come la 422."
     }
   ],
   "domande_per_nicola": [
@@ -231,10 +423,16 @@
     "R18-020 (migrazione 424): le tre chiavi esterne nascono NOT VALID e si validano subito; se in produzione esiste un reclamo, un movimento punti o un uso di codice di zona legato a un ordine cancellato, la chiave resta NOT VALID con un avviso. Le domande per trovarli sono in fondo alla 424. Scelto RESTRICT per i reclami e SET NULL per punti e codici di zona (la voce diceva RESTRICT per tutte e tre): confermi?",
     "R18-016 (migrazione 421): firmi il recupero dei nomi dei profili gia' nati da auth.users? La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della 421. Con la 421 la classifica degli inviti mostra solo il nome di battesimo, come gli altri nomi pubblici.",
     "R18-022 (migrazione 427): un fattorino col documento d'identita' scaduto non prende consegne nuove, come con patente e polizza scadute (data vuota = non ferma): confermi? E per il negoziante col documento scaduto cosa deve succedere (oggi niente)? Va controllata anche all'approvazione (lib/admin/regole-approvazione.ts, come patente e polizza)?",
-    "R18-023: la correzione di check_coupon e' gia' nel codice (185 e 230): la produzione la riceve col riallineamento delle migrazioni pendenti, da fare prima di riaccendere i codici sconto."
+    "R18-023: la correzione di check_coupon e' gia' nel codice (185 e 230): la produzione la riceve col riallineamento delle migrazioni pendenti, da fare prima di riaccendere i codici sconto.",
+    "R18-025 (migrazione 420): un fattorino sospeso con la merce gia' in mano non chiude piu' la consegna. In contanti e in strada la chiude l'amministratore (admin_chiudi_consegna, 360); con la carta oggi c'e' solo l'annullo col rimborso, nessun «chiudi consegna» dell'amministratore. Va bene, o la consegna gia' ritirata si lascia finire al sospeso come si fa con la polizza scaduta a meta' giro?",
+    "R18-025: alla sospensione le consegne non ancora ritirate tornano in bacheca e i fattorini online ricevono «ordine pronto», ma il negozio non riceve un avviso (rider_release_order invece lo manda). Lo vuoi anche qui?",
+    "R18-018 (migrazione 422): oltre agli eventi ho cambiato allo stesso modo le regole degli amministratori su shop_of_month (negozio del mese in home) e cashback_campaigns, che i visitatori leggono e che con profiles chiusa ad anon davano lo stesso errore. Chi e' admin fa quello che faceva prima: confermi?",
+    "R18-021 (migrazione 425 + impalcatura): togliendo dall'impalcatura i permessi di partenza, sulle prove una tabella nuova nasce chiusa; in produzione invece nasce ancora con SELECT per anon e authenticated (permessi di default dopo 114/119). Vuoi allineare anche la produzione (ALTER DEFAULT PRIVILEGES … REVOKE SELECT ON TABLES FROM anon, authenticated, anche FOR ROLE postgres), cosi' ogni migrazione nuova deve scrivere i suoi GRANT ovunque?",
+    "R18-024 (migrazione 426, commit pronto d7e40adc): sul sito vero e' un no-op. Entra nel ramo solo insieme alla patch delle prove SQL 19 e 34 (non mie), che oggi contano le righe di profiles da anon e con la lettura negata diventerebbero rosse.",
+    "R18-007: le 20 righe del registro (e le loro copie in activity_events) con il nome di 16 account cancellati e il file orfano nel contenitore products stanno nel database vero: la domanda per ripulirle e' nella nota della voce. Le fai tu, o aspettiamo la potatura dei 12 mesi (giugno-luglio 2027)?"
   ],
   "conto": {
-    "agenti": 2,
-    "nota": ""
+    "agenti": 3,
+    "nota": "Fermata al tetto di costo: 34,73 $ dopo i lotti 1-3 (3 subagenti riparatori, nessun revisore ancora). Restano senza esito R18-004, 005, 006, 008, 009, 010, 011, 012, 013, 014, 015, 017 (lotti 4 e 5 del piano approvato) e la revisione dei lotti 1-3. Migrazioni libere della fascia: 428, 429. Patch dei serve_file_altrui: non nel ramo, descritte per intero nelle voci."
   }
 }
