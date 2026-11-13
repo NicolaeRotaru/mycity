@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
@@ -12,7 +13,12 @@ export const runtime = 'nodejs';
 
 const Schema = z.object({
   firstMessage: z.string().trim().min(1, 'Messaggio vuoto').max(4000, 'Massimo 4000 caratteri'),
+  // R14-022 — Facoltativa: un identificativo per ogni invio dalla schermata (stesso invio ripetuto = stessa chiave).
+  chiave: z.string().trim().min(8).max(100).optional(),
 });
+
+/** Quanto due invii uguali della stessa persona contano come uno solo (doppio clic, doppio tocco, rete che ripete). */
+const FINESTRA_DOPPIONE_MS = 5_000;
 
 /**
  * GET /api/support/conversation → `{ supportId }`
@@ -80,7 +86,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   try { json = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = Schema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
-  const { firstMessage } = parsed.data;
+  const { firstMessage, chiave } = parsed.data;
 
   const admin = getAdminSupabase();
 
@@ -129,6 +135,17 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
       if (error || !created) return ApiErrors.internal('Impossibile aprire la conversazione');
       conversationId = created.id;
     }
+  }
+
+  // R14-022 — DUE INVII UGUALI NELLO STESSO ISTANTE = UN MESSAGGIO E UN AVVISO.
+  // Il corpo non porta una chiave anti-doppione e il database non ne ha una per i messaggi: il
+  // controllo e' un contatore atomico (incremento, non «leggi e poi scrivi») sulla chiave
+  // persona + invio, che il primo dei due vince. Il secondo riceve la stessa risposta del primo
+  // e non scrive niente. Senza `chiave` (modulo non ancora aggiornato) l'invio e' l'impronta del testo.
+  const impronta = chiave ?? createHash('sha256').update(firstMessage).digest('hex').slice(0, 32);
+  const unico = await rateLimitAsync({ key: `support:invio:${user.id}:${impronta}`, max: 1, windowMs: FINESTRA_DOPPIONE_MS });
+  if (!unico.allowed) {
+    return NextResponse.json({ conversationId, supportId: support.id }, { status: 200 });
   }
 
   const { error: msgErr } = await admin.from('messages').insert({
