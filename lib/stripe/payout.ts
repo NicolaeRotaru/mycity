@@ -1684,7 +1684,9 @@ async function laChiaveENelLibro(
   return typeof data === 'boolean' ? data : null;
 }
 
-async function ilRimborsoDellaChiaveGiaUscito(
+// 13/11/2026 (R17-004) — Esportata: `avanza` la chiede prima del suo controllo sul residuo, che un
+// rimborso pieno gia' uscito porta a zero (il rimborso si registra, non si respinge).
+export async function ilRimborsoDellaChiaveGiaUscito(
   order: { id: string; stripe_payment_intent?: string | null },
   chiave: string,
   idDelReso: string | null,

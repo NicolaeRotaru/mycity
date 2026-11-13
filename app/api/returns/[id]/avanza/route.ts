@@ -5,6 +5,7 @@ import { isStripeConfigured } from '@/lib/stripe/client';
 import {
   AccreditoGiaUscitoConAltroImporto,
   cosaMancaAlBonifico,
+  ilRimborsoDellaChiaveGiaUscito,
   RimborsoInAttesaDellaDivisione,
   refundOrder,
 } from '@/lib/stripe/payout';
@@ -166,6 +167,35 @@ function mancaLaColonnaDelGiorno(errore: unknown): boolean {
   const e = errore as { code?: string; message?: string; details?: string } | null;
   if (!e || (e.code !== 'PGRST204' && e.code !== '42703')) return false;
   return new RegExp(`\\b${COLONNA_DEL_GIORNO}\\b`).test(`${e.message ?? ''} ${e.details ?? ''}`);
+}
+
+/**
+ * 13/11/2026 (R17-004) — IL RIMBORSO CON LA CARTA DI QUESTO RESO E' GIA' USCITO.
+ *
+ * Il negozio approva un reso da 40 € su un ordine con carta da 40 €: Stripe rimborsa e l'ordine
+ * conta 40 €, poi cade la scrittura dell'esito sul reso (decide risponde 500, il reso resta
+ * APPROVED). Coi passi normali («merce ricevuta», «rimborsato») il residuo dell'ordine e' zero, e qui
+ * si rispondeva «già rimborsato per intero» (o «non può superare») prima che `refundOrder` potesse
+ * riconoscere il rimborso della chiave del reso: il reso non si chiudeva mai «rimborsato». Sui
+ * contanti lo dice il segno sull'ordine (`giaSullOrdine`); sulla carta il testimone e' Stripe. Si
+ * guarda solo quando il residuo non basta; una lettura caduta lascia la risposta di prima.
+ */
+async function ilRimborsoDelResoGiaSullaCarta(
+  ordine: OrdineDaRimborsare,
+  ret: { id: string; order_id: string },
+): Promise<{ refundId: string; centesimi: number } | null> {
+  if (!ordine.stripe_payment_intent || !isStripeConfigured()) return null;
+  try {
+    const visto = await ilRimborsoDellaChiaveGiaUscito(
+      { id: ret.order_id, stripe_payment_intent: ordine.stripe_payment_intent },
+      `return_${ret.id}`,
+      ret.id,
+    );
+    return visto ? { refundId: visto.uscito.id, centesimi: visto.uscito.amount ?? 0 } : null;
+  } catch (err) {
+    logger.error('[returns/avanza] rimborsi del pagamento non letti: resta il controllo sul residuo', { returnId: ret.id, err });
+    return null;
+  }
 }
 
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
@@ -337,10 +367,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     if (importoRimborso <= 0) {
       return ApiErrors.invalidRequest('Indica quanto rimborsare al cliente.');
     }
-    if (rimborsabile.perche !== 'ok') {
+    // R17-004 — Il residuo non basta: forse e' il rimborso di questo reso, gia' uscito sulla carta.
+    const giaSullaCarta =
+      rimborsabile.perche !== 'ok' || importoRimborso > residuoCent ? await ilRimborsoDelResoGiaSullaCarta(ordine, ret) : null;
+    // Si registra quello che e' uscito: `refundOrder` lo riconosce e non lo rifa'.
+    if (giaSullaCarta) importoRimborso = giaSullaCarta.centesimi;
+    if (!giaSullaCarta && rimborsabile.perche !== 'ok') {
       return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
     }
-    if (importoRimborso > residuoCent) {
+    if (!giaSullaCarta && importoRimborso > residuoCent) {
       return ApiErrors.invalidRequest(
         `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
       );
@@ -352,7 +387,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
      * il motivo (merce rovinata o usata oltre la prova), che arriva al cliente.
      * Vale anche per l'amministratore.
      */
-    if (eUnRecesso(ret)) {
+    if (!giaSullaCarta && eUnRecesso(ret)) {
       let righe: RigaDellOrdine[] | null = null;
       if (ret.order_item_id) {
         const { data: lette, error: errRighe } = await admin
