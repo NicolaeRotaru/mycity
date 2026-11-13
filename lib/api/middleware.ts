@@ -575,7 +575,11 @@ async function recordCronHeartbeat(req: NextRequest): Promise<void> {
  */
 export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const expected = process.env.CRON_SECRET;
+    // R23-009 (13/11/2026) — Su Vercel un segreto incollato porta spesso un «a capo» in fondo.
+    // Il gettone che arriva si ripulisce (`.trim()` qui sotto), il segreto atteso no: i due non
+    // combaciavano mai, e anche il primo giro a mano rispondeva «non autorizzato». Si ripuliscono
+    // tutti e due allo stesso modo; un segreto fatto solo di spazi vale come assente.
+    const expected = process.env.CRON_SECRET?.trim();
     // S10 (5/11/2026) — Per sette settimane i lavori non sono partiti e il
     // registro taceva: queste due uscite stanno PRIMA della riga d'errore e del
     // battito. Adesso lasciano la loro riga (mai il segreto).

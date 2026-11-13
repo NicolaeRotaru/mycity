@@ -211,7 +211,9 @@ export async function GET(request: Request) {
   // Chi ha il segreto dei lavori periodici vede il dettaglio interno. Decide
   // QUANTO si racconta, non piu' QUALI controlli si fanno: i controlli adesso
   // si fanno tutti comunque (vedi il blocco qui sotto).
-  const segreto = process.env.CRON_SECRET;
+  // R23-009 — ripulito come il gettone (vedi withCronAuth): con un «a capo» in fondo al segreto
+  // su Vercel il dettaglio non lo vedeva più nessuno.
+  const segreto = process.env.CRON_SECRET?.trim();
   const autorizzato =
     process.env.NODE_ENV !== 'production' ||
     // 22/8/2026 — era `=== \`Bearer ${segreto}\``. Un confronto che esce al
