@@ -145,7 +145,23 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   const impronta = chiave ?? createHash('sha256').update(firstMessage).digest('hex').slice(0, 32);
   const unico = await rateLimitAsync({ key: `support:invio:${user.id}:${impronta}`, max: 1, windowMs: FINESTRA_DOPPIONE_MS });
   if (!unico.allowed) {
-    return NextResponse.json({ conversationId, supportId: support.id }, { status: 200 });
+    // Il doppione risponde 200 solo se il primo invio e' DAVVERO andato a buon fine: si cerca il messaggio
+    // scritto. Se il primo e' ancora in corso si aspetta un attimo; se e' fallito (o non compare) il
+    // nuovo tentativo non si perde: scrive lui.
+    for (let prova = 0; prova < 4; prova++) {
+      if (prova > 0) await new Promise((r) => setTimeout(r, 150));
+      const { data: scritto } = await admin
+        .from('messages')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('sender_id', user.id)
+        .eq('body', firstMessage)
+        .gte('created_at', new Date(Date.now() - FINESTRA_DOPPIONE_MS).toISOString())
+        .limit(1);
+      if (scritto && scritto.length > 0) {
+        return NextResponse.json({ conversationId, supportId: support.id }, { status: 200 });
+      }
+    }
   }
 
   const { error: msgErr } = await admin.from('messages').insert({

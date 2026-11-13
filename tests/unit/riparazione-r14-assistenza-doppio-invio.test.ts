@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const incrementi = new Map<string, number>();
 const messaggi: Array<Record<string, unknown>> = [];
 const avvisi: Array<Record<string, unknown>> = [];
+let falliscono = 0; // quanti insert in messages devono ancora fallire
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
@@ -31,7 +32,22 @@ vi.mock('@/lib/supabase/server', () => ({
           select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'conv-1' }, error: null }) }) }) }),
         };
       }
-      if (t === 'messages') return { insert: async (r: Record<string, unknown>) => { messaggi.push(r); return { error: null }; } };
+      if (t === 'messages') {
+        return {
+          insert: async (r: Record<string, unknown>) => {
+            if (falliscono > 0) { falliscono--; return { error: { message: 'guasto finto' } }; }
+            messaggi.push(r);
+            return { error: null };
+          },
+          select: () => {
+            const q: Record<string, unknown> = {};
+            q.eq = () => q;
+            q.gte = () => q;
+            q.limit = async () => ({ data: messaggi.map((_, i) => ({ id: String(i) })), error: null });
+            return q;
+          },
+        };
+      }
       if (t === 'notifications') return { insert: async (r: Record<string, unknown>) => { avvisi.push(r); return { error: null }; } };
       throw new Error(`tabella inattesa ${t}`);
     },
@@ -52,6 +68,7 @@ beforeEach(() => {
   incrementi.clear();
   messaggi.length = 0;
   avvisi.length = 0;
+  falliscono = 0;
 });
 
 describe('R14-022 due invii uguali all assistenza', () => {
@@ -76,5 +93,16 @@ describe('R14-022 due invii uguali all assistenza', () => {
     await Promise.all([invia('Primo problema'), invia('Secondo problema')]);
     expect(messaggi).toHaveLength(2);
     expect(avvisi).toHaveLength(2);
+  });
+
+  it('un invio che fallisce non blocca il nuovo tentativo: il messaggio viene scritto', async () => {
+    falliscono = 1;
+    const primo = await invia('Il mio ordine non è arrivato.');
+    expect(primo.status).toBeGreaterThanOrEqual(500);
+    expect(messaggi).toHaveLength(0);
+    const secondo = await invia('Il mio ordine non è arrivato.');
+    expect(secondo.status).toBe(200);
+    expect(messaggi).toHaveLength(1);
+    expect(avvisi).toHaveLength(1);
   });
 });
