@@ -7,6 +7,7 @@ import { ApiErrors, apiError } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
+import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
 
 export const runtime = 'nodejs';
 
@@ -27,11 +28,29 @@ export const runtime = 'nodejs';
  *
  * L'errore di Supabase torna al browser con il suo codice e il suo testo, come
  * lo vedeva prima la pagina: la traduzione resta una sola, `friendlyError`.
+ * Se Supabase non risponde (rete caduta, 5xx) la risposta è 503, come
+ * sull'accesso: non è colpa della persona né della sua rete.
+ *
+ * IL GETTONE ANTI-ROBOT LO VERIFICA UNO SOLO. Cloudflare dà un gettone valido una
+ * volta sola: verificarlo qui con siteverify e poi passarlo a Supabase col CAPTCHA
+ * acceso fa fallire la seconda verifica (timeout-or-duplicate) e ogni iscrizione
+ * riceve 400 captcha_failed, bruciando anche un posto del freno. Chi verifica lo
+ * dice `CAPTCHA_SU_SUPABASE` (variabile non segreta):
+ *  - accesa («1» o «true»), col CAPTCHA acceso in Supabase → Attack Protection:
+ *    niente siteverify qui, il gettone va a Supabase;
+ *  - spenta (il resto dei casi), col CAPTCHA spento in Supabase: siteverify qui,
+ *    e il gettone NON va a Supabase.
  */
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const RUOLI = new Set(['buyer', 'seller', 'rider']);
 const NOME_MAX = 120;
+
+/** Accesa = il gettone lo verifica Supabase (CAPTCHA acceso lì), non questa rotta. */
+function captchaSuSupabase(): boolean {
+  const v = (process.env.CAPTCHA_SU_SUPABASE ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true';
+}
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -70,14 +89,21 @@ export async function POST(request: Request) {
     return ApiErrors.invalidRequest('Spunta la casella per accettare Termini e Privacy');
   }
 
-  const cap = await verifyTurnstileToken(captchaToken, ip);
-  if (!cap.ok) {
-    return ApiErrors.invalidRequest(cap.reason);
+  const suSupabase = captchaSuSupabase();
+  if (suSupabase) {
+    // Lo verifica Supabase: senza gettone rifiuterebbe comunque, inutile chiamarlo.
+    if (!captchaToken) return ApiErrors.invalidRequest('CAPTCHA mancante');
+  } else {
+    const cap = await verifyTurnstileToken(captchaToken, ip);
+    if (!cap.ok) {
+      return ApiErrors.invalidRequest(cap.reason);
+    }
   }
 
   try {
     const { data, error } = await authServer.signUp(email, password, {
-      captchaToken: captchaToken || undefined,
+      // Già speso da siteverify se la verifica è stata fatta qui: a Supabase va solo se tocca a lui.
+      captchaToken: suSupabase ? captchaToken : undefined,
       emailRedirectTo: ritornoDopoLaConferma(env.appUrl(), returnTo, 'email'),
       data: {
         role: ruolo,
@@ -86,6 +112,9 @@ export async function POST(request: Request) {
       },
     });
     if (error) {
+      if (esitoErroreDiAccesso(error) === 'servizio_giu') {
+        return ApiErrors.unavailable('Il servizio di registrazione non risponde in questo momento. Riprova fra poco.');
+      }
       const stato = typeof error.status === 'number' && error.status >= 400 && error.status < 600 ? error.status : 400;
       const codice = typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : 'SIGNUP_FAILED';
       return apiError(stato, error.message || 'Registrazione non riuscita. Riprova fra un momento.', codice);
