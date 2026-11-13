@@ -29,11 +29,21 @@ export const useNotificationsCount = () => {
     refetchInterval: 60_000,
     queryFn: async () => {
       if (!userId) return 0;
-      const { count, error } = await supabase
+      // 13/11/2026 (R22-013) — Le promozioni contano solo per chi le ha accese (`notif_promos`),
+      // come nella lista di /notifications: un numero acceso per notifiche che la pagina non
+      // mostra non si spegnerebbe mai.
+      const { data: preferenze } = await supabase
+        .from('profiles')
+        .select('notif_promos')
+        .eq('id', userId)
+        .maybeSingle();
+      let conta = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
+      if (preferenze?.notif_promos !== true) conta = conta.neq('category', 'promo');
+      const { count, error } = await conta;
       // Non `return 0`: quello marcava la lettura come riuscita con un numero falso, e react-query
       // non riprova una query riuscita. Il pallino delle notifiche restava spento per sempre dopo
       // un guasto di un secondo. Chi legge il numero ha gia' il suo valore di riserva (`= 0` qui

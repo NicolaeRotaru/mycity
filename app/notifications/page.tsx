@@ -84,10 +84,17 @@ export default function NotificationsPage() {
       // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
       // distinguerli su un testo libero e' come non distinguerli.
       if (!user) throw new Error(AUTH_RICHIESTA);
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
+      // 13/11/2026 (R22-013) — Chi ha spento le promozioni nelle impostazioni (`notif_promos`) le
+      // vedeva lo stesso qui: l'interruttore lo leggeva solo l'invio delle push. Le promozioni si
+      // mostrano solo a chi le ha accese; se la preferenza non si legge, non si mostrano.
+      const { data: preferenze } = await supabase
+        .from('profiles')
+        .select('notif_promos')
+        .eq('id', user.id)
+        .maybeSingle();
+      let lettura = supabase.from('notifications').select('*').eq('user_id', user.id);
+      if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo');
+      const { data, error } = await lettura
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
