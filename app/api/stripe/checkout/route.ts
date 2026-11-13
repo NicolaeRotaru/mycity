@@ -21,7 +21,7 @@ import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
-import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
+import { campoFasciaConsegna, motivoSenzaFascia } from '@/lib/ordini/fascia-consegna';
 import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -131,6 +131,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
   // falso e non c'e' un punto che possa sfuggire.
   body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
+
+  // 13/11/2026 (R13-012) — Una consegna a domicilio ha sempre un orario, come nei contanti
+  // (la regola sta in lib/ordini/fascia-consegna.ts). Dopo lo spegnimento del ritiro.
+  const senzaFascia = motivoSenzaFascia({ ritiroInNegozio: body.pickupInStore, fascia: body.deliverySlot });
+  if (senzaFascia) return ApiErrors.invalidRequest(senzaFascia);
 
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();

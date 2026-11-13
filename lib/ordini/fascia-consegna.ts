@@ -26,7 +26,8 @@ import { FASCE_AMMESSE } from '@/lib/quando-arriva';
  * `orders.delivery_slot` e da lì sotto gli occhi del negoziante e dentro le email. Un campo
  * libero di 120 caratteri scritto da chi ordina non è un posto dove far passare del testo.
  *
- * La fascia resta facoltativa: chi ritira in negozio non ne ha una, e va bene.
+ * La fascia resta facoltativa nello schema: chi ritira in negozio non ne ha una, e va bene. Per la
+ * consegna a domicilio invece è obbligatoria: vedi `motivoSenzaFascia` qui sotto.
  */
 export const campoFasciaConsegna = z
   .string()
@@ -36,3 +37,22 @@ export const campoFasciaConsegna = z
   })
   .optional()
   .nullable();
+
+/**
+ * 13/11/2026 (R13-012) — UNA CONSEGNA A DOMICILIO SENZA ORARIO.
+ *
+ * La fascia era facoltativa per il ritiro, ma l'obbligo per la consegna non era scritto da nessuna
+ * parte: una richiesta senza fascia (scritta a mano, o da una scheda vecchia) creava un ordine a
+ * domicilio con `delivery_slot` vuoto. Il negoziante, il fattorino e il cliente non vedevano
+ * nessun orario, e il bar alle 22:30 doveva telefonare per sapere se portarlo stasera o domattina.
+ * La cassa del sito ne manda sempre una.
+ *
+ * Le due rotte che creano gli ordini lo chiedono qui, DOPO aver spento il ritiro quando il ritiro
+ * è messo da parte: un «ritiro» spento diventa una consegna, e senza fascia non passa.
+ * Restituisce il motivo del rifiuto, o null.
+ */
+export const MANCA_LA_FASCIA = 'Scegli quando vuoi ricevere l’ordine.';
+
+export function motivoSenzaFascia(o: { ritiroInNegozio: boolean; fascia: string | null | undefined }): string | null {
+  return !o.ritiroInNegozio && !o.fascia ? MANCA_LA_FASCIA : null;
+}
