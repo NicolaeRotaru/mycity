@@ -18,6 +18,7 @@ const stato = vi.hoisted(() => ({
   prezzi: {} as Record<string, number>,
   negozi: new Map<string, { id: string; store_lat: number | null; store_lng: number | null }>(),
   casa: null as null | { lat: number; lng: number },
+  varianti: [] as string[],
 }));
 
 vi.mock('next/link', () => ({ default: (p: { children?: unknown }) => p.children ?? null }));
@@ -43,6 +44,7 @@ globalThis.fetch = (async (input: unknown) => {
   const url = String(typeof input === 'object' && input !== null && 'url' in input ? (input as { url: unknown }).url : input);
   if (url.includes('/api/consegna/veloce')) return json({ possibile: true });
   if (url.includes('/rest/v1/products')) return json(Object.entries(stato.prezzi).map(([id, price]) => ({ id, stock: 50, price })));
+  if (url.includes('/rest/v1/product_variants')) return json(stato.varianti.map((id) => ({ id, stock: 50 })));
   if (url.includes('/rest/v1/user_addresses')) return json(stato.casa ? [stato.casa] : []);
   if (url.includes('/rest/v1/')) return json([]);
   return new Response('', { status: 503 });
@@ -67,19 +69,22 @@ afterEach(() => {
   stato.prezzi = {};
   stato.negozi = new Map();
   stato.casa = null;
+  stato.varianti = [];
 });
 afterEach(() => { /* la rete finta resta per tutto il file */ });
 process.on('exit', () => { globalThis.fetch = reteDiPartenza; });
 
-type Riga = { id: string; prezzo: number; negozio: string; quantita: number; nome?: string };
+type Riga = { id: string; prezzo: number; negozio: string; quantita: number; nome?: string; variante?: string };
 
 async function carrello(righe: Riga[]): Promise<string> {
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   vi.setSystemTime(new Date(2026, 9, 30, 14, 0));
   for (const r of righe) stato.prezzi[r.id] = r.prezzo;
+  stato.varianti = righe.flatMap((r) => (r.variante ? [r.variante] : []));
   sessioneNeiCookie();
   localStorage.setItem('cart', JSON.stringify(righe.map((r) => ({
     id: r.id, name: `Prodotto ${r.id}`, price: r.prezzo, quantity: r.quantita, sellerId: r.negozio, storeName: r.nome ?? `Negozio ${r.negozio}`,
+    ...(r.variante ? { variantId: r.variante, variantLabel: `Taglia ${r.variante}` } : {}),
   }))));
   schermo = accendi(CartPage);
   for (let i = 0; i < 12; i++) {
@@ -110,5 +115,16 @@ describe('R24-011 · l’avviso «spesa sotto i 10 €» conta i pezzi, non solo
     expect(t).toContain(avvisoSpesaPiccola(345)!);
     expect(t, 'accanto al negozio c’è la spesa di un pezzo solo').toContain(`Negozio neg-b · ${formatPrice(3.45)}`);
     expect(t.split('Spesa sotto i').length - 1, 'l’avviso compare anche per il negozio grande').toBe(1);
+  });
+
+  it('due varianti dello stesso prodotto, 2 pezzi ciascuna da 2 €: la spesa è 8 €, mancano 2 €', async () => {
+    const t = await carrello([
+      { id: 'p-maglia', prezzo: 2, negozio: 'neg-a', quantita: 2, variante: 'v-s' },
+      { id: 'p-maglia', prezzo: 2, negozio: 'neg-a', quantita: 2, variante: 'v-m' },
+    ]);
+    expect(t, 'controprova: le due varianti si devono disegnare').toContain('Taglia v-s');
+    expect(t).toContain('Taglia v-m');
+    expect(t, 'con una variante il conto legge un pezzo solo per riga').not.toContain(avvisoSpesaPiccola(400)!);
+    expect(t).toContain(avvisoSpesaPiccola(800)!);
   });
 });
