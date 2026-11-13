@@ -1,7 +1,7 @@
 {
   "sessione": "R13",
-  "aggiornato": "2026-11-13 06:45",
-  "finita": true,
+  "aggiornato": "2026-11-13 13:05",
+  "finita": false,
   "testa": "6f56a10df83465ec90b89f63cbf56b71c8847b6a",
   "verifica": {
     "comando": "npm run verify",
@@ -13,8 +13,42 @@
     {
       "id": "R13-001",
       "chiave": "qa-flussi|la cassa dice «troppo lontano» a chi abita in via roma o in via cavour, in pieno centro, e l'ordine non parte",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "parziale",
+      "commit": "5fb08582",
+      "file_toccati": [
+        "lib/geocodifica.ts",
+        "app/api/geocode/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-geocodifica.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-geocodifica.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5fb08582^ --file lib/geocodifica.ts,app/api/geocode/route.ts --prove tests/unit/riparazione-r13-geocodifica.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "lib/geocodifica.ts ha ora una sola ricerca. La frase «via, CAP città, Italia» si divide in via, CAP e città; se la città manca vale Piacenza. La domanda a Nominatim è strutturata (street/city/postalcode, limit=5, addressdetails). Quando la città è Piacenza la ricerca resta chiusa nel riquadro (viewbox+bounded). Si tiene solo il risultato che cade nel comune scritto (city/town/village/municipality/hamlet/suburb, mai la provincia), con il CAP scritto per primo. Se nessun risultato è affidabile la risposta è null: l'ordine passa senza coordinate e il controllo dei 5 km non cambia. La rotta /api/geocode chiama la stessa coordinateDiUnIndirizzo, che ora accetta anche la frase così com'è. Così cassa, rubrica, negozio e server (cod e carta, che usavano già coordinateDiUnIndirizzo) ricevono la stessa risposta. Prova: Nominatim finto con più risultati e il primo fuori Piacenza (Podenzano, Gossolengo), più Milano, che resta fuori zona come prima. Nel commit di R13-006 ho cambiato questa prova (toMatchObject e un caso su luogo).",
+      "nota": "Gli indirizzi già salvati in rubrica con coordinate sbagliate, cercati prima di oggi, passano ancora per primi (coordinateDaIndirizziSalvati): vedi domande_per_nicola.",
+      "verificato_da": "collaudo (parziale): Ho rilanciato la prova (8 verdi), la prova rimessa con lo stesso comando (regge, uscita 0, albero pulito) e le 8 prove vicine che usano davvero la geocodifica o la zona (109 verdi). Ho letto il diff contro i punti ①-④ del fix e ho provato le varianti con una prova temporanea, già cancellata: «Via Roma, 10», città «Piacenza PC», «PIACENZA (PC)», città e CAP vuoti, CAP sbagliato «2912», frase senza virgole, frazione omonima («Quarto», CAP 29020). Il caso di Via Roma in centro regge sia dal server (contanti e carta) sia da /api/geocode (cassa, rubrica, negozio), e i file toccati sono in elenco. Nominatim vero non si raggiunge da qui (il proxy risponde 403), quindi il comportamento reale della domanda strutturata con riquadro non è verificato.",
+      "collaudo_difetti": [
+        {
+          "file": "lib/geocodifica.ts:120-125",
+          "cosa": "Il punto ③ del fix chiede di scartare i risultati con comune O CAP diversi da quelli scritti. Qui il CAP serve solo a mettere in ordine i risultati, e uno con CAP diverso viene accettato se il nome del comune combacia. Fuori da Piacenza il riquadro non c'è (riga 151), quindi resta aperto lo stesso difetto per le località omonime. Con la prova temporanea, «Via Roma 15», città «Quarto», CAP 29020 (frazione di Gossolengo) restituisce 40.87, 14.14, cioè Quarto in provincia di Napoli (CAP 80010): fuori zona e «troppo lontano», quando la risposta sicura (④) sarebbe null. Vale anche per San Nicolò (Rottofreno) e altre frazioni dal nome comune."
+        },
+        {
+          "file": "lib/geocodifica.ts:151",
+          "cosa": "Il riquadro scatta solo se la città normalizzata è esattamente «piacenza»: «Piacenza PC» o un CAP storpiato («2912 Piacenza») lo tolgono. Il filtro sul comune tiene comunque fuori gli altri comuni, quindi non si blocca nessuno, ma la ricerca non è più chiusa su Piacenza. Difetto minore."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts:1091",
+          "cosa": "Resta aperto un caso che il riparatore ha dichiarato. Gli indirizzi salvati in rubrica prima della correzione, con le coordinate sbagliate della vecchia ricerca a testo libero, vincono ancora: coordinateDaIndirizziSalvati sta in lib/shipping-coordinate.ts, che è fuori elenco, ed è usata anche da app/api/stripe/checkout/route.ts:592. In cassa useCoordinateDellaZona prende le coordinate «conosciute». Chi ha Via Roma salvata con il punto di Podenzano vede ancora «troppo lontano» in cassa e sul server. Va deciso da Nicola: una migrazione che rifà o azzera le coordinate salvate, oppure serve_file_altrui."
+        }
+      ],
+      "cosa_resta": "lib/geocodifica.ts:120-125: Il punto ③ del fix chiede di scartare i risultati con comune O CAP diversi da quelli scritti. Qui il CAP serve solo a mettere in ordine i risultati, e uno con CAP diverso viene accettato se il nome del comune combacia. Fuori da Piacenza il riquadro non c'è (riga 151), quindi resta aperto lo stesso difetto per le località omonime. Con la prova temporanea, «Via Roma 15», città «Quarto», CAP 29020 (frazione di Gossolengo) restituisce 40.87, 14.14, cioè Quarto in provincia di Napoli (CAP 80010): fuori zona e «troppo lontano», quando la risposta sicura (④) sarebbe null. Vale anche per San Nicolò (Rottofreno) e altre frazioni dal nome comune.; lib/geocodifica.ts:151: Il riquadro scatta solo se la città normalizzata è esattamente «piacenza»: «Piacenza PC» o un CAP storpiato («2912 Piacenza») lo tolgono. Il filtro sul comune tiene comunque fuori gli altri comuni, quindi non si blocca nessuno, ma la ricerca non è più chiusa su Piacenza. Difetto minore.; app/api/orders/cod/route.ts:1091: Resta aperto un caso che il riparatore ha dichiarato. Gli indirizzi salvati in rubrica prima della correzione, con le coordinate sbagliate della vecchia ricerca a testo libero, vincono ancora: coordinateDaIndirizziSalvati sta in lib/shipping-coordinate.ts, che è fuori elenco, ed è usata anche da app/api/stripe/checkout/route.ts:592. In cassa useCoordinateDellaZona prende le coordinate «conosciute». Chi ha Via Roma salvata con il punto di Podenzano vede ancora «troppo lontano» in cassa e sul server. Va deciso da Nicola: una migrazione che rifà o azzera le coordinate salvate, oppure serve_file_altrui."
     },
     {
       "id": "R13-002",
@@ -93,8 +127,49 @@
     {
       "id": "R13-006",
       "chiave": "qa-flussi|la posizione del negozio può finire lontano da piacenza, o restare quella vecchia, e il modulo la salva lo stesso",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "parziale",
+      "commit": "45b185a5",
+      "file_toccati": [
+        "lib/ordini/zona-di-consegna.ts",
+        "lib/geocodifica.ts",
+        "app/api/geocode/route.ts",
+        "app/api/seller/apply/route.ts",
+        "app/seller/profile/page.tsx",
+        "components/StoreLocationPicker.tsx",
+        "migrations/377_la_posizione_del_negozio_sta_nell_area_di_piacenza.sql",
+        "tests/unit/riparazione-r13-geocodifica.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-posizione-negozio.test.tsx",
+        "tests/unit/riparazione-r13-geocodifica.test.ts",
+        "tests/sql/rls/riparazione-r13-posizione-negozio.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-posizione-negozio.test.tsx tests/unit/riparazione-r13-geocodifica.test.ts && bash tests/sql/harness/apply.sh r13_prova && psql -q -X -d r13_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r13-posizione-negozio.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale solo su lib/ordini/zona-di-consegna.ts (gli altri 5 file mordono sul comportamento); migrazione con --sql: regge (0)",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45b185a5^ --file lib/ordini/zona-di-consegna.ts,lib/geocodifica.ts,app/api/geocode/route.ts,app/api/seller/apply/route.ts,app/seller/profile/page.tsx,components/StoreLocationPicker.tsx --prove tests/unit/riparazione-r13-posizione-negozio.test.tsx,tests/unit/riparazione-r13-geocodifica.test.ts --json ; poi --file migrations/377_la_posizione_del_negozio_sta_nell_area_di_piacenza.sql --prove tests/sql/rls/riparazione-r13-posizione-negozio.test.sql --sql r13_rimessa (uscita 0)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuovi in lib/ordini/zona-di-consegna.ts: RIQUADRO_PIACENZA (comune con le frazioni e la prima cintura), dentroAreaDiPiacenza e il messaggio per il negozio; geocodifica usa lo stesso riquadro. Selettore: a ogni cambio del testo «confermata» torna false e compare l'invito a ripremere Cerca. Dopo Cerca, un punto fuori area non si conferma e l'avviso dice dove è finito («Trovato: …»); un punto dentro mostra «Trovato: …». Il segnaposto ora dice «Via Roma 1, Piacenza». /api/geocode restituisce anche luogo (display_name). /api/seller/apply rifiuta con 400 una posizione fuori area prima di scrivere. Il profilo non salva una posizione CAMBIATA fuori area e lo dice con parole chiare. La migrazione 377 aggiunge un trigger: una posizione nuova o cambiata fuori dal riquadro dà errore 23514; vale anche per la chiave di servizio e lascia passare le posizioni vecchie che non cambiano. Rimessa 3 su zona-di-consegna.ts perché gli altri file ne importano i nomi nuovi. Ho rimesso il difetto a mano (dentroAreaDiPiacenza sempre vero): 3 prove su 7 diventano rosse (selettore Roma, iscrizione Roma, profilo Roma). Ho fatto girare anche le 14 prove SQL esistenti con store_lat: sono verdi.",
+      "verificato_da": "collaudo (parziale): Ho rilanciato le due prove unitarie (15 verdi), la migrazione 377 su r13_collaudo con la sua prova SQL (4 verdi) e le 13 prove SQL esistenti che usano store_lat (tutte verdi). Ho rilanciato anche le due prove rimesse: quella sul codice esce 3 solo per zona-di-consegna.ts, quella con --sql esce 0. Rimettendo il difetto a mano (dentroAreaDiPiacenza sempre vero) diventano rosse 3 prove: selettore Roma, iscrizione Roma, profilo Roma. Le 53 prove unitarie che importano i file toccati sono verdi. Con una prova temporanea, poi cancellata, ho cercato le varianti scomode: il testo cambiato mentre «Cerca» aspetta la risposta, una posizione già salvata lontano da Piacenza, il GPS a Milano. Per il profilo, finché la 377 non è applicata, il controllo resta solo nel browser.",
+      "collaudo_difetti": [
+        {
+          "file": "components/StoreLocationPicker.tsx:200",
+          "cosa": "Il secondo buco si riapre se il testo cambia mentre la ricerca è in corso, con un'attesa che arriva a qualche secondo per il freno di Nominatim e il timeout. Quando arriva la risposta, il selettore manda al modulo l'indirizzo di prima, preso nella chiusura (`address`), e lo segna confermata=true. Prova: si cerca «Via Roma 12» e durante l'attesa si scrive «Via Garibaldi 3, Piacenza». Il campo mostra Via Garibaldi, ma il modulo riceve {address:'Via Roma 12', lat:45.0505, lng:9.6905, confermata:true} e lo salva. Al ritorno della risposta il codice non controlla che il testo sia ancora quello cercato (indirizzoRef.current)."
+        },
+        {
+          "file": "components/StoreLocationPicker.tsx:48",
+          "cosa": "Una posizione già salvata lontano da Piacenza, per esempio 41.91,12.5 (Roma, ma non il vecchio punto di partenza), si apre confermata e senza nessun avviso. Il profilo e il trigger 377 la lasciano passare di proposito se non cambia. Così il negozio rimasto a Roma per il vecchio difetto (il danno del n. 113 che la voce richiama) continua a non ricevere ordini, e nessuno gli dice perché. Il selettore non mostra un avviso all'apertura, come fa invece per VECCHIO_PUNTO_DI_PARTENZA."
+        },
+        {
+          "file": "components/StoreLocationPicker.tsx:221",
+          "cosa": "«Usa la mia posizione attuale» (e allo stesso modo il tocco o il trascinamento sulla mappa, riga 117) conferma un punto fuori area senza nessun avviso. Prova: GPS a Milano 45.4642,9.19, il modulo riceve confermata=true e nessun alert. Il server dell'iscrizione e il controllo del profilo poi lo fermano, quindi il dato sbagliato non passa. Però il selettore usa il riquadro solo dopo «Cerca», e il negozio vede l'errore soltanto all'invio."
+        }
+      ],
+      "cosa_resta": "components/StoreLocationPicker.tsx:200: Il secondo buco si riapre se il testo cambia mentre la ricerca è in corso, con un'attesa che arriva a qualche secondo per il freno di Nominatim e il timeout. Quando arriva la risposta, il selettore manda al modulo l'indirizzo di prima, preso nella chiusura (`address`), e lo segna confermata=true. Prova: si cerca «Via Roma 12» e durante l'attesa si scrive «Via Garibaldi 3, Piacenza». Il campo mostra Via Garibaldi, ma il modulo riceve {address:'Via Roma 12', lat:45.0505, lng:9.6905, confermata:true} e lo salva. Al ritorno della risposta il codice non controlla che il testo sia ancora quello cercato (indirizzoRef.current).; components/StoreLocationPicker.tsx:48: Una posizione già salvata lontano da Piacenza, per esempio 41.91,12.5 (Roma, ma non il vecchio punto di partenza), si apre confermata e senza nessun avviso. Il profilo e il trigger 377 la lasciano passare di proposito se non cambia. Così il negozio rimasto a Roma per il vecchio difetto (il danno del n. 113 che la voce richiama) continua a non ricevere ordini, e nessuno gli dice perché. Il selettore non mostra un avviso all'apertura, come fa invece per VECCHIO_PUNTO_DI_PARTENZA.; components/StoreLocationPicker.tsx:221: «Usa la mia posizione attuale» (e allo stesso modo il tocco o il trascinamento sulla mappa, riga 117) conferma un punto fuori area senza nessun avviso. Prova: GPS a Milano 45.4642,9.19, il modulo riceve confermata=true e nessun alert. Il server dell'iscrizione e il controllo del profilo poi lo fermano, quindi il dato sbagliato non passa. Però il selettore usa il riquadro solo dopo «Cerca», e il negozio vede l'errore soltanto all'invio."
     },
     {
       "id": "R13-007",
@@ -140,8 +215,26 @@
     {
       "id": "R13-010",
       "chiave": "api-backend|la ricerca degli indirizzi chiama il servizio pubblico delle mappe più volte al secondo, senza un freno per tutto il sito",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "riparato",
+      "commit": "4a1f76a4",
+      "file_toccati": [
+        "lib/geocodifica.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-freno-nominatim.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-freno-nominatim.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4a1f76a4^ --file lib/geocodifica.ts --prove tests/unit/riparazione-r13-freno-nominatim.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ho usato il limitatore condiviso che il sito ha già (rateLimitAsync, Upstash con ripiego in memoria): ogni chiamata a Nominatim, sia dalla rotta sia da coordinateDiUnIndirizzo, passa da una sola funzione. Quella funzione chiede il turno a rateLimitAsync con la chiave nominatim:globale, uno al secondo, e prova ogni 250 ms per al massimo 3 s; se il turno non arriva risponde null, cioè «non so». Ha anche una memoria delle risposte per indirizzo normalizzato, anche mentre la risposta è in arrivo (30 giorni, al massimo 1000 voci). Un «non so» dovuto al freno, alla rete o a un errore non si ricorda. Prova con orologio finto: 10 richieste alla rotta da IP diversi più una dal server non arrivano mai a meno di 1000 ms l'una dall'altra; lo stesso indirizzo chiesto due volte, insieme o più tardi, fa una sola chiamata.",
+      "nota": "La memoria vive in ogni copia del sito, non in un deposito condiviso. Perché il freno valga per tutto il sito, in produzione servono UPSTASH_REDIS_REST_URL/TOKEN (impostazione di Nicola, già chiesta in lib/rate-limit.ts).",
+      "verificato_da": "collaudo (regge): Rilanciato il test (3 verdi) e la prova rimessa 4a1f76a4^ (esito regge, uscita 0, file byte-identici); verificato che entrambi gli ingressi (rotta /api/geocode e coordinateDiUnIndirizzo via trovaLaPosizione) passano dall'unica funzione chiediANominatim con freno rateLimitAsync nominatim:globale 1/s e memoria per indirizzo; controllato che i cache-hit non consumano il freno e che un «non so» non si ricorda; nessun altro chiamante di Nominatim fuori lib/geocodifica.ts (solo le tile Leaflet, non la geocodifica); le 6 prove vicine (geocodifica, posizione-negozio, s07, le-prove-unitarie-non-vanno-in-rete) restano verdi (27 casi)."
     },
     {
       "id": "R13-011",
@@ -152,14 +245,197 @@
     {
       "id": "R13-012",
       "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "serve_file_altrui",
+      "commit": "69b1cc57",
+      "file_toccati": [
+        "lib/ordini/fascia-consegna.ts",
+        "app/api/orders/cod/route.ts",
+        "app/api/stripe/checkout/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-consegna-senza-fascia.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-consegna-senza-fascia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale solo su lib/ordini/fascia-consegna.ts (le due rotte mordono sul comportamento); difetto rimesso a mano: 4 rosse su 6",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 69b1cc57^ --file lib/ordini/fascia-consegna.ts,app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r13-consegna-senza-fascia.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La riparazione sta nel commit 69b1cc57. In lib/ordini/fascia-consegna.ts ci sono motivoSenzaFascia e MANCA_LA_FASCIA («Scegli quando vuoi ricevere l’ordine.»). Le due rotte (contanti e carta) rispondono 400 se manca la fascia, controllando subito dopo lo spegnimento del ritiro: un ritiro spento diventa consegna e senza fascia non passa. La prova nuova passa. La correzione però rende rosse 34 prove comuni (204 casi) che mandano consegne a domicilio senza deliverySlot e si aspettano che passino. Per la regola delle prove comuni ho tolto la voce con git revert 10708bcf: nel ramo il comportamento resta quello di prima.",
+      "cosa_resta": "Bisogna rimettere 69b1cc57 (cherry-pick) dopo aver aggiunto un deliverySlot valido ai corpi delle 34 prove comuni elencate in serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts",
+          "modifica": "nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout aggiungere deliverySlot con una fascia vera di lib/quando-arriva.ts (es. FASCE_DI_DOMANI[0], compatibile con orologio e orari del negozio finto della prova); poi cherry-pick di 69b1cc57 (vale per tutte le righe sotto)"
+        },
+        {
+          "file": "tests/unit/api-stripe-checkout.test.ts",
+          "modifica": "idem: deliverySlot valido nei corpi senza ritiro"
+        },
+        {
+          "file": "tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/contanti-la-chiave-si-prende-prima.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/minori-s01-cassa-carta.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/minori-s01-negozio-senza-insegna.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/minori-s01-zona-carta.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/ordini-contrassegno-due-negozi.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/riparazione-r13-riserva-della-cassa.test.ts",
+          "modifica": "idem (prova di R13 dei lotti 1-3, usa anche file di altre sessioni)"
+        },
+        {
+          "file": "tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts",
+          "modifica": "idem"
+        },
+        {
+          "file": "tests/unit/variante-503-dopo-chiave-abbandonata.test.ts",
+          "modifica": "idem"
+        }
+      ],
+      "nota": "SHA da riprendere: 69b1cc57 (la voce). È tolta da 10708bcf (il revert). Rimessa 3 solo perché le rotte importano il nome nuovo motivoSenzaFascia; rimettendo il difetto a mano (motivoSenzaFascia restituisce sempre null) la prova diventa rossa in 4 casi su 6.",
+      "verificato_da": "collaudo (parziale): Confermato che nel ramo la voce NON è chiusa: 10708bcf ha revertito 69b1cc57, fascia-consegna.ts non ha più motivoSenzaFascia/MANCA_LA_FASCIA, nessun riferimento penzolante, il file prova è stato rimosso. Verificata l'onestà del serve_file_altrui: applicato il fix al solo albero (git checkout 69b1cc57 -- i 3 file sorgente, tutti in elenco), lanciato un campione di 6 dei 34 test → 30 casi rossi, tutti per il 400 «Scegli quando vuoi ricevere l'ordine»; poi ripristinato con git checkout HEAD e riconfermato verde (31 casi). Controllato che i test elencati importano/mockano file fuori elenco (lib/constants, lib/coupons, lib/store-hours, lib/promotions, lib/email/*, lib/supabase/server, …) quindi sono davvero «comuni»; nessuno degli elenchi usa deliverySlot; la modifica descritta (aggiungere deliverySlot da lib/quando-arriva.ts + cherry-pick 69b1cc57) è esatta. Il fix (se ripreso) copre entrambe le rotte dopo lo spegnimento del ritiro. Albero pulito. Verdetto parziale perché la voce resta aperta nel ramo (revertita): handling onesto e corretto, ma non risolto.",
+      "collaudo_difetti": []
     },
     {
       "id": "R13-013",
       "chiave": "architettura|la frase della zona vive in quattro posti (cassa, spedizioni, rifiuto, tendina della posizione) piu' faq e «vicino a te»: le tiene allineate solo una prova",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "riparato",
+      "commit": "674fde4c",
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "lib/ordini/zona-di-consegna.ts",
+        "components/checkout/ShippingAddressForm.tsx",
+        "components/LocationPill.tsx",
+        "app/shipping/page.tsx",
+        "app/near/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-frase-della-zona.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-frase-della-zona.test.ts tests/unit/le-frasi-della-zona-dicono-il-confine-della-cassa.test.tsx",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 674fde4c^ --file lib/promesse-pubbliche.ts,lib/ordini/zona-di-consegna.ts,components/checkout/ShippingAddressForm.tsx,components/LocationPill.tsx,app/shipping/page.tsx,app/near/page.tsx --prove tests/unit/riparazione-r13-frase-della-zona.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In lib/promesse-pubbliche.ts ci sono ora FINO_A_DOVE_CONSEGNIAMO («fino a N km dal negozio», da RAGGIO_CONSEGNA_KM) e CONSEGNIAMO_A_PIACENZA. Li leggono la riga sotto il CAP in cassa, la tendina della pillola, la pagina Spedizioni, motivoFuoriZona, le tre FAQ, avvisoNessunNegozioVicino e il testo di Vicino a te. Il testo a schermo resta identico. La pagina Spedizioni tiene la frase congelata da le-promesse-della-consegna-cambiano-solo-di-proposito, una prova comune che non ho toccato. La prova nuova legge i sorgenti: la frase compare una sola volta, nelle promesse pubbliche, e nessuno degli altri cinque file la riscrive o la compone a pezzi. Restano verdi la prova comune sulle frasi della zona e le 68 prove che importano questi file.",
+      "nota": "app/near/layout.tsx e app/category/[slug]/layout.tsx (metadati, file non miei e non nominati nella voce) scrivono ancora la frase a mano: vedi nuovi_difetti_visti.",
+      "verificato_da": "collaudo (regge): Rilanciato il test nuovo + le-frasi-della-zona-dicono-il-confine (11 verdi) e la prova congelata le-promesse-della-consegna-cambiano-solo-di-proposito (7 verdi, confronta il testo a schermo); prova rimessa 674fde4c^ regge (uscita 0, i 6 file mordono uno a uno). Verificato che FINO_A_DOVE_CONSEGNIAMO/CONSEGNIAMO_A_PIACENZA stanno solo in lib/promesse-pubbliche.ts (la frase km dal negozio compare una volta sola) e tutti e 6 i file nominati la leggono. Il cambio di <strong> nella pagina Spedizioni non cambia il testo letto. Confermato che near/layout.tsx e category/[slug]/layout.tsx riscrivono ancora la frase ma NON sono in elenco né nella voce (fuori ambito, segnalati onestamente dal riparatore)."
     },
     {
       "id": "R13-014",
@@ -230,8 +506,26 @@
     {
       "id": "R13-025",
       "chiave": "frontend-ux|tornando dall'accesso con un indirizzo già scritto, la cassa lo nasconde e non segna nessun indirizzo come scelto",
-      "esito": "non_fatto",
-      "nota": "Non lavorata: la sessione ha raggiunto il tetto di costo di 35 $ dopo i lotti 1-3. La regista ha scelto di fermarsi qui (opzione b, 13/11) finché Nicola non alza il tetto. Il piano approvato la metteva nei lotti 4-6."
+      "esito": "riparato",
+      "commit": "a74b591b",
+      "file_toccati": [
+        "components/checkout/ShippingAddressForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-indirizzo-dopo-l-accesso.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r13-indirizzo-dopo-l-accesso.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a74b591b^ --file components/checkout/ShippingAddressForm.tsx --prove tests/unit/riparazione-r13-indirizzo-dopo-l-accesso.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ci sono indirizzi salvati e il modulo contiene un indirizzo scritto che non coincide con nessuna mattonella? Allora il modulo si apre (editing vero): l'indirizzo dove partirà la spesa si vede ed è la scelta attiva, e nessuna mattonella risulta premuta. Con un indirizzo salvato, o con la via vuota, tutto resta come prima. Le 50 prove della cassa sono verdi.",
+      "nota": "Mentre il modulo contiene un indirizzo non salvato, «Chiudi» non lo nasconde, apposta: si passa a un indirizzo salvato toccando la sua mattonella.",
+      "verificato_da": "collaudo (regge): Rilanciato il test (3 verdi) e la prova rimessa a74b591b^ (regge, uscita 0, file identici); le 6 prove della cassa che montano ShippingAddressForm restano verdi (24 casi). Verificato la logica indirizzoNonSalvato = savedAddresses>0 && address!='' && !activeId: la bozza fuori mattonella apre il modulo e nessuna tile finge di essere scelta; indirizzo salvato o via vuota restano come prima. La quirk disclosa («Chiudi» non nasconde finché c'è un indirizzo non salvato) è intenzionale e si esce toccando una mattonella (selectTile aggiorna il form → activeId combacia → modulo si chiude): non è una regressione della voce."
     }
   ],
   "nuovi_difetti_visti": [
@@ -248,6 +542,14 @@
       "severita": "minore",
       "file": "app/api/orders/cod/route.ts:1522",
       "descrizione": "La rilettura dopo un errore di inserimento (`if (orderErr && idDiQuestoInvio)`) vale solo con la chiave. Per le app vecchie senza chiave, se la riga si è salvata e la risposta si è persa, la rotta rimette merce e credito come se l'ordine non fosse nato. L'ordine resta senza articoli, e il suo annullo restituisce il credito una seconda volta (wallet_applied_cents). Adesso l'id dell'ordine si decide sempre prima (R13-002), quindi la stessa rilettura si può estendere anche al caso senza chiave."
+    },
+    {
+      "titolo": "Due pagine scrivono ancora a mano la frase «fino a N km dal negozio» nei metadati",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "app/near/layout.tsx:7 · app/category/[slug]/layout.tsx:17",
+      "descrizione": "Dopo R13-013 la frase della zona sta in lib/promesse-pubbliche.ts (FINO_A_DOVE_CONSEGNIAMO), ma queste due pagine non sono nel mio elenco e la compongono ancora da RAGGIO_CONSEGNA_KM per conto loro. Per ora il testo è giusto, ma resta fuori dal posto unico.",
+      "riservato": false
     }
   ],
   "domande_per_nicola": [
@@ -256,10 +558,14 @@
     "Il giro che sistema per tutti le riserve rimaste aperte: lo agganciamo al giro degli ordini fermi (ogni 30 minuti, nessun file nuovo) o a un lavoro suo ogni 15 minuti (rotta nuova più vercel.json)?",
     "Applicare la 371 (sta a te deciderlo). Prima di applicarla, il codice nuovo riserva la merce come prima, senza riga.",
     "Il reclamo che il sito apre da solo avvisa gli amministratori. Al negozio non arriva la campanella che /api/disputes manda per i reclami aperti dal cliente (dove si dice che il bonifico di quell'ordine resta fermo). La aggiungiamo anche qui?",
-    "Il reclamo aperto dal sito ha il motivo 'other', che nel pannello Reclami si legge «Altro». Vuoi un motivo suo (per esempio «Annullo dopo l'incasso in contanti»)? Servirebbe toccare app/admin/disputes/page.tsx, che non è in questo lotto."
+    "Il reclamo aperto dal sito ha il motivo 'other', che nel pannello Reclami si legge «Altro». Vuoi un motivo suo (per esempio «Annullo dopo l'incasso in contanti»)? Servirebbe toccare app/admin/disputes/page.tsx, che non è in questo lotto.",
+    "Area dove può stare un negozio: ho scelto il riquadro lat 44.97–45.10, lng 9.57–9.86 (comune di Piacenza con le frazioni e la prima cintura: San Nicolò, Gossolengo, Pontenure). Podenzano e Caorso restano fuori. Va bene? La stessa cifra sta in lib/ordini/zona-di-consegna.ts e nella migrazione 377.",
+    "Gli indirizzi salvati in rubrica prima di oggi possono avere coordinate sbagliate, cercate a testo libero (per esempio Via Roma a Podenzano). Le rotte d'ordine le usano per prime, quindi quei clienti restano bloccati finché non risalvano l'indirizzo. Vuoi azzerare lat/lng in user_addresses (o ricalcolarle)? È un'operazione sul database vero, da fare tu.",
+    "Migrazione 377 (il trigger sulla posizione del negozio): la applichi tu quando decidi.",
+    "Il freno di Nominatim vale per tutto il sito solo con UPSTASH_REDIS_REST_URL/TOKEN impostati in produzione: senza, ogni copia del sito conta per sé."
   ],
   "conto": {
     "agenti": 7,
-    "nota": "Proposta A (12) ridotta dal tetto di costo di 35 $: 3 riparatori + 3 collaudatori + 1 giro di correzione su R13-007. Lotti 4-6 non lanciati (opzione b della regista)."
+    "nota": "Tetto alzato da Nicola (13/11 12:58): 90 $ e fino a 22 subagenti. Fatti 7 (lotti 1-3 + una correzione); poi lotti 4-7."
   }
 }
