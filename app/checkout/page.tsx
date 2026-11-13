@@ -290,6 +290,18 @@ export default function CheckoutPage() {
           orari: s.store_hours ?? null,
         });
       }
+      // R19-006 — Il proprietario di un negozio non ancora approvato non è nella vista pubblica:
+      // il suo nome si legge dalla riga di `profiles` che può già leggere (le regole fanno tornare
+      // solo la sua, per gli altri niente). Solo il nome: coordinate e orari restano come per la vista.
+      const senzaVista = [...new Set(allSellerIds)].filter((id) => !negozi.has(id));
+      if (senzaVista.length > 0) {
+        try {
+          const { data: proprie } = await supabase.from('profiles').select('id, store_name').in('id', senzaVista);
+          for (const r of (proprie ?? []) as Array<{ id: string; store_name: string | null }>) {
+            if (r.store_name) sellerInfo.set(r.id, { name: r.store_name, lat: null, lng: null, orari: null });
+          }
+        } catch { /* resta «Negozio»: come prima */ }
+      }
 
       const sellerMap = new Map<string, {
         sellerId: string;

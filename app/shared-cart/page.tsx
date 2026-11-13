@@ -132,6 +132,19 @@ function SharedCartInner() {
             (data ?? []).map((p) => p.seller_id as string | null),
             'id, store_name',
           );
+          // R19-006 — Il proprietario di un negozio non ancora approvato non è nella vista pubblica:
+          // il nome della sua insegna si legge dalla riga di `profiles` che può già leggere (per gli
+          // altri le regole non restituiscono niente, e resta «Negozio»).
+          const senzaVista = [...new Set((data ?? []).map((p) => p.seller_id as string | null))]
+            .filter((id): id is string => !!id && !negozi.has(id));
+          if (senzaVista.length > 0) {
+            try {
+              const { data: proprie } = await supabase.from('profiles').select('id, store_name').in('id', senzaVista);
+              for (const r of (proprie ?? []) as Array<{ id: string; store_name: string | null }>) {
+                if (r.store_name) negozi.set(r.id, { id: r.id, store_name: r.store_name });
+              }
+            } catch { /* resta «Negozio»: come prima */ }
+          }
           righe = attachSellerProfiles((data ?? []) as Array<Omit<Product, 'profiles'>>, negozi);
         } catch {
           caduta = true;
