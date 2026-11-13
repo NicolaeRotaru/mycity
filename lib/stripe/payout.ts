@@ -1367,7 +1367,36 @@ export async function cosaMancaAlBonifico(chiave: string, creditoCents: number):
  * Una lettura caduta lancia: niente e' stato toccato, si riprova.
  */
 const METADATO_DELLA_CHIAVE = 'chiave_rimborso';
+/**
+ * 13/11/2026 (R17-018) — Il rimborso nato con la prenotazione che porta la chiave (412) lo dice nei
+ * suoi metadati: per lui «è già nel libro?» lo sa il libro (`laChiaveENelLibro`). Un rimborso nato
+ * prima non lo dice, e per lui resta il conto sui totali.
+ */
+const METADATO_DEL_LIBRO = 'libro_dei_rimborsi';
 const PAGINE_DI_RIMBORSI = 20;
+
+/**
+ * 13/11/2026 (R17-018) — LA PRENOTAZIONE DI QUESTA CHIAVE E' NEL LIBRO DELL'ORDINE?
+ *
+ * Il conto sui totali («registrato <= rimborsi su Stripe - questo») non regge un rimborso fatto fuori
+ * da Stripe: 5 € resi a mano, la risposta di Stripe persa (la prenotazione torna indietro), la chiave
+ * scaduta. Alla ripresa i 5 € facevano sembrare contato il rimborso da 20: l'ordine restava a 5 € e al
+ * negozio non si toglieva la sua parte. Il libro (412) lo sa senza conti: la prenotazione della chiave
+ * c'è o non c'è. `null` se il database non ha la 412 (si torna al conto); una lettura caduta lancia,
+ * niente è stato toccato e si riprova.
+ */
+async function laChiaveENelLibro(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  chiave: string,
+): Promise<boolean | null> {
+  const { data, error } = await admin.rpc('rimborso_gia_prenotato', { p_order_id: orderId, p_chiave: chiave });
+  if (error) {
+    if (funzioneNonTrovata(error)) return null;
+    throw new Error(`refundOrder: il libro dei rimborsi non risponde, riprovare (${(error as { message?: string }).message ?? 'errore'})`);
+  }
+  return typeof data === 'boolean' ? data : null;
+}
 
 async function ilRimborsoDellaChiaveGiaUscito(
   order: { id: string; stripe_payment_intent?: string | null },
@@ -1674,7 +1703,13 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     if (visto) {
       const { uscito, totaleDellOrdineCents } = visto;
       const registrato = Number(order.refunded_amount_cents ?? 0);
-      const nonContato = registrato <= totaleDellOrdineCents - (uscito.amount ?? 0);
+      // R17-018 — Per un rimborso nato con la prenotazione che porta la chiave decide il libro: se la
+      // prenotazione non c'è (tornata indietro con la risposta persa), il rimborso non è contato,
+      // anche se i totali, gonfiati da un rimborso fatto fuori da Stripe, dicono di sì.
+      const nelLibro = ((uscito.metadata ?? {}) as Record<string, string>)[METADATO_DEL_LIBRO]
+        ? await laChiaveENelLibro(admin, order.id, opts.idempotencyKey)
+        : null;
+      const nonContato = registrato <= totaleDellOrdineCents - (uscito.amount ?? 0) || nelLibro === false;
       if (nonContato) {
         rimborsoGiaUscito = uscito;
       } else {
@@ -1844,6 +1879,8 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // Il bonifico rimasto a meta' ha gia' la sua prenotazione: non se ne fa un'altra.
   // R17-014 — La prenotazione porta la chiave che va a Stripe (`prenotaIlRimborso`).
   const chiaveDellaPrenotazione = opts.idempotencyKey ?? null;
+  // R17-018 — La prenotazione l'ha presa il libro con la chiave (il database ha la 412).
+  let prenotataConLaChiave = false;
   let newRefundedTotal = Number(order.refunded_amount_cents ?? 0);
   if (!bonificoDiPrima) {
     const { data: claimRimborso, error: errClaim } = await prenotaIlRimborso(admin, order.id, safeAmountCents, chiaveDellaPrenotazione);
@@ -1860,6 +1897,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       throw new RimborsoNonRitentabile('refundOrder: rimborso già registrato o oltre il totale dell ordine');
     }
     const prenotazione: Prenotazione = rivendicato.prenotazione ?? 'nuova';
+    prenotataConLaChiave = chiaveDellaPrenotazione != null && rivendicato.prenotazione != null;
     // Un altro tentativo della stessa chiave la sta usando adesso: niente è stato toccato, si
     // riprova dopo. Fuori dal blocco qui sotto apposta: la sua prenotazione non si storna.
     if (prenotazione === 'in_corso') {
@@ -1965,6 +2003,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
             ...(opts.reason ? { reason: opts.reason.slice(0, 500) } : {}),
             ...(opts.metadata ?? {}),
             ...(opts.idempotencyKey ? { [METADATO_DELLA_CHIAVE]: chiave } : {}),
+            ...(prenotataConLaChiave ? { [METADATO_DEL_LIBRO]: 'chiave' } : {}),
           },
         },
         // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
