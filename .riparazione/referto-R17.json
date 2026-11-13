@@ -1,0 +1,92 @@
+{
+  "sessione": "R17",
+  "aggiornato": "2026-11-13 05:58",
+  "finita": false,
+  "testa": "6b0b78cf846816721ff32d74c48442ea82cdf012",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R17-002",
+      "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
+      "esito": "riparato",
+      "commit": "b912629d804074b7fdc03f2356db62043bd7817a",
+      "file_toccati": [
+        "migrations/410_il_bonifico_del_lunedi_si_segna_per_l_importo_versato.sql",
+        "app/admin/payouts/page.tsx",
+        "lib/stripe/payout.ts",
+        "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx",
+        "lib/database.types.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts",
+        "tests/sql/rls/riparazione-r17-bonifico-del-lunedi.test.sql",
+        "tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-bonifico-del-lunedi.test.sql && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file lib/stripe/payout.ts,app/admin/payouts/page.tsx --prove tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file migrations/410_il_bonifico_del_lunedi_si_segna_per_l_importo_versato.sql --prove tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql --sql r17_rimessa --json",
+        "nota": "La prova SQL piena (riparazione-r17-bonifico-del-lunedi.test.sql) chiama segna_bonifico_manuale, che sulla base non esiste (la 350 è stata tolta): con --sql la macchina esce 3 per costruzione. Per la 410 la rimessa che decide è su riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql (vincolo PAID_MANUALLY). La funzione è stata collaudata a mano: rimessa col comportamento della 350 (solo id, segna in silenzio una parte), la prova piena dà 15 controlli rossi P0001."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 410 (non applicata): stato PAID_MANUALLY, payout_manual_ref e segna_bonifico_manuale(negozio, ordini, importo_cents, riferimento), solo is_admin(), righe bloccate FOR UPDATE, tutto o niente: con gli stessi cancelli del giro automatico, un ordine fermo, una cifra diversa dai netti meno gli storni o un riferimento ripetuto non segnano niente; una riga in audit_logs. Il pannello chiede la cifra versata, la manda e mostra ogni rifiuto. refundOrder tratta PAID_MANUALLY come bonifico già uscito (avviso «togli la quota», REVERSED sul rimborso pieno). Prova esistente toccata, dichiarata: tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx importa app/admin/payouts/page.tsx; cambiati solo i finti (prompt cifra+riferimento, rpc {ok,segnati}), asserzioni uguali. Tipi generati: le 3 righe di orders.payout_manual_ref in lib/database.types.ts, nel commit 6b0b78cf «R17-002»; il file è assegnato a R17 dalla regia dell’onda 2 (piano.json e scheda, 13/11 06:46)."
+    },
+    {
+      "id": "R17-001",
+      "chiave": "pagamenti-stripe|la pagina guadagni, con i soli contanti, dice al negozio commissione zero e soldi mai versati",
+      "esito": "riparato",
+      "commit": "c6713b6b939b016752bee8bafa89d99d05790750",
+      "file_toccati": [
+        "app/seller/earnings/page.tsx",
+        "lib/guadagni/negozio.ts",
+        "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts",
+        "tests/unit/minori-s01-numeri-del-negozio.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6713b6b939b016752bee8bafa89d99d05790750^ --file app/seller/earnings/page.tsx,lib/guadagni/negozio.ts --prove tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "riepilogoNegozio conta anche il contrassegno consegnato: lordo (col credito MyCity), commissione application_fee_cents, netto seller_payout_cents meno gli storni, conteggio per metodo; versato = TRANSFERRED/PAID_MANUALLY, in attesa = HELD/PROCESSING/PENDING più il contante ancora dal fattorino. La pagina mostra torre, grafico e storico anche coi contanti, dice «in attesa del bonifico del lunedì» e, finché CARTA_ACCESA è false, toglie frase e rinvio al conto Stripe. Il ritiro pagato al banco (CASH_IN_STORE) resta fuori dalla torre (commissione dovuta, non trattenuta: la mostra il riquadro dei contanti). Prova esistente toccata, dichiarata: tests/unit/minori-s01-numeri-del-negozio.test.ts:57 legge per nome la pagina; ora guarda incassoPerGiorno(riepilogo.contati) al posto di activeCard, stesso senso. Commenti «migrazione 350» → «410» nel commit a parte d282dda3 (R17-varie)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nello storico dei guadagni la colonna «Netto» non toglie gli storni, mentre torre e riquadro li tolgono",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "app/seller/earnings/page.tsx:414",
+      "descrizione": "La colonna Netto dello storico mostra seller_payout_cents, mentre il resto della pagina usa nettoDopoStorni: dopo un rimborso parziale il negozio legge due netti diversi per lo stesso ordine."
+    },
+    {
+      "titolo": "Un rimborso pieno letto come HELD un attimo prima del bonifico a mano scrive REFUNDED sopra PAID_MANUALLY",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:1838",
+      "descrizione": "Corsa fra refundOrder e segna_bonifico_manuale: l’avviso «togli la quota» parte comunque (i soldi non si perdono), ma lo stato mostrato è sbagliato. Stessa famiglia di R17-025."
+    }
+  ],
+  "domande_per_nicola": [
+    "R17-002: un ordine che hai già pagato a mano ma che riceve un reso prima di segnarlo oggi non si segna (stessi cancelli del giro); il pannello dice di annotarlo e non ripagarlo. Vuoi poterlo segnare PAID_MANUALLY anche se è fermo? Toglierebbe del tutto il rischio di pagarlo due volte.",
+    "R17-002: vuoi che il database tenga il conto delle quote da trattenere dopo un rimborso su un ordine già pagato a mano, così «Da versare lunedì» le toglie da solo? Oggi parte solo un avviso."
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": ""
+  }
+}
