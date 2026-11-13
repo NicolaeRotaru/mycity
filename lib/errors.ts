@@ -12,6 +12,9 @@ import { trackErrorShown } from './analytics/events';
 import { PASSWORD_RUBATA, PASSWORD_SEMPLICE } from './auth/errori-nuova-password';
 import { TIPI_IMMAGINE } from './storage/regole-secchi';
 import { formatiLeggibili } from './storage/carica-immagine';
+// 13/11/2026 (R24-007) — Importarlo accende anche il traduttore italiano di Zod (z.setErrorMap)
+// dove si carica questo file: è voluto, è la stessa lingua.
+import { FRASI_ZOD } from './zod-i18n';
 
 const SUPABASE_CODE_MAP: Record<string, string> = {
   '23505': 'Questo valore è già stato usato. Prova con uno diverso.',
@@ -160,6 +163,44 @@ function ricordaFraseDellaRotta(frase: string): void {
 }
 
 /**
+ * 13/11/2026 (R24-007) — LE FRASI INGLESI DI ZOD CHE ARRIVANO DAL SERVER.
+ *
+ * Una rotta che non ha acceso il traduttore (lib/zod-i18n) risponde col testo
+ * predefinito di Zod — «String must contain at most 120 character(s)», «Required»,
+ * «Expected number, received string» — e l'ultimo ramo lo lasciava passare perché ha
+ * la forma di una frase. Qui si riconoscono quei testi e si danno le stesse frasi del
+ * traduttore. `frase: null` con `tecnico: true` = ha la forma di un testo di Zod ma
+ * non ho una frase pronta: non si mostra così com'è.
+ */
+function traduciTestoDiZod(messaggio: string): { frase: string | null; tecnico: boolean } {
+  const m = messaggio.trim();
+  let r: RegExpMatchArray | null;
+  if (m === 'Required') return { frase: FRASI_ZOD.obbligatorio, tecnico: true };
+  if ((r = m.match(/^Expected (\w+), received (\w+)$/)))
+    return { frase: r[2] === 'undefined' || r[2] === 'null' ? FRASI_ZOD.obbligatorio : FRASI_ZOD.tipo(r[1]), tecnico: true };
+  if ((r = m.match(/^String must contain (?:at least|over) (\d+) character(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoCaratteri(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^String must contain (?:at most|under) (\d+) character(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.massimoCaratteri(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Number must be greater than (?:or equal to )?(-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.minimo(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Number must be less than (?:or equal to )?(-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.massimo(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Array must contain (?:at least|more than) (\d+) element(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoElementi(Number(r[1])), tecnico: true };
+  if (m === 'Invalid email') return { frase: FRASI_ZOD.email, tecnico: true };
+  if (m === 'Invalid url') return { frase: FRASI_ZOD.url, tecnico: true };
+  if (m === 'Invalid uuid') return { frase: FRASI_ZOD.uuid, tecnico: true };
+  if (m === 'Invalid') return { frase: FRASI_ZOD.formato, tecnico: true };
+  if (/^Invalid enum value\. Expected /.test(m)) return { frase: FRASI_ZOD.scelta, tecnico: true };
+  const tecnico =
+    /^(String must contain|Number must be|Array must contain|Set must contain|Date must be|Invalid (literal value|discriminator value|date|enum value|arguments|return type)\b|Unrecognized key\(s\) in object|Intersection results could not be merged)/.test(
+      m,
+    );
+  return { frase: null, tecnico };
+}
+
+/**
  * Trasforma errori Supabase/Stripe/fetch in messaggi user-friendly italiani.
  * Logga il messaggio originale per debugging via PostHog.
  */
@@ -209,6 +250,14 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       if (inItaliano) {
         trackErrorShown(e.code ?? 'auth', e.message, context?.page);
         return inItaliano;
+      }
+      // 13/11/2026 (R24-007) — Il testo predefinito di Zod che una rotta senza traduttore
+      // rimanda in inglese («String must contain at most 120 character(s)», «Required»):
+      // qui esce con le frasi del traduttore; quello senza frase pronta non passa così.
+      const daZod = traduciTestoDiZod(e.message);
+      if (daZod.tecnico) {
+        trackErrorShown(e.code ?? 'validazione', e.message, context?.page);
+        return daZod.frase ?? 'Uno dei dati inseriti non va bene: controllalo e riprova.';
       }
       // Fix #17: trackErrorShown in ogni ramo (era tracciato solo per i codici Supabase mappati).
       if (/duplicate key value/i.test(e.message)) {
