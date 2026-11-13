@@ -1,6 +1,6 @@
 {
   "sessione": "R16",
-  "aggiornato": "2026-11-13 06:50",
+  "aggiornato": "2026-11-13 07:10",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -385,6 +385,98 @@
         }
       ],
       "verificato_da": ""
+    },
+    {
+      "id": "R16-008",
+      "chiave": "microcopy|le ore scritte dal server escono nell'ora di londra: la pagina stato dice 14:54 quando a piacenza sono le 16:54",
+      "esito": "riparato",
+      "commit": "0270677f47fb1e7648e3d56c1ff4a3390b98a26a",
+      "file_toccati": [
+        "lib/format.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-ore-di-roma.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-ore-di-roma.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0270677f^ --file lib/format.ts --prove tests/unit/riparazione-r16-ore-di-roma.test.ts"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base app/status/page.tsx:73 e lib/shipping-etichetta/label.ts:115 avevano già timeZone 'Europe/Rome'; mancava formatDate in lib/format.ts, che ora lo ha. Prova con l'orologio finto: 22:30 UTC di agosto esce «4 agosto», 23:30 UTC di dicembre esce «1 gennaio». Le 27 prove che importano lib/format restano verdi, nessuna toccata.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-016",
+      "chiave": "qa-flussi|l'etichetta da attaccare alla busta non dice quando consegnare: né «veloce» né la fascia",
+      "esito": "riparato",
+      "commit": "de11b93a4439f0ac08b70e0b847772efe9a41d12",
+      "file_toccati": [
+        "lib/shipping-etichetta/label.ts",
+        "app/api/seller/orders/[id]/label/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-etichetta-consegna.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-etichetta-consegna.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de11b93a^ --file lib/shipping-etichetta/label.ts,app/api/seller/orders/[id]/label/route.ts --prove tests/unit/riparazione-r16-etichetta-consegna.test.ts"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "LabelData ha il campo consegna: la veloce esce «CONSEGNA VELOCE» in grande, la fascia esce «CONSEGNA:» col giorno vero e le ore (ora di Roma). La rotta legge delivery_slot, created_at e pickup_in_store e usa fasciaLeggibile già esistente. La prova legge il testo stampato nel PDF e prova la rotta con un database finto.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-002",
+      "chiave": "dati-analytics|negozio del mese: la classifica dei voti mostra tutti i negozi a zero voti in fila, e «nessun voto» non compare mai",
+      "esito": "gia_riparato_prima",
+      "prova": "app/admin/shop-of-month/page.tsx:91 `classifica.filter((r) => Number(r.vote_count) > 0)` e :199 «Nessun voto registrato»; il mese di Piacenza nella vista è già in migrations/322_la_classifica_conta_il_mese_di_piacenza.sql (mese_di_piacenza(), usata per month e per contare i voti)",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-006",
+      "chiave": "layout-responsive|sul telefono la tabella dei clienti esce dallo schermo: spesa, ultimo ordine e targhetta vip si vedono solo trascinandola di lato",
+      "esito": "riparato",
+      "commit": "11b21b997fd4717c31837415cc75d6b4de19e5fd",
+      "commit_voce": [
+        "4419056ee5a7c073d10e0dd5bd8b8983d9b3f0f3",
+        "11b21b997fd4717c31837415cc75d6b4de19e5fd"
+      ],
+      "file_toccati": [
+        "app/seller/customers/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-clienti-schede-telefono.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-clienti-schede-telefono.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4419056e^ --file app/seller/customers/page.tsx --prove tests/unit/riparazione-r16-clienti-schede-telefono.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sul telefono una lista a schede (nome, ordini, speso, ultimo ordine, targhetta VIP/Inattivo/Attivo, senza la riga «ID:») al posto della tabella da 700 px, che resta da md in su. Filtri, ricerca e il link «Punto 9 delle condizioni» hanno min-h-11 sul telefono e il contenitore ha pb-24 md:pb-0, così il pulsante assistenza non copre l ultima scheda.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-017",
+      "chiave": "qa-flussi|prova con un nome che promette il contrario",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": "Riga 137: rinominare il caso da 'il pannello admin riceve 409 e non scrive nessun drop, anche senza chiave di servizio' a 'il pannello admin riceve 409 e non scrive nessun drop: il freno sta prima della chiave di servizio'. Il caso fa questo (il middleware è finto, stato.admin non viene chiamato), non prova il 503 senza chiave. Il file non importa né legge per nome nessun file di R16."
+        }
+      ]
     }
   ],
   "nuovi_difetti_visti": [
@@ -416,7 +508,7 @@
     "R16-003: va bene che lo script del rilascio scriva per ogni migrazione nuova il commento '-- md5:<impronta>' nella colonna statements di supabase_migrations.schema_migrations? È un commento SQL (rieseguito non fa niente); le righe vecchie restano senza impronta e si confrontano solo per numero e nome. È la modifica al registro che il 5/11 era stata rimandata come «da firmare»."
   ],
   "conto": {
-    "agenti": 3,
+    "agenti": 5,
     "nota": ""
   }
 }
