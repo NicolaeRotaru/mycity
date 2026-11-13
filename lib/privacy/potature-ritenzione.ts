@@ -602,7 +602,12 @@ function potaturaKycIscrizioneAMeta(prima: string): Potatura {
  * cartella: se la rilettura non riesce, o l'ordine non c'è, quella cartella non si tocca.
  */
 const SECCHIO_PROVE = 'cod-proof';
-const COLONNE_PROVE = ['cash_photo_url', 'delivery_photo_url', 'cash_signature_url'] as const;
+/**
+ * TUTTE le colonne dell'ordine che possono indicare un file di cod-proof: un file indicato da una
+ * qualsiasi non è orfano. `delivery_signature_url` (migrations/024:33) oggi non la scrive nessuno,
+ * ma se un giorno la si scrive i suoi file non devono sparire come orfani (collaudo del lotto 2).
+ */
+const COLONNE_PROVE = ['cash_photo_url', 'delivery_photo_url', 'cash_signature_url', 'delivery_signature_url'] as const;
 const COLONNE_PROVE_LETTE = ['id', ...COLONNE_PROVE].join(', ');
 const FORMA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

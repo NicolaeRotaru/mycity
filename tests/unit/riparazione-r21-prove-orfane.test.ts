@@ -13,6 +13,10 @@ import { fintoGiroNotturno } from './aiuti/finto-giro-notturno';
  * Qui la notte VERA (la rotta process-deletions, col suo mondo finto): elenca il magazzino delle
  * prove, toglie le copie che nessun ordine indica più, e lascia stare le foto vive, le copie
  * troppo giovani e le cartelle di un ordine che non si riesce a rileggere.
+ *
+ * Secondo giro (collaudo del lotto 2): «viva» è una foto indicata da QUALSIASI colonna
+ * dell'ordine che può puntare a cod-proof, compresa `delivery_signature_url`
+ * (migrations/024:33), non solo dalle tre che si scrivono oggi.
  */
 
 const mondo: { attuale: ReturnType<typeof fintoGiroNotturno> } = { attuale: fintoGiroNotturno() };
@@ -34,6 +38,7 @@ const RIDER = 'r1d3r000-0000-4000-8000-000000000001';
 const ORDINE = '0d1e0000-0000-4000-8000-000000000001'; // consegnato ieri, la foto vera è la seconda
 const VECCHIO = '0d1e0000-0000-4000-8000-000000000002'; // oltre 90 giorni: colonne già azzerate
 const SPARITO = '0d1e0000-0000-4000-8000-000000000003'; // la cartella c'è, l'ordine non si rilegge
+const FIRMATO = '0d1e0000-0000-4000-8000-000000000004'; // la prova sta solo in delivery_signature_url
 
 function richiesta(url: string) {
   return new Request(url, { method: 'POST', headers: { authorization: 'Bearer segreto-dei-lavori' } }) as never;
@@ -128,5 +133,41 @@ describe('R21-013 · le foto rifatte dal fattorino non restano per sempre', () =
     const corpo = await res.json();
     expect(rimossiDalleProve()).toEqual([]);
     expect(corpo.retentionFallite).toBeGreaterThan(0);
+  });
+
+  it('una foto indicata solo da delivery_signature_url è viva: la notte non la toglie', async () => {
+    mondo.attuale = fintoGiroNotturno({
+      tabelle: {
+        profiles: [{ id: 'admin-1', role: 'admin' }],
+        notifications: [],
+        orders: [
+          {
+            id: FIRMATO,
+            cash_photo_url: null,
+            delivery_photo_url: null,
+            cash_signature_url: null,
+            delivery_signature_url: `${RIDER}/${FIRMATO}/firma.png`,
+          },
+        ],
+      },
+      secchi: {
+        'cod-proof': {
+          '': [{ name: RIDER, id: null }],
+          [RIDER]: [{ name: FIRMATO, id: null }],
+          [`${RIDER}/${FIRMATO}`]: [
+            { name: 'firma.png', id: 'f7', created_at: giorniFa(10) },
+            // Nella stessa cartella una copia che nessuna colonna indica: questa sì, se ne va.
+            { name: 'firma-rifatta.png', id: 'f8', created_at: giorniFa(10) },
+          ],
+        },
+      },
+    });
+    const res = await POST(richiesta('http://localhost/api/cron/process-deletions'));
+    const tolti = rimossiDalleProve();
+    expect(tolti, 'la notte toglie la firma che l’ordine indica in delivery_signature_url').not.toContain(
+      `${RIDER}/${FIRMATO}/firma.png`,
+    );
+    expect(tolti).toEqual([`${RIDER}/${FIRMATO}/firma-rifatta.png`]);
+    expect(res.status).toBe(200);
   });
 });
