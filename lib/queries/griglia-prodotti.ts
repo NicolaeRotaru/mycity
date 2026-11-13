@@ -110,6 +110,25 @@ async function idsPiuPertinenti(supabase: SupabaseClient, termine: string, tetto
   return ((data ?? []) as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
 }
 
+/** I filtri che la lettura e il conteggio devono applicare uguali. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; or: any }>(
+  q: Q,
+  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
+  categorie: string[] | null,
+): Q {
+  if (categorie) q = q.in('category_id', categorie);
+  if (d.sellerId) q = q.eq('seller_id', d.sellerId);
+  if (d.maxPrice !== undefined) q = q.lte('price', d.maxPrice);
+  if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
+  // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
+  // disponibilità illimitata.
+  if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
+  if (d.apertiOra !== undefined) q = q.in('seller_id', d.apertiOra);
+  if (d.creatiDal) q = q.gte('created_at', d.creatiDal);
+  return q;
+}
+
 /**
  * 3/9/2026 — SCEGLIERE «ALIMENTARI» NASCONDEVA IL PANE.
  *
@@ -134,25 +153,6 @@ async function conLeSueSottocategorie(supabase: SupabaseClient, id: string): Pro
   if (error) return [id];
   const figlie = ((data ?? []) as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
   return [id, ...figlie];
-}
-
-/** I filtri che la lettura e il conteggio devono applicare uguali. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; or: any }>(
-  q: Q,
-  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
-  categorie: string[] | null,
-): Q {
-  if (categorie) q = q.in('category_id', categorie);
-  if (d.sellerId) q = q.eq('seller_id', d.sellerId);
-  if (d.maxPrice !== undefined) q = q.lte('price', d.maxPrice);
-  if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
-  // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
-  // disponibilità illimitata.
-  if (d.onlyInStock) q = q.or('stock.is.null,stock.gt.0');
-  if (d.apertiOra !== undefined) q = q.in('seller_id', d.apertiOra);
-  if (d.creatiDal) q = q.gte('created_at', d.creatiDal);
-  return q;
 }
 
 export async function leggiProdottiDellaGriglia(
