@@ -1,13 +1,13 @@
 {
   "sessione": "R14",
-  "aggiornato": "2026-11-13 13:26",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-13 14:43",
+  "finita": true,
+  "testa": "004218b6674bf1d1c30eb212a86c91aa232f41c7",
   "verifica": {
-    "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "004218b6674bf1d1c30eb212a86c91aa232f41c7",
+    "nota": "typecheck, lint e 1433 file di prove (9731 prove) verdi. Il primo giro su de0f54b era rosso per 2 prove comuni di R11 (i tipi del database) a causa della migrazione 385: R14-021 tolta col revert 004218b e rifatto il verify."
   },
   "voci": [
     {
@@ -219,15 +219,15 @@
     {
       "id": "R14-009",
       "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
-      "esito": "riparato",
+      "esito": "parziale",
       "file_toccati": [
         "app/api/cron/abandoned-carts/route.ts",
         "lib/carrelli-abbandonati.ts"
       ],
       "prova": "app/api/cron/abandoned-carts/route.ts: il ramo senza consenso e quello «troppo vecchio» fanno skipped++ e continue (non sent++); sent++ solo dopo sendEmail ok. La risposta ha già conteggi separati sent / skipped / errors / giaPresi.",
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Chiusa senza migrazione (la 386 non serve e non c'e'). I due rami senza email del giro (carrello oltre 48 ore, cliente senza consenso) chiamano ancora mark_abandoned_cart_email_sent, poi mettono in recovery_email_sent_at l'ora dell'ultima attivita' del carrello; contaRendimentoRecupero legge «segno uguale a last_activity» come «gestito senza email» (un'email vera parte almeno 4 ore dopo l'ultima attivita') e non lo conta ne' fra i promemoria inviati ne' nel merito della campagna. La prova fa girare il giro vero su una tabella finta (lista, marcatura come la 166, UPDATE) e poi il conto: prima 3 promemoria su 1 invio, adesso 1; i carrelli chiusi restano fuori dal giro dopo.",
-      "cosa_resta": "Resta il contatore emailInviate di lib/carrelli-abbandonati.ts (riga 124, contaRendimentoRecupero): conta ogni carrello con recovery_email_sent_at pieno, e quel campo lo scrive anche la marcatura dei carrelli senza consenso o troppo vecchi. Con i dati di oggi non si distinguono. Serve una colonna nuova (es. recovery_skipped_at su abandoned_carts, migrazione 385) scritta dal ramo senza consenso/troppo vecchio e letta dal contatore, con ripiego per lo schema indietro; non fatto perché il mandato sconsiglia la migrazione e oggi nessun codice di produzione legge emailInviate (solo le prove).",
+      "cosa_resta": "Il cron dei carrelli ora segna i carrelli chiusi senza email con l ora dell ultima attivita, e il conto li tiene fuori dagli «inviati». Restano fuori: (1) un altro scrittore dello stesso segno in un file non di R14, app/api/account/delete/route.ts:189, che alla richiesta di cancellazione scrive recovery_email_sent_at = now() sui carrelli mai avvisati: quei carrelli contano ancora come promemoria inviati; (2) i carrelli chiusi prima di questa modifica, che non hanno un dato che li distingua; (3) l UPDATE del segno in app/api/cron/abandoned-carts/route.ts:88-92 non e condizionato a last_activity (se il carrello cambia tra lettura e scrittura il segno non e piu uguale e torna a contare).",
       "commit": "4cbcf09df264b6069479a3e3c64327f633340bca",
       "prova_file": [
         "tests/unit/riparazione-r14-carrelli-senza-email.test.ts"
@@ -240,7 +240,14 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4cbcf09df264b6069479a3e3c64327f633340bca^ --file app/api/cron/abandoned-carts/route.ts,lib/carrelli-abbandonati.ts --prove tests/unit/riparazione-r14-carrelli-senza-email.test.ts --json"
       },
-      "nota": "I carrelli chiusi senza email prima di questa riparazione hanno l'ora della marcatura nel segno e restano contati come invii: non c'e' un dato che li distingua. Lo spazio fra la marcatura e il secondo UPDATE e' di pochi millisecondi: se in quell'istante il browser riscrive il carrello, il carrello nuovo resta segnato «gestito» (succedeva gia' prima, fra la lista e la marcatura)."
+      "nota": "I carrelli chiusi senza email prima di questa riparazione hanno l'ora della marcatura nel segno e restano contati come invii: non c'e' un dato che li distingua. Lo spazio fra la marcatura e il secondo UPDATE e' di pochi millisecondi: se in quell'istante il browser riscrive il carrello, il carrello nuovo resta segnato «gestito» (succedeva gia' prima, fra la lista e la marcatura).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/account/delete/route.ts",
+          "modifica": "alla riga 189, sui carrelli mai avvisati, scrivere recovery_email_sent_at uguale al loro last_activity invece di now() (lo stesso segno «chiuso senza email» che usa app/api/cron/abandoned-carts/route.ts dal commit 4cbcf09), cosi il conto di lib/carrelli-abbandonati.ts non li conta come promemoria inviati"
+        }
+      ],
+      "verificato_da": "revisore 4 (2.0): prova verde, rimessa uscita 0, grep di tutti i lettori e scrittori di recovery_email_sent_at (cron, cart-sync, delete, funzioni SQL 029/166/215, export): il conto dei recuperi legge solo contaRendimentoRecupero, cart-sync azzera il segno a ogni modifica del carrello, nessun filtro o data mostrata sbaglia; prove vicine verdi. — dubbio: un altro scrittore in file altrui, da riparato a parziale"
     },
     {
       "id": "R14-010",
@@ -411,7 +418,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5722621ed59e1b79f70fde9c78c85035d4bf6a75^ --file app/api/kyc/documenti-rider/[id]/route.ts,app/api/admin/users/[id]/kyc/route.ts,app/api/ai/reviews-summary/route.ts --prove tests/unit/riparazione-r14-codice-storto.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nelle tre rotte la regola larga [0-9a-f-]{36} e' diventata la forma vera dell'uuid (8-4-4-4-12): un codice storto riceve 400 «ID non valido» e non arriva piu' al database (prima 500, e 404 nel riepilogo recensioni). La prova usa l'involucro di accesso vero: rider, venditore e compratore restano fuori (403) e chi non ha fatto l'accesso riceve 401, come prima."
+      "cosa_ho_fatto": "Nelle tre rotte la regola larga [0-9a-f-]{36} e' diventata la forma vera dell'uuid (8-4-4-4-12): un codice storto riceve 400 «ID non valido» e non arriva piu' al database (prima 500, e 404 nel riepilogo recensioni). La prova usa l'involucro di accesso vero: rider, venditore e compratore restano fuori (403) e chi non ha fatto l'accesso riceve 401, come prima.",
+      "verificato_da": "revisore 4 (2.0): prova verde, rimessa uscita 0, diff delle tre rotte solo sulla regola (wrapper e permessi intatti: 403 non amministratore, 401 non entrato, provati dalla prova con l'involucro vero), regex con /i quindi uuid maiuscolo e minuscolo passano come prima, 29 file di prove vicine verdi."
     },
     {
       "id": "R14-018",
@@ -499,7 +507,8 @@
           "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-voice-product, niente-chiamate-a-vuoto-al-filtro, un-corpo-troppo-grande-non-e-un-json-rotto, minori-s10-bozze-dalle-foto, la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto, il-testo-di-altri-sta-nel-recinto, dopo-la-dettatura-il-negoziante-sa-cosa-scrivere-lui, le-parole-dell-assistente-non-fanno-da-conferma, riparazione-r04-dettatura-elenchi."
         }
       ],
-      "cosa_resta": "1) Rimettere 930e4f9 dopo aver preparato tests/unit/api-ai-reviews-summary.test.ts (sopra). 2) Le altre 14 rotte app/api/ai/* (elenco sopra) non leggono AI_NEGOZI_ACCESA: oggi nessuna chiama il modello da spenta perche' lo ferma lib/ai/client.ts:198 (getAnthropic lancia AiConfigError), ma consumano il freno, leggono il database e rispondono «Servizio AI non configurato». catalog-batch/status e catalog-batch/cancel le lascerei senza freno: servono a chiudere un lotto partito prima dello spegnimento. 3) Classifica inviti: non c'e' una rotta; la pagina app/profile/referral/leaderboard/page.tsx legge la vista public.referral_leaderboard dal browser (GRANT SELECT TO authenticated in migrations/151). Un freno lato server sarebbe una migrazione nuova (`REVOKE SELECT ON public.referral_leaderboard FROM authenticated;`, da ridare alla riaccensione); lib/funzioni-al-lancio.ts:26-28 oggi la dichiara un'eccezione voluta (nessun premio passa di mano): scelta di Nicola. 4) Nessun aiutante comune in lib/funzioni-al-lancio.ts: il file e' letto anche da pagine del browser e una risposta del server (next/server) li' dentro non ci sta. Gli interruttori non sono cambiati."
+      "cosa_resta": "1) Rimettere 930e4f9 dopo aver preparato tests/unit/api-ai-reviews-summary.test.ts (sopra). 2) Le altre 14 rotte app/api/ai/* (elenco sopra) non leggono AI_NEGOZI_ACCESA: oggi nessuna chiama il modello da spenta perche' lo ferma lib/ai/client.ts:198 (getAnthropic lancia AiConfigError), ma consumano il freno, leggono il database e rispondono «Servizio AI non configurato». catalog-batch/status e catalog-batch/cancel le lascerei senza freno: servono a chiudere un lotto partito prima dello spegnimento. 3) Classifica inviti: non c'e' una rotta; la pagina app/profile/referral/leaderboard/page.tsx legge la vista public.referral_leaderboard dal browser (GRANT SELECT TO authenticated in migrations/151). Un freno lato server sarebbe una migrazione nuova (`REVOKE SELECT ON public.referral_leaderboard FROM authenticated;`, da ridare alla riaccensione); lib/funzioni-al-lancio.ts:26-28 oggi la dichiara un'eccezione voluta (nessun premio passa di mano): scelta di Nicola. 4) Nessun aiutante comune in lib/funzioni-al-lancio.ts: il file e' letto anche da pagine del browser e una risposta del server (next/server) li' dentro non ci sta. Gli interruttori non sono cambiati.",
+      "verificato_da": "revisore 4 (2.0): git diff 930e4f9^ cf976e1 e vuoto (il revert rimette tutti i file identici); applicando in prova revert + vi.mock AI_NEGOZI_ACCESA:true in api-ai-reviews-summary.test.ts le prove reviews-summary, freno e codice-storto passano e 41 file di prove che toccano funzioni-al-lancio restano verdi; newsletter/route.ts:52 e seller/products/import/route.ts:36 rifiutano gia con 503 da spenti (interruttori false in lib/funzioni-al-lancio.ts); elenco delle 14 rotte ai/* senza freno esatto (translate ha il suo TRADUCI_ACCESO, batch status/cancel lasciate apposta); modifiche scritte lasciate come serve_file_altrui, non applicate. Nota: i nomi delle prove da preparare per ogni rotta non li ho riverificati uno a uno."
     },
     {
       "id": "R14-019",
@@ -551,7 +560,7 @@
     {
       "id": "R14-021",
       "chiave": "api-backend|comunicare due volte l'esito di una segnalazione rimanda la mail e le notifiche, e dopo un errore il nuovo tentativo rimanda anche i canali già riusciti",
-      "esito": "riparato",
+      "esito": "serve_file_altrui",
       "commit": "76e8dc32182563128b34bdf21338d17341446997",
       "file_toccati": [
         "app/api/segnalazioni/esito/comunica.ts",
@@ -570,15 +579,33 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 76e8dc32182563128b34bdf21338d17341446997^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-segnalazione-una-volta.test.ts",
         "nota": "La migrazione 385 da sola con --sql r14_l6a_rimessa dà uscita 3 (rossa per struttura: le colonne nuove); la prova SQL è verde sul database ricostruito con la 385."
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Nessun registro esistente teneva traccia di cosa era partito, quindi la migrazione 385 aggiunge tre segni per canale (email, notifica, venditore) e un trigger che li azzera se la decisione cambia. comunicaEsito prende il canale con un UPDATE condizionato prima di spedire (una chiamata sola vince) e lo rimette libero se il canale fallisce; se le colonne non ci sono ancora (schema indietro) comunica come prima.",
-      "verificato_da": "revisore 3 (2.0): prova unit verde e rimessa solo codice uscita 0; apply.sh r14_rev3_prova 197 migrazioni 0 fallite, prova SQL verde (1 chiamata sola vince, decisione cambiata azzera); migrazione rigirata due volte e su 50 righe gia' decise senza errori, trigger azzera solo se cambia la decisione; ripiego colonne assenti (42703/PGRST204) e canale fallito rimesso libero letti e coperti dalla prova. Con --sql la rimessa da' 3 (rosso strutturale, file nuovo) come previsto."
+      "verificato_da": "revisore 3 (2.0): prova unit verde e rimessa solo codice uscita 0; apply.sh r14_rev3_prova 197 migrazioni 0 fallite, prova SQL verde (1 chiamata sola vince, decisione cambiata azzera); migrazione rigirata due volte e su 50 righe gia' decise senza errori, trigger azzera solo se cambia la decisione; ripiego colonne assenti (42703/PGRST204) e canale fallito rimesso libero letti e coperti dalla prova. Con --sql la rimessa da' 3 (rosso strutturale, file nuovo) come previsto.",
+      "commit_tolto": "76e8dc32182563128b34bdf21338d17341446997",
+      "revert": "004218b",
+      "nota": "La riparazione (commit 76e8dc3: comunica.ts prende ogni canale con un UPDATE condizionato prima di spedire, migrazione 385 con tre segni per canale su public.segnalazioni e trigger che li azzera se la decisione cambia; prova unit e prova SQL) reggeva: prova rimessa del codice uscita 0, revisore 3 regge. Il verify finale l ha trovata in contrasto con due prove comuni di R11 (tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts e tests/unit/riparazione-r11-viste-nei-tipi.test.ts): i tipi salvati lib/database.types.ts, che non sono di R14, non hanno le tre colonne nuove. Tolta intera col revert 004218b, come vuole la regola.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "rimettere la riparazione con git revert 004218b (riporta comunica.ts, la migrazione 385 e le due prove di R14), poi rigenerare il file con node scripts/gen-db-types.mjs: aggiunge alla tabella segnalazioni esito_email_at: string | null (Row) e esito_email_at?: string | null (Insert e Update), e lo stesso per esito_notifica_at ed esito_venditore_at. Con questo le due prove di R11 tornano verdi."
+        }
+      ],
+      "prima_del_revert": {
+        "rimessa": {
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 76e8dc32182563128b34bdf21338d17341446997^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-segnalazione-una-volta.test.ts",
+          "nota": "La migrazione 385 da sola con --sql r14_l6a_rimessa dà uscita 3 (rossa per struttura: le colonne nuove); la prova SQL è verde sul database ricostruito con la 385."
+        },
+        "verificato_da": "revisore 3 (2.0): prova unit verde e rimessa solo codice uscita 0; apply.sh r14_rev3_prova 197 migrazioni 0 fallite, prova SQL verde (1 chiamata sola vince, decisione cambiata azzera); migrazione rigirata due volte e su 50 righe gia' decise senza errori, trigger azzera solo se cambia la decisione; ripiego colonne assenti (42703/PGRST204) e canale fallito rimesso libero letti e coperti dalla prova. Con --sql la rimessa da' 3 (rosso strutturale, file nuovo) come previsto."
+      }
     },
     {
       "id": "R14-022",
       "chiave": "api-backend|due invii uguali all'assistenza nello stesso istante creano due messaggi e due avvisi",
       "esito": "parziale",
-      "commit": "ee68faa3b895ff0405c1002c3dd7970e101c258e",
+      "commit": "de0f54b18148e49437fe06523ae71c83c97b0cba",
       "file_toccati": [
         "app/api/support/conversation/route.ts"
       ],
@@ -591,16 +618,19 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ee68faa3b895ff0405c1002c3dd7970e101c258e^ --file app/api/support/conversation/route.ts --prove tests/unit/riparazione-r14-assistenza-doppio-invio.test.ts"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base de0f54b18148e49437fe06523ae71c83c97b0cba^ --file app/api/support/conversation/route.ts --prove tests/unit/riparazione-r14-assistenza-doppio-invio.test.ts"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "La rotta accetta una chiave facoltativa per ogni invio e, prima di scrivere, fa un incremento atomico sul contatore (persona + chiave, o persona + impronta del testo, finestra 5 secondi): il secondo invio uguale riceve la stessa risposta del primo e non scrive né messaggio né avviso.",
-      "cosa_resta": "Il contatore è atomico su tutte le istanze solo con Upstash configurato; senza, regge solo dentro la stessa istanza. Nessun vincolo sul database per i messaggi (non c'è un posto dove metterlo senza toccare le chat di tutti). Il modulo non manda ancora la chiave: oggi il doppione si riconosce dall'impronta del testo nei 5 secondi.",
+      "cosa_ho_fatto": "La rotta accetta una chiave facoltativa per ogni invio e, prima di scrivere, fa un incremento atomico sul contatore (persona + chiave, o persona + impronta del testo, finestra 5 secondi): il secondo invio uguale riceve la stessa risposta del primo e non scrive né messaggio né avviso. Correzione della regressione: se un invio e' bloccato come doppione, la rotta risponde 200 solo se il messaggio del primo invio risulta scritto (aspetta fino a circa mezzo secondo se e' ancora in corso); se il primo e' fallito, il nuovo tentativo scrive lui.",
+      "cosa_resta": "Il contatore è atomico su tutte le istanze solo con Upstash configurato; senza, regge solo dentro la stessa istanza. Nessun vincolo sul database per i messaggi (non c'è un posto dove metterlo senza toccare le chat di tutti). Il modulo non manda ancora la chiave: oggi il doppione si riconosce dall'impronta del testo nei 5 secondi. Il doppione che arriva mentre il primo insert dura piu' di circa mezzo secondo potrebbe scrivere un secondo messaggio.",
       "serve_file_altrui": [
         {
           "file": "components/SupportChatModal.tsx",
           "modifica": "In start() (riga ~88) generare un id per invio (crypto.randomUUID(), tenuto in un ref finché l'invio non riesce) e mandarlo nel corpo: JSON.stringify({ firstMessage: body, chiave: idInvio })."
         }
+      ],
+      "commit_precedenti": [
+        "ee68faa3b895ff0405c1002c3dd7970e101c258e"
       ]
     },
     {
@@ -626,7 +656,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La migrazione 384 (non applicata) mette in activity_events la stessa regola della deduplica (stessa persona e sessione del browser entro 30 minuti; sessione non nota entro 1 minuto; sessioni diverse sempre) in un grilletto BEFORE INSERT solo per gli accessi, sotto un lucchetto per persona: la seconda copia esce con 23505. Non un indice unico perche' la regola ha finestre di tempo (un indice su persona+sessione scarterebbe l'accesso nuovo dopo la mezz'ora, uno a fasce lascerebbe passare due segnali a cavallo del bordo). La prova SQL scrive due accessi uguali nella tabella che c'era: una riga sola con la 384, due senza (rimessa 0); controprove: altra sessione, stessa scheda dopo 31 minuti, altra persona e pagine viste entrano. Provato a mano anche con due sessioni psql vere in parallelo (la seconda aspetta il lucchetto e viene rifiutata, resta 1 riga), su un database con doppioni gia' presenti, e due giri della 384 senza errori.",
-      "nota": "Il codice trattava gia' il 23505 come «gia' registrato» prima di questa voce (lib/activity.ts:97 RIGA_GIA_PRESENTE e il controllo dopo l'insert in recordActivity): non serve un upsert, che con PostgREST non potrebbe comunque puntare a una regola con finestre. La prova unit tests/unit/riparazione-r14-accesso-doppio.test.ts (due segnali insieme, il secondo rifiutato con 23505: 204 a tutti e due, niente nel registro degli errori; un altro codice resta errore) e' verde anche sulla base: protegge quel contratto (togliendo il controllo del 23505 diventa rossa, provato). In lib/activity.ts ho cambiato solo il commento che parlava di una «migrazione proposta»."
+      "nota": "Il codice trattava gia' il 23505 come «gia' registrato» prima di questa voce (lib/activity.ts:97 RIGA_GIA_PRESENTE e il controllo dopo l'insert in recordActivity): non serve un upsert, che con PostgREST non potrebbe comunque puntare a una regola con finestre. La prova unit tests/unit/riparazione-r14-accesso-doppio.test.ts (due segnali insieme, il secondo rifiutato con 23505: 204 a tutti e due, niente nel registro degli errori; un altro codice resta errore) e' verde anche sulla base: protegge quel contratto (togliendo il controllo del 23505 diventa rossa, provato). In lib/activity.ts ho cambiato solo il commento che parlava di una «migrazione proposta».",
+      "verificato_da": "revisore 4 (2.0): rimessa con --sql r14_rev4_rimessa uscita 0; su database con 200000 righe e doppioni la 384 gira due volte senza errori; pagine viste, login senza persona, login di persone diverse, login vecchi di giorni entrano; il lucchetto e per persona e solo per i login (nessun altro scrittore della tabella aspetta); insert 0,3 ms con indice user_id; finestre (30 min stessa sessione, 1 min sessione ignota, sessioni diverse sempre) uguali a lib/activity.ts accessoGiaRegistrato; unico scrittore di login con persona e /api/track via recordActivity, che tratta 23505 come gia registrato."
     },
     {
       "id": "R14-024",
@@ -822,8 +853,8 @@
     "La classifica degli inviti si legge dal browser (vista referral_leaderboard) anche con l interruttore della classifica spento: va chiusa anche dal server con una migrazione, o resta l eccezione voluta che dice lib/funzioni-al-lancio.ts? (R14-018)"
   ],
   "conto": {
-    "agenti": 19,
-    "nota": "12 della prima parte + L5 (prima sessione); sessione 2.0: L6a, L6b, revisori 1-3 (5 dei 9); poi correzione di R14-022 e revisore 4"
+    "agenti": 20,
+    "nota": "12 della prima parte + L5 (prima sessione, 13); sessione 2.0: L6a, L6b, correzione di R14-022, revisori 1-4 (7 dei 9)"
   },
   "passaggio": {
     "quando": "2026-11-13 13:50",
@@ -856,7 +887,7 @@
       "R14-024",
       "R14-025"
     ],
-    "in_corso": "niente: L1-L5 chiusi, commit spinti",
+    "in_corso": "niente: chiusa dalla sessione 2.0 (session_015BmpnWjBBk7GEooFEhi67r)",
     "giri_aperti": [
       "L6a (modello piccolo): R14-009, R14-021, R14-022, R14-024, R14-025",
       "L6b (modello grande, permessi/dati): R14-017, R14-018 (le 17 rotte app/api/ai/* non sono di R14: parziale + serve_file_altrui), R14-023 (migrazione 384 con prova SQL)",
