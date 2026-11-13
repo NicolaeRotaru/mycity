@@ -1526,9 +1526,17 @@ export default function CheckoutPage() {
               onApplySavedAddress={applySavedAddress}
             />
             {/* R19-003 — L'avviso «fuori zona» sta anche qui, accanto all'indirizzo: sul telefono il
-                riepilogo è in fondo e chi scrive l'indirizzo lo scoprirebbe all'ultimo tocco. */}
+                riepilogo è in fondo e chi scrive l'indirizzo lo scoprirebbe all'ultimo tocco.
+                Sta sopra gli altri riquadri: se a fermare l'ordine è un motivo che viene prima
+                (scorte, varianti), qui si informa e basta (`data-informativo`), così «vai al primo
+                blocco» porta al motivo vero e non a questo. */}
             {fuoriZona && (
-              <div role="alert" data-avviso="fuori-zona" className="mt-3 flex items-start gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
+              <div
+                role="alert"
+                data-avviso="fuori-zona"
+                data-informativo={motivoDelBlocco === motivoFuoriZona(gruppoFuoriZona?.storeName) ? undefined : ''}
+                className="mt-3 flex items-start gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800"
+              >
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span>{motivoFuoriZona(gruppoFuoriZona?.storeName)}</span>
               </div>
