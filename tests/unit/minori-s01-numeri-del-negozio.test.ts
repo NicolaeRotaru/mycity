@@ -54,7 +54,8 @@ describe('268 — il grafico dei guadagni usa l\'incassato al netto dei rimborsi
     expect(giorni['2026-11-04']).toBe(5);
   });
   it('la pagina passa al grafico solo gli ordini attivi', () => {
-    expect(leggi('app/seller/earnings/page.tsx')).toContain('incassoPerGiorno(activeCard)');
+    // R17-001 — Gli ordini attivi del riepilogo, contanti compresi (prova: riparazione-r17-guadagni-coi-contanti).
+    expect(leggi('app/seller/earnings/page.tsx')).toContain('incassoPerGiorno(riepilogo.contati)');
   });
 });
 
