@@ -194,6 +194,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           setTimeout(() => rifiuta(new Error(TIMEOUT_INVIO)), 10_000)),
       ]);
       if (!error) return { ok: true, id: data?.id ?? '' };
+      // 13/11/2026 (R22-001, R22-011) — Il 409 «stessa chiave, corpo diverso» vuol dire che Resend
+      // ha già accettato il messaggio di questa chiave (sulle promozioni il link di disiscrizione
+      // cambia a ogni giro): è già spedita, non un errore. Il 409 delle richieste concorrenti resta
+      // un errore e la coda lo ritenta più tardi.
+      if (opzioni && String(error.name) === 'invalid_idempotent_request') {
+        logger.warn('[email] Resend ha già accettato questo messaggio con la stessa chiave: non si rispedisce');
+        return { ok: true, id: '' };
+      }
       lastErr = error.message ?? 'resend error';
       ritentabile = ['rate_limit_exceeded', 'internal_server_error', 'application_error'].includes(String(error.name));
     } catch (err) {
@@ -221,6 +229,8 @@ type OpzioniInvio = Parameters<Resend['emails']['send']>[1];
 function conChiaveDiIdempotenza(resend: Resend, chiave: string): OpzioniInvio {
   const base = (resend as unknown as { headers?: unknown }).headers;
   if (!(base instanceof Headers) || !base.has('Authorization')) {
+    // resend 3.5 ignora `idempotencyKey`: qui la chiave non arriva a Resend, e va detto.
+    logger.warn('[email] intestazioni di Resend non trovate: la chiave di idempotenza potrebbe non arrivare');
     return { idempotencyKey: chiave } as unknown as OpzioniInvio;
   }
   const headers = new Headers(base);

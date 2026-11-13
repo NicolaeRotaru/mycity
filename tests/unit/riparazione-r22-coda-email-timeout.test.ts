@@ -122,9 +122,24 @@ describe('dopo un timeout di Resend la riga ripresa non spedisce una seconda ema
     expect(scritturaDi('q1').some((s) => typeof s.valori.sent_at === 'string')).toBe(true);
   });
 
-  it('anche una promozione (link di disiscrizione nuovo a ogni giro) non esce due volte', async () => {
-    await timeoutPoiRiprova('first_order_promo');
+  it('anche una promozione (link di disiscrizione nuovo a ogni giro) non esce due volte, e la riga si chiude come spedita', async () => {
+    const { secondo } = await timeoutPoiRiprova('first_order_promo');
     expect(consegnate, 'la promozione è uscita due volte').toHaveLength(1);
+    // Resend risponde 409 «stessa chiave, corpo diverso»: vuol dire che l'ha già accettata.
+    expect(secondo.sent, 'la promozione già accettata da Resend non risulta spedita').toBe(1);
+    expect(secondo.errors, 'il 409 di idempotenza è stato contato come errore').toBe(0);
+    // La coda vera riprende la riga finché non ha sent_at né cancelled_at: si seguono i giri fino al quinto tentativo.
+    for (let giro = 3; giro <= 5; giro++) {
+      const tutte = scritturaDi('q1');
+      const ultima = tutte[tutte.length - 1].valori;
+      if (ultima.sent_at || ultima.cancelled_at) break;
+      vi.setSystemTime(new Date(Date.parse(String(ultima.send_at)) + 1_000));
+      coda = [{ id: 'q1', user_id: 'u1', template: 'first_order_promo', attempts: Number(ultima.attempts), scade_at: '2026-11-15T09:00:00.000Z' }];
+      await giroDellaPosta();
+    }
+    expect(scritturaDi('q1').some((s) => typeof s.valori.sent_at === 'string'), 'la riga non è mai stata segnata spedita').toBe(true);
+    expect(scritturaDi('q1').some((s) => s.valori.cancelled_at != null), 'la promozione consegnata è finita annullata').toBe(false);
+    expect(consegnate).toHaveLength(1);
   });
 
   it('la chiave è la stessa a ogni tentativo della riga e la chiave d\'accesso resta', async () => {
