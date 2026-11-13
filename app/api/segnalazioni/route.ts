@@ -37,34 +37,7 @@ const Corpo = z.object({
   ]),
   dettaglio: z.string().max(2000).optional(),
   emailContatto: z.string().email().max(320).optional(),
-  // 13/11/2026 (R21-014) — Nome e dichiarazione di buona fede, tutti e due facoltativi.
-  nomeSegnalante: z.string().trim().max(120).optional(),
-  buonaFede: z.boolean().optional(),
 });
-
-/**
- * 13/11/2026 (R21-014) — IL MODULO NON PERMETTEVA DI DARE IL NOME NÉ DI DICHIARARE LA BUONA FEDE.
- *
- * Il regolamento europeo sui servizi digitali (art. 16.2, lettere c e d) chiede che il canale
- * consenta il nome di chi segnala e la dichiarazione che quanto scrive è, in buona fede, esatto e
- * completo. Non chiede di rifiutare chi non li dà: restano facoltativi.
- *
- * Viaggiano dentro il testo della segnalazione, in fondo, in righe scritte da noi: così li legge
- * l'amministratore che la esamina (la pagina admin mostra il testo), e se ne vanno con il testo
- * quando la potatura o la cancellazione lo tolgono. Nessuna colonna nuova da aspettare nel database.
- */
-const LIMITE_DEL_TESTO = 2000; // il vincolo della colonna `dettaglio` (migrazione 126)
-const DICHIARAZIONE_DI_BUONA_FEDE =
-  'Dichiara in buona fede che le informazioni e le accuse di questa segnalazione sono esatte e complete.';
-
-function testoDellaSegnalazione(c: z.infer<typeof Corpo>): string | null {
-  const firma = [
-    c.nomeSegnalante ? `— Chi segnala: ${c.nomeSegnalante}` : null,
-    c.buonaFede ? `— ${DICHIARAZIONE_DI_BUONA_FEDE}` : null,
-  ].filter(Boolean);
-  if (firma.length === 0) return c.dettaglio ?? null;
-  return [c.dettaglio?.trim() || null, firma.join('\n')].filter(Boolean).join('\n\n');
-}
 
 /**
  * 13/11/2026 (R21-008) — CHI LASCIAVA L'EMAIL NON RICEVEVA NESSUNA CONFERMA.
@@ -135,11 +108,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
     }
 
-    const dettaglio = testoDellaSegnalazione(corpo);
-    if (dettaglio && dettaglio.length > LIMITE_DEL_TESTO) {
-      return ApiErrors.invalidRequest('Il testo della segnalazione è troppo lungo: accorcialo un po’.');
-    }
-
     // Chi è loggato viene riconosciuto, ma non è obbligatorio.
     let autoreId: string | null = null;
     try {
@@ -175,7 +143,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         tipo: corpo.tipo,
         oggetto_id: corpo.oggettoId,
         motivo: corpo.motivo,
-        dettaglio,
+        dettaglio: corpo.dettaglio ?? null,
         segnalante_id: autoreId,
         email_contatto: corpo.emailContatto ?? null,
       })
