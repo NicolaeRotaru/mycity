@@ -261,41 +261,56 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
       incassatoCents: body.cashCollectedCents,
       attesoCents: expectedCents,
     });
-    const { data: amministratori } = await admin.from('profiles').select('id').eq('role', 'admin');
-    const avvisi = (amministratori ?? []).map((a) => ({
-      user_id: a.id,
-      category: 'system',
+    await avvisaGliAmministratori(admin, {
       title: '📷 Incasso senza foto',
       body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: dichiarati ${formatPriceFromCents(body.cashCollectedCents)} senza foto dei contanti. Motivo: «${prova.nota}»`,
       link: '/admin/orders',
-    }));
-    if (avvisi.length > 0) await admin.from('notifications').insert(avvisi);
+    }, { riderId: user.id, orderId: body.orderId });
   }
 
   // Mismatch → alert agli ADMIN (NON al rider, che è la parte da controllare).
   const delta = body.cashCollectedCents - expectedCents;
   if (Math.abs(delta) > MISMATCH_TOLERANCE_CENTS) {
-    const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
-    const rows = (admins ?? []).map((a) => ({
-      user_id: a.id,
-      /**
-       * 30/8/2026 (R127) — «system», non la predefinita del database.
-       *
-       * Senza questo campo la riga nasceva nella categoria 'order' (migrazione
-       * 115), cioe' insieme agli aggiornamenti d'ordine — i piu' rumorosi, e
-       * quindi i primi che un amministratore spegne. `vuole_notifica` governa
-       * l'invio della push: spegnendo quelli si smetteva di ricevere sul
-       * telefono l'unico segnale automatico sul contante che manca all'appello.
-       * 'system' e' la categoria degli avvisi di servizio: non si disattiva.
-       */
-      category: 'system',
+    await avvisaGliAmministratori(admin, {
       title: '⚠️ Incasso COD non quadra',
       body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: incassati €${(body.cashCollectedCents / 100).toFixed(2)}, attesi €${(expectedCents / 100).toFixed(2)} (Δ €${(delta / 100).toFixed(2)}).`,
       link: '/admin/orders',
-    }));
-    if (rows.length > 0) await admin.from('notifications').insert(rows);
+    }, { riderId: user.id, orderId: body.orderId, delta });
   }
 
   return NextResponse.json({ ok: true, delta, expectedCents }, { status: 200 });
 });
 
+/**
+ * R14-020 — GLI AVVISI AGLI AMMINISTRATORI SI GUARDANO.
+ *
+ * «Incasso che non quadra» e «incasso senza foto» si scrivevano senza leggere niente: né l'esito
+ * della lettura degli amministratori né quello della scrittura. Un fattorino dichiara 30 € su un
+ * ordine da 42 €, l'avviso non si scrive, e nessuno lo sa. L'incasso è già registrato e il
+ * fattorino non è la persona a cui dirlo, quindi la risposta resta quella; ma un avviso che non
+ * parte lascia una riga d'errore nel log col suo testo intero: è la traccia del lavoro da fare.
+ *
+ * 30/8/2026 (R127) — «system», non la predefinita del database. Senza questo campo la riga
+ * nasceva nella categoria 'order' (migrazione 115), cioe' insieme agli aggiornamenti d'ordine —
+ * i piu' rumorosi, e quindi i primi che un amministratore spegne. `vuole_notifica` governa
+ * l'invio della push: spegnendo quelli si smetteva di ricevere sul telefono l'unico segnale
+ * automatico sul contante che manca all'appello. 'system' e' la categoria degli avvisi di
+ * servizio: non si disattiva.
+ */
+async function avvisaGliAmministratori(
+  admin: ReturnType<typeof getAdminSupabase>,
+  avviso: { title: string; body: string; link: string },
+  contesto: Record<string, unknown>,
+): Promise<boolean> {
+  const nonPartito = (perche: string, motivo?: string) => {
+    logger.error(`[cash-confirm] avviso «${avviso.title}» NON partito: ${perche}`, { ...contesto, ...avviso, motivo });
+    return false;
+  };
+  const { data: amministratori, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (errLettura) return nonPartito('amministratori non letti', errLettura.message);
+  const righe = ((amministratori ?? []) as Array<{ id: string }>).map((a) => ({ user_id: a.id, category: 'system', ...avviso }));
+  if (righe.length === 0) return nonPartito('nessun amministratore a cui mandarlo');
+  const esito = await admin.from('notifications').insert(righe);
+  if (esito?.error) return nonPartito('campanella non scritta', esito.error.message);
+  return true;
+}
