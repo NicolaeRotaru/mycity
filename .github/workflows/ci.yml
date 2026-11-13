@@ -90,13 +90,19 @@ jobs:
       # volta sola e i giri dopo non perdono tempo a ricaricarla. Chi non trova
       # la sua riparte dalla piu' recente disponibile (`restore-keys`): per una
       # richiesta nuova, quella dell'ultimo commit di main.
+      #
+      # Ogni tipo di costruzione ha la sua cache (lint, browser, axe): le tre
+      # costruiscono con variabili pubbliche diverse, e una cache fatta con le
+      # variabili di un altro lavoro fa ricompilare molti pezzi. Misurato il
+      # 13/11: con la cache comune le fette del browser costruivano in 73-113
+      # secondi, questo lavoro con la sua in 66.
       - name: Riprendi la cache di compilazione di Next
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .next/cache
-          key: next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+          key: next-build-v1-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v1-lint-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # Storybook 8.x dichiara peer deps su React 18 + ecc, ma il monorepo usa
       # react-dom 18.3 risolto via Next 14; senza --legacy-peer-deps fallisce.
@@ -592,9 +598,9 @@ jobs:
   # auto-salta per intero non puo' piu' uscire con la stessa spunta di una che
   # ha guardato. Le saltate sono elencate con il loro motivo, una per una.
   #
-  # 13/11/2026 — SEI FETTE, NELLO STESSO MOMENTO. Le 76 prove giravano una
+  # 13/11/2026 — OTTO FETTE, NELLO STESSO MOMENTO. Le 76 prove giravano una
   # dopo l'altra in 3 minuti, dopo 2 di costruzione del sito. Adesso ogni
-  # fetta costruisce il sito e fa girare un sesto delle prove (sharding di
+  # fetta costruisce il sito e fa girare un ottavo delle prove (sharding di
   # Playwright). Il conto di cosa ha guardato resta in ogni fetta, ed e' piu'
   # severo di prima: una fetta che non apre nessuna pagina si ferma rossa da
   # sola. Il lavoro «e2e-senza-chiavi-insieme» rimette insieme i referti e si
@@ -608,7 +614,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fetta: [1, 2, 3, 4, 5, 6]
+        fetta: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -628,9 +634,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .next/cache
-          key: next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+          key: next-build-v1-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v1-browser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
       # versione di Playwright (fissata da package-lock.json) vuole lo stesso
@@ -843,9 +849,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .next/cache
-          key: next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
+          key: next-build-v1-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
-            next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            next-build-v1-axe-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
       # versione di Playwright (fissata da package-lock.json) vuole lo stesso
