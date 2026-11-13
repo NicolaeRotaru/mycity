@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
-import { creaLibro, creaStripe, type Libro, type StripeFinto } from './aiuti/libro-dei-rimborsi-r17';
+import { creaLibro, creaStripe, type Libro, type StripeFinto } from './aiuti/libro-dei-rimborsi-finto';
 
 /**
  * R17-010 — La veloce pagata tutta o quasi col credito su un ordine con la carta.
