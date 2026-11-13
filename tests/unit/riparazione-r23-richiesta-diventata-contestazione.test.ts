@@ -148,4 +148,51 @@ describe('R23-012 — la richiesta di informazioni diventata contestazione togli
     // 1800 × 1000 / 2790 = 645
     expect(stato.storni.map((s) => s.amount)).toEqual([645]);
   });
+
+  it('un rimborso fatto durante la richiesta non passa per lo storno della contestazione: la fetta del negozio si toglie', async () => {
+    // Durante la richiesta di informazioni il pagamento si può ancora rimborsare: 5 € al negozio
+    // tornano indietro con uno storno che porta l'ordine ed è nato dopo la contestazione.
+    stato.storni.push({
+      id: 'trr_rimborso', transferId: 'tr_o1', amount: 500, chiave: 'reversal_o1_tot_500',
+      created: contestazione.created + 3_600, metadata: { order_id: 'o1' },
+    });
+    stato.db.tabelle.orders = [ordine('o1', { seller_payout_reversed_cents: 500, stripe_reversal_id: 'trr_rimborso' })];
+    const parte = { ...contestazione, amount: 1000 };
+
+    expect(await consegna('evt_inq', 'charge.dispute.created', { ...parte, status: 'warning_needs_response' })).toBe(200);
+    expect(await consegna('evt_p', 'charge.dispute.funds_withdrawn', { ...parte, status: 'needs_response' })).toBe(200);
+
+    // 1800 × 1000 / 2790 = 645: lo storno del rimborso non è quello della contestazione.
+    expect(stato.storni.map((s) => s.amount), 'la fetta del negozio non si toglie mai').toEqual([500, 645]);
+    expect(riga('o1')).toMatchObject({ seller_payout_reversed_cents: 1145, dispute_seller_reversed_cents: 645 });
+  });
+
+  it('lo storno che porta l id di questa contestazione è il suo, anche con un importo diverso dalla quota', async () => {
+    stato.storni.push({
+      id: 'trr_suo', transferId: 'tr_o1', amount: 600, chiave: 'chiave scaduta',
+      created: contestazione.created + 60, metadata: { order_id: 'o1', dispute_id: 'dp_1' },
+    });
+    stato.db.tabelle.orders = [ordine('o1', { dispute_status: 'OPEN' })];
+    expect(await consegna('evt_p', 'charge.dispute.funds_withdrawn', { ...contestazione, amount: 1000, status: 'needs_response' })).toBe(200);
+    expect(stato.storni.map((s) => s.id)).toEqual(['trr_suo']);
+  });
+
+  it('negozio non ancora pagato: la richiesta diventata contestazione manda comunque «Chargeback aperto», una volta', async () => {
+    stato.db.tabelle.orders = [ordine('o1', { payout_status: 'HELD', stripe_transfer_id: null })];
+    expect(await consegna('evt_inq', 'charge.dispute.created', { ...contestazione, status: 'warning_needs_response' })).toBe(200);
+    expect(await consegna('evt_p', 'charge.dispute.funds_withdrawn', { ...contestazione, status: 'needs_response' })).toBe(200);
+
+    expect(stato.storni).toEqual([]);
+    expect(riga('o1').dispute_status, 'il bonifico fermo non deve partire').toBe('OPEN');
+    expect(avvisi().filter((a) => a.includes('Chargeback aperto')), 'nessuno sa che la banca si è ripresa i soldi').toHaveLength(1);
+  });
+
+  it('il prelievo arriva prima di created: uno storno e un avviso solo', async () => {
+    stato.db.tabelle.orders = [ordine('o1')];
+    expect(await consegna('evt_p', 'charge.dispute.funds_withdrawn', { ...contestazione, status: 'needs_response' })).toBe(200);
+    expect(await consegna('evt_c', 'charge.dispute.created', { ...contestazione, status: 'needs_response' })).toBe(200);
+
+    expect(stato.storni.map((s) => s.amount)).toEqual([1800]);
+    expect(avvisi().filter((a) => a.includes('Chargeback aperto')), 'due avvisi per la stessa contestazione').toHaveLength(1);
+  });
 });

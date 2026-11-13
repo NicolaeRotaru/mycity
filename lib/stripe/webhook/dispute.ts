@@ -40,20 +40,26 @@ type StornoDaControllare = { orderId: string; testo: string };
  * 15/10/2026 (R81) — Su Stripe c'è già uno storno di questo bonifico fatto da
  * quando la contestazione è nata? Si chiede a Stripe e non al database, perché
  * il database può non averlo registrato (un processo morto fra la risposta di
- * Stripe e la scrittura). Un pagamento contestato Stripe non lo lascia più
- * rimborsare (errore `charge_disputed`), quindi uno storno nato dopo la
- * contestazione è il suo. Se Stripe non risponde si lancia: la rotta risponde
+ * Stripe e la scrittura). Se Stripe non risponde si lancia: la rotta risponde
  * 500 e Stripe riprova (prima di questo punto è stata scritta solo la riga OPEN).
+ *
+ * R23-012 — «Nato dopo la contestazione» non basta: durante una richiesta di informazioni il
+ * pagamento si può ancora rimborsare, e lo storno del rimborso porta lo stesso order_id. Preso
+ * per quello della contestazione, la fetta del negozio non si toglieva mai. Conta solo lo storno
+ * di QUESTA contestazione: col suo id nei metadati, se lo porta; se no (gli storni di
+ * `reverseOrderTransfer` portano solo l'ordine) con l'importo uguale alla quota da riprendere.
  */
 async function stornoGiaFattoPerLaContestazione(
   o: { id: string; stripe_transfer_id: string | null; stripe_reversal_id: string | null },
   dispute: Stripe.Dispute,
+  quota: number,
   daControllare: StornoDaControllare[],
 ): Promise<boolean> {
   if (!o.stripe_transfer_id) return false;
   const dal = dispute.created ?? 0;
   const storni = await getStripe().transfers.listReversals(o.stripe_transfer_id, { limit: 100 });
-  const suo = storni.data.find((r) => r.created >= dal && (r.metadata?.order_id ?? o.id) === o.id);
+  const suo = storni.data.find((r) => r.created >= dal && (r.metadata?.order_id ?? o.id) === o.id
+    && (r.metadata?.dispute_id ? r.metadata.dispute_id === dispute.id : r.amount === quota));
   if (suo && suo.id !== o.stripe_reversal_id) {
     // Fatto su Stripe, non scritto da noi: non si rifà, ma va visto. Non solo
     // nei log: senza registrazione, a contestazione vinta il negozio non
@@ -72,10 +78,10 @@ async function stornoGiaFattoPerLaContestazione(
 /**
  * charge.dispute.created → chargeback aperto (Stripe ha GIÀ prelevato i fondi: niente refund, sarebbe doppio):
  * claw-back del transfer se il negozio era già pagato, ordini 'OPEN' (il giro dei bonifici li salta), avviso.
- * R23-012 — Anche charge.dispute.funds_withdrawn (`prelievo`): la richiesta di informazioni diventata contestazione
- * vera non ripassava di qui, e al negozio non si toglieva niente. Su un chargeback già lavorato l'avviso non si ripete.
+ * R23-012 — Anche charge.dispute.funds_withdrawn: la richiesta di informazioni diventata contestazione vera
+ * non ripassava di qui, e al negozio non si toglieva niente. L'avviso del chargeback parte una volta sola.
  */
-export async function handleDisputeCreated(dispute: Stripe.Dispute, prelievo = false) {
+export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const orders = await findOrdersForDispute(
     dispute,
     // R052 — serve anche il lordo dell'ordine: la quota da riprendere al
@@ -184,7 +190,6 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute, prelievo = f
   // Se c'era solo il reclamo, Stripe non ne ha nessuno e lo storno si fa.
   const giaPassati = new Set(orders.filter((o) => o.dispute_status === 'OPEN').map((o) => o.id));
   const daControllare: StornoDaControllare[] = [];
-  let stornatoOra = 0; // R23-012 — quanto ha tolto QUESTO passaggio, a negozio e fattorino
   scritturaObbligatoria(
     await admin
       .from('orders')
@@ -203,7 +208,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute, prelievo = f
     const quota = quotaDaRiprendere(o);
     if (
       o.payout_status === 'TRANSFERRED' && quota !== undefined && giaPassati.has(o.id) &&
-      (await stornoGiaFattoPerLaContestazione(o, dispute, daControllare))
+      (await stornoGiaFattoPerLaContestazione(o, dispute, quota, daControllare))
     ) {
       // R81 — Lo stesso avviso consegnato di nuovo, e su Stripe lo storno per
       // questa contestazione c'è già. Uno storno PARZIALE non si rifà: dopo il
@@ -247,7 +252,6 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute, prelievo = f
     // ripetuto, uno zero non deve cancellare il promemoria del primo, che alla
     // chiusura vinta dice quanto restituire al negozio.
     const valori: Record<string, number> = {};
-    stornatoOra += stornatoVenditore + stornatoFattorino;
     if (stornatoVenditore > 0) valori.dispute_seller_reversed_cents = stornatoVenditore;
     if (stornatoFattorino > 0) valori.dispute_rider_reversed_cents = stornatoFattorino;
     if (Object.keys(valori).length > 0) {
@@ -280,10 +284,13 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute, prelievo = f
     );
   }
 
-  if (!prelievo || stornatoOra > 0) await notifyAdmins(
+  // R23-012 — Una volta per contestazione: anche col negozio non ancora pagato (niente storno), e
+  // anche se il prelievo arriva prima di `created` (due passaggi, un avviso).
+  await notifyAdmins(
     '⚠️ Chargeback aperto',
     `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
     '/admin/disputes',
+    { unaVoltaPer: `chargeback-aperto:${dispute.id}` },
   );
 }
 
@@ -497,9 +504,10 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       );
     }
     const scaffaleNonRiuscito: string[] = [];
-    // 1/11/2026 — Una richiesta di informazioni diventata contestazione non
-    // passa da handleDisputeCreated una seconda volta: il bonifico al negozio
-    // non e' stato stornato. Persa la contestazione, va ripreso a mano.
+    // 1/11/2026 — Una richiesta di informazioni diventata contestazione ripassa da
+    // handleDisputeCreated solo con charge.dispute.funds_withdrawn (R23-012): se
+    // quell'avviso non è acceso sull'endpoint, o lo storno non è riuscito, il bonifico
+    // al negozio non e' stato stornato. Persa la contestazione, va ripreso a mano.
     const nonStornati = orders.filter(
       (o) => o.payout_status === 'TRANSFERRED' && !giaChiusiPersi.has(o.id) && (o.dispute_seller_reversed_cents ?? 0) <= 0,
     );

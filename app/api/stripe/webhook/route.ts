@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       case 'charge.dispute.created':
       // R23-012 — La richiesta di informazioni diventata contestazione vera: ora i soldi sono tolti (dispute.ts).
       case 'charge.dispute.funds_withdrawn': {
-        await handleDisputeCreated(event.data.object as Stripe.Dispute, event.type === 'charge.dispute.funds_withdrawn');
+        await handleDisputeCreated(event.data.object as Stripe.Dispute);
         break;
       }
       case 'charge.dispute.closed': {
