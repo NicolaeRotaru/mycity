@@ -62,6 +62,14 @@ export const runtime = 'nodejs';
 type Admin = ReturnType<typeof getAdminSupabase>;
 
 /**
+ * 13/11/2026 (R14-013) — Il tetto di tempo delle email della notte, contato
+ * dall'inizio del giro. Il lavoro ha 300 secondi (vercel.json, `maxDuration`);
+ * un'email cominciata può aspettare la posta fino a due volte dieci secondi, e
+ * dopo restano gli allarmi e la risposta. Oltre i 240 secondi nessuna email nuova.
+ */
+const TETTO_DELLE_EMAIL_MS = 240_000;
+
+/**
  * Il conto del giro senza il giro: gli account che la notte cancellerebbe e le
  * righe che le potature toccherebbero. Non scrive niente e non lascia il
  * battito, perche' il lavoro non e' stato fatto.
@@ -241,7 +249,14 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // appesa e quindici persone in attesa la notte sforava i 300 secondi prima
   // di arrivare alla sveglia, e le cancellazioni ferme non le sapeva nessuno.
   if (verdetto.daSvegliare) await sveglia(admin, verdetto);
-  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
+  // 13/11/2026 (R14-013) — E LE EMAIL HANNO UN TETTO DI TEMPO. La sveglia prima non
+  // bastava: con la posta appesa il giro arrivava lo stesso ai 300 secondi
+  // (vercel.json, maxDuration) e veniva fermato a meta', e gli ultimi non avevano
+  // nemmeno la spiegazione nel pannello. Adesso i pannelli si scrivono per tutti
+  // prima delle email, e oltre il tetto nessuna email nuova comincia: resta dovuta
+  // per la notte dopo. Il tetto lascia il margine per l'ultima email cominciata
+  // (fino a due volte dieci secondi) e per gli allarmi qui sotto.
+  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger, adesso + TETTO_DELLE_EMAIL_MS);
   if (avvisi.falliti > 0) {
     // 13/11/2026 (R14-012) — UN ALLARME PER STATO, E DICE CHI. Era un allarme nuovo
     // a ogni notte, uguale al precedente, e senza la persona: con l'avviso fermo per
@@ -324,6 +339,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       // 27/10/2026 (quarto giro, fase 2) — Quante email stanotte non si sono
       // tentate perché il turno l'aveva già preso un altro giro da poco.
       avvisiEmailRimandate: avvisi.emailRimandate,
+      // 13/11/2026 (R14-013) — Quante email stanotte non si sono guardate perché il
+      // giro era oltre il suo tetto di tempo: la notte dopo si riprende da lì.
+      avvisiEmailFuoriTempo: avvisi.emailFuoriTempo,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //

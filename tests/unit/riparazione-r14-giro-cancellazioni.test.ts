@@ -14,6 +14,12 @@
  * pannello, la notte scriveva agli amministratori «Persone non avvisate del
  * rinvio della cancellazione»: un allarme nuovo a ogni notte, uguale al
  * precedente, e senza dire chi. La stessa classe era già chiusa per le email.
+ *
+ * R14-013 — Le spiegazioni a chi aspetta partivano persona per persona,
+ * pannello ed email, senza un tetto di tempo. Con la posta appesa (fino a due
+ * volte dieci secondi a email) e una quindicina di persone, il giro arrivava ai
+ * 300 secondi del lavoro e veniva fermato: gli ultimi non avevano nemmeno la
+ * spiegazione nel pannello. Orologio finto: ogni email «appesa» lo manda avanti.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fintoGiroNotturno } from './aiuti/finto-giro-notturno';
@@ -24,7 +30,8 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => mondo.admin })
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn(), spesa: vi.fn() },
 }));
-vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
+const posta = vi.hoisted(() => ({ invia: (async () => ({ ok: true })) as (x: unknown) => Promise<{ ok: boolean }> }));
+vi.mock('@/lib/email/client', () => ({ sendEmail: (x: unknown) => posta.invia(x) }));
 
 import { POST } from '@/app/api/cron/process-deletions/route';
 
@@ -88,6 +95,7 @@ function unGiro() {
 const segretoSalvato = process.env.CRON_SECRET;
 beforeEach(() => {
   vi.clearAllMocks();
+  posta.invia = async () => ({ ok: true });
   process.env.CRON_SECRET = 'segreto-dei-lavori';
 });
 afterEach(() => {
@@ -203,5 +211,107 @@ describe('R14-012 — l allarme «persone non avvisate» è uno per stato e dice
     const allarmi = giro.notifiche().filter((n) => n.title === 'Persone non avvisate del rinvio della cancellazione');
     expect(allarmi, 'un allarme nuovo a ogni notte, uguale al precedente').toHaveLength(1);
     expect(String(allarmi[0].body), 'l allarme non dice chi aspetta').toContain(LUCA);
+  });
+});
+
+// ── quindici fattorini con la cassa aperta e la posta appesa ─────────────────
+/** I 300 secondi che Vercel dà al lavoro (vercel.json, maxDuration). */
+const DURATA_MASSIMA_MS = 300_000;
+
+function laNotteDiQuindici() {
+  const fattorini = Array.from({ length: 15 }, (_, i) => `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`);
+  const giro = fintoGiroNotturno({
+    tabelle: {
+      profiles: [
+        { id: 'admin-1', role: 'admin' },
+        ...fattorini.map((id) => ({ id, role: 'rider', deletion_requested_at: giorniFa(8) })),
+      ],
+      notifications: [],
+      cron_heartbeats: [],
+      audit_logs: [],
+      cod_reconciliations: fattorini.map((id) => (
+        { rider_id: id, for_date: '2026-11-01', collected_cents: 5_000, status: 'OPEN', remitted_at: null }
+      )),
+    },
+    rpc: {
+      process_expired_deletions: { data: fattorini.map((id) => ({ user_id: id, deleted_at: giorniFa(8) })), error: null },
+    },
+  });
+  // Quando è stata scritta ogni spiegazione nel pannello, sull'orologio della notte.
+  const scritteAl = new Map<string, number>();
+  const base = giro.admin as unknown as { from(t: string): Record<string, unknown> };
+  mondo.admin = {
+    ...giro.admin,
+    auth: {
+      admin: {
+        getUserById: async (id: string) => ({ data: { user: { email: `${id}@example.it` } }, error: null }),
+        deleteUser: async () => ({ error: null }),
+      },
+    },
+    from(tabella: string) {
+      const q = base.from(tabella);
+      if (tabella === 'notifications') {
+        const vera = (q.insert as (r: unknown) => unknown).bind(q);
+        q.insert = (righe: Record<string, unknown> | Record<string, unknown>[]) => {
+          for (const r of Array.isArray(righe) ? righe : [righe]) {
+            if (fattorini.includes(String(r.user_id))) scritteAl.set(String(r.user_id), Date.now());
+          }
+          return vera(righe);
+        };
+      }
+      return q;
+    },
+  };
+  return { giro, fattorini, scritteAl };
+}
+
+describe('R14-013 — gli avvisi e le email della notte hanno un tetto di tempo', () => {
+  beforeEach(() => {
+    const adesso = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(adesso);
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('posta appesa e quindici persone: tutte hanno il pannello prima dello stop, e il giro finisce in tempo', async () => {
+    const { fattorini, scritteAl } = laNotteDiQuindici();
+    const inizio = Date.now();
+    let spedite = 0;
+    // Ogni email aspetta la posta 25 secondi e poi non parte.
+    posta.invia = async () => {
+      spedite++;
+      vi.setSystemTime(Date.now() + 25_000);
+      return { ok: false };
+    };
+
+    const res = await unGiro();
+    const corpo = await res.json();
+    const durata = Date.now() - inizio;
+
+    const tardive = fattorini.filter((id) => !((scritteAl.get(id) ?? Infinity) - inizio < DURATA_MASSIMA_MS));
+    expect(tardive, 'il pannello di questi arriva dopo i 300 secondi: il giro li avrebbe già fermati').toEqual([]);
+    expect(durata, 'il giro va oltre i 300 secondi del lavoro').toBeLessThan(DURATA_MASSIMA_MS);
+    expect(spedite).toBeGreaterThan(0);
+    expect(corpo.avvisiEmailFuoriTempo + spedite).toBe(15);
+  });
+
+  it('la notte dopo riparte da dove si era fermata: le email non tentate partono', async () => {
+    const { fattorini } = laNotteDiQuindici();
+    const destinatari: string[] = [];
+    posta.invia = async (x: unknown) => {
+      destinatari.push(String((x as { to?: string }).to));
+      vi.setSystemTime(Date.now() + 25_000);
+      return { ok: true };
+    };
+
+    await unGiro();
+    const primaNotte = destinatari.length;
+    vi.setSystemTime(Date.now() + GIORNO);
+    await unGiro();
+
+    expect(primaNotte).toBeLessThan(15);
+    expect(new Set(destinatari).size, 'qualcuno resta senza email anche la seconda notte').toBe(15);
+    expect(destinatari.length, 'una email spedita due volte').toBe(15);
+    expect(fattorini.every((id) => destinatari.includes(`${id}@example.it`))).toBe(true);
   });
 });

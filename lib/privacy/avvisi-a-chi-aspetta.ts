@@ -110,6 +110,14 @@ export type RapportoAvvisi = {
    * numero la risposta diceva 0 e 0, e sembrava tutto partito.
    */
   emailRimandate: number;
+  /**
+   * 13/11/2026 (R14-013) — Avvisi la cui email stanotte non si è nemmeno
+   * guardata, perché il giro era oltre il suo tetto di tempo (`scadenza`). Né
+   * partite né ferme, come le rimandate: quelle ancora dovute si riprovano la
+   * notte dopo, partendo da dove ci si è fermati (le già partite si saltano
+   * senza spedire).
+   */
+  emailFuoriTempo: number;
   /** Una riga per avviso, in ordine, per il registro. */
   esiti: Array<{ chiave: string; esito: 'recapitato' | 'gia-detto' | 'fallito'; errore?: string }>;
 };
@@ -160,12 +168,27 @@ export async function recapitaAvvisi(
   posta?: PostaAvvisi,
   /** L'ora del giro: decide se un nuovo tentativo d'invio tocca a questa notte. */
   adesso: number = Date.now(),
+  /**
+   * 13/11/2026 (R14-013) — Il tetto di tempo del giro (ora, in millisecondi):
+   * oltre, nessuna email nuova si comincia. Senza, la notte va avanti finché la
+   * posta risponde.
+   */
+  scadenza: number = Infinity,
 ): Promise<RapportoAvvisi> {
   const rapporto: RapportoAvvisi = {
     recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, emailBloccateAvvisi: [],
-    emailPartiteAvvisi: [], emailRimandate: 0, esiti: [],
+    emailPartiteAvvisi: [], emailRimandate: 0, emailFuoriTempo: 0, esiti: [],
   };
 
+  // 13/11/2026 (R14-013) — PRIMA IL PANNELLO DI TUTTI, POI LE EMAIL, E LE EMAIL
+  // COL TETTO DI TEMPO. Prima si faceva pannello+email persona per persona: ogni
+  // email può aspettare la posta fino a due volte dieci secondi, e con la posta
+  // appesa e una quindicina di persone in attesa il giro arrivava ai 300 secondi
+  // del lavoro (vercel.json) e veniva fermato. Gli ultimi non avevano nemmeno la
+  // spiegazione nel pannello, che è una scrittura di un attimo. Adesso il
+  // pannello si scrive per tutti prima di spedire, e oltre la `scadenza` non si
+  // comincia un'email nuova: resta dovuta, la notte dopo riparte da lì.
+  const daSpedire: Array<{ a: AvvisoAllInteressato; id: string }> = [];
   for (const avviso of avvisi) {
     let a = avviso;
     const id = identificativoAvviso(a.chiave);
@@ -202,13 +225,20 @@ export async function recapitaAvvisi(
       // tentava nemmeno. Ma l'email è il canale per chi non rientra nel sito: non deve
       // dipendere da quello interno. Ha il suo lucchetto (`emailDovuta`), si tenta lo stesso.
     }
+    daSpedire.push({ a, id });
+  }
 
+  for (const { a, id } of daSpedire) {
     // 27/10/2026 (terzo giro) — L'EMAIL È DOVUTA FINCHÉ NON RISULTA PARTITA.
     // Prima partiva solo nel ramo «scritto ora»: se quella notte la posta
     // diceva di no, dalla notte dopo l'avviso era «già detto» e l'email non
     // ripartiva mai più. Adesso l'email ha il suo lucchetto (`emailDovuta`) e
     // vale per ogni avviso che è nel pannello, scritto stanotte o prima.
     if (posta) {
+      if (Date.now() >= scadenza) {
+        rapporto.emailFuoriTempo++;
+        continue;
+      }
       const email = await emailDovuta(admin, posta, a, id, registro, adesso);
       if (email === 'non-partita' || email === 'bloccata') rapporto.emailNonPartite++;
       if (email === 'bloccata') {
@@ -588,8 +618,10 @@ export async function rispondiAChiAspetta(
   admin: Amministrativo,
   verdetto: { dovuti: AvvisoAllInteressato[] },
   registro: RegistroAvvisi,
+  /** 13/11/2026 (R14-013) — Il tetto di tempo del giro: oltre, nessuna email nuova. */
+  scadenza: number = Infinity,
 ): Promise<RapportoAvvisi> {
-  return recapitaAvvisi(admin as unknown as ClienteAvvisi, verdetto.dovuti, registro, postaVera(admin));
+  return recapitaAvvisi(admin as unknown as ClienteAvvisi, verdetto.dovuti, registro, postaVera(admin), Date.now(), scadenza);
 }
 
 /** La posta vera: l'indirizzo dal servizio di accesso, l'invio da `sendEmail`. */
