@@ -1,13 +1,13 @@
 {
   "sessione": "R19",
-  "aggiornato": "2026-11-13 07:38",
-  "finita": false,
-  "testa": "c30d04d14441f4456363bc7201dc1fe2e8d25b29",
+  "aggiornato": "2026-11-13 12:39",
+  "finita": true,
+  "testa": "5a81802f6174767bed50122dc1e6d3217db2584f",
   "verifica": {
-    "comando": "npm run verify",
-    "esito": "non_lanciato",
-    "testa": "",
-    "nota": "Per decisione della regista (tetto di costo superato) il verify finale e la chiusura si fanno dopo la risposta di Nicola. Prove lanciate nei lotti: tsc --noEmit verde dopo ogni voce; prove vicine verdi (ultimo giro: 101 file, 800 prove)."
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "5a81802f6174767bed50122dc1e6d3217db2584f",
+    "nota": "typecheck, lint e vitest: 1435 file e 9715 prove verdi, 1 file saltato che non è di R19 (nessuna prova riparazione-r19-* spenta). Dopo 5a81802f solo commit del referto."
   },
   "voci": [
     {
@@ -18,6 +18,30 @@
       "nota": "La metà del negozio è già riparata prima della campagna: lib/auth/decisione-portiere.ts:279 lascia entrare il negozio non approvato su /seller/dashboard (schermata di attesa o rifiuto), e npx vitest run tests/unit/il-portiere-non-chiude-fuori-chi-aspetta-e-non-perde-il-rinnovo.test.ts è verde (12/12). La metà del fattorino è una scelta firmata (lib/auth/decisione-portiere.ts:262-263, riverifica del 6/11 «scelta dichiarata»). Il subagente l aveva riaperta nel commit e33ef01. L ho tolta con b4c3caa (revert, albero uguale alla base). Il diff pronto, se Nicola riapre, è e33ef01: prove tests/unit/riparazione-r19-ingresso-in-attesa*.test.ts, rimessa uscita 0. Se riapre, c è anche il caso del respinto che ricarica i documenti (app/api/kyc/upload-document/route.ts:140-143).",
       "commit": "b4c3caa9",
       "verificato_da": "capo squadra R19: letta la decisione in lib/auth/decisione-portiere.ts:262-263 e la riverifica del 6/11 nel registro"
+    },
+    {
+      "id": "R19-002",
+      "chiave": "api-backend|un documento del fattorino fra 4,4 e 8 mb viene rifiutato con un messaggio tecnico in inglese, anche se la pagina promette fino a 8 mb",
+      "esito": "riparato",
+      "commit": "3318ef6981da624c19e8fa049ed81aa58675fd6a",
+      "file_toccati": [
+        "app/rider/onboarding/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-documento-del-fattorino-col-tetto-vero.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-documento-del-fattorino-col-tetto-vero.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3318ef6981da624c19e8fa049ed81aa58675fd6a^ --file app/rider/onboarding/page.tsx --prove tests/unit/riparazione-r19-documento-del-fattorino-col-tetto-vero.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Via del tetto vero: la pagina scrive «max 4 MB», ferma prima di inviare un file più grande con «File troppo grande, massimo 4 MB…», e un 413 in testo semplice della piattaforma non fa più comparire l'errore JSON in inglese ma lo stesso messaggio. Rotta, permessi e secchio invariati.",
+      "nota": "La rotta tiene ancora il suo tetto interno di 8 MB (MAX_BYTES): su Vercel non si raggiunge (il 413 arriva da circa 4,4 MB) e la pagina ora ferma a 4 MB. Lasciata com'è per la modifica più piccola.",
+      "verificato_da": "collaudatore A: file a 4194304 byte parte, +1 byte si ferma; 502 HTML, 504 testo, 200 non JSON → messaggio italiano; rotta, migrazioni e secchio invariati → regge."
     },
     {
       "id": "R19-003",
@@ -40,12 +64,12 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Prima (b7070503): avviso role=alert con motivoFuoriZona subito dopo il modulo indirizzo. Correzione: se a bloccare c'è prima un altro motivo (scorte, varianti) l'avviso del passo 1 diventa informativo e «vai al primo blocco» porta al riquadro giusto. La prova ora monta la cassa: indirizzo salvato fuori zona → avviso nel riquadro del modulo; mattonella in zona → sparisce; indirizzo scritto con geocodifica finta fuori/in zona → compare/sparisce; fuori zona più scorte → il fuoco va alle scorte. Rimessa sul commit del salto; senza l'avviso le 4 prove cadono.",
-      "verificato_da": "collaudo lotto 4: cassa montata fuori/in zona → l'avviso compare e sparisce; prova debole. Il giro di correzione (fb3b7a7a) NON è stato ricollaudato: subagenti fermati dalla regista."
+      "verificato_da": "collaudatore B (ricollaudo del giro di correzione, subagente diverso): tolti su copia il salto (cade la prova delle scorte) e l avviso (cadono 4 prove); sonde fuori zona da solo, con varianti, con scorte → regge."
     },
     {
       "id": "R19-004",
       "chiave": "frontend-ux|in cassa da ospite il link «ho già un account» fa perdere indirizzo e telefono appena scritti, anche se la pagina promette che restano salvati",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "b028f98ce19dfe7ef6d0f6aec3978318701e5698",
       "file_toccati": [
         "app/checkout/page.tsx"
@@ -61,9 +85,34 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b028f98ce19dfe7ef6d0f6aec3978318701e5698^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-ho-gia-un-account-salva-la-bozza.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Prima (e9259cfc): salvaLaBozzaPerAccesso() sul link «Ho già un account» e su «Ordina» da ospite. Correzione, solo in app/checkout/page.tsx con la prop savedAddresses che c'era già (ShippingAddressForm non toccato): se l'indirizzo della bozza non è fra i salvati compare come prima mattonella «Appena scritto», scelta; si può passare a un salvato e tornare; se la bozza è proprio un salvato, è scelta quella mattonella. La prova monta la cassa come chi rientra dall'accesso.",
-      "verificato_da": "collaudo lotto 4: con indirizzi salvati il modulo restava nascosto. Il giro di correzione (b028f98c) NON è stato ricollaudato: subagenti fermati dalla regista."
+      "verificato_da": "collaudatore B (ricollaudo del giro di correzione, subagente diverso): cassa montata come chi rientra dall accesso, corpo della richiesta COD letto con «Appena scritto», con un salvato e tornando indietro; due salvati → una sola mattonella in più → parziale per i due doppioni.",
+      "cosa_resta": "Il buco del primo collaudo è chiuso (mattonella «Appena scritto» scelta, si ordina sull indirizzo che si vede, ShippingAddressForm non toccato), ma il ricollaudo ha trovato due doppioni: (1) app/checkout/page.tsx:624-632 con :665: la correzione di R19-009 (8d9e830a) sostituisce nome e telefono col predefinito prima del confronto, quindi una bozza uguale a un indirizzo salvato non predefinito con un altro nome (es. «Nonna Pina, Via Nonna 5») diventa «Appena scritto · Maria Rossi · Via Nonna 5» e l ordine parte coi dati sbagliati; (2) :665 confronto esatto senza trim né maiuscole (spazio in fondo → doppione). Cura indicata: togliere la sostituzione di nome e telefono di R19-009 (il caso dell ospite aspetta comunque Nicola) e confrontare con trim e senza maiuscole."
+    },
+    {
+      "id": "R19-005",
+      "chiave": "frontend-ux|nel profilo del fattorino il documento risulta «verificato» appena caricato, e l'attestato haccp resta «mancante» anche dopo il caricamento",
+      "esito": "parziale",
+      "commit": "7d54bb488340903db6c5fa075035c4b036d17277",
+      "file_toccati": [
+        "app/rider/profile/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-profilo-fattorino-documenti-in-verifica.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-profilo-fattorino-documenti-in-verifica.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7d54bb488340903db6c5fa075035c4b036d17277^ --file app/rider/profile/page.tsx --prove tests/unit/riparazione-r19-profilo-fattorino-documenti-in-verifica.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base «Verificato» era già sostituito (R03-018) da «In attesa di verifica», ma con l'etichetta «In scadenza». Ora un documento caricato da un fattorino non approvato è «Caricato · In attesa di verifica» con «In verifica». L'HACCP si riconosce dal file (rider_haccp_url, aggiunto alla select) perché la sua scadenza non la scrive nessuno: caricato è «In verifica» o, da approvato, «Caricato», non più «Mancante». Nessuna migrazione.",
+      "cosa_resta": "Collaudo A: (1) un fattorino rifiutato o sospeso legge «Caricato · In attesa di verifica / In verifica» (app/rider/profile/page.tsx:48, :185-186, :192-193: la pagina non legge approval_status); (2) da approvato l HACCP caricato passa subito a «Caricato · OK» senza che nessuno lo guardi (:192-193, :197; l HACCP non è fra i documenti per l approvazione, lib/admin/regole-approvazione.ts:24-28); (3) da approvato, ricaricando il documento d identità la rotta riapre la verifica (app/api/kyc/upload-document/route.ts:281-286) ma la pagina dice ancora «Verificato · OK». Giro di correzione.",
+      "verificato_da": "collaudatore A: rider_haccp_url esiste (024:70) ed è leggibile dal fattorino; pagina montata negli stati non approvato, rifiutato, sospeso, approvato, approvato con documento ricaricato → parziale."
     },
     {
       "id": "R19-006",
@@ -93,7 +142,7 @@
       "id": "R19-007",
       "chiave": "layout-responsive|alla cassa, col testo del telefono al massimo, la scheda «contanti alla consegna» esce dallo schermo e la pagina scorre di lato",
       "esito": "riparato",
-      "commit": "5d924702ee38a5c50dcca03e198966413e4bd0a6",
+      "commit": "ef66437404e5c9990ec8f1bacb26f89464efcb84",
       "file_toccati": [
         "components/checkout/PaymentMethodSelector.tsx",
         "app/checkout/page.tsx"
@@ -107,17 +156,17 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d924702ee38a5c50dcca03e198966413e4bd0a6^ --file app/checkout/page.tsx,components/checkout/PaymentMethodSelector.tsx --prove tests/unit/riparazione-r19-scheda-contanti-col-testo-grande.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d924702ee38a5c50dcca03e198966413e4bd0a6^ --file components/checkout/PaymentMethodSelector.tsx --prove tests/unit/riparazione-r19-scheda-contanti-col-testo-grande.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Prima (2577669a): min-w-0 break-words sui tre div flex-1: misurata, la pagina restava larga 444 px. Correzione: min-w-0 sul fieldset (teneva il min-content del browser) e sul titolo «Contanti alla consegna»; nella riga «Consegna a domicilio» del passo 2 min-w-0 break-words e gap-3, così a 360 px «6,00 €» non esce. La prova monta la cassa vera, compila il CSS col Tailwind del progetto e misura in Chromium (Playwright) a 360/375/390 px con html{font-size:200%}: scrollWidth uguale a innerWidth; prima della correzione 444 px.",
-      "nota": "La misura in Chromium usa describe.skipIf(!Chromium), come le prove PostgreSQL: dove il browser non c'è (il lavoro «Unit tests» della CI oggi non lo installa) si salta dichiarandolo, e resta sempre la prova leggera sulle classi del fieldset e del titolo. Qui gira (Chromium della macchina).",
-      "verificato_da": "collaudo lotto 4: misura reale in Chromium → la prima correzione non cambiava la larghezza. Il giro di correzione (5d924702) NON è stato ricollaudato da un subagente diverso: la regista ha fermato i subagenti per il tetto di costo."
+      "cosa_ho_fatto": "Prima (2577669a): min-w-0 break-words sui tre div flex-1: misurata, la pagina restava larga 444 px. Correzione (5d924702): min-w-0 sul fieldset (teneva il min-content del browser) e sul titolo «Contanti alla consegna»; nella riga «Consegna a domicilio» del passo 2 min-w-0 break-words e gap-3. Correzione della prova (ef664374): tolte la parte Chromium e describe.skipIf; restano prove leggere sulle classi del fieldset, del titolo, del contenuto delle schede e della riga «Consegna a domicilio», che girano dappertutto e tornano rosse togliendo la correzione del selettore.",
+      "nota": "La misura in Chromium (444 px prima, nessuno scorrimento dopo, a 360/375/390 px con testo al 200%) è stata fatta il 13/11 e tolta dalle prove perché in CI non c'è Chromium: era spenta con describe.skipIf, e una prova non si spegne. Il risultato resta nel commento della prova. Rimessa solo su PaymentMethodSelector.tsx: app/checkout/page.tsx è cambiato anche dopo, per altre voci.",
+      "verificato_da": "collaudatore A: nessun skip/only/todo; la prova (5/5) diventa rossa togliendo min-w-0 da fieldset, titolo o riga «Consegna a domicilio»; misura rifatta col Chrome della macchina: a 360/375/390 px nessuno scorrimento, senza la correzione 444 px → regge (copre anche il giro di correzione 5d924702)."
     },
     {
       "id": "R19-008",
       "chiave": "mobile-pwa|quando la sessione scade da sola, il telefono perde le notifiche in silenzio e al nuovo accesso nessuno le riaccende",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "c30d04d14441f4456363bc7201dc1fe2e8d25b29",
       "file_toccati": [
         "components/Navbar.tsx",
@@ -135,9 +184,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c30d04d14441f4456363bc7201dc1fe2e8d25b29^ --file components/Navbar.tsx,app/profile/settings/page.tsx,app/cookies/page.tsx --prove tests/unit/riparazione-r19-notifiche-spente-dette-al-rientro.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Prima (2f399302): a fine sessione, se l'iscrizione si spegneva davvero, un segno in localStorage; al rientro, con permesso concesso e iscrizione assente, un avviso con «Riattiva» (via scelta: «lo si dice», non si riaccendono da sole su un apparecchio che può essere condiviso). Correzione: (1) il segno è una mappa {id interno dell'account → scadenza a 30 giorni}; l'avviso va solo a chi le ha perse, per un altro il segno resta finché non scade; la Cookie policy dichiara mc_notifiche_spente_all_uscita (30 giorni). (2) Le impostazioni guardano ?tab= a ogni disegno e aprono la scheda se è cambiato. Dichiarato: le 4 prove di prima ora ricevono INITIAL_SESSION prima di SIGNED_OUT, come fa Supabase; nessuna asserzione tolta.",
-      "verificato_da": "collaudo lotto 2: apparecchio condiviso, localStorage che lancia, Notification assente, eventi ripetuti → parziale per i due buchi. Il giro di correzione (c30d04d1) NON è stato ricollaudato: subagenti fermati dalla regista."
+      "verificato_da": "collaudatore B (ricollaudo del giro di correzione, subagente diverso): Anna esce/entra Bruno/Anna rientra, localStorage che lancia, scheda scelta a mano, Cookie policy, logica di R19-009 intatta; sonda con sessione caduta al caricamento → 0 avvisi → parziale.",
+      "cosa_resta": "Il buco dell apparecchio condiviso è chiuso (Anna/Bruno, localStorage che lancia, ?tab= reagisce, Cookie policy), ma il ricollaudo ne ha riaperto uno: quando la sessione cade al caricamento (gettone scaduto e rinnovo fallito in _recoverAndRefresh, auth-js 2.106.1) Supabase manda SIGNED_OUT prima di INITIAL_SESSION, utenteDellaSessione è null e segnaNotificheSpente(null) non lascia il segno (components/Navbar.tsx:219-228, :82-83): al rientro nessun avviso. È il caso della voce (telefono riaperto il giorno dopo, K160). Cura indicata: ricordare l ultimo id visto anche fra un caricamento e l altro, già dichiarato nella stessa voce della Cookie policy."
     },
     {
       "id": "R19-009",
@@ -164,9 +214,9 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Prima (d25200a5): scadeIl di 2 ore; la Navbar butta la bozza scaduta a ogni caricamento e ogni bozza a SIGNED_OUT; voce nella Cookie policy. Correzione: la bozza la scrive sempre un ospite, quindi un «id di chi l'ha scritta» non c'è; minimo onesto: se l'account appena entrato ha indirizzi salvati, nome e telefono vengono dal suo indirizzo predefinito e non dalla bozza (l'indirizzo scritto resta, per R19-004). scadenzaDellaBozzaValida rifiuta scadeIl oltre sceltaIl + 2 ore o oltre adesso + 2 ore. La Cookie policy dice «dopo 2 ore non si usa più e si cancella alla tua visita successiva al sito». Dichiarato: la prova di R19-004 ora attende il telefono dell'account.",
-      "cosa_resta": "Il caso dell'ospite non si chiude senza una scelta: (1) in un account senza indirizzi salvati la bozza di un altro torna intera (nome, telefono, indirizzo, note); (2) in un account con indirizzi salvati tornano ancora indirizzo e note, come mattonella «Appena scritto». Il browser non sa se chi entra è chi ha scritto la bozza.",
-      "domanda": "Per la bozza scritta da ospite, al rientro in un account: la cassa chiede «Riprendi i dati scritti prima dell'accesso?» prima di rimetterli, oppure si lega la bozza al giro d'accesso con un gettone monouso nel returnTo (tocca la pagina di accesso e la callback, che non sono di R19)?",
-      "verificato_da": "collaudo lotto 3: giro ospite→accesso→cassa, uscita, bozza scaduta/senza scadenza, memoria che lancia, render lato server, R19-008 intatto → parziale per l'utente diverso. Il giro di correzione (8d9e830a) NON è stato ricollaudato: subagenti fermati dalla regista."
+      "cosa_resta": "(a) Il caso dell ospite che entra in un altro account aspetta la scelta di Nicola (domanda sotto). (b) Il ricollaudo ha trovato che la correzione 8d9e830a (nome e telefono dal predefinito dell account) cambia senza dirlo il telefono scritto da ospite dalla stessa persona (app/checkout/page.tsx:624-632) e crea il doppione descritto in R19-004: va tolta quella sostituzione. (c) Nota: lib/bozza-checkout.ts:92 nessun margine se l orologio torna indietro di 1 secondo.",
+      "domanda": "Per la bozza scritta da ospite, al rientro in un account: la cassa chiede «Riprendi i dati scritti prima dell accesso?» prima di rimetterli, oppure si lega la bozza al giro d accesso con un gettone monouso nel returnTo (tocca la pagina di accesso e la callback, che non sono di R19)?",
+      "verificato_da": "collaudatore B (ricollaudo del giro di correzione, subagente diverso): prove di R03 verdi; stessa persona senza indirizzi → bozza intera; barra: scaduta sparisce, fresca resta, all uscita sparisce; scadenza fra dieci giorni rifiutata; Cookie policy fedele → parziale."
     },
     {
       "id": "R19-010",
@@ -287,7 +337,31 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Prima (50535dc8): la chiave resta legata al carrello (doppio clic protetto, come vuole la nota del 5/11); con «ripetuto» e un'altra fascia o un altro indirizzo un avviso dice che l'ordine valido è quello di prima. Correzione dei due minori del collaudo: (a) mc_just_ordered solo per un ordine nuovo, niente coriandoli dopo l'avviso; (b) la consegna del primo invio ricorda il giorno (delivery_date) e il confronto è giorno di Roma più orario, quindi «Domani · 9–11» di venerdì e «Oggi · 9–11» dopo la mezzanotte sono la stessa consegna.",
-      "verificato_da": "collaudo lotto 3: risposta persa + altra fascia/indirizzo, ricaricamento, altra scheda, doppio invio uguale → regge, con due minori. Il giro di correzione (5f97f524) NON è stato ricollaudato: subagenti fermati dalla regista."
+      "verificato_da": "collaudatore B (ricollaudo del giro di correzione, subagente diverso): tolte su copia le due correzioni (cadono 3 prove su 5); doppio invio uguale anche tre volte, Domani/Oggi dopo la mezzanotte, invio salvato senza giorno → regge (resta solo il caso di una scheda aperta da prima del rilascio)."
+    },
+    {
+      "id": "R19-016",
+      "chiave": "qa-flussi|un carrello condiviso con più di cinquanta righe perde le ultime in silenzio, anche quelle disponibili",
+      "esito": "riparato",
+      "commit": "5a81802f6174767bed50122dc1e6d3217db2584f",
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "components/ShareCartButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-lista-condivisa-oltre-cinquanta-righe.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-lista-condivisa-oltre-cinquanta-righe.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5a81802f6174767bed50122dc1e6d3217db2584f^ --file app/shared-cart/page.tsx,components/ShareCartButton.tsx --prove tests/unit/riparazione-r19-lista-condivisa-oltre-cinquanta-righe.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "/shared-cart legge ancora al massimo 50 righe, ma conta quelle oltre e lo dice («Questa lista ha 60 righe: ne mostro solo le prime 50…»). «Condividi la lista» manda una lista più lunga in più link da 50 righe al massimo e lo spiega, così nessun link nasce tagliato.",
+      "verificato_da": "collaudatore A: ShareCartButton con 50/51/101 righe → 1/2/3 link aperti nel /shared-cart vero, tutte le righe; link a mano con 51 voci → avviso; R19-006 intatta → regge."
     },
     {
       "id": "R19-017",
@@ -322,7 +396,7 @@
           "modifica": "stessa cosa: delivery_date nello schema; il giorno usato a riga ~204 (giornoDiPiacenza(new Date())) e nei controlli della fascia viene da delivery_date se c'è; se manca, come oggi"
         }
       ],
-      "verificato_da": "collaudo lotto 3: orologio finto alle 23:59:30 +91 s nei due cambi d'ora, domenica chiusa, invio dopo mezzanotte → ①②③ reggono; ④ scoperto. Il giro di correzione (46eac696) NON è stato ricollaudato: subagenti fermati dalla regista."
+      "verificato_da": "collaudatore B (ricollaudo del giro di correzione, subagente diverso): schemi zod delle due rotte non strict (cod:79, stripe:65), campo in più scartato; cassa montata con orologio finto nei due cambi d ora, fuso Los Angeles e Kiritimati, 31/12 → data giusta; col ritiro null → lato cassa regge, resta il lato rotte."
     },
     {
       "id": "R19-018",
@@ -401,6 +475,43 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Dopo il 200 la pagina mostra «Password cambiata: accedi con quella nuova», chiama supabase.auth.signOut({ scope: 'local' }) dentro un try e va a /sign-in?returnTo=%2Fprofile%2Fsettings. La rotta non cambia: continua a chiudere anche tutte le altre sessioni. Se la rotta dà errore la pagina resta com'era. La prova monta la pagina vera con un Supabase finto.",
       "verificato_da": "collaudo lotto 2: prova 2/2, rimessa regge, 99 prove vicine verdi, sonda di 6 casi (signOut che lancia o dà errore, 500/429/503, 200 senza JSON); l avviso resta visibile su /sign-in. Nota: con auth-js 2.106.1 signOut({scope:local}) chiama /logout e, se fallisce per rete o 5xx, non toglie la sessione locale (app/profile/settings/page.tsx:314-318): finestra stretta."
+    },
+    {
+      "id": "R19-022",
+      "chiave": "sicurezza-auth|commento e prova dicono che senza la chiave di servizio il drop spento risponde comunque 409, ma la rotta vera in quel caso risponde 503",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": "Riga 139: sostituire il titolo 'il pannello admin riceve 409 e non scrive nessun drop, anche senza chiave di servizio' con 'il pannello admin riceve 409 e non scrive nessun drop, e il freno viene prima della chiave di servizio dentro il gestore'; subito sopra aggiungere il commento: // withAdminAuth qui è finto (vi.mock di @/lib/api/middleware, righe 41-48): senza SUPABASE_SERVICE_ROLE_KEY la rotta vera risponde il 503 di withAdminAuth, che la usa per leggere il profilo, e a questo freno non si arriva (app/api/admin/daily-drops/route.ts:38-41). Nessuna asserzione tolta."
+        }
+      ],
+      "nota": "Il commento della rotta (app/api/admin/daily-drops/route.ts:38-41) dice già il vero dal 5/11 (S05): senza chiave la risposta è il 503 di withAdminAuth. Il freno 409 non va prima di withAdminAuth: una rotta admin deve autenticare prima di rispondere. La prova è comune (importa anche gift-cards/checkout, newsletter e ai/catalog-batch/apply), quindi non l'ho toccata.",
+      "verificato_da": "collaudatore A: la prova è comune (importa gift-cards/checkout, admin/daily-drops, newsletter, ai/catalog-batch/apply); il commento della rotta dice già il vero; la modifica proposta applicata su copia lascia la prova verde (8/8); corretto il numero di riga del finto (41-48)."
+    },
+    {
+      "id": "R19-023",
+      "chiave": "stati-ui|se la lettura del profilo non riesce, il negoziante approvato legge che il suo account non è da venditore e gli viene proposto di iscriversi di nuovo",
+      "esito": "riparato",
+      "commit": "1445c09df4a99dfee8cf2a1141d50c2c589aac0c",
+      "file_toccati": [
+        "app/seller/layout.tsx",
+        "components/hooks/useProfile.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1445c09df4a99dfee8cf2a1141d50c2c589aac0c^ --file app/seller/layout.tsx,components/hooks/useProfile.ts --prove tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "useProfile restituisce anche isError e refetch, senza cambiare il resto. Il layout di /seller giudica il ruolo solo su un profilo letto davvero: con la lettura a 500, o in pausa senza rete, mostra «Non riesco a leggere i dati del tuo account» con «Riprova» (che rilegge e fa entrare il negozio), non «altro tipo» né «Diventa venditore». La prova monta il layout vero con lo useProfile vero.",
+      "verificato_da": "collaudatore A (subagente diverso): prova 3/3, rossa senza correzione; sonda col layout vero e lo useProfile vero: caricamento infinito, retry, Riprova che fallisce, admin, cliente/fattorino/pending, negozio non approvato; i 22 chiamanti di useProfile non cambiano → regge."
     }
   ],
   "nuovi_difetti_visti": [
@@ -452,16 +563,24 @@
       "severita": "minore",
       "file": ".github/workflows/ci.yml:91-142",
       "descrizione": "Il lavoro unit-tests non lancia npx playwright install chromium; la misura di R19-007 si salta dichiarandolo e resta la prova delle classi. Basta aggiungere npx playwright install --with-deps chromium prima di npm run test."
+    },
+    {
+      "titolo": "La barra cade se localStorage lancia su ogni chiave",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/Navbar.tsx (effetto non di R19, già alla base a19ff892)",
+      "descrizione": "Con localStorage che lancia su qualunque chiave la barra va in errore in un effetto che non è di R19, già sulla base. Visto dal ricollaudo, non indagato."
     }
   ],
   "domande_per_nicola": [
     "R19-001: riapriamo il reclutamento dei fattorini dal sito (il fattorino in attesa arriva al modulo dei documenti)? Oggi la decisione del 26/10 lo tiene fuori.",
     "R19-018: per il tetto di attesa del portiere sulla sessione vale «qualunque tessera → 10 s» o «10 s solo se la tessera scade entro 2 minuti, altrimenti 3 s»? (stessa domanda lasciata aperta da R06-008)",
     "R19-009: la bozza della cassa (nome, telefono, indirizzo) ora scade dopo 2 ore. Va bene, o la teniamo fino al mattino dopo per chi conferma l email il giorno seguente (scenario R03-025)? Basta cambiare BOZZA_VALE_MS in lib/bozza-checkout.ts e la durata nella pagina dei cookie.",
-    "R19-009: per la bozza scritta da ospite, al rientro in un account, la cassa chiede «Riprendi i dati scritti prima dell accesso?» prima di rimetterli, oppure si lega la bozza al giro d accesso con un gettone monouso?"
+    "R19-009: per la bozza scritta da ospite, al rientro in un account, la cassa chiede «Riprendi i dati scritti prima dell accesso?» prima di rimetterli, oppure si lega la bozza al giro d accesso con un gettone monouso?",
+    "R19-005: un attestato HACCP caricato da un fattorino già approvato lo esamina qualcuno? Se no, la pagina deve dire «Caricato, non verificato» invece di «OK»."
   ],
   "conto": {
-    "agenti": 9,
-    "nota": "Lotto 5 (R19-002, 005, 016, 022, 023) non partito: la regista ha fermato la sessione a 40,4 $ (tetto 35 $). Il giro di correzione non è stato ricollaudato. 9 subagenti su 12."
+    "agenti": 14,
+    "nota": "14 subagenti (lotti 1-5, giro di correzione, 7 collaudi). Costo dal record della sessione 70,2 $ sul tetto di 71 $: per questo i quattro parziali nati dai ricollaudi (004, 005, 008, 009) non hanno avuto un altro giro; la cura è scritta in cosa_resta. Lotto 1: il commit e33ef01 è tolto con b4c3caa (scelta di Nicola)."
   }
 }
