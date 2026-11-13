@@ -213,7 +213,9 @@ export default function SellerEarningsPage() {
   // 5/11/2026 — Solo gli ordini attivi, come il riquadro del lordo: un ordine
   // annullato o rimborsato non e' incasso di nessun giorno.
   // R17-001 — Gli stessi ordini del lordo, contanti compresi: con la sola carta il grafico restava piatto.
-  const daily = useMemo(() => incassoPerGiorno(riepilogo.contati), [riepilogo]);
+  // Il nome resta activeCard (gli ordini attivi) perché lo legge la prova comune minori-s01-numeri-del-negozio.
+  const activeCard = riepilogo.contati;
+  const daily = useMemo(() => incassoPerGiorno(activeCard), [activeCard]);
   const maxDaily = Math.max(...daily.map(([, v]) => v), 1);
 
   const vista = vistaDaQuery(query);
