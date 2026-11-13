@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { FILTRO_PRIMO_INCASSO } from '@/lib/abbonamento-primo-incasso';
 import { ABBONAMENTO_CENTESIMI_MESE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
-import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
@@ -78,38 +78,6 @@ export const POST = withAuthRateLimit(
 
     const stripe = getStripe();
 
-    // 13/11/2026 (R23-011) — UN CLIENTE STRIPE SOLO PER NEGOZIO, PRIMA DELLA CASSA.
-    // Al primo abbonamento la cassa partiva con `customer_email`, e Stripe creava un cliente
-    // nuovo a ogni pagamento: due schede pagate facevano due clienti, il controllo qui sotto
-    // (che chiede per cliente) non vedeva l'altro abbonamento, e il webhook salvava sul profilo
-    // l'ultimo. Il portale si apre su quel cliente: il primo abbonamento, da 50 € al mese,
-    // dal sito non si disdiceva piu'. Adesso il cliente si trova (o si crea) prima, e tutte le
-    // casse e tutti gli abbonamenti del negozio stanno sullo stesso.
-    // Se il cliente non si prepara, la cassa NON parte: con `customer_email` il doppione tornava
-    // (una caduta, la seconda scheda venti minuti dopo: due casse su due clienti).
-    // Il cliente si salva subito sul profilo: se la cassa resta abbandonata e l'account si
-    // cancella, la cancellazione (lib/account/cancellazione.ts) lo trova e lo toglie da Stripe.
-    let clienteStripe: string | null = profile.stripe_customer_id ?? null;
-    if (!clienteStripe) {
-      try {
-        clienteStripe = await clienteDelNegozio(stripe, user.id, user.email);
-      } catch (err) {
-        logger.warn('[subscription] cliente Stripe del negozio non preparato: niente cassa', { err });
-        return ApiErrors.unavailable('Pagamento non disponibile al momento. Riprova fra poco.');
-      }
-      const { error: erroreCliente } = await getAdminSupabase()
-        .from('profiles')
-        .update({ stripe_customer_id: clienteStripe })
-        .eq('id', user.id)
-        .is('stripe_customer_id', null);
-      if (erroreCliente) {
-        logger.warn('[subscription] cliente Stripe non salvato sul profilo: niente cassa', {
-          sellerId: user.id, code: erroreCliente.code,
-        });
-        return ApiErrors.unavailable('Pagamento non disponibile al momento. Riprova fra poco.');
-      }
-    }
-
     // Il controllo sopra guarda un campo che viene scritto dal webhook DOPO il
     // pagamento: fra il primo clic e l'arrivo del webhook — o con due schede
     // aperte — restava aperta una finestra in cui nascevano due abbonamenti
@@ -119,32 +87,27 @@ export const POST = withAuthRateLimit(
     // Qui si chiede a Stripe, che è la fonte vera, invece di fidarsi del nostro
     // campo. Se la chiamata non riesce non si blocca il negoziante: si prosegue,
     // perché il caso peggiore resta quello di prima.
-    try {
-      const esistenti = await stripe.subscriptions.list({
-        customer: clienteStripe,
-        status: 'all',
-        limit: 10,
-      });
-      const attiva = esistenti.data.find((sub) => ABBONAMENTO_VIVO.includes(sub.status))
-        ?? (await abbonamentoVivoAltrove(stripe, user.id));
-      if (attiva) {
-        logger.warn('[subscription] abbonamento già presente su Stripe', {
-          sellerId: user.id, subscriptionId: attiva.id, stato: attiva.status,
+    if (profile.stripe_customer_id) {
+      try {
+        const esistenti = await stripe.subscriptions.list({
+          customer: profile.stripe_customer_id,
+          status: 'all',
+          limit: 10,
         });
-        return ApiErrors.conflict(
-          'Risulta già un abbonamento su questo account. Ricarica la pagina: se non lo vedi, scrivici.',
+        const attiva = esistenti.data.find((sub) =>
+          ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status),
         );
+        if (attiva) {
+          logger.warn('[subscription] abbonamento già presente su Stripe', {
+            sellerId: user.id, subscriptionId: attiva.id, stato: attiva.status,
+          });
+          return ApiErrors.conflict(
+            'Risulta già un abbonamento su questo account. Ricarica la pagina: se non lo vedi, scrivici.',
+          );
+        }
+      } catch (err) {
+        logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
       }
-      // R23-011 — La chiave qui sotto vale dieci minuti: due schede aperte a cavallo della
-      // finestra (o la seconda un quarto d'ora dopo) avevano due casse vive, tutte e due
-      // pagabili. Una cassa ancora aperta dello stesso negozio si riusa: si paga una volta sola.
-      const aperte = await stripe.checkout.sessions.list({ customer: clienteStripe, status: 'open', limit: 10 });
-      const aperta = aperte.data.find((s) =>
-        s.metadata?.kind === 'seller_subscription' && s.metadata?.seller_id === user.id && !!s.url,
-      );
-      if (aperta) return NextResponse.json({ url: aperta.url }, { status: 200 });
-    } catch (err) {
-      logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
     }
     // 12/11/2026 (R10-019) — Il controllo qui sopra non vede le casse ancora aperte: con due
     // schede (o senza `stripe_customer_id`, al primo abbonamento) nascevano due sessioni e due
@@ -155,9 +118,11 @@ export const POST = withAuthRateLimit(
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
-        // R23-011 — Sempre il cliente del negozio, mai `customer_email`: con quello Stripe creava
-        // un cliente nuovo a ogni pagamento.
-        customer: clienteStripe,
+        // Riusa il Customer esistente se già creato, altrimenti Stripe lo crea
+        // da customer_email e lo recupereremo nel webhook (session.customer).
+        ...(profile.stripe_customer_id
+          ? { customer: profile.stripe_customer_id }
+          : { customer_email: user.email }),
         line_items: [
           {
             quantity: 1,
@@ -189,48 +154,3 @@ export const POST = withAuthRateLimit(
     }
   },
 );
-
-const ABBONAMENTO_VIVO = ['active', 'trialing', 'past_due', 'unpaid'];
-
-/**
- * R23-011 — Il cliente Stripe del negozio: quello già creato per lui (stessa email, segnato col
- * suo id), oppure uno nuovo. Due richieste nello stesso istante portano la stessa chiave di
- * idempotenza: su Stripe la seconda, mentre la prima è ancora in corso, riceve un 409 (non lo
- * stesso cliente). Allora si cerca di nuovo; se il cliente non si vede ancora, l'errore sale e
- * quella scheda riceve «Riprova fra poco». Dopo, lo ritrova la ricerca per email.
- */
-async function clienteDelNegozio(stripe: ReturnType<typeof getStripe>, sellerId: string, email: string): Promise<string> {
-  const cerca = async () => {
-    const trovati = await stripe.customers.list({ email, limit: 100 });
-    return trovati.data.find((c) => c.metadata?.seller_id === sellerId)?.id ?? null;
-  };
-  const suo = await cerca();
-  if (suo) return suo;
-  try {
-    const nuovo = await stripe.customers.create(
-      { email, metadata: { seller_id: sellerId } },
-      { idempotencyKey: `cliente-negozio:${sellerId}` },
-    );
-    return nuovo.id;
-  } catch (err) {
-    if ((err as { statusCode?: number })?.statusCode !== 409) throw err;
-    const dopo = await cerca();
-    if (dopo) return dopo;
-    throw err;
-  }
-}
-
-/**
- * R23-011 — Un abbonamento vivo del negozio su un altro cliente: un orfano nato prima della
- * correzione, quando ogni cassa pagata faceva un cliente nuovo. Lo trova la ricerca per
- * `seller_id` nei metadati. Se la ricerca non riesce non si blocca niente: è un controllo in più.
- */
-async function abbonamentoVivoAltrove(stripe: ReturnType<typeof getStripe>, sellerId: string) {
-  try {
-    const trovati = await stripe.subscriptions.search({ query: `metadata['seller_id']:'${sellerId}'`, limit: 10 });
-    return trovati.data.find((sub) => ABBONAMENTO_VIVO.includes(sub.status));
-  } catch (err) {
-    logger.warn('[subscription] ricerca degli abbonamenti del negozio non riuscita', { err });
-    return undefined;
-  }
-}
