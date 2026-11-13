@@ -314,6 +314,98 @@ function ordineRimastoAMeta(): NextResponse {
  * ordine e' rimasto in piedi. Ogni altro errore, anche quello che non sappiamo
  * leggere, tiene la chiave: al tocco dopo la rotta rilegge e decide.
  */
+/**
+ * 13/11/2026 (R13-002) — LA MERCE PRESA NON VIVE PIU' SOLO NELLA MEMORIA DELLA FUNZIONE.
+ *
+ * Merce (`reserve_stock`) e credito (`wallet_debit`) si prendono prima di scrivere l'ordine, gli
+ * articoli dopo. Se la funzione moriva in mezzo, cosa aveva preso lo sapeva solo lei: la merce
+ * restava scalata e il credito tolto, con l'ordine senza articoli o senza ordine, e nessuno che li
+ * rimettesse (la cassa si fermava, la correzione era a mano).
+ *
+ * Adesso ogni negozio del carrello ha una riserva scritta (migrazione 371), nata nella stessa
+ * transazione della merce: l'ordine previsto, la merce, il riferimento della spesa di credito.
+ * Gli storni della rotta la chiudono mentre rimettono la merce (una volta sola), l'ordine finito la
+ * chiude come «ordine», e quelle rimaste aperte le sistema chi viene dopo
+ * (`libera_riserve_della_cassa`): la prossima cassa con quei prodotti, e l'annullo dell'ordine
+ * rimasto senza articoli (`restore_stock_for_order`). Per le righe che nessuna cassa ritocca serve
+ * il giro a orario che la chiami per tutte: non e' in questo file, ed e' scritto in R13-002.
+ *
+ * Prima che la 371 sia applicata il database non conosce l'argomento nuovo (PGRST202): si riserva
+ * come prima, senza riga, e gli storni rimettono come prima.
+ */
+type MerceDelGruppo = Array<{ product_id: string; variant_id: string | null; qty: number }>;
+type ClientDiServizio = ReturnType<typeof getAdminSupabase>;
+
+function senzaLaMigrazione371(e: { code?: string; message?: string } | null | undefined, funzione: string): boolean {
+  if (!e) return false;
+  return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(funzione));
+}
+
+async function prendiLaMerce(
+  admin: ClientDiServizio,
+  merce: MerceDelGruppo,
+  riserva: { id: string; ordine_id: string; rif_credito: string },
+): Promise<{ error: { message: string } | null; riserva: string | null }> {
+  const { error } = await admin.rpc('reserve_stock', { p_items: merce, p_riserva: riserva });
+  if (!error) return { error: null, riserva: riserva.id };
+  if (!senzaLaMigrazione371(error, 'reserve_stock')) return { error, riserva: null };
+  logger.warn('[cod] migrazione 371 non applicata: la merce si riserva senza la riserva scritta', { ordine: riserva.ordine_id });
+  const { error: errSenzaRiga } = await admin.rpc('reserve_stock', { p_items: merce });
+  return { error: errSenzaRiga, riserva: null };
+}
+
+/** Con la riga, la merce torna insieme alla chiusura della riga: chi arriva dopo la trova chiusa. */
+async function rimettiLaMerce(
+  admin: ClientDiServizio,
+  merce: MerceDelGruppo,
+  riserva: string | null | undefined,
+): Promise<{ error: { message: string } | null }> {
+  if (riserva) {
+    const { error } = await admin.rpc('restore_stock', { p_items: merce, p_riserva: riserva });
+    if (!senzaLaMigrazione371(error, 'restore_stock')) return { error };
+  }
+  const { error } = await admin.rpc('restore_stock', { p_items: merce });
+  return { error };
+}
+
+/** Gli ordini sono nati con i loro articoli: la merce adesso e' degli articoli. */
+async function chiudiLeRiserve(admin: ClientDiServizio, riserve: Array<string | null>, chiave: string): Promise<void> {
+  const ids = riserve.filter((r): r is string => !!r);
+  if (ids.length === 0) return;
+  try {
+    const { error } = await admin.rpc('chiudi_riserve_della_cassa', { p_riserve: ids });
+    if (error) {
+      logger.warn('[cod] riserve della cassa non chiuse: le chiude la pulizia, che vede gli articoli', { chiave, riserve: ids, message: error.message });
+    }
+  } catch (e) {
+    logger.warn('[cod] riserve della cassa non chiuse', { chiave, riserve: ids, message: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
+ * Chi viene dopo: le riserve rimaste aperte da piu' di 15 minuti (chi le ha scritte e' morto di
+ * sicuro) che tengono i prodotti di questo carrello si sistemano qui, prima di leggere le
+ * disponibilita': altrimenti chi compra adesso leggerebbe «esaurito» per merce che nessuno ha
+ * comprato. Non ferma mai l'ordine: se non riesce, ci riprova la cassa dopo.
+ */
+async function liberaLeRiserveRimasteAperte(admin: ClientDiServizio, prodotti: string[]): Promise<void> {
+  try {
+    const { data, error } = await admin.rpc('libera_riserve_della_cassa', { p_prodotti: prodotti });
+    if (error) {
+      if (!senzaLaMigrazione371(error, 'libera_riserve_della_cassa')) {
+        logger.warn('[cod] riserve della cassa rimaste aperte non sistemate', { prodotti, message: error.message });
+      }
+      return;
+    }
+    const esito = (data ?? null) as { liberate?: number; a_meta?: number; incerte?: number; errori?: number } | null;
+    if (esito && ((esito.liberate ?? 0) + (esito.a_meta ?? 0) + (esito.incerte ?? 0) + (esito.errori ?? 0)) > 0) {
+      logger.warn('[cod] riserve della cassa rimaste aperte da un invio morto: sistemate', { prodotti, ...esito });
+    }
+  } catch (e) {
+    logger.warn('[cod] riserve della cassa rimaste aperte non sistemate', { prodotti, message: e instanceof Error ? e.message : String(e) });
+  }
+}
+
 async function conLaChiaveLiberata(risposta: NextResponse): Promise<NextResponse> {
   const corpo: unknown = await risposta.clone().json().catch(() => null);
   if (!corpo || typeof corpo !== 'object') return risposta;
@@ -743,6 +835,9 @@ export const POST = withAuthRateLimit(
       buyerId: user.id,
       soloConProdotti: uniqueProductIds,
     });
+    // 13/11/2026 (R13-002) — E le riserve dei contanti rimaste aperte da un invio morto su questi
+    // prodotti, per lo stesso motivo e nello stesso punto: prima di leggere le disponibilita'.
+    await liberaLeRiserveRimasteAperte(admin, uniqueProductIds);
 
     /**
      * 8/9/2026 — SE LA PAGINA CON LA CARTA È RIMASTA VIVA, L'ORDINE IN CONTANTI
@@ -1146,6 +1241,8 @@ export const POST = withAuthRateLimit(
     // parola «multi» al posto del negozio.
     const ordiniCreati: Array<{ id: string; sellerId: string; totalCents: number }> = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
+    /** R13-002 — La riserva scritta di ogni gruppo (null prima della migrazione 371), accanto alla sua merce. */
+    const riservePerGroup: Array<string | null> = [];
     /**
      * 29/10/2026 — Il credito tolto a ogni negozio, con il riferimento della
      * SPESA che lo ha tolto. Lo storno usa quel riferimento, non l'id
@@ -1199,7 +1296,7 @@ export const POST = withAuthRateLimit(
           });
           continue;
         }
-        const { error: errMerce } = await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
+        const { error: errMerce } = await rimettiLaMerce(admin, reservedStockPerGroup[j], riservePerGroup[j]);
         if (errMerce) {
           logger.error('[cod] ordine annullato ma la merce non e tornata: va rimessa a mano', {
             userId: user.id, orderId: oid, merce: reservedStockPerGroup[j], message: errMerce.message,
@@ -1226,8 +1323,11 @@ export const POST = withAuthRateLimit(
         const ids = restano.map((j) => createdOrderIds[j]);
         const merce = restano.map((j) => reservedStockPerGroup[j]);
         const crediti = restano.map((j) => walletAppliedPerGroup[j]);
+        // R13-002 — La loro riserva resta aperta: la sistema la pulizia, che guarda se l'ordine ha gli articoli.
+        const riserve = restano.map((j) => riservePerGroup[j]);
         createdOrderIds.splice(0, createdOrderIds.length, ...ids);
         reservedStockPerGroup.splice(0, reservedStockPerGroup.length, ...merce);
+        riservePerGroup.splice(0, riservePerGroup.length, ...riserve);
         walletAppliedPerGroup.splice(0, walletAppliedPerGroup.length, ...crediti);
         ordiniCreati.length = 0;
         comunicazioni.length = 0;
@@ -1249,6 +1349,7 @@ export const POST = withAuthRateLimit(
       ordiniCreati.length = 0;
       comunicazioni.length = 0;
       reservedStockPerGroup.length = 0;
+      riservePerGroup.length = 0;
       walletAppliedPerGroup.length = 0;
     };
 
@@ -1277,7 +1378,16 @@ export const POST = withAuthRateLimit(
         variant_id: it.variantId,
         qty: it.quantity,
       }));
-      const { error: resErr } = await admin.rpc('reserve_stock', { p_items: groupStockItems });
+      // R13-002 — L'identificativo dell'ordine si decide PRIMA, anche senza la chiave del browser: la
+      // riserva scritta lo porta, e chi viene dopo guarda se quell'ordine e' nato.
+      const idOrdine = idDiQuestoInvio ? idDiQuestoInvio[i] : crypto.randomUUID();
+      // Il riferimento della spesa di credito nasce qui, prima della riserva, per finire nella sua riga.
+      const walletRef = `${idDiQuestoInvio ? idDiQuestoInvio[i] : 'cod'}:${crypto.randomUUID()}`;
+      const { error: resErr, riserva: riservaDelGruppo } = await prendiLaMerce(admin, groupStockItems, {
+        id: crypto.randomUUID(),
+        ordine_id: idOrdine,
+        rif_credito: walletRef,
+      });
       if (resErr) {
         logger.warn('[cod] reserve_stock fallita', { sellerId: g.sellerId, message: resErr.message });
         // Annulla anche gli ordini dei negozi PRECEDENTI di questo carrello.
@@ -1297,7 +1407,6 @@ export const POST = withAuthRateLimit(
       // Il riferimento e' della spesa, uno per tentativo: lo storno lo riusa.
       // Davanti l'id dell'ordine (se c'e' la chiave), per chi legge il diario.
       let walletAppliedCents = 0;
-      const walletRef = `${idDiQuestoInvio ? idDiQuestoInvio[i] : 'cod'}:${crypto.randomUUID()}`;
       if (body.useCredit && grossTotalCents > 0) {
         const { data: applied, error: wErr } = await admin.rpc('wallet_debit', {
           p_user: user.id,
@@ -1330,7 +1439,7 @@ export const POST = withAuthRateLimit(
       // una colonna che non conosce, fa fallire l'istruzione intera, e senza
       // ripiego non nascerebbe nessun ordine fino alla firma sul database.
       const rigaOrdine = {
-        ...(idDiQuestoInvio ? { id: idDiQuestoInvio[i] } : {}),
+        id: idOrdine,
         user_id: user.id,
         seller_id: g.sellerId,
         total_price: totalCents / 100,
@@ -1415,7 +1524,7 @@ export const POST = withAuthRateLimit(
         const rendiLaNostraParte = async () => {
           await rollbackCreatedCodOrders();
           // 5/11/2026 — Gli esiti si leggono: merce o credito che non tornano vanno nel registro.
-          const { error: errMerce } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+          const { error: errMerce } = await rimettiLaMerce(admin, groupStockItems, riservaDelGruppo);
           if (errMerce) {
             logger.error('[cod] merce del gemello non tornata: va rimessa a mano', {
               chiave: chiaveTentativo, merce: groupStockItems, message: errMerce.message,
@@ -1466,6 +1575,9 @@ export const POST = withAuthRateLimit(
              * gli ordini dei negozi prima, che sappiamo nati per intero; la
              * merce e il credito di questo restano legati all'ordine che forse
              * c'e', e lo sistema chi legge questo errore.
+             *
+             * 13/11/2026 (R13-002) — La sua riserva scritta resta aperta: passati 15 minuti la
+             * pulizia guarda se l'ordine e' nato, e rimette merce e credito se non c'e'.
              */
             await rollbackCreatedCodOrders();
             logger.error('[cod] non so se l ordine e nato: tengo la chiave, la merce e il credito, serve un controllo a mano', {
@@ -1484,7 +1596,7 @@ export const POST = withAuthRateLimit(
       if ((orderErr && !ripreso) || !order) {
         await rollbackCreatedCodOrders();
         // 5/11/2026 — Anche qui l'esito si legge: merce o credito che non tornano vanno nel registro.
-        const { error: errMerceGruppo } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+        const { error: errMerceGruppo } = await rimettiLaMerce(admin, groupStockItems, riservaDelGruppo);
         if (errMerceGruppo) {
           logger.error('[cod] ordine non nato ma la merce non e tornata: va rimessa a mano', {
             userId: user.id, sellerId: g.sellerId, merce: groupStockItems, message: errMerceGruppo.message,
@@ -1508,6 +1620,7 @@ export const POST = withAuthRateLimit(
       }
 
       reservedStockPerGroup.push(groupStockItems);
+      riservePerGroup.push(riservaDelGruppo);
       walletAppliedPerGroup.push({ cents: walletAppliedCents, ref: walletRef });
 
       const itemsRows = itemsPerGroupCents[i].map((it) => ({
@@ -1555,6 +1668,10 @@ export const POST = withAuthRateLimit(
       createdOrderIds.push(order.id);
       ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
     }
+
+    // R13-002 — Tutti gli ordini sono nati con i loro articoli: le riserve si chiudono qui, non prima,
+    // perche' fino all'ultimo negozio un errore deve poter rimettere la merce dei negozi di prima.
+    await chiudiLeRiserve(admin, riservePerGroup, chiaveCarrello);
 
     // --- 6. Adesso che TUTTI gli ordini esistono, si avvisa. (#159)
     /**
