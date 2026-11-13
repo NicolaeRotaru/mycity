@@ -649,7 +649,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // corrispondeva a niente di visibile.
       compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       hasVariants={p.has_variants ?? false}
-      priority={prioritaPrimeFoto && i < 4}
+      // 13/11/2026 (R15-006) — Una fila (`rail`) sta sempre sotto qualcos'altro: in home è la sesta
+      // sezione, nelle categorie viene dopo l'intestazione e le altre file. Niente foto «urgenti».
+      priority={prioritaPrimeFoto && !formaFila && i < 4}
     />
   );
 
