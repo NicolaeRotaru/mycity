@@ -150,8 +150,12 @@ export default function PrivacyPage() {
                   documenti dei respinti a 90 giorni, quelli delle iscrizioni lasciate a metà a
                   30 e tutti alla cancellazione dell'account (lib/privacy/potature-ritenzione.ts,
                   lib/account/cancellazione.ts). La conservazione dice quello che il codice fa;
-                  finalità e base giuridica restano da far rivedere a un legale. */}
-              <tr><td className="border px-3 py-2">Verifica KYC e antiriciclaggio</td><td className="border px-3 py-2">Obbligo di legge</td><td className="border px-3 py-2">Fino alla cancellazione dell&apos;account, quando documenti e selfie si cancellano subito; domanda respinta: 90 giorni; iscrizione lasciata a metà: {GIORNI_DOCUMENTI_ISCRIZIONE_A_META} giorni</td></tr>
+                  finalità e base giuridica restano da far rivedere a un legale.
+                  13/11/2026 (R21-009) — Diceva anche «antiriciclaggio» e «Obbligo di legge»: un
+                  marketplace non risulta fra i soggetti obbligati alla normativa antiriciclaggio, e
+                  nessun codice tiene i documenti per quell'obbligo. Finalità e base giuridica sono la
+                  bozza del registro dei difetti, da far validare a un legale abilitato. */}
+              <tr><td className="border px-3 py-2">Verifica dell&apos;identità di Venditori e Rider (KYC)</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b) e legittimo interesse alla sicurezza della piattaforma (art. 6.1.f)</td><td className="border px-3 py-2">Fino alla cancellazione dell&apos;account, quando documenti e selfie si cancellano subito; domanda respinta: 90 giorni; iscrizione lasciata a metà: {GIORNI_DOCUMENTI_ISCRIZIONE_A_META} giorni</td></tr>
               {/* 27/8/2026 (R059) — La riga diceva 12 mesi e il lavoro notturno ne
                   applicava 14, e le righe di accesso non le cancellava mai
                   nessuno. Adesso il codice fa quello che c'è scritto qui, e
