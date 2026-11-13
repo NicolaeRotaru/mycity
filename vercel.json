@@ -12,7 +12,6 @@
   "functions": {
     "app/api/cron/**/route.ts": { "maxDuration": 300 },
     "app/api/ai/**/route.ts": { "maxDuration": 120 },
-    "app/api/vision/**/route.ts": { "maxDuration": 120 },
     "app/api/image/remove-bg/route.ts": { "maxDuration": 60 },
     "app/api/account/export/route.ts": { "maxDuration": 60 },
     "app/api/stripe/webhook/route.ts": { "maxDuration": 60 }
