@@ -691,6 +691,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          # 13/11/2026 — Nicola, «ok 1 e 2»: stile e tipi qui non si
+          # ricontrollano, li controlla una volta il lavoro «Lint + Typecheck +
+          # Build», che Main aspetta. Vale solo dentro GitHub Actions: vedi
+          # next.config.js e stile-e-tipi-si-controllano-una-volta-nella-ci.test.ts.
+          MYCITY_COSTRUZIONE_PER_LE_PROVE: "1"
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &
@@ -911,6 +916,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "https://accessibilita-senza-database.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-il-cancello-accessibilita"
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          # 13/11/2026 — Nicola, «ok 1 e 2»: stile e tipi qui non si
+          # ricontrollano, li controlla una volta il lavoro «Lint + Typecheck +
+          # Build», che Main aspetta. Vale solo dentro GitHub Actions: vedi
+          # next.config.js e stile-e-tipi-si-controllano-una-volta-nella-ci.test.ts.
+          MYCITY_COSTRUZIONE_PER_LE_PROVE: "1"
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &

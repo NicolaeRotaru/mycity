@@ -28,7 +28,24 @@ const securityHeaders = [
   },
 ];
 
+// 13/11/2026 — Nicola, «ok 1 e 2»: nella CI il sito si costruisce 9 volte
+// (8 fette delle prove nel browser + axe) e ogni volta Next ricontrollava
+// stile e tipi: circa 47 secondi su 95, sempre lo stesso controllo.
+// Quel controllo resta, una volta sola e obbligatorio, nel lavoro
+// «Lint + Typecheck + Build», che Main aspetta. Qui si spegne SOLO se
+// valgono entrambe: siamo dentro GitHub Actions (Vercel non imposta mai
+// GITHUB_ACTIONS) e il lavoro dichiara di essere una costruzione per le
+// prove. Il sito costruito e' identico: cambia solo cosa si ricontrolla.
+// La prova `tests/unit/stile-e-tipi-si-controllano-una-volta-nella-ci.test.ts`
+// diventa rossa se la variabile compare nel lavoro lint, nel rilascio,
+// o se questa condizione si allarga.
+const soloCostruzionePerLeProve =
+  process.env.GITHUB_ACTIONS === 'true' &&
+  process.env.MYCITY_COSTRUZIONE_PER_LE_PROVE === '1';
+
 const nextConfig = {
+  eslint: { ignoreDuringBuilds: soloCostruzionePerLeProve },
+  typescript: { ignoreBuildErrors: soloCostruzionePerLeProve },
   reactStrictMode: true,
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
