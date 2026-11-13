@@ -7,6 +7,8 @@ import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
+import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { avvisaNegozioMessaggioNuovo } from '@/lib/email/avviso-messaggio-negozio';
 
 export const runtime = 'nodejs';
 
@@ -69,7 +71,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
  * dell'insert). Trenta messaggi di fila = una campanella, non trenta.
  *
  * Il messaggio è GIÀ salvato: un guasto qui non fa fallire l'invio, ma si logga.
- * Email e push al negozio non partono da qui (lib/email/ è un altro cantiere).
+ * La push la fa il giro send-push dalla campanella; l'email al negozio parte da qui (R22-010).
  */
 async function avvisaChiRiceve(conversationId: string, mittente: string, testo: string): Promise<void> {
   try {
@@ -118,6 +120,17 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
           : scriveIlCliente
             ? 'Nuovo messaggio da un cliente'
             : 'Il negozio ti ha risposto';
+    // 13/11/2026 (R22-010) — E L'EMAIL AL NEGOZIO, CHE ERA PRONTA E NESSUNO CHIAMAVA.
+    // La campanella diventa una push solo se il negozio ha acceso le notifiche del browser:
+    // senza, il fornaio scopriva il messaggio alla prossima visita. Solo quando scrive il
+    // cliente a un negozio (non nella chat con l'Assistenza). Una email per giro di non letti
+    // e niente se il negozio è in chat: lo decide `avvisaNegozioMessaggioNuovo`. Parte dopo la
+    // risposta e non lancia: un guasto della posta non fa fallire il messaggio, già salvato.
+    if (scriveIlCliente && ruoloDi(mittente) !== 'admin' && ruoloDi(destinatario) !== 'admin') {
+      dopoLaRisposta(async () => {
+        await avvisaNegozioMessaggioNuovo(admin, { conversationId, senderId: mittente });
+      }, 'email al negozio per un messaggio nuovo');
+    }
     const { error: errN } = await admin.from('notifications').insert({
       category: 'system',
       user_id: destinatario,
