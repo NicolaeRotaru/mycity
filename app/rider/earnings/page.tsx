@@ -14,6 +14,7 @@ import RiderConnectButton from '@/components/rider/RiderConnectButton';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 import { riepilogoFattorino } from '@/lib/guadagni/fattorino';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
+import { giornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -64,17 +65,16 @@ export default function RiderEarningsPage() {
   const pending = riepilogo.inArrivo;
   const inContanti = riepilogo.inContanti;
 
-  // Mini-grafico ultimi 7 giorni
+  // Mini-grafico ultimi 7 giorni.
+  // R24-014 — I giorni sono quelli di Piacenza, come nel grafico del negozio (lib/guadagni/giorni.ts):
+  // tagliati all'ora di Greenwich, una consegna alle 00:30 finiva nella colonna del giorno prima, e
+  // fra mezzanotte e l'una (le due d'estate) mancava la colonna di oggi.
   const daily = useMemo(() => {
     const days: Record<string, { total: number; count: number }> = {};
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      days[d.toISOString().slice(0, 10)] = { total: 0, count: 0 };
-    }
+    for (const g of ultimiGiorniPiacenza(7)) days[g] = { total: 0, count: 0 };
     for (const o of orders) {
-      const k = (o.delivered_at ?? '').slice(0, 10);
+      if (!o.delivered_at) continue;
+      const k = giornoPiacenza(o.delivered_at);
       if (k in days) {
         days[k].total += compensoConsegnaEuro(o);
         days[k].count += 1;
@@ -168,7 +168,9 @@ export default function RiderEarningsPage() {
                     />
                   </div>
                   <span className="text-[10px] text-ink-400">
-                    {new Date(day).toLocaleDateString('it', { weekday: 'short' }).slice(0, 1).toUpperCase()}
+                    {/* La colonna è una data di calendario (mezzanotte UTC di quel giorno): letta in UTC,
+                        la lettera è quella del suo giorno su qualunque telefono. */}
+                    {new Date(day).toLocaleDateString('it', { weekday: 'short', timeZone: 'UTC' }).slice(0, 1).toUpperCase()}
                   </span>
                 </div>
               );
