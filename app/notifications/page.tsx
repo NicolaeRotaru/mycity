@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Bell, Inbox, Package, Tag, Gift, Sparkles, MessageCircle, CheckCheck,
   type LucideIcon,
@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
+import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 
 type Notification = {
   id: string;
@@ -69,12 +70,25 @@ function sessioneMancante(e: unknown): boolean {
 /** Il marcatore del non-autenticato: una costante, cosi' il confronto non e' su una frase libera. */
 const AUTH_RICHIESTA = 'AUTH_REQUIRED';
 
+/** Quante notifiche si leggono alla volta: «Carica altre» ne aggiunge altrettante (R22-018). */
+const PER_VOLTA = 50;
+
 export default function NotificationsPage() {
   const router = useRouter();
   const qc = useQueryClient();
+  // 13/11/2026 (R22-018) — LE NON LETTE OLTRE LE ULTIME CINQUANTA RESTAVANO SUL CAMPANELLO PER SEMPRE.
+  // La pagina leggeva solo le ultime 50 e decideva «Segna tutte come lette» guardando solo quelle,
+  // mentre il campanello conta tutte le non lette. Chi apriva le notifiche una per una si trovava
+  // 50 righe lette, nessun pulsante, nessun modo di arrivare alle più vecchie, e un numero fisso
+  // sul campanello. Ora il pulsante guarda il conteggio vero (lo stesso del campanello) e le più
+  // vecchie si raggiungono con «Carica altre».
+  const [quante, setQuante] = useState(PER_VOLTA);
+  const nonLetteDelCampanello = useNotificationsCount();
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.notifications.list,
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: [...queryKeys.notifications.list, quante],
+    // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa.
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user }, error: errUtente } = await supabase.auth.getUser();
       // 5/11/2026 — Con la rete caduta getUser non lancia: risponde user null CON un errore. Quello
@@ -96,7 +110,7 @@ export default function NotificationsPage() {
       if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo');
       const { data, error } = await lettura
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(quante);
       if (error) throw error;
       return data ?? [];
     },
@@ -168,7 +182,9 @@ export default function NotificationsPage() {
   if (serveAccesso) return null;
 
   const notifications = data ?? [];
-  const hasUnread = notifications.some((n) => !n.is_read);
+  const hasUnread = nonLetteDelCampanello > 0 || notifications.some((n) => !n.is_read);
+  // Se ne sono arrivate quante ne ho chieste, ce ne possono essere altre più indietro.
+  const forseAltre = notifications.length >= quante;
 
   return (
     <div className="max-w-3xl">
@@ -252,6 +268,19 @@ export default function NotificationsPage() {
             );
           })}
         </ul>
+      )}
+
+      {forseAltre && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setQuante((q) => q + PER_VOLTA)}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
+          >
+            Carica altre
+          </button>
+        </div>
       )}
     </div>
   );
