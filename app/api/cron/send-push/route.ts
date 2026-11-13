@@ -53,10 +53,6 @@ function contrassegno(n: { id: string; link: string | null }): string {
 
 /** Le categorie che possono aspettare: senza la preferenza letta non partono. */
 const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
-/** Le categorie che passano davanti alle altre (R14-016): ordini e avvisi di servizio. */
-const CATEGORIE_CHE_NON_ASPETTANO = ['order', 'system'];
-/** Notifiche lavorate al massimo in un giro. */
-const LOTTO = 100;
 
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
@@ -91,55 +87,21 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
   }
 
-  /**
-   * R14-016 — PRIMA GLI AVVISI CHE NON ASPETTANO.
-   *
-   * Il giro prendeva le cento notifiche più vecchie dell'ultima ora, qualunque cosa dicessero. Un
-   * ribasso su un prodotto preferito da trecento persone scrive trecento righe «promo» tutte
-   * insieme: il «Nuovo ordine» della panetteria, arrivato un minuto dopo, aspettava tre giri
-   * (un quarto d'ora) dietro le promozioni. Adesso si leggono prima ordini e avvisi di servizio,
-   * e solo nel posto che resta le altre, sempre dalle più vecchie.
-   */
   const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: urgenti, error: erroreLettura } = await supa
+  const { data: pending, error: erroreLettura } = await supa
     .from('notifications')
     .select('id, user_id, title, body, link, category')
-    .in('category', CATEGORIE_CHE_NON_ASPETTANO)
     .is('pushed_at', null)
     .gte('created_at', sinceIso)
     .order('created_at', { ascending: true })
-    .limit(LOTTO);
+    .limit(100);
   // 5/11/2026 — Una lettura caduta non è «niente da mandare»: il giro risponde 503, come send-emails.
   if (erroreLettura) {
     logger.error('[cron] notifiche push non leggibili', { message: erroreLettura.message });
     return ApiErrors.unavailable('notifiche non leggibili');
   }
-  const pending = [...(urgenti ?? [])];
-  if (pending.length < LOTTO) {
-    // Le altre, nel posto che resta: si leggono tutte le categorie (anche una nuova che qui non
-    // fosse ancora scritta) e si scartano quelle già prese qui sopra.
-    const { data: altre, error: erroreAltre } = await supa
-      .from('notifications')
-      .select('id, user_id, title, body, link, category')
-      .is('pushed_at', null)
-      .gte('created_at', sinceIso)
-      .order('created_at', { ascending: true })
-      .limit(LOTTO);
-    if (erroreAltre) {
-      // Ordini e avvisi di servizio partono lo stesso; le altre restano in coda per il giro dopo.
-      logger.error('[cron] notifiche push che possono aspettare non leggibili', { message: erroreAltre.message });
-    } else {
-      const giaPrese = new Set(pending.map((n) => n.id));
-      for (const n of altre ?? []) {
-        if (pending.length >= LOTTO) break;
-        if (giaPrese.has(n.id)) continue;
-        giaPrese.add(n.id);
-        pending.push(n);
-      }
-    }
-  }
 
-  if (!pending.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });
+  if (!pending?.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });
 
   /**
    * 22/8/2026 — TRE VIAGGI AL DATABASE PER OGNI SINGOLA NOTIFICA.

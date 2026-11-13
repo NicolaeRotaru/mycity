@@ -37,17 +37,14 @@ vi.mock('@/lib/supabase/server', () => ({
         select: sel, is: sel, gte: sel, order: sel,
         limit: async () => (erroreLettura ? { data: null, error: { message: 'permission denied' } } : { data: pending, error: null }),
         update: () => ((b._update = true), b),
-        in: (_c: string, valori: string[]) => {
-          if (b._update) { segnate.push(...valori); return Promise.resolve({ error: null }); }
+        in: async (_c: string, valori: string[]) => {
+          if (b._update) { segnate.push(...valori); return { error: null }; }
           if (tabella === 'push_subscriptions') {
-            return Promise.resolve(erroreIscrizioni
+            return erroreIscrizioni
               ? { data: null, error: { message: 'canceling statement due to statement timeout' } }
-              : { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null });
+              : { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };
           }
-          // R14-016 — La lettura delle notifiche filtra per categoria (prima ordini e avvisi di
-          // servizio) prima del tetto: qui il filtro resta nella catena, la risponde `limit`.
-          if (tabella === 'notifications') return b;
-          return Promise.resolve({ data: [], error: null });
+          return { data: [], error: null };
         },
       });
       return b;
