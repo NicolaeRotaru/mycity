@@ -596,9 +596,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     addToCart({
       id: product.id,
       name: product.name,
-      // R24-013 — Al carrello il prezzo che la scheda mostra: con la promo attiva quello scontato,
-      // al centesimo come la cassa. Col pieno, carrello e cassa avvisavano «il prezzo è cambiato».
-      price,
+      // Al carrello il prezzo pieno: lo sconto della promo lo applica lui, come la cassa.
+      price: prezzoPieno,
       image: images[0],
       quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -644,7 +643,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       addToCart({
         id: product.id,
         name: product.name,
-        price,
+        price: prezzoPieno,
         image: images[0],
         quantity: qty,
         sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,

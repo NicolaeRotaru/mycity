@@ -9,7 +9,6 @@ import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import { discountedUnitCents } from '@/lib/promotions';
 import { sizedImage } from '@/lib/image-url';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { promessaSpedizione } from '@/lib/promesse-pubbliche';
@@ -54,9 +53,7 @@ const ProductCard = ({
   stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, hasVariants, priority,
 }: ProductCardProps) => {
   const hasDiscount = !!discountPercent && discountPercent > 0;
-  // R24-013 — Scontato al centesimo come la cassa: senza arrotondare, 0,62 € col 25% si leggeva
-  // 0,46 € e la cassa ne chiedeva 0,47.
-  const discountedPrice = hasDiscount ? discountedUnitCents(price, discountPercent as number) / 100 : price;
+  const discountedPrice = hasDiscount ? price * (1 - (discountPercent as number) / 100) : price;
   // Prezzo pieno barrato del venditore (solo se non c'è già una promo attiva).
   const compareValid = !hasDiscount && !!compareAtPrice && compareAtPrice > price;
   const showStrike = hasDiscount || compareValid;
