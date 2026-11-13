@@ -11,8 +11,10 @@
  *    build senza la variabile, e Main lo aspetta;
  *  ② la variabile vive solo nei due lavori delle prove (e2e-senza-chiavi, a11y)
  *    e in nessun altro posto del repository che possa costruire il sito;
- *  ③ next.config.js la ascolta solo dentro GitHub Actions: impostata per
- *    sbaglio su Vercel, il rilascio controlla tipi e stile lo stesso.
+ *  ③ next.config.js la ascolta solo dentro GitHub Actions, nei due lavori delle
+ *    prove e fuori da `vercel build`: il rilascio in produzione gira anche lui
+ *    in GitHub Actions (deploy-dopo-ci.yml) e li' controlla tipi e stile lo
+ *    stesso, anche se qualcuno mettesse la variabile fra quelle di Vercel.
  * La prima prova di ogni gruppo gira su una forma sbagliata e pretende che il
  * controllo la bocci.
  */
@@ -63,9 +65,18 @@ function perche_stile_e_tipi_possono_sfuggire(workflow: string): string[] {
   if (!controlli) {
     motivi.push(`il lavoro «${LAVORO_DEI_CONTROLLI}» non c'e' piu'`);
   } else {
-    if (!/run:\s*npm run lint\b/.test(controlli)) motivi.push(`«${LAVORO_DEI_CONTROLLI}» non lancia piu' npm run lint`);
-    if (!/run:\s*npm run build\b/.test(controlli)) {
-      motivi.push(`«${LAVORO_DEI_CONTROLLI}» non lancia piu' npm run build, che e' il controllo dei tipi`);
+    // I comandi si leggono come righe `run:` intere di un passo, non come parole
+    // nel testo: un `|| true`, un `echo "run: npm run lint"` o un commento non
+    // contano come controllo.
+    const comandi = [...controlli.matchAll(/^ {8}run:[ \t]*(.*?)[ \t]*$/gm)].map((m) => m[1]);
+    if (!comandi.includes('npm run lint --if-present') && !comandi.includes('npm run lint')) {
+      motivi.push(`«${LAVORO_DEI_CONTROLLI}» non lancia piu' npm run lint, da solo e senza vie d'uscita`);
+    }
+    if (!comandi.includes('npm run build')) {
+      motivi.push(`«${LAVORO_DEI_CONTROLLI}» non lancia piu' npm run build, da solo e senza vie d'uscita: e' il controllo dei tipi`);
+    }
+    if (/set \+e|\|\|\s*(true|:|exit 0)/.test(controlli)) {
+      motivi.push(`«${LAVORO_DEI_CONTROLLI}» ha un'uscita forzata a verde (set +e o || true)`);
     }
     if (/^ {4,8}if:/m.test(controlli)) motivi.push(`«${LAVORO_DEI_CONTROLLI}» ha una condizione: potrebbe non girare`);
     if (/continue-on-error:\s*true/.test(controlli)) motivi.push(`«${LAVORO_DEI_CONTROLLI}» non ferma niente se e' rosso`);
@@ -120,6 +131,18 @@ describe('① e ② il controllo di stile e tipi resta, una volta, nel lavoro ch
     expect(perche_stile_e_tipi_possono_sfuggire(rotto).join('\n')).toContain('per tutta la CI');
   });
 
+  it('boccia un controllo che non ferma piu niente (|| true)', () => {
+    const rotto = workflowVero.replace(/(\n  lint-and-typecheck:[\s\S]*?)run: npm run build/, '$1run: npm run build || true');
+    expect(rotto).not.toBe(workflowVero);
+    expect(perche_stile_e_tipi_possono_sfuggire(rotto).join('\n')).toContain('npm run build');
+  });
+
+  it('boccia un comando che nomina il lint senza lanciarlo', () => {
+    const rotto = workflowVero.replace(/(\n  lint-and-typecheck:[\s\S]*?)run: npm run lint --if-present/, '$1run: echo "run: npm run lint"');
+    expect(rotto).not.toBe(workflowVero);
+    expect(perche_stile_e_tipi_possono_sfuggire(rotto).join('\n')).toContain('npm run lint');
+  });
+
   it('boccia un lavoro dei controlli che non costruisce piu', () => {
     const rotto = workflowVero.replace(/(\n  lint-and-typecheck:[\s\S]*?)run: npm run build/, '$1run: echo saltato');
     expect(perche_stile_e_tipi_possono_sfuggire(rotto).join('\n')).toContain('npm run build');
@@ -161,10 +184,31 @@ describe('③ next.config.js ascolta la variabile solo dentro GitHub Actions', (
   });
 
   it('un valore diverso da "1" non basta', () => {
-    expect(configCon({ GITHUB_ACTIONS: 'true', [VARIABILE]: 'true' })).toEqual({ saltaTipi: false, saltaStile: false });
+    expect(configCon({ GITHUB_ACTIONS: 'true', GITHUB_JOB: 'a11y', [VARIABILE]: 'true' })).toEqual({ saltaTipi: false, saltaStile: false });
   });
 
-  it('solo le costruzioni per le prove, dentro GitHub Actions, saltano il doppione', () => {
-    expect(configCon({ GITHUB_ACTIONS: 'true', [VARIABILE]: '1' })).toEqual({ saltaTipi: true, saltaStile: true });
+  it('il rilascio in produzione (vercel build dentro GitHub Actions) controlla tutto anche con la variabile', () => {
+    expect(configCon({ GITHUB_ACTIONS: 'true', GITHUB_JOB: 'a11y', VERCEL: '1', [VARIABILE]: '1' })).toEqual({
+      saltaTipi: false,
+      saltaStile: false,
+    });
+  });
+
+  it('un altro lavoro di GitHub Actions (il rilascio, il lavoro lint) controlla tutto anche con la variabile', () => {
+    for (const lavoro of ['deploy', 'lint-and-typecheck', 'e2e-tests', '']) {
+      expect(configCon({ GITHUB_ACTIONS: 'true', GITHUB_JOB: lavoro, [VARIABILE]: '1' }), lavoro).toEqual({
+        saltaTipi: false,
+        saltaStile: false,
+      });
+    }
+  });
+
+  it('solo i due lavori delle prove, dentro GitHub Actions, saltano il doppione', () => {
+    for (const lavoro of ['e2e-senza-chiavi', 'a11y']) {
+      expect(configCon({ GITHUB_ACTIONS: 'true', GITHUB_JOB: lavoro, [VARIABILE]: '1' }), lavoro).toEqual({
+        saltaTipi: true,
+        saltaStile: true,
+      });
+    }
   });
 });
