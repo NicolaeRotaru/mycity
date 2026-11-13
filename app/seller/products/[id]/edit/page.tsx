@@ -24,6 +24,23 @@ const RECESSO_SEGNABILE = '__recessoSegnabile';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
+/**
+ * R16-004 — IL PRODOTTO COM'ERA, PER I CAMPI CHE IL SALVATAGGIO HA SCRITTO.
+ * Se le varianti cadono dopo che il prodotto è già scritto, la pagina rimanda
+ * questi valori (letti all'apertura) e il salvataggio resta tutto o niente.
+ * La scorta torna indietro solo se in banca dati c'è ancora quella appena
+ * scritta: una vendita arrivata nel frattempo non si cancella.
+ */
+function comEraPrima(prima: Record<string, unknown>, payload: Record<string, unknown>): Record<string, unknown> {
+  const indietro: Record<string, unknown> = {};
+  for (const colonna of Object.keys(payload)) {
+    if (colonna === 'stock_visto' || colonna === 'stock_confermato') continue;
+    indietro[colonna] = prima[colonna];
+  }
+  if (typeof payload.stock === 'number') indietro.stock_visto = payload.stock;
+  return indietro;
+}
+
 export default function EditProductPage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const router = useRouter();
@@ -153,7 +170,25 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       // Sincronizza le varianti (insert/update/delete); il trigger DB riallinea
       // products.stock e has_variants. Con le scorte viste all'apertura: una
       // variante venduta mentre il modulo era aperto non torna in magazzino.
-      await saveProductVariants(id, nextVariants, scorteViste);
+      try {
+        await saveProductVariants(id, nextVariants, scorteViste);
+      } catch (errore) {
+        // R16-004 — TUTTO O NIENTE: le varianti non sono passate (una taglia
+        // venduta fra il controllo e la scrittura, la rete caduta), quindi nome,
+        // prezzo e il resto tornano com'erano all'apertura, dalla stessa porta.
+        try {
+          await salvaProdottoDalBrowser({
+            prodottoId: id,
+            payload: comEraPrima(product ?? {}, payload as unknown as Record<string, unknown>),
+            origine: 'venditore-modulo-annullato',
+          });
+        } catch {
+          throw new Error(
+            'Le varianti non si sono salvate, ma le altre modifiche sì e non sono riuscito ad annullarle: riapri il prodotto, controlla e salva di nuovo.',
+          );
+        }
+        throw errore;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
