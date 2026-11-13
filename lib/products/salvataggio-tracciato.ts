@@ -39,6 +39,7 @@
 
 import type { AuditAction } from '@/lib/audit';
 import type { CategoryRow } from '@/lib/products/aiPatch';
+import { categoriaDaFreschi, ESCLUSIONE_NON_AMMESSA, type CategoriaPerIlRecesso } from '@/lib/ordini/recesso';
 import {
   cosaMancaPerVendere,
   daCompletareDopoLaModifica,
@@ -396,6 +397,29 @@ async function controllaCheSiPossaVendere(
 }
 
 /**
+ * 13/11/2026 (R13-004) — «ESCLUSO DAL RECESSO» SOLO SUGLI ALIMENTI.
+ *
+ * La porta accettava la spunta su qualunque prodotto: una merceria poteva togliere il
+ * ripensamento a un maglione. La spunta accesa si scrive solo se la categoria del prodotto
+ * (quella nuova, se la modifica la cambia) è alimentare (`categoriaDaFreschi`, lib/ordini/recesso.ts);
+ * le categorie si leggono con `*` per avere anche `richiede_dichiarazioni_alimentari` dove c'è.
+ * Una spunta tolta passa sempre.
+ */
+async function controllaCheSiPossaEscludere(
+  db: ClientDelCatalogo,
+  prima: Record<string, unknown>,
+  daScrivere: Record<string, unknown>,
+): Promise<void> {
+  if (daScrivere[COLONNA_DEL_RECESSO] !== true) return;
+  const categoria = ('category_id' in daScrivere ? daScrivere.category_id : prima.category_id) as string | null | undefined;
+  const { data: categorie, error } = await db.from('categories').select('*');
+  if (error) throw error;
+  if (!categoriaDaFreschi((categorie ?? []) as unknown as CategoriaPerIlRecesso[], categoria)) {
+    throw new DaCompletare(ESCLUSIONE_NON_AMMESSA, ['recesso']);
+  }
+}
+
+/**
  * La scorta in banca dati non e' piu' quella che il negoziante aveva davanti:
  * nel frattempo qualcuno ha comprato. La scorta non si scrive, e il messaggio
  * dice cosa fare — riprovare con lo stesso numero darebbe lo stesso errore.
@@ -494,6 +518,7 @@ export async function salvaProdottoTracciato(opts: {
   // nuovo prodotto scrivono `products` dal browser senza passare di qui, e la'
   // il database ferma solo l'alimentare senza allergeni (migrazione 126).
   await controllaCheSiPossaVendere(opts.db, prima, daScrivere);
+  await controllaCheSiPossaEscludere(opts.db, prima, daScrivere);
 
   // Il filtro sul negozio resta anche nella scrittura: la regola per riga del
   // database e' l'ultima difesa, non l'unica.

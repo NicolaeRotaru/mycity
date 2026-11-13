@@ -224,12 +224,16 @@ export default function TermsPage() {
         <p>
           {/* 31/10/2026 (ondata 6) — Fatto legale.recesso-esclusi: i freschi e il fatto su ordinazione,
               detti con i nomi che il cliente riconosce. */}
-          Sono esclusi dal recesso, ai sensi dell&apos;art. 59 Cod. Cons.: prodotti deperibili
-          (pane, dolci, salumi, latticini e gli altri freschi), prodotti fatti su ordinazione,
+          {/* 13/11/2026 (R13-004) — L'esclusione non è un interruttore del negozio: vale solo
+              dove la scheda la dice prima dell'acquisto (art. 49 c.1 lett. m), e il negozio può
+              segnarla solo sugli alimenti (lib/ordini/recesso.ts). */}
+          Sono esclusi dal recesso, ai sensi dell&apos;art. 59 Cod. Cons.: prodotti che si
+          deteriorano rapidamente (pane, dolci, salumi, latticini e gli altri freschi), prodotti fatti su ordinazione,
           prodotti confezionati su misura o personalizzati, prodotti sigillati (per igiene) aperti
           dopo la consegna, beni che dopo la consegna risultino mescolati con altri beni in modo
           non separabile, contenuti digitali forniti su supporto non materiale dopo l&apos;avvio
-          dell&apos;esecuzione.
+          dell&apos;esecuzione. Un prodotto fresco o fatto su ordinazione è escluso solo se la sua
+          scheda lo dice prima dell&apos;acquisto.
         </p>
         <p>
           Per esercitare il recesso usa il flusso &quot;Richiedi reso&quot; nel dettaglio ordine

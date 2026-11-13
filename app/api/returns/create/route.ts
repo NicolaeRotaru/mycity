@@ -14,6 +14,8 @@ import {
   notaDegliEsclusi,
   prodottiDelleRighe,
   rifiutoDelRecesso,
+  esclusioniAmmesse,
+  type CategoriaPerIlRecesso,
   type ProdottoPerIlRecesso,
   type RigaPerIlRecesso,
 } from '@/lib/ordini/recesso';
@@ -151,8 +153,20 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
         logger.error(pErr, { context: 'returns-recesso-prodotti' });
         return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
       }
+      let letti = (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string; category_id?: string | null }>;
+      // 13/11/2026 (R13-004) — La spunta vale solo sugli alimenti: su un maglione segnato
+      // «escluso» il ripensamento passa, e il negozio lo valuta. Le categorie si leggono solo
+      // quando c'è una spunta da controllare; se la lettura non riesce non si decide al buio.
+      if (letti.some((p) => p.non_recedibile === true && 'category_id' in p)) {
+        const { data: categorie, error: cErr } = await getAdminSupabase().from('categories').select('*');
+        if (cErr) {
+          logger.error(cErr, { context: 'returns-recesso-categorie' });
+          return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
+        }
+        letti = esclusioniAmmesse(letti, (categorie ?? []) as CategoriaPerIlRecesso[]);
+      }
       // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
-      const perRiga = prodottiDelleRighe(righeOrdine, (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>);
+      const perRiga = prodottiDelleRighe(righeOrdine, letti);
       const rifiuto = rifiutoDelRecesso(body.reason, perRiga);
       if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
       notaRecesso = notaDegliEsclusi(body.reason, perRiga);

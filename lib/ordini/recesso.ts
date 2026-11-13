@@ -37,8 +37,12 @@ export function rifiutoDelRecesso(motivo: string, prodotti: ProdottoPerIlRecesso
   const esclusi = prodotti.filter(esclusoDalRecesso);
   if (esclusi.length === 0 || esclusi.length < prodotti.length) return null;
   const quali = elencoDeiNomi(esclusi);
-  const chi = esclusi.length === 1 ? `Questo prodotto${quali} è escluso` : `Questi prodotti${quali} sono esclusi`;
-  return `${chi} dal recesso: è fresco o fatto su ordinazione, e la legge non permette il reso per «Cambio idea» (art. 59 del Codice del Consumo). Se è arrivato difettoso o sbagliato, scegli quel motivo: la garanzia vale sempre.`;
+  const uno = esclusi.length === 1;
+  const chi = uno ? `Questo prodotto${quali} è escluso` : `Questi prodotti${quali} sono esclusi`;
+  // 13/11/2026 (R13-004) — Prima la frase diceva a nome di MyCity «è fresco … la legge non permette»
+  // per qualunque prodotto segnato, anche un maglione. Ora la spunta vale solo sugli alimenti
+  // (`esclusioniAmmesse`), e la frase dice chi lo afferma: il negozio.
+  return `${chi} dal recesso: il negozio ${uno ? 'lo' : 'li'} indica come ${uno ? 'alimento fresco che si deteriora' : 'alimenti freschi che si deteriorano'} in fretta o ${uno ? 'fatto' : 'fatti'} su ordinazione, e per questi prodotti il Codice del Consumo esclude il reso per «Cambio idea» (art. 59). Se è arrivato difettoso o sbagliato, scegli quel motivo: la garanzia vale sempre.`;
 }
 
 /**
@@ -54,6 +58,60 @@ export function notaDegliEsclusi(motivo: string, prodotti: ProdottoPerIlRecesso[
   const nomi = [...new Set(esclusi.map((p) => (p.name ?? '').trim()).filter(Boolean))];
   return `Esclusi dal recesso (art. 59 Cod. Cons.), da non rimborsare per «Cambio idea»: ${nomi.length > 0 ? nomi.join(', ') : 'alcuni prodotti dell\'ordine'}.`;
 }
+
+/**
+ * 13/11/2026 (R13-004) — LA SPUNTA NON TOGLIE IL RECESSO A UN MAGLIONE.
+ *
+ * «Escluso dal recesso» era un interruttore libero: il negozio poteva accenderlo su qualunque
+ * prodotto, e la rotta dei resi rifiutava il ripensamento dicendo che era la legge. L'elenco
+ * dell'art. 59 è chiuso, e la scelta di Nicola (fatto `legale.recesso-esclusi`) ne prende due
+ * voci: i prodotti che si deteriorano in fretta (pane, dolci, salumi, latticini e gli altri
+ * freschi) e quelli fatti su ordinazione. Tutti e due, sul nostro catalogo, sono ALIMENTI: la
+ * spunta vale solo per un prodotto la cui categoria (o una delle sue madri) è alimentare,
+ * la stessa regola degli allergeni (`richiede_dichiarazioni_alimentari`, migrazione 363; senza
+ * la colonna, la radice «alimentari», come in lib/category-attributes.ts).
+ *
+ * La controllano il salvataggio (lib/products/salvataggio-tracciato.ts), il database
+ * (migrazione 373) e la rotta dei resi: una spunta rimasta su un prodotto non alimentare non
+ * conta, il ripensamento passa e il negozio lo valuta.
+ */
+export type CategoriaPerIlRecesso = {
+  id: string;
+  slug?: string | null;
+  parent_id?: string | null;
+  richiede_dichiarazioni_alimentari?: boolean | null;
+};
+
+export function categoriaDaFreschi(categorie: CategoriaPerIlRecesso[], categoriaId: string | null | undefined): boolean {
+  if (!categoriaId) return false;
+  const perId = new Map(categorie.map((c) => [c.id, c]));
+  const viste = new Set<string>();
+  for (let c = perId.get(categoriaId); c && !viste.has(c.id); c = c.parent_id ? perId.get(c.parent_id) : undefined) {
+    viste.add(c.id);
+    if (c.richiede_dichiarazioni_alimentari === true) return true;
+    if (!c.parent_id) return c.slug === 'alimentari';
+  }
+  return false;
+}
+
+/**
+ * I prodotti letti dal database, con la spunta tolta dove la categoria non la permette. Una riga
+ * letta senza la colonna `category_id` (una lettura parziale) resta com'è: non si sa.
+ */
+export function esclusioniAmmesse<T extends ProdottoPerIlRecesso & { category_id?: string | null }>(
+  prodotti: T[],
+  categorie: CategoriaPerIlRecesso[],
+): T[] {
+  return prodotti.map((p) =>
+    p.non_recedibile === true && 'category_id' in p && !categoriaDaFreschi(categorie, p.category_id)
+      ? { ...p, non_recedibile: false }
+      : p,
+  );
+}
+
+/** Cosa si dice al negozio che segna come escluso un prodotto non alimentare. */
+export const ESCLUSIONE_NON_AMMESSA =
+  "«Escluso dal recesso» vale solo per gli alimenti freschi che si deteriorano in fretta o fatti su ordinazione (art. 59 del Codice del Consumo): per questa categoria il cliente può sempre ripensarci. Togli la spunta e salva di nuovo.";
 
 /** Una riga d'ordine come la legge la rotta dei resi. */
 export type RigaPerIlRecesso = { product_id?: string | null; product_name?: string | null };

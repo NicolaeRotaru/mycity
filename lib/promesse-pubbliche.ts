@@ -354,8 +354,10 @@ export const FRASE_RESO = `Reso entro 14 giorni, ${RESO_ESCLUSI}`;
  * torta su ordinazione «Reso entro 14 giorni» era falso anche con l'esclusione
  * accanto: la cliente legge il numero, non la coda. Lì si dice cosa resta.
  */
+// 13/11/2026 (R13-004) — Lo dice il negozio, non MyCity: la spunta vale solo sugli alimenti
+// (lib/ordini/recesso.ts), e la frase non afferma da sola che il prodotto «è fresco».
 export const FRASE_RESO_ESCLUSO =
-  'Escluso dal recesso: è fresco o fatto su ordinazione. Resta la garanzia se arriva difettoso o sbagliato';
+  'Escluso dal recesso: il negozio lo indica come fresco o fatto su ordinazione. Resta la garanzia se arriva difettoso o sbagliato';
 
 /** La frase del reso per UNA scheda: quella dell'escluso se il negozio l'ha segnato, se no la generale. */
 export function fraseResoDelProdotto(prodotto: { non_recedibile?: unknown } | null | undefined): string {
