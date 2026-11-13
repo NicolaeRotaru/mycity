@@ -1166,6 +1166,24 @@ export class RimborsoInAttesaDellaDivisione extends Error {
 }
 
 /**
+ * 13/11/2026 (R17-014) — LO STESSO RIMBORSO E' GIA' IN CORSO, ADESSO.
+ *
+ * Due chiamate con la stessa chiave nello stesso istante (il negozio che preme due volte, la rotta
+ * del reso e quella della decisione, due giri del freno della veloce sovrapposti) prenotavano tutte
+ * e due la cifra: Stripe, con la stessa chiave, rimborsava una volta sola, e il libro dell'ordine
+ * segnava 40 € su 20 € usciti. Dalla migrazione 412 la prenotazione porta la chiave: la seconda
+ * chiamata trova quella della prima, presa da pochi minuti, e si ferma qui senza toccare niente.
+ * Si riprova dopo: la prima avrà finito (e la ripresa la riconosce), o sarà morta (e la ripresa,
+ * passati 10 minuti, finisce il suo lavoro). Ritentabile apposta: non porta `ritentabile = false`.
+ */
+export class RimborsoGiaInCorso extends Error {
+  constructor(readonly orderId: string) {
+    super('Un altro tentativo dello stesso rimborso è in corso in questo momento: riprova fra qualche minuto.');
+    this.name = 'RimborsoGiaInCorso';
+  }
+}
+
+/**
  * 6/9/2026 (stesso giorno, riparazione) — «L'ORDINE NON C'E'» E «NON SONO
  * RIUSCITO A LEGGERLO» NON SONO LA STESSA COSA.
  *
@@ -1502,6 +1520,57 @@ async function avvisaDellaQuotaDaTrattenere(
 }
 
 /**
+ * 13/11/2026 (R17-014) — LA PRENOTAZIONE PORTA LA CHIAVE DEL RIMBORSO.
+ *
+ * `accumula_rimborso` sommava qualunque cifra, senza sapere di quale rimborso fosse: la stessa
+ * chiave prenotata due volte (due chiamate insieme, un tentativo che riprende quello di prima)
+ * contava due volte, mentre Stripe con la stessa chiave rimborsa una volta sola. Con la 412 la
+ * prenotazione porta la chiave che va a Stripe, e il database risponde com'è andata:
+ * 'nuova' (sommata), 'in_corso' (un altro tentativo la usa adesso), 'ripresa' (il tentativo che
+ * l'aveva presa è morto: questo finisce il lavoro), 'altra_cifra' (la chiave ha un'altra cifra).
+ * Un database senza la 412 risponde «funzione non trovata»: si prenota senza chiave, come prima.
+ * Una risposta senza `prenotazione` è di quel database: vale 'nuova'.
+ */
+type Prenotazione = 'nuova' | 'in_corso' | 'ripresa' | 'altra_cifra';
+
+/** PostgREST non trova la funzione con quegli argomenti (PGRST202), o Postgres non la conosce (42883). */
+function funzioneNonTrovata(errore: unknown): boolean {
+  const codice = (errore as { code?: unknown } | null)?.code;
+  return codice === 'PGRST202' || codice === '42883';
+}
+
+async function prenotaIlRimborso(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  deltaCents: number,
+  chiave: string | null,
+): Promise<{ data: unknown; error: { message: string } | null }> {
+  const argomenti = { p_order_id: orderId, p_delta: deltaCents };
+  if (chiave) {
+    const conChiave = await admin.rpc('accumula_rimborso', { ...argomenti, p_chiave: chiave });
+    if (!conChiave.error || !funzioneNonTrovata(conChiave.error)) return conChiave;
+    logger.warn('[refundOrder] database senza la 412: la prenotazione si fa senza chiave', { orderId });
+  }
+  return admin.rpc('accumula_rimborso', argomenti);
+}
+
+/** Lo storno della prenotazione di questa chiave (412): toglie solo quella, se c'è. */
+async function stornaLaPrenotazione(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  deltaCents: number,
+  chiave: string | null,
+): Promise<{ error: { message: string } | null }> {
+  const argomenti = { p_order_id: orderId, p_delta: deltaCents };
+  if (chiave) {
+    const conChiave = await admin.rpc('storna_rimborso', { ...argomenti, p_chiave: chiave });
+    if (!conChiave.error || !funzioneNonTrovata(conChiave.error)) return conChiave;
+    logger.warn('[refundOrder] database senza la 412: lo storno si fa senza chiave', { orderId });
+  }
+  return admin.rpc('storna_rimborso', argomenti);
+}
+
+/**
  * 1/11/2026 — LA PRENOTAZIONE CON LA RISPOSTA PERSA.
  *
  * `accumula_rimborso` puo' scrivere e perdere la risposta: prima `refundOrder`
@@ -1515,12 +1584,13 @@ async function prenotazioneConRispostaPersa(
   orderId: string,
   primaCents: number,
   deltaCents: number,
+  chiave: string | null,
 ): Promise<void> {
   const { data, error } = await admin.from('orders').select('refunded_amount_cents').eq('id', orderId).single();
   const ora = error || !data ? null : Number((data as { refunded_amount_cents?: number | null }).refunded_amount_cents ?? 0);
   if (ora === primaCents) return;
   if (ora === primaCents + deltaCents) {
-    const { error: errStorno } = await admin.rpc('storna_rimborso', { p_order_id: orderId, p_delta: deltaCents });
+    const { error: errStorno } = await stornaLaPrenotazione(admin, orderId, deltaCents, chiave);
     if (!errStorno) return;
     logger.error('[refundOrder] storno della prenotazione persa non riuscito', { orderId, message: errStorno.message });
   }
@@ -1772,19 +1842,34 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // Ora la somma la fa il database in una riga sola, con il tetto dentro la
   // stessa istruzione. Se non rivendica, non si chiama Stripe: si esce.
   // Il bonifico rimasto a meta' ha gia' la sua prenotazione: non se ne fa un'altra.
+  // R17-014 — La prenotazione porta la chiave che va a Stripe (`prenotaIlRimborso`).
+  const chiaveDellaPrenotazione = opts.idempotencyKey ?? null;
   let newRefundedTotal = Number(order.refunded_amount_cents ?? 0);
   if (!bonificoDiPrima) {
-    const { data: claimRimborso, error: errClaim } = await admin
-      .rpc('accumula_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
+    const { data: claimRimborso, error: errClaim } = await prenotaIlRimborso(admin, order.id, safeAmountCents, chiaveDellaPrenotazione);
     if (errClaim) {
       logger.error('[refundOrder] accumulo rimborso fallito', { orderId: order.id, message: errClaim.message });
-      await prenotazioneConRispostaPersa(admin, order.id, alreadyRefunded, safeAmountCents);
+      await prenotazioneConRispostaPersa(admin, order.id, alreadyRefunded, safeAmountCents, chiaveDellaPrenotazione);
       throw new Error('refundOrder: impossibile registrare il rimborso');
     }
-    const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
+    const rivendicato = (Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso) as
+      | { totale_rimborsato?: number | null; prenotazione?: Prenotazione | null }
+      | null
+      | undefined;
     if (!rivendicato) {
       throw new RimborsoNonRitentabile('refundOrder: rimborso già registrato o oltre il totale dell ordine');
     }
+    const prenotazione: Prenotazione = rivendicato.prenotazione ?? 'nuova';
+    // Un altro tentativo della stessa chiave la sta usando adesso: niente è stato toccato, si
+    // riprova dopo. Fuori dal blocco qui sotto apposta: la sua prenotazione non si storna.
+    if (prenotazione === 'in_corso') {
+      logger.warn('[refundOrder] lo stesso rimborso è già in corso: non si prenota di nuovo', { orderId: order.id, chiave: chiaveDellaPrenotazione });
+      throw new RimborsoGiaInCorso(order.id);
+    }
+    if (prenotazione === 'altra_cifra') {
+      throw new RimborsoNonRitentabile('refundOrder: questo rimborso è già prenotato sull ordine con un altra cifra');
+    }
+    // 'ripresa': la prenotazione è di un tentativo morto prima di finire; è già nel totale.
     newRefundedTotal = Number(rivendicato.totale_rimborsato ?? 0);
   }
 
@@ -1977,7 +2062,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     // Il bonifico rimasto a meta' non ha prenotato niente: la prenotazione resta del tentativo di prima.
     const { error: errStorno } = bonificoDiPrima
       ? { error: null }
-      : await admin.rpc('storna_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
+      : await stornaLaPrenotazione(admin, order.id, safeAmountCents, chiaveDellaPrenotazione);
     if (errStorno) {
       logger.error('[refundOrder] STORNO FALLITO: l ordine resta segnato come rimborsato senza esserlo', {
         orderId: order.id, centesimi: safeAmountCents, message: errStorno.message,
