@@ -548,7 +548,7 @@ function SearchInner() {
               ref={sortTriggerRef}
               onClick={() => setSortOpen(true)}
               aria-label={t('sortBy')}
-              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm hover:bg-cream-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm-neutral hover:bg-cream-50 transition-colors"
             >
               <ArrowDownWideNarrow size={15} strokeWidth={2.2} className="text-ink-500" />
               <span>{t('sortShort')}</span>
@@ -557,7 +557,7 @@ function SearchInner() {
               ref={filterTriggerRef}
               onClick={() => setFiltersOpen(true)}
               aria-label={t('filters')}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm-neutral transition-colors ${
                 activeFilters > 0
                   ? 'bg-primary-700 text-white hover:bg-primary-800'
                   : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
