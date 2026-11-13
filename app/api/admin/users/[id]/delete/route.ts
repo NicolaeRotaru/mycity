@@ -45,6 +45,17 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     .single();
   if (!targetProfile) return ApiErrors.notFound('Utente non trovato.');
 
+  // 13/11/2026 (R14-008) — Un amministratore non si cancella da qui. La pagina
+  // nasconde il bottone per gli amministratori, ma la rotta lo accettava: bastava
+  // una chiamata diretta perche' un amministratore ne cancellasse un altro, il
+  // passo meno reversibile del sito. La regola adesso sta dove non si aggira.
+  // Per cancellarlo davvero prima gli si toglie il ruolo (Modifica → ruolo).
+  if (targetProfile.role === 'admin') {
+    return ApiErrors.forbidden(
+      'Un amministratore non si cancella da qui: prima togligli il ruolo di amministratore.',
+    );
+  }
+
   // #178 — Una pipeline sola, la stessa del cron. Prima questa strada
   // anonimizzava il profilo e basta: la carta d'identita' e il selfie
   // restavano nello storage, le recensioni col nome dentro restavano, e la
