@@ -302,10 +302,22 @@ export default function SettingsPage() {
     } finally {
       setChangingPwd(false);
     }
-    toast.success('Password aggiornata con successo');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    // 13/11/2026 (R19-021) — Il cambio chiude TUTTE le sessioni dell'account,
+    // anche questa (la rotta scrive col client di servizio, ed e' voluto: caccia
+    // chi avesse una sessione rubata). Restare qui voleva dire essere fuori al
+    // clic dopo senza saperlo. Si dice, si chiude la sessione di questo browser
+    // (solo in locale: sul server e' gia' chiusa) e si torna all'accesso.
+    toast.success('Password cambiata: accedi con quella nuova');
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // La sessione sul server non c'e' gia' piu': all'accesso si va lo stesso.
+    }
+    router.push(`/sign-in?returnTo=${encodeURIComponent('/profile/settings')}`);
+    router.refresh();
   };
 
   const handleChangeEmail = async (e: React.FormEvent) => {
