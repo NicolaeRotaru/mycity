@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Plus, Star } from 'lucide-react';
 import { toast } from 'sonner';
@@ -112,6 +112,8 @@ export default function ListsPage() {
   const ospite = leMie === null;
   const myLists = leMie ?? [];
 
+  // R18-009 — Freno sincrono: `isPending` arriva al bottone solo al disegno dopo, un secondo tocco immediato passava.
+  const inCorso = useRef(false);
   const create = useMutation({
     mutationFn: async () => {
       if (!newTitle.trim()) throw new Error('Titolo obbligatorio');
@@ -138,7 +140,13 @@ export default function ListsPage() {
       window.location.href = `/lists/${id}`;
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
+    onSettled: () => { inCorso.current = false; },
   });
+  const creaLista = () => {
+    if (inCorso.current) return;
+    inCorso.current = true;
+    create.mutate();
+  };
 
   // 6/9/2026 — Finché la risposta non arriva `myLists` è `[]`, e `[] .length
   // === 0` è vero: comparivano «Non hai ancora liste» e «Nessuna lista
@@ -283,7 +291,7 @@ export default function ListsPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowNew(false)}>Annulla</Button>
-            <Button onClick={() => create.mutate()} disabled={create.isPending || !newTitle.trim()} loading={create.isPending}>
+            <Button onClick={creaLista} disabled={create.isPending || !newTitle.trim()} loading={create.isPending}>
               Crea lista
             </Button>
           </>
@@ -305,6 +313,7 @@ export default function ListsPage() {
                   <label htmlFor={idTitolo} className="block text-sm font-semibold mb-1">Titolo</label>
                   <input
                     id={idTitolo}
+                    data-autofocus
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     maxLength={60}
