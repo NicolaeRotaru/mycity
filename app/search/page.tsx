@@ -378,7 +378,7 @@ function SearchInner() {
             <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
             {t('filters')}
             {activeFilters > 0 && (
-              <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+              <span className="bg-primary-600 text-white text-2xs font-bold rounded-full px-1.5 py-0.5 leading-none">
                 {activeFilters}
               </span>
             )}
@@ -403,7 +403,7 @@ function SearchInner() {
                 <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
                 {t('filters')}
                 {activeFilters > 0 && (
-                  <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                  <span className="bg-primary-600 text-white text-2xs font-bold rounded-full px-1.5 py-0.5 leading-none">
                     {activeFilters}
                   </span>
                 )}
@@ -500,13 +500,13 @@ function SearchInner() {
             <p role="status" aria-live="polite" className="text-sm text-ink-500">
               {resultCount !== null ? t('countLine', { count: resultCount }) : ''}
             </p>
-            <label className="hidden md:inline-flex items-center gap-2 text-[13px] text-ink-500">
+            <label className="hidden md:inline-flex items-center gap-2 text-sm text-ink-500">
               {t('sortBy')}
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortOption)}
                 aria-label={t('sortBy')}
-                className="bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-700 cursor-pointer"
+                className="bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-700 cursor-pointer"
               >
                 {SORT_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>{t(`sort.${opt}`)}</option>
@@ -524,7 +524,7 @@ function SearchInner() {
                   type="button"
                   onClick={c.clear}
                   aria-label={t('removeFilter', { label: c.label })}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 pl-3 pr-2 py-1 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 pl-3 pr-2 py-1 text-sm font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
                 >
                   {c.label}
                   <X size={14} strokeWidth={2.4} className="text-primary-700" aria-hidden />
@@ -533,7 +533,7 @@ function SearchInner() {
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex items-center gap-1 px-2 py-1 text-[13px] font-semibold text-ink-500 hover:text-primary-700 transition-colors"
+                className="inline-flex items-center gap-1 px-2 py-1 text-sm font-semibold text-ink-500 hover:text-primary-700 transition-colors"
               >
                 <RotateCcw size={13} aria-hidden /> {t('clearAll')}
               </button>
@@ -548,7 +548,7 @@ function SearchInner() {
               ref={sortTriggerRef}
               onClick={() => setSortOpen(true)}
               aria-label={t('sortBy')}
-              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm hover:bg-cream-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm-neutral hover:bg-cream-50 transition-colors"
             >
               <ArrowDownWideNarrow size={15} strokeWidth={2.2} className="text-ink-500" />
               <span>{t('sortShort')}</span>
@@ -557,7 +557,7 @@ function SearchInner() {
               ref={filterTriggerRef}
               onClick={() => setFiltersOpen(true)}
               aria-label={t('filters')}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm-neutral transition-colors ${
                 activeFilters > 0
                   ? 'bg-primary-700 text-white hover:bg-primary-800'
                   : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
@@ -566,7 +566,7 @@ function SearchInner() {
               <Filter size={15} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
               <span>{t('filters')}</span>
               {activeFilters > 0 && (
-                <span className="bg-white text-primary-700 text-[10px] font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
+                <span className="bg-white text-primary-700 text-2xs font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
                   {activeFilters}
                 </span>
               )}
@@ -596,13 +596,13 @@ function SearchInner() {
             <div className="mt-6 space-y-6">
               {didYouMean.length > 0 && (
                 <div className="text-center">
-                  <p className="mb-2 text-[13px] text-ink-500">{t('didYouMean')}</p>
+                  <p className="mb-2 text-sm text-ink-500">{t('didYouMean')}</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {didYouMean.map((c) => (
                       <Link
                         key={c.id}
                         href={`/category/${c.slug}`}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-sm font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
                       >
                         {c.icon
                           ? <span aria-hidden>{c.icon}</span>

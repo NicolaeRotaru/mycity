@@ -64,6 +64,8 @@ import { creaFrenoDoppioTocco } from '@/lib/ui/freno-doppio-tocco';
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
 const ALLERGEN_ACCORDION_KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'];
+// R24-003 — Una recensione di questo cliente su questo prodotto c'è già.
+const GIA_RECENSITO = 'Hai già recensito questo prodotto: resta pubblicata la recensione di prima.';
 
 /**
  * 30/8/2026 (R068) — La forma della scheda e la domanda che la legge stanno in
@@ -117,9 +119,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const cuorePremibile = siPuoPremere(statoCuore);
 
   // Form recensione
-  const [reviewRating, setReviewRating] = useState(5);
+  // R24-003 — Le stelle partono vuote: con 5 già scelte, chi non le toccava lasciava cinque stelle
+  // senza averle scelte. «Pubblica» resta spento finché non si vota, e dopo l'invio si torna a zero.
+  const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
+  // R24-003 — Il freno al doppio invio, come in app/orders/[id]/review/page.tsx (R24-012):
+  // `isPending` diventa vero solo al disegno dopo, e due invii nello stesso istante facevano due
+  // scritture; la seconda urtava il vincolo e chi recensiva per la prima volta leggeva «Hai già
+  // recensito». Si riapre solo se l'invio non riesce; dopo il successo resta chiuso e lo dice.
+  const invioRecensione = useRef<'libero' | 'in_volo' | 'fatto'>('libero');
 
   // Ordinamento + filtro "Con foto" delle recensioni (client-side, sui dati già caricati).
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
@@ -267,7 +276,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       void trackReviewSubmitted(id, reviewRating, reviewPhotos.length > 0);
       qc.invalidateQueries({ queryKey: queryKeys.reviews.detail(id) });
       setReviewComment('');
-      setReviewRating(5);
+      setReviewRating(0);
       setReviewPhotos([]);
       toast.success(
         // 5/11/2026 — I punti sono spenti al lancio: si promettono solo se l'interruttore è acceso.
@@ -277,7 +286,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       );
     },
     onError: (err: unknown) => {
-      if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
+      if (err instanceof Error && err.message === 'REDIRECT') return;
+      // R24-003 — La seconda recensione urta il vincolo (product_id, user_id): si dice cosa è
+      // successo, invece di «Questo valore è già stato usato».
+      if ((err as { code?: string } | null)?.code === '23505') {
+        toast.error(GIA_RECENSITO);
+        return;
+      }
+      toast.error(friendlyError(err));
     },
   });
 
@@ -499,7 +515,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const optionGroups = hasVariants ? deriveOptionGroups(variants) : [];
   const allOptionsChosen = optionGroups.length > 0 && optionGroups.every((g) => selectedOptions[g.name]);
   const selectedVariant = allOptionsChosen ? findVariant(variants, selectedOptions) : null;
-  const needsVariantChoice = hasVariants && !selectedVariant;
+  // R24-018 — Tutte le opzioni scelte ma nessuna variante con quella coppia (il negozio non l'ha
+  // creata): non è «scegli le opzioni», è una combinazione che non c'è, e la scheda lo dice.
+  const combinazioneMancante = allOptionsChosen && !selectedVariant;
+  const needsVariantChoice = hasVariants && !selectedVariant && !combinazioneMancante;
+  const COMBINAZIONE_CHE_NON_CE = 'Questa combinazione non c\'è: prova un\'altra opzione.';
 
   const stock: number | undefined = hasVariants
     ? (selectedVariant ? selectedVariant.stock : undefined)
@@ -519,7 +539,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const tutteLeVariantiEsaurite =
     hasVariants && variants.length > 0 && variants.every((v) => v.stock === 0);
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
-  const canAdd = !isOutOfStock && !needsVariantChoice && mayPurchase;
+  const canAdd = !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
 
   // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
   // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
@@ -567,6 +587,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
       return;
     }
+    if (combinazioneMancante) {
+      toast.error(COMBINAZIONE_CHE_NON_CE);
+      return;
+    }
     // R02-008 — Il pulsante resta raggiungibile da tastiera anche quando non si può comprare
     // (aria-disabled): premuto, dice perché invece di aggiungere.
     if (isOutOfStock) {
@@ -602,6 +626,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     }
     if (needsVariantChoice) {
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
+      return;
+    }
+    if (combinazioneMancante) {
+      toast.error(COMBINAZIONE_CHE_NON_CE);
       return;
     }
     // R02-008 (dopo il collaudo) — Anche «Compra ora» resta nel giro del Tab quando non si può
@@ -999,6 +1027,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       // di sceglierlo, anche a chi usa il lettore di schermo.
                       const conQuestoValore = variants.filter((v) => v.options?.[g.name] === val);
                       const esaurito = conQuestoValore.length > 0 && conQuestoValore.every((v) => v.stock === 0);
+                      // R24-018 — Con le altre scelte già fatte, questo valore ha una variante? Se no
+                      // si spegne (barrato, e lo sente anche il lettore di schermo) prima di sceglierlo.
+                      const altreScelte = Object.entries(selectedOptions).filter(([k, s]) => k !== g.name && s);
+                      const senzaVariante = altreScelte.length > 0 && !conQuestoValore.some(
+                        (v) => altreScelte.every(([k, s]) => v.options?.[k] === s),
+                      );
                       return (
                         <button
                           key={val}
@@ -1009,10 +1043,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                           className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
                             active
                               ? 'border-primary-600 bg-primary-50 text-primary-800'
-                              : 'border-surface-300 bg-white text-ink-700 hover:border-primary-300'
+                              : senzaVariante
+                                ? 'border-dashed border-surface-300 bg-white text-ink-500 line-through hover:border-primary-300'
+                                : 'border-surface-300 bg-white text-ink-700 hover:border-primary-300'
                           }`}
                         >
                           {val}
+                          {senzaVariante && (
+                            <span className="sr-only">, non disponibile con {altreScelte.map(([, s]) => s).join(' e ')}</span>
+                          )}
                         </button>
                       );
                     })}
@@ -1027,6 +1066,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <p className="text-xs text-ink-500">
                   Scegli {optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} per vedere la disponibilità.
                 </p>
+              ) : combinazioneMancante ? (
+                <p className="text-xs font-semibold text-secondary-700">{COMBINAZIONE_CHE_NON_CE}</p>
               ) : selectedVariant && selectedVariant.stock === 0 ? (
                 <p className="text-xs font-semibold text-secondary-700">Variante esaurita — prova un&apos;altra combinazione.</p>
               ) : selectedVariant && selectedVariant.stock <= LOW_STOCK_THRESHOLD ? (
@@ -1132,6 +1173,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <span className="text-ink-600 font-semibold">
                   Scegli le opzioni per vedere la disponibilità
                 </span>
+              ) : combinazioneMancante ? (
+                <span className="text-secondary-700 font-bold">Combinazione non disponibile</span>
               ) : isLowStock ? (
                 <span className="text-secondary-700 font-bold inline-flex items-center gap-1"><Flame size={13} strokeWidth={2.4} aria-hidden /> {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}</span>
               ) : (
@@ -1185,7 +1228,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               className="aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:shadow-none aria-disabled:cursor-not-allowed aria-disabled:hover:bg-cream-200 aria-disabled:hover:shadow-none"
               icon={canAdd ? ShoppingCart : undefined}
             >
-              {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
+              {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock || combinazioneMancante ? 'Non disponibile' : 'Aggiungi al carrello'}
             </Button>
 
             <button
@@ -1312,7 +1355,19 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <p className="text-sm text-ink-600">Puoi recensire questo prodotto dopo averlo ricevuto.</p>
           ) : (
             <form
-              onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (reviewRating < 1 || invioRecensione.current === 'in_volo') return;
+                if (invioRecensione.current === 'fatto') {
+                  toast.error(GIA_RECENSITO);
+                  return;
+                }
+                invioRecensione.current = 'in_volo';
+                submitReview.mutate(undefined, {
+                  onSuccess: () => { invioRecensione.current = 'fatto'; },
+                  onError: () => { invioRecensione.current = 'libero'; },
+                });
+              }}
               className="space-y-3"
             >
               {/* #142 — Le stelle erano cinque pulsanti senza stato: si sentiva
@@ -1352,7 +1407,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   onUploaded={setReviewPhotos}
                 />
               )}
-              <Button type="submit" loading={submitReview.isPending} size="sm">Pubblica recensione</Button>
+              {reviewRating < 1 && <p className="text-xs text-ink-500">Tocca le stelle per votare.</p>}
+              <Button type="submit" loading={submitReview.isPending} disabled={reviewRating < 1} size="sm">Pubblica recensione</Button>
             </form>
           )}
         </div>
@@ -1441,7 +1497,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     <RatingStars rating={Number(r.rating)} size={16} />
                     {/* Verified Purchase badge — Trust & Safety insight */}
                     {r.verified_purchase && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-2xs font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">
                         <Check size={11} strokeWidth={3} aria-hidden /> Acquisto verificato
                       </span>
                     )}

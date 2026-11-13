@@ -494,7 +494,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="font-serif text-[26px] font-bold text-ink-900">{heroTitle}</h1>
+              <h1 className="font-serif text-2xl font-bold text-ink-900">{heroTitle}</h1>
               <OrderStatusBadge status={status} size="sm" />
             </div>
             <p className="mt-1 text-sm text-ink-600">
@@ -682,10 +682,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                     </div>
                     {/* Testo: stato veicolato anche a parole (non solo via colore) */}
                     <div className="pb-5">
-                      <p className={`text-[15px] ${active ? 'font-bold' : 'font-semibold'} ${past || active ? 'text-ink-900' : 'text-ink-400'}`}>
+                      <p className={`text-base ${active ? 'font-bold' : 'font-semibold'} ${past || active ? 'text-ink-900' : 'text-ink-400'}`}>
                         {ORDER_STATUS_LABEL[step]}
                       </p>
-                      <p className="mt-0.5 text-[13px] text-ink-500">
+                      <p className="mt-0.5 text-sm text-ink-500">
                         {active ? (HERO_SUBTITLE[status] ?? 'In corso') : past ? 'Completato' : 'In attesa'}
                         {/* 12/11/2026 (R09-014) — L'ora di Piacenza, non quella del telefono: col fuso UTC le tappe uscivano un'ora indietro. */}
                         {ts && ` · ${new Date(ts).toLocaleString('it-IT', ORA_DELLA_TAPPA)}`}
@@ -781,11 +781,11 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                       ) : <Package size={18} className="text-ink-400" aria-hidden />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 break-words text-[13px] font-semibold text-ink-900">{nomeDellaRigaOrdine(it)}</p>
+                      <p className="line-clamp-2 break-words text-sm font-semibold text-ink-900">{nomeDellaRigaOrdine(it)}</p>
                       {it.variant_label && <p className="text-xs text-ink-600">{it.variant_label}</p>}
                       <p className="text-xs text-ink-500">× {it.quantity}</p>
                     </div>
-                    <span className="text-[13px] font-bold text-ink-900">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
+                    <span className="text-sm font-bold text-ink-900">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
                   </div>
                 );
               })}
@@ -804,7 +804,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                   contraddice da sola, sotto gli occhi di chi ha appena pagato, è peggio di una
                   tabella incompleta. */}
               {!riepilogo.torna && (
-                <p className="border-t border-cream-200 pt-1 text-[12px] text-ink-500">
+                <p className="border-t border-cream-200 pt-1 text-xs text-ink-500">
                   Le voci qui sopra non fanno esattamente il totale
                   ({formatPrice(Math.abs(riepilogo.differenzaCentesimi) / 100)} di differenza).
                   Il totale è quello scritto sull&apos;ordine, ed è la cifra che vale.
@@ -817,20 +817,20 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 l'ordine (annullato o consegnato: niente «Paghi») — e se non si sa, non dice
                 niente. La regola sta in statoPagamento. */}
             {pagamento.tipo === 'contanti-da-pagare' && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-sm font-medium text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
                 Paghi {formatPrice(pagamento.centesimi / 100)} in contanti al rider alla consegna.
               </div>
             )}
             {pagamento.tipo === 'gia-pagato-con-carta' && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-sm font-medium text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
                 Già pagato con carta · {formatPrice(pagamento.centesimi / 100)}
                 {pagamento.rimborsatoCentesimi ? ` · ${formatPrice(pagamento.rimborsatoCentesimi / 100)} già tornati sulla carta` : ''}. Al rider non devi niente.
               </div>
             )}
             {pagamento.tipo === 'rimborsato' && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-sm font-medium text-ink-700">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
                 Ordine rimborsato.
               </div>
@@ -839,7 +839,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 rimborsato», niente «arrivato». La cifra è quella dei segni sull'ordine, cioè la
                 sola parte in contanti. */}
             {pagamento.tipo === 'bonifico-a-mano' && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-sm font-medium text-ink-700">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
                 <span>
                   {fraseDelBonificoAMano(pagamento.centesimi, (c) => formatPrice(c / 100))}{' '}
@@ -864,7 +864,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 <p className="text-xs text-ink-500">Venditore</p>
               </div>
             </div>
-            <div className="mt-2.5 flex items-start gap-2 text-[13px] text-ink-600">
+            <div className="mt-2.5 flex items-start gap-2 text-sm text-ink-600">
               <MapPin size={15} strokeWidth={2.2} className="mt-0.5 shrink-0 text-primary-600" aria-hidden />
               <span>
                 {order.delivery_full_name && <span className="font-medium text-ink-800">{order.delivery_full_name}<br /></span>}
@@ -873,7 +873,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               </span>
             </div>
             {fasciaLeggibile(order) && (
-              <p className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-800">
+              <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-ink-800">
                 <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fasciaLeggibile(order)}
               </p>
             )}
