@@ -330,28 +330,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // premuto il pulsante legge che le consegne non sono state contate.
   let consegneInCorso = 0;
   let consegneNonContate = false;
-  // 13/11/2026 (R18-025) — Le consegne non ancora ritirate tornano in bacheca. Prima restavano
-  // al sospeso, che poteva ancora ritirarle. Da sospeso non ne prende di nuove (prendi_ordine
-  // guarda l'approvazione), quindi dopo questo passo gli restano solo quelle con la merce in
-  // mano (PICKED_UP, OUT_FOR_DELIVERY): il conteggio qui sotto le conta e l'avviso le nomina.
-  // Se il passo cade, le ASSIGNED restano sue e il conteggio le comprende.
-  let rimesseInBacheca: number | null = null;
   if (body.action === 'suspend' && target.role === 'rider') {
-    try {
-      const { data: rimessi, error: eBacheca } = await admin
-        .from('orders')
-        .update({ rider_id: null, delivery_status: 'READY', rider_lat: null, rider_lng: null, rider_position_updated_at: null })
-        .eq('rider_id', params.id)
-        .eq('delivery_status', 'ASSIGNED')
-        .select('id');
-      if (eBacheca) {
-        logger.error('[moderate] consegne assegnate non rimesse in bacheca', { target: params.id, err: eBacheca.message });
-      } else {
-        rimesseInBacheca = Array.isArray(rimessi) ? rimessi.length : 0;
-      }
-    } catch (e) {
-      logger.error('[moderate] consegne assegnate non rimesse in bacheca', { target: params.id, err: e instanceof Error ? e.message : String(e) });
-    }
     try {
       const { count, error: eConta } = await admin
         .from('orders')
@@ -376,9 +355,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     emailInviata === false ? 'l\'email all\'utente non e\' partita' : null,
     consegneInCorso > 0 ? `il fattorino ha ancora ${consegneInCorso} consegne in corso: riassegnale dalla pagina Ordini` : null,
     consegneNonContate ? 'non ho potuto contare le consegne in corso del fattorino: controllale nella pagina Ordini e riassegnale' : null,
-    body.action === 'suspend' && target.role === 'rider' && rimesseInBacheca === null
-      ? 'non ho potuto rimettere in bacheca le consegne non ancora ritirate: riassegnale dalla pagina Ordini'
-      : null,
   ].filter(Boolean);
   return NextResponse.json(
     {
@@ -386,7 +362,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       notifica_inviata: !notErr,
       email_inviata: emailInviata,
       consegne_in_corso: consegneNonContate ? null : consegneInCorso,
-      ...(body.action === 'suspend' && target.role === 'rider' ? { rimesse_in_bacheca: rimesseInBacheca } : {}),
       ...(avvisi.length > 0 ? { avviso: `Stato aggiornato, ma ${avvisi.join('; ')}.` } : {}),
     },
     { status: 200 },

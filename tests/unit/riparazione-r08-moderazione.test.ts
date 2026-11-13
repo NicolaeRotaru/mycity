@@ -70,11 +70,6 @@ vi.mock('@/lib/supabase/server', () => ({
       if (t === 'orders') {
         const b: Record<string, unknown> = {};
         Object.assign(b, {
-          // R18-025: la sospensione rimette in bacheca le consegne ASSIGNED (qui nessuna).
-          update: () => {
-            const u: Record<string, unknown> = { eq: () => u, select: async () => ({ data: [], error: null }) };
-            return u;
-          },
           select: () => b,
           eq: () => b,
           in: async () => {
