@@ -104,13 +104,11 @@ describe('chi aspetta l approvazione non gira in tondo', () => {
     expect(new URL(res.headers.get('location')!).pathname).toBe('/');
   });
 
-  // R19-001 — Era «non entra» (decisione 1 del 26/10): chi si iscriveva come
-  // fattorino non arrivava mai al modulo dei documenti. Ora ci arriva.
-  it('un fattorino non approvato entra nel modulo dei documenti', async () => {
+  it('un fattorino non approvato non entra: il reclutamento dal sito e chiuso (decisione 1 del 26/10)', async () => {
     conProfilo('rider', false);
     const res = await middleware(richiesta('/rider/onboarding', SESSIONE_VALIDA()));
-    expect(res.headers.get('location'), 'il fattorino in attesa viene rimandato fuori dal modulo').toBe(null);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/');
   });
 
   it('un amministratore promosso dal pannello entra nel pannello', async () => {
