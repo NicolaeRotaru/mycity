@@ -31,6 +31,15 @@ describe('la password debole si spiega in italiano', () => {
     expect(qui).toBe(traduciErroreNuovaPassword({ message: PWNED, code: 'weak_password', reasons: ['pwned'] }));
   });
 
+  it('la sola lunghezza si dice come su /reset-password, con lo stesso N (R24-008)', () => {
+    for (const n of [8, 12]) {
+      const testo = `Password should be at least ${n} characters.`;
+      const qui = traduciErroreAuth(testo);
+      expect(qui).toBe(`La password è troppo corta: usane una di almeno ${n} caratteri.`);
+      expect(qui).toBe(traduciErroreNuovaPassword({ message: testo, code: 'weak_password', reasons: ['length'] }));
+    }
+  });
+
   it('friendlyError col codice weak_password non lascia passare l’inglese', () => {
     const msg = friendlyError({ code: 'weak_password', status: 422, message: PWNED });
     expect(msg).not.toMatch(/weak|guess/i);

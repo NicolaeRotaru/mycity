@@ -110,7 +110,8 @@ export function traduciErroreAuth(msg: string): string | null {
     return PASSWORD_RUBATA;
   if (m.includes('password should be at least')) {
     const n = m.match(/at least (\d+)/)?.[1];
-    return n ? `La password deve essere di almeno ${n} caratteri` : 'La password è troppo corta';
+    // Stessa frase di /reset-password (R24-008), con lo stesso N.
+    return n ? `La password è troppo corta: usane una di almeno ${n} caratteri.` : 'La password è troppo corta';
   }
   if (m.includes('unable to validate email address') || m.includes('invalid email'))
     return 'Questa email non sembra valida. Controlla come l’hai scritta.';
