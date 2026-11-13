@@ -180,6 +180,32 @@ function segnalaRipiego(motivo: string): null {
   return null;
 }
 
+/**
+ * R23-017 (13/11/2026) — SENZA IL CONTATORE CONDIVISO, IN PRODUZIONE, IL FRENO LO DICE.
+ *
+ * Il ripiego qui sopra parla quando Upstash non risponde. Ma quando Upstash non e' proprio
+ * configurato (manca URL, token o tutti e due) il freno passava al contatore in memoria senza
+ * una riga: su Vercel vuol dire un contatore per ogni copia accesa, e «dieci tentativi di
+ * accesso al minuto» diventano dieci per copia. Chi prova mille password non se ne accorge
+ * nemmeno; noi non lo sapevamo.
+ *
+ * In produzione si scrive una volta per copia (non a ogni richiesta: i registri servono
+ * leggibili). Fuori dalla produzione il contatore in memoria e' quello giusto e si tace. La
+ * cura vera sono le due variabili su Vercel; /api/health le elenca gia' fra le importanti.
+ */
+let senzaContatoreDetto = false;
+
+function frenoSenzaContatoreCondiviso(): void {
+  if (senzaContatoreDetto || process.env.NODE_ENV !== 'production') return;
+  senzaContatoreDetto = true;
+  logger.error('[freno] manca il contatore condiviso: ogni copia del sito conta per conto suo, il limite reale e piu largo di quello scritto', {
+    // Solo se ci sono, mai i valori.
+    url: !!UPSTASH_URL,
+    token: !!UPSTASH_TOKEN,
+    variabili: 'UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN',
+  });
+}
+
 async function upstashIncr(key: string, ttlSec: number): Promise<number | null> {
   if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
   try {
@@ -229,6 +255,8 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
     }
     // Fallback se Upstash unreachable: usa in-memory locale invece di
     // fail-open (mai lasciare il marketplace senza rate limit).
+  } else {
+    frenoSenzaContatoreCondiviso();
   }
 
   return rateLimit(opts);
