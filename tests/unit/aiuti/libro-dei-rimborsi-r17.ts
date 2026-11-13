@@ -25,7 +25,8 @@ export type PrenotazioneDelLibro = { order_id: string; chiave: string; centesimi
 
 export interface Libro {
   db: FintoDatabase;
-  prenotazioni: PrenotazioneDelLibro[];
+  /** Le righe di `prenotazioni_dei_rimborsi`: la tabella del database finto, che si può anche leggere e cancellare. */
+  readonly prenotazioni: PrenotazioneDelLibro[];
   /** Il database non ha ancora la 412. */
   senza412: boolean;
   client: FintoDatabase['client'] & {
@@ -37,7 +38,9 @@ export function creaLibro(tabelle: Record<string, Riga[]>): Libro {
   const db = fintoDatabase(tabelle);
   const libro: Libro = {
     db,
-    prenotazioni: [],
+    get prenotazioni() {
+      return (db.tabelle.prenotazioni_dei_rimborsi ??= []) as unknown as PrenotazioneDelLibro[];
+    },
     senza412: false,
     client: {
       ...db.client,

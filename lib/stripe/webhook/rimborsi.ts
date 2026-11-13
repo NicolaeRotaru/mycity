@@ -358,6 +358,29 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
  * liquidato. E' l'innesco tipico di una contestazione che poi si perde,
  * perche' le nostre prove dicono il contrario di quello che e' successo.
  */
+/**
+ * 13/11/2026 (R17-014) — IL RIMBORSO RESPINTO LIBERA LA SUA PRENOTAZIONE NEL LIBRO.
+ *
+ * Dalla migrazione 412 `refundOrder` prenota il rimborso con la chiave che va a Stripe
+ * (`metadata.chiave_rimborso`), e la stessa chiave non si somma due volte. Qui l'importo respinto si
+ * toglie dall'ordine con la scrittura del segno «respinto», ma la prenotazione della chiave restava:
+ * rifatto con la stessa chiave (lo stesso reso rimborsato di nuovo dopo il rifiuto della banca), il
+ * rimborso nuovo usciva senza contarsi, e il libro diceva 0 € su 20 usciti. Si toglie la riga, non
+ * l'importo (già tolto qui sopra). Un database senza la 412 non ha la tabella: niente da togliere.
+ * Un'altra caduta lancia: Stripe riprova l'avviso, e il segno già scritto non fa rifare il resto.
+ */
+async function liberaLaPrenotazioneNelLibro(admin: ReturnType<typeof getAdminSupabase>, refund: Stripe.Refund): Promise<void> {
+  const m = (refund.metadata ?? {}) as Record<string, string>;
+  const ordine = (m.order_id ?? '').trim();
+  const chiave = (m.chiave_rimborso ?? '').trim();
+  if (!ordine || !chiave) return;
+  const { error } = await admin.from('prenotazioni_dei_rimborsi').delete().eq('order_id', ordine).eq('chiave', chiave);
+  if (!error) return;
+  const codice = (error as { code?: string }).code;
+  if (codice === 'PGRST205' || codice === '42P01') return;
+  throw new Error(`[stripe] prenotazione del rimborso respinto non tolta dal libro: ${error.message}`);
+}
+
 export async function handleRefundUpdated(refund: Stripe.Refund) {
   if (refund.status !== 'failed' && refund.status !== 'canceled') return;
 
@@ -476,6 +499,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     // rimborsare il cliente due volte a mano).
     logger.info('[stripe] rimborso respinto già registrato: niente da rifare', { refundId: refund.id, ordini: piano.giaFatti });
     if (refund.id) await avvisaGliAmministratori();
+    await liberaLaPrenotazioneNelLibro(admin, refund);
     return;
   }
 
@@ -518,4 +542,5 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   }
 
   await avvisaGliAmministratori();
+  await liberaLaPrenotazioneNelLibro(admin, refund);
 }
