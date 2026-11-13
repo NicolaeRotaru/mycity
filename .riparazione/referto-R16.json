@@ -1,6 +1,6 @@
 {
   "sessione": "R16",
-  "aggiornato": "2026-11-13 06:20",
+  "aggiornato": "2026-11-13 06:50",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -251,7 +251,7 @@
         "tests/unit/riparazione-r16-storie-testi.test.tsx"
       ],
       "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-storie-testi.test.tsx",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -260,6 +260,130 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "«Caption (1 frase)» diventa «Scritta sotto la foto (una frase)»; il link diventa «Pagina del sito (facoltativo)» con una spiegazione e l'esempio /promozioni, che la regola della 011 accetta. La prova controlla che «Caption» non ci sia e che l'esempio passi safeInternalPath.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-004",
+      "chiave": "frontend-ux|il salvataggio fa due passi: se una variante è cambiata, nome e prezzo del prodotto restano salvati e le varianti no",
+      "esito": "riparato",
+      "commit": "66e466b9320b31e283653addaafd1e0825901da5",
+      "file_toccati": [
+        "app/seller/products/[id]/edit/page.tsx",
+        "app/api/admin/products/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-salvataggio-tutto-o-niente.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-salvataggio-tutto-o-niente.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 66e466b9^ --file app/seller/products/[id]/edit/page.tsx,app/api/admin/products/route.ts --prove tests/unit/riparazione-r16-salvataggio-tutto-o-niente.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Pagina del negozio: se le varianti cadono dopo che il prodotto è scritto, rimette i valori letti all'apertura passando dalla stessa porta (la scorta torna indietro solo se nel database c'è ancora quella appena scritta; se anche il ripristino cade, il messaggio lo dice). Rotta admin: prima controlla le scorte delle taglie, legge com'era il prodotto e lo rimette così se le varianti cadono. È un ripristino, non una transazione unica; nessun calcolo di prezzo cambiato.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-005",
+      "chiave": "frontend-ux|«seminuovo», «come nuovo» e «non nuovo», letti dalla foto o dall assistente, entrano come «nuovo»: un oggetto usato può arrivare in vetrina come nuovo",
+      "esito": "riparato",
+      "commit": "c4015952e1fa945f300e153794286e873deedd7c",
+      "file_toccati": [
+        "lib/products/schema.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-condizione-usata.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-condizione-usata.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c4015952^ --file lib/products/schema.ts --prove tests/unit/riparazione-r16-condizione-usata.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "normalizeCondition riconosce come usato le frasi che somigliano al nuovo (pari al, praticamente, tipo, sembra, da nuovo, non è nuovo, like/as/nearly new) e l'uso negato che dice quanto è stato usato (molto, da anni, non più). «Nuovo», «nuova», «Nuovo con etichetta» e «Nuovo, mai usato» restano nuovo. Verdi le 44 prove che importano lo schema.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-020",
+      "chiave": "stati-ui|se la lettura del prodotto non riesce, la pagina di modifica dice «prodotto non trovato» e non offre «riprova»",
+      "esito": "riparato",
+      "commit": "d368bfe2b7a1a0fce5ee6e6bc49acd6217da9ee4",
+      "file_toccati": [
+        "app/seller/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d368bfe2^ --file app/seller/products/[id]/edit/page.tsx --prove tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Solo PGRST116 (nessuna riga) vale «Prodotto non trovato». Ogni altro errore di lettura mostra «Non riesco a leggere il prodotto: controlla la connessione e riprova» con «Riprova», che rilegge prodotto e varianti. «Non autenticato» e «prodotto non tuo» restano come prima.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-021",
+      "chiave": "stati-ui|se le categorie non arrivano, il modulo «nuovo prodotto» mostra un elenco vuoto e poi chiede di scegliere una categoria che non c'è",
+      "esito": "riparato",
+      "commit": "0834f8e1e16c1ede8420fb497cadb07d2d68c640",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0834f8e1^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge isError, isLoading e refetch delle categorie: mentre carica mostra il caricamento; se la lettura fallisce e l'elenco è vuoto, al posto del modulo compare l'avviso «Non riesco a leggere le categorie» con «Riprova», come nella pagina di modifica.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R16-003",
+      "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
+      "esito": "parziale",
+      "commit": "30486fd5cee15b7f927254ae857ea4543a9a4160",
+      "file_toccati": [
+        "scripts/check-migration-drift.mjs",
+        "scripts/applica-migrazioni-mancanti.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-deriva-contenuto.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-deriva-contenuto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 30486fd5^ --file scripts/check-migration-drift.mjs,scripts/applica-migrazioni-mancanti.sh --prove tests/unit/riparazione-r16-deriva-contenuto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Lo script del rilascio scrive nel registro (colonna statements) il commento SQL «-- md5:<impronta>» del file; esitoDelConfronto (funzione pura esportata) lo confronta con l'impronta del file di oggi: diverse = deriva, e il verdetto dice per quante migrazioni il confronto c'è davvero. Il commento in testa ora dice il vero. Provato con la funzione pura e con lo script su un Postgres locale usa e getta, mai sul database vero.",
+      "cosa_resta": "Applicazione e registrazione stanno ancora in due psql separati: unirle rompe la prova comune tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts (il suo psql finto esce appena vede -f). Le due modifiche vanno fatte insieme, dalla regista: (1) in scripts/applica-migrazioni-mancanti.sh i due psql dopo `impronta=...` diventano uno: psql \"$DB\" -q -v ON_ERROR_STOP=1 --single-transaction -f \"$f\" -c \"INSERT INTO supabase_migrations.schema_migrations (version, name, statements) VALUES ('$versione', '$descrizione', ARRAY['-- md5:$impronta']) ON CONFLICT (version) DO NOTHING\"; (2) nella prova comune la riga del psql finto `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; exit 0; fi` diventa `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; case \"$query\" in *INSERT*) echo \"REGISTRATO\" >> \"$REGISTRO_PSQL\" ;; esac; exit 0; fi`.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts",
+          "modifica": "Nel psql finto, la riga `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; exit 0; fi` diventa `if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; case \"$query\" in *INSERT*) echo \"REGISTRATO\" >> \"$REGISTRO_PSQL\" ;; esac; exit 0; fi`, insieme alla modifica (1) dello script descritta in cosa_resta."
+        }
+      ],
       "verificato_da": ""
     }
   ],
@@ -273,7 +397,7 @@
     },
     {
       "riservato": true,
-      "titolo": "Falla di sicurezza da chiudere (storie dei negozi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "rls-database",
       "severita": "minore",
       "file": "(nel referto privato)"
@@ -288,10 +412,11 @@
   ],
   "domande_per_nicola": [
     "R16-010: profiles.address, city e zip restano nel database ma nessuna pagina li legge o li corregge più. Si cancellano (minimizzazione dei dati) o si rimettono nel Profilo, annullando la scelta della scheda 178?",
-    "R16-015: con la consegna non letta il riepilogo ora dice «le voci non fanno il totale (X di differenza)» invece di mostrare una riga «Consegna MyCity» ricavata. Va bene così, o preferisci una riga «stimata»? Servirebbe toccare le due pagine dell ordine, che non sono di R16."
+    "R16-015: con la consegna non letta il riepilogo ora dice «le voci non fanno il totale (X di differenza)» invece di mostrare una riga «Consegna MyCity» ricavata. Va bene così, o preferisci una riga «stimata»? Servirebbe toccare le due pagine dell ordine, che non sono di R16.",
+    "R16-003: va bene che lo script del rilascio scriva per ogni migrazione nuova il commento '-- md5:<impronta>' nella colonna statements di supabase_migrations.schema_migrations? È un commento SQL (rieseguito non fa niente); le righe vecchie restano senza impronta e si confrontano solo per numero e nome. È la modifica al registro che il 5/11 era stata rimandata come «da firmare»."
   ],
   "conto": {
-    "agenti": 2,
+    "agenti": 3,
     "nota": ""
   }
 }
