@@ -181,9 +181,19 @@ export default function SellerStoriesPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  /**
+   * 13/11/2026 (R16-013) — Attiva o scaduta si decide con la stessa regola dei clienti: la storia
+   * si vede finché `expires_at` è dopo adesso (il carosello in home e la regola di lettura del
+   * database). Prima lo diceva un numero di ore arrotondato: sotto la mezz'ora faceva 0, e il negozio
+   * leggeva «scaduta» una storia che i clienti vedevano ancora. Le ore rimaste si arrotondano per
+   * eccesso: «1h» vuol dire «entro un'ora».
+   */
+  function storiaAttiva(expiresAt: string): boolean {
+    return new Date(expiresAt).getTime() > Date.now();
+  }
   function hoursLeft(expiresAt: string): number {
     const ms = new Date(expiresAt).getTime() - Date.now();
-    return Math.max(0, Math.round(ms / 3600_000));
+    return Math.max(0, Math.ceil(ms / 3600_000));
   }
 
   const vista = vistaDaQuery(queryStories);
@@ -220,7 +230,7 @@ export default function SellerStoriesPage() {
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {stories.map((s) => {
             const hours = hoursLeft(s.expires_at);
-            const active = hours > 0;
+            const active = storiaAttiva(s.expires_at);
             return (
               <li key={s.id} className="relative bg-white border border-cream-300 rounded-xl overflow-hidden">
                 <div className="relative aspect-[3/4]">
