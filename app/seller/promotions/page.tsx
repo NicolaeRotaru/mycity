@@ -17,6 +17,7 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { statoDellaPromo } from './stato-promo';
+import { FUSO_PIACENZA, giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 
 type Promo = {
   id: string;
@@ -39,9 +40,15 @@ const DURATIONS = [
 function endDateFor(duration: string): Date {
   const d = new Date();
   switch (duration) {
-    case 'today':
-      d.setHours(23, 59, 59, 999);
-      return d;
+    case 'today': {
+      // R18-011 — «fino a mezzanotte» è la mezzanotte di Piacenza, non quella del fuso del
+      // telefono: da New York la promo durava sei ore in più, da Tokyo finiva nel pomeriggio.
+      // L'ultimo istante del giorno di Piacenza = l'inizio del giorno dopo, meno un millesimo
+      // (anche nelle domeniche del cambio d'ora, che durano 23 o 25 ore).
+      const [a, m, g] = giornoPiacenza(d).split('-').map(Number);
+      const domani = new Date(Date.UTC(a, m - 1, g + 1)).toISOString().slice(0, 10);
+      return new Date(inizioGiornoPiacenza(domani).getTime() - 1);
+    }
     case '3d':
       d.setDate(d.getDate() + 3);
       return d;
@@ -210,7 +217,7 @@ export default function SellerPromotionsPage() {
                 <p className="font-serif font-bold text-lg text-ink-900 pr-12">{p.title}</p>
                 <p className="text-xs text-ink-600 mt-1 flex items-center gap-1">
                   <Calendar size={12} />
-                  Fino al {new Date(p.ends_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  Fino al {new Date(p.ends_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: FUSO_PIACENZA })}
                 </p>
                 <p className="text-xs text-ink-600 mt-0.5 flex items-center gap-1">
                   <Tag size={12} />
@@ -241,7 +248,7 @@ export default function SellerPromotionsPage() {
                   <p className="font-semibold text-ink-700">{p.title}</p>
                   {/* R18-004 — «Terminata <data>» solo per una promo scaduta davvero: una annullata
                       non ha mai raggiunto ends_at, e la sua data è ancora da venire. */}
-                  <p className="text-xs text-ink-400">-{p.discount_percent}%{statoDellaPromo(p) === 'Scaduta' ? ` · Terminata ${new Date(p.ends_at).toLocaleDateString('it-IT')}` : ''}</p>
+                  <p className="text-xs text-ink-400">-{p.discount_percent}%{statoDellaPromo(p) === 'Scaduta' ? ` · Terminata ${new Date(p.ends_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}` : ''}</p>
                 </div>
                 <span className="text-xs text-ink-400 uppercase tracking-wider">{statoDellaPromo(p)}</span>
               </div>
@@ -333,7 +340,7 @@ export default function SellerPromotionsPage() {
             {/* Preview */}
             <div className="bg-accent-50 border border-accent-200 rounded-lg p-3 text-sm text-ink-700">
               <p className="font-semibold">Anteprima:</p>
-              <p>«{title || `Sconto ${percent}%`}» — sconto del <strong>{percent}%</strong> su {scope === 'store' ? 'tutti i tuoi prodotti' : nomeCategoria ? `la categoria «${nomeCategoria}»` : 'la categoria che scegli qui sopra'} fino al {endDateFor(duration).toLocaleDateString('it-IT')}.</p>
+              <p>«{title || `Sconto ${percent}%`}» — sconto del <strong>{percent}%</strong> su {scope === 'store' ? 'tutti i tuoi prodotti' : nomeCategoria ? `la categoria «${nomeCategoria}»` : 'la categoria che scegli qui sopra'} fino al {endDateFor(duration).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}.</p>
             </div>
 
             <Button
