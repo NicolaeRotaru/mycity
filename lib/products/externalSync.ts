@@ -1,4 +1,6 @@
-import 'server-only';
+// R23-004 (13/11/2026) — Qui c'era `import 'server-only'`: la libreria non e' fra le dipendenze
+// del sito e l'import reggeva solo per una scorciatoia interna di Next (e nelle prove andava
+// finta a mano). Il modulo resta del server: lo usano due rotte API e un lavoro periodico.
 import type Anthropic from '@anthropic-ai/sdk';
 import { MODELS } from '@/lib/ai/client';
 import { runMessage } from '@/lib/ai/run';
