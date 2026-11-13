@@ -239,7 +239,9 @@ export default function SellerPromotionsPage() {
               <div key={p.id} className="flex items-center justify-between p-3 text-sm">
                 <div>
                   <p className="font-semibold text-ink-700">{p.title}</p>
-                  <p className="text-xs text-ink-400">-{p.discount_percent}% · Terminata {new Date(p.ends_at).toLocaleDateString('it-IT')}</p>
+                  {/* R18-004 — «Terminata <data>» solo per una promo scaduta davvero: una annullata
+                      non ha mai raggiunto ends_at, e la sua data è ancora da venire. */}
+                  <p className="text-xs text-ink-400">-{p.discount_percent}%{statoDellaPromo(p) === 'Scaduta' ? ` · Terminata ${new Date(p.ends_at).toLocaleDateString('it-IT')}` : ''}</p>
                 </div>
                 <span className="text-xs text-ink-400 uppercase tracking-wider">{statoDellaPromo(p)}</span>
               </div>
