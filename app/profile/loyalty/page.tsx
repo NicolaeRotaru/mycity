@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import {
   fetchLoyaltyAccount,
@@ -37,6 +38,9 @@ const REASON_LABEL: Record<string, string> = {
   redeem_credit:    'Convertiti in credito',
 };
 
+// I numeri dei punti si scrivono all'italiana, col punto delle migliaia (12.345), come i prezzi.
+const NUMERO_IT = new Intl.NumberFormat('it-IT');
+
 export default function LoyaltyPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
@@ -51,22 +55,23 @@ export default function LoyaltyPage() {
     });
   }, [router]);
 
-  const { data: account } = useQuery<LoyaltyAccount | null>({
+  const { data: account, isError: contoNonLetto, refetch: rileggiConto } = useQuery<LoyaltyAccount | null>({
     queryKey: queryKeys.loyalty.accountByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: () => fetchLoyaltyAccount(),
   });
 
-  const { data: txs = [] } = useQuery<Tx[]>({
+  const { data: txs = [], isError: movimentiNonLetti, refetch: rileggiMovimenti } = useQuery<Tx[]>({
     queryKey: queryKeys.loyalty.txsByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('loyalty_transactions')
         .select('id, delta, reason, created_at')
         .eq('user_id', userId!)
         .order('created_at', { ascending: false })
         .limit(20);
+      if (error) throw error;
       return (data ?? []) as Tx[];
     },
   });
@@ -106,6 +111,21 @@ export default function LoyaltyPage() {
 
   if (!userId) return <LoadingState />;
 
+  // Conto non letto (e niente di vecchio da mostrare): si dice, invece di scrivere «0 punti».
+  if (contoNonLetto && !account) {
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl">
+        <ErrorState
+          title="Non riusciamo a leggere i tuoi punti"
+          description="Non è colpa tua: i punti che hai restano tuoi. Riprova fra un momento."
+          retry={() => rileggiConto()}
+          backHref="/profile"
+          backLabel="Torna al profilo"
+        />
+      </div>
+    );
+  }
+
   const points = account?.points_balance ?? 0;
   const lifetime = account?.lifetime_earned ?? 0;
   const tier = account?.tier ?? 'bronze';
@@ -138,7 +158,7 @@ export default function LoyaltyPage() {
 
         <div className="relative">
           <div className="flex items-baseline gap-2">
-            <span className="text-6xl md:text-7xl font-serif font-extrabold">{points}</span>
+            <span className="text-6xl md:text-7xl font-serif font-extrabold">{NUMERO_IT.format(points)}</span>
             <span className="text-lg opacity-90">punti</span>
           </div>
           {/* 31/10/2026 — Con i punti spenti (migrazione 168) i punti non diventano sconto: niente cifra in euro. */}
@@ -157,8 +177,8 @@ export default function LoyaltyPage() {
             </div>
             {next.tier && (
               <div className="text-right">
-                <p className="text-xs opacity-80">Al {TIER_META[next.tier].label}</p>
-                <p className="text-sm font-bold">{next.remaining} punti</p>
+                <p className="text-xs opacity-80">{/^[AEIOU]/i.test(TIER_META[next.tier].label) ? "All'" : 'Al '}{TIER_META[next.tier].label}</p>
+                <p className="text-sm font-bold">{NUMERO_IT.format(next.remaining)} punti</p>
               </div>
             )}
           </div>
@@ -191,7 +211,7 @@ export default function LoyaltyPage() {
         </p>
         {convertiblePoints >= 100 ? (
           <Button onClick={() => convert.mutate(convertiblePoints)} loading={convert.isPending} icon={Wallet}>
-            Converti {convertiblePoints} punti in {formatPrice(convertibleEuro)}
+            Converti {NUMERO_IT.format(convertiblePoints)} punti in {formatPrice(convertibleEuro)}
           </Button>
         ) : (
           <p className="text-sm text-ink-400">Ti servono almeno 100 punti per convertire.</p>
@@ -262,7 +282,15 @@ export default function LoyaltyPage() {
       {/* Storico */}
       <div>
         <h2 className="font-serif font-bold text-lg text-ink-900 mb-3">Movimenti recenti</h2>
-        {txs.length === 0 ? (
+        {txs.length === 0 && movimentiNonLetti ? (
+          <ErrorState
+            variant="compact"
+            title="Non riusciamo a leggere i movimenti"
+            description="Riprova fra un momento."
+            retry={() => rileggiMovimenti()}
+            supportHref={null}
+          />
+        ) : txs.length === 0 ? (
           <div className="bg-white border border-cream-300 rounded-2xl p-8 text-center">
             <Gift size={32} className="mx-auto text-ink-300 mb-3" />
             <p className="text-ink-600 font-medium mb-1">Nessun movimento</p>
@@ -280,7 +308,7 @@ export default function LoyaltyPage() {
                   <p className="text-xs text-ink-400">{new Date(tx.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                 </div>
                 <span className={`font-bold ${tx.delta >= 0 ? 'text-olive-700' : 'text-primary-700'}`}>
-                  {tx.delta >= 0 ? '+' : ''}{tx.delta} pt
+                  {tx.delta >= 0 ? '+' : ''}{NUMERO_IT.format(tx.delta)} pt
                 </span>
               </div>
             ))}
