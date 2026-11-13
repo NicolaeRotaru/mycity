@@ -1,6 +1,6 @@
 {
   "sessione": "R14",
-  "aggiornato": "2026-11-13 12:58",
+  "aggiornato": "2026-11-13 13:26",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -219,12 +219,28 @@
     {
       "id": "R14-009",
       "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
-      "esito": "parziale",
-      "file_toccati": [],
+      "esito": "riparato",
+      "file_toccati": [
+        "app/api/cron/abandoned-carts/route.ts",
+        "lib/carrelli-abbandonati.ts"
+      ],
       "prova": "app/api/cron/abandoned-carts/route.ts: il ramo senza consenso e quello «troppo vecchio» fanno skipped++ e continue (non sent++); sent++ solo dopo sendEmail ok. La risposta ha già conteggi separati sent / skipped / errors / giaPresi.",
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nessuna modifica: il giro della rotta conta già a parte le email partite (sent) e i carrelli segnati senza email (skipped).",
-      "cosa_resta": "Resta il contatore emailInviate di lib/carrelli-abbandonati.ts (riga 124, contaRendimentoRecupero): conta ogni carrello con recovery_email_sent_at pieno, e quel campo lo scrive anche la marcatura dei carrelli senza consenso o troppo vecchi. Con i dati di oggi non si distinguono. Serve una colonna nuova (es. recovery_skipped_at su abandoned_carts, migrazione 385) scritta dal ramo senza consenso/troppo vecchio e letta dal contatore, con ripiego per lo schema indietro; non fatto perché il mandato sconsiglia la migrazione e oggi nessun codice di produzione legge emailInviate (solo le prove)."
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Chiusa senza migrazione (la 386 non serve e non c'e'). I due rami senza email del giro (carrello oltre 48 ore, cliente senza consenso) chiamano ancora mark_abandoned_cart_email_sent, poi mettono in recovery_email_sent_at l'ora dell'ultima attivita' del carrello; contaRendimentoRecupero legge «segno uguale a last_activity» come «gestito senza email» (un'email vera parte almeno 4 ore dopo l'ultima attivita') e non lo conta ne' fra i promemoria inviati ne' nel merito della campagna. La prova fa girare il giro vero su una tabella finta (lista, marcatura come la 166, UPDATE) e poi il conto: prima 3 promemoria su 1 invio, adesso 1; i carrelli chiusi restano fuori dal giro dopo.",
+      "cosa_resta": "Resta il contatore emailInviate di lib/carrelli-abbandonati.ts (riga 124, contaRendimentoRecupero): conta ogni carrello con recovery_email_sent_at pieno, e quel campo lo scrive anche la marcatura dei carrelli senza consenso o troppo vecchi. Con i dati di oggi non si distinguono. Serve una colonna nuova (es. recovery_skipped_at su abandoned_carts, migrazione 385) scritta dal ramo senza consenso/troppo vecchio e letta dal contatore, con ripiego per lo schema indietro; non fatto perché il mandato sconsiglia la migrazione e oggi nessun codice di produzione legge emailInviate (solo le prove).",
+      "commit": "4cbcf09df264b6069479a3e3c64327f633340bca",
+      "prova_file": [
+        "tests/unit/riparazione-r14-carrelli-senza-email.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-carrelli-senza-email.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4cbcf09df264b6069479a3e3c64327f633340bca^ --file app/api/cron/abandoned-carts/route.ts,lib/carrelli-abbandonati.ts --prove tests/unit/riparazione-r14-carrelli-senza-email.test.ts --json"
+      },
+      "nota": "I carrelli chiusi senza email prima di questa riparazione hanno l'ora della marcatura nel segno e restano contati come invii: non c'e' un dato che li distingua. Lo spazio fra la marcatura e il secondo UPDATE e' di pochi millisecondi: se in quell'istante il browser riscrive il carrello, il carrello nuovo resta segnato «gestito» (succedeva gia' prima, fra la lista e la marcatura)."
     },
     {
       "id": "R14-010",
@@ -374,6 +390,118 @@
       "nota": "La riparazione c'era (ba36f97a: prima le notifiche order e system, poi le altre; prova rimessa che reggeva), ma cambiava la prova comune minori-s03-push. È tolta col commit c81987f0. Per rimetterla: prima la modifica della prova qui sopra, poi `git revert c81987f0`."
     },
     {
+      "id": "R14-017",
+      "chiave": "api-backend|se l'amministratore apre i documenti di un fattorino con un codice storto, la rotta risponde con un guasto invece di dire che il codice non è valido",
+      "esito": "riparato",
+      "commit": "5722621ed59e1b79f70fde9c78c85035d4bf6a75",
+      "file_toccati": [
+        "app/api/kyc/documenti-rider/[id]/route.ts",
+        "app/api/admin/users/[id]/kyc/route.ts",
+        "app/api/ai/reviews-summary/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-codice-storto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-codice-storto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5722621ed59e1b79f70fde9c78c85035d4bf6a75^ --file app/api/kyc/documenti-rider/[id]/route.ts,app/api/admin/users/[id]/kyc/route.ts,app/api/ai/reviews-summary/route.ts --prove tests/unit/riparazione-r14-codice-storto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nelle tre rotte la regola larga [0-9a-f-]{36} e' diventata la forma vera dell'uuid (8-4-4-4-12): un codice storto riceve 400 «ID non valido» e non arriva piu' al database (prima 500, e 404 nel riepilogo recensioni). La prova usa l'involucro di accesso vero: rider, venditore e compratore restano fuori (403) e chi non ha fatto l'accesso riceve 401, come prima."
+    },
+    {
+      "id": "R14-018",
+      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
+      "esito": "serve_file_altrui",
+      "commit": "930e4f9ffc90098bc161164e7c237e6bef8c4942",
+      "revert": "cf976e1d072db3995709333eb67b0203c8070504",
+      "file_toccati": [
+        "app/api/ai/reviews-summary/route.ts",
+        "tests/unit/riparazione-r14-freno-ai-recensioni.test.ts",
+        "tests/unit/riparazione-r14-codice-storto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-freno-ai-recensioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-freno-ai-recensioni.test.ts (sul commit 930e4f9)",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 930e4f9ffc90098bc161164e7c237e6bef8c4942^ --file app/api/ai/reviews-summary/route.ts --prove tests/unit/riparazione-r14-freno-ai-recensioni.test.ts --json (lanciata sul commit 930e4f9, prima del revert)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La newsletter rifiutava gia' prima della base (app/api/newsletter/route.ts:52, `if (!NEWSLETTER_ACCESA) return ApiErrors.unavailable(...)`, commit 9ec755e) e il caricamento da file pure (app/api/seller/products/import/route.ts:36). Ho messo il freno nel riepilogo recensioni (503 «non sono ancora attivi» prima di freno e letture, prova nuova rossa senza e verde con, rimessa 0), ma la prova esistente tests/unit/api-ai-reviews-summary.test.ts non finge l'interruttore e le sue 6 prove diventano 503: commit 930e4f9 tolto con il revert cf976e1.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/api-ai-reviews-summary.test.ts",
+          "modifica": "accanto agli altri vi.mock aggiungere `vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));` (la prova finge oggi un venditore e un modello, ma non l'interruttore, che e' spento). Poi rimettere la correzione con `git revert cf976e1d072db3995709333eb67b0203c8070504` (riporta 930e4f9: la riga in app/api/ai/reviews-summary/route.ts, la prova nuova tests/unit/riparazione-r14-freno-ai-recensioni.test.ts e l'interruttore acceso nella prova di R14-017)."
+        },
+        {
+          "file": "app/api/ai/answer-qa/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: tests/unit/api-ai-answer-qa.test.ts."
+        },
+        {
+          "file": "app/api/ai/barcode-lookup/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: tests/unit/api-ai-barcode-lookup.test.ts, un-corpo-troppo-grande-non-e-un-json-rotto, riparazione-r04-elenchi-con-tetto, la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto, riparazione-r04-modello-ritirato."
+        },
+        {
+          "file": "app/api/ai/catalog-apply/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: il-freno-sul-prezzo-si-accende-davvero, minori-s03-email-testi, una-dichiarazione-che-la-scheda-non-ha-non-si-chiede, dalla-chat-un-alimento-non-va-in-vendita-senza-i-controlli-del-modulo, la-chat-non-dice-salvate-se-il-prezzo-e-rimasto, riparazione-r10-traccia-del-prezzo-una-forma, le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante, il-prezzo-rifiutato-si-dice-anche-quando-la-chat-si-ferma-per-altro."
+        },
+        {
+          "file": "app/api/ai/catalog-apply-bulk/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: una-voce-scritta-male-non-ferma-le-modifiche-in-massa (finge gia' acceso), una-dichiarazione-che-la-scheda-non-ha-non-si-chiede, dalla-chat-un-alimento-non-va-in-vendita-senza-i-controlli-del-modulo, il-copilot-dice-cosa-non-e-entrato, minori-s10-copilot-applica, il-copilot-non-dice-applicato-se-il-prezzo-non-e-entrato, il-copilot-applica-tutto-in-una-volta, le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante."
+        },
+        {
+          "file": "app/api/ai/catalog-chat/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: le-foto-che-arrivano-al-modello-sono-le-nostre, riparazione-r04-chat-non-inventa, minori-s10-catalogo-chat, minori-s10-ai-chat, la-chat-mostra-la-proposta-che-il-server-applica, riparazione-r04-chat-turni-assistente, riparazione-r04-modello-ritirato, la-cache-copre-il-pezzo-che-pesa, al-primo-messaggio-la-chat-non-propone-quello-che-non-ha-letto, riparazione-r04-chat-caratteristiche."
+        },
+        {
+          "file": "app/api/ai/catalog-create/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: minori-s10-bozze-dalle-foto (finge gia' acceso), dalla-chat-un-alimento-non-va-in-vendita-senza-i-controlli-del-modulo."
+        },
+        {
+          "file": "app/api/ai/copilot/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-copilot, riparazione-r04-copilot-regola, niente-chiamate-a-vuoto-al-filtro, minori-s10-catalogo-chat, il-copilot-dice-cosa-non-e-entrato, riparazione-r04-copilot-cronologia, riparazione-r04-modello-ritirato."
+        },
+        {
+          "file": "app/api/ai/description/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-description, minori-s10-bozze-dalle-foto, il-filtro-e-collegato, una-descrizione-tagliata-esce-corta-non-a-meta-parola, i-tagli-valgono-in-tutti-e-due-i-punti, l-ai-spenta-non-chiama-il-modello-neanche-con-la-chiave (finge l'interruttore)."
+        },
+        {
+          "file": "app/api/ai/diagnose/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-diagnose, la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto, il-filtro-e-collegato, riparazione-r04-modello-ritirato."
+        },
+        {
+          "file": "app/api/ai/improve-product/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-improve-product, riparazione-r04-consegna-nel-prompt, minori-s10-bozze-dalle-foto, riparazione-r04-elenchi-con-tetto, il-filtro-e-collegato, riparazione-r04-modello-ritirato."
+        },
+        {
+          "file": "app/api/ai/product-chat/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: minori-s10-ai-chat, riparazione-r04-elenchi-con-tetto, la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto, riparazione-r04-chat-turni-assistente, riparazione-r04-modello-ritirato, al-venditore-arriva-la-risposta-non-il-diario, la-cache-copre-il-pezzo-che-pesa."
+        },
+        {
+          "file": "app/api/ai/seo/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-seo, il-filtro-e-collegato."
+        },
+        {
+          "file": "app/api/ai/variants/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-variants, il-filtro-e-collegato, riparazione-r04-modello-ritirato, i-tagli-valgono-in-tutti-e-due-i-punti."
+        },
+        {
+          "file": "app/api/ai/voice-product/route.ts",
+          "modifica": "aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e in testa al gestore POST, dentro withSellerAuth e prima di tutto il resto (freno, `env.anthropicKey()`, corpo): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove che importano la rotta e non fingono l'interruttore vanno preparate prima con `AI_NEGOZI_ACCESA: true` in un vi.mock di '@/lib/funzioni-al-lancio', se no diventano 503: api-ai-voice-product, niente-chiamate-a-vuoto-al-filtro, un-corpo-troppo-grande-non-e-un-json-rotto, minori-s10-bozze-dalle-foto, la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto, il-testo-di-altri-sta-nel-recinto, dopo-la-dettatura-il-negoziante-sa-cosa-scrivere-lui, le-parole-dell-assistente-non-fanno-da-conferma, riparazione-r04-dettatura-elenchi."
+        }
+      ],
+      "cosa_resta": "1) Rimettere 930e4f9 dopo aver preparato tests/unit/api-ai-reviews-summary.test.ts (sopra). 2) Le altre 14 rotte app/api/ai/* (elenco sopra) non leggono AI_NEGOZI_ACCESA: oggi nessuna chiama il modello da spenta perche' lo ferma lib/ai/client.ts:198 (getAnthropic lancia AiConfigError), ma consumano il freno, leggono il database e rispondono «Servizio AI non configurato». catalog-batch/status e catalog-batch/cancel le lascerei senza freno: servono a chiudere un lotto partito prima dello spegnimento. 3) Classifica inviti: non c'e' una rotta; la pagina app/profile/referral/leaderboard/page.tsx legge la vista public.referral_leaderboard dal browser (GRANT SELECT TO authenticated in migrations/151). Un freno lato server sarebbe una migrazione nuova (`REVOKE SELECT ON public.referral_leaderboard FROM authenticated;`, da ridare alla riaccensione); lib/funzioni-al-lancio.ts:26-28 oggi la dichiara un'eccezione voluta (nessun premio passa di mano): scelta di Nicola. 4) Nessun aiutante comune in lib/funzioni-al-lancio.ts: il file e' letto anche da pagine del browser e una risposta del server (next/server) li' dentro non ci sta. Gli interruttori non sono cambiati."
+    },
+    {
       "id": "R14-019",
       "chiave": "api-backend|se il cliente ritira il reso mentre il negozio lo approva con rimborso, il reso resta annullato coi soldi gia' usciti",
       "esito": "riparato",
@@ -443,7 +571,8 @@
         "nota": "La migrazione 385 da sola con --sql r14_l6a_rimessa dà uscita 3 (rossa per struttura: le colonne nuove); la prova SQL è verde sul database ricostruito con la 385."
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nessun registro esistente teneva traccia di cosa era partito, quindi la migrazione 385 aggiunge tre segni per canale (email, notifica, venditore) e un trigger che li azzera se la decisione cambia. comunicaEsito prende il canale con un UPDATE condizionato prima di spedire (una chiamata sola vince) e lo rimette libero se il canale fallisce; se le colonne non ci sono ancora (schema indietro) comunica come prima."
+      "cosa_ho_fatto": "Nessun registro esistente teneva traccia di cosa era partito, quindi la migrazione 385 aggiunge tre segni per canale (email, notifica, venditore) e un trigger che li azzera se la decisione cambia. comunicaEsito prende il canale con un UPDATE condizionato prima di spedire (una chiamata sola vince) e lo rimette libero se il canale fallisce; se le colonne non ci sono ancora (schema indietro) comunica come prima.",
+      "verificato_da": "revisore 3 (2.0): prova unit verde e rimessa solo codice uscita 0; apply.sh r14_rev3_prova 197 migrazioni 0 fallite, prova SQL verde (1 chiamata sola vince, decisione cambiata azzera); migrazione rigirata due volte e su 50 righe gia' decise senza errori, trigger azzera solo se cambia la decisione; ripiego colonne assenti (42703/PGRST204) e canale fallito rimesso libero letti e coperti dalla prova. Con --sql la rimessa da' 3 (rosso strutturale, file nuovo) come previsto."
     },
     {
       "id": "R14-022",
@@ -475,6 +604,31 @@
       ]
     },
     {
+      "id": "R14-023",
+      "chiave": "api-backend|due segnali di accesso per lo stesso ingresso: la deduplica legge-e-poi-scrive senza vincolo sul database — e la migrazione che la reggerebbe non c'e' in questo lotto",
+      "esito": "riparato",
+      "commit": "f3b50ba93b7f361d0aebc12c70f64031841f4a5b",
+      "file_toccati": [
+        "migrations/384_un_accesso_lascia_una_riga_sola.sql",
+        "lib/activity.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r14-accesso-doppio.test.sql",
+        "tests/unit/riparazione-r14-accesso-doppio.test.ts"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh r14_l6b_prova && psql -q -X -d r14_l6b_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r14-accesso-doppio.test.sql ; npx vitest run tests/unit/riparazione-r14-accesso-doppio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f3b50ba93b7f361d0aebc12c70f64031841f4a5b^ --file migrations/384_un_accesso_lascia_una_riga_sola.sql --prove tests/sql/rls/riparazione-r14-accesso-doppio.test.sql --sql r14_l6b_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La migrazione 384 (non applicata) mette in activity_events la stessa regola della deduplica (stessa persona e sessione del browser entro 30 minuti; sessione non nota entro 1 minuto; sessioni diverse sempre) in un grilletto BEFORE INSERT solo per gli accessi, sotto un lucchetto per persona: la seconda copia esce con 23505. Non un indice unico perche' la regola ha finestre di tempo (un indice su persona+sessione scarterebbe l'accesso nuovo dopo la mezz'ora, uno a fasce lascerebbe passare due segnali a cavallo del bordo). La prova SQL scrive due accessi uguali nella tabella che c'era: una riga sola con la 384, due senza (rimessa 0); controprove: altra sessione, stessa scheda dopo 31 minuti, altra persona e pagine viste entrano. Provato a mano anche con due sessioni psql vere in parallelo (la seconda aspetta il lucchetto e viene rifiutata, resta 1 riga), su un database con doppioni gia' presenti, e due giri della 384 senza errori.",
+      "nota": "Il codice trattava gia' il 23505 come «gia' registrato» prima di questa voce (lib/activity.ts:97 RIGA_GIA_PRESENTE e il controllo dopo l'insert in recordActivity): non serve un upsert, che con PostgREST non potrebbe comunque puntare a una regola con finestre. La prova unit tests/unit/riparazione-r14-accesso-doppio.test.ts (due segnali insieme, il secondo rifiutato con 23505: 204 a tutti e due, niente nel registro degli errori; un altro codice resta errore) e' verde anche sulla base: protegge quel contratto (togliendo il controllo del 23505 diventa rossa, provato). In lib/activity.ts ho cambiato solo il commento che parlava di una «migrazione proposta»."
+    },
+    {
       "id": "R14-024",
       "chiave": "api-backend|la rotta che registra le visite va in errore del server se riceve un corpo vuoto o rotto, o un cookie dei consensi storto",
       "esito": "riparato",
@@ -495,12 +649,13 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base deccd9f87bd2acf4a427346a57dfe703358ff6c1^ --file app/api/track/route.ts,lib/consent.ts --prove tests/unit/riparazione-r14-visite-corpo-rotto.test.ts"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La rotta risponde 400 se il corpo è vuoto, rotto o non è un oggetto; il lettore del cookie dei consensi, se la decodifica fallisce, dice «nessun consenso» invece di dare errore. lib/api/corpo.ts non toccato."
+      "cosa_ho_fatto": "La rotta risponde 400 se il corpo è vuoto, rotto o non è un oggetto; il lettore del cookie dei consensi, se la decodifica fallisce, dice «nessun consenso» invece di dare errore. lib/api/corpo.ts non toccato.",
+      "verificato_da": "revisore 3 (2.0): prova verde, rimessa uscita 0 (route.ts e consent.ts, entrambi rossi alla base); lanciate 33 prove che importano consent/corpo/track (202 verdi); varianti: array, null, stringa, % storto nel cookie, unico altro chiamante di parseConsentCookie e' la rotta."
     },
     {
       "id": "R14-025",
       "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "f19f53cd84a5a9bf99aa9d53cd0b6f51fe573c05",
       "file_toccati": [
         "app/error.tsx",
@@ -518,8 +673,20 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f19f53cd84a5a9bf99aa9d53cd0b6f51fe573c05^ --file app/error.tsx,app/admin/error.tsx,lib/analytics/sentry.tsx --prove tests/unit/riparazione-r14-pagina-errore-registra.test.ts"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Le tre pagine chiamavano già captureError (global-error non promette niente). Ora captureError dice se ha consegnato l'errore (senza chiave del servizio no), parte anche se l'accensione di instrumentation-client non è ancora arrivata e non rompe mai la pagina; app/error.tsx e app/admin/error.tsx dicono «abbiamo registrato il problema» solo se la chiave NEXT_PUBLIC_SENTRY_DSN c'è. Configurare la chiave resta a Nicola."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le tre pagine chiamavano già captureError (global-error non promette niente). Ora captureError dice se ha consegnato l'errore (senza chiave del servizio no), parte anche se l'accensione di instrumentation-client non è ancora arrivata e non rompe mai la pagina; app/error.tsx e app/admin/error.tsx dicono «abbiamo registrato il problema» solo se la chiave NEXT_PUBLIC_SENTRY_DSN c'è. Configurare la chiave resta a Nicola.",
+      "cosa_resta": "Nelle pagine d errore del negozio e del fattorino (app/seller/error.tsx:26, app/rider/error.tsx:26), che non sono file di R14, la scritta «Abbiamo registrato il problema» resta fissa anche quando il registratore non ha la chiave. Le due pagine chiamano gia captureError, che con questo commit consegna davvero quando la chiave c e. Impostare NEXT_PUBLIC_SENTRY_DSN resta a Nicola.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/error.tsx",
+          "modifica": "importare registratoreAcceso da @/lib/analytics/sentry (accanto a captureError) e alla riga 26 scrivere description={registratoreAcceso() ? \"Abbiamo registrato il problema. Riprova fra un momento.\" : \"Riprova fra un momento.\"}, come app/error.tsx nel commit f19f53c"
+        },
+        {
+          "file": "app/rider/error.tsx",
+          "modifica": "la stessa modifica di app/seller/error.tsx: import di registratoreAcceso e alla riga 26 la scritta «Abbiamo registrato il problema» solo se registratoreAcceso() è vero"
+        }
+      ],
+      "verificato_da": "revisore 3 (2.0): prova verde e rimessa uscita 0; captureError non rompe la pagina e la scritta di app/error.tsx e app/admin/error.tsx segue la chiave; restano fisse le pagine del negozio e del fattorino (file altrui): da riparato a parziale"
     }
   ],
   "nuovi_difetti_visti": [
@@ -641,14 +808,22 @@
       "severita": "minore",
       "file": "components/SupportChatModal.tsx:88",
       "descrizione": "La rotta (R14-022) accetta una chiave facoltativa per ogni invio ma il modulo non la manda: oggi il doppione si riconosce solo dall'impronta del testo in 5 secondi."
+    },
+    {
+      "titolo": "comunicare l esito di una segnalazione: se il processo muore tra «prendo il canale» e l invio, quel canale resta preso e non riparte piu",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/segnalazioni/esito/comunica.ts , migrations/385_l_esito_della_segnalazione_si_comunica_una_volta_per_canale.sql",
+      "descrizione": "Visto dal revisore 3 (sessione 2.0) guardando R14-021: il segno del canale andrebbe scritto come orario e un segno vecchio di qualche minuto contato come libero. Non fatto per il tetto di spesa."
     }
   ],
   "domande_per_nicola": [
-    "R14-004: dopo quanto tempo un ordine fermo su «accettato» (mai «Pronto») o su «ritirato» va annullato e rimborsato da solo? Alla fine della fascia più quante ore (e senza fascia dopo quante), oppure mai, solo l'allarme?"
+    "R14-004: dopo quanto tempo un ordine fermo su «accettato» (mai «Pronto») o su «ritirato» va annullato e rimborsato da solo? Alla fine della fascia più quante ore (e senza fascia dopo quante), oppure mai, solo l'allarme?",
+    "La classifica degli inviti si legge dal browser (vista referral_leaderboard) anche con l interruttore della classifica spento: va chiusa anche dal server con una migrazione, o resta l eccezione voluta che dice lib/funzioni-al-lancio.ts? (R14-018)"
   ],
   "conto": {
-    "agenti": 16,
-    "nota": "12 della prima parte + L5 (prima sessione); sessione 2.0: L6a, revisori 1 e 2 (3 dei 9)"
+    "agenti": 19,
+    "nota": "12 della prima parte + L5 (prima sessione); sessione 2.0: L6a, L6b, revisori 1-3 (5 dei 9); poi correzione di R14-022 e revisore 4"
   },
   "passaggio": {
     "quando": "2026-11-13 13:50",
