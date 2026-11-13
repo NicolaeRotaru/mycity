@@ -80,6 +80,15 @@ function parseCartParam(raw: string | null): ParsedItem[] {
   return [...righe.values()];
 }
 
+/**
+ * 13/11/2026 (R19-016) — Le righe oltre il tetto non si leggono, ma si contano e si dice: prima
+ * sparivano in silenzio (anche quelle disponibili) e non finivano nemmeno fra le escluse.
+ */
+function righeOltreIlTetto(raw: string | null): number {
+  if (!raw) return 0;
+  return raw.split(',').slice(MAX_ITEMS).filter((entry) => entry.trim() !== '').length;
+}
+
 function SharedCartInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -101,6 +110,7 @@ function SharedCartInner() {
   const [tentativo, setTentativo] = useState(0);
 
   const parsed = parseCartParam(cartParam);
+  const oltreIlTetto = righeOltreIlTetto(cartParam);
 
   useEffect(() => {
     if (parsed.length === 0) {
@@ -313,6 +323,13 @@ function SharedCartInner() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {oltreIlTetto > 0 && (
+        <div className="bg-cream-50 border border-cream-300 rounded-xl p-4 text-sm text-ink-600 mb-6 flex items-center gap-1.5">
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-500 shrink-0" aria-hidden />{' '}
+          {`Questa lista ha ${MAX_ITEMS + oltreIlTetto} righe: ne mostro solo le prime ${MAX_ITEMS}. Chiedi a chi te l'ha mandata di dividerla in liste più corte.`}
         </div>
       )}
 
