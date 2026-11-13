@@ -357,6 +357,25 @@ async function rendiSulCredito(admin: SupabaseClient, c: RigaVeloce, cents: numb
   return false;
 }
 
+/** La chiave del rimborso dell'euro della veloce: la stessa per Stripe e per il libro dei rimborsi (412). */
+const chiaveDelFreno = (orderId: string) => `veloce_non_confermata_${orderId}`;
+
+/**
+ * 13/11/2026 (R17-016) — Il rimborso già prenotato sull'ordine è quello del freno?
+ *
+ * Il libro dei rimborsi (migrazione 412) tiene la chiave di ogni prenotazione: `rimborso_gia_prenotato`
+ * risponde vero se quella del freno c'è. Falso, una risposta che non è un sì (il database senza la
+ * 412 risponde «funzione non trovata»), o una lettura caduta: non si sa di chi sia, e si fa come prima.
+ */
+async function laPrenotazioneEDelFreno(admin: SupabaseClient, orderId: string): Promise<boolean> {
+  try {
+    const { data, error } = await admin.rpc('rimborso_gia_prenotato', { p_order_id: orderId, p_chiave: chiaveDelFreno(orderId) });
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 12/11/2026 (R09-001, collaudo K01) — Gli ordini del carrello già confermati da un negozio e passati
  * alla fascia: quelli spostati in questo giro, e quelli spostati da un giro di prima caduto a metà
@@ -458,6 +477,13 @@ async function spostaIlCarrello(
       // uscito 1, e all'annullo il cliente ne riaveva 1 in meno. Già reso = esattamente l'euro e il
       // rimborso nell'elenco dell'ordine (si scrive a Stripe riuscito). Ogni altro rimborso già sopra
       // non si sa di chi è: non se ne prenota un altro, e lo guarda una persona.
+      //
+      // 13/11/2026 (R17-016) — Il giro morto fra la prenotazione e Stripe lasciava 1 € prenotato senza
+      // soldi usciti e senza rimborso nell'elenco: il giro dopo lo prendeva per «un altro rimborso», il
+      // cliente leggeva «a mano», e il rimborso a mano dall'amministrazione portava il libro a 2 €. Dalla
+      // 412 la prenotazione porta la chiave del freno: se è sua (`laPrenotazioneEDelFreno`) si richiama
+      // `refundOrder` con la stessa chiave, che non la prenota di nuovo e rende l'euro una volta sola
+      // (fra 10 minuti, se il giro di prima potrebbe essere ancora vivo: fino ad allora si riprova).
       const lui = carrello.find((c) => c.id === r.id);
       const giaResi = Number(lui?.refunded_amount_cents ?? 0);
       if (giaResi > 0) {
@@ -466,6 +492,8 @@ async function spostaIlCarrello(
           fatto.push(`${formatPriceFromCents(giaResi)} già reso sulla carta per l’ordine ${codiceDi(r.id)}`);
           continue;
         }
+      }
+      if (giaResi > 0 && !(await laPrenotazioneEDelFreno(admin, r.id))) {
         logger.error('[veloce-non-confermata] sull ordine c è già un rimborso che non è l euro della veloce: non se ne prenota un altro', {
           orderId: r.id, giaResi, chiesti: -r.deltaCents,
         });
@@ -482,7 +510,7 @@ async function spostaIlCarrello(
           // L'euro della veloce è di MyCity (lib/constants.ts): dal negozio non si toglie niente.
           quotaNegozioCents: 0,
           reason: 'consegna veloce non confermata dal negozio in 10 minuti',
-          idempotencyKey: `veloce_non_confermata_${r.id}`,
+          idempotencyKey: chiaveDelFreno(r.id),
           notifyBuyer: false,
           metadata: { motivo: 'veloce_non_confermata' },
         });
