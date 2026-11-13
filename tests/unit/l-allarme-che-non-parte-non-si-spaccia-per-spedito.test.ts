@@ -16,6 +16,8 @@ import type { NextRequest } from 'next/server';
 
 let esitoInvio: Record<string, unknown> = { ok: true, id: 'finta' };
 const scritte: Array<{ tabella: string; metodo: string; righe: unknown }> = [];
+/** R14-011 — Le chiavi tolte da operational_alert_log: il turno preso prima dell'invio e restituito. */
+const tolte: string[] = [];
 
 function tabella(nome: string): unknown {
   const chiamate: Array<{ m: string; a: unknown[] }> = [];
@@ -35,6 +37,9 @@ function tabella(nome: string): unknown {
       return (...a: unknown[]) => {
         chiamate.push({ m: String(k), a });
         if (k === 'insert' || k === 'upsert') scritte.push({ tabella: nome, metodo: String(k), righe: a[0] });
+        if (nome === 'operational_alert_log' && k === 'in' && chiamate.some((x) => x.m === 'delete')) {
+          tolte.push(...(a[1] as string[]));
+        }
         return c;
       };
     },
@@ -67,14 +72,18 @@ async function faiUnGiro() {
 // 31/10/2026 — l'attesa che conta qui e' quella dell'EMAIL. La campanella ha
 // una memoria sua (`CAMPANELLA|<chiave>`, stessa tabella) che si scrive anche
 // quando la posta non parte: e' cio' che le impedisce di suonare ogni 15 minuti.
+// R14-011 — Il giro prende il turno PRIMA dell'invio (scrive la chiave) e, se
+// l'email non parte, lo restituisce (la toglie): conta quello che resta scritto
+// alla fine del giro.
 const attesaScritta = () => scritte.some((s) => s.tabella === 'operational_alert_log'
   && ([] as Array<{ alert_key: string }>).concat(s.righe as never)
-    .some((r) => !String(r.alert_key).startsWith('CAMPANELLA|')));
+    .some((r) => !String(r.alert_key).startsWith('CAMPANELLA|') && !tolte.includes(String(r.alert_key))));
 
 describe('il sorvegliante legge l esito della email d allarme', () => {
   const salvato = { ...process.env };
   beforeEach(() => {
     scritte.length = 0;
+    tolte.length = 0;
     esitoInvio = { ok: true, id: 'finta' };
     process.env.SUPPORT_EMAIL = 'nicola@mycity.test';
     process.env.NEXT_PUBLIC_APP_URL = 'https://mycity.test';

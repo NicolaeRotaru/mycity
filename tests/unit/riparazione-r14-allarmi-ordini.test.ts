@@ -349,3 +349,52 @@ describe('R14-004 — l ordine fermo su «accettato» o «ritirato dal fattorino
     expect(campanelle()).toHaveLength(1);
   });
 });
+
+describe('R14-011 — due giri del sorvegliante partiti insieme suonano una volta sola', () => {
+  const chiave = `ORDINE_DA_ACCETTARE|${ORDINE}`;
+
+  it('due giri nello stesso istante: una campanella e una email, non due', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    await Promise.all([giro(), giro()]);
+    expect(campanelle(), 'l amministratore riceve due volte la stessa campanella').toHaveLength(1);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it('anche quando l attesa di sei ore è appena scaduta: uno solo la rinfresca e suona', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    db.operational_alert_log = [
+      { alert_key: chiave, last_sent_at: minutiFa(7 * 60) },
+      { alert_key: `CAMPANELLA|${chiave}`, last_sent_at: minutiFa(7 * 60) },
+    ];
+    await Promise.all([giro(), giro()]);
+    expect(campanelle()).toHaveLength(1);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it('la campanella rifiutata restituisce il turno: il giro dopo suona', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    rifiuta.notifications = 'rifiutata';
+    const primo = await giro();
+    expect(primo.http).toBe(500);
+    expect(campanelle()).toHaveLength(0);
+    rifiuta.notifications = null;
+    vaiAvanti(15);
+    await giro();
+    expect(campanelle()).toHaveLength(1);
+  });
+
+  it('l email non partita restituisce il turno: il giro dopo la ritenta', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    vi.mocked(sendEmail).mockImplementation(async () => ({ ok: false, error: 'domain is not verified' }));
+    const primo = await giro();
+    expect(primo.http).toBe(500);
+    expect((db.operational_alert_log ?? []).map((r) => r.alert_key)).not.toContain(chiave);
+    vi.mocked(sendEmail).mockImplementation(async () => ({ ok: true, id: 'finta' }));
+    vaiAvanti(15);
+    const secondo = await giro();
+    expect(secondo.http).toBe(200);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
+    // E la campanella, già suonata al primo giro, non risuona.
+    expect(campanelle()).toHaveLength(1);
+  });
+});

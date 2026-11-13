@@ -752,32 +752,47 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       logger.error('[operational-alerts] amministratori non letti: campanella non suonata', { motivo: errAdmins.message });
       problemi.push('amministratori non letti: campanella non suonata');
     } else if (admins && admins.length > 0) {
-      const notifications = admins.map((a: { id: string }) => ({
-        user_id: a.id,
-        // #33 — categoria 'system': un allarme operativo non e' una promozione e
-        // non si spegne con gli interruttori del marketing.
-        category: 'system',
-        title: `⚠️ ${daSuonare.length} alert operativi`,
-        body: daSuonare.slice(0, 3).map((al) => al.detail).join('; '),
-        link: '/admin/today',
-      }));
-      const esitoCampanella = await admin.from('notifications').insert(notifications);
-      if (esitoCampanella?.error) {
-        // Non si segna l'invio: il giro dopo ci riprova invece di tacere sei ore.
-        logger.error('[operational-alerts] campanella non scritta: si ritenta al prossimo giro', {
-          motivo: esitoCampanella.error.message, anomalie: daSuonare.length,
-        });
-        problemi.push('campanella non scritta');
-      } else {
-        const esitoMemoria = await admin
-          .from('operational_alert_log')
-          .upsert(
-            daSuonare.map((a) => ({ alert_key: chiaveCampanella(a.key), last_sent_at: new Date().toISOString() })),
-            { onConflict: 'alert_key' },
-          );
-        if (esitoMemoria?.error) {
-          logger.error('[operational-alerts] attesa della campanella non registrata', { motivo: esitoMemoria.error.message });
-          problemi.push('attesa della campanella non registrata');
+      // R14-011 — Prima il turno, poi la campanella: suona solo chi l'ha preso (vedi `prendiIlTurno`).
+      const turno = await prendiIlTurno(admin, daSuonare.map((a) => chiaveCampanella(a.key)), cutoff);
+      if (turno.errore) {
+        // Meglio un doppione che un silenzio: si suona, ma si dice.
+        logger.error('[operational-alerts] turno della campanella non preso: si suona lo stesso', { motivo: turno.errore });
+        problemi.push('turno della campanella non preso');
+      }
+      const mie = daSuonare.filter((a) => turno.presi.has(chiaveCampanella(a.key)));
+      if (mie.length > 0) {
+        const notifications = admins.map((a: { id: string }) => ({
+          user_id: a.id,
+          // #33 — categoria 'system': un allarme operativo non e' una promozione e
+          // non si spegne con gli interruttori del marketing.
+          category: 'system',
+          title: `⚠️ ${mie.length} alert operativi`,
+          body: mie.slice(0, 3).map((al) => al.detail).join('; '),
+          link: '/admin/today',
+        }));
+        const esitoCampanella = await admin.from('notifications').insert(notifications);
+        if (esitoCampanella?.error) {
+          // Il turno si restituisce: il giro dopo ci riprova invece di tacere sei ore.
+          logger.error('[operational-alerts] campanella non scritta: si ritenta al prossimo giro', {
+            motivo: esitoCampanella.error.message, anomalie: mie.length,
+          });
+          problemi.push('campanella non scritta');
+          const nonLiberato = await liberaIlTurno(admin, turno.scritti);
+          if (nonLiberato) {
+            logger.error('[operational-alerts] turno della campanella non restituito: tace fino a sei ore', { motivo: nonLiberato });
+            problemi.push('turno della campanella non restituito');
+          }
+        } else {
+          const esitoMemoria = await admin
+            .from('operational_alert_log')
+            .upsert(
+              mie.map((a) => ({ alert_key: chiaveCampanella(a.key), last_sent_at: new Date().toISOString() })),
+              { onConflict: 'alert_key' },
+            );
+          if (esitoMemoria?.error) {
+            logger.error('[operational-alerts] attesa della campanella non registrata', { motivo: esitoMemoria.error.message });
+            problemi.push('attesa della campanella non registrata');
+          }
         }
       }
     }
@@ -818,14 +833,36 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     );
   }
 
+  // R14-011 — Prima il turno, poi l'email: la manda solo chi l'ha preso. Se l'invio non va, il
+  // turno si restituisce e il giro dopo la ritenta (come prima, quando l'attesa non si scriveva).
+  const turnoEmail = await prendiIlTurno(admin, fresh.map((a) => a.key), cutoff);
+  if (turnoEmail.errore) {
+    logger.error('[operational-alerts] turno dell email non preso: si manda lo stesso', { motivo: turnoEmail.errore });
+    problemi.push('turno dell email non preso');
+  }
+  const daMandare = fresh.filter((a) => turnoEmail.presi.has(a.key));
+  if (daMandare.length === 0) {
+    return NextResponse.json(
+      {
+        ok: stato() === 200,
+        alerts: alerts.length,
+        fresh: 0,
+        controlliSaltati,
+        ...(problemi.length ? { problemi } : {}),
+        message: 'Email già presa da un altro giro partito insieme: niente doppioni',
+      },
+      { status: stato() },
+    );
+  }
+
   // 5/11/2026 — Nomi di negozi e fattorini li scrive la persona stessa: nell'HTML si filtrano.
   // E l'indirizzo del sito viene da env.appUrl(), come il resto della posta (non la variabile grezza).
   const sito = env.appUrl().replace(/\/$/, '');
   const body = `
     <h2>⚠️ Alert operational MyCity</h2>
-    <p>Rilevate <strong>${fresh.length}</strong> nuove anomalie:</p>
+    <p>Rilevate <strong>${daMandare.length}</strong> nuove anomalie:</p>
     <ul>
-      ${fresh.map((a) => `<li><strong>[${escapeHtml(a.type)}]</strong> ${escapeHtml(a.detail)}${a.url ? ` <a href="${escapeHtml(`${sito}${a.url}`)}">[apri]</a>` : ''}</li>`).join('\n')}
+      ${daMandare.map((a) => `<li><strong>[${escapeHtml(a.type)}]</strong> ${escapeHtml(a.detail)}${a.url ? ` <a href="${escapeHtml(`${sito}${a.url}`)}">[apri]</a>` : ''}</li>`).join('\n')}
     </ul>
     <p style="color:#666;font-size:12px">Generato automaticamente dal cron operational-alerts.</p>
   `;
@@ -836,7 +873,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     try {
       esitoInvio = await sendEmail({
         to: adminEmail,
-        subject: `[MyCity Alert] ${fresh.length} anomalie operative`,
+        subject: `[MyCity Alert] ${daMandare.length} anomalie operative`,
         html: body,
         /**
          * 6/9/2026 — LO STESSO RAGIONAMENTO DI #33, VENTI RIGHE PIU' SU.
@@ -877,9 +914,12 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
           : esitoInvio && 'error' in esitoInvio
             ? String(esitoInvio.error)
             : String(erroreInvio ?? 'invio fallito');
-      logger.error('[cron-alerts] email d\'allarme NON recapitata', { motivo, fresh: fresh.length });
+      logger.error('[cron-alerts] email d\'allarme NON recapitata', { motivo, fresh: daMandare.length });
+      // Il turno si restituisce: senza, l'allarme mai partito tacerebbe sei ore.
+      const nonLiberato = await liberaIlTurno(admin, turnoEmail.scritti);
+      if (nonLiberato) logger.error('[operational-alerts] turno dell email non restituito: tace fino a sei ore', { motivo: nonLiberato });
       return NextResponse.json(
-        { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'allarmi non recapitati', motivo },
+        { ok: false, alerts: alerts.length, fresh: daMandare.length, errore: 'allarmi non recapitati', motivo },
         { status: 500 },
       );
     }
@@ -890,7 +930,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   const esitoAttesa = await admin
     .from('operational_alert_log')
     .upsert(
-      fresh.map((a) => ({ alert_key: a.key, last_sent_at: new Date().toISOString() })),
+      daMandare.map((a) => ({ alert_key: a.key, last_sent_at: new Date().toISOString() })),
       { onConflict: 'alert_key' },
     );
   if (esitoAttesa?.error) {
@@ -902,11 +942,11 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     {
       ok: stato() === 200,
       alerts: alerts.length,
-      fresh: fresh.length,
+      fresh: daMandare.length,
       controlliSaltati,
       ...(problemi.length ? { problemi } : {}),
       cancellazioniRinviate: sorveglianza.rinviate.length,
-      details: fresh,
+      details: daMandare,
     },
     { status: stato() },
   );
@@ -929,4 +969,68 @@ export const GET = POST;
  */
 function chiaveCampanella(chiave: string): string {
   return `CAMPANELLA|${chiave}`;
+}
+
+type ClientDiServizio = ReturnType<typeof getAdminSupabase>;
+
+/**
+ * R14-011 — IL TURNO SI PRENDE PRIMA DI SUONARE.
+ *
+ * L'attesa di sei ore funzionava a «leggi, poi suona, poi scrivi»: regge fra giri in fila, non
+ * fra due giri partiti nello stesso istante (il calendario di Vercel e un cron esterno, o un giro
+ * a mano durante quello del calendario). Tutti e due leggevano prima che l'altro scrivesse, e
+ * l'amministratore riceveva due campanelle identiche a pochi millisecondi (e domani due email).
+ *
+ * Adesso la memoria si scrive anche PRIMA, e la prima scrittura la vince uno solo, grazie alla
+ * chiave primaria di `operational_alert_log`:
+ *  ① le chiavi scritte più di sei ore fa si rinfrescano solo se sono ancora vecchie: il secondo
+ *    giro trova la riga già rinfrescata dal primo e non la prende;
+ *  ② le chiavi mai scritte si inseriscono: il database rifiuta la seconda riga con la stessa
+ *    chiave (23505), quindi il secondo giro non la prende.
+ * Suona solo chi ha preso il turno. Se poi la campanella o l'email non partono, il turno si
+ * restituisce (`liberaIlTurno`) e il giro dopo ci riprova. Dopo l'invio l'attesa si riscrive come
+ * prima.
+ *
+ * Se il turno non si riesce a prendere (il database non risponde), si suona lo stesso e si dice:
+ * meglio un doppione che un silenzio. `scritti` sono le chiavi scritte davvero da questo giro.
+ */
+async function prendiIlTurno(
+  admin: ClientDiServizio,
+  chiavi: string[],
+  cutoff: string,
+): Promise<{ presi: Set<string>; scritti: string[]; errore: string | null }> {
+  const adesso = new Date().toISOString();
+  const presi = new Set<string>();
+  const nonPreso = (errore: string) => ({ presi: new Set(chiavi), scritti: [...presi], errore });
+  if (chiavi.length === 0) return { presi, scritti: [], errore: null };
+  const scadute = await admin
+    .from('operational_alert_log')
+    .update({ last_sent_at: adesso })
+    .in('alert_key', chiavi)
+    .lt('last_sent_at', cutoff)
+    .select('alert_key');
+  if (scadute.error) return nonPreso(scadute.error.message);
+  for (const r of (scadute.data ?? []) as Array<{ alert_key: string }>) presi.add(r.alert_key);
+  const nuove = chiavi.filter((k) => !presi.has(k));
+  if (nuove.length > 0) {
+    const tutte = await admin.from('operational_alert_log').insert(nuove.map((k) => ({ alert_key: k, last_sent_at: adesso })));
+    if (!tutte.error) {
+      for (const k of nuove) presi.add(k);
+    } else if ((tutte.error as { code?: string }).code === '23505') {
+      // Qualcuna l'ha già scritta un altro giro: una per una, per sapere quali sono rimaste.
+      for (const k of nuove) {
+        const una = await admin.from('operational_alert_log').insert({ alert_key: k, last_sent_at: adesso });
+        if (!una.error) presi.add(k);
+        else if ((una.error as { code?: string }).code !== '23505') return nonPreso(una.error.message);
+      }
+    } else return nonPreso(tutte.error.message);
+  }
+  return { presi, scritti: [...presi], errore: null };
+}
+
+/** Restituisce il turno preso (la campanella o l'email non sono partite): risponde il motivo, se non ci riesce. */
+async function liberaIlTurno(admin: ClientDiServizio, chiavi: string[]): Promise<string | null> {
+  if (chiavi.length === 0) return null;
+  const { error } = await admin.from('operational_alert_log').delete().in('alert_key', chiavi);
+  return error ? error.message : null;
 }
