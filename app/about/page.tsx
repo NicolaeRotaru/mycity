@@ -29,7 +29,6 @@ export const metadata = {
 const STATS = [
   // 29/10/2026 — Erano i minuti della veloce come «tempi di consegna» certi: il dato vero è il confine.
   { value: `${RAGGIO_CONSEGNA_KM} km`, label: 'il confine della consegna, dal negozio' },
-  { value: '100%', label: 'venditori locali verificati' },
   // 31/10/2026 (ondata 6) — Era «0€ commissioni mensili»: il negozio paga il 10% sul venduto tramite MyCity.
   { value: `${COMMISSIONE_PERCENTO}%`, label: 'per i negozi, solo su quello che vendono tramite MyCity' },
   // 5/11/2026 — Era «Pay-on-delivery», in inglese in una pagina tutta italiana.
@@ -42,7 +41,8 @@ const STATS = [
  * Le "zone" NON sono derivabili in modo affidabile (profiles ha solo
  * `store_address` free-text, nessuna colonna città/provincia) → non vengono
  * fabbricate. Se la query fallisce o ritorna 0, si tiene la copy statica come
- * fallback (nessuna regressione, nessun "0" finto in pagina).
+ * fallback: tre statistiche invece di quattro (nessun "0" finto in pagina e
+ * nessuna frase assoluta al posto del numero).
  *
  * 18/10/2026 — Si contano le righe della vista pubblica dei negozi, che tiene
  * già solo i venditori approvati con un'insegna. Prima si contavano sulla
@@ -59,8 +59,9 @@ async function buildStats(): Promise<typeof STATS> {
 
     const stats = [...STATS];
     if (typeof storeCount === 'number' && storeCount > 0) {
-      // Sostituisce il claim "100%" col numero reale di negozi attivi.
-      stats[1] = { value: `${storeCount}`, label: storeCount === 1 ? 'negozio locale attivo' : 'negozi locali attivi' };
+      // 13/11/2026 (R21-006) — La frase «100% venditori locali verificati» non c'è più: nessun dato la
+      // sostiene. Col numero vero si aggiunge la statistica dei negozi; senza, restano le altre tre.
+      stats.splice(1, 0, { value: `${storeCount}`, label: storeCount === 1 ? 'negozio locale attivo' : 'negozi locali attivi' });
     }
     return stats;
   } catch {
@@ -72,7 +73,7 @@ const VALUES = [
   {
     Icon: MapPin,
     title: 'Locale, davvero',
-    body: 'Solo commercianti del territorio, verificati uno a uno. Niente rivenditori anonimi: dietro ogni prodotto c’è una persona che conosci.',
+    body: 'Solo commercianti del territorio, che approviamo prima di farli entrare. Niente rivenditori anonimi: dietro ogni prodotto c’è una persona che conosci.',
   },
   {
     Icon: Handshake,
@@ -115,7 +116,7 @@ export default async function AboutPage() {
 
       {/* Stats row, overlapping the hero */}
       <div className="container mx-auto px-6 max-w-5xl -mt-10 relative z-10">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-2 gap-4 ${stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
           {stats.map((s) => (
             <div
               key={s.label}
