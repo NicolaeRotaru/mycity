@@ -296,7 +296,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           // in mezzo (prima che router.push cambi pagina) non deve mandare una seconda recensione.
           submit.mutate(undefined, { onError: () => { inviando.current = false; } });
         }}
-        loading={submit.isPending}
+        loading={submit.isPending || submit.isSuccess}
         disabled={manca}
         fullWidth
         size="lg"

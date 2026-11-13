@@ -114,6 +114,16 @@ describe('R24-012 · la recensione col doppio clic parte una volta', () => {
     expect(stato.toast.join(' ')).not.toContain('Avevi già recensito');
   });
 
+  it('dopo l’invio riuscito, con la pagina ancora lì, il pulsante è spento e non sembra attivo', async () => {
+    await monta();
+    await act(async () => { (c.querySelector('button[aria-label="4 stelle"]') as HTMLButtonElement).click(); });
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 4; i++) await pausa();
+    expect(stato.toast.join(' ')).toContain('Grazie per la recensione');
+    expect(invia().disabled, 'dopo il successo il pulsante sembra attivo ma ingoia il clic').toBe(true);
+    expect(invia().getAttribute('aria-busy')).toBe('true');
+  });
+
   it('se l’invio non riesce il freno si riapre e si può riprovare', async () => {
     await monta();
     stato.guasti = 1;
