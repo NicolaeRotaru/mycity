@@ -9,6 +9,12 @@
  * Qui la pagina VERA di accesso, montata: la rotta risponde 429 con
  * Retry-After, e si guarda il pulsante — spento, col conto alla rovescia, e di
  * nuovo «Accedi» quando l'attesa è finita.
+ *
+ * Secondo giro (collaudo del lotto 2): il conto scalava un secondo a ogni
+ * timer. Con la scheda in secondo piano i timer si fermano mentre l'orologio
+ * va avanti, e alla ripresa «Accedi» restava spento anche a scadenza passata.
+ * Le ultime prove usano l'orologio finto: spostano l'orologio senza far
+ * scattare i timer e pretendono il conto rifatto sulla scadenza.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { act, type ComponentType } from 'react';
@@ -68,13 +74,22 @@ function rispondeIlFreno(retryAfter: string) {
   return chiamate;
 }
 
-async function provaAdAccedere() {
+/** Come aspettaChe, ma con l'orologio finto: il tempo passa solo quando lo si spinge. */
+async function aspettaCheFinto(vero: () => boolean, passi = 200): Promise<void> {
+  for (let i = 0; i < passi && !vero(); i++) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20);
+    });
+  }
+}
+
+async function provaAdAccedere(attendiChe: (vero: () => boolean) => Promise<void> = aspettaChe) {
   window.history.replaceState(null, '', '/sign-in');
   g.__QUERY_FINTA__ = '';
   g.__PERCORSO_FINTO__ = '/sign-in';
   const s = accendi(Accesso);
   montate.push(s);
-  await aspettaChe(() => !!s.radice.querySelector('#signin-email'));
+  await attendiChe(() => !!s.radice.querySelector('#signin-email'));
   scrivi(s.radice.querySelector<HTMLInputElement>('#signin-email')!, 'maria.rossi@esempio.it');
   scrivi(s.radice.querySelector<HTMLInputElement>('#signin-password')!, 'una-password-sbagliata');
   invia(s.radice.querySelector('form')!);
@@ -92,6 +107,7 @@ afterEach(() => {
   delete g.__NAVIGAZIONI__;
   delete g.__AUTH_FINTA__;
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('R21-018 dopo troppi tentativi «Accedi» si spegne e dice quanto manca', () => {
@@ -125,5 +141,55 @@ describe('R21-018 dopo troppi tentativi «Accedi» si spegne e dice quanto manca
     await aspettaChe(() => /^Accedi$/.test(testoVisibile(pulsanteDiInvio(s.radice)).trim()), 4000);
     expect(pulsanteDiInvio(s.radice).disabled).toBe(false);
     expect(testoVisibile(s.radice)).not.toContain('Riprova fra 5 minuti.');
+  }, 30000);
+});
+
+describe('R21-018 il conto alla rovescia guarda la scadenza, non i secondi contati', () => {
+  /** 429 con Retry-After 261 sull'orologio finto; si torna quando il pulsante dice 4:2x. */
+  async function freno261SullOrologioFinto() {
+    vi.useFakeTimers();
+    rispondeIlFreno('261');
+    const s = await provaAdAccedere(aspettaCheFinto);
+    await aspettaCheFinto(() => /4:2\d/.test(testoVisibile(pulsanteDiInvio(s.radice))));
+    expect(testoVisibile(pulsanteDiInvio(s.radice))).toMatch(/fra 4:2[01]/);
+    expect(pulsanteDiInvio(s.radice).disabled).toBe(true);
+    return s;
+  }
+  function accediTornato(radice: HTMLElement) {
+    const pulsante = pulsanteDiInvio(radice);
+    expect(testoVisibile(pulsante).trim(), 'a scadenza passata il pulsante non dice «Accedi»').toBe('Accedi');
+    expect(pulsante.disabled, 'a scadenza passata «Accedi» resta spento').toBe(false);
+    expect(testoVisibile(radice), 'la frase dell’attesa resta dopo la scadenza').not.toContain('Riprova fra 5 minuti.');
+  }
+
+  it('SCHEDA IN SECONDO PIANO — l’orologio va avanti di 300 s coi timer fermi: al primo tick torna «Accedi»', async () => {
+    const s = await freno261SullOrologioFinto();
+    // I timer non scattano: si sposta solo l'orologio, come con la scheda in secondo piano.
+    vi.setSystemTime(Date.now() + 300_000);
+    // Un solo tick.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    accediTornato(s.radice);
+  }, 30000);
+
+  it('alla ripresa della scheda il conto si rifà sull’orologio subito, senza aspettare un tick', async () => {
+    const s = await freno261SullOrologioFinto();
+    vi.setSystemTime(Date.now() + 300_000);
+    void act(() => {
+      document.dispatchEvent(new window.Event('visibilitychange'));
+    });
+    accediTornato(s.radice);
+  }, 30000);
+
+  it('a metà: 100 s coi timer fermi, al primo tick il pulsante dice quanto manca davvero (2:40, non 4:20)', async () => {
+    const s = await freno261SullOrologioFinto();
+    vi.setSystemTime(Date.now() + 100_000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    const pulsante = pulsanteDiInvio(s.radice);
+    expect(testoVisibile(pulsante), 'il conto non tiene conto del tempo passato').toMatch(/fra 2:(39|40|41)/);
+    expect(pulsante.disabled).toBe(true);
   }, 30000);
 });

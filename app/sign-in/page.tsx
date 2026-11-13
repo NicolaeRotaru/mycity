@@ -98,15 +98,32 @@ const SignInForm = () => {
    * scadenza. Prima restava premibile e ogni tocco prendeva lo stesso 429.
    */
   const [attesa, setAttesa] = useState(0);
+  /**
+   * 13/11/2026 (R21-018, secondo giro) — Il conto si rifà sulla scadenza
+   * (l'ora in cui il server torna ad accettare), non scalando un secondo a ogni
+   * timer: con la scheda in secondo piano i timer si fermano ma l'orologio va
+   * avanti, e alla ripresa «Accedi» restava spento a scadenza già passata.
+   */
+  const [scadenzaAttesa, setScadenzaAttesa] = useState(0);
   useEffect(() => {
-    if (attesa <= 0) return;
-    const t = setTimeout(() => {
-      // Finita l'attesa, la frase «Riprova fra 5 minuti» non è più vera.
-      if (attesa === 1) setErroreAccesso(undefined);
-      setAttesa(attesa - 1);
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [attesa]);
+    if (scadenzaAttesa <= 0) return;
+    const aggiorna = () => {
+      const resto = Math.max(0, Math.ceil((scadenzaAttesa - Date.now()) / 1000));
+      setAttesa(resto);
+      if (resto === 0) {
+        // Finita l'attesa, la frase «Riprova fra 5 minuti» non è più vera.
+        setErroreAccesso(undefined);
+        setScadenzaAttesa(0);
+      }
+    };
+    aggiorna();
+    const t = setInterval(aggiorna, 1000);
+    document.addEventListener('visibilitychange', aggiorna);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', aggiorna);
+    };
+  }, [scadenzaAttesa]);
 
   // Difesa lato client: se Supabase ha mandato l'utente qui invece che
   // su /reset-password (Site URL configurata male), intercetta il flusso
@@ -195,7 +212,7 @@ const SignInForm = () => {
         const dallaRotta = messaggioDellaRottaDiAccesso(esito);
         if (dallaRotta) {
           rigeneraGettone();
-          if (esito.attesaSecondi) setAttesa(esito.attesaSecondi);
+          if (esito.attesaSecondi) setScadenzaAttesa(Date.now() + esito.attesaSecondi * 1000);
           setErroreAccesso(dallaRotta);
           toast.error(dallaRotta);
           requestAnimationFrame(() => document.getElementById('signin-password')?.focus());
