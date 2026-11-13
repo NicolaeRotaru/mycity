@@ -133,6 +133,10 @@ export async function POST(request: Request) {
     // Trentaduemila byte sono molto piu' di qualunque evento legittimo.
     const letto = await jsonConTetto(request, 32 * 1024);
     if (letto === undefined) return noContent(); // troppo grande: si scarta in silenzio
+    // Corpo vuoto o JSON rotto (null) o non un oggetto: richiesta sbagliata, non guasto del server.
+    if (!letto || typeof letto !== 'object' || Array.isArray(letto)) {
+      return new NextResponse(null, { status: 400 });
+    }
     body = letto as typeof body;
   } catch {
     return noContent();

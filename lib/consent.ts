@@ -154,7 +154,13 @@ export function parseConsentCookie(value: string | undefined): {
 } {
   const nessunConsenso = { functional: false, analytics: false, marketing: false };
   if (!value) return nessunConsenso;
-  const decoded = decodeURIComponent(value);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    // Cookie con una sequenza % storta: vale come «nessun consenso», non come errore del server.
+    return nessunConsenso;
+  }
   const duePunti = decoded.indexOf(':');
   if (duePunti < 0) return nessunConsenso;
   if (decoded.slice(0, duePunti) !== String(CONSENT_VERSION)) return nessunConsenso;
