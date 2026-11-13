@@ -1,8 +1,19 @@
 name: CI
 
+# 13/11/2026 — UNA CORSA SOLA PER OGNI AGGIORNAMENTO DI UNA RICHIESTA.
+#
+# Prima la CI partiva anche a ogni invio su un ramo claude/**: sui rami con una
+# richiesta aperta lo stesso commit veniva provato due volte, una per il ramo e
+# una per la richiesta. Divise in fette, le due corse chiedevano insieme 34
+# macchine, e l'account ne da' circa 20: meta' dei lavori aspettava in coda e
+# la CI superava i 4 minuti (corse 43365332694 e 43365403658). Nicola ha
+# deciso il 13/11 di tenere solo la corsa della richiesta: prova il codice gia'
+# unito a main, a ogni aggiornamento. Su main non cambia niente: ogni unione fa
+# girare la CI, e il rilascio parte dal suo esito. Un ramo senza richiesta
+# aperta non ha controlli finche' la richiesta non si apre.
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
