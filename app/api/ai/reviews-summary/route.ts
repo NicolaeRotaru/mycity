@@ -76,7 +76,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // ogni chiamata la pagavamo noi. Ora si dichiara QUALE prodotto, si verifica
   // che sia suo, e le recensioni si leggono dal database.
   const productId = typeof body.productId === 'string' ? body.productId : '';
-  if (!/^[0-9a-f-]{36}$/i.test(productId)) {
+  // R14-017 — Con la regola larga `[0-9a-f-]{36}` un codice storto arrivava al
+  // database e la risposta era «prodotto non trovato»: un uuid vero e' 8-4-4-4-12.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId)) {
     return ApiErrors.invalidRequest('Manca il prodotto di cui riassumere le recensioni.');
   }
 

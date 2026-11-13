@@ -23,7 +23,11 @@ const SCADENZA_LINK_SECONDI = 120;
  * lettura lascia una riga nel registro: chi, quando, di chi.
  */
 async function handler(req: NextRequest, adminUser: { id: string }, targetId: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(targetId)) return ApiErrors.invalidRequest('ID non valido');
+  // R14-017 — La regola larga `[0-9a-f-]{36}` lasciava passare 36 trattini, e
+  // il database rispondeva con un guasto (500): un uuid vero ha la forma 8-4-4-4-12.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+    return ApiErrors.invalidRequest('ID non valido');
+  }
 
   const admin = getAdminSupabase();
   const { data, error } = await admin
