@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
@@ -756,6 +757,27 @@ async function propagaLaCancellazioneAStripe(
   }
 }
 
+/**
+ * 13/11/2026 (R14-007) — L'identificativo di una riga del registro ricavato da
+ * una chiave: la stessa chiave dà sempre lo stesso UUID (versione 5, variante
+ * RFC 4122), quindi la seconda scrittura della stessa cosa sbatte sulla chiave
+ * primaria invece di diventare una riga doppia. Stessa costruzione di
+ * `identificativoAvviso` (lib/privacy/avvisi-a-chi-aspetta.ts), con un suo prefisso.
+ */
+function identificativoDaChiave(chiave: string): string {
+  const b = createHash('sha256').update(`mycity:cancellazione-account:${chiave}`).digest();
+  const byte = Buffer.from(b.subarray(0, 16));
+  byte[6] = (byte[6] & 0x0f) | 0x50;
+  byte[8] = (byte[8] & 0x3f) | 0x80;
+  const h = byte.toString('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Vero quando il database ha rifiutato perché la riga c'è già. */
+function eUnDoppione(messaggio: string): boolean {
+  return /duplicate key|23505|already exists/i.test(messaggio);
+}
+
 async function annotaIlContoCollegato(
   admin: Admin,
   userId: string,
@@ -765,16 +787,20 @@ async function annotaIlContoCollegato(
   // dalla piattaforma (payout HELD), e chiuderlo prima di deleteUser renderebbe irreversibile un
   // passo che dopo può ancora fallire. Si scrive il codice dove resta anche dopo la cancellazione,
   // così chi gestisce i pagamenti lo chiude a mano quando i conti col negozio sono chiusi.
+  // 13/11/2026 (R14-007) — Con un identificativo ricavato da persona e conto: due cancellazioni
+  // dello stesso account partite insieme (o una ritentata la notte dopo) scrivevano due righe
+  // «conto da chiudere» per lo stesso conto. La seconda adesso trova la prima e va avanti.
   const { error } = await (admin.from('audit_logs') as unknown as {
     insert(r: Record<string, unknown>[]): PromiseLike<{ error: { message: string } | null }>;
   }).insert([{
+    id: identificativoDaChiave(`conto-stripe-da-chiudere:${userId}:${conto}`),
     actor_id: null,
     action: 'account.cancellazione.conto_stripe_da_chiudere',
     target_table: 'profiles',
     target_id: userId,
     metadata: { conto },
   }]);
-  if (error) {
+  if (error && !eUnDoppione(error.message)) {
     logger.error('[cancellazione] codice del conto Stripe collegato non annotato', { userId, err: error.message });
     return { ok: false, errore: `il codice del conto Stripe collegato non è stato annotato (${error.message})` };
   }
@@ -787,6 +813,12 @@ export type EsitoCancellazione = {
   errore?: string;
   /** Perché non si è fatto, quando la ragione non è un guasto ma una regola. */
   motivo?: 'cassa_da_versare';
+  /**
+   * 13/11/2026 (R14-007, R14-015) — L'account l'aveva già chiuso un'altra
+   * cancellazione partita insieme a questa: la promessa è mantenuta, ma il passo
+   * irreversibile non l'ha fatto questa chiamata (chi chiama non lo registra due volte).
+   */
+  giaCancellato?: boolean;
   fileRimossi: number;
   erroriFile: string[];
 };
@@ -937,7 +969,15 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   // la persona vede: se va male, il suo account resta intero e la richiesta
   // viene ritentata.
   const { error: errAuth } = await admin.auth.admin.deleteUser(userId);
-  if (errAuth) {
+  // 13/11/2026 (R14-007, R14-015) — «Utente non trovato» vuol dire che l'account non c'è già
+  // più: l'ha chiuso un'altra cancellazione dello stesso account partita insieme a questa (due
+  // giri notturni, due clic dell'amministratore). Era un «non cancellato»: l'amministratore
+  // leggeva un errore falso, e la notte svegliava qualcuno per una cancellazione riuscita. Non
+  // è un guasto: si va avanti col ④ (che si può ripetere) e si dice che l'ha fatto un altro.
+  const giaChiuso = !!errAuth && (
+    (errAuth as { status?: number }).status === 404 || (errAuth as { code?: string }).code === 'user_not_found'
+  );
+  if (errAuth && !giaChiuso) {
     return {
       ok: false,
       errore: `L'account non è stato cancellato: ${errAuth.message}`,
@@ -952,8 +992,11 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
     logger.error('[cancellazione] account cancellato ma profilo non ripulito', { userId, err: profilo.errore });
   }
 
+  if (giaChiuso) logger.info('[cancellazione] account gia chiuso da una cancellazione parallela', { userId });
+
   return {
     ok: true,
+    ...(giaChiuso ? { giaCancellato: true } : {}),
     fileRimossi: file.rimossi + prove.rimossi,
     erroriFile: [...file.errori, ...prove.errori],
   };
