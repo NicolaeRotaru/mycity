@@ -6,6 +6,7 @@ import { veloceNonConfermataTemplate } from '@/lib/email/templates';
 import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { consegnaSenzaLaVeloce } from '@/lib/ordini/prezzi';
+import { SUPPLEMENTO_VELOCE_CENTS } from '@/lib/constants';
 import { MINUTI_PER_CONFERMARE_LA_VELOCE, scadenzaAccettazione, scadenzaLeggibile } from '@/lib/ordini/scadenza-accettazione';
 import { ETICHETTA_ADESSO, fasceAncoraPossibili, fasceDiDomaniPossibili, fasciaFuoriTempo } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
@@ -394,6 +395,39 @@ function confermatiSpostati(o: RigaVeloce, scritti: RigaVeloce[], vivi: RigaVelo
 }
 
 /**
+ * 13/11/2026 (R17-012) — IL CONTO DI UN CARRELLO RISCRITTO A META' DA UN GIRO DI PRIMA.
+ *
+ * Contanti, due negozi: un giro riscrive l'ordine 1 (consegna 4 € -> 3 €, l'euro della veloce tolto)
+ * e cade sulla scrittura dell'ordine 2. Al giro dopo `consegnaSenzaLaVeloce` non riconosceva più il
+ * conto, perché l'ordine 1 era già senza la veloce: l'euro andava «a mano», il cliente leggeva «te lo
+ * rendiamo a mano» e gli amministratori «rendi l'euro se c'era», ma l'euro era già tolto e poteva
+ * tornare due volte. Qui si rifà il conto com'era prima di quel giro: a un ordine già spostato dal
+ * freno (in fascia, mentre il carrello nasce tutto «Adesso») si rimette l'euro della veloce, e la
+ * regola deve riconoscere quel conto e ridare esattamente la consegna scritta adesso su ogni ordine
+ * già spostato. Se torna, l'euro è già tolto da quell'ordine: le righe dicono quanto resta da togliere
+ * agli altri (di solito niente). `null` se nessun conto torna: allora resta «a mano», come prima.
+ */
+function contoGiaRiscrittoAMeta(
+  ordini: Parameters<typeof consegnaSenzaLaVeloce>[0],
+  giaSpostati: ReadonlySet<string>,
+): { righe: NonNullable<ReturnType<typeof consegnaSenzaLaVeloce>>['righe']; toltaCents: number; giaToltoDa: string } | null {
+  for (const s of ordini) {
+    if (!giaSpostati.has(s.id) || s.giaAnnullato) continue;
+    const comEra = ordini.map((x) => (x.id === s.id ? { ...x, deliveryFeeCents: x.deliveryFeeCents + SUPPLEMENTO_VELOCE_CENTS } : x));
+    const conto = consegnaSenzaLaVeloce(comEra);
+    if (!conto || conto.toltaCents === 0) continue;
+    const adesso = (id: string) => ordini.find((x) => x.id === id)?.deliveryFeeCents;
+    if (!conto.righe.every((r) => !giaSpostati.has(r.id) || r.deliveryFeeCents === adesso(r.id))) continue;
+    return {
+      righe: conto.righe.map((r) => (giaSpostati.has(r.id) ? { ...r, deltaCents: 0 } : r)),
+      toltaCents: conto.toltaCents,
+      giaToltoDa: s.id,
+    };
+  }
+  return null;
+}
+
+/**
  * `fatto`: quello che il giro ha già fatto sul carrello e non si disfa (l'euro reso sulla carta o sul
  * credito, un ordine già spostato). Se dopo una scrittura cade, il giro lo legge agli amministratori.
  * Le frasi dipendono dallo stato, non dal giro: lo stesso stato dà lo stesso avviso, una volta sola.
@@ -448,7 +482,7 @@ async function spostaIlCarrello(
   const fascia = fasciaDelCarrello ?? (fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null);
   if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
 
-  const conto = consegnaSenzaLaVeloce(carrello.map((r) => {
+  const ordiniDelConto = carrello.map((r) => {
     const consegna = Number(r.delivery_fee_cents ?? 0);
     const spedizione = centesimi(r.shipping_cost);
     const merce = lordoDi(r) - consegna - spedizione;
@@ -461,7 +495,15 @@ async function spostaIlCarrello(
       riderFeeCents: Number(r.rider_fee_cents ?? 0),
       giaAnnullato: FUORI_DAL_GIRO.includes(String(r.delivery_status)),
     };
-  }));
+  });
+  // R17-012 — Un giro di prima caduto a metà può aver già tolto l'euro da un ordine spostato in fascia.
+  const giaSpostati = new Set(vivi.filter((c) => c.id !== o.id && !c.pickup_in_store
+    && /^(Oggi|Domani) · /.test(String(c.delivery_slot ?? ''))).map((c) => c.id));
+  const riscrittoAMeta = consegnaSenzaLaVeloce(ordiniDelConto) ? null : contoGiaRiscrittoAMeta(ordiniDelConto, giaSpostati);
+  const conto = riscrittoAMeta ?? consegnaSenzaLaVeloce(ordiniDelConto);
+  if (riscrittoAMeta) {
+    fatto.push(`l’euro della veloce già tolto dalla consegna dell’ordine ${codiceDi(riscrittoAMeta.giaToltoDa)} da un giro di prima`);
+  }
   const carta = carrello.some((c) => c.payment_method !== 'cod');
   const euro: ComeVaLEuro = !conto ? 'a-mano' : conto.toltaCents === 0 ? 'compresa' : carta ? 'tolto-carta' : 'tolto-contanti';
 
@@ -675,7 +717,8 @@ async function spostaIlCarrello(
       aMeta = true;
       continue;
     }
-    fatto.push(`ordine ${codiceDi(c.id)} già passato alla fascia ${fascia}`);
+    // R17-012 — Se il giro cade dopo, gli amministratori leggono anche che l'euro qui è già tolto.
+    fatto.push(`ordine ${codiceDi(c.id)} già passato alla fascia ${fascia}${riga && delta !== 0 ? ', con l’euro della veloce già tolto dalla sua consegna' : ''}`);
     deltaScritti.set(c.id, delta);
     if (delta !== 0) {
       contantiScritti.set(c.id, delta + dalCredito);
@@ -717,7 +760,9 @@ async function spostaIlCarrello(
     ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
   }
 
-  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents, giaConfermati: confermatiSpostati(o, scritti, vivi) }));
+  // R17-012 — Con la carta un conto riscritto vuol dire l'euro tornato sul credito (R17-010).
+  const giaSulCreditoCents = riscrittoAMeta && carta ? riscrittoAMeta.toltaCents : 0;
+  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents: sulCreditoCents + giaSulCreditoCents, giaConfermati: confermatiSpostati(o, scritti, vivi) }));
   await avvisaNegoziEFattorino(admin, o, scritti, fascia);
   logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
   // 5/11/2026 — La promessa al cliente è cambiata (da 30-60 minuti a una fascia): se né campanella né
