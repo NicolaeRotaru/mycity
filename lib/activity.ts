@@ -204,9 +204,12 @@ export async function recordActivity(entry: ActivityEntry): Promise<void> {
  *    quindi un minuto basta e avanza.
  *
  * ⚠️ Questo è il controllo dell'applicazione: fra la lettura e la scrittura c'è
- * una fessura di millisecondi. Il freno vero è un vincolo di unicità sul
- * database — è nella migrazione proposta, e finché non c'è questo regge il
- * caso normale.
+ * una fessura di millisecondi. Il freno vero sta nel database (R14-023,
+ * migrations/384_un_accesso_lascia_una_riga_sola.sql): la stessa regola, con
+ * le stesse finestre, sotto un lucchetto per persona; la seconda copia esce con
+ * 23505, che `recordActivity` scarta come «già registrato». Finché la 384 non è
+ * applicata, questo controllo regge il caso normale. Se cambi le finestre qui,
+ * cambiale anche lì.
  */
 /** Due copie dello stesso accesso, quando la sessione del browser non si sa. */
 export const FINESTRA_ACCESSO_DOPPIO_MS = 60_000;
