@@ -18,7 +18,7 @@
  */
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
-import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
+import { reverseOrderTransfer, reverseRiderTransfer, type ReversibleOrder } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
@@ -91,6 +91,17 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // l'importo è già scritto. Il perché sta in `rimborsi-da-fuori.ts`.
     await registraRimborsoParzialeDaFuori(charge, orders);
     return;
+  }
+
+  // 13/11/2026 (R17-025) — IL BONIFICO AL NEGOZIO E' IN CORSO: SI ASPETTA, COME PER IL PARZIALE.
+  // Lo storno qui sotto parte solo su TRANSFERRED: su PROCESSING si scriveva REFUNDED e poi il giro dei
+  // bonifici ci scriveva sopra TRANSFERRED. La cliente riprendeva 30 €, il forno teneva i suoi 27, e
+  // nessuno lo sapeva. Il rimborso parziale lo riconosceva già (rimborsi-da-fuori.ts): si lancia, Stripe
+  // ripete l'avviso, e quando il giro ha finito il bonifico è TRANSFERRED e si storna. Prima di toccare
+  // qualunque cosa, così la ripetizione riparte da capo.
+  const bonificiInCorso = orders.filter((o) => o.payout_status === 'PROCESSING').map((o) => o.id);
+  if (bonificiInCorso.length > 0) {
+    throw new Error(`[stripe] rimborso pieno con il bonifico al negozio in corso (${bonificiInCorso.join(', ')}): si riprova dopo`);
   }
 
   // 🟢-1: charge.refunds non è sempre espanso nel payload → fallback via API per
@@ -233,6 +244,42 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
       );
     }
   }
+  /**
+   * 13/11/2026 (R17-025) — E SE IL GIRO HA PAGATO FRA LA LETTURA E LA SCRITTURA?
+   * Un ordine letto col bonifico da fare (HELD) può essere stato pagato dal giro mentre questo avviso
+   * lavorava: la scrittura qui sopra (solo per id) ci ha messo REFUNDED sopra TRANSFERRED, e il bonifico
+   * restava al negozio. Si rilegge: un ordine rimborsato tutto con un bonifico che prima non c'era si
+   * storna per il residuo, come i pagati qui sopra (se invece il giro scrive dopo di noi, trova REFUNDED
+   * e lo storna lui, lib/stripe/payout.ts).
+   */
+  const daFareAllaLettura = new Set(
+    orders
+      .filter((o) => !o.stripe_transfer_id && (o.payout_status === 'HELD' || o.payout_status === 'PENDING_SELLER_ONBOARDING'))
+      .map((o) => o.id as string),
+  );
+  if (daFareAllaLettura.size > 0) {
+    const { data: dopo } = await admin
+      .from('orders')
+      .select('id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id')
+      .eq('stripe_payment_intent', pi);
+    for (const r of (dopo ?? []) as unknown as ReversibleOrder[]) {
+      if (!daFareAllaLettura.has(r.id) || r.payout_status !== 'REFUNDED' || !r.stripe_transfer_id) continue;
+      try {
+        await reverseOrderTransfer({ ...r, payout_status: 'TRANSFERRED' });
+      } catch (e) {
+        const motivo = e instanceof Error ? e.message : 'errore sconosciuto';
+        logger.error('[stripe] bonifico pagato durante il rimborso pieno: storno non riuscito', { orderId: r.id, e });
+        stornoFallito.push({ id: r.id, motivo });
+        idFalliti.push(r.id);
+        const { error: errSegno } = await admin
+          .from('orders')
+          .update({ payout_status: 'REVERSAL_FAILED', reversal_error: motivo.slice(0, 500) })
+          .eq('id', r.id);
+        if (errSegno) logger.error('[stripe] storno mancato non segnato sull ordine', { orderId: r.id, message: errSegno.message });
+      }
+    }
+  }
+
   if (stornoFallito.length > 0) {
     await notifyAdmins(
       '⚠️ Storno al venditore non riuscito',

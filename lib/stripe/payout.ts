@@ -179,7 +179,7 @@ export function contantiPagabiliDaStripe(
 async function bonificoGiaFatto(
   stripe: ReturnType<typeof getStripe>,
   q: { gruppo: string; ordineId: string; tentativo: number; delFattorino: boolean; turnoDiPrima: string | null },
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; amount: number | null } | null> {
   try {
     const esistenti = await stripe.transfers.list({ transfer_group: q.gruppo, limit: 100 });
     const trovato = (esistenti.data ?? []).find(
@@ -188,7 +188,7 @@ async function bonificoGiaFatto(
         (t.metadata?.kind === 'rider_fee') === q.delFattorino &&
         (t.metadata?.tentativo ?? '0') === String(q.tentativo),
     );
-    return trovato ? { id: trovato.id } : null;
+    return trovato ? { id: trovato.id, amount: typeof trovato.amount === 'number' ? trovato.amount : null } : null;
   } catch (e) {
     if (q.turnoDiPrima) {
       throw new Error(`elenco dei bonifici non consultabile dopo un turno di prima: non rifaccio il bonifico alla cieca (${q.ordineId})`);
@@ -367,12 +367,7 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       logger.warn('[stripe] bonifico al negozio gia esistente: registrato invece di rifarlo', {
         orderId: order.id, transferId: gia.id,
       });
-      const { error: errGia } = await admin
-        .from('orders')
-        .update({ stripe_transfer_id: gia.id, payout_status: 'TRANSFERRED', payout_at: new Date().toISOString() })
-        .eq('id', order.id);
-      if (errGia) logger.error('[stripe] bonifico ritrovato ma stato non aggiornato', errGia);
-      return { ok: true, transferId: gia.id };
+      return await registraIlBonificoAlNegozio(order.id, gia.id, gia.amount ?? daVersare);
     }
 
     const transfer = await stripe.transfers.create(
@@ -404,25 +399,156 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       { idempotencyKey: `payout_seller_${order.id}_t${tentativo}_c${daVersare}` },
     );
 
-    const { error: errFine } = await admin
-      .from('orders')
-      .update({ stripe_transfer_id: transfer.id, payout_status: 'TRANSFERRED', payout_at: new Date().toISOString() })
-      .eq('id', order.id);
-    if (errFine) {
-      // Il bonifico e' partito ma l'ordine resta in PROCESSING: senza questo
-      // avviso nessuno lo scopre, e il recupero automatico non saprebbe che
-      // il transfer esiste gia'. L'id serve per riconciliare a mano.
-      logger.error('[stripe] payout eseguito ma stato non aggiornato', {
-        orderId: order.id, transferId: transfer.id, message: errFine.message,
-      });
-    }
-
-    return { ok: true, transferId: transfer.id };
+    return await registraIlBonificoAlNegozio(order.id, transfer.id, daVersare);
   } catch (err) {
     logger.error('[stripe] transfer failed', err);
     // Ripristina HELD: il prossimo cron ritenterà con lo stesso idempotencyKey (safe).
-    await admin.from('orders').update({ payout_status: 'HELD' }).eq('id', order.id);
+    // R17-025 — solo se il turno è ancora nostro: un rimborso pieno arrivato nel frattempo ha chiuso
+    // il bonifico (REFUNDED), e rimetterlo HELD lo farebbe pagare al giro dopo.
+    await admin.from('orders').update({ payout_status: 'HELD' }).eq('id', order.id).eq('payout_status', 'PROCESSING');
     return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer failed' };
+  }
+}
+
+/**
+ * 13/11/2026 (R17-025) — IL BONIFICO E' PARTITO: LO SI SCRIVE SOLO SE IL TURNO E' ANCORA NOSTRO.
+ *
+ * Qui si scriveva TRANSFERRED filtrando solo per id. Ma mentre il bonifico partiva, un rimborso pieno
+ * (dal cruscotto, o `refundOrder`) poteva aver già chiuso il bonifico al negozio scrivendo REFUNDED: la
+ * scrittura ci passava sopra, la cliente riprendeva 30 € e il forno teneva i suoi 27, senza un avviso.
+ * Adesso TRANSFERRED si scrive solo su PROCESSING. Se l'ordine è cambiato si rilegge:
+ *  · tornato HELD (il giro ha rimesso in coda un turno che credeva appeso): nessuno l'ha chiuso, il
+ *    bonifico vale e si registra;
+ *  · REFUNDED: un rimborso pieno l'ha chiuso prima che partisse, al negozio non spetta niente: il
+ *    bonifico si storna tutto e l'ordine passa a REVERSED (bonifico partito e ripreso), come uno storno;
+ *  · altro: non lo indovino, lo dico agli amministratori con l'id del bonifico.
+ * Non lancia: il bonifico è già uscito, e chi chiama non deve rimetterlo in coda.
+ */
+/**
+ * 13/11/2026 (R17-025) — IL BONIFICO PARTITO SU UN ORDINE CHE UN RIMBORSO PIENO AVEVA GIA' CHIUSO.
+ *
+ * L'ordine dice REFUNDED (il bonifico al negozio chiuso da un rimborso pieno, prima che partisse) ma
+ * il bonifico `transferId` è uscito lo stesso, perché le due cose sono successe nello stesso momento.
+ * Al negozio di un ordine rimborsato tutto non spetta niente: il bonifico si storna per quello che ne
+ * resta (`importoCents`, oppure chiesto a Stripe), e l'ordine passa a REVERSED — bonifico partito e
+ * ripreso, con tutto il netto ripreso — come dopo uno storno pieno: se poi la banca respinge il
+ * rimborso, il bonifico si rifà da capo con un tentativo nuovo (lib/stripe/rimborso-respinto.ts).
+ * Lo storno che non riesce si segna (REVERSAL_FAILED) e si dice agli amministratori. Non lancia.
+ * La usano il giro dei bonifici e `refundOrder` (il webhook del rimborso pieno storna con `reverseOrderTransfer`).
+ */
+async function stornaIlBonificoDellOrdineRimborsato(
+  orderId: string,
+  transferId: string,
+  importoCents: number | null = null,
+): Promise<'stornato' | 'niente' | 'fallito'> {
+  const admin = getAdminSupabase();
+  let reversalId: string | null = null;
+  let motivo: string | null = null;
+  let quanto = importoCents ?? 0;
+  try {
+    const stripe = getStripe();
+    if (importoCents === null) {
+      const t = await stripe.transfers.retrieve(transferId);
+      quanto = Math.max(0, (t.amount ?? 0) - (t.amount_reversed ?? 0));
+    }
+    if (quanto <= 0) return 'niente';
+    const reversal = await stripe.transfers.createReversal(
+      transferId,
+      { amount: quanto, metadata: { order_id: orderId } },
+      { idempotencyKey: `reversal_${orderId}_bonifico_${transferId}` },
+    );
+    reversalId = reversal.id;
+  } catch (e) {
+    motivo = e instanceof Error ? e.message : 'errore sconosciuto';
+  }
+  const { data: ora } = await admin.from('orders').select('seller_payout_cents').eq('id', orderId).single();
+  const netto = (ora as { seller_payout_cents?: number | null } | null)?.seller_payout_cents ?? 0;
+  const { error } = await admin
+    .from('orders')
+    .update(
+      reversalId
+        ? {
+            stripe_transfer_id: transferId,
+            stripe_reversal_id: reversalId,
+            payout_status: 'REVERSED',
+            payout_at: new Date().toISOString(),
+            seller_payout_reversed_cents: netto,
+          }
+        : { stripe_transfer_id: transferId, payout_status: 'REVERSAL_FAILED', reversal_error: (motivo ?? '').slice(0, 500) },
+    )
+    .eq('id', orderId)
+    .eq('payout_status', 'REFUNDED');
+  if (error) {
+    logger.error('[stripe] bonifico di un ordine rimborsato: esito dello storno non scritto', { orderId, transferId, reversalId, message: error.message });
+  }
+  if (reversalId) {
+    logger.spesa('[stripe] rimborso pieno arrivato mentre partiva il bonifico: bonifico stornato', { orderId, transferId, centesimi: quanto });
+    return 'stornato';
+  }
+  logger.error('[stripe] bonifico partito su un ordine rimborsato per intero: storno non riuscito', { orderId, transferId, motivo });
+  await notifyAdmins(
+    '⚠️ Bonifico partito su un ordine rimborsato per intero',
+    `Il bonifico ${transferId} al negozio dell'ordine ${orderId} è partito mentre l'ordine veniva rimborsato per intero, ` +
+      `e lo storno non è riuscito (${motivo}). Prima di riprenderlo a mano guarda su Stripe (Connect → il bonifico → Storni) se lo storno c'è già.`,
+    '/admin/orders',
+  ).catch(() => undefined);
+  return 'fallito';
+}
+
+async function registraIlBonificoAlNegozio(orderId: string, transferId: string, importoCents: number): Promise<PayoutResult> {
+  const admin = getAdminSupabase();
+  const adesso = new Date().toISOString();
+  const { data: scritti, error: errFine } = await admin
+    .from('orders')
+    .update({ stripe_transfer_id: transferId, payout_status: 'TRANSFERRED', payout_at: adesso })
+    .eq('id', orderId)
+    .eq('payout_status', 'PROCESSING')
+    .select('id');
+  if (errFine) {
+    // Il bonifico e' partito ma l'ordine resta in PROCESSING: senza questo
+    // avviso nessuno lo scopre, e il recupero automatico non saprebbe che
+    // il transfer esiste gia'. L'id serve per riconciliare a mano.
+    logger.error('[stripe] payout eseguito ma stato non aggiornato', {
+      orderId, transferId, message: errFine.message,
+    });
+    return { ok: true, transferId };
+  }
+  if (!Array.isArray(scritti) || scritti.length > 0) return { ok: true, transferId };
+
+  try {
+    const { data: ora, error: errOra } = await admin
+      .from('orders')
+      .select('payout_status, seller_payout_cents')
+      .eq('id', orderId)
+      .single();
+    if (errOra || !ora) throw new Error(`ordine non riletto: ${errOra?.message ?? 'nessuna riga'}`);
+    const statoOra = (ora as { payout_status?: string | null }).payout_status ?? null;
+    if (statoOra === 'HELD' || statoOra === 'PENDING_SELLER_ONBOARDING') {
+      const { error } = await admin
+        .from('orders')
+        .update({ stripe_transfer_id: transferId, payout_status: 'TRANSFERRED', payout_at: adesso })
+        .eq('id', orderId)
+        .eq('payout_status', statoOra);
+      if (error) throw new Error(error.message);
+      return { ok: true, transferId };
+    }
+    if (statoOra === 'REFUNDED') {
+      const esito = await stornaIlBonificoDellOrdineRimborsato(orderId, transferId, importoCents);
+      if (esito === 'stornato') {
+        return { ok: true, code: 'NOTHING_TO_PAY', reason: 'Rimborsato per intero mentre partiva il bonifico: bonifico stornato' };
+      }
+      return { ok: true, transferId };
+    }
+    throw new Error(`stato del bonifico cambiato in ${statoOra}`);
+  } catch (e) {
+    logger.error('[stripe] bonifico partito ma ordine cambiato nel frattempo', { orderId, transferId, e });
+    await notifyAdmins(
+      '⚠️ Bonifico partito su un ordine cambiato',
+      `Il bonifico ${transferId} di ${formatPriceFromCents(importoCents)} al negozio dell'ordine ${orderId} è partito, ma l'ordine è cambiato mentre partiva ` +
+        `(${e instanceof Error ? e.message : 'errore'}): controlla a mano stato del bonifico e quota del negozio.`,
+      '/admin/orders',
+    ).catch(() => undefined);
+    return { ok: true, transferId };
   }
 }
 
@@ -2359,6 +2485,17 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   const { error: errStato } = Object.keys(statoDaScrivere).length === 0
     ? { error: null }
     : await admin.from('orders').update(statoDaScrivere).eq('id', order.id);
+  // 13/11/2026 (R17-025) — Il rimborso pieno ha chiuso un bonifico che non era partito (REFUNDED): ma il
+  // giro può averlo pagato mentre il rimborso usciva, e questa scrittura ci è passata sopra. Si rilegge:
+  // se ora c'è un bonifico, al negozio di un ordine rimborsato tutto non spetta niente e si storna.
+  // (Se invece il giro scrive dopo di noi, la sua scrittura trova REFUNDED e lo storna lui.)
+  if (!errStato && (statoDelNegozio as { payout_status?: string }).payout_status === 'REFUNDED' && !order.stripe_transfer_id) {
+    const { data: dopo } = await admin.from('orders').select('payout_status, stripe_transfer_id').eq('id', order.id).single();
+    const bonificoNelFrattempo = (dopo as { payout_status?: string | null; stripe_transfer_id?: string | null } | null) ?? null;
+    if (bonificoNelFrattempo?.payout_status === 'REFUNDED' && bonificoNelFrattempo.stripe_transfer_id) {
+      await stornaIlBonificoDellOrdineRimborsato(order.id, bonificoNelFrattempo.stripe_transfer_id);
+    }
+  }
   if (errStato) {
     logger.error('[refundOrder] stato del rimborso non scritto sull ordine', {
       orderId: order.id, message: errStato.message,
