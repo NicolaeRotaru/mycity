@@ -9,6 +9,7 @@
  */
 
 import { trackErrorShown } from './analytics/events';
+import { PASSWORD_RUBATA, PASSWORD_SEMPLICE } from './auth/errori-nuova-password';
 
 const SUPABASE_CODE_MAP: Record<string, string> = {
   '23505': 'Questo valore è già stato usato. Prova con uno diverso.',
@@ -22,6 +23,16 @@ const SUPABASE_CODE_MAP: Record<string, string> = {
 };
 
 const GENERIC_FALLBACK = 'Qualcosa non ha funzionato. Riprova fra un momento.';
+
+/**
+ * 13/11/2026 (R24-008) — I CODICI DI SUPABASE AUTH. Qui il testo del messaggio vince
+ * sul codice, perché dice il MOTIVO: `weak_password` arriva sia per una password
+ * rubata sia per una troppo semplice, e il consiglio giusto è diverso. Il codice fa
+ * da ripiego quando il testo non si riconosce.
+ */
+const CODICI_AUTH: Record<string, string> = {
+  weak_password: PASSWORD_SEMPLICE,
+};
 
 /**
  * LE PAROLE CHE SOLO UN MOTORE SCRIVE — la rete che mancava all'ultimo ramo.
@@ -97,6 +108,14 @@ export function traduciErroreAuth(msg: string): string | null {
   // «troppe email a questo indirizzo» lo leggeva anche chi non ne aveva mai ricevuta una.
   if (m.includes('email rate limit exceeded'))
     return 'In questo momento non riusciamo a mandare email: riprova fra qualche minuto.';
+  // 13/11/2026 (R24-008) — «Password is known to be weak and easy to guess» è la password
+  // comune o già finita negli elenchi rubati (reasons: pwned): usciva in inglese sotto il
+  // campo della registrazione. Le frasi sono quelle di /reset-password, una sola per lo
+  // stesso errore (lib/auth/errori-nuova-password.ts).
+  if (m.includes('known to be weak') || m.includes('pwned') || m.includes('leaked password'))
+    return PASSWORD_RUBATA;
+  if (m.includes('weak password') || m.includes('password is too weak') || m.includes('password should contain'))
+    return PASSWORD_SEMPLICE;
   if (m.includes('new password should be different'))
     return 'La password nuova deve essere diversa da quella attuale';
   if (m.includes('same password'))
@@ -125,6 +144,10 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
     if (e.code && SUPABASE_CODE_MAP[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return SUPABASE_CODE_MAP[e.code];
+    }
+    if (e.code && CODICI_AUTH[e.code]) {
+      trackErrorShown(e.code, e.message ?? '', context?.page);
+      return traduciErroreAuth(e.message ?? '') ?? CODICI_AUTH[e.code];
     }
     if (e.message) {
       /**
