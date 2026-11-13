@@ -1,0 +1,252 @@
+{
+  "sessione": "R20",
+  "aggiornato": "2026-11-13 06:20",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R20-011",
+      "chiave": "qa-flussi|sulla bacheca del fattorino un «accetta» perso lascia l'ordine in elenco fino a un minuto, e fa girare tutti i pulsanti insieme",
+      "esito": "riparato",
+      "commit": "2eb0cddf7559d246bf1445d5aec3b629371a6256",
+      "file_toccati": [
+        "app/rider/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-presa-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-presa-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2eb0cddf7559d246bf1445d5aec3b629371a6256^ --file app/rider/page.tsx --prove tests/unit/riparazione-r20-presa-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con GIA_PRESO l'ordine esce subito dagli ordini liberi in memoria e la bacheca si rilegge. Lo stesso succede dopo un accetta riuscito. Gira solo il pulsante dell'ordine premuto (claim.variables === o.id). Il testo ora dice «non è più disponibile: l'ha preso un altro fattorino oppure non è più pronto»: è vero in tutti e due i casi, perché il server non li distingue. La migrazione 123 non è stata toccata e non ne ho fatta una nuova.",
+      "verificato_da": "qa: la prova passa 4 su 4 e la rimessa esce 0. Dal diff: GIA_PRESO toglie l'ordine dalla bacheca e la rilegge, gira solo il pulsante premuto (claim.variables===o.id), con DOCUMENTI_SCADUTI l'ordine resta. La 123 non è toccata. Le migrazioni 123 e 270 non distinguono annullato da preso: un solo testo vero per i due casi va bene per la nota del capo squadra. tsc esce 0, le 22 prove vicine sono verdi."
+    },
+    {
+      "id": "R20-010",
+      "chiave": "qa-flussi|due ordini dello stesso carrello possono finire a due fattorini diversi, e il secondo fa un viaggio intero per 1 euro",
+      "esito": "scelta_di_nicola",
+      "domanda": "Un carrello con più negozi deve andare tutto allo stesso fattorino, o resta un ordine alla volta e cambia il compenso di chi prende il secondo?",
+      "opzioni": [
+        "A) Giro intero allo stesso fattorino: una migrazione nuova mette la chiave del carrello nella vista ordini_disponibili_rider (per i contanti oggi sta solo in cod_checkout_attempts, per la carta in stripe_transfer_group) e aggiunge una presa che assegna insieme i negozi pronti e tiene riservati a lui quelli ancora in preparazione; nessuna cifra cambia",
+        "B) Solo raggruppati in bacheca («stesso carrello, un giro solo») con un «Accetta il giro», senza riservare: se i negozi sono pronti in momenti diversi due fattorini restano possibili; serve comunque la migrazione per la chiave del carrello; nessuna cifra cambia",
+        "C) Un ordine alla volta come oggi, ma chi parte per un negozio dello stesso carrello senza quello della base prende la base (3 €) invece di 1 €: cambia una cifra del compenso",
+        "D) Lasciare così finché il fattorino è solo Nicola"
+      ],
+      "nota": "Nella bacheca non si può raggruppare senza una migrazione: la vista non porta nessuna chiave del carrello, e negli ordini in contanti la chiave non sta nemmeno sulla riga dell'ordine. Un client che chiede una colonna nuova prima che la migrazione sia applicata romperebbe la lettura della bacheca. Chi tiene i negozi in preparazione è una regola di assegnazione. Nessuna modifica fatta.",
+      "verificato_da": "qa: l'esito scelta_di_nicola è giusto. Ho controllato: la vista ordini_disponibili_rider (161) non ha la chiave del carrello; nei contanti la chiave sta solo in cod_checkout_attempts.order_ids, con la carta in stripe_transfer_group; il compenso è 3 € più 1 € (prezzi.ts:310-316). Raggruppare da solo non impedisce due fattorini, e riservare i negozi in preparazione è una regola di assegnazione. Nessun file toccato. Il rischio «client prima della migrazione» si potrebbe evitare, ma non cambia l'esito."
+    },
+    {
+      "id": "R20-007",
+      "chiave": "frontend-ux|sulla bacheca del fattorino un guasto passeggero della vista dei negozi toglie il nome del negozio fino al giro dopo, senza riprovare subito",
+      "esito": "riparato",
+      "commit": "1051c49a0fa569f26b29a3136f632f293f86b479",
+      "commit_della_voce": [
+        "5729b46f1a087679817ab0b9cdec622de2884517",
+        "1051c49a0fa569f26b29a3136f632f293f86b479"
+      ],
+      "file_toccati": [
+        "lib/queries/negozio-dell-ordine.ts",
+        "app/rider/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-negozio-riprova.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-negozio-riprova.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2eb0cddf7559d246bf1445d5aec3b629371a6256 --file lib/queries/negozio-dell-ordine.ts,app/rider/page.tsx --prove tests/unit/riparazione-r20-negozio-riprova.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "conNegozioSePossibile prende un richiamo facoltativo seLaVistaCade e restituisce le righe come prima. La bacheca segna la lettura come parziale (negoziNonLetti) e la riprova dopo 5 secondi invece di 60. Con la vista sana l'intervallo resta 60 secondi. Il primo commit è stato rifatto (uscita 3) perché la lettura restava compatibile all'indietro. La base della rimessa è il commit prima dei due commit della voce.",
+      "verificato_da": "qa: la prova passa 2 su 2 con l'orologio finto e la rimessa esce 0, base 2eb0cddf, prima dei due commit della voce. Il richiamo seLaVistaCade è facoltativo e l'unico chiamante è app/rider/page.tsx. L'intervallo è 5 s solo con negoziNonLetti, altrimenti 60 s (la prova di controllo lo verifica). Il tipo della funzione per refetchInterval in v5 è giusto: tsc esce 0."
+    },
+    {
+      "id": "R20-002",
+      "chiave": "accessibilita|nella bacheca del fattorino l'interruttore online è alto 32 pixel e le consegne in preparazione hanno il compenso poco leggibile",
+      "esito": "riparato",
+      "commit": "3f78b2b2edd6494ddaf2d1f72dba14c28b445670",
+      "file_toccati": [
+        "app/rider/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-interruttore-online.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-interruttore-online.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f78b2b2edd6494ddaf2d1f72dba14c28b445670^ --file app/rider/page.tsx --prove tests/unit/riparazione-r20-interruttore-online.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'interruttore ora misura 76x44 (era 58x32), con il pallino in proporzione. Tolta opacity-75 dalle schede in preparazione: il compenso passa da 3,80:1 a circa 6,9:1. La mutazione online/offline usa networkMode 'always' e passa avanti l'errore di getUser. Senza rete compare subito «Problema di connessione», l'interruttore non resta grigio e non cambia da solo quando la rete torna.",
+      "verificato_da": "qa: la prova passa 3 su 3 e la rimessa esce 0. L'interruttore misura 76x44: pallino 38 px, 3+38+3, sinistra 35 px quando è online. opacity-75 tolta. networkMode 'always' con getUser che passa l'errore: friendlyError dà «Problema di connessione», l'interruttore non resta spento e non scrive da solo quando torna la rete. Fuori voce: pref (riga 201) ha lo stesso ripiego senza rete (online:false)."
+    },
+    {
+      "id": "R20-001",
+      "chiave": "accessibilita|nella consegna in corso i tasti chiama, naviga e sms sono sotto i 44 pixel, e senza rete un codice giusto risulta «verifica fallita»",
+      "esito": "riparato",
+      "commit": "425b234b3096a889a38aa33062a340ffede6231a",
+      "file_toccati": [
+        "app/rider/orders/[id]/page.tsx",
+        "components/VerifyCodeDialog.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-consegna-tasti-e-rete.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-consegna-tasti-e-rete.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 425b234b3096a889a38aa33062a340ffede6231a^ --file \"app/rider/orders/[id]/page.tsx,components/VerifyCodeDialog.tsx\" --prove tests/unit/riparazione-r20-consegna-tasti-e-rete.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Naviga, Chiama e SMS hanno h-11 (44 px) e restano a testo piccolo, così i tre stanno in fila. Anche la freccia indietro passa a 44x44 (h-11 w-11). VerifyCodeDialog riconosce gli errori di rete di Chrome, Safari e Firefox, e anche navigator.onLine falso, sia come motivo sia come eccezione. Mostra «Niente rete: il codice non è stato controllato, non è sbagliato. Riprova appena c'è connessione» e non segna il campo con aria-invalid. Un codice davvero sbagliato resta «Codice errato».",
+      "verificato_da": "qa: la prova passa 7 su 7 e la rimessa esce 0. h-11 batte min-h-[32px] in cn(): 44 px, anche sui tasti che sono link. Freccia indietro 44x44. postgrest-js senza rete dà «TypeError: Failed to fetch» e le espressioni regolari lo riconoscono (Chrome, Safari, Firefox). Unico chiamante: verifyPickup e verifyDelivery passano error.message. WRONG_CODE e gli altri motivi conosciuti restano com'erano, aria-invalid si spegne solo per la rete."
+    },
+    {
+      "id": "R20-004",
+      "chiave": "dati-analytics|la bacheca del fattorino mostra «oggi 0,00 € e 0 consegne» quando la lettura cade e mentre carica",
+      "esito": "riparato",
+      "commit": "05d1969e76233d7f39cf12374724ef3dd8d80ec6",
+      "commit_della_voce": [
+        "c3fcbbf61090c1a6169d0221d2de0eb509872fcf",
+        "05d1969e76233d7f39cf12374724ef3dd8d80ec6"
+      ],
+      "file_toccati": [
+        "app/rider/page.tsx",
+        "tests/unit/riparazione-r20-incasso-di-oggi.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-incasso-di-oggi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-incasso-di-oggi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 05d1969e76233d7f39cf12374724ef3dd8d80ec6^ --file app/rider/page.tsx --prove tests/unit/riparazione-r20-incasso-di-oggi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Giro di correzione. Quando getUser() torna senza utente, la lettura degli incassi di oggi ora lancia l'errore (erroreUtente, o 'Non autenticato' se manca) invece di dare {0,0}, come R20-002 fa già in toggleOnline. Così il riquadro mostra «—» e la lettura viene rifatta quando la rete torna (refetchOnReconnect su una lettura in errore). Il «Riprova» della bacheca ora rilegge anche gli incassi di oggi. Due casi nuovi nella prova della voce (aperta senza rete, poi Riprova; aperta senza rete, poi la rete torna): tutti e due rossi sul codice di c3fcbbf6.",
+      "verificato_da": "qa lotto 1: parziale (getUser senza rete → zero); qa lotto 2 dopo la correzione: qa: letti la voce intera e i diff di c3fcbbf6 e 05d1969e. Prova: 5/5 verdi. Rimessa con --base 05d1969e^: uscita 0, regge. Ragionato sui due cambi: il caso del Riprova cade se si toglie il refetch di letturaOggi; il caso del ritorno della rete cade se si toglie il throw, perché {0,0} restava fresco per 30 s. Il QueryProvider non spegne refetchOnReconnect e una lettura in errore senza dati è vecchia per react-query. Le 44 prove che importano i file toccati sono verdi, tsc ed eslint puliti. Fuori voce: pref e rating hanno lo stesso schema getUser→valori di ripiego."
+    },
+    {
+      "id": "R20-015",
+      "chiave": "qa-flussi|salvando le taglie, se la scorta cambia a metà il negozio legge «riapri e salva di nuovo», ma le taglie tolte sono già cancellate",
+      "esito": "riparato",
+      "commit": "33fc7ac356326c6366cf097c62f8fd05e5a162ad",
+      "file_toccati": [
+        "lib/products/persistVariantsServer.ts",
+        "tests/unit/riparazione-r20-taglie-tolte.test.ts",
+        "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-taglie-tolte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-taglie-tolte.test.ts tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 33fc7ac356326c6366cf097c62f8fd05e5a162ad^ --file lib/products/persistVariantsServer.ts --prove tests/unit/riparazione-r20-taglie-tolte.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La strada principale era già atomica dal 12/11: R08-008 usa la funzione salva_varianti della migrazione 323, che non è detto sia applicata. Restava il difetto nel ripiego a pezzi (PGRST202), che cancellava per primo. Ora fa prima gli aggiornamenti condizionati sulla scorta, poi quelli senza condizione, e solo dopo cancellazioni e inserimenti (seconda strada indicata dal fix del registro). Quando tutto va bene il risultato finale è identico: id distinti e nessun vincolo unique su product_variants. Prova con un client finto che registra l'ordine delle chiamate. Dichiaro di aver cambiato una prova esistente che importa il mio file: tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts, caso «ripiego». Diceva expect(aPezzi[0]).toBe('delete v-l'), cioè fissava il difetto; ora controlla che la L non sia cancellata al conflitto. La prova è più stretta, non più debole.",
+      "verificato_da": "qa: confrontato il diff con la voce, che indica come seconda strada prima i condizionati e poi cancellazioni e inserimenti. In migrations/080 e nelle successive product_variants non ha vincoli unique, quindi riordinare gli aggiornamenti dà lo stesso stato finale. Prova nuova 3/3 verde, rimessa con --base 33fc7ac3^: uscita 0. La modifica a riparazione-r08 è ammessa (importa persistVariantsServer) e stringe, non indebolisce: prima fissava 'delete v-l' come primo passo. Resta, come la voce accetta, che un aggiornamento condizionato riuscito prima del conflitto (S) resta scritto. La strada principale salva_varianti è atomica. 44 prove vicine verdi."
+    },
+    {
+      "id": "R20-012",
+      "chiave": "qa-flussi|il carrello si riempie di nuovo con la spesa già pagata o già tolta, se si usano due dispositivi o non si torna da stripe",
+      "esito": "parziale",
+      "commit": "33e65fc83f1b8d6fe7fa3b1fc137cb5bd51374bf",
+      "file_toccati": [
+        "components/CartCrossDeviceSync.tsx",
+        "tests/unit/riparazione-r20-carrello-riga-tolta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-carrello-riga-tolta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-carrello-riga-tolta.test.ts tests/unit/minori-s07-carrello-fra-dispositivi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 33e65fc83f1b8d6fe7fa3b1fc137cb5bd51374bf^ --file components/CartCrossDeviceSync.tsx --prove tests/unit/riparazione-r20-carrello-riga-tolta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il pezzo «cloud vuoto + locale pieno» era già curato il 5/11 (S07, segno mc_cart_synced_at). Ho chiuso il pezzo della riga tolta. In syncDown, se il carrello locale non è cambiato dopo l'ultimo allineamento e il cloud sì, ora vale il cloud com'è (anche con righe tolte o quantità abbassate) invece della fusione «quantità più alta». Si fonde solo quando il locale ha roba mai salita: il carrello da ospite resta protetto. fondiCarrelli in lib/cart.ts non è cambiato.",
+      "cosa_resta": "Il caso della carta senza ritorno da Stripe (scheda chiusa, app della banca): nessuno svuota user_carts sul server quando l'ordine nasce, quindi carrello locale e copia sul server restano pieni. Va fatto nella rotta contanti e nel webhook della carta, file non di R20 (vedi serve_file_altrui). Dopo quelle due righe la parte di R20 basta già: la logica esistente di syncDown (cloud vuoto più recente, locale non cambiato) svuota il carrello locale alla riapertura, sul telefono che ha pagato e sull'altro dispositivo. app/orders/page.tsx non serve toccarlo.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "In handleCheckoutCompleted, dentro il blocco `if (createdOrderIds.some((c) => c.nuovo)) {`, subito dopo `await marcaCarrelloRecuperato(admin, buyerId);` aggiungere: `// R20-012 — La copia del carrello sul server si svuota quando l'ordine nasce: chi paga e non torna da Stripe la ritrovava piena. Solo se non è cambiata dopo l'apertura del pagamento (una spesa nuova fatta nel frattempo resta).` poi `const { error: errCarrello } = await admin.from('user_carts').update({ items: [], updated_at: new Date().toISOString() }).eq('user_id', buyerId).lte('updated_at', new Date(session.created * 1000).toISOString());` e `if (errCarrello) logger.warn('[carrelli] copia del carrello sul server non svuotata', { message: errCarrello.message });` (logger è già importato)."
+        },
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Subito dopo `if (comunicazioni.length > 0) await marcaCarrelloRecuperato(admin, user.id);` (circa riga 1608) aggiungere: `// R20-012 — Anche qui la copia del carrello sul server si svuota quando l'ordine nasce, senza aspettare il browser.` poi `if (comunicazioni.length > 0) { const { error: errCarrello } = await admin.from('user_carts').update({ items: [], updated_at: new Date().toISOString() }).eq('user_id', user.id); if (errCarrello) logger.warn('[cod] copia del carrello sul server non svuotata', { message: errCarrello.message }); }` (logger è già importato)."
+        }
+      ],
+      "verificato_da": "qa: l'esito parziale è giusto. Il cloud vuoto era già curato da S07; la riga tolta ora è chiusa in syncDown, dove il locale non cambiato e il cloud più recente vuol dire che vale il cloud. Il carrello da ospite resta protetto da synced_at>0 e localUpdated<=synced. Ho controllato che tutte le scritture del carrello passano da saveCart, con il suo bump. Prova 3/3 e minori-s07 verdi, rimessa con --base 33e65fc8^: uscita 0. I punti d'aggancio di serve_file_altrui esistono (ordini.ts:493-497 con admin, session.created e logger; cod/route.ts:1608) e il checkout svuota tutto il carrello, quindi svuotare tutto user_carts è coerente. Limite della proposta per il webhook: .lte confronta updated_at, scritto dall'orologio del browser, con session.created di Stripe. Con l'orologio del browser avanti, o un flush al pagehide verso Stripe, lo svuotamento salta: resta com'è oggi, senza danni."
+    },
+    {
+      "id": "R20-008",
+      "chiave": "qa-flussi|il drop del giorno legge senza guardare l errore e usa il giorno di greenwich",
+      "esito": "riparato",
+      "commit": "e90b1221b1035535a3b11a27b00a25fe0989fff1",
+      "file_toccati": [
+        "app/admin/daily-drops/page.tsx",
+        "tests/unit/riparazione-r20-drop-del-giorno.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r20-drop-del-giorno.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r20-drop-del-giorno.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e90b1221b1035535a3b11a27b00a25fe0989fff1^ --file app/admin/daily-drops/page.tsx --prove tests/unit/riparazione-r20-drop-del-giorno.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giorno di Roma (giornoPiacenza, Europe/Rome) e l'errore della lettura dei drop li aveva già sistemati R07-017 (commit 83658a41). Restava la lettura dei prodotti: se cadeva, il menu «Prodotto» restava vuoto senza una parola. Ora c'è un ErrorState compatto con «Riprova», fuori dal fieldset, quindi si preme anche con la funzione spenta. Prova con orologio finto alle 00:30 di Roma (23:30 UTC del 12/11) e la notte del cambio dell'ora (25/10). Controlla anche che la lettura dei drop caduta non dica «Nessun drop».",
+      "verificato_da": "qa: alla base il giorno di Roma (giornoPiacenza su Europe/Rome) e l'errore dei drop erano già curati da R07-017. Restava la lettura dei prodotti senza isError, ora con ErrorState compatto fuori dal fieldset. Il Button ha type='button' di default, quindi il Riprova dentro il form non invia il salvataggio. Prova 5/5 verde: orologio finto alle 23:30 UTC del 12/11 e la notte del 25/10. Rimessa con --base e90b1221^: uscita 0. tsc ed eslint puliti."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Sulla bacheca del fattorino, se la lettura dello stato online cade, la pagina scrive «Sei offline» invece di dire che non lo sa; anche il voto ignora l’errore",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/rider/page.tsx:201",
+      "descrizione": "La lettura pref (rider_is_online) e quella del rating non guardano error: senza rete la bacheca mostra «Sei offline» (online:false) come se fosse vero. Visto dal riparatore e dal revisore del lotto 1, fuori dalle voci di R20."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "nota": ""
+  }
+}
