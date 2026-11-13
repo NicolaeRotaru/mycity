@@ -8,8 +8,6 @@ import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { comunicaEsito, MOTIVAZIONE_MINIMA } from './esito/comunica';
 import { motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
-import { sendEmail } from '@/lib/email/client';
-import { escapeHtml } from '@/lib/html-escape';
 
 export const runtime = 'nodejs';
 
@@ -38,58 +36,6 @@ const Corpo = z.object({
   dettaglio: z.string().max(2000).optional(),
   emailContatto: z.string().email().max(320).optional(),
 });
-
-/**
- * 13/11/2026 (R21-008) — CHI LASCIAVA L'EMAIL NON RICEVEVA NESSUNA CONFERMA.
- *
- * Dopo l'inserimento la rotta avvisava solo gli amministratori: chi aveva segnalato vedeva un
- * avviso a schermo che spariva, e restava senza prova né numero. Il regolamento europeo sui
- * servizi digitali (art. 16.4) chiede una conferma di ricezione al recapito elettronico lasciato.
- *
- * Il testo è tutto nostro: numero, oggetto, motivo e data. Niente testo libero di chi segnala,
- * perché l'indirizzo lo può scrivere chiunque e la conferma non deve poter portare parole altrui.
- * L'esito dell'invio si legge: torna nella risposta e, se fallisce, nei registri.
- */
-type Conferma = 'inviata' | 'fallita' | 'nessun_recapito';
-
-async function mandaConferma(
-  a: string,
-  s: { id: string; tipo: string; motivo: string; quando: Date },
-): Promise<Conferma> {
-  const quando = s.quando.toLocaleString('it-IT', { timeZone: 'Europe/Rome', dateStyle: 'long', timeStyle: 'short' });
-  const righe = [
-    `Numero della segnalazione: ${s.id}`,
-    `Che cosa hai segnalato: ${oggettoConArticolo(s.tipo)}`,
-    `Motivo: ${motivoLeggibile(s.motivo)}`,
-    `Ricevuta il: ${quando}`,
-  ];
-  const chiusura = 'La esaminiamo e ti scriviamo a questo indirizzo la decisione, con la motivazione.';
-  try {
-    const r = await sendEmail({
-      to: a,
-      subject: 'Abbiamo ricevuto la tua segnalazione',
-      html:
-        '<p>Abbiamo ricevuto la tua segnalazione.</p>' +
-        `<p>${righe.map(escapeHtml).join('<br>')}</p>` +
-        `<p>${escapeHtml(chiusura)}</p>`,
-      text: `Abbiamo ricevuto la tua segnalazione.\n\n${righe.join('\n')}\n\n${chiusura}`,
-      tipo: 'transazionale',
-    });
-    if (r.ok) return 'inviata';
-    logger.error(new Error('[segnalazioni] conferma di ricezione non partita'), {
-      context: 'segnalazioni',
-      segnalazione: s.id,
-      motivo: 'error' in r ? r.error : r.reason,
-    });
-  } catch (e) {
-    logger.error(new Error('[segnalazioni] conferma di ricezione non partita'), {
-      context: 'segnalazioni',
-      segnalazione: s.id,
-      motivo: e instanceof Error ? e.message : 'errore',
-    });
-  }
-  return 'fallita';
-}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   {
@@ -147,7 +93,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         segnalante_id: autoreId,
         email_contatto: corpo.emailContatto ?? null,
       })
-      .select('id, created_at')
+      .select('id')
       .single();
 
     if (error) {
@@ -204,16 +150,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       logger.warn('[segnalazioni] avviso agli amministratori non partito', { e });
     }
 
-    const conferma: Conferma = corpo.emailContatto
-      ? await mandaConferma(corpo.emailContatto, {
-          id: data.id,
-          tipo: corpo.tipo,
-          motivo: corpo.motivo,
-          quando: data.created_at ? new Date(data.created_at) : new Date(),
-        })
-      : 'nessun_recapito';
-
-    return NextResponse.json({ ok: true, id: data.id, conferma }, { status: 201 });
+    return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
   }
 }
 
