@@ -67,7 +67,9 @@ export function Modal({
     document.body.style.overflow = 'hidden';
     // Focus first focusable inside
     setTimeout(() => {
-      const first = dialogRef.current?.querySelector<HTMLElement>(
+      // R18-009 — Chi lo chiede con `data-autofocus` ha il fuoco iniziale sul suo campo; gli altri
+      // dialoghi restano com'erano (primo elemento attivabile).
+      const first = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])') ?? dialogRef.current?.querySelector<HTMLElement>(
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
       first?.focus();
