@@ -524,7 +524,7 @@
     "R21-002: per stare sotto i 120 s della rotta il tetto di token del Copilot scende da 6000 a 3000: un negozio con un catalogo grande riceve piani più corti (circa 33 prodotti per volta). Va bene finché non c'è lo streaming?"
   ],
   "conto": {
-    "agenti": 7,
-    "nota": "7 subagenti su 12 (3 lotti, 1 correzione, 2 collaudi... più il collaudo del lotto 1). Costo della sessione 39,2 $ alle 06:41, oltre il tetto di 35 $: fermo qui. Restano: collaudo del lotto 3 (8 voci) e ricollaudo della correzione 008/014; correzione di R21-018 (conto alla rovescia dalla scadenza) e del rischio latente di R21-013 (delivery_signature_url fra le colonne lette); npm run verify; valida-referto."
+    "agenti": 6,
+    "nota": "6 subagenti su 12: 3 lotti, 2 collaudi (lotti 1 e 2), 1 correzione (008/014). Costo della sessione 39,2 $ alle 06:41, oltre il tetto di 35 $: fermo qui. Restano: collaudo del lotto 3 (8 voci) e ricollaudo della correzione 008/014; correzione di R21-018 (conto alla rovescia dalla scadenza) e del rischio latente di R21-013 (delivery_signature_url fra le colonne lette); npm run verify; valida-referto."
   }
 }
