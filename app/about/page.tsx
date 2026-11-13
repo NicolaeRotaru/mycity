@@ -119,9 +119,9 @@ export default async function AboutPage() {
           {stats.map((s) => (
             <div
               key={s.label}
-              className="bg-white border border-cream-300 rounded-xl px-5 py-5 shadow-warm"
+              className="min-w-0 bg-white border border-cream-300 rounded-xl px-5 py-5 shadow-warm"
             >
-              <div className="font-serif text-2xl md:text-3xl font-extrabold text-primary-700 leading-none">
+              <div className="font-serif text-xl sm:text-2xl md:text-3xl font-extrabold text-primary-700 leading-none break-words">
                 {s.value}
               </div>
               <div className="text-sm text-ink-500 mt-1.5">{s.label}</div>
