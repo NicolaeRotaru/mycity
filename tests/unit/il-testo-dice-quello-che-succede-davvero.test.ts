@@ -62,9 +62,11 @@ describe('① il SOS non promette una chiamata che nessuno ha fatto partire', ()
     expect(messaggiToast.some((t) => /NON è stata avvisata/.test(t))).toBe(true);
   });
 
-  it('il dialogo di conferma resta al futuro, com’era giusto', () => {
-    // Era già scritto bene venti righe più in basso: il testo esatto stava lì.
-    expect(sos).toContain('Verrà avviata la chiamata al');
+  it('anche il dialogo di conferma non promette la chiamata: dice che CHIAMA lo preme il fattorino', () => {
+    // R16-001 (13/11/2026) — Qui prima si vincolava «Verrà avviata la chiamata al 112», che era lo
+    // stesso difetto dei messaggi: `tel:` non avvia nessuna chiamata, apre il telefono col numero scritto.
+    expect(sos).not.toContain('Verrà avviata la chiamata al');
+    expect(sos).toMatch(/già scritto: la chiamata parte solo quando premi tu CHIAMA/);
   });
 });
 
