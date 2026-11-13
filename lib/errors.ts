@@ -132,6 +132,32 @@ export function traduciErroreAuth(msg: string): string | null {
 }
 
 /**
+ * 13/11/2026 (R24-004) — LE FRASI CHE UNA NOSTRA ROTTA HA SCRITTO PER IL CLIENTE.
+ *
+ * Il filtro dell'ultimo ramo di `friendlyError` indovina «questa frase è nostra» dalla
+ * forma: comincia per lettera (o cifra, virgolette, apostrofo), niente codice tecnico in
+ * testa, niente parole da database. Un rifiuto in cassa comincia col nome del negozio:
+ * «Bistrot La Table adesso è chiuso…», «Row Bar…», «1920 Bottega…» finivano nel generico,
+ * e il cliente riprovava lo stesso ordine senza sapere perché.
+ *
+ * Qui il segno lo mette chi la frase la conosce: una rotta che rifiuta con
+ * `ApiErrors.conflict` (codice CONFLICT, la forma dei rifiuti «con un motivo» —
+ * negozio chiuso, fascia passata, consegna veloce non possibile) scrive per il
+ * cliente. `apiErrorMessage` se la ricorda, e `friendlyError` la lascia passare intera,
+ * parentesi comprese. I filtri restano per tutto il resto: errori grezzi, 500, testi
+ * che non hanno quel segno.
+ */
+const CODICI_SCRITTI_PER_L_UTENTE = new Set(['CONFLICT']);
+const FRASI_DELLE_ROTTE: string[] = [];
+const TETTO_FRASI_DELLE_ROTTE = 20;
+
+function ricordaFraseDellaRotta(frase: string): void {
+  if (FRASI_DELLE_ROTTE.includes(frase)) return;
+  FRASI_DELLE_ROTTE.push(frase);
+  if (FRASI_DELLE_ROTTE.length > TETTO_FRASI_DELLE_ROTTE) FRASI_DELLE_ROTTE.shift();
+}
+
+/**
  * Trasforma errori Supabase/Stripe/fetch in messaggi user-friendly italiani.
  * Logga il messaggio originale per debugging via PostHog.
  */
@@ -148,6 +174,11 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
     if (e.code && CODICI_AUTH[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return traduciErroreAuth(e.message ?? '') ?? CODICI_AUTH[e.code];
+    }
+    if (e.message && FRASI_DELLE_ROTTE.includes(e.message)) {
+      // R24-004 — Scritta da una nostra rotta per il cliente: passa com'è (vedi sopra).
+      trackErrorShown(e.code ?? 'dalla_rotta', e.message, context?.page);
+      return e.message;
     }
     if (e.message) {
       /**
@@ -317,7 +348,11 @@ export function apiErrorMessage(body: unknown, fallback = 'Operazione non riusci
   if (typeof e === 'string' && e.trim()) return e;
   if (e && typeof e === 'object' && 'message' in e) {
     const m = (e as { message?: unknown }).message;
-    if (typeof m === 'string' && m.trim()) return m;
+    if (typeof m === 'string' && m.trim()) {
+      const codice = (e as { code?: unknown }).code;
+      if (typeof codice === 'string' && CODICI_SCRITTI_PER_L_UTENTE.has(codice)) ricordaFraseDellaRotta(m);
+      return m;
+    }
   }
   return fallback;
 }
