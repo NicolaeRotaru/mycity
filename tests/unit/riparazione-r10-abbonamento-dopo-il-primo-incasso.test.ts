@@ -30,8 +30,6 @@ vi.mock('@/lib/env', async (orig) => ({
   env: { ...(await orig<typeof import('@/lib/env')>()).env, appUrl: () => 'http://localhost' },
 }));
 vi.mock('@/lib/supabase/server', () => ({
-  // R23-011 — La cassa salva il cliente Stripe sul profilo col client admin.
-  getAdminSupabase: () => ({ from: () => ({ update: () => ({ eq: () => ({ is: async () => ({ error: null }) }) }) }) }),
   getServerSupabase: async () => ({
     from: (tabella: string) => tabella === 'orders'
       ? { select: () => ({ eq: (_c: string, v: string) => ({ or: (f: string) => {
@@ -46,8 +44,6 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/stripe/client', () => ({
   isStripeConfigured: () => true,
   getStripe: () => ({
-    // R23-011 — La cassa prepara il cliente Stripe del negozio prima di aprirsi.
-    customers: { list: async () => ({ data: [] }), create: async () => ({ id: 'cus_1' }) },
     subscriptions: { list: async () => ({ data: [] }) },
     checkout: { sessions: { create: async () => { stato.sessioni += 1; return { url: 'https://cassa' }; } } },
   }),
