@@ -72,6 +72,38 @@ import { queryKeys } from '@/lib/queries/keys';
  */
 const MOTIVO_VELOCE_IN_ATTESA = 'Aspetto la risposta sulla consegna veloce: se non vuoi aspettare, scegli Oggi o Domani.';
 
+/**
+ * 13/11/2026 (R19-015) — LA FASCIA E L'INDIRIZZO DEL PRIMO INVIO DI UN TENTATIVO.
+ *
+ * La chiave del tentativo resta legata al carrello: se la risposta si perde e il selettore sposta la
+ * fascia da solo, una chiave nuova creerebbe un secondo ordine vero (provato e tolto il 5/11). Ma col
+ * carrello uguale e un'altra fascia o un altro indirizzo, la rotta risponde «ripetuto» con l'ordine
+ * di prima, e la cassa diceva «Ordine effettuato!» come se valesse la scelta nuova. Qui si ricorda
+ * cosa portava il PRIMO invio con quella chiave, per dire la verità quando torna l'ordine di prima.
+ */
+const CONSEGNA_DEL_TENTATIVO = 'mycity:cod:tentativo:consegna';
+type ConsegnaDelTentativo = { fascia: string; indirizzo: string };
+
+function consegnaDelPrimoInvio(chiave: string, adesso: ConsegnaDelTentativo): ConsegnaDelTentativo {
+  try {
+    const letta = JSON.parse(window.sessionStorage.getItem(CONSEGNA_DEL_TENTATIVO) ?? 'null') as
+      | { chiave?: unknown; fascia?: unknown; indirizzo?: unknown }
+      | null;
+    if (letta && letta.chiave === chiave && typeof letta.fascia === 'string' && typeof letta.indirizzo === 'string') {
+      return { fascia: letta.fascia, indirizzo: letta.indirizzo };
+    }
+    window.sessionStorage.setItem(CONSEGNA_DEL_TENTATIVO, JSON.stringify({ chiave, ...adesso }));
+  } catch {
+    /* memoria negata: si confronta con l'invio di adesso */
+  }
+  return adesso;
+}
+
+function fraseOrdineDiPrima(c: ConsegnaDelTentativo): string {
+  const dove = c.indirizzo ? ` (${c.indirizzo})` : '';
+  return `Questo carrello l'avevi già ordinato con «${c.fascia}»${dove}: l'ordine valido è quello e non ne abbiamo creato un altro. Per un'altra fascia o un altro indirizzo annullalo dalla pagina dell'ordine, finché il negozio non lo accetta, e rifallo.`;
+}
+
 type AddressForm = {
   fullName: string;
   address: string;
@@ -898,10 +930,10 @@ export default function CheckoutPage() {
     [],
   );
 
-  const chiudiIlTentativo = useCallback(
-    () => chiudiTentativo(typeof window === 'undefined' ? null : window.sessionStorage),
-    [],
-  );
+  const chiudiIlTentativo = useCallback(() => {
+    chiudiTentativo(typeof window === 'undefined' ? null : window.sessionStorage);
+    try { window.sessionStorage.removeItem(CONSEGNA_DEL_TENTATIVO); } catch { /* niente da chiudere */ }
+  }, []);
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -945,6 +977,12 @@ export default function CheckoutPage() {
         .sort()
         .join('|');
       const chiaveTentativo = `cod-${nuovaChiaveTentativo(improntaCarrello)}`;
+      // R19-015 — fascia e indirizzo di adesso, e quelli del primo invio con questa chiave.
+      const consegnaOra: ConsegnaDelTentativo = {
+        fascia: deliverySlot ?? '',
+        indirizzo: pickupInStore ? '' : `${form.address.trim()}, ${form.zip.trim()} ${form.city.trim()}`,
+      };
+      const consegnaDiPrima = consegnaDelPrimoInvio(chiaveTentativo, consegnaOra);
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },
@@ -1000,6 +1038,13 @@ export default function CheckoutPage() {
       // Analytics. Adesso legge `leggiOrdiniCod`, che conosce tutte e due le
       // forme della risposta.
       const { orderIds: createdOrders, ordini: ordiniVeri } = leggiOrdiniCod(body);
+      // R19-015 — «ripetuto» con un'altra fascia o un altro indirizzo: l'ordine è quello di prima.
+      const corpo = body as { ripetuto?: unknown; data?: { ripetuto?: unknown } | null };
+      const ripetuto = corpo.ripetuto === true || corpo.data?.ripetuto === true;
+      const ordineDiPrima =
+        ripetuto && (consegnaDiPrima.fascia !== consegnaOra.fascia || consegnaDiPrima.indirizzo !== consegnaOra.indirizzo)
+          ? consegnaDiPrima
+          : null;
       // #210 e #213 — Prima partiva UN evento solo, con due difetti dentro.
       //
       // Il primo: l'importo era `grandTotal`, cioe' la stima del browser prima
@@ -1019,9 +1064,9 @@ export default function CheckoutPage() {
           checkoutId: carrelloId,
         });
       }
-      return createdOrders;
+      return { orderIds: createdOrders, ordineDiPrima };
     },
-    onSuccess: (orderIds) => {
+    onSuccess: ({ orderIds, ordineDiPrima }) => {
       setInPartenza(true);
       // Il tentativo e' andato a buon fine: la sua chiave ha finito il lavoro.
       // Se restasse, il prossimo ordine identico si vedrebbe restituire questo.
@@ -1037,11 +1082,12 @@ export default function CheckoutPage() {
       // Behavioral Scientist + CRO: gratifica immediata su purchase success.
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
       try { sessionStorage.setItem('mc_just_ordered', '1'); } catch { /* noop */ }
+      if (ordineDiPrima) toast.warning(fraseOrdineDiPrima(ordineDiPrima), { duration: 15_000 });
       if (orderIds.length === 1) {
-        toast.success('Ordine effettuato!');
+        if (!ordineDiPrima) toast.success('Ordine effettuato!');
         router.push(`/orders/${orderIds[0]}`);
       } else {
-        toast.success(`${orderIds.length} ordini effettuati!`);
+        if (!ordineDiPrima) toast.success(`${orderIds.length} ordini effettuati!`);
         router.push('/orders');
       }
     },
