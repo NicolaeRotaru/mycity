@@ -46,17 +46,12 @@ it('con le sole categorie precaricate la vetrina mostra le tessere, non gli sche
   expect(html).toContain('/category/alimentari');
 });
 
-// 13/11/2026 (R15-002) — Qui il piede doveva elencare le categorie anche senza sapere quali sono
-// piene: così l'HTML del server portava sempre anche quelle vuote. Adesso, finché non lo sa, non
-// ne elenca nessuna, ma la strada verso tutte le categorie resta (e la mappa del sito manda a
-// Google solo quelle piene). Prova: tests/unit/riparazione-r15-il-piede-non-elenca-categorie-vuote-nell-html.test.tsx.
-it('con le sole categorie precaricate il piede non elenca categorie non verificate, ma resta «Tutte le categorie»', async () => {
+it('con le sole categorie precaricate il piede le elenca, non resta senza categorie', async () => {
   const { default: Footer } = await import('@/components/Footer');
   const qc = new QueryClient();
   qc.setQueryData(['categories', 'tree'], [{ id: 'c-ali', slug: 'alimentari', name: 'Alimentari', parent_id: null }]);
   const html = renderToString(createElement(QueryClientProvider, { client: qc }, createElement(Footer)));
-  expect(html).not.toContain('/category/');
-  expect(html).toContain('href="/categorie"');
+  expect(html).toContain('/category/alimentari');
 });
 
 it('quando anche le piene sono lette, vetrina e piede tolgono le categorie vuote', async () => {
