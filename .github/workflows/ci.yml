@@ -581,9 +581,9 @@ jobs:
   # auto-salta per intero non puo' piu' uscire con la stessa spunta di una che
   # ha guardato. Le saltate sono elencate con il loro motivo, una per una.
   #
-  # 13/11/2026 — QUATTRO FETTE, NELLO STESSO MOMENTO. Le 76 prove giravano una
+  # 13/11/2026 — SEI FETTE, NELLO STESSO MOMENTO. Le 76 prove giravano una
   # dopo l'altra in 3 minuti, dopo 2 di costruzione del sito. Adesso ogni
-  # fetta costruisce il sito e fa girare un quarto delle prove (sharding di
+  # fetta costruisce il sito e fa girare un sesto delle prove (sharding di
   # Playwright). Il conto di cosa ha guardato resta in ogni fetta, ed e' piu'
   # severo di prima: una fetta che non apre nessuna pagina si ferma rossa da
   # sola. Il lavoro «e2e-senza-chiavi-insieme» rimette insieme i referti e si
@@ -597,7 +597,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fetta: [1, 2, 3, 4]
+        fetta: [1, 2, 3, 4, 5, 6]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -620,6 +620,18 @@ jobs:
           key: next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.ref == 'refs/heads/main' && github.sha || github.head_ref || github.ref_name }}
           restore-keys: |
             next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
+      # versione di Playwright (fissata da package-lock.json) vuole lo stesso
+      # Chromium, e riscaricarlo e scompattarlo a ogni giro rubava tempo e
+      # processore alla costruzione del sito. `playwright install --with-deps`
+      # piu' sotto gira lo stesso: installa le librerie di sistema e, se il
+      # browser in cache mancasse, lo riscarica.
+      - name: Riprendi Chromium dalla cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-playwright-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install deps
         run: npm ci --legacy-peer-deps
@@ -824,6 +836,18 @@ jobs:
           restore-keys: |
             next-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
+      # 13/11/2026 — Chromium si tiene in cache come i pacchetti npm: la stessa
+      # versione di Playwright (fissata da package-lock.json) vuole lo stesso
+      # Chromium, e riscaricarlo e scompattarlo a ogni giro rubava tempo e
+      # processore alla costruzione del sito. `playwright install --with-deps`
+      # piu' sotto gira lo stesso: installa le librerie di sistema e, se il
+      # browser in cache mancasse, lo riscarica.
+      - name: Riprendi Chromium dalla cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-playwright-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install deps
         run: npm ci --legacy-peer-deps
 
@@ -911,13 +935,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout
+      # Serve solo lo script che rimette insieme le fette: niente pacchetti npm,
+      # basta il Node che la macchina di GitHub ha gia'.
+      - name: Checkout (solo lo script che rimette insieme le fette)
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          sparse-checkout: scripts/ricuci-fette-ci.mjs
+          sparse-checkout-cone-mode: false
 
       - name: Prendi i referti delle fette
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -928,7 +952,9 @@ jobs:
       - name: Ogni file di prova ha girato, una volta sola
         env:
           REFERTI: ${{ runner.temp }}/referti-unitari
-        run: node scripts/ricuci-fette-ci.mjs vitest "$REFERTI"
+        run: |
+          node --version
+          node scripts/ricuci-fette-ci.mjs vitest "$REFERTI"
 
   e2e-senza-chiavi-insieme:
     name: Prove nel browser — le fette messe insieme
@@ -936,13 +962,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout
+      # Serve solo lo script che rimette insieme le fette: niente pacchetti npm,
+      # basta il Node che la macchina di GitHub ha gia'.
+      - name: Checkout (solo lo script che rimette insieme le fette)
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          sparse-checkout: scripts/ricuci-fette-ci.mjs
+          sparse-checkout-cone-mode: false
 
       - name: Prendi i referti delle fette
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -953,7 +979,9 @@ jobs:
       - name: Ogni prova nel browser ha girato, una volta sola
         env:
           REFERTI: ${{ runner.temp }}/referti-browser
-        run: node scripts/ricuci-fette-ci.mjs playwright "$REFERTI"
+        run: |
+          node --version
+          node scripts/ricuci-fette-ci.mjs playwright "$REFERTI"
 
   # 15/10/2026 (R57) — LA REGOLA «MAIN» ASPETTAVA UN CONTROLLO CHE NON ARRIVAVA MAI.
   #
