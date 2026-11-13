@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { verificaDisiscrizione } from '@/lib/email/unsubscribe';
@@ -71,19 +72,34 @@ export async function POST(request: Request) {
   // un client solo poteva far girare `disiscrivi` a raffica. La soglia e'
   // larga: disiscriversi si fa una volta, e i client di posta che aprono il
   // link in anticipo ne fanno pochissime.
-  const freno = await rateLimitAsync({
-    key: `disiscrizione:${getClientIp(request)}`,
-    max: 30,
-    windowMs: 10 * 60_000,
-  });
-  if (!freno.allowed) {
-    return vaiA('non-riuscita');
-  }
-
+  //
+  // 13/11/2026 (R22-007) — IL FRENO PER INDIRIZZO IP NON FERMA PIÙ UN GETTONE VALIDO.
+  // Il «con un clic» di Gmail lo fa il server di posta: quaranta persone che si disiscrivono
+  // nello stesso quarto d'ora arrivano da pochi indirizzi di Google, e dalla trentunesima
+  // il consenso restava acceso senza una riga nei log. Ora il gettone si guarda prima: senza
+  // gettone valido resta il freno per IP; con un gettone valido il freno è per quell'indirizzo
+  // email (chi lo ripete a raffica non tiene occupato il database), e se scatta si scrive.
   const dati = verificaDisiscrizione(token);
 
   if (!dati) {
-    return vaiA('link-non-valido');
+    const freno = await rateLimitAsync({
+      key: `disiscrizione:${getClientIp(request)}`,
+      max: 30,
+      windowMs: 10 * 60_000,
+    });
+    return vaiA(freno.allowed ? 'link-non-valido' : 'non-riuscita');
+  }
+
+  const frenoIndirizzo = await rateLimitAsync({
+    key: `disiscrizione:gettone:${createHash('sha256').update(`${dati.email}:${dati.ambito}`).digest('hex').slice(0, 32)}`,
+    max: 30,
+    windowMs: 10 * 60_000,
+  });
+  if (!frenoIndirizzo.allowed) {
+    logger.error('[disiscrizione] non riuscita: lo stesso indirizzo oltre 30 richieste in dieci minuti', {
+      ambito: dati.ambito,
+    });
+    return vaiA('non-riuscita');
   }
 
   const admin = getAdminSupabase();
