@@ -436,6 +436,10 @@ async function processBatch(
        */
       tipo: isMarketing ? 'marketing' : 'transazionale',
       tags: [{ name: 'template', value: row.template }],
+      // 13/11/2026 (R22-001, R22-011) — Dopo un timeout la riga torna fra cinque minuti, ma la
+      // prima email può essere già uscita: la chiave è la stessa a ogni tentativo della riga, e
+      // Resend non spedisce due volte. Righe diverse hanno chiavi diverse.
+      idempotencyKey: `email-queue/${row.id}`,
     });
     if ('ok' in res && res.ok) {
       sent++;
