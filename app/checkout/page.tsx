@@ -1318,6 +1318,22 @@ export default function CheckoutPage() {
     return e;
   };
 
+  // R19-004 — Un solo modo di salvare la bozza prima di andare all'accesso: lo usano «Ordina» da ospite
+  // e il link «Ho già un account». Passa da `bozzaDaSalvare`, quindi porta anche la scadenza.
+  const salvaLaBozzaPerAccesso = () => {
+    try {
+      localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
+        form,
+        couponCode: appliedCoupon?.coupon.code ?? couponCode,
+        metodoPagamento: paymentMethod,
+        giorno: slotDay,
+        fasciaOggi: slotTodayTime,
+        fasciaDomani: slotTomorrowTime,
+        adesso: new Date(),
+      })));
+    } catch { /* noop */ }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Il pulsante disabilitato e' una difesa a video, e a video si puo' arrivare in altri modi —
@@ -1395,17 +1411,7 @@ export default function CheckoutPage() {
       // Non solo l'indirizzo: chi torna dall'accesso deve ritrovare il totale che aveva accettato.
       // Dello sconto si salva il CODICE e mai la cifra — la bozza sta nel browser, e nel browser
       // ci scrive chiunque. Al ritorno il codice passa dalla verifica come il primo giorno.
-      try {
-        localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
-          form,
-          couponCode: appliedCoupon?.coupon.code ?? couponCode,
-          metodoPagamento: paymentMethod,
-          giorno: slotDay,
-          fasciaOggi: slotTodayTime,
-          fasciaDomani: slotTomorrowTime,
-          adesso: new Date(),
-        })));
-      } catch { /* noop */ }
+      salvaLaBozzaPerAccesso();
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
@@ -1488,7 +1494,7 @@ export default function CheckoutPage() {
           <p className="text-sm text-olive-900">
             <strong>Compila pure il tuo indirizzo qui sotto.</strong> Ti chiederemo di accedere solo al momento di confermare l&apos;ordine — i dati che inserisci restano salvati.
           </p>
-          <Link href="/sign-in?returnTo=/checkout" className="text-sm font-semibold text-primary-700 hover:underline shrink-0">
+          <Link href="/sign-in?returnTo=/checkout" onClick={salvaLaBozzaPerAccesso} className="text-sm font-semibold text-primary-700 hover:underline shrink-0">
             Ho già un account →
           </Link>
         </div>
