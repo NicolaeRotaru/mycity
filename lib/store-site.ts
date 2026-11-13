@@ -266,16 +266,31 @@ const menuLinkSchema = z.object({
 });
 export type MenuLink = z.infer<typeof menuLinkSchema>;
 
+/**
+ * Menu spento: i link non si vedono nell'editor, quindi uno lasciato a metà (nome vuoto)
+ * non deve bloccare «Salva sito». Si scartano solo i link incompleti, i completi restano.
+ * Menu acceso: nessun cambio, il controllo resta com'è.
+ */
+function dropIncompleteLinksIfMenuOff(menu: unknown): unknown {
+  if (!menu || typeof menu !== 'object') return menu;
+  const m = menu as { enabled?: unknown; links?: unknown };
+  if (m.enabled === true || !Array.isArray(m.links)) return menu;
+  return { ...m, links: m.links.filter((l) => menuLinkSchema.safeParse(l).success) };
+}
+
 export const storeSiteSchema = z
   .object({
     theme: z.enum(THEME_KEYS).default(DEFAULT_THEME),
     pages: z.array(pageSchema).min(1).max(MAX_PAGES),
-    menu: z
-      .object({
-        enabled: z.boolean().default(false),
-        links: z.array(menuLinkSchema).max(MAX_MENU_LINKS).default([]),
-      })
-      .default({ enabled: false, links: [] }),
+    menu: z.preprocess(
+      dropIncompleteLinksIfMenuOff,
+      z
+        .object({
+          enabled: z.boolean().default(false),
+          links: z.array(menuLinkSchema).max(MAX_MENU_LINKS).default([]),
+        })
+        .default({ enabled: false, links: [] }),
+    ),
   })
   .superRefine((site, ctx) => {
     // Slug unici (collisione = pagine irraggiungibili in routing).
