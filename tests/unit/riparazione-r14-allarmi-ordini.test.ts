@@ -204,19 +204,6 @@ const emailHtml = () => vi.mocked(sendEmail).mock.calls.map((c) => String((c[0] 
 
 const ORDINE = '11111111-aaaa-4aaa-8aaa-000000000001';
 
-function ordineNuovo(o: Riga): Riga {
-  return {
-    id: ORDINE,
-    delivery_status: 'NEW',
-    created_at: minutiFa(6),
-    delivery_slot: null,
-    total_price: 18,
-    payment_method: 'cod',
-    profiles: { store_name: 'Pane Quotidiano' },
-    ...o,
-  };
-}
-
 const salvato = { ...process.env };
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -232,47 +219,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   process.env = { ...salvato };
-});
-
-describe('R14-003 — un ordine che il negozio non accetta suona dopo 5 minuti, non dopo un ora', () => {
-  it('ordine nato 6 minuti fa e ancora nuovo: campanella ed email a Nicola', async () => {
-    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
-    const { corpo } = await giro();
-    expect(chiaviDelGiro(corpo), 'il primo allarme per un ordine non accettato non può aspettare un ora').toContain(`ORDINE_DA_ACCETTARE|${ORDINE}`);
-    expect(campanelle()).toHaveLength(1);
-    expect(String(campanelle()[0].body)).toContain('#11111111');
-    expect(emailHtml()).toContain('#11111111');
-    expect(emailHtml()).toContain('Pane Quotidiano');
-  });
-
-  it('a 3 minuti dalla nascita il negozio ha ancora tempo: nessun allarme', async () => {
-    db.orders = [ordineNuovo({ created_at: minutiFa(3) })];
-    const { corpo } = await giro();
-    expect(chiaviDelGiro(corpo)).not.toContain(`ORDINE_DA_ACCETTARE|${ORDINE}`);
-    expect(campanelle()).toHaveLength(0);
-  });
-
-  it('l ordine della sera per domani: avviso di ordine nuovo, ma non «bloccato»', async () => {
-    db.orders = [ordineNuovo({ created_at: minutiFa(7), delivery_slot: 'Domani · 9:00–12:00' })];
-    const { corpo } = await giro();
-    const chiavi = chiaviDelGiro(corpo);
-    expect(chiavi).toContain(`ORDINE_DA_ACCETTARE|${ORDINE}`);
-    expect(chiavi).not.toContain(`ORDER_STUCK_NEW|${ORDINE}`);
-    expect(emailHtml()).toContain('Domani');
-  });
-
-  it('una volta sola per ordine: i giri dopo non lo ripetono, nemmeno quando l attesa di sei ore scade', async () => {
-    db.orders = [ordineNuovo({ created_at: minutiFa(6), delivery_slot: 'Domani · 9:00–12:00' })];
-    await giro();
-    expect(campanelle()).toHaveLength(1);
-    vaiAvanti(15);
-    const secondo = await giro();
-    expect(chiaviDelGiro(secondo.corpo)).not.toContain(`ORDINE_DA_ACCETTARE|${ORDINE}`);
-    expect(campanelle()).toHaveLength(1);
-    vaiAvanti(6 * 60 + 10);
-    const terzo = await giro();
-    expect(chiaviDelGiro(terzo.corpo)).not.toContain(`ORDINE_DA_ACCETTARE|${ORDINE}`);
-  });
 });
 
 describe('R14-004 — l ordine fermo su «accettato» o «ritirato dal fattorino» fa suonare l allarme', () => {

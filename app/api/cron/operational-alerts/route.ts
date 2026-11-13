@@ -107,40 +107,6 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     });
   }
 
-  // 1b) R14-003 — L'ORDINE CHE DOPO 5 MINUTI NESSUNO HA ANCORA ACCETTATO.
-  // Il punto 1 suona solo vicino alla scadenza, e mai prima di un'ora dalla nascita: per un ordine
-  // delle 12:00 il primo segnale a Nicola arrivava fra le 13:00 e le 13:15. La regola è un'altra
-  // (avvisi.negozio, 1/11): finché non c'è l'app Nicola telefona al negozio a ogni ordine, e dopo
-  // 5 minuti senza «Accetto» deve saperlo lui. Un avviso per ordine, una volta sola: si guardano
-  // solo gli ordini nati da meno delle sei ore dell'attesa, così la chiave non risuona quando
-  // l'attesa scade. Vale anche per l'ordine della sera per domani: non è «bloccato» (il punto 1
-  // non suona), ma è un ordine nuovo che il negozio non ha ancora visto.
-  const cinqueMinutiFa = new Date(Date.now() - 5 * 60_000).toISOString();
-  const nelleOreDellAttesa = new Date(Date.now() - COOLDOWN_HOURS * 60 * 60_000).toISOString();
-  const { data: daAccettare, error: err_daAccettare } = await admin
-    .from('orders')
-    .select('id, created_at, delivery_slot, total_price, profiles!orders_seller_id_fkey(store_name)')
-    .eq('delivery_status', 'NEW')
-    .lt('created_at', cinqueMinutiFa)
-    .gte('created_at', nelleOreDellAttesa)
-    // I più recenti per primi: sono quelli che non hanno ancora suonato.
-    .order('created_at', { ascending: false })
-    .limit(20);
-  if (err_daAccettare) controlliSaltati.push('ordini nuovi non ancora accettati');
-
-  for (const o of daAccettare ?? []) {
-    const r = o as { id: string; created_at: string; delivery_slot?: string | null; total_price?: number | string | null; profiles?: { store_name?: string } | null };
-    const minuti = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
-    const totale = r.total_price != null && Number.isFinite(Number(r.total_price)) ? `, ${Number(r.total_price).toFixed(2).replace('.', ',')} €` : '';
-    const fascia = r.delivery_slot ? `, ${r.delivery_slot}` : '';
-    alerts.push({
-      key: `ORDINE_DA_ACCETTARE|${r.id}`,
-      type: 'ORDINE_DA_ACCETTARE',
-      detail: `Nuovo ordine #${r.id.slice(0, 8)} da ${r.profiles?.store_name ?? 'unknown'}${totale}${fascia}: il negozio non l'ha ancora accettato dopo ${minuti} min`,
-      url: `/admin/orders/${r.id}`,
-    });
-  }
-
   // 2) Rider con ordine OUT_FOR_DELIVERY ma nessun aggiornamento da 45 minuti
   // R14-004 — Anche PICKED_UP: ritirato dal negozio e mai messo «in consegna» restava senza nessun
   // allarme. Stesso orologio (il ritiro, `picked_up_at`), stessa soglia e stessa chiave: ritirato da
