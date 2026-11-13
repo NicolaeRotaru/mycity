@@ -1566,8 +1566,8 @@ export default function CheckoutPage() {
                 )}
 
                 {/* Metodo + costo di consegna (invariato). */}
-                <div className="flex items-center justify-between rounded-lg border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
-                  <div>
+                <div className="flex items-center gap-3 justify-between rounded-lg border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
+                  <div className="min-w-0 break-words">
                     <p className="font-bold text-ink-900">Consegna a domicilio</p>
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>

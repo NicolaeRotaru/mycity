@@ -102,8 +102,12 @@ export function PaymentMethodSelector({
      * alternative della stessa domanda, né quante sono. Il `fieldset` con la
      * sua `legend` è il modo standard di dirlo, ed è già usato dieci righe più
      * in là per le fasce di consegna.
+     *
+     * 13/11/2026 (R19-007) — `min-w-0`: il browser dà al fieldset
+     * min-width: min-content, e col testo del telefono al massimo la pagina
+     * diventava larga 444 px su uno schermo da 375. Misurato in Chromium.
      */
-    <fieldset className="space-y-3">
+    <fieldset className="min-w-0 space-y-3">
       <legend className="sr-only">Come vuoi pagare</legend>
       {stripeAvailable && (
         <label
@@ -162,7 +166,7 @@ export function PaymentMethodSelector({
         </span>
         <div className="min-w-0 flex-1 break-words">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-bold text-ink-900">Contanti alla consegna</p>
+            <p className="min-w-0 font-bold text-ink-900">Contanti alla consegna</p>
             <Badge variant="cod">Zero rischio</Badge>
           </div>
           <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
