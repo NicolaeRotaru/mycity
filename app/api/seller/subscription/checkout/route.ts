@@ -78,6 +78,23 @@ export const POST = withAuthRateLimit(
 
     const stripe = getStripe();
 
+    // 13/11/2026 (R23-011) — UN CLIENTE STRIPE SOLO PER NEGOZIO, PRIMA DELLA CASSA.
+    // Al primo abbonamento la cassa partiva con `customer_email`, e Stripe creava un cliente
+    // nuovo a ogni pagamento: due schede pagate facevano due clienti, il controllo qui sotto
+    // (che chiede per cliente) non vedeva l'altro abbonamento, e il webhook salvava sul profilo
+    // l'ultimo. Il portale si apre su quel cliente: il primo abbonamento, da 50 € al mese,
+    // dal sito non si disdiceva piu'. Adesso il cliente si trova (o si crea) prima, e tutte le
+    // casse e tutti gli abbonamenti del negozio stanno sullo stesso. Se Stripe non risponde si
+    // prosegue come prima (vedi sotto).
+    let clienteStripe: string | null = profile.stripe_customer_id ?? null;
+    if (!clienteStripe) {
+      try {
+        clienteStripe = await clienteDelNegozio(stripe, user.id, user.email);
+      } catch (err) {
+        logger.warn('[subscription] cliente Stripe del negozio non preparato, si prosegue', { err });
+      }
+    }
+
     // Il controllo sopra guarda un campo che viene scritto dal webhook DOPO il
     // pagamento: fra il primo clic e l'arrivo del webhook — o con due schede
     // aperte — restava aperta una finestra in cui nascevano due abbonamenti
@@ -87,10 +104,10 @@ export const POST = withAuthRateLimit(
     // Qui si chiede a Stripe, che è la fonte vera, invece di fidarsi del nostro
     // campo. Se la chiamata non riesce non si blocca il negoziante: si prosegue,
     // perché il caso peggiore resta quello di prima.
-    if (profile.stripe_customer_id) {
+    if (clienteStripe) {
       try {
         const esistenti = await stripe.subscriptions.list({
-          customer: profile.stripe_customer_id,
+          customer: clienteStripe,
           status: 'all',
           limit: 10,
         });
@@ -105,6 +122,14 @@ export const POST = withAuthRateLimit(
             'Risulta già un abbonamento su questo account. Ricarica la pagina: se non lo vedi, scrivici.',
           );
         }
+        // R23-011 — La chiave qui sotto vale dieci minuti: due schede aperte a cavallo della
+        // finestra (o la seconda un quarto d'ora dopo) avevano due casse vive, tutte e due
+        // pagabili. Una cassa ancora aperta dello stesso negozio si riusa: si paga una volta sola.
+        const aperte = await stripe.checkout.sessions.list({ customer: clienteStripe, status: 'open', limit: 10 });
+        const aperta = aperte.data.find((s) =>
+          s.metadata?.kind === 'seller_subscription' && s.metadata?.seller_id === user.id && !!s.url,
+        );
+        if (aperta) return NextResponse.json({ url: aperta.url }, { status: 200 });
       } catch (err) {
         logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
       }
@@ -120,8 +145,8 @@ export const POST = withAuthRateLimit(
         payment_method_types: ['card'],
         // Riusa il Customer esistente se già creato, altrimenti Stripe lo crea
         // da customer_email e lo recupereremo nel webhook (session.customer).
-        ...(profile.stripe_customer_id
-          ? { customer: profile.stripe_customer_id }
+        ...(clienteStripe
+          ? { customer: clienteStripe }
           : { customer_email: user.email }),
         line_items: [
           {
@@ -154,3 +179,19 @@ export const POST = withAuthRateLimit(
     }
   },
 );
+
+/**
+ * R23-011 — Il cliente Stripe del negozio: quello già creato per lui (stessa email, segnato col
+ * suo id), oppure uno nuovo. La chiave di idempotenza fa sì che due schede nello stesso istante
+ * ricevano lo stesso cliente; dopo, lo ritrova la ricerca per email.
+ */
+async function clienteDelNegozio(stripe: ReturnType<typeof getStripe>, sellerId: string, email: string): Promise<string> {
+  const trovati = await stripe.customers.list({ email, limit: 100 });
+  const suo = trovati.data.find((c) => c.metadata?.seller_id === sellerId);
+  if (suo) return suo.id;
+  const nuovo = await stripe.customers.create(
+    { email, metadata: { seller_id: sellerId } },
+    { idempotencyKey: `cliente-negozio:${sellerId}` },
+  );
+  return nuovo.id;
+}
