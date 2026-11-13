@@ -60,6 +60,41 @@ function oraDiSilenzio(ora: number): boolean {
   return ora < ORA_PRIMA || ora >= ORA_ULTIMA;
 }
 
+type Candidato = { user_id: string; email: string; full_name: string | null; cart_data: unknown; cart_total: number; last_activity?: string | null };
+
+/**
+ * R14-009 — IL CARRELLO CHIUSO SENZA EMAIL NON E' UN PROMEMORIA INVIATO.
+ *
+ * Il carrello troppo vecchio e quello di chi non ha dato il consenso si segnano
+ * «gestiti» con lo stesso segno dell'invio (`recovery_email_sent_at`), cosi' il
+ * giro dopo non li riprende. Ma il conto dei promemoria inviati
+ * (`contaRendimentoRecupero` in lib/carrelli-abbandonati.ts) li contava come
+ * email partite. Adesso, dopo la marcatura, il segno prende l'ora dell'ultima
+ * attivita' del carrello: un'email vera parte almeno quattro ore dopo, quindi
+ * «segno uguale all'ultima attivita'» vuol dire «gestito senza email», ed e'
+ * cosi' che il conto lo legge. Nessuna colonna nuova, nessuna migrazione.
+ */
+async function segnaGestitoSenzaEmail(
+  supa: ReturnType<typeof getAdminSupabase>,
+  c: Candidato,
+  perche: string,
+): Promise<void> {
+  const { data: preso, error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+  if (errMarca) {
+    logger.error(`[abandoned-carts] marcatura fallita (${perche})`, errMarca);
+    return;
+  }
+  // Un altro giro l'ha segnato prima di noi: il segno e' suo e non si tocca.
+  if (preso === false || typeof c.last_activity !== 'string') return;
+  const { error: errSegno } = await supa
+    .from('abandoned_carts')
+    .update({ recovery_email_sent_at: c.last_activity })
+    .eq('user_id', c.user_id);
+  if (errSegno) {
+    logger.error(`[abandoned-carts] carrello chiuso senza email ma contato come invio (${perche})`, { message: errSegno.message });
+  }
+}
+
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
@@ -79,7 +114,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   const { data, error } = await supa.rpc('list_abandoned_carts_to_recover', { min_hours: 4 });
   if (error) return ApiErrors.internal(error.message);
 
-  const candidates = (data ?? []) as Array<{ user_id: string; email: string; full_name: string | null; cart_data: unknown; cart_total: number; last_activity?: string | null }>;
+  const candidates = (data ?? []) as Candidato[];
   let sent = 0, errors = 0, skipped = 0, giaPresi = 0;
 
   /**
@@ -115,8 +150,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   for (const c of candidates) {
     if (troppoVecchio(c.last_activity)) {
       skipped++;
-      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
-      if (errMarca) logger.error('[abandoned-carts] marcatura fallita (carrello troppo vecchio)', errMarca);
+      await segnaGestitoSenzaEmail(supa, c, 'carrello troppo vecchio');
       continue;
     }
     // Consenso: l'email di recupero carrello è marketing → inviala solo a chi
@@ -124,8 +158,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     // così il cron non riprova ad ogni giro.
     if (!consensoPerPersona.get(c.user_id)) {
       skipped++;
-      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
-      if (errMarca) logger.error('[abandoned-carts] marcatura fallita (senza consenso)', errMarca);
+      await segnaGestitoSenzaEmail(supa, c, 'senza consenso');
       continue;
     }
 
