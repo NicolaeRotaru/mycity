@@ -25,9 +25,29 @@ const USATI = [
   'tipo nuovo',
   'Non è stato usato molto',
   'Non usato da anni',
+  'Non proprio nuovo',
+  'Non più nuovo',
+  'Non è più nuovo',
+  'Non del tutto nuovo',
+  'Non è proprio nuova',
+  'Come fosse nuovo',
+  'Pare nuovo',
+  'Simile al nuovo',
+  'Quasi del tutto nuovo',
+  'Not quite new',
+  'Non usato per anni',
+  'Non usato negli ultimi anni',
+  'Non usato dal 2019',
 ];
 
-const NUOVI = ['nuovo', 'Nuovo', 'nuova', 'Nuovo con etichetta', 'Nuovo, mai usato', 'Brand new, never used', 'Nuovo, non è mai stato usato'];
+const NUOVI = ['nuovo', 'Nuovo', 'nuova', 'Nuovo con etichetta', 'Nuovo, mai usato', 'Brand new, never used', 'Nuovo, non è mai stato usato',
+  'nuovissimo',
+  'mai usato, nuovo',
+  'nuovo con scatola',
+  'Mai usato perché troppo piccolo',
+  'Non usato perché troppo grande',
+  'Mai usato tanto è vero che ha ancora il cartellino',
+];
 
 describe('R16-005 · una frase da usato non entra come «nuovo»', () => {
   it.each(USATI)('«%s» non è «nuovo», né letto né suggerito', (frase) => {

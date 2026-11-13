@@ -63,13 +63,18 @@ export function condizioneDaScegliere(c: unknown): c is ProductCondition {
   return typeof c === 'string' && (CONDIZIONI_DA_SCEGLIERE as readonly string[]).includes(c);
 }
 
-/** «Come nuovo», «pari al nuovo», «non è nuovo», «like new»…: somiglia al nuovo, quindi è usato. */
-const SOMIGLIA_AL_NUOVO =
-  /semi[\s-]?nuov|\b(come|quasi|pari(\s+al?)?|praticamente|pressoch[eé]|tipo|sembra|da)\s+(un\s+|il\s+)?nuov|\b(non|not)\s+(è\s+|e'\s+|is\s+)?(brand\s+)?(nuov|new)|\bisn'?t\s+(brand\s+)?new|\b(like|as|nearly|almost)[\s-]+new\b/;
+/** Una negazione («non», «not», «mai», «n't»): davanti a «nuovo» lo toglie. */
+const NEGAZIONE = /\b(non|not|mai|never|no|né)\b|n't/;
 
-/** Un uso negato che dice quanto è stato usato («non molto», «da anni», «non più»): è usato. */
-const USO_MISURATO =
-  /\b(molto|tanto|spesso|troppo|granch|pi(ù|u\b)|da\s+(anni|mesi|tempo)|a\s+lungo|much|often|anymore|for\s+(years|months|a\s+while))/;
+/** Un paragone («come», «quasi», «simile», «pare»…): davanti a «nuovo» dice che somiglia al nuovo, non che lo è. */
+const PARAGONE =
+  /\b(come|quasi|pari|simile|simili|pare|sembra|sembrano|tipo|praticamente|pressoch[eé]|fosse|like|as|nearly|almost)\b|\bda\s*$/;
+
+/** «Mai usato» / «non usato» (e l'inglese): il resto della frase fino alla virgola resta in coda. */
+const USO_NEGATO = /\b(mai|non|never|not)\b([^,.;]{0,20}?)\b(usat\w*|used)\b([^,.;]*)/;
+
+/** Dopo «mai/non usato», una misura di tempo o di quantità dell'uso subito dopo: l'oggetto è stato usato. */
+const MISURA_DOPO = /^\s*(molto|tanto\s+(tempo|spesso)|più|piu\b|spesso|a\s+lungo|da\b|dal\b|dall|per\b|negli\b|nell|nei\b|much|often|anymore|for\b|since|in\s+the\s+(last|past))/;
 
 /**
  * Normalizza testo libero (AI o vecchio attributo per-categoria `stato`) nella
@@ -78,17 +83,29 @@ const USO_MISURATO =
 export function normalizeCondition(s: string): ProductCondition | '' {
   const t = s.toLowerCase();
   if (t.includes('ricond') || t.includes('refurb')) return 'ricondizionato';
-  // 2261 · R16-005 — «Seminuovo», «come nuovo», «quasi nuovo», «non nuovo», «pari al nuovo»,
-  // «praticamente nuovo», «tipo nuovo», «like new» non sono nuovi: dicono che l'oggetto somiglia
-  // a uno nuovo, cioè che è usato. Prima bastava la sillaba «nuov» e entrava in vetrina come nuovo.
-  if (SOMIGLIA_AL_NUOVO.test(t)) return 'usato';
-  // 2289 — «Nuovo, mai usato»: la negazione dell'uso dice nuovo (prima vinceva «usat»).
-  // R16-005 — Ma non se dice quanto è stato usato: «non è stato usato molto», «non usato da anni».
-  const usoNegato = t.match(/\b(mai|non|never|not)\b[^,.;]{0,20}\b(usat|used)[^,.;]*/);
-  if (usoNegato) return USO_MISURATO.test(usoNegato[0]) ? 'usato' : 'nuovo';
+  // R16-005 — «Seminuovo» è usato.
+  if (/semi[\s-]?nuov/.test(t)) return 'usato';
+  // R16-005 — UNA REGOLA, non una lista di frasi: «nuovo» (nuov…/new) vale nuovo solo se, nella
+  // sua frase (fino alla virgola), non ha DAVANTI una negazione né un paragone. «Non più nuovo»,
+  // «non proprio nuovo», «come fosse nuovo», «simile al nuovo», «not quite new»: usato.
+  const nuovo = /nuov|\bnew\b/.exec(t);
+  if (nuovo) {
+    const frase = t.slice(0, nuovo.index).split(/[,.;]/).pop() ?? '';
+    // «mai usato nuovo»: il «mai» appartiene a «usato», non a «nuovo».
+    const davanti = frase.replace(new RegExp(USO_NEGATO.source, 'g'), ' ');
+    if (NEGAZIONE.test(davanti) || PARAGONE.test(davanti)) return 'usato';
+  }
+  // 2289 — «Nuovo, mai usato» dice nuovo (prima vinceva «usat»). R16-005 — Ma non se subito dopo
+  // c'è una misura dell'uso («non usato per anni», «dal 2019», «non è stato usato molto», «non più usato»).
+  // Le parole «troppo», «tanto» altrove nella frase («mai usato perché troppo piccolo») non contano.
+  const uso = USO_NEGATO.exec(t);
+  if (uso) {
+    if (/\b(più|piu|anymore|longer)\b/.test(uso[2])) return 'usato';
+    return MISURA_DOPO.test(uso[4]) ? 'usato' : 'nuovo';
+  }
   // 2268 — Anche «used», «second hand», «di seconda mano» si riconoscono come usato.
   if (/usat|second[\s-]?hand|seconda mano|\bused\b|pre-?owned/.test(t)) return 'usato';
-  if (t.includes('nuov') || /\bnew\b|\bbrand new\b/.test(t)) return 'nuovo';
+  if (nuovo) return 'nuovo';
   return '';
 }
 
