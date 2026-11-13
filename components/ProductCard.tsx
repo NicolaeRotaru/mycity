@@ -276,12 +276,14 @@ const ProductCard = ({
                 <span className="text-lg font-extrabold text-ink-900">{formatPrice(price)}</span>
               )}
             </div>
+            {/* Il «+» è un contorno, non un quadrato pieno: il colore pieno resta al prezzo, che è
+                quello che si vuole leggere per primo. L'area di tocco non cambia (h-11 w-11). */}
             <button
               type="button"
               onClick={handleAdd}
               disabled={isOutOfStock}
               aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
-              className="pointer-events-auto ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm-neutral transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+              className="pointer-events-auto ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-primary-600 bg-transparent text-primary-700 shadow-sm-neutral transition-all hover:bg-primary-50 active:scale-95 disabled:cursor-not-allowed disabled:border-cream-200 disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
               <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>
