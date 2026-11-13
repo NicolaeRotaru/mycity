@@ -9,16 +9,29 @@
 -- controllo. È la stessa regola che la pagina e il visore usano dal lato del browser
 -- (lib/safe-redirect.ts).
 --
--- NOT VALID: le righe già scritte non si ricontrollano (una storia vive al massimo
--- 24 ore e il visore non mostra più un link che non passa la regola); la regola vale
--- per ogni storia nuova e per ogni modifica. Finché una storia vecchia con un link
--- esterno non scade, il contatore delle sue visualizzazioni non sale: l'aggiornamento
--- di track_story_view cade sulla regola. Dura al massimo un giorno.
+-- Il vincolo vale su tutte le righe (niente NOT VALID, come chiede la prova 14 e come
+-- fanno la 149 e la 272): prima si toglie il link alle storie già scritte che non
+-- passano la regola, DICENDO quante sono. Il visore non mostrava già più quei link,
+-- quindi al cliente non cambia niente; la storia resta, senza il bottone.
+
+BEGIN;
+
+DO $$
+DECLARE n int;
+BEGIN
+  UPDATE public.seller_stories
+     SET link_url = NULL
+   WHERE link_url IS NOT NULL
+     AND NOT (link_url ~ '^/([^/\\]|$)' AND link_url !~ '[[:cntrl:]]');
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE '403: % storie avevano un link che non porta dentro MyCity, tolto', n;
+END $$;
 
 ALTER TABLE public.seller_stories DROP CONSTRAINT IF EXISTS seller_stories_link_dentro_mycity;
 ALTER TABLE public.seller_stories
   ADD CONSTRAINT seller_stories_link_dentro_mycity
-  CHECK (link_url IS NULL OR (link_url ~ '^/([^/\\]|$)' AND link_url !~ '[[:cntrl:]]'))
-  NOT VALID;
+  CHECK (link_url IS NULL OR (link_url ~ '^/([^/\\]|$)' AND link_url !~ '[[:cntrl:]]'));
+
+COMMIT;
 
 NOTIFY pgrst, 'reload schema';
