@@ -1,13 +1,13 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-13 16:00",
+  "aggiornato": "2026-11-13 16:10",
   "finita": true,
-  "testa": "d5b463ffe20985a6b47a4920579cf559da373a8f",
+  "testa": "7e5909b2aeafac50988356725f03cd07837c3d08",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "d5b463ffe20985a6b47a4920579cf559da373a8f",
-    "nota": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify sull’ultimo commit di codice d5b463ff (= testa): typecheck, lint e vitest con 1438 file e 9719 prove verdi."
+    "testa": "7e5909b2aeafac50988356725f03cd07837c3d08",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify sull’ultimo commit di codice 7e5909b2 (= testa): typecheck, lint e vitest con 1438 file e 9719 prove verdi. guardia-ramo (cervello di ad-mycity 37f078a2) resta rossa SOLO per il commit bb53b6be: è il revert intero di d5687bbc (R17-005, serve_file_altrui) col messaggio standard «Revert \"R17-005 …\"» senza l’id davanti; la storia non si riscrive, la deroga è nella lista della fermata 3 per la firma di Nicola (come il revert 10708bcf di R13)."
   },
   "voci": [
     {
