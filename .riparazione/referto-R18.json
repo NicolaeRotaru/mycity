@@ -1,13 +1,13 @@
 {
   "sessione": "R18",
-  "aggiornato": "2026-11-13 13:36",
-  "finita": false,
-  "testa": "89cd5c2db96405d388310869fab52af87f5a23f9",
+  "aggiornato": "2026-11-13 13:55",
+  "finita": true,
+  "testa": "5188ab6cb7c235d0eaeed55e6f5680c8680f758b",
   "verifica": {
-    "comando": "npm run verify",
-    "esito": "non_lanciato",
-    "testa": "",
-    "nota": ""
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "5188ab6cb7c235d0eaeed55e6f5680c8680f758b",
+    "nota": "typecheck, lint e vitest: 1430 file, 9679 prove, 394 s. In più sulla stessa testa: apply.sh + run.sh (199 migrazioni, tutti i controlli verdi), migrazione-su-database-pieno.sh verde, guardia-ramo verde."
   },
   "voci": [
     {
@@ -76,6 +76,30 @@
       "verificato_da": "revisore A: sulla testa 8bab0265 ricostruita (r18_rev_a_test) il venditore autenticato cambia price=1 e stock=999 e inserisce un prodotto 'available' senza foto; patch applicata: prova SQL nuova rossa 4/5 senza la migrazione e verde 5/5 con, vitest dei file toccati e delle due prove dei tipi verde (17 file, 72 prove), vitest intero 1421/9658 e tsc verdi, ma run.sh ROSSO in 2 file (verde sulla testa senza patch); cercate tutte le scritture su products."
     },
     {
+      "id": "R18-002",
+      "chiave": "accessibilita|le foto delle recensioni e l'importazione dei prodotti da file non si aprono da tastiera",
+      "esito": "riparato",
+      "commit": "e69b5fbf",
+      "file_toccati": [
+        "app/seller/products/import/page.tsx",
+        "app/orders/[id]/return/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e69b5fbf^ --file app/seller/products/import/page.tsx,app/orders/[id]/return/page.tsx --prove tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Importazione CSV: input sr-only con aria-label e anello focus-within sul riquadro. Reso: aria-label sull'input e focus-within sulla label. Le foto della recensione erano già a posto dal 5/11.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+    },
+    {
       "id": "R18-003",
       "chiave": "deploy-sre|la prova «migrazione su database pieno» mette ancora i file nell'ordine vecchio",
       "esito": "serve_file_altrui",
@@ -120,7 +144,8 @@
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dc067a08^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-annullata.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nello storico la riga scrive « · Terminata <data>» solo quando statoDellaPromo dice «Scaduta» (non annullata e ends_at già passato); una promo annullata resta «-15%» col cartellino «Annullata», senza la data che deve ancora venire. Nessuna colonna nuova. La correzione sta tutta in page.tsx (riusa statoDellaPromo senza cambiarlo): una funzione nuova in stato-promo.ts avrebbe reso la prova rimessa «strutturale». La prova monta la pagina con orologio finto al 6/11 (promo annullata fino al 6/12 e una scaduta il 1/11) e controlla anche statoDellaPromo con l'orologio finto."
+      "cosa_ho_fatto": "Nello storico la riga scrive « · Terminata <data>» solo quando statoDellaPromo dice «Scaduta» (non annullata e ends_at già passato); una promo annullata resta «-15%» col cartellino «Annullata», senza la data che deve ancora venire. Nessuna colonna nuova. La correzione sta tutta in page.tsx (riusa statoDellaPromo senza cambiarlo): una funzione nuova in stato-promo.ts avrebbe reso la prova rimessa «strutturale». La prova monta la pagina con orologio finto al 6/11 (promo annullata fino al 6/12 e una scaduta il 1/11) e controlla anche statoDellaPromo con l'orologio finto.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-005",
@@ -135,7 +160,31 @@
       "rimessa": null,
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Controllato che il codice non abbia una strada esistente su cui ripiegare: i nomi da mostrare sono di fattorini (al cliente e al negozio) e di clienti (al negozio), nessuno dei due sta in seller_public_profiles; la vecchia vista public_profiles (110) è stata tolta dalla 119; profiles in produzione si legge solo per la propria riga. Le due strade giuste sono già scritte nel deposito e il codice le usa già (fetchNomiPubblici con ripiego su profiles; app/seller/reviews/page.tsx:59 e lib/queries/controparte-della-chat.ts:48 con nomi_dei_clienti_del_negozio). Non ho scritto la 428: rifarebbe le stesse due. Il database vero non l'ho interrogato: lo stato di produzione è quello scritto nella voce (5/11).",
-      "nota": "Nicola: applicare in produzione la migrazione 164 (vista nomi_pubblici, solo authenticated) e la 181 (funzione nomi_dei_clienti_del_negozio, solo authenticated), già nel deposito; la 164 va con la 161 o dopo. Nessuna modifica al codice: appena ci sono, cliente e negozio leggono i nomi di battesimo al posto di «Il tuo rider» e «Cliente»."
+      "nota": "Nicola: applicare in produzione la migrazione 164 (vista nomi_pubblici, solo authenticated) e la 181 (funzione nomi_dei_clienti_del_negozio, solo authenticated), già nel deposito; la 164 va con la 161 o dopo. Nessuna modifica al codice: appena ci sono, cliente e negozio leggono i nomi di battesimo al posto di «Il tuo rider» e «Cliente».",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+    },
+    {
+      "id": "R18-006",
+      "chiave": "mobile-pwa|nella rubrica indirizzi i bottoni «modifica» ed «elimina» sono troppo piccoli e troppo vicini per il pollice",
+      "esito": "riparato",
+      "commit": "a09cc8e9",
+      "file_toccati": [
+        "app/profile/addresses/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-indirizzi-bottoni-da-pollice.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-indirizzi-bottoni-da-pollice.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a09cc8e9^ --file app/profile/addresses/page.tsx --prove tests/unit/riparazione-r18-indirizzi-bottoni-da-pollice.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella scheda indirizzo Modifica ed Elimina passano a size=md (44 px) con flex-wrap gap-3; Button.tsx non toccato.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-007",
@@ -196,7 +245,32 @@
           "modifica": "Nell'elenco dei fornitori, subito dopo la riga «Google Ireland Ltd. — misurazione del traffico…» (riga 246), aggiungere: <li><strong>Google Ireland Ltd. / Google LLC (YouTube)</strong> e <strong>Vimeo.com, Inc.</strong> (Stati Uniti — SCC) — video incorporati nelle vetrine dei negozi, in home e nelle pagine informative. Il video si carica solo quando tocchi «Guarda il video»: da quel momento YouTube o Vimeo ricevono il tuo indirizzo IP e la pagina da cui guardi, e trattano i dati secondo le proprie regole.</li>"
         }
       ],
-      "nota": "Il codice era già a posto sulla base (components/store-sections/VideoSection.tsx:29 usa VideoAlClic): il commit 89cd5c2d aggiunge solo la prova col clic vero. Quello che resta della voce (la cookie policy e l informativa che nominano YouTube e Vimeo) sta in file non di R18."
+      "nota": "Il codice era già a posto sulla base (components/store-sections/VideoSection.tsx:29 usa VideoAlClic): il commit 89cd5c2d aggiunge solo la prova col clic vero. Quello che resta della voce (la cookie policy e l informativa che nominano YouTube e Vimeo) sta in file non di R18.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+    },
+    {
+      "id": "R18-009",
+      "chiave": "qa-flussi|un doppio tocco su «crea lista» crea due liste uguali, e aprendo la finestra il cursore va su «chiudi» invece che sul nome",
+      "esito": "riparato",
+      "commit": "dd6985ed",
+      "file_toccati": [
+        "app/lists/page.tsx",
+        "components/ui/Modal.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-crea-lista-una-sola-volta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-crea-lista-una-sola-volta.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dd6985ed^ --file app/lists/page.tsx,components/ui/Modal.tsx --prove tests/unit/riparazione-r18-crea-lista-una-sola-volta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Freno sincrono con useRef su Crea lista (rilasciato in onSettled). Modal dà il fuoco iniziale a un elemento [data-autofocus] se c'è, altrimenti come prima; il campo Titolo lo chiede.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-010",
@@ -219,7 +293,8 @@
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2b4b10a6^ --file app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "L'anteprima mostra tutti i risultati (non più slice(0, 50); il lotto parte al massimo su 200 prodotti) e «Applica a tutti» / «Metti in bozza i segnalati» mandano alla rotta {jobId, productIds} con i prodotti mostrati: la rotta li filtrava già (apply/route.ts:74-98), quindi rotta e start non cambiano. La prova monta la pagina vera e passa la sua richiesta alla rotta vera con un database finto: 120 proposte, i prodotti riscritti sono esattamente quelli mostrati (sulla base: 70 riscritti senza essere stati mostrati); lo stesso per la moderazione (80, sulla base 30 messi in bozza senza essere mostrati); più un controllo diretto sulla rotta con productIds."
+      "cosa_ho_fatto": "L'anteprima mostra tutti i risultati (non più slice(0, 50); il lotto parte al massimo su 200 prodotti) e «Applica a tutti» / «Metti in bozza i segnalati» mandano alla rotta {jobId, productIds} con i prodotti mostrati: la rotta li filtrava già (apply/route.ts:74-98), quindi rotta e start non cambiano. La prova monta la pagina vera e passa la sua richiesta alla rotta vera con un database finto: 120 proposte, i prodotti riscritti sono esattamente quelli mostrati (sulla base: 70 riscritti senza essere stati mostrati); lo stesso per la moderazione (80, sulla base 30 messi in bozza senza essere mostrati); più un controllo diretto sulla rotta con productIds.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-011",
@@ -242,7 +317,8 @@
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ec4673a^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "endDateFor('today') ora calcola l'ultimo istante del giorno di Piacenza: inizioGiornoPiacenza(giorno dopo) meno un millesimo, con giornoPiacenza e inizioGiornoPiacenza di lib/tempo-piacenza.ts usati senza modificarli. Le tre date mostrate (anteprima, «Fino al», «Terminata») hanno timeZone Europe/Rome (FUSO_PIACENZA). La prova monta la pagina col processo in America/New_York (e Asia/Tokyo), orologio finto, sceglie «Oggi» e preme «Crea promo»: ends_at = 22:59:59.999Z il 6/11 (inverno), 21:59:59.999Z il 15/7 (estate), la sera di New York quando a Piacenza è già il giorno dopo, e le due domeniche del cambio d'ora (25/10 e 29/3)."
+      "cosa_ho_fatto": "endDateFor('today') ora calcola l'ultimo istante del giorno di Piacenza: inizioGiornoPiacenza(giorno dopo) meno un millesimo, con giornoPiacenza e inizioGiornoPiacenza di lib/tempo-piacenza.ts usati senza modificarli. Le tre date mostrate (anteprima, «Fino al», «Terminata») hanno timeZone Europe/Rome (FUSO_PIACENZA). La prova monta la pagina col processo in America/New_York (e Asia/Tokyo), orologio finto, sceglie «Oggi» e preme «Crea promo»: ends_at = 22:59:59.999Z il 6/11 (inverno), 21:59:59.999Z il 15/7 (estate), la sera di New York quando a Piacenza è già il giorno dopo, e le due domeniche del cambio d'ora (25/10 e 29/3).",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-012",
@@ -268,7 +344,48 @@
         "comando": "cd /home/user/mycity && export PGHOST=/var/run/postgresql && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1916a2e9^ --file migrations/429_due_promo_uguali_non_restano_attive_insieme.sql --prove tests/sql/rls/riparazione-r18-promo-doppia.test.sql --sql r18_rimessa --json (0) ; cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1916a2e9^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-doppio-clic.test.tsx --json (0)"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Pagina: un useRef creazioneInCorso messo a true prima di create.mutate() e rimesso a false in onSettled; il secondo clic nello stesso istante si ignora (prova: due clic in un solo act, un solo insert; dopo un errore il bottone torna a funzionare). Database, migrazione 429: un controllo BEFORE INSERT OR UPDATE OF status su seller_promotions (funzione seller_promotions_niente_doppioni, plpgsql, search_path fisso, EXECUTE tolto a PUBLIC/anon/authenticated) rifiuta con un messaggio in italiano una promo attiva uguale (stesso negozio, titolo, sconto, scope, categoria, prodotti) a un'altra attiva la cui durata si sovrappone e non è finita; un lucchetto per negozio (pg_advisory_xact_lock) mette in fila due inserimenti concorrenti (provato a mano con due sessioni psql: una riga sola). Scadute e annullate non fermano niente. Niente colonne, niente indice: i doppioni vecchi non fermano la migrazione. run.sh e le due prove dei tipi verdi."
+      "cosa_ho_fatto": "Pagina: un useRef creazioneInCorso messo a true prima di create.mutate() e rimesso a false in onSettled; il secondo clic nello stesso istante si ignora (prova: due clic in un solo act, un solo insert; dopo un errore il bottone torna a funzionare). Database, migrazione 429: un controllo BEFORE INSERT OR UPDATE OF status su seller_promotions (funzione seller_promotions_niente_doppioni, plpgsql, search_path fisso, EXECUTE tolto a PUBLIC/anon/authenticated) rifiuta con un messaggio in italiano una promo attiva uguale (stesso negozio, titolo, sconto, scope, categoria, prodotti) a un'altra attiva la cui durata si sovrappone e non è finita; un lucchetto per negozio (pg_advisory_xact_lock) mette in fila due inserimenti concorrenti (provato a mano con due sessioni psql: una riga sola). Scadute e annullate non fermano niente. Niente colonne, niente indice: i doppioni vecchi non fermano la migrazione. run.sh e le due prove dei tipi verdi.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+    },
+    {
+      "id": "R18-013",
+      "chiave": "qa-flussi|le domande dei clienti sotto i prodotti non arrivano a nessuno, ma al cliente diciamo che riceverà una notifica",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "migrations/<numero libero>_le_domande_dei_clienti_avvisano_il_negozio.sql",
+          "modifica": "Trigger AFTER INSERT su public.product_questions che scrive in notifications per il seller del prodotto, e AFTER UPDATE OF answer che avvisa l'autore della domanda (funzione SECURITY DEFINER con search_path fisso)."
+        },
+        {
+          "file": "app/seller/ (nuova pagina «Domande da rispondere»)",
+          "modifica": "Elenco delle domande senza risposta dei prodotti del negozio, con link alla scheda."
+        }
+      ],
+      "nota": "Il testo di components/ProductQA.tsx non promette più nessuna notifica già dal 5/11 (riga 96: «Domanda pubblicata: la risposta del negozio comparirà qui sotto»): niente da cambiare nel mio file. La parte che manca (avviso reale al negozio) sta in migrazione e pannello venditore.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+    },
+    {
+      "id": "R18-014",
+      "chiave": "qa-flussi|la risalita dei genitori delle categorie non ha un tetto",
+      "esito": "riparato",
+      "commit": "5188ab6c",
+      "file_toccati": [
+        "lib/category-attributes.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5188ab6c^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La risalita dei genitori ha un tetto di 20 passi e un insieme dei già visti: un cerchio A→B→A si ferma. La prova conta le chiamate a find, così senza correzione cade invece di bloccarsi.",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-015",
@@ -302,7 +419,8 @@
           "file": "app/seller/orders/[id]/page.tsx",
           "modifica": "riga 240: la stessa correzione: `const lettoAlle = new Date(Math.max(adesso, dataUpdatedAt || 0, errorUpdatedAt || 0) + scarto);` con lo stesso scarto dall'orologio del server (meglio un aiutante comune, per esempio lib/ordini/ora-del-server.ts, usato da tutte e due le pagine)."
         }
-      ]
+      ],
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-016",
@@ -328,6 +446,19 @@
       "cosa_ho_fatto": "Migrazione 421: handle_new_user copia NULLIF(left(btrim(raw_user_meta_data->>'full_name'), 200), '') in profiles.full_name, il resto identico alla 161 ('pending' compreso). Nello stesso giro get_referral_leaderboard da' solo il nome di battesimo, come nomi_pubblici e rider_reviews_ricevute: il 5/11 la copia del nome era stata tolta proprio perche' la classifica degli inviti l'avrebbe mostrata intera a ogni utente con l'accesso. La prova simula l'iscrizione con una riga in auth.users coi dati dell'account (come lo shim) e guarda il profilo che nasce e la classifica vista da un altro.",
       "cosa_resta": "I profili gia' nati restano senza nome: il recupero da auth.users e' una scrittura sui dati veri e la voce la vuole con la firma di Nicola. La domanda pronta (riempie solo i nomi vuoti) e' nell'intestazione della migrazione 421.",
       "verificato_da": "revisore B: 421 confrontata con la 161 (handle_new_user uguale, più full_name) e con la 048 (get_referral_leaderboard uguale, cambia solo il nome); prova SQL verde nella suite intera; variante: rimessa la classifica della 048 e lasciato il resto, la prova cade solo sul controllo 5 (classifica con i cognomi). Il cambio della classifica era necessario: la nota_5_11 della voce lo mette come condizione prima di copiare il nome, quindi sta dentro la voce. L'unica altra lettura del nome di un altro è nomi_dei_clienti_del_negozio, che serve il negozio sui suoi clienti. Chi legge la classifica non si rompe: firma, colonne e permessi uguali (authenticated sì, anon no); l'unica pagina, app/profile/referral/leaderboard/page.tsx (spenta al lancio), con anonName regge un nome di una parola sola (mostra «Mario» invece di «Mario R.»). L'esito parziale è giusto: resta il recupero dei profili già nati, che vuole la firma di Nicola"
+    },
+    {
+      "id": "R18-017",
+      "chiave": "qa-flussi|una prova col nome del collaudo",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/zz-collaudo-termini-chi.test.tsx",
+          "modifica": "Rinominare (git mv) in tests/unit/i-termini-nominano-chi-gestisce-il-servizio-anche-senza-le-variabili-del-titolare.test.tsx, contenuto invariato (stessa convenzione delle prove i-termini-dicono-… del sito; il nome non esiste ancora)."
+        }
+      ],
+      "nota": "Difetto ancora presente: il file esiste col prefisso zz-collaudo e il nome non dice cosa protegge (verifica del 13/11).",
+      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
     },
     {
       "id": "R18-018",
@@ -381,7 +512,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Migrazione 423: dieci paletti CHECK col giro della 215 (NOT VALID, poi VALIDATE; se il passato non regge resta NOT VALID con un avviso e le domande per contare le righe). coupons: PERCENT fra 0 e 100, FIXED > 0, mai negativo; spesa minima >= 0; usi e massimo >= 0 e usi <= massimo. orders: shipping_cost, discount_amount, application_fee_cents, cash_collected_cents >= 0 e payment_method in ('card','cod') o vuoto; disputes.refund_cents e gift_cards.voided_cents >= 0. Nel modulo admin il Valore ha max=100 col tipo percentuale. La prova SQL scrive i 15 numeri storti (rifiutati) e 10 scritture oneste (passano, compresi claim/release del contatore); la vitest apre la pagina: 150% non parte, 15% e 150 euro fissi partono. lib/coupons.ts non cambia: la cassa taglia gia' lo sconto, il buco era nel database.",
-      "verificato_da": "revisore B: database ricostruito fino alla 422 con righe storte committate (coupon PERCENT 150, usi 7 su 1, spesa minima -10; ordine apple_pay con importi -1/-2/-3/-4; reclamo refund -300; buono voided -100), poi 423: esce 0 con 10 avvisi e i 10 vincoli NOT VALID; prova SQL e vitest verdi; rimessa --sql e rimessa sulla pagina rifatte: regge (0); i vincoli stanno tutti nella descrizione e nel fix della voce; gli unici payment_method scritti dal codice (anche nella storia git) sono 'card' e 'cod'"
+      "verificato_da": "revisore B: database ricostruito fino alla 422 con righe storte committate (coupon PERCENT 150, usi 7 su 1, spesa minima -10; ordine apple_pay con importi -1/-2/-3/-4; reclamo refund -300; buono voided -100), poi 423: esce 0 con 10 avvisi e i 10 vincoli NOT VALID; prova SQL e vitest verdi; rimessa --sql e rimessa sulla pagina rifatte: regge (0); i vincoli stanno tutti nella descrizione e nel fix della voce; gli unici payment_method scritti dal codice (anche nella storia git) sono 'card' e 'cod'",
+      "nota": "Giro di correzione NON fatto (tetto di costo), segnalato dal revisore B: (1) 423:63, un vincolo NOT VALID scatta su ogni UPDATE di una riga vecchia storta anche se la modifica non tocca la colonna, quindi il «Disattiva» dell admin (app/admin/coupons/page.tsx:103) su un vecchio codice al 150% e release_coupon su un codice con usi oltre il massimo vengono rifiutati (idem ordini, reclami e buoni storti); cura proposta: il vincolo sul valore dei coupon vale solo per i codici attivi; (2) lib/coupons.ts:137, un vecchio codice oltre il 100% rimasto NOT VALID vale ancora in cassa: il calcolo deve rifiutarlo."
     },
     {
       "id": "R18-020",
@@ -655,10 +787,11 @@
     "R18-007: le 20 righe del registro (e le loro copie in activity_events) con il nome di 16 account cancellati e il file orfano nel contenitore products stanno nel database vero: la domanda per ripulirle e' nella nota della voce. Le fai tu, o aspettiamo la potatura dei 12 mesi (giugno-luglio 2027)?",
     "Migrazione 429 (R18-012), da applicare quando decidi: è un controllo (trigger seller_promotions_niente_doppioni con lucchetto per negozio), non un indice unico, perché la fine della promo la calcola il telefono e un indice su (negozio, titolo, sconto, bersaglio) fermerebbe anche la promo rifatta dopo la scadenza (le scadute restano «active»). Guarda solo le righe nuove o riaccese: i doppioni già nel database vero restano e non fermano la migrazione. Per vederli: SELECT seller_id, title, discount_percent, scope, count(*) FROM public.seller_promotions WHERE status = 'active' AND ends_at > now() GROUP BY 1, 2, 3, 4, category_id, product_ids HAVING count(*) > 1; vuoi che i doppioni vecchi si annullino (tenendone uno), o li lasci scadere?",
     "R18-005: applicare in produzione la 164 (vista nomi_pubblici) e la 181 (funzione nomi_dei_clienti_del_negozio), già nel deposito; la 164 con la 161 o dopo.",
-    "R18-008: il testo proposto per cookie policy e informativa (YouTube tramite Google Ireland / Google LLC, Vimeo.com, Inc., trasferimento negli Stati Uniti con SCC) va guardato da chi cura la parte legale prima di pubblicarlo."
+    "R18-008: il testo proposto per cookie policy e informativa (YouTube tramite Google Ireland / Google LLC, Vimeo.com, Inc., trasferimento negli Stati Uniti con SCC) va guardato da chi cura la parte legale prima di pubblicarlo.",
+    "R18-019: dopo aver applicato la 423, le righe vecchie storte (codici oltre il 100%, importi negativi, usi oltre il massimo) vanno sistemate SUBITO: finché restano, quelle righe non si possono più aggiornare (nemmeno il Disattiva di un codice). Le domande di conteggio pronte sono nell intestazione della 423."
   ],
   "conto": {
-    "agenti": 7,
-    "nota": "Lotti 1-4 fatti, revisori A, B, C sui lotti 1-3. Restano: lotto 5 (002, 006, 009, 013, 014, 017), revisione dei lotti 4-5, il giro di correzione di R18-019 (vedi /home/user/r18-attrezzi/lotti/correzioni.md, descritto anche qui: i vincoli NOT VALID della 423 bloccano il Disattiva di un vecchio codice storto; lib/coupons.ts:137 lascia valere in cassa un vecchio codice oltre il 100%)."
+    "agenti": 8,
+    "nota": "8 subagenti: 5 riparatori (lotti 1-5, il 5 col modello piccolo) e 3 revisori (A: 001 da solo; B: lotto 2; C: lotto 3). I lotti 4 e 5 non hanno avuto un revisore indipendente, e il giro di correzione di R18-019 non è stato fatto: il tetto di 70 $ non bastava. Costo alla chiusura: circa 66 $ (get_session)."
   }
 }
