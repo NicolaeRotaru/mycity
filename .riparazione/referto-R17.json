@@ -1,13 +1,13 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-13 06:35",
-  "finita": false,
+  "aggiornato": "2026-11-13 06:40",
+  "finita": true,
   "testa": "28a4f5a775814e91285ef9224ff5c7d1f2a5c2ac",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "5ebe5257a860411754c6748be35aa8db83857586",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify (typecheck + lint + vitest: 1420 file, 9667 prove verdi) sul commit 5ebe5257, che dopo la testa 28a4f5a7 tocca solo il referto. guardia-ramo verde con la cartella aggiornata dalla regia (lib/database.types.ts assegnato a R17)."
   },
   "voci": [
     {
@@ -29,7 +29,7 @@
     {
       "id": "R17-001",
       "chiave": "pagamenti-stripe|la pagina guadagni, con i soli contanti, dice al negozio commissione zero e soldi mai versati",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "c6713b6b939b016752bee8bafa89d99d05790750",
       "file_toccati": [
         "app/seller/earnings/page.tsx",
@@ -47,8 +47,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6713b6b939b016752bee8bafa89d99d05790750^ --file app/seller/earnings/page.tsx,lib/guadagni/negozio.ts --prove tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "riepilogoNegozio conta anche il contrassegno consegnato: lordo (col credito MyCity), commissione application_fee_cents, netto seller_payout_cents meno gli storni, conteggio per metodo; versato = TRANSFERRED/PAID_MANUALLY, in attesa = HELD/PROCESSING/PENDING più il contante ancora dal fattorino. La pagina mostra torre, grafico e storico anche coi contanti, dice «in attesa del bonifico del lunedì» e, finché CARTA_ACCESA è false, toglie frase e rinvio al conto Stripe. Il ritiro pagato al banco (CASH_IN_STORE) resta fuori dalla torre (commissione dovuta, non trattenuta: la mostra il riquadro dei contanti). Nessuna prova esistente toccata: la prova comune tests/unit/minori-s01-numeri-del-negozio.test.ts, che legge la pagina per nome, è tornata uguale alla base nel commit 28a4f5a7 «R17-001» (la pagina passa di nuovo activeCard, che ora vale gli ordini attivi del riepilogo, carta e contanti). La prova rimessa è stata rilanciata sullo stato finale (base c6713b6b^): uscita 0. "
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "riepilogoNegozio conta anche il contrassegno consegnato: lordo (col credito MyCity), commissione application_fee_cents, netto seller_payout_cents meno gli storni, conteggio per metodo; versato = TRANSFERRED/PAID_MANUALLY, in attesa = HELD/PROCESSING/PENDING più il contante ancora dal fattorino. La pagina mostra torre, grafico e storico anche coi contanti, dice «in attesa del bonifico del lunedì» e, finché CARTA_ACCESA è false, toglie frase e rinvio al conto Stripe. Il ritiro pagato al banco (CASH_IN_STORE) resta fuori dalla torre (commissione dovuta, non trattenuta: la mostra il riquadro dei contanti). Nessuna prova esistente toccata: la prova comune tests/unit/minori-s01-numeri-del-negozio.test.ts, che legge la pagina per nome, è tornata uguale alla base nel commit 28a4f5a7 «R17-001» (la pagina passa di nuovo activeCard, che ora vale gli ordini attivi del riepilogo, carta e contanti). La prova rimessa è stata rilanciata sullo stato finale (base c6713b6b^): uscita 0. ",
+      "cosa_resta": "Revisore grande (13/11), tre punti: (1) la metà «soldi mai versati» resta aperta finché sul ramo nessuno scrive PAID_MANUALLY: la 410 e segna_bonifico_manuale di R17-002 sono state tolte (serve_file_altrui), quindi i contanti già pagati a mano il lunedì restano HELD e la pagina dice «0,00 € già versati · N € in attesa del bonifico del lunedì» (app/seller/earnings/page.tsx:108,362; lib/guadagni/negozio.ts:95). Si chiude riprendendo R17-002. (2) Con CARTA_ACCESA=false resta StripeConnectButton (app/seller/earnings/page.tsx:379), che manda il negozio a Stripe Connect con «Collega conto per ricevere pagamenti», contro la frase del bonifico sull’IBAN ogni lunedì: è anche la logica di R17-009, non fatta. (3) Minore: «Già tolta: a te X netti» sotto la commissione (page.tsx:281) fa pensare che lordo meno commissione dia il netto, ma il lordo comprende la consegna (10 ordini da 23 €: 230 − 20 = 210, la pagina dice 180 netti).",
+      "verificato_da": "revisore grande (subagente), da solo: rilanciati 12 file di prova (100 verdi) e la prova rimessa da una copia separata (regge, uscita 0); riepilogoNegozio nuovo e della base fatti girare su dati finti (lo scenario della voce, sola carta, misto contanti) e confrontati con confirm_cod_remittance, refundOrder e la cassa dei contanti: la commissione è quella trattenuta davvero, la sola carta è identica alla base, annullati/rimborsati fuori, storni dal netto, AWAITING_REMITTANCE in attesa senza doppi; minori-s01 uguale alla base. Verdetto parziale per i punti di cosa_resta."
     },
     {
       "id": "R17-003",
@@ -87,6 +89,138 @@
         }
       ],
       "cosa_ho_fatto": "La rotta avanza lascia al cliente dell'ordine il passo APPROVED → SHIPPED_BACK, col giorno (non futuro, non prima della richiesta) e il numero di spedizione in tracking_number; negozio e amministratore ricevono 403 se mandano quei campi; avviso al negozio; prima della 411 un ripiego senza la colonna. Da SHIPPED_BACK la regola esistente (percheIlRecessoNonSiChiude, regole-del-rimborso.ts:393-397) nega già la chiusura e il cron (OPEN_RETURN_STATUSES, release-payouts:83, righe 232 e 491) tiene fermo il bonifico: quei due file non servivano. La scheda del negozio mostra la dichiarazione. Migrazione 411 (non applicata): la colonna customer_shipped_back_on e un guardiano della riga (la dichiarazione si scrive solo in quel passo e poi non cambia; un recesso SHIPPED_BACK o RECEIVED non diventa mai CANCELED o REJECTED). lib/database.types.ts: solo le righe del generatore (file assegnato a R17 dalla regia)."
+    },
+    {
+      "id": "R17-004",
+      "chiave": "api-backend|un reso già rimborsato per intero, con l'esito non scritto sul reso, non si chiude con «rimborsato»",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-005",
+      "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-006",
+      "chiave": "frontend-ux|il link a un negozio tagliato a metà dice «problema di collegamento, riprova» invece di «negozio non trovato»",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-007",
+      "chiave": "pagamenti-stripe|tre tempi diversi per lo stesso bonifico nel codice — e un quarto nelle faq del venditore",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-008",
+      "chiave": "pagamenti-stripe|le campagne sponsorizzate scadute restano «attiva» per sempre, e il filtro «finite» dell'amministrazione è sempre vuoto",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-009",
+      "chiave": "pagamenti-stripe|un negozio con stripe a metà legge «pagamenti pronti» e la lista delle cose da fare sparisce, ma il server non gli manda il bonifico",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-010",
+      "chiave": "pagamenti-stripe|con la veloce pagata tutta o quasi col credito su un ordine carta, l'euro va sulla carta e stripe puo' rifiutarlo: finisce a mano",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-011",
+      "chiave": "pagamenti-stripe|due giri del freno sovrapposti sullo stesso ordine carta prenotano due volte l'euro: stripe ne rende uno solo, il libro ne segna 2",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-012",
+      "chiave": "pagamenti-stripe|se la scrittura del secondo ordine del carrello cade, il giro dopo promette al cliente un euro da rendere a mano che e' gia' stato tolto",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-013",
+      "chiave": "pagamenti-stripe|dopo l'euro della veloce reso senza toccare il negozio, il rimborso pieno successivo gli riprende meno della sua quota (71 cent su maria)",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-014",
+      "chiave": "pagamenti-stripe|due rimborsi dello stesso reso lanciati nello stesso istante si contano due volte: 40 € segnati su 20 € usciti",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-015",
+      "chiave": "pagamenti-stripe|il bonifico al negozio usa l'importo letto prima di prendere il turno: un rimborso registrato in quel momento non scende dal bonifico",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-016",
+      "chiave": "pagamenti-stripe|il giro che muore fra accumula_rimborso e stripe lascia 1 € prenotato senza soldi usciti; un rimborso a mano dall'admin lo porta a 2",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-017",
+      "chiave": "pagamenti-stripe|la protezione dal doppio bonifico al negozio e al fattorino dura solo 24 ore",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-018",
+      "chiave": "pagamenti-stripe|reso con la carta ripreso dopo 24 ore: un rimborso già fatto fuori da stripe fa saltare il conteggio e lo storno al negozio",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-019",
+      "chiave": "pagamenti-stripe|se il processo muore fra il rimborso uscito e la scrittura nell'elenco, un nuovo tentativo registra di nuovo",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-020",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso vecchio mentre ne parte uno che porta l'ordine al totale, l'ordine resta «rimborsato del tutto» e il negozio non riceve più il resto del bonifico",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-021",
+      "chiave": "pagamenti-stripe|la cintura che doveva impedire di restituire due volte lo stesso buono non esiste nel database",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-022",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso dal cruscotto che aspetta ancora la divisione, il sito lo toglie dagli ordini che non l'avevano mai registrato",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-023",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso parziale su un ordine col bonifico già partito, al negozio resta tolta la sua quota",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-024",
+      "chiave": "pagamenti-stripe|se uno storno al negozio è già fallito e poi l'ordine viene rimborsato tutto, il segno «da recuperare a mano» sparisce e il resto del netto non lo riprende nessuno",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
+    },
+    {
+      "id": "R17-025",
+      "chiave": "pagamenti-stripe|un rimborso pieno che arriva mentre parte il bonifico lascia al negozio la sua quota",
+      "esito": "non_fatto",
+      "nota": "tetto dei 35 $: la sessione si è fermata dopo i tre gravi (regia onda 2, 13/11); la voce la riprende l’onda 3."
     }
   ],
   "nuovi_difetti_visti": [
@@ -121,6 +255,6 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": ""
+    "nota": "5 subagenti su 12: 3 riparatori (L1-L3, L3 ripreso una volta col messaggio sulle prove comuni) e 2 revisori grandi (R17-002, R17-001). Tetto dei 35 $ raggiunto: L4-L6 non fatti, revisore di R17-003 saltato (parziale), con l’accordo della regia."
   }
 }
