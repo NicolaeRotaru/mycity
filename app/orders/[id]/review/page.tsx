@@ -292,7 +292,9 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
         onClick={() => {
           if (inviando.current) return;
           inviando.current = true;
-          submit.mutate(undefined, { onSettled: () => { inviando.current = false; } });
+          // Si riapre solo se l'invio non riesce: dopo il successo la pagina se ne va, e un clic
+          // in mezzo (prima che router.push cambi pagina) non deve mandare una seconda recensione.
+          submit.mutate(undefined, { onError: () => { inviando.current = false; } });
         }}
         loading={submit.isPending}
         disabled={manca}

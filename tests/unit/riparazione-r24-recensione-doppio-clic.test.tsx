@@ -15,6 +15,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const stato = vi.hoisted(() => ({
   scritture: [] as string[],
   toast: [] as string[],
+  // Quante scritture devono ancora fallire per un guasto (non un doppione).
+  guasti: 0,
 }));
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('react', async (o) => ({ ...(await o<Record<string, unknown>>()), use: () => ({ id: 'o1' }) }));
@@ -41,6 +43,10 @@ vi.mock('@/lib/supabase/client', () => ({
         : {
             select: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }),
             insert: async () => {
+              if (stato.guasti > 0) {
+                stato.guasti -= 1;
+                return { error: { code: '08006', message: 'connessione interrotta' } };
+              }
               stato.scritture.push(t);
               return { error: stato.scritture.filter((x) => x === t).length > 1 ? { code: '23505', message: 'duplicate key' } : null };
             },
@@ -72,6 +78,7 @@ const freccia = (el: Element, key: string) => el.dispatchEvent(new window.Keyboa
 beforeEach(() => {
   stato.scritture = [];
   stato.toast = [];
+  stato.guasti = 0;
   router.push.mockClear();
 });
 afterEach(async () => {
@@ -90,6 +97,33 @@ describe('R24-012 · la recensione col doppio clic parte una volta', () => {
     for (let i = 0; i < 4; i++) await pausa();
     expect(stato.scritture, 'il secondo clic ha mandato una seconda recensione').toEqual(['store_reviews']);
     expect(stato.toast.join(' '), 'alla prima recensione il cliente legge «Avevi già recensito»').not.toContain('Avevi già recensito');
+    expect(stato.toast.join(' ')).toContain('Grazie per la recensione');
+  });
+
+  it('un clic, la risposta, un secondo clic prima che la pagina cambi: sempre una scrittura sola', async () => {
+    await monta();
+    await act(async () => { (c.querySelector('button[aria-label="4 stelle"]') as HTMLButtonElement).click(); });
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 4; i++) await pausa();
+    expect(stato.toast.join(' '), 'il primo invio non è arrivato in fondo: la prova non guarda niente').toContain('Grazie per la recensione');
+    expect(router.push).toHaveBeenCalledTimes(1);
+    // router.push è partito ma la pagina c'è ancora: il secondo clic arriva qui.
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 4; i++) await pausa();
+    expect(stato.scritture, 'dopo l’invio riuscito il freno si è riaperto').toEqual(['store_reviews']);
+    expect(stato.toast.join(' ')).not.toContain('Avevi già recensito');
+  });
+
+  it('se l’invio non riesce il freno si riapre e si può riprovare', async () => {
+    await monta();
+    stato.guasti = 1;
+    await act(async () => { (c.querySelector('button[aria-label="4 stelle"]') as HTMLButtonElement).click(); });
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 4; i++) await pausa();
+    expect(stato.toast.some((m) => m.startsWith('err:'))).toBe(true);
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 4; i++) await pausa();
+    expect(stato.scritture, 'dopo un errore il secondo tentativo non parte').toEqual(['store_reviews']);
     expect(stato.toast.join(' ')).toContain('Grazie per la recensione');
   });
 });
