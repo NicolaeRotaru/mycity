@@ -114,6 +114,22 @@ type AddressForm = {
   notes: string;
 };
 
+/**
+ * 13/11/2026 (R19-017 ④) — La data «AAAA-MM-GG» del giorno di Roma a cui si riferisce la fascia.
+ *
+ * Nella richiesta andava solo l'etichetta («Domani · 9:00–11:00»), e la rotta la legge col suo
+ * orologio: premuto venerdì alle 23:59:59 e arrivato dopo la mezzanotte, «Domani» diventava
+ * domenica. La data si calcola con l'ora di Roma dello stesso disegno che ha scritto l'etichetta.
+ * `oraDiRoma` è quella di `romeNow()`: i campi del giorno sono già quelli di Roma.
+ */
+function dataDelGiornoDellaFascia(fascia: string | null, oraDiRoma: Date): string | null {
+  if (!fascia) return null;
+  const traGiorni = fascia.startsWith('Domani') ? 1 : 0;
+  return new Date(Date.UTC(oraDiRoma.getFullYear(), oraDiRoma.getMonth(), oraDiRoma.getDate() + traGiorni))
+    .toISOString()
+    .slice(0, 10);
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -683,6 +699,9 @@ export default function CheckoutPage() {
   });
   // null SOLO quando la fascia non serve: una fascia non valida ferma l'ordine.
   const deliverySlot = etichettaPerLOrdine(consegna);
+  // R19-017 ④ — Il giorno vero della fascia, dallo stesso disegno dell'etichetta. Le rotte oggi
+  // leggono solo l'etichetta: il campo in più non cambia niente finché non lo leggono (R23-005).
+  const dataDellaConsegna = dataDelGiornoDellaFascia(deliverySlot, romeNow());
   const consegnaConfermabile = siPuoConfermare(consegna);
   // 13/11/2026 (R19-017) — Il giorno di Roma dell'ultimo disegno. Se all'invio è già un altro, è
   // passata la mezzanotte senza che la cassa ridisegnasse: «Domani» sullo schermo era il giorno di
@@ -1085,6 +1104,8 @@ export default function CheckoutPage() {
           // cade il saldo vale 0, la casella non compare, e il server non deve spenderlo lo stesso.
           useCredit: useCredit && (walletCents ?? 0) > 0,
           deliverySlot,
+          // R19-017 ④ — la data del giorno di Roma della fascia, «AAAA-MM-GG» (null col ritiro).
+          delivery_date: dataDellaConsegna,
           // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
           // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
           checkoutId: idCheckout,
@@ -1221,6 +1242,8 @@ export default function CheckoutPage() {
           pickupDiscountCents,
           pickupInStore,
           deliverySlot,
+          // R19-017 ④ — la data del giorno di Roma della fascia, «AAAA-MM-GG» (null col ritiro).
+          delivery_date: dataDellaConsegna,
           // R163 — viaggia fino al webhook dentro la riga di intento: e' li' che
           // nasce `order_placed` per la carta.
           checkoutId: idCheckout,

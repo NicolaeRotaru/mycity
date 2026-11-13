@@ -44,12 +44,16 @@ const ORDINE = '22222222-bbbb-4bbb-8bbb-222222222222';
 const VENERDI_23_59_30 = '2026-11-06T22:59:30Z';
 
 const fasceInviate: string[] = [];
+/** R19-017 ④ — la data (`delivery_date`) che ogni richiesta d'ordine ha portato. */
+const dateInviate: unknown[] = [];
 const reteDiPartenza = globalThis.fetch;
 globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
   const url = String(typeof input === 'object' && input !== null && 'url' in input ? (input as { url: unknown }).url : input);
   if (url.includes('/api/consegna/veloce')) return { ok: true, json: async () => ({ possibile: false, perche: 'finto' }) };
   if (url.includes('/api/orders/cod')) {
-    fasceInviate.push((JSON.parse(init?.body ?? '{}') as { deliverySlot?: string }).deliverySlot ?? '');
+    const corpo = JSON.parse(init?.body ?? '{}') as { deliverySlot?: string; delivery_date?: unknown };
+    fasceInviate.push(corpo.deliverySlot ?? '');
+    dateInviate.push(corpo.delivery_date);
     return { ok: true, status: 200, json: async () => ({ ok: true, data: { orderIds: [ORDINE], ordini: [{ id: ORDINE, sellerId: PANE, totalCents: 1500 }] } }) };
   }
   return { ok: false, status: 503, statusText: 'finto', headers: new Headers(), text: async () => '', json: async () => null };
@@ -65,6 +69,7 @@ afterEach(() => {
   vi.useRealTimers();
   avvisi.errori.length = 0;
   fasceInviate.length = 0;
+  dateInviate.length = 0;
   delete globale.__DATI_QUERY__;
   delete globale.__UTENTE__;
   delete globale.__MUTAZIONI_VERE__;
@@ -159,6 +164,7 @@ describe('R19-017 · a mezzanotte la fascia di domani non cambia giorno in silen
     await c.ordina();
     expect(avvisi.errori).toEqual([]);
     expect(fasceInviate, 'l’ordine non nasce per sabato 7/11').toEqual(['Oggi · 9:00–11:00']);
+    expect(dateInviate, 'la richiesta non porta la data di sabato 7/11').toEqual(['2026-11-07']);
   }, 30_000);
 
   it('② «Ordina» subito dopo la mezzanotte, prima che la cassa ridisegni: niente ordine per domenica', async () => {
@@ -173,5 +179,29 @@ describe('R19-017 · a mezzanotte la fascia di domani non cambia giorno in silen
     expect(c.avviso()).toMatch(/sab 7\/11/);
     await c.ordina();
     expect(fasceInviate, 'ripremuto, l’ordine deve nascere per sabato 7/11').toEqual(['Oggi · 9:00–11:00']);
+    expect(dateInviate, 'la richiesta non porta la data di sabato 7/11').toEqual(['2026-11-07']);
   }, 30_000);
+
+  /**
+   * Giro di correzione (13/11), punto ④ della cura: chi preme alle 23:59:59 e arriva al server dopo
+   * la mezzanotte. L'etichetta da sola («Domani · …») la rotta la legge col suo orologio, cioè
+   * domenica: la richiesta porta anche la data del giorno di Roma scelto.
+   */
+  it('④ «Ordina» venerdì alle 23:59:59.9: la richiesta porta «Domani» E la data di sabato 7/11', async () => {
+    const c = await cassaDiVenerdiSera();
+    expect(c.fascia()).toBe('Domani · 9:00–11:00');
+    vi.setSystemTime(new Date('2026-11-06T22:59:59.900Z'));
+    await c.ordina();
+    expect(avvisi.errori).toEqual([]);
+    expect(fasceInviate).toEqual(['Domani · 9:00–11:00']);
+    expect(dateInviate, 'senza la data, la rotta che riceve dopo la mezzanotte legge «Domani» come domenica').toEqual(['2026-11-07']);
+  }, 30_000);
+
+  it('④ anche la richiesta della carta porta la data, accanto all’etichetta (la carta al lancio è spenta: si legge la richiesta)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const cassa = readFileSync('app/checkout/page.tsx', 'utf8');
+    const carta = cassa.slice(cassa.indexOf("fetch('/api/stripe/checkout'"));
+    const corpo = carta.slice(0, carta.indexOf('});'));
+    expect(corpo).toMatch(/deliverySlot,\s*(\/\/[^\n]*\n\s*)*delivery_date: dataDellaConsegna,/);
+  });
 });
