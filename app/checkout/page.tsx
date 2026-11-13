@@ -615,6 +615,15 @@ export default function CheckoutPage() {
   // null SOLO quando la fascia non serve: una fascia non valida ferma l'ordine.
   const deliverySlot = etichettaPerLOrdine(consegna);
   const consegnaConfermabile = siPuoConfermare(consegna);
+  // 13/11/2026 (R19-017) — Il giorno di Roma dell'ultimo disegno. Se all'invio è già un altro, è
+  // passata la mezzanotte senza che la cassa ridisegnasse: «Domani» sullo schermo era il giorno di
+  // ieri, e l'ordine nascerebbe per il giorno dopo. Si ridisegna (il selettore riporta la fascia al
+  // giorno giusto e lo dice) e si chiede di ripremere.
+  const giornoDelDisegno = useRef(oraDiApertura.toDateString());
+  useEffect(() => {
+    giornoDelDisegno.current = romeNow().toDateString();
+  });
+  const [, ridisegnaDopoMezzanotte] = useState(0);
 
   // 29/10/2026 — «Adesso» si offre solo se il server dice che si può mantenere: dalle 8 alle 21,
   // negozi aperti, un fattorino approvato e online (`veloceSiPuo`, la stessa decisione delle due
@@ -1320,6 +1329,12 @@ export default function CheckoutPage() {
     }
     if (variantIssues.length > 0) {
       toast.error('Scegli le opzioni (taglia/colore) per alcuni articoli prima di ordinare.');
+      return;
+    }
+    // R19-017 — «Domani» scelto ieri sera e mezzanotte passata senza ridisegnare: prima si ridisegna.
+    if (slotDay === 'tomorrow' && !pickupInStore && romeNow().toDateString() !== giornoDelDisegno.current) {
+      ridisegnaDopoMezzanotte((n) => n + 1);
+      toast.error('È passata la mezzanotte: «Oggi» e «Domani» sono cambiati. Controlla il giorno di consegna qui sopra e premi di nuovo.');
       return;
     }
     // La fascia si ricontrolla QUI, sull'ora di adesso.
