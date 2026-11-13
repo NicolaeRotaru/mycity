@@ -314,10 +314,17 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                 key={foto.src}
                 // Una foto fallita PRIMA dell'idratazione: React 18 non ripete quell'errore, e onError
                 // non scatta. Al montaggio un'immagine «completa» con larghezza zero è una foto rotta.
+                // 13/11/2026 (R15-001) — E va detta anche qui, non solo in onError: le tessere arrivano
+                // nell'HTML del server, quindi una foto sparita fallisce quasi sempre prima
+                // dell'idratazione, e questo ramo la nascondeva in silenzio. Una volta sola per foto.
                 ref={(el) => {
                   if (el && el.complete && el.naturalWidth === 0) {
                     el.style.display = 'none';
-                    segnaRotta(chiaveFoto(c.slug, foto.src));
+                    const chiave = chiaveFoto(c.slug, foto.src);
+                    if (!fotoRotte.has(chiave)) {
+                      logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
+                    }
+                    segnaRotta(chiave);
                   }
                 }}
                 src={sizedImage(foto.src, 'card')}
