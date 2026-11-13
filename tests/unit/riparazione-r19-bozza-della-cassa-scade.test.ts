@@ -72,8 +72,8 @@ const gruppi = {
   prezziCambiati: [],
 };
 
-/** Apre la cassa: `chi` = null per un ospite, altrimenti la persona entrata. */
-async function apriLaCassa(chi: { id: string; email: string } | null) {
+/** Apre la cassa: `chi` = null per un ospite, altrimenti la persona entrata (coi suoi `indirizzi` salvati). */
+async function apriLaCassa(chi: { id: string; email: string } | null, indirizzi: unknown[] = []) {
   localStorage.setItem('cart', JSON.stringify([filone]));
   if (chi) globale.__UTENTE__ = chi;
   else delete globale.__UTENTE__;
@@ -82,7 +82,7 @@ async function apriLaCassa(chi: { id: string; email: string } | null) {
     const [cosa, quale] = o.queryKey;
     if (cosa === 'checkout-groups') return String(quale).includes('p-filone') ? gruppi : undefined;
     if (cosa === 'auth-user') return chi;
-    if (cosa === 'user-addresses') return [];
+    if (cosa === 'user-addresses') return indirizzi;
     return undefined;
   };
   const pagina = (await monta('app/checkout/page.tsx')).default;
@@ -91,6 +91,7 @@ async function apriLaCassa(chi: { id: string; email: string } | null) {
   const campo = (nome: string) => s.radice.querySelector<HTMLInputElement>(`input[name="${nome}"]`);
   return {
     campo,
+    testo: () => s.radice.textContent ?? '',
     scrivi: async (nome: string, valore: string) => {
       const c = campo(nome);
       expect(c, `il campo «${nome}» non si trova`).not.toBeNull();
@@ -152,6 +153,56 @@ describe('R19-009 · la bozza della cassa scade e non passa a chi viene dopo', (
   }, 30_000);
 });
 
+/**
+ * Giro di correzione (13/11): «cancellarla all'accesso di un utente diverso». La bozza la scrive
+ * sempre un ospite, quindi chi entra dopo può essere Anna o suo fratello, e il browser non lo sa.
+ * Il minimo onesto: se l'account appena entrato ha già i suoi dati (indirizzi salvati), nome e
+ * telefono di chi ha scritto la bozza non tornano. E una scadenza oltre le 2 ore non vale.
+ */
+describe('R19-009 · giro di correzione: la bozza da ospite e chi entra dopo', () => {
+  const MARCO_CASA = { id: 'ind-marco', user_id: FRATELLO.id, full_name: 'Marco Bianchi', address: 'Via Roma 1', city: 'Piacenza', zip: '29121', phone: '3471112222', notes: null, lat: 45.05, lng: 9.69, is_default: true };
+
+  it('trenta minuti dopo il fratello entra col suo account (con i suoi indirizzi): nome e telefono di Anna non tornano', async () => {
+    await annaVaAllAccesso();
+    vi.setSystemTime(new Date(GIOVEDI_10.getTime() + 30 * MINUTO));
+    const c = await apriLaCassa(FRATELLO, [MARCO_CASA]);
+    expect(c.campo('fullName')?.value, 'il fratello ordina col nome di Anna').toBe('Marco Bianchi');
+    expect(c.campo('phone')?.value, 'il fratello ordina col telefono di Anna').toBe('3471112222');
+    expect(c.testo(), 'il nome di Anna è a schermo').not.toContain('Anna Bianchi');
+    expect(localStorage.getItem(BOZZA), 'ripresa, la bozza si cancella').toBeNull();
+    c.chiudi();
+  }, 30_000);
+
+  it('una bozza con la scadenza oltre le 2 ore dalla scelta non vale: la cassa non la rimette e la butta', async () => {
+    process.env.TZ = 'Europe/Rome';
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date(GIOVEDI_10.getTime() + 3 * 60 * MINUTO));
+    localStorage.setItem(BOZZA, JSON.stringify({
+      form: { fullName: 'Anna Bianchi', address: 'Via Garibaldi 5', city: 'Piacenza', zip: '29121', phone: '3339876543', notes: '' },
+      sceltaIl: GIOVEDI_10.getTime(),
+      scadeIl: GIOVEDI_10.getTime() + 10 * 60 * MINUTO,
+    }));
+    const c = await apriLaCassa(FRATELLO);
+    expect(c.campo('fullName')?.value, 'tre ore dopo la scelta la bozza «scade fra sette ore»: non è credibile').toBe('');
+    expect(c.campo('phone')?.value).toBe('');
+    expect(localStorage.getItem(BOZZA)).toBeNull();
+    c.chiudi();
+  }, 30_000);
+
+  it('…e neanche una che scade fra dieci ore senza dire quando è stata scritta', async () => {
+    process.env.TZ = 'Europe/Rome';
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(GIOVEDI_10);
+    localStorage.setItem(BOZZA, JSON.stringify({
+      form: { fullName: 'Anna Bianchi', address: 'Via Garibaldi 5', city: 'Piacenza', zip: '29121', phone: '3339876543', notes: '' },
+      scadeIl: GIOVEDI_10.getTime() + 10 * 60 * MINUTO,
+    }));
+    const c = await apriLaCassa(FRATELLO);
+    expect(c.campo('fullName')?.value).toBe('');
+    c.chiudi();
+  }, 30_000);
+});
+
 describe('R19-009 · la barra in alto butta la bozza della cassa', () => {
   function ascolti() {
     return globale.__ASCOLTI_AUTH__ as ((evento: string, sessione: unknown) => void)[];
@@ -184,6 +235,12 @@ describe('R19-009 · la barra in alto butta la bozza della cassa', () => {
     s = await barra();
     expect(localStorage.getItem(BOZZA), 'la bozza fresca serve a chi sta accedendo: deve restare').not.toBeNull();
     s.smonta();
+
+    // Giro di correzione: una scadenza fra dieci giorni non è di una bozza vera.
+    localStorage.setItem(BOZZA, JSON.stringify({ form: { fullName: 'Anna Bianchi' }, sceltaIl: Date.now(), scadeIl: Date.now() + 10 * 24 * 60 * MINUTO }));
+    s = await barra();
+    expect(localStorage.getItem(BOZZA), 'una scadenza oltre le 2 ore tiene i dati di Anna nel browser per giorni').toBeNull();
+    s.smonta();
   }, 60_000);
 
   it('all’uscita dall’account la bozza si butta, anche se è fresca', async () => {
@@ -206,5 +263,10 @@ describe('R19-009 · la Cookie policy dichiara la bozza della cassa', () => {
     const riga = necessari.split('\n').find((r) => r.includes("name: 'mc_checkout_draft'"));
     expect(riga, 'la bozza della cassa non è dichiarata fra gli strettamente necessari').toBeTruthy();
     expect(riga, 'la policy non dice quanto dura (2 ore)').toMatch(/duration: '2 ore'/);
+    // Giro di correzione: dopo 2 ore la bozza non si usa più, e la cancella la visita successiva
+    // (la barra in alto, al caricamento): «comunque dopo 2 ore» prometteva una cancellazione da sola.
+    expect(riga).not.toMatch(/comunque dopo 2 ore/);
+    expect(riga).toMatch(/dopo 2 ore non si usa più/);
+    expect(riga).toMatch(/visita successiva/);
   });
 });

@@ -78,6 +78,22 @@ export type Bozza = {
   scadeIl?: number;
 };
 
+/**
+ * 13/11/2026 (R19-009, giro di correzione) — La scadenza è ancora valida, ed è credibile.
+ *
+ * `scadeIl` arriva dal browser come il resto: una bozza con la scadenza fra dieci giorni passava per
+ * buona. Una bozza vera scade al più 2 ore dopo la scelta (`sceltaIl`), e non può scadere più di 2
+ * ore dopo adesso: oltre, non vale. La usano la cassa (`bozzaLetta`) e la barra in alto.
+ */
+export function scadenzaDellaBozzaValida(g: { scadeIl?: unknown; sceltaIl?: unknown }, adesso: Date): boolean {
+  if (typeof g.scadeIl !== 'number' || !Number.isFinite(g.scadeIl)) return false;
+  const ora = adesso.getTime();
+  if (ora > g.scadeIl) return false;
+  if (g.scadeIl > ora + BOZZA_VALE_MS) return false;
+  if (typeof g.sceltaIl === 'number' && Number.isFinite(g.sceltaIl) && g.scadeIl > g.sceltaIl + BOZZA_VALE_MS) return false;
+  return true;
+}
+
 /** Quello che si mette da parte prima di mandare qualcuno a fare l'accesso. */
 export function bozzaDaSalvare(s: {
   form: CampiIndirizzo;
@@ -113,8 +129,9 @@ export function bozzaDaSalvare(s: {
 export function bozzaLetta(grezza: unknown, adesso?: Date): Bozza | null {
   if (!grezza || typeof grezza !== 'object') return null;
   const g = grezza as Record<string, unknown>;
-  // R19-009 — Scaduta: i dati di chi l'ha scritta non tornano a chi apre la cassa dopo.
-  if (adesso && typeof g.scadeIl === 'number' && adesso.getTime() > g.scadeIl) return null;
+  // R19-009 — Scaduta: i dati di chi l'ha scritta non tornano a chi apre la cassa dopo. E una
+  // scadenza oltre le 2 ore dalla scelta (o da adesso) non vale (`scadenzaDellaBozzaValida`).
+  if (adesso && typeof g.scadeIl === 'number' && !scadenzaDellaBozzaValida(g, adesso)) return null;
   // Le bozze vecchie erano il form e basta, senza il campo `form`: si leggono lo stesso.
   const form = (g.form && typeof g.form === 'object' ? g.form : g) as CampiIndirizzo;
   const bozza: Bozza = { form: soloCampiSemplici(form) };

@@ -105,7 +105,9 @@ describe('R19-004 · montata: chi ha già indirizzi salvati vede dove arriva l\'
     clicca(scritta!);
     await assesta(3);
     expect(indirizzoDellOrdine(r)).toBe('Via Roma 10');
-    expect(r.querySelector<HTMLInputElement>('#checkout-form input[name="phone"]')!.value).toBe('3339876543');
+    // R19-009 (giro di correzione): l'account ha già i suoi dati, quindi nome e telefono sono i suoi,
+    // non quelli scritti da ospite (che potrebbe essere un altro, sullo stesso browser).
+    expect(r.querySelector<HTMLInputElement>('#checkout-form input[name="phone"]')!.value).toBe('3331234567');
   }, 60000);
 
   it('se la bozza è proprio un indirizzo salvato, è quella mattonella a essere scelta (niente doppioni)', async () => {

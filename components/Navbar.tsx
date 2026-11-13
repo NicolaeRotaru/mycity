@@ -25,6 +25,7 @@ import { trackSignedOut } from '@/lib/analytics/events';
 import { gestoreDiQuestoBrowser, scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
 import { toast } from 'sonner';
 import { hrefDiAccesso } from '@/lib/auth/href-di-accesso';
+import { scadenzaDellaBozzaValida } from '@/lib/bozza-checkout';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
@@ -76,13 +77,14 @@ function buttaLaBozzaDellaCassa(soloSeScaduta: boolean): void {
       const scritta = memoria.getItem(BOZZA_DELLA_CASSA);
       if (scritta === null) continue;
       if (soloSeScaduta) {
-        let scadeIl: unknown;
+        let letta: { scadeIl?: unknown; sceltaIl?: unknown } | null = null;
         try {
-          scadeIl = (JSON.parse(scritta) as { scadeIl?: unknown } | null)?.scadeIl;
+          letta = JSON.parse(scritta) as { scadeIl?: unknown; sceltaIl?: unknown } | null;
         } catch {
-          scadeIl = undefined;
+          letta = null;
         }
-        if (typeof scadeIl === 'number' && Date.now() <= scadeIl) continue;
+        // Giro di correzione: la stessa regola della cassa, col tetto delle 2 ore sulla scadenza.
+        if (letta && typeof letta === 'object' && scadenzaDellaBozzaValida(letta, new Date())) continue;
       }
       memoria.removeItem(BOZZA_DELLA_CASSA);
     }
