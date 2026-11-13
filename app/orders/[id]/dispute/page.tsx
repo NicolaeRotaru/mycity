@@ -129,7 +129,9 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         <div className="bg-accent-50 border border-accent-200 rounded-2xl p-5 mt-5 text-sm text-ink-700">
           <p className="font-semibold mb-1">Hai già un reclamo aperto su questo ordine</p>
           <p>
-            L&apos;hai aperto il {new Date(reclamoAperto.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} ·
+            {/* 13/11/2026 (R13-007) — Il reclamo dei contanti da restituire lo apre il sito a nome del cliente:
+                «l'hai aperto» non era sempre vero. */}
+            Aperto il {new Date(reclamoAperto.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} ·
             stato: {reclamoAperto.status === 'under_review' ? 'in esame' : 'aperto'}. Ti scriviamo noi appena c&apos;è una decisione.
           </p>
         </div>

@@ -8,6 +8,7 @@ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere'
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
 import { ordineAnnullatoTemplate } from '@/lib/email/templates';
+import { formatPriceFromCents } from '@/lib/format';
 import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
@@ -65,6 +66,12 @@ export type EsitoAnnullo =
         // dividere fra i negozi: quanto rendere si sa solo dopo la divisione.
         | 'RIMBORSO_DA_DIVIDERE';
       dettaglio?: string;
+      /**
+       * 13/11/2026 (R13-007) — Solo su CONTANTI_INCASSATI, e solo se chi chiama ha chiesto
+       * `reclamoSeIncassati`: l'id del reclamo che il sito ha aperto per restituire i contanti
+       * (o quello già aperto sull'ordine). `null` = il reclamo non si è potuto aprire.
+       */
+      reclamoId?: string | null;
     };
 
 /**
@@ -116,7 +123,13 @@ const PAUSA_STORNO_CREDITO_MS = 200;
 export async function annullaERimborsa(
   admin: SupabaseClient,
   order: OrdineDaAnnullare,
-  opts: { reason: string; metadata?: Record<string, string>; motivoCredito?: string },
+  opts: {
+    reason: string;
+    metadata?: Record<string, string>;
+    motivoCredito?: string;
+    /** R13-007 — Sui contanti già incassati apre da solo il reclamo per restituirli (`apriIlReclamoDeiContanti`). */
+    reclamoSeIncassati?: boolean;
+  },
 ): Promise<EsitoAnnullo> {
   // 053 — Un ordine già rimborsato in parte ha stato 'PARTIALLY_REFUNDED':
   // trattarlo come «niente da rimborsare» lasciava indietro il residuo, cioè la
@@ -261,8 +274,17 @@ export async function annullaERimborsa(
   // e senza soldi.
   // 5/11/2026 — La regola comune (`contantiIncassati`): anche il ritiro pagato
   // al banco (DELIVERED + PAID, senza cash_confirmed_at) e' un incasso vero.
+  //
+  // 13/11/2026 (R13-007) — Decisione di Nicola del 29/10 (`pagamenti.rimborso-contanti`): il
+  // rimborso dei contanti già pagati passa SEMPRE dal reclamo, e il reclamo lo apre il sito.
+  // Prima qui ci si fermava e basta, e le rotte dicevano «apri un reclamo» all'amministratore, che
+  // non può: il reclamo lo apre solo il cliente o il negozio dell'ordine (migrazione 215).
+  // L'ordine resta com'è (merce e soldi li decide il reclamo); chi chiama lo chiede con
+  // `reclamoSeIncassati` — il rifiuto del negozio e il «cliente assente» non aprono reclami.
   if (order.payment_method === 'cod' && contantiIncassati(order)) {
-    return { ok: false, motivo: 'CONTANTI_INCASSATI' };
+    if (!opts.reclamoSeIncassati) return { ok: false, motivo: 'CONTANTI_INCASSATI' };
+    const reclamo = await apriIlReclamoDeiContanti(admin, order, opts.reason);
+    return { ok: false, motivo: 'CONTANTI_INCASSATI', reclamoId: reclamo?.id ?? null };
   }
 
   if (isPaidCard) {
@@ -421,6 +443,92 @@ export async function annullaERimborsa(
   if (giro?.avviso) await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, come);
 
   return { ok: true, refundId: null, ...(creditoNonTornato > 0 ? { creditoNonTornatoCents: creditoNonTornato } : {}) };
+}
+
+/** Gli stati di un reclamo ancora aperto: quelli dell'indice `disputes_one_open_per_order` (063). */
+const RECLAMO_APERTO = ['open', 'under_review'];
+
+/**
+ * 13/11/2026 (R13-007) — IL RECLAMO DEI CONTANTI LO APRE IL SITO.
+ *
+ * Decisione di Nicola del 29/10 (`pagamenti.rimborso-contanti`, «rimborso dal reclamo, mezzo
+ * automatico»): un ordine in contanti già pagato e poi annullato si rimborsa chiudendo un reclamo
+ * a favore del cliente, e il reclamo con la cifra lo apre il sito. Chiuderlo così fa il resto
+ * (`refundOrder`: il bonifico da fare annunciato agli amministratori, la quota tolta al negozio);
+ * finché è aperto, il bonifico del lunedì al negozio per quell'ordine resta fermo.
+ *
+ * Coi permessi di servizio, come `/api/disputes`: la regola `disputes_open_insert` (215) vale per
+ * chi entra dal browser. Il reclamo è a nome del cliente (è lui che riceve i soldi e l'esito),
+ * contro il negozio dell'ordine. Un reclamo per ordine (indice `disputes_one_open_per_order`): se
+ * ce n'è già uno aperto si usa quello. Torna `null` se non si è potuto aprire; non lancia mai.
+ */
+export async function apriIlReclamoDeiContanti(
+  admin: SupabaseClient,
+  order: OrdineDaAnnullare,
+  motivo: string,
+): Promise<{ id: string; nuovo: boolean } | null> {
+  const contantiCents = Math.max(0, Math.round(Number(order.total_price ?? 0) * 100));
+  const creditoCents = Math.max(0, Number(order.wallet_applied_cents ?? 0));
+  const giaTornatiCents = Math.max(0, Number(order.refunded_amount_cents ?? 0));
+  const numero = `#${order.id.slice(0, 6).toUpperCase()}`;
+  const descrizione =
+    `Aperto dal sito dopo la richiesta di annullo («${motivo}»): l'ordine ${numero} era già pagato in contanti ` +
+    `(${formatPriceFromCents(contantiCents)}) e non si annulla.` +
+    (creditoCents > 0 ? ` Il cliente aveva usato anche ${formatPriceFromCents(creditoCents)} di credito MyCity.` : '') +
+    (giaTornatiCents > 0 ? ` Già restituiti: ${formatPriceFromCents(giaTornatiCents)}.` : '') +
+    ' I soldi tornano al cliente chiudendo questo reclamo a suo favore con la cifra da restituire: il bonifico si fa a mano.';
+
+  const giaAperto = async (): Promise<{ id: string; nuovo: boolean } | null> => {
+    const { data } = await admin
+      .from('disputes')
+      .select('id')
+      .eq('order_id', order.id)
+      .in('status', RECLAMO_APERTO)
+      .limit(1)
+      .maybeSingle();
+    const id = (data as { id?: string } | null)?.id;
+    return id ? { id, nuovo: false } : null;
+  };
+
+  try {
+    const { data, error } = await admin
+      .from('disputes')
+      .insert({
+        order_id: order.id,
+        opener_id: order.user_id,
+        against_id: order.seller_id ?? null,
+        reason: 'other',
+        description: descrizione,
+        status: 'open',
+      })
+      .select('id')
+      .single();
+    if (error || !data) {
+      if (error?.code === '23505' || /disputes_one_open_per_order/.test(error?.message ?? '')) {
+        const esistente = await giaAperto();
+        if (esistente) return esistente;
+      }
+      logger.error('[annullaERimborsa] reclamo dei contanti NON aperto', { orderId: order.id, err: error?.message });
+      return null;
+    }
+    const id = (data as { id: string }).id;
+    try {
+      await notifyAdmins(
+        '⚖️ Reclamo aperto dal sito: contanti da restituire',
+        `Richiesta di annullo («${motivo}») sull'ordine ${numero}, già pagato in contanti (${formatPriceFromCents(contantiCents)}): non si annulla. ` +
+          "Il sito ha aperto il reclamo a nome del cliente: chiudilo a suo favore con la cifra da restituire e il sito ti dice il bonifico da fare. " +
+          "Intanto il bonifico al negozio per quell'ordine resta fermo.",
+        '/admin/disputes',
+        { unaVoltaPer: `reclamo-nuovo:${id}` },
+      );
+    } catch (err) {
+      logger.error('[annullaERimborsa] avviso del reclamo dei contanti non partito', { orderId: order.id, err });
+    }
+    return { id, nuovo: true };
+  } catch (err) {
+    logger.error('[annullaERimborsa] reclamo dei contanti NON aperto', { orderId: order.id, err });
+    return null;
+  }
 }
 
 /**

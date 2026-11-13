@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { apiError, ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -58,11 +58,22 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     reason: 'Ordine annullato dal cliente',
     metadata: { canceled_by: user.id, source: 'buyer_cancel' },
     motivoCredito: 'order_canceled_by_buyer',
+    reclamoSeIncassati: true,
   });
 
   if (!esito.ok) {
     if (esito.motivo === 'CONTANTI_INCASSATI') {
-      return ApiErrors.conflict("Ordine già incassato in contanti: scrivi all'assistenza per la restituzione.");
+      // 13/11/2026 (R13-007) — Il reclamo per restituire i contanti lo apre il sito (decisione del
+      // 29/10): al cliente si dice che è già aperto. Solo se non si è aperto, l'assistenza.
+      if (!esito.reclamoId) {
+        return ApiErrors.conflict("Ordine già incassato in contanti: scrivi all'assistenza per la restituzione.");
+      }
+      return apiError(
+        409,
+        'Ordine già pagato in contanti: non si annulla, ma abbiamo già aperto un reclamo per restituirti i soldi. Ti scriviamo noi per il bonifico.',
+        'CONFLICT',
+        { reclamoId: esito.reclamoId, link: `/orders/${order.id}/dispute` },
+      );
     }
     // 27/8/2026 (R131) — Chi arriva secondo (doppio invio, ritentativo di rete)
     // trova il turno gia' preso: si dice che e' fatto, non si accredita di nuovo.

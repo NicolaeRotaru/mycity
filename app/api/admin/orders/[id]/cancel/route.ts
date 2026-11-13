@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 import { withAdminAuth } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { apiError, ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -40,11 +40,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (order.delivery_status === 'CANCELED') return ApiErrors.conflict('Ordine già annullato');
   // 5/11/2026 (S05) — Un ordine in contanti già consegnato non si annulla, anche
   // se l'incasso non risulta confermato: la merce l'ha il cliente e non torna a
-  // scaffale, e i contanti vanno chiesti al fattorino. Si gestisce con un reclamo.
+  // scaffale. Si gestisce con un reclamo.
   // (Su un ordine con carta consegnato l'annullo resta la strada del rimborso.)
-  if (order.delivery_status === 'DELIVERED' && order.payment_method === 'cod') {
-    return ApiErrors.conflict('Ordine in contanti già consegnato: non si annulla. Chiedi i contanti al fattorino o apri un reclamo.');
-  }
+  // 13/11/2026 (R13-007) — Qui c'era un rifiuto a parte che diceva «apri un reclamo»: dal
+  // pannello non si può. Ora lo prende `annullaERimborsa`: la consegna in contanti È l'incasso
+  // (`contantiIncassati`), quindi l'ordine non si tocca e il sito apre da solo il reclamo.
 
   // 5/11/2026 (S05) — La nota scritta dall'amministratore resta nel registro, non
   // arriva al cliente: prima finiva parola per parola nell'email del rimborso.
@@ -58,15 +58,26 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     reason,
     metadata: { canceled_by: user.id, source: 'admin_cancel' },
     motivoCredito: 'order_admin_canceled',
+    reclamoSeIncassati: true,
   });
 
   if (!esito.ok) {
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       // 5/11/2026 (S05) — Niente parentesi (friendlyError le toglie) e niente passi
       // che non esistono: la strada vera è il reclamo, col bonifico fatto a mano.
-      return ApiErrors.conflict(
-        'Ordine già incassato in contanti dal fattorino: dal pannello non si annulla. ' +
-        'Per restituire i soldi al cliente apri un reclamo: il bonifico si fa a mano.',
+      // 13/11/2026 (R13-007) — E il reclamo l'ha già aperto il sito (decisione del 29/10): la
+      // risposta lo dice e porta il link. Se non si è aperto, si dice quello, non «aprilo tu».
+      if (!esito.reclamoId) {
+        return ApiErrors.conflict(
+          'Ordine già pagato in contanti: dal pannello non si annulla, e il reclamo per restituire i soldi non si è aperto. Riprova fra poco.',
+        );
+      }
+      return apiError(
+        409,
+        'Ordine già pagato in contanti: dal pannello non si annulla. Il reclamo per restituire i soldi è aperto in Reclami: ' +
+          'chiudilo a favore del cliente e il bonifico si fa a mano.',
+        'CONFLICT',
+        { reclamoId: esito.reclamoId, link: '/admin/disputes' },
       );
     }
     // 27/8/2026 (R131) — Il secondo annullo sovrapposto non trova righe da
