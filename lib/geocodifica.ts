@@ -1,5 +1,6 @@
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { rateLimitAsync } from '@/lib/rate-limit';
 // Piacenza e dintorni: il riquadro dove si cerca quando la città è Piacenza.
 import { RIQUADRO_PIACENZA } from '@/lib/ordini/zona-di-consegna';
 
@@ -154,6 +155,67 @@ async function trovaLaPosizione(frase: string): Promise<PosizioneTrovata | null>
   }
 
   try {
+    const chiave = `${normalizza(cercato.via)}|${normalizza(cercato.citta)}|${cercato.cap}`;
+    const risultati = await chiediANominatim(chiave, params);
+    return risultati ? scegliIlRisultato(risultati, cercato) : null;
+  } catch {
+    // Un indirizzo che non si trova non è un ordine da bloccare: si prosegue
+    // senza la mappa, come si faceva prima.
+    logger.warn('[geocodifica] indirizzo non risolto', { lunghezza: frase.length });
+    return null;
+  }
+}
+
+/**
+ * 13/11/2026 (R13-010) — UN FRENO SOLO PER TUTTO IL SITO VERSO NOMINATIM.
+ *
+ * La regola d'uso del servizio pubblico delle mappe chiede al massimo UNA richiesta al
+ * secondo per applicazione. Il solo freno era per indirizzo IP (30 al minuto, nella rotta
+ * /api/geocode), e il server dell'ordine chiamava per conto suo: dieci clienti che scrivono
+ * l'indirizzo insieme facevano dieci chiamate nello stesso istante, e lo stesso indirizzo
+ * veniva chiesto ogni volta da capo. Un sabato di campagna e Nominatim blocca «MyCity/1.0»:
+ * da lì la ricerca delle posizioni tace per tutti.
+ *
+ * Adesso tutte le chiamate passano di qui (la rotta e il server dell'ordine usano la stessa
+ * funzione) e:
+ *  ① una risposta già avuta per lo stesso indirizzo si riusa (anche mentre è ancora in
+ *    arrivo), senza richiamare il servizio;
+ *  ② prima di chiamare si chiede il turno al freno condiviso del sito (`rateLimitAsync`, la
+ *    chiave `nominatim:globale`, uno al secondo). Con Upstash il conto è di tutto il sito;
+ *    senza, ogni copia conta per sé (lib/rate-limit.ts: in produzione Upstash va messo).
+ *    Se il turno non arriva entro qualche secondo la risposta è «non so» (null), come quando
+ *    Nominatim è giù: nessun ordine si blocca per questo.
+ *
+ * La memoria vive nella copia del sito che gira, non in un deposito condiviso.
+ */
+const FRENO_NOMINATIM = { key: 'nominatim:globale', max: 1, windowMs: 1_000 } as const;
+const ATTESA_MASSIMA_MS = 3_000;
+const PASSO_ATTESA_MS = 250;
+const MEMORIA_MS = 30 * 24 * 60 * 60 * 1_000;
+const MEMORIA_MASSIMA = 1_000;
+
+const memoria = new Map<string, { scade: number; risposta: Promise<RisultatoNominatim[] | null> }>();
+
+async function aspettaIlTurno(): Promise<boolean> {
+  const fine = Date.now() + ATTESA_MASSIMA_MS;
+  for (;;) {
+    if ((await rateLimitAsync(FRENO_NOMINATIM)).allowed) return true;
+    if (Date.now() + PASSO_ATTESA_MS > fine) return false;
+    await new Promise((fatto) => setTimeout(fatto, PASSO_ATTESA_MS));
+  }
+}
+
+/** I risultati grezzi di Nominatim per questa domanda; null = non si sa (freno pieno, rete, errore). */
+function chiediANominatim(chiave: string, params: URLSearchParams): Promise<RisultatoNominatim[] | null> {
+  const ora = Date.now();
+  const ricordo = memoria.get(chiave);
+  if (ricordo && ricordo.scade > ora) return ricordo.risposta;
+
+  const risposta = (async (): Promise<RisultatoNominatim[] | null> => {
+    if (!(await aspettaIlTurno())) {
+      logger.warn('[geocodifica] freno di Nominatim pieno: rispondo «non so»');
+      return null;
+    }
     const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
       headers: {
         // Nominatim Usage Policy: User-Agent identificativo obbligatorio.
@@ -164,11 +226,20 @@ async function trovaLaPosizione(frase: string): Promise<PosizioneTrovata | null>
     });
     if (!res.ok) return null;
     const json = (await res.json()) as unknown;
-    return Array.isArray(json) ? scegliIlRisultato(json as RisultatoNominatim[], cercato) : null;
-  } catch {
-    // Un indirizzo che non si trova non è un ordine da bloccare: si prosegue
-    // senza la mappa, come si faceva prima.
-    logger.warn('[geocodifica] indirizzo non risolto', { lunghezza: frase.length });
-    return null;
+    return Array.isArray(json) ? (json as RisultatoNominatim[]) : null;
+  })();
+
+  memoria.delete(chiave);
+  memoria.set(chiave, { scade: ora + MEMORIA_MS, risposta });
+  while (memoria.size > MEMORIA_MASSIMA) {
+    const piuVecchia = memoria.keys().next().value;
+    if (piuVecchia === undefined) break;
+    memoria.delete(piuVecchia);
   }
+  // Un «non so» (freno, rete, errore) non si ricorda: la prossima volta si riprova.
+  const dimentica = () => {
+    if (memoria.get(chiave)?.risposta === risposta) memoria.delete(chiave);
+  };
+  risposta.then((r) => { if (r === null) dimentica(); }, dimentica);
+  return risposta;
 }
