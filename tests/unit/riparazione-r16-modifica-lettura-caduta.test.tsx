@@ -25,6 +25,7 @@ const stato = vi.hoisted(() => {
     /** Cosa risponde la lettura del prodotto. */
     lettura: { data: null, error: null } as Esito,
     letture: 0,
+    utente: { data: { user: { id: 'negozio-1' } }, error: null } as unknown,
     client: null as unknown,
   };
   const catena = (finale: () => Esito) => {
@@ -36,7 +37,7 @@ const stato = vi.hoisted(() => {
     return c;
   };
   s.client = {
-    auth: { getUser: async () => ({ data: { user: { id: 'negozio-1' } }, error: null }) },
+    auth: { getUser: async () => s.utente },
     from: (tavola: string) => {
       if (tavola === 'categories') return catena(() => ({ data: [{ id: 'cat-1', name: 'Panetteria', slug: 'panetteria', parent_id: null }], error: null }));
       if (tavola === 'product_variants') return catena(() => ({ data: [], error: null }));
@@ -89,6 +90,7 @@ async function apri() {
 
 beforeEach(() => {
   stato.letture = 0;
+  stato.utente = { data: { user: { id: 'negozio-1' } }, error: null };
 });
 
 afterEach(() => {
@@ -131,6 +133,20 @@ describe('R16-020 · la lettura del prodotto caduta non è «Prodotto non trovat
     stato.lettura = { data: { ...PRODOTTO, seller_id: 'negozio-2' }, error: null };
     const radice = await apri();
     expect(radice.textContent).toContain('Non puoi modificare un prodotto che non è tuo');
+    expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
+  });
+
+  it('getUser cade per la rete: «Riprova», non «Non autenticato»', async () => {
+    stato.utente = { data: { user: null }, error: { name: 'AuthRetryableFetchError', message: 'Failed to fetch', status: 0 } };
+    const radice = await apri();
+    expect(radice.textContent).not.toContain('Non autenticato');
+    expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
+  });
+
+  it('la sessione è davvero mancante: resta «Non autenticato», senza «Riprova»', async () => {
+    stato.utente = { data: { user: null }, error: { name: 'AuthSessionMissingError', message: 'Auth session missing!' } };
+    const radice = await apri();
+    expect(radice.textContent).toContain('Non autenticato');
     expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
   });
 });

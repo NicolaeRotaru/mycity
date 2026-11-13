@@ -52,7 +52,10 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto } = useQuery({
     queryKey: queryKeys.seller.product(id),
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      // R16-020 — Senza rete getUser risponde con un errore: è una lettura caduta (con «Riprova»),
+      // non «Non autenticato». Solo la sessione davvero mancante dice «Non autenticato».
+      if (erroreUtente && (erroreUtente as { name?: string }).name !== 'AuthSessionMissingError') throw erroreUtente;
       if (!user) throw new LetturaNegata('Non autenticato');
       const { data, error } = await supabase
         .from('products')
