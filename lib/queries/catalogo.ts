@@ -249,6 +249,9 @@ export function domandaNegozio(supa: ClientDiLettura, id: string) {
         conBandierine,
         senzaBandierine,
       );
+      // Un link tagliato a meta' (/store/abc) non e' un codice valido: Postgres lo rifiuta con
+      // 22P02. E' un negozio che non c'e', come per il prodotto, non un guasto da riprovare.
+      if (error && (error as { code?: string }).code === TESTO_NON_VALIDO_PER_IL_TIPO) return null;
       if (error) throw error;
       return (data ?? null) as SchedaNegozio | null;
     },
