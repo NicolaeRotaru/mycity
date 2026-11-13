@@ -168,7 +168,7 @@ export default function RiderDashboardPage() {
       // 18/10/2026 — Il negozio delle consegne prese arriva dalla vetrina pubblica,
       // non da `profiles` (lib/queries/negozio-dell-ordine.ts): regge anche quando
       // `profiles` si chiude.
-      const mieiColNegozio = await conNegozioSePossibile(
+      const { righe: mieiColNegozio, negoziNonLetti } = await conNegozioSePossibile(
         supabase,
         (miei.data ?? []) as unknown as Array<Omit<AvailableOrder, 'seller'> & { seller_id: string | null; rider_id: string | null }>,
         'id, store_name, store_logo, store_address',
@@ -181,9 +181,12 @@ export default function RiderDashboardPage() {
         liberi: (bacheca.data ?? []) as unknown as OrdineLibero[],
         bachecaGuasta: !!bacheca.error,
         miei: mieiColNegozio as (AvailableOrder & { rider_id: string | null })[],
+        negoziNonLetti,
       };
     },
-    refetchInterval: 60_000,   // dashboard rider: 1 min è sufficiente
+    // dashboard rider: 1 min è sufficiente. R20-007 — Ma se la vista dei negozi è caduta la lettura
+    // è parziale (consegne senza il nome del negozio): si riprova dopo pochi secondi.
+    refetchInterval: (q) => (q.state.data?.negoziNonLetti ? 5_000 : 60_000),
     refetchOnWindowFocus: true, // appena torna sulla tab fa refresh subito
     staleTime: 15_000,
   });
