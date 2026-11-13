@@ -13,7 +13,8 @@
  * riaccendono da sole: chi rientra può essere un'altra persona.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { monta } from './aiuti/monta-componente';
+import { createElement, useState, type ComponentType } from 'react';
+import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
 const avvisi = vi.hoisted(() => ({ info: [] as Array<{ testo: string; opzioni?: { action?: { label?: string; onClick?: () => void } } }> }));
@@ -64,6 +65,14 @@ function ascolti() {
 
 const SESSIONE = { user: { id: 'anna' }, access_token: 'gettone' };
 
+/**
+ * Giro di correzione: come fa Supabase, all'ascolto arriva subito la sessione di chi c'è
+ * (INITIAL_SESSION). È da lì che la barra sa di chi sono le notifiche che si spengono dopo.
+ */
+function cEAnna(s: { agisci: (f: () => void) => void }) {
+  s.agisci(() => ascolti().forEach((a) => a('INITIAL_SESSION', SESSIONE)));
+}
+
 describe('R19-008 · le notifiche spente alla fine della sessione si dicono al rientro', () => {
   beforeEach(() => {
     (globalThis as Globale).__PROFILO__ = { isAuthenticated: true, isBuyer: true, profile: { full_name: 'Anna Rossi' } };
@@ -88,6 +97,8 @@ describe('R19-008 · le notifiche spente alla fine della sessione si dicono al r
     permesso('granted');
     const mod = await monta('components/Navbar.tsx');
     const s = accendi(mod.default, {});
+    cEAnna(s);
+    await respira();
 
     s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
     await respira();
@@ -115,6 +126,8 @@ describe('R19-008 · le notifiche spente alla fine della sessione si dicono al r
     permesso('granted');
     const mod = await monta('components/Navbar.tsx');
     const s = accendi(mod.default, {});
+    cEAnna(s);
+    await respira();
     s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
     await respira();
     s.agisci(() => ascolti().forEach((a) => a('INITIAL_SESSION', SESSIONE)));
@@ -128,6 +141,8 @@ describe('R19-008 · le notifiche spente alla fine della sessione si dicono al r
     permesso('granted');
     const mod = await monta('components/Navbar.tsx');
     const s = accendi(mod.default, {});
+    cEAnna(s);
+    await respira();
     s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
     await respira();
     s.agisci(() => ascolti().forEach((a) => a('SIGNED_IN', SESSIONE)));
@@ -141,6 +156,8 @@ describe('R19-008 · le notifiche spente alla fine della sessione si dicono al r
     permesso('granted');
     const mod = await monta('components/Navbar.tsx');
     const s = accendi(mod.default, {});
+    cEAnna(s);
+    await respira();
     s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
     await respira();
     permesso('default');
@@ -148,5 +165,124 @@ describe('R19-008 · le notifiche spente alla fine della sessione si dicono al r
     await respira();
     expect(avvisi.info).toEqual([]);
     s.smonta();
+  }, 60000);
+
+  /**
+   * Giro di correzione (13/11), punto (1): il segno era dell'apparecchio. Se dopo la sessione
+   * caduta di Anna entrava Bruno, l'avviso andava a lui e Anna non lo sapeva più.
+   */
+  it('a Bruno, che entra dopo sullo stesso apparecchio, non si dice niente; ad Anna, quando rientra, sì', async () => {
+    apparecchio([], true);
+    permesso('granted');
+    const mod = await monta('components/Navbar.tsx');
+    const s = accendi(mod.default, {});
+    cEAnna(s);
+    await respira();
+    s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
+    await respira();
+
+    s.agisci(() => ascolti().forEach((a) => a('SIGNED_IN', { user: { id: 'bruno' }, access_token: 'altro' })));
+    await respira();
+    expect(avvisi.info, 'l\'avviso delle notifiche di Anna va a Bruno').toEqual([]);
+    s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
+    await respira();
+
+    s.agisci(() => ascolti().forEach((a) => a('SIGNED_IN', SESSIONE)));
+    await respira();
+    expect(avvisi.info.length, 'il segno di Anna si è perso col passaggio di Bruno').toBe(1);
+    expect(avvisi.info[0].opzioni?.action?.label).toBe('Riattiva');
+    s.smonta();
+  }, 60000);
+
+  it('il segno di Anna resta finché non scade: dopo trenta giorni non si dice più', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-13T10:00:00Z'));
+      apparecchio([], true);
+      permesso('granted');
+      const mod = await monta('components/Navbar.tsx');
+      const s = accendi(mod.default, {});
+      cEAnna(s);
+      await respira();
+      s.agisci(() => ascolti().forEach((a) => a('SIGNED_OUT', null)));
+      await respira();
+      expect(window.localStorage.getItem('mc_notifiche_spente_all_uscita'), 'il segno non c\'è').not.toBeNull();
+
+      vi.setSystemTime(new Date('2026-12-14T10:00:00Z'));
+      s.agisci(() => ascolti().forEach((a) => a('SIGNED_IN', SESSIONE)));
+      await respira();
+      expect(avvisi.info, 'un segno di un mese fa non è più una notizia').toEqual([]);
+      expect(window.localStorage.getItem('mc_notifiche_spente_all_uscita'), 'il segno scaduto resta nel browser').toBeNull();
+      s.smonta();
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 60000);
+});
+
+describe('R19-008 · il segno con l\'identificativo è dichiarato nella Cookie policy', () => {
+  it('mc_notifiche_spente_all_uscita sta fra gli strumenti necessari, con la sua durata', async () => {
+    const { readFileSync } = await import('node:fs');
+    const policy = readFileSync('app/cookies/page.tsx', 'utf8');
+    const necessari = policy.slice(0, policy.indexOf('2.2 Cookie funzionali'));
+    const riga = necessari.split('\n').find((r) => r.includes("name: 'mc_notifiche_spente_all_uscita'"));
+    expect(riga, 'il segno porta l\'identificativo dell\'account ma la policy non lo dichiara').toBeTruthy();
+    expect(riga).toMatch(/duration: '30 giorni'/);
+  });
+});
+
+/**
+ * Giro di correzione (13/11), punto (2): «Riattiva» porta a /profile/settings?tab=notifications,
+ * ma la pagina leggeva `?tab=` solo al montaggio. Qui la pagina vera resta montata, l'indirizzo
+ * cambia e la pagina si ridisegna (come fa il router di Next dopo `push`): la scheda deve aprirsi.
+ */
+describe('R19-008 · «Riattiva» apre la scheda Notifiche anche a impostazioni già aperte', () => {
+  const g = globalThis as Globale;
+  const fetchDiPartenza = globalThis.fetch;
+  beforeEach(() => {
+    g.__UTENTE__ = { id: 'anna', email: 'anna@prova.it' };
+    g.__RISPOSTA_SUPABASE__ = {
+      data: [{ notif_order_updates: true, notif_promos: false, notif_groups: true, notif_newsletter: false, email_marketing: false }],
+      error: null,
+    };
+    window.history.replaceState(null, '', '/profile/settings');
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ pending: false }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+    globalThis.fetch = fetchDiPartenza;
+    delete g.__UTENTE__;
+    delete g.__RISPOSTA_SUPABASE__;
+    delete g.__RIDISEGNA__;
+  });
+
+  it('da «Account» a ?tab=notifications senza ricaricare: si apre «Notifiche»', async () => {
+    const Impostazioni = (await monta('app/profile/settings/page.tsx')).default as ComponentType<Record<string, unknown>>;
+    // Il contenitore fa quello che fa il router: a indirizzo cambiato, ridisegna la pagina (senza rimontarla).
+    function ComeIlRouter() {
+      const [giro, setGiro] = useState(0);
+      g.__RIDISEGNA__ = () => setGiro((n) => n + 1);
+      return createElement(Impostazioni, { giro });
+    }
+    const s = accendi(ComeIlRouter, {});
+    await respira();
+    const schedaAperta = () => testoVisibile(s.radice.querySelector('nav button.font-bold')).trim();
+    expect(schedaAperta(), 'la pagina non è arrivata in fondo al caricamento').toBe('Account');
+
+    // Quello che fa router.push('/profile/settings?tab=notifications'): l'indirizzo cambia, la pagina si ridisegna.
+    window.history.replaceState(null, '', '/profile/settings?tab=notifications');
+    s.agisci(() => (g.__RIDISEGNA__ as () => void)());
+    await respira();
+    expect(schedaAperta(), '«Riattiva» porta a ?tab=notifications ma la scheda resta quella di prima').toBe('Notifiche');
+
+    // Un ridisegno qualsiasi con lo stesso indirizzo non riporta indietro la scheda scelta a mano.
+    const privacy = [...s.radice.querySelectorAll('nav button')].find((b) => testoVisibile(b).trim() === 'Privacy e dati')!;
+    s.agisci(() => (privacy as HTMLButtonElement).click());
+    s.agisci(() => (g.__RIDISEGNA__ as () => void)());
+    await respira();
+    expect(schedaAperta()).toBe('Privacy e dati');
+    s.smonta();
+    window.history.replaceState(null, '', '/');
   }, 60000);
 });

@@ -45,19 +45,53 @@ type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
  */
 const SEGNO_NOTIFICHE_SPENTE = 'mc_notifiche_spente_all_uscita';
 
-function segnaNotificheSpente(): void {
-  try { window.localStorage.setItem(SEGNO_NOTIFICHE_SPENTE, '1'); } catch { /* memoria chiusa: niente avviso */ }
+/**
+ * 13/11/2026 (R19-008, giro di correzione) — IL SEGNO È DELLA PERSONA, NON DELL'APPARECCHIO.
+ *
+ * Il segno era un «1» e basta: se dopo la sessione caduta di Anna entrava Bruno, l'avviso andava a
+ * lui, e Anna non lo sapeva più. Adesso il segno dice di chi è (l'identificativo interno
+ * dell'account, non il nome né l'email) e fino a quando vale: l'avviso si dà solo a quella persona,
+ * e per gli altri il segno resta lì, finché non scade.
+ */
+const SEGNO_VALE_MS = 30 * 24 * 60 * 60_000;
+
+/** I segni ancora validi: identificativo dell'account → quando scade. */
+function leggiSegniNotificheSpente(): Record<string, number> {
+  try {
+    const letti = JSON.parse(window.localStorage.getItem(SEGNO_NOTIFICHE_SPENTE) ?? 'null') as unknown;
+    if (!letti || typeof letti !== 'object' || Array.isArray(letti)) return {};
+    const adesso = Date.now();
+    const validi: Record<string, number> = {};
+    for (const [chi, scadeIl] of Object.entries(letti as Record<string, unknown>)) {
+      if (typeof scadeIl === 'number' && adesso <= scadeIl) validi[chi] = scadeIl;
+    }
+    return validi;
+  } catch {
+    return {};
+  }
 }
 
-/** Legge il segno e lo toglie subito: l'avviso si da' una volta sola. */
-function prendiSegnoNotificheSpente(): boolean {
+function scriviSegniNotificheSpente(segni: Record<string, number>): void {
   try {
-    const c = window.localStorage.getItem(SEGNO_NOTIFICHE_SPENTE) === '1';
-    if (c) window.localStorage.removeItem(SEGNO_NOTIFICHE_SPENTE);
-    return c;
-  } catch {
-    return false;
-  }
+    if (Object.keys(segni).length === 0) window.localStorage.removeItem(SEGNO_NOTIFICHE_SPENTE);
+    else window.localStorage.setItem(SEGNO_NOTIFICHE_SPENTE, JSON.stringify(segni));
+  } catch { /* memoria chiusa: niente avviso */ }
+}
+
+/** Chi è uscito non si sa (nessuna sessione vista): nessun segno, perché non si saprebbe a chi dirlo. */
+function segnaNotificheSpente(utenteId: string | null): void {
+  if (!utenteId) return;
+  scriviSegniNotificheSpente({ ...leggiSegniNotificheSpente(), [utenteId]: Date.now() + SEGNO_VALE_MS });
+}
+
+/** Legge il segno di QUESTA persona e lo toglie subito: l'avviso si da' una volta sola. */
+function prendiSegnoNotificheSpente(utenteId: string): boolean {
+  const segni = leggiSegniNotificheSpente();
+  const c = Object.prototype.hasOwnProperty.call(segni, utenteId);
+  if (c) delete segni[utenteId];
+  // Si riscrive comunque: così i segni scaduti (e quello vecchio, «1») se ne vanno.
+  scriviSegniNotificheSpente(segni);
+  return c;
 }
 
 /**
@@ -93,8 +127,8 @@ function buttaLaBozzaDellaCassa(soloSeScaduta: boolean): void {
   }
 }
 
-async function diciSeLeNotificheSonoSpente(dove: () => string, vai: (href: string) => void): Promise<void> {
-  if (!prendiSegnoNotificheSpente()) return;
+async function diciSeLeNotificheSonoSpente(utenteId: string, dove: () => string, vai: (href: string) => void): Promise<void> {
+  if (!prendiSegnoNotificheSpente(utenteId)) return;
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   let iscritto = false;
   try {
@@ -181,17 +215,23 @@ export default function Navbar() {
   useEffect(() => {
     // R19-009 — la bozza scaduta della cassa si butta a ogni caricamento, su qualunque pagina.
     buttaLaBozzaDellaCassa(true);
+    // R19-008 — Chi c'è adesso: a sessione finita non lo dice più nessuno, e il segno è suo.
+    let utenteDellaSessione: string | null = null;
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      const chiEntrato = sessione?.user?.id ?? null;
       if (evento === 'SIGNED_OUT') {
+        const chiEUscito = utenteDellaSessione;
+        utenteDellaSessione = null;
         // R19-009 — e a ogni uscita dall'account, scaduta o no.
         buttaLaBozzaDellaCassa(false);
         void scollegaQuestoDispositivo().then((esito) => {
-          if (esito.disiscritto) segnaNotificheSpente();
+          if (esito.disiscritto) segnaNotificheSpente(chiEUscito);
         });
         return;
       }
-      if ((evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') && sessione) {
-        void diciSeLeNotificheSonoSpente(() => doveLeNotifiche.current, (href) => router.push(href));
+      if (chiEntrato) utenteDellaSessione = chiEntrato;
+      if ((evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') && chiEntrato) {
+        void diciSeLeNotificheSonoSpente(chiEntrato, () => doveLeNotifiche.current, (href) => router.push(href));
       }
     });
     return () => data.subscription.unsubscribe();

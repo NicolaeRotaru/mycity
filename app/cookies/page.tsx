@@ -81,6 +81,8 @@ export default function CookiesPage() {
           // 1/11/2026 — Il segno del rientro col link di recupero (lib/auth/segno-recupero.ts).
           // 13/11/2026 (R19-009) — La bozza della cassa (lib/bozza-checkout.ts, BOZZA_VALE_MS): non era dichiarata.
           { name: 'mc_checkout_draft', purpose: 'Se compili la cassa senza aver fatto l\'accesso, tiene i dati che hai scritto (nome, indirizzo, telefono, note, fascia e pagamento) mentre accedi o ti registri, così non li riscrivi. Si cancella appena torni in cassa e quando esci dall\'account; dopo 2 ore non si usa più e si cancella alla tua visita successiva al sito.', duration: '2 ore', provider: 'Prima parte (archivio locale)' },
+          // 13/11/2026 (R19-008) — Il segno delle notifiche spente a fine sessione (components/Navbar.tsx).
+          { name: 'mc_notifiche_spente_all_uscita', purpose: 'Se la tua sessione finisce e le notifiche di questo dispositivo si spengono, ricorda di chi erano (il tuo identificativo interno, un codice, non il nome né l\'email) per dirtelo quando rientri, e solo a te. Si cancella appena te lo diciamo; dopo 30 giorni non si usa più.', duration: '30 giorni', provider: 'Prima parte (archivio locale)' },
           { name: 'mycity_recupero', purpose: 'Dopo che hai aperto il link per scegliere una nuova password, ricorda per un\'ora che vieni da quel link, così puoi cambiarla. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '1 ora', provider: 'Prima parte' },
           { name: '__cf_bm', purpose: 'Anti-bot Cloudflare (sicurezza)', duration: '30 minuti', provider: 'Cloudflare' },
           { name: 'cf-turnstile-*', purpose: 'CAPTCHA Turnstile', duration: 'Sessione', provider: 'Cloudflare' },
