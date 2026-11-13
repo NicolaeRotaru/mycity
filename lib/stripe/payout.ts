@@ -229,6 +229,8 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   // (app/api/cron/release-payouts), che e' l'unico posto dove si puo' decidere
   // che «vecchio» vuol dire «chi l'aveva preso e' morto».
   const valoriTurno = { payout_status: 'PROCESSING', payout_claimed_at: new Date().toISOString() };
+  // 13/11/2026 (R17-015) — Il turno restituisce anche gli importi: vedi `importiDelTurno` qui sotto.
+  const COLONNE_DEL_TURNO = 'id, seller_payout_cents, seller_payout_reversed_cents';
   const { data: claimed, error: claimErr } = await conRipiegoSchema(
     'orders.update (turno del bonifico)',
     () =>
@@ -237,14 +239,14 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
         .update(valoriTurno)
         .eq('id', order.id)
         .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
-        .select('id'),
+        .select(COLONNE_DEL_TURNO),
     () =>
       admin
         .from('orders')
         .update(senzaCampi(valoriTurno, ['payout_claimed_at']))
         .eq('id', order.id)
         .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
-        .select('id'),
+        .select(COLONNE_DEL_TURNO),
   );
   if (claimErr) {
     // Un errore DB qui (es. violazione di constraint) NON va mascherato da no-op:
@@ -256,6 +258,26 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
     return { ok: false, code: 'BAD_STATE', reason: 'Payout già in lavorazione o completato, no-op' };
   }
 
+  /**
+   * 13/11/2026 (R17-015) — L'IMPORTO SI LEGGE DALLA RIGA PRESA COL TURNO.
+   *
+   * L'ordine si leggeva all'inizio, poi il profilo del negozio, poi si prendeva il turno: e il
+   * bonifico partiva col residuo della PRIMA lettura. Un rimborso scritto in mezzo (il webhook del
+   * cruscotto, o la quota che `refundOrder` toglie dal bonifico da fare) trovava lo stato ancora
+   * HELD e passava; il turno passava lo stesso, e il bonifico usciva col netto di prima. Un caso:
+   * netto 18,00 €, il rimborso toglie 1,94 € nello stesso istante, partivano 18,00 €, e quei 1,94 €
+   * non li riprendeva più nessuno. La scrittura del turno restituisce la riga com'è DOPO, con gli
+   * importi di adesso: si versa quello.
+   */
+  const presoColTurno = (claimed[0] ?? {}) as Record<string, unknown>;
+  const importiDelTurno: ReversibleOrder = {
+    ...(order as unknown as ReversibleOrder),
+    ...('seller_payout_cents' in presoColTurno ? { seller_payout_cents: presoColTurno.seller_payout_cents as number | null } : {}),
+    ...('seller_payout_reversed_cents' in presoColTurno
+      ? { seller_payout_reversed_cents: presoColTurno.seller_payout_reversed_cents as number | null }
+      : {}),
+  };
+
   try {
     const stripe = getStripe();
     // 046 — Prima qui si trasferiva `seller_payout_cents`, cioè il netto pieno
@@ -265,7 +287,7 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
     // comunque il cento per cento: la differenza la metteva la piattaforma.
     // `residuoRecuperabile` toglie dal netto quanto è già stato messo a carico
     // del venditore, ed è la stessa funzione che governa gli storni.
-    const daVersare = residuoRecuperabile(order as unknown as ReversibleOrder);
+    const daVersare = residuoRecuperabile(importiDelTurno);
     if (daVersare <= 0) {
       const { error: errNulla } = await admin
         .from('orders')
@@ -293,7 +315,7 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
      * bonifico vecchio — che era stato stornato — non viene scambiato per
      * quello nuovo.
      */
-    if ((order.seller_payout_reversed_cents ?? 0) > 0) {
+    if ((importiDelTurno.seller_payout_reversed_cents ?? 0) > 0) {
       const gruppo = order.stripe_transfer_group ?? `order_${order.id}`;
       try {
         const esistenti = await stripe.transfers.list({ transfer_group: gruppo, limit: 100 });
@@ -447,8 +469,8 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   if (inContanti && !order.cash_confirmed_at) {
     return { ok: false, code: 'BAD_STATE', reason: 'COD: incasso non ancora confermato dal fattorino' };
   }
-  const daVersareCents = inContanti ? compensoDalContante(order).residuoDovutoCents : feeCents;
-  if (daVersareCents <= 0) {
+  const daVersarePrimaDelTurno = inContanti ? compensoDalContante(order).residuoDovutoCents : feeCents;
+  if (daVersarePrimaDelTurno <= 0) {
     return { ok: false, code: 'BAD_STATE', reason: 'COD: il compenso e gia trattenuto dal contante' };
   }
 
@@ -481,20 +503,22 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   // (stessa misura di `prendiIlTurno` in lib/stripe/webhook/registro-eventi.ts).
   // Ognuna delle due è una sola UPDATE: fra due giri in gara la vince uno solo.
   const valoriTurnoRider = { rider_payout_status: 'PROCESSING', rider_payout_claimed_at: new Date().toISOString() };
+  // 13/11/2026 (R17-015) — Il turno restituisce anche i campi del compenso, come quello del negozio.
+  const COLONNE_DEL_TURNO_RIDER = 'id, rider_fee_cents, shipping_cost, total_price, pickup_in_store';
   const prendiIlTurnoDelFattorino = async (valori: Partial<typeof valoriTurnoRider>) => {
     const libero = await admin
       .from('orders')
       .update(valori)
       .eq('id', order.id)
       .is('rider_payout_status', null)
-      .select('id');
+      .select(COLONNE_DEL_TURNO_RIDER);
     if (libero.error || (libero.data ?? []).length > 0) return libero;
     return await admin
       .from('orders')
       .update(valori)
       .eq('id', order.id)
       .in('rider_payout_status', [...STATI_RIDER_RITENTABILI])
-      .select('id');
+      .select(COLONNE_DEL_TURNO_RIDER);
   };
   const { data: claimed, error: claimErr } = await conRipiegoSchema(
     'orders.update (turno del compenso fattorino)',
@@ -508,6 +532,23 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   }
   if (!claimed || claimed.length === 0) {
     return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già in lavorazione o versato, no-op' };
+  }
+
+  // 13/11/2026 (R17-015) — Il compenso si calcola sulla riga presa col turno, non sulla lettura di
+  // prima: quello che è cambiato in mezzo (il compenso, il totale in contanti) vale adesso.
+  const presoColTurnoRider = (claimed[0] ?? {}) as Record<string, unknown>;
+  const comeAlTurno = { ...order } as typeof order;
+  for (const campo of ['rider_fee_cents', 'shipping_cost', 'total_price', 'pickup_in_store'] as const) {
+    if (campo in presoColTurnoRider) (comeAlTurno as Record<string, unknown>)[campo] = presoColTurnoRider[campo];
+  }
+  const feeDelTurno = comeAlTurno.rider_fee_cents != null
+    ? comeAlTurno.rider_fee_cents
+    : Math.round(Number(comeAlTurno.shipping_cost ?? 0) * 100);
+  const daVersareCents = inContanti ? compensoDalContante(comeAlTurno).residuoDovutoCents : feeDelTurno;
+  if (daVersareCents <= 0) {
+    // Niente da versare con i numeri di adesso: il turno si restituisce, nessun bonifico.
+    await admin.from('orders').update({ rider_payout_status: 'HELD' }).eq('id', order.id);
+    return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider nullo sulla riga presa col turno' };
   }
 
   try {
