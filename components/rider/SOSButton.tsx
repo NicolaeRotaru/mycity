@@ -122,8 +122,8 @@ export default function SOSButton({ orderId }: Props) {
     // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
     // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
     //
-    // R16-001 (13/11/2026) — Anche il dialogo di conferma prometteva «Verra' avviata la chiamata
-    // al 112»: adesso dice che si apre il telefono col 112 gia' scritto e che CHIAMA lo premi tu.
+    // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
+    // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
     //
     // R16-009 (13/11/2026) — La posizione si chiede PRIMA del tastierino, e non si aspetta.
     // Prima si chiedeva dopo: col 112 aperto la pagina va in secondo piano, e il telefono puo' non
@@ -220,11 +220,11 @@ export default function SOSButton({ orderId }: Props) {
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
                   <Phone size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Si apre il telefono con il <strong>112 (numero unico emergenze)</strong> già scritto: la chiamata parte solo quando premi tu CHIAMA</span>
+                  <span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>La tua posizione GPS viene mandata a MyCity, se il telefono riesce a darla</span>
+                  <span>La tua posizione GPS verrà condivisa con MyCity</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
