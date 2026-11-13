@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
+import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -55,6 +56,24 @@ export const POST = withAdminAuth(async ({ req, user }): Promise<NextResponse> =
   const esito = (data ?? {}) as { rilasciati?: number; saltati_senza_incasso?: number } | number;
   const rilasciati = typeof esito === 'number' ? esito : esito.rilasciati ?? 0;
   const saltati = typeof esito === 'number' ? 0 : esito.saltati_senza_incasso ?? 0;
+
+  // 13/11/2026 (R14-002) — La giornata di cassa si ricalcola subito dopo la
+  // rimessa. Se la rimessa la lascia aperta (resta un ordine da versare, migrazione
+  // 381), la guardia della cancellazione e il sorvegliante la riconoscono come
+  // aperta solo dall'incassato o dal MISMATCH: prima restavano quelli dell'ultimo
+  // ricalcolo, che non conta l'ultima consegna chiusa dopo l'incasso, fino al giro
+  // notturno. Il «versato» non si tocca qui: lo decide la funzione nel database.
+  // La rimessa e' gia' fatta: un ricalcolo che non riesce si scrive e si va avanti
+  // (il giro notturno riquadra-casse rifa' ieri e oggi).
+  try {
+    await aggiornaQuadratura(getAdminSupabase(), body.riderId, body.date);
+  } catch (e) {
+    logger.error('[admin] quadratura della giornata non aggiornata dopo la rimessa', {
+      riderId: body.riderId,
+      giorno: body.date,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   await writeAudit({
     actorId: user.id,
