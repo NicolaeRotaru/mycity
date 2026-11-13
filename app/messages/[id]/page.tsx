@@ -187,9 +187,23 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
     scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Mark-read quando entro o ricevo
+  // 13/11/2026 (R22-012) — «ARRIVATO» NON È «VISTO».
+  // La chat lasciata aperta in sottofondo sul computer del negozio segnava come letto ogni
+  // messaggio appena arrivava: il contatore tornava a zero e sul telefono del fornaio, in
+  // laboratorio, non c'era nessun «non letto». Si segna letto solo con la pagina visibile, e
+  // quando la pagina torna in primo piano.
+  const [paginaVisibile, setPaginaVisibile] = useState(
+    () => typeof document === 'undefined' || document.visibilityState === 'visible',
+  );
   useEffect(() => {
-    if (!userId || messages.length === 0) return;
+    const aggiorna = () => setPaginaVisibile(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', aggiorna);
+    return () => document.removeEventListener('visibilitychange', aggiorna);
+  }, []);
+
+  // Mark-read quando entro o ricevo, se la pagina si vede
+  useEffect(() => {
+    if (!userId || messages.length === 0 || !paginaVisibile) return;
     fetch('/api/chat/mark-read', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -197,7 +211,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
     }).then(() => {
       qc.invalidateQueries({ queryKey: queryKeys.messages.conversations });
     }).catch(() => { /* noop */ });
-  }, [userId, messages.length, params.id, qc]);
+  }, [userId, messages.length, params.id, qc, paginaVisibile]);
 
   const sendMutation = useMutation({
     mutationFn: async (body: string) => {
