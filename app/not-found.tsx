@@ -1,6 +1,26 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Home, Search, Store, BookOpen, Lightbulb, Mail, MapPin, Package, ShoppingCart } from 'lucide-react';
+
+/**
+ * 13/11/2026 (R15-005) — LA 404 PORTAVA IL TITOLO E L'ANTEPRIMA DELLA HOME.
+ *
+ * Senza intestazioni sue, la pagina «non trovata» ereditava quelle del layout radice: nella
+ * scheda del browser, su Google e nell'anteprima di WhatsApp un indirizzo sbagliato si
+ * presentava come «MyCity Piacenza — Marketplace dei negozi della tua città». Adesso dice cos'è,
+ * e chiede di non essere indicizzata.
+ */
+const TITOLO_404 = 'Pagina non trovata · MyCity';
+const FRASE_404 = 'La pagina che cerchi non esiste o è stata spostata.';
+
+export const metadata: Metadata = {
+  title: TITOLO_404,
+  description: FRASE_404,
+  robots: { index: false },
+  openGraph: { title: TITOLO_404, description: FRASE_404 },
+  twitter: { title: TITOLO_404, description: FRASE_404 },
+};
 
 export default function NotFound() {
   return (
