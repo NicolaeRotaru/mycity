@@ -22,11 +22,59 @@ import CategoryBar from './CategoryBar';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import { trackSignedOut } from '@/lib/analytics/events';
-import { scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
+import { gestoreDiQuestoBrowser, scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
+import { toast } from 'sonner';
 import { hrefDiAccesso } from '@/lib/auth/href-di-accesso';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
+
+/**
+ * 13/11/2026 (R19-008) — LE NOTIFICHE SPENTE ALL'USCITA, DETTE AL RIENTRO.
+ *
+ * Ogni fine della sessione spegne l'iscrizione push di questo apparecchio
+ * (vedi l'ascolto qui sotto): e' la difesa degli avvisi di uno sullo schermo di
+ * un altro, e resta. Ma la sessione finisce anche da sola (rinnovo fallito), e
+ * allora nessuno ha premuto niente: il permesso del browser resta «concesso» e
+ * la persona crede di avere ancora le notifiche. Quando l'ascolto spegne
+ * davvero un'iscrizione, se ne lascia un segno su questo apparecchio; al
+ * rientro, se il permesso e' ancora concesso e l'iscrizione non c'e' piu', lo si
+ * dice una volta, con la strada per riattivarle. Non si riaccendono da sole:
+ * chi entra puo' essere un'altra persona, che non le ha chieste.
+ */
+const SEGNO_NOTIFICHE_SPENTE = 'mc_notifiche_spente_all_uscita';
+
+function segnaNotificheSpente(): void {
+  try { window.localStorage.setItem(SEGNO_NOTIFICHE_SPENTE, '1'); } catch { /* memoria chiusa: niente avviso */ }
+}
+
+/** Legge il segno e lo toglie subito: l'avviso si da' una volta sola. */
+function prendiSegnoNotificheSpente(): boolean {
+  try {
+    const c = window.localStorage.getItem(SEGNO_NOTIFICHE_SPENTE) === '1';
+    if (c) window.localStorage.removeItem(SEGNO_NOTIFICHE_SPENTE);
+    return c;
+  } catch {
+    return false;
+  }
+}
+
+async function diciSeLeNotificheSonoSpente(dove: () => string, vai: (href: string) => void): Promise<void> {
+  if (!prendiSegnoNotificheSpente()) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  let iscritto = false;
+  try {
+    const gestore = await gestoreDiQuestoBrowser();
+    iscritto = !!(gestore && (await gestore.getSubscription()));
+  } catch {
+    iscritto = false;
+  }
+  if (iscritto) return;
+  toast.info('Le notifiche su questo dispositivo si sono spente alla fine della sessione: riattivale per ricevere gli avvisi.', {
+    duration: 12000,
+    action: { label: 'Riattiva', onClick: () => vai(dove()) },
+  });
+}
 
 /**
  * Navbar redesignata "Mediterranean Modern":
@@ -90,12 +138,27 @@ export default function Navbar() {
    * browser si spegne — ed è quella che consegna gli avvisi di uno all'altro.
    * La riga rimasta indietro la ripulisce il primo invio fallito.
    */
+  // R19-008 — Dove si riattivano le notifiche: ogni area ha la sua pagina.
+  const doveLeNotifiche = useRef('/profile/settings?tab=notifications');
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((evento) => {
-      if (evento !== 'SIGNED_OUT') return;
-      void scollegaQuestoDispositivo();
+    doveLeNotifiche.current = isSeller ? '/seller/profile' : isRider ? '/rider/profile' : '/profile/settings?tab=notifications';
+  }, [isSeller, isRider]);
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      if (evento === 'SIGNED_OUT') {
+        void scollegaQuestoDispositivo().then((esito) => {
+          if (esito.disiscritto) segnaNotificheSpente();
+        });
+        return;
+      }
+      if ((evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') && sessione) {
+        void diciSeLeNotificheSonoSpente(() => doveLeNotifiche.current, (href) => router.push(href));
+      }
     });
     return () => data.subscription.unsubscribe();
+    // router: lo stesso oggetto per tutta la vita della pagina.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Su /admin, /seller e /rider la navbar globale è nascosta: queste aree usano
