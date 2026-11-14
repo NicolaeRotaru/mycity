@@ -1,13 +1,13 @@
 {
   "sessione": "R20",
-  "aggiornato": "2026-11-13 07:40",
+  "aggiornato": "2026-11-14 08:40",
   "finita": true,
-  "testa": "a23283e8170733f5ebd9c770b166091c4afc61a9",
+  "testa": "30b7f9ed4c8231a23b8f56bae58f4e53e99e8c80",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "a23283e8170733f5ebd9c770b166091c4afc61a9",
-    "nota": "Lanciato con NODE_OPTIONS=--max-old-space-size=8192: col tetto di memoria di base di Node, tsc --noEmit si ferma per memoria esaurita (uscita 134), una condizione della macchina e non del codice. typecheck, lint e test verdi: 1432 file e 9698 prove passati, 1 file saltato che era già saltato sulla base. guardia-ramo HEAD R20 verde."
+    "testa": "30b7f9ed4c8231a23b8f56bae58f4e53e99e8c80",
+    "nota": "Giro di correzione di R20-011: lanciato con NODE_OPTIONS=--max-old-space-size=6144 su 30b7f9ed (SHA preso con git rev-parse HEAD nello stesso comando, uguale alla fine). typecheck, lint e test verdi: 1432 file e 9700 prove passati, 1 file saltato che era già saltato sulla base. guardia-ramo HEAD R20 verde."
   },
   "voci": [
     {
@@ -261,7 +261,7 @@
       "id": "R20-011",
       "chiave": "qa-flussi|sulla bacheca del fattorino un «accetta» perso lascia l'ordine in elenco fino a un minuto, e fa girare tutti i pulsanti insieme",
       "esito": "riparato",
-      "commit": "2eb0cddf7559d246bf1445d5aec3b629371a6256",
+      "commit": "30b7f9ed4c8231a23b8f56bae58f4e53e99e8c80",
       "file_toccati": [
         "app/rider/page.tsx"
       ],
@@ -274,11 +274,13 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2eb0cddf7559d246bf1445d5aec3b629371a6256^ --file app/rider/page.tsx --prove tests/unit/riparazione-r20-presa-ordine.test.ts --json"
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 30b7f9ed4c8231a23b8f56bae58f4e53e99e8c80^ --file app/rider/page.tsx --prove tests/unit/riparazione-r20-presa-ordine.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Con GIA_PRESO l'ordine esce subito dagli ordini liberi in memoria e la bacheca si rilegge. Lo stesso succede dopo un accetta riuscito. Gira solo il pulsante dell'ordine premuto (claim.variables === o.id). Il testo ora dice «non è più disponibile: l'ha preso un altro fattorino oppure non è più pronto»: è vero in tutti e due i casi, perché il server non li distingue. La migrazione 123 non è stata toccata e non ne ho fatta una nuova.",
-      "verificato_da": "qa: la prova passa 4 su 4 e la rimessa esce 0. Dal diff: GIA_PRESO toglie l'ordine dalla bacheca e la rilegge, gira solo il pulsante premuto (claim.variables===o.id), con DOCUMENTI_SCADUTI l'ordine resta. La 123 non è toccata. Le migrazioni 123 e 270 non distinguono annullato da preso: un solo testo vero per i due casi va bene per la nota del capo squadra. tsc esce 0, le 22 prove vicine sono verdi."
+      "cosa_ho_fatto": "Giro di correzione (collaudo K05). Ho tolto la prima versione (2eb0cddf) col revert e607b68b, come nell'integrazione (01547939): dopo il revert il diff col ramo di integrazione sui file della voce è vuoto. Poi ho rifatto la voce da capo. Con GIA_PRESO l'ordine esce subito dagli ordini liberi in memoria e la bacheca si rilegge; con DOCUMENTI_SCADUTI resta. Il testo dice «non è più disponibile: l'ha preso un altro fattorino oppure non è più pronto». La correzione: la rotella non segue più claim.variables, che ricorda solo l'ultimo mutate. Un insieme di ordini in volo si riempie al tocco e si svuota in onSettled della useMutation, che scatta per ogni presa. Ogni pulsante con la sua presa in volo gira ed è spento, gli altri restano attivi. Un ref scarta il secondo tocco sullo stesso ordine anche prima del ridisegno.",
+      "verificato_da": "qa (revisore indipendente, sonnet, nel suo worktree): non è riuscito a smentirla. Ha rilanciato la prova (6 su 6) e le 10 prove che leggono app/rider/page.tsx (118 su 118), tsc pulito. Mutazioni: senza ref, onSettled vuoto, claim.variables, niente togliDallaBacheca su GIA_PRESO, svuotamento solo senza errore: tutte rosse. Ha letto in @tanstack/query-core 5.100.14 che onSettled delle opzioni scatta per ogni presa, anche quando un mutate più nuovo l'ha sostituita, e anche in errore. Note, non difetti: offline il pulsante gira finché la rete torna, uguale alla base; la mutazione «svuota solo in errore» sopravvive perché, a presa riuscita, l'ordine esce dall'elenco e si cambia pagina.",
+      "nota": "Prova 6 su 6. Il caso del collaudo (A, poi B con A in volo, poi di nuovo A) dà 2 chiamate (A, B) e non 3, e nessun toast d'errore. Mutazioni a mano, tutte rosse: la prima versione (claim.variables) fa cadere 2 casi, M5 (girano tutti) 2, senza ref 1, M6 (niente rimozione subito su GIA_PRESO, con la rilettura trattenuta) 1, M7 (onSettled che non riaccende) 1. Le 10 prove che leggono app/rider/page.tsx: 118 su 118 verdi.",
+      "prova": "npx vitest run tests/unit/riparazione-r20-presa-ordine.test.ts --reporter=dot → 6 passate; prova-rimessa --base 30b7f9ed4c8231a23b8f56bae58f4e53e99e8c80^ → uscita 0, regge"
     },
     {
       "id": "R20-012",
