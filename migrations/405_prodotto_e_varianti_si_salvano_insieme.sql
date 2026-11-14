@@ -65,7 +65,7 @@ SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
-  v_servizio  boolean := coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role';
+  v_servizio  boolean := current_user NOT IN ('anon', 'authenticated') AND (current_user = 'service_role' OR coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role');
   v_chi       uuid    := auth.uid();
   v_patch     jsonb   := coalesce(p_prodotto, '{}'::jsonb);
   v_ammesse   text[]  := ARRAY['name', 'description', 'price', 'compare_at_price', 'unit', 'condition',

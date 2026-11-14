@@ -25,7 +25,6 @@ import { trackSignedOut } from '@/lib/analytics/events';
 import { gestoreDiQuestoBrowser, scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
 import { toast } from 'sonner';
 import { hrefDiAccesso } from '@/lib/auth/href-di-accesso';
-import { scadenzaDellaBozzaValida } from '@/lib/bozza-checkout';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
@@ -92,39 +91,6 @@ function prendiSegnoNotificheSpente(utenteId: string): boolean {
   // Si riscrive comunque: così i segni scaduti (e quello vecchio, «1») se ne vanno.
   scriviSegniNotificheSpente(segni);
   return c;
-}
-
-/**
- * 13/11/2026 (R19-009) — LA BOZZA DELLA CASSA NON RESTA NEL BROWSER DI CHI VIENE DOPO.
- *
- * Chi compila la cassa da ospite e va all'accesso lascia nel browser una bozza col suo nome,
- * l'indirizzo, il telefono e le note (`mc_checkout_draft`, lib/bozza-checkout.ts). Si cancellava solo
- * riaprendo la cassa: chi rinunciava la lasciava lì per sempre. La barra è montata su ogni pagina:
- * a ogni caricamento butta la bozza scaduta (o senza scadenza, cioè scritta prima che ce l'avesse),
- * e a ogni uscita dall'account la butta comunque.
- */
-const BOZZA_DELLA_CASSA = 'mc_checkout_draft';
-
-function buttaLaBozzaDellaCassa(soloSeScaduta: boolean): void {
-  try {
-    for (const memoria of [window.localStorage, window.sessionStorage]) {
-      const scritta = memoria.getItem(BOZZA_DELLA_CASSA);
-      if (scritta === null) continue;
-      if (soloSeScaduta) {
-        let letta: { scadeIl?: unknown; sceltaIl?: unknown } | null = null;
-        try {
-          letta = JSON.parse(scritta) as { scadeIl?: unknown; sceltaIl?: unknown } | null;
-        } catch {
-          letta = null;
-        }
-        // Giro di correzione: la stessa regola della cassa, col tetto delle 2 ore sulla scadenza.
-        if (letta && typeof letta === 'object' && scadenzaDellaBozzaValida(letta, new Date())) continue;
-      }
-      memoria.removeItem(BOZZA_DELLA_CASSA);
-    }
-  } catch {
-    /* memoria chiusa: non c'è niente da buttare */
-  }
 }
 
 async function diciSeLeNotificheSonoSpente(utenteId: string, dove: () => string, vai: (href: string) => void): Promise<void> {
@@ -213,8 +179,6 @@ export default function Navbar() {
   }, [isSeller, isRider]);
 
   useEffect(() => {
-    // R19-009 — la bozza scaduta della cassa si butta a ogni caricamento, su qualunque pagina.
-    buttaLaBozzaDellaCassa(true);
     // R19-008 — Chi c'è adesso: a sessione finita non lo dice più nessuno, e il segno è suo.
     let utenteDellaSessione: string | null = null;
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
@@ -222,8 +186,6 @@ export default function Navbar() {
       if (evento === 'SIGNED_OUT') {
         const chiEUscito = utenteDellaSessione;
         utenteDellaSessione = null;
-        // R19-009 — e a ogni uscita dall'account, scaduta o no.
-        buttaLaBozzaDellaCassa(false);
         void scollegaQuestoDispositivo().then((esito) => {
           if (esito.disiscritto) segnaNotificheSpente(chiEUscito);
         });
