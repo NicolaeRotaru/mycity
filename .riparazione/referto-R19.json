@@ -1,13 +1,15 @@
 {
   "sessione": "R19",
-  "aggiornato": "2026-11-13 12:39",
+  "aggiornato": "2026-11-14 09:35",
   "finita": true,
-  "testa": "5a81802f6174767bed50122dc1e6d3217db2584f",
+  "testa": "8ca90026cac4b5c39102267f30e0a18ab4d61afb",
   "verifica": {
-    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
     "esito": "verde",
-    "testa": "5a81802f6174767bed50122dc1e6d3217db2584f",
-    "nota": "typecheck, lint e vitest: 1435 file e 9715 prove verdi, 1 file saltato che non è di R19 (nessuna prova riparazione-r19-* spenta). Dopo 5a81802f solo commit del referto."
+    "testa": "8ca90026cac4b5c39102267f30e0a18ab4d61afb",
+    "nota": "Giro di correzione del 14/11: typecheck, lint e vitest, 1438 file e 9723 prove verdi, 1 file saltato che non è di R19 (nessuna prova riparazione-r19-* spenta). Dopo 8ca90026 solo il commit del referto. guardia-ramo verde.",
+    "aggiornato": "2026-11-14 09:35",
+    "conto_giro": "1 subagente (verificatore che prova a smentire 013/020/023) su un tetto di 4; costo della sessione di correzione dal record: vedi il rapporto alla regista."
   },
   "voci": [
     {
@@ -117,7 +119,7 @@
     {
       "id": "R19-006",
       "chiave": "frontend-ux|il negoziante col negozio non ancora approvato vede «negozio» al posto della sua insegna nella lista condivisa e alla cassa",
-      "esito": "riparato",
+      "esito": "serve_file_altrui",
       "commit": "23cf610b566e8b9b2a3c26cb2e2200d81bee6c13",
       "file_toccati": [
         "app/checkout/page.tsx",
@@ -134,9 +136,27 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 23cf610b566e8b9b2a3c26cb2e2200d81bee6c13^ --file app/checkout/page.tsx,app/shared-cart/page.tsx --prove tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Solo lato client. Per i negozi che la vista pubblica non restituisce, il nome si legge da `profiles` (`id, store_name`), dove le regole fanno tornare solo la propria riga. Vale in cassa e nella lista condivisa. In cassa il nome è l'unico campo che cambia: coordinate e orari restano vuoti come prima. Nessuna vista, RLS o migrazione toccata.",
-      "verificato_da": "collaudo lotto 4: ricostruite le policy di select su profiles da tutte le migrazioni (restano solo propria riga e admin, la 161 toglie le letture pubbliche): nessuna esposizione; montaggio in lista condivisa e cassa, negozio non approvato vede la sua insegna, un altro cliente vede «Negozio» → regge (la prova legge il sorgente)."
+      "verificato_da": "collaudo lotto 4: ricostruite le policy di select su profiles da tutte le migrazioni (restano solo propria riga e admin, la 161 toglie le letture pubbliche): nessuna esposizione; montaggio in lista condivisa e cassa, negozio non approvato vede la sua insegna, un altro cliente vede «Negozio» → regge (la prova legge il sorgente).",
+      "nota": "Giro di correzione del 14/11 (collaudo K06, verdetto parziale). Nicola, 14/11 09:14: le voci serve_file_altrui entrano nel prossimo giro di correzione con i file dati a un padrone solo; le diff qui sotto sono il punto di partenza, provate nell'albero e poi rimesse com'erano (tsc --noEmit verde, 53 file di prova vicini verdi, 622 prove). La parte di R19 (cassa e lista condivisa, commit 23cf610b) resta com'è; il collaudo l'ha trovata buona. Il difetto resta nel carrello, il passo fra le due pagine riparate, e nasce nella scheda prodotto: tutti e due i file non sono di R19.",
+      "cosa_resta": "Carrello e scheda prodotto: il proprietario di un negozio non ancora approvato legge «Negozio» invece della sua insegna.",
+      "serve_file_altrui": [
+        {
+          "file": "app/cart/page.tsx",
+          "padrone": "R10, R24 (onda 2)",
+          "righe": "122 (stato nuovo), 344-345 (dopo setDisponibilita, nella lettura dei dati), 487 (gruppo del negozio)",
+          "modifica": "Per i negozi che la vista pubblica non restituisce (idNegozi assenti da negoziRes) leggere supabase.from('profiles').select('id, store_name').in('id', senzaVista) — le regole fanno tornare solo la propria riga — in un try/catch, tenerli in uno stato insegnaPropria, e a :487 usare it.storeName ?? insegnaPropria[it.sellerId] ?? 'Negozio'. Stesso schema già in app/checkout/page.tsx e app/shared-cart/page.tsx (commit 23cf610b).",
+          "diff": "diff --git a/app/cart/page.tsx b/app/cart/page.tsx\nindex 027b7ed..5172767 100644\n--- a/app/cart/page.tsx\n+++ b/app/cart/page.tsx\n@@ -121,4 +121,7 @@ export default function CartPage() {\n    */\n   const [disponibilita, setDisponibilita] = useState<Record<string, number | null>>({});\n+  // R19-006 — L'insegna dei negozi che la vista pubblica non restituisce (il proprio negozio non\n+  // ancora approvato), letta dalla propria riga di `profiles`. Per gli altri resta vuota.\n+  const [insegnaPropria, setInsegnaPropria] = useState<Record<string, string>>({});\n \n   /**\n@@ -343,4 +346,21 @@ export default function CartPage() {\n       }\n       setDisponibilita(mappa);\n+      // R19-006 — Il proprietario di un negozio non ancora approvato non è nella vista pubblica: la\n+      // sua insegna si legge dalla riga di `profiles` che può già leggere (le regole fanno tornare\n+      // solo la sua; per gli altri niente, e resta «Negozio»). Come in cassa e nella lista condivisa.\n+      const senzaVista = idNegozi.filter((idNegozio) => !negoziRes.has(idNegozio));\n+      if (senzaVista.length > 0) {\n+        try {\n+          const { data: proprie } = await supabase.from('profiles').select('id, store_name').in('id', senzaVista);\n+          if (!vivo) return;\n+          setInsegnaPropria(\n+            Object.fromEntries(\n+              ((proprie ?? []) as Array<{ id: string; store_name: string | null }>)\n+                .filter((r) => !!r.store_name)\n+                .map((r) => [r.id, r.store_name as string]),\n+            ),\n+          );\n+        } catch { /* resta «Negozio»: come prima */ }\n+      }\n     })();\n     return () => { vivo = false; };\n@@ -485,5 +505,8 @@ export default function CartPage() {\n     const key = it.sellerId ?? it.storeName ?? '__nostore__';\n     if (!groupsByStore.has(key)) {\n-      groupsByStore.set(key, { storeName: it.storeName ?? 'Negozio', items: [] });\n+      groupsByStore.set(key, {\n+        storeName: it.storeName ?? (it.sellerId ? insegnaPropria[it.sellerId] : undefined) ?? 'Negozio',\n+        items: [],\n+      });\n       groupOrder.push(key);\n     }\n"
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "padrone": "R02, R24 (onda 2)",
+          "righe": "552 (dopo sellerProfile), 587, 629, 962",
+          "modifica": "Dopo sellerProfile: const insegna = sellerProfile?.store_name ?? (profile?.id && profile.id === product.seller_id ? profile.store_name ?? undefined : undefined) (profile viene già da useProfile, che legge store_name). Usare insegna nelle due righe del carrello (:587, :629, storeName: insegna ?? undefined) e nella scheda venditore (:962, storeName={insegna ?? 'Negozio'}). Facoltativo, stesso sintomo: :1100, :1217 («Venduto da») e :1236 leggono ancora product.profiles?.store_name.",
+          "diff": "diff --git a/app/product/[id]/page.tsx b/app/product/[id]/page.tsx\nindex fa3aad3..45e11f4 100644\n--- a/app/product/[id]/page.tsx\n+++ b/app/product/[id]/page.tsx\n@@ -551,4 +551,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> })\n \n   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;\n+  // R19-006 — Il proprietario di un negozio non ancora approvato non è nella vista pubblica, quindi\n+  // `sellerProfile` è vuoto: la sua insegna la sa già `useProfile` (la sua riga). Per gli altri\n+  // resta quella della vista, e senza vista «Negozio» come prima.\n+  const insegna =\n+    sellerProfile?.store_name ??\n+    (profile?.id && profile.id === product.seller_id ? profile.store_name ?? undefined : undefined);\n   // 29/10/2026 — Qui c'era `expressEligible` (interruttore Express del prodotto e del negozio): decideva\n   // fra «arriva oggi» e «Consegna in 2-3 giorni», ma la cassa non lo guarda e non ha una consegna a\n@@ -585,5 +591,5 @@ export default function ProductPage(props: { params: Promise<{ id: string }> })\n       quantity: qty,\n       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,\n-      storeName: sellerProfile?.store_name ?? undefined,\n+      storeName: insegna ?? undefined,\n       variantId: selectedVariant?.id,\n       variantLabel: selectedVariant?.label,\n@@ -627,5 +633,5 @@ export default function ProductPage(props: { params: Promise<{ id: string }> })\n         quantity: qty,\n         sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,\n-        storeName: sellerProfile?.store_name ?? undefined,\n+        storeName: insegna ?? undefined,\n         variantId: selectedVariant?.id,\n         variantLabel: selectedVariant?.label,\n@@ -960,5 +966,5 @@ export default function ProductPage(props: { params: Promise<{ id: string }> })\n             <SellerCard\n               sellerId={(sellerProfile?.id ?? product.seller_id) as string}\n-              storeName={product.profiles?.store_name ?? 'Negozio'}\n+              storeName={insegna ?? 'Negozio'}\n             />\n           )}\n"
+        }
+      ]
     },
     {
       "id": "R19-007",
@@ -272,26 +292,45 @@
     {
       "id": "R19-013",
       "chiave": "qa-flussi|la cassa propone i contanti anche sopra il tetto di legge",
-      "esito": "riparato",
-      "commit": "4296db3a67a7012d5f5d8d49bde75f10d349f620",
+      "esito": "serve_file_altrui",
+      "commit": "8ca90026cac4b5c39102267f30e0a18ab4d61afb",
       "file_toccati": [
-        "app/checkout/page.tsx",
-        "components/checkout/PaymentMethodSelector.tsx"
+        "app/checkout/page.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r19-contanti-sopra-il-tetto.test.ts"
+        "tests/unit/riparazione-r19-contanti-sopra-il-tetto.test.ts",
+        "tests/unit/riparazione-r19-contanti-sopra-il-tetto-barra-del-telefono.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r19-contanti-sopra-il-tetto.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-contanti-sopra-il-tetto.test.ts tests/unit/riparazione-r19-contanti-sopra-il-tetto-barra-del-telefono.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4296db3a67a7012d5f5d8d49bde75f10d349f620^ --file app/checkout/page.tsx,components/checkout/PaymentMethodSelector.tsx --prove tests/unit/riparazione-r19-contanti-sopra-il-tetto.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8ca90026cac4b5c39102267f30e0a18ab4d61afb^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r19-contanti-sopra-il-tetto-barra-del-telefono.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La cassa usa TETTO_CONTANTI_CENTS di lib/ordini/tetto-dei-contanti.ts sul lordo prima del credito: sopra 4.999,99 € i contanti sono spenti con la frase che spiega perché, il pulsante si ferma con lo stesso motivo e l'invio non parte; con la carta accesa si passa alla carta. La rotta COD controlla già il tetto lato server.",
-      "verificato_da": "collaudo lotto 3 (subagente diverso): cassa montata al limite esatto 4.999,99/5.000,00, credito 1.000 su 5.200, due negozi da 2.600, ramo carta accesa (CARTA_ACCESA=true su copia) → regge; app/product/[id] non si rompe; tolta la correzione su copia la prova cade per il comportamento."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro (4296db3a): tetto sul lordo, contanti spenti con il perché, invio fermato. Giro di correzione (8ca90026): sopra il tetto con la carta spenta la barra del telefono dice «Non si può ordinare» (nome accessibile col perché) invece di «Ordina e paga alla consegna».",
+      "verificato_da": "giro di correzione 14/11, subagente diverso da chi ha riparato (mandato: smentire): prova 2/2 e prova del primo giro verdi, rossa togliendo la correzione nel worktree; 12 varianti in più tutte verdi: limite esatto 4.999,98/4.999,99 contro 5.000,00/5.002,98, bozza salvata con la carta, carta accesa su copia (passa a «Paga con carta»), credito di 500 € su un lordo sopra e sotto il tetto; 56 file di prova vicini alla cassa verdi (453 prove) → regge. Note che non sono difetti: formatPrice scrive «4999,99 €» senza il punto delle migliaia; col credito la barra mostra un totale sotto il tetto mentre il nome dice il tetto sul lordo (stessa regola di motivoNoContanti).",
+      "commit_primo_giro": "4296db3a67a7012d5f5d8d49bde75f10d349f620",
+      "nota": "Giro di correzione del 14/11 (collaudo K06, verdetto parziale). Nicola, 14/11 09:14: le voci serve_file_altrui entrano nel prossimo giro di correzione con i file dati a un padrone solo; le diff qui sotto sono il punto di partenza, provate nell'albero e poi rimesse com'erano (tsc --noEmit verde, 53 file di prova vicini verdi, 622 prove). Il pulsante e la frase del riepilogo stanno in components/checkout/OrderSummary.tsx, che non è di R19. Il passaggio della prop da app/checkout/page.tsx (file di R19) va nello stesso commit della modifica a OrderSummary: senza la prop nuova non compila, per questo non è nel ramo.",
+      "cosa_resta": "Riepilogo della cassa (OrderSummary): sopra il tetto, con la carta spenta, il pulsante dice ancora «Ordina e paga alla consegna · 5.203,00 €» e sotto «Non paghi adesso. Paghi in contanti al rider quando arriva.»",
+      "serve_file_altrui": [
+        {
+          "file": "components/checkout/OrderSummary.tsx",
+          "padrone": "R09 (onda 2)",
+          "righe": "5 (import), 40 (Props), 92 (prop con default), 204 (testo del pulsante), 220 (frase sotto il pulsante)",
+          "modifica": "Prop facoltativa contantiSopraIlTetto?: boolean (default false). Se è vera e paymentMethod non è 'card': il pulsante dice «Non si può ordinare» invece di «Ordina e paga alla consegna · <totale>», e la frase sotto dice «Niente contanti sopra 4.999,99 €. È il tetto di legge: così questo ordine non si può fare.» invece di «Non paghi adesso…». Importa TETTO_CONTANTI_CENTS da lib/ordini/tetto-dei-contanti.ts.",
+          "diff": "diff --git a/components/checkout/OrderSummary.tsx b/components/checkout/OrderSummary.tsx\nindex 7cc6ee7..bf7ad5b 100644\n--- a/components/checkout/OrderSummary.tsx\n+++ b/components/checkout/OrderSummary.tsx\n@@ -4,4 +4,5 @@ import { AlertTriangle, Banknote, Check, Lock, RotateCcw, Store } from 'lucide-r\n import { formatPrice } from '@/lib/format';\n import { FRASE_RESO, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';\n+import { TETTO_CONTANTI_CENTS } from '@/lib/ordini/tetto-dei-contanti';\n \n /**\n@@ -39,4 +40,10 @@ type Props = {\n    */\n   motivoBlocco?: string | null;\n+  /**\n+   * R19-013 — Contanti scelti sopra il tetto di legge (la cassa passa `contantiFuoriLegge`): con la\n+   * carta spenta l'ordine così non si può fare, e il pulsante e la frase sotto non devono promettere\n+   * il pagamento alla consegna.\n+   */\n+  contantiSopraIlTetto?: boolean;\n   couponSection?: React.ReactNode;\n   /** 5/11/2026 — `false` quando il carrello non si è letto: niente cifre a zero. */\n@@ -85,4 +92,5 @@ export function OrderSummary({\n   couponSection,\n   importiLetti = true,\n+  contantiSopraIlTetto = false,\n }: Props) {\n   const consegna = shipping + platformDeliveryFee;\n@@ -202,5 +210,7 @@ export function OrderSummary({\n             {paymentMethod === 'card'\n               ? `Paga con carta${importiLetti ? ` · ${formatPrice(total)}` : ''}`\n-              : `Ordina e paga alla consegna${importiLetti ? ` · ${formatPrice(total)}` : ''}`}\n+              : contantiSopraIlTetto\n+                ? 'Non si può ordinare'\n+                : `Ordina e paga alla consegna${importiLetti ? ` · ${formatPrice(total)}` : ''}`}\n           </span>\n         )}\n@@ -215,4 +225,9 @@ export function OrderSummary({\n               <span><strong>Pagamento sicuro con Stripe.</strong> Niente costi nascosti.</span>\n             </>\n+          ) : contantiSopraIlTetto ? (\n+            <>\n+              <Banknote size={16} strokeWidth={2.2} className=\"text-olive-600 shrink-0 mt-0.5\" aria-hidden />\n+              <span><strong>Niente contanti sopra {formatPrice(TETTO_CONTANTI_CENTS / 100)}.</strong> È il tetto di legge: così questo ordine non si può fare.</span>\n+            </>\n           ) : (\n             <>\n"
+        },
+        {
+          "file": "app/checkout/page.tsx",
+          "padrone": "R19 (onda 2): da mettere nello stesso commit di OrderSummary, se no non compila",
+          "righe": "1947-1950 (props di <OrderSummary>)",
+          "modifica": "Passare contantiSopraIlTetto={contantiFuoriLegge} a <OrderSummary>.",
+          "diff": "diff --git a/app/checkout/page.tsx b/app/checkout/page.tsx\nindex f147dbf..7160f6a 100644\n--- a/app/checkout/page.tsx\n+++ b/app/checkout/page.tsx\n@@ -1947,4 +1947,5 @@ export default function CheckoutPage() {\n               motivoBlocco={motivoDelBlocco}\n               importiLetti={groups.length > 0}\n+              contantiSopraIlTetto={contantiFuoriLegge}\n             />\n           </Card>\n"
+        }
+      ]
     },
     {
       "id": "R19-014",
@@ -433,25 +472,45 @@
     {
       "id": "R19-020",
       "chiave": "qa-flussi|il ritorno dopo l accesso perde ?tab=",
-      "esito": "riparato",
-      "commit": "b1cd202916fee6eafacb0a19034c9bd4c0ce8d2f",
+      "esito": "serve_file_altrui",
+      "commit": "6f880b3c396435c61dea07fdc9a0d08e3a409a08",
       "file_toccati": [
-        "middleware.ts"
+        "app/profile/settings/page.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r19-ritorno-con-la-query.test.ts"
+        "tests/unit/riparazione-r19-ritorno-con-la-query.test.ts",
+        "tests/unit/riparazione-r19-ritorno-con-la-scheda-dalle-impostazioni.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r19-ritorno-con-la-query.test.ts --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-ritorno-con-la-query.test.ts tests/unit/riparazione-r19-ritorno-con-la-scheda-dalle-impostazioni.test.tsx --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b1cd202916fee6eafacb0a19034c9bd4c0ce8d2f^ --file middleware.ts --prove tests/unit/riparazione-r19-ritorno-con-la-query.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6f880b3c396435c61dea07fdc9a0d08e3a409a08^ --file app/profile/settings/page.tsx --prove tests/unit/riparazione-r19-ritorno-con-la-scheda-dalle-impostazioni.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nei due rami del portiere che rimandano all'accesso (senza tessera, e chiudi-al-login), returnTo ora è percorso + query, con il nuovo aiutante ritornoDopoLAccesso; oltre i 512 caratteri resta il solo percorso. La query non resta più anche sulla pagina /sign-in. La prova chiama il middleware vero e controlla che safeInternalPath(returnTo) restituisca il valore uguale, cioè che resti un percorso interno.",
-      "verificato_da": "collaudo lotto 2 (subagente diverso): prova 4/4, rimessa regge, 161 prove vicine verdi, sonda di 30 varianti di redirect aperto (//evil.com, /\\evil, %2F%2F, returnTo annidato, CRLF, oltre 512) sempre interne; giro dopo l accesso fino a ?tab= controllato."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro (b1cd2029): il portiere porta percorso + query fino all'accesso. Giro di correzione (6f880b3c): il ripiego della pagina delle impostazioni senza utente porta anche lui la query (?tab=), codificata, e oltre i 512 caratteri il solo percorso, come il portiere.",
+      "verificato_da": "giro di correzione 14/11, subagente diverso da chi ha riparato (mandato: smentire): prova 3/3 verde, rossa togliendo la correzione; 15 varianti in più tutte verdi, ognuna guardata dopo safeInternalPath come la legge l'accesso: returnTo annidato verso //evil.com, CRLF codificato, %2F%2F, tab e a capo grezzi, barra rovesciata, javascript:, %252F, +/%2B, frammento, query ripetute, accenti; il returnTo resta interno su /profile/settings, senza doppia codifica; confine 512 (512 si porta, 513 no); 24 file di prova vicini verdi (186 prove) → regge.",
+      "commit_primo_giro": "b1cd202916fee6eafacb0a19034c9bd4c0ce8d2f",
+      "nota": "Giro di correzione del 14/11 (collaudo K06, verdetto parziale). Nicola, 14/11 09:14: le voci serve_file_altrui entrano nel prossimo giro di correzione con i file dati a un padrone solo; le diff qui sotto sono il punto di partenza, provate nell'albero e poi rimesse com'erano (tsc --noEmit verde, 53 file di prova vicini verdi, 622 prove). L'accesso con Google perde ancora tutto il ritorno: il pulsante sta in components/ui/AuthShell.tsx (di nessuna sessione dell'onda 2) e la pagina di accesso che lo monta è di R10/R21. /auth/callback legge già next e lo ripulisce con safeInternalPath.",
+      "cosa_resta": "Accesso con Google: da /profile/settings?tab=danger, dopo Google si finisce in home (handleGoogle non manda next, la pagina di accesso non passa returnTo).",
+      "serve_file_altrui": [
+        {
+          "file": "components/ui/AuthShell.tsx",
+          "padrone": "nessuna sessione dell'onda 2",
+          "righe": "109-118 (prop di AuthAlternatives), 145 (handleGoogle)",
+          "modifica": "AuthAlternatives riceve returnTo?: string; in handleGoogle, dopo searchParams.set('versione', …): if (returnTo && returnTo !== '/') ritorno.searchParams.set('next', returnTo). Facoltativo, stesso sintomo: anche app/sign-up/page.tsx:338 monta AuthAlternatives senza returnTo.",
+          "diff": "diff --git a/components/ui/AuthShell.tsx b/components/ui/AuthShell.tsx\nindex 61cba89..2e0df0a 100644\n--- a/components/ui/AuthShell.tsx\n+++ b/components/ui/AuthShell.tsx\n@@ -109,4 +109,5 @@ export function AuthShell({\n export function AuthAlternatives({\n   condizioniDalModulo,\n+  returnTo,\n }: {\n   /**\n@@ -116,4 +117,9 @@ export function AuthAlternatives({\n    */\n   condizioniDalModulo?: boolean;\n+  /**\n+   * R19-020 — Dove tornare dopo l'accesso con Google (già pulito da `safeInternalPath` nella\n+   * pagina). Viaggia come `next` verso /auth/callback, che lo ripulisce e ci rimanda.\n+   */\n+  returnTo?: string;\n } = {}) {\n   const [googleLoading, setGoogleLoading] = useState(false);\n@@ -145,4 +151,5 @@ export function AuthAlternatives({\n       const ritorno = new URL('/auth/callback', window.location.origin);\n       ritorno.searchParams.set('versione', VERSIONE_TESTI_LEGALI);\n+      if (returnTo && returnTo !== '/') ritorno.searchParams.set('next', returnTo);\n       const { error } = await supabase.auth.signInWithOAuth({\n         provider: 'google',\n"
+        },
+        {
+          "file": "app/sign-in/page.tsx",
+          "padrone": "R10, R21 (onda 2)",
+          "righe": "345",
+          "modifica": "<AuthAlternatives returnTo={returnTo} /> (returnTo è già safeInternalPath(searchParams.get('returnTo'), '/') a :81).",
+          "diff": "diff --git a/app/sign-in/page.tsx b/app/sign-in/page.tsx\nindex bd8d8f9..df0d35a 100644\n--- a/app/sign-in/page.tsx\n+++ b/app/sign-in/page.tsx\n@@ -343,5 +343,5 @@ const SignInForm = () => {\n       </form>\n \n-      <AuthAlternatives />\n+      <AuthAlternatives returnTo={returnTo} />\n \n       <p className=\"mt-6 text-[14px] text-ink-600\">\n"
+        }
+      ]
     },
     {
       "id": "R19-021",
@@ -492,26 +551,38 @@
     {
       "id": "R19-023",
       "chiave": "stati-ui|se la lettura del profilo non riesce, il negoziante approvato legge che il suo account non è da venditore e gli viene proposto di iscriversi di nuovo",
-      "esito": "riparato",
-      "commit": "1445c09df4a99dfee8cf2a1141d50c2c589aac0c",
+      "esito": "serve_file_altrui",
+      "commit": "6d1563cb64ad4bd8aa9f1659ca81d054f8d75054",
       "file_toccati": [
-        "app/seller/layout.tsx",
-        "components/hooks/useProfile.ts"
+        "app/rider/layout.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx"
+        "tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx",
+        "tests/unit/riparazione-r19-profilo-non-letto-nel-fattorino.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx tests/unit/riparazione-r19-profilo-non-letto-nel-fattorino.test.tsx --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1445c09df4a99dfee8cf2a1141d50c2c589aac0c^ --file app/seller/layout.tsx,components/hooks/useProfile.ts --prove tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6d1563cb64ad4bd8aa9f1659ca81d054f8d75054^ --file app/rider/layout.tsx --prove tests/unit/riparazione-r19-profilo-non-letto-nel-fattorino.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "useProfile restituisce anche isError e refetch, senza cambiare il resto. Il layout di /seller giudica il ruolo solo su un profilo letto davvero: con la lettura a 500, o in pausa senza rete, mostra «Non riesco a leggere i dati del tuo account» con «Riprova» (che rilegge e fa entrare il negozio), non «altro tipo» né «Diventa venditore». La prova monta il layout vero con lo useProfile vero.",
-      "verificato_da": "collaudatore A (subagente diverso): prova 3/3, rossa senza correzione; sonda col layout vero e lo useProfile vero: caricamento infinito, retry, Riprova che fallisce, admin, cliente/fattorino/pending, negozio non approvato; i 22 chiamanti di useProfile non cambiano → regge."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro (1445c09d): /seller e useProfile (isError, refetch). Giro di correzione (6d1563cb): il layout di /rider giudica il ruolo solo su un profilo letto davvero; col profilo non letto mostra ErrorState con «Riprova» e non rimanda a '/'. La prova monta il layout vero con useProfile vero.",
+      "verificato_da": "giro di correzione 14/11, subagente diverso da chi ha riparato (mandato: smentire): prova 3/3 verde, rossa togliendo la correzione; 14 varianti in più tutte verdi: admin entra senza SOS, rider con SOS, seller/buyer/pending/null/'RIDER'/'' restano fuori con rimando a '/', 500 poi Riprova con un cliente resta fuori, caricamento e secondo tentativo (retry 1) mostrano LoadingState, senza utente rimando a /sign-in?returnTo=/rider; 40 file di prova vicini verdi (444 prove) → regge. Nota: un utente senza la riga in profiles (PGRST116 da .single()) resta su «Riprova» invece di andare alla home, come già nel layout del negozio; non allarga l'accesso.",
+      "commit_primo_giro": "1445c09df4a99dfee8cf2a1141d50c2c589aac0c",
+      "nota": "Giro di correzione del 14/11 (collaudo K06, verdetto parziale). Nicola, 14/11 09:14: le voci serve_file_altrui entrano nel prossimo giro di correzione con i file dati a un padrone solo; le diff qui sotto sono il punto di partenza, provate nell'albero e poi rimesse com'erano (tsc --noEmit verde, 53 file di prova vicini verdi, 622 prove). Il layout di /admin ha lo stesso schema ma non è di nessuna sessione dell'onda 2.",
+      "cosa_resta": "Layout di /admin: con la lettura del profilo fallita dice «Accesso riservato agli amministratori.» e rimanda a '/'.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/layout.tsx",
+          "padrone": "nessuna sessione dell'onda 2",
+          "righe": "5 (import ErrorState), 11-12 (useProfile e profiloNonLetto), 19 (rimando a '/'), 27-28 (ErrorState prima di «Accesso riservato»)",
+          "modifica": "Come app/rider/layout.tsx in 6d1563cb: prendere isError e refetch da useProfile; profiloNonLetto = isAuthenticated && !profile; nell'effetto rimandare a '/' solo se !profiloNonLetto && !isAdmin; dopo il LoadingState, se profiloNonLetto, ErrorState «Non riesco a leggere i dati del tuo account» con onRetry=refetch. Non allarga l'accesso: senza profilo letto non si entra nel cockpit.",
+          "diff": "diff --git a/app/admin/layout.tsx b/app/admin/layout.tsx\nindex 05456dc..8adc25d 100644\n--- a/app/admin/layout.tsx\n+++ b/app/admin/layout.tsx\n@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation';\n import { useProfile } from '@/components/hooks/useProfile';\n import { LoadingState } from '@/components/ui/LoadingState';\n+import { ErrorState } from '@/components/ui/ErrorState';\n import AdminSidebar, { AdminMobileTopbar } from '@/components/admin/AdminSidebar';\n \n export default function AdminLayout({ children }: { children: React.ReactNode }) {\n   const router = useRouter();\n-  const { profile, isAuthenticated, isLoading } = useProfile();\n+  const { profile, isAuthenticated, isLoading, isError, refetch } = useProfile();\n   const isAdmin = profile?.role === 'admin';\n+  // R19-023 — Un profilo che non si è letto (guasto, o lettura in pausa senza rete) non è «un\n+  // altro ruolo»: il ruolo si giudica solo su un profilo letto davvero, come in /seller e /rider.\n+  const profiloNonLetto = isAuthenticated && !profile;\n \n   useEffect(() => {\n@@ -16,8 +20,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })\n     if (!isAuthenticated) {\n       router.replace('/sign-in');\n-    } else if (!isAdmin) {\n+    } else if (!profiloNonLetto && !isAdmin) {\n       router.replace('/');\n     }\n-  }, [isAuthenticated, isAdmin, isLoading, router]);\n+  }, [isAuthenticated, isAdmin, profiloNonLetto, isLoading, router]);\n \n   if (isLoading || !isAuthenticated) {\n@@ -25,4 +29,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })\n   }\n \n+  if (profiloNonLetto) {\n+    return (\n+      <ErrorState\n+        title=\"Non riesco a leggere i dati del tuo account\"\n+        description={\n+          isError\n+            ? 'La lettura non è riuscita: riprova fra un momento.'\n+            : 'Sembra che manchi la connessione: riprova appena torna la rete.'\n+        }\n+        onRetry={refetch ? () => refetch() : undefined}\n+      />\n+    );\n+  }\n+\n   if (!isAdmin) {\n     return (\n"
+        }
+      ]
     }
   ],
   "nuovi_difetti_visti": [
@@ -581,6 +652,7 @@
   ],
   "conto": {
     "agenti": 14,
-    "nota": "14 subagenti (lotti 1-5, giro di correzione, 7 collaudi). Costo dal record della sessione 70,2 $ sul tetto di 71 $: per questo i quattro parziali nati dai ricollaudi (004, 005, 008, 009) non hanno avuto un altro giro; la cura è scritta in cosa_resta. Lotto 1: il commit e33ef01 è tolto con b4c3caa (scelta di Nicola)."
+    "nota": "14 subagenti (lotti 1-5, giro di correzione, 7 collaudi). Costo dal record della sessione 70,2 $ sul tetto di 71 $: per questo i quattro parziali nati dai ricollaudi (004, 005, 008, 009) non hanno avuto un altro giro; la cura è scritta in cosa_resta. Lotto 1: il commit e33ef01 è tolto con b4c3caa (scelta di Nicola).",
+    "giro_di_correzione_14_11": "1 subagente (verificatore che prova a smentire 013/020/023) su un tetto di 4; costo della sessione di correzione dal record: vedi il rapporto alla regista."
   }
 }
