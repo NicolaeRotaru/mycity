@@ -15,7 +15,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { screen } from '@testing-library/dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+
+import { queryKeys } from '@/lib/queries/keys';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 
@@ -74,13 +76,14 @@ const PRODOTTO = {
 const accesi: Root[] = [];
 const aspetta = (ms: number) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 
-async function apri() {
+async function apri(prepara?: (qc: QueryClient) => void) {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   const radice = document.createElement('div');
   document.body.appendChild(radice);
   const root = createRoot(radice);
   accesi.push(root);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  prepara?.(qc);
   await act(async () => {
     root.render(createElement(QueryClientProvider, { client: qc }, createElement(EditProductPage as never, { params: { valore: { id: ID } } })));
   });
@@ -94,6 +97,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   for (const r of accesi.splice(0)) act(() => r.unmount());
   document.body.innerHTML = '';
 });
@@ -148,5 +152,21 @@ describe('R16-020 · la lettura del prodotto caduta non è «Prodotto non trovat
     const radice = await apri();
     expect(radice.textContent).toContain('Non autenticato');
     expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
+  });
+});
+
+describe('R16-020 · senza rete la lettura del prodotto è in pausa, non «Prodotto non trovato»', () => {
+  it('rete assente: «Non riesco a leggere il prodotto» con «Riprova», mai «Prodotto non trovato»', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const radice = await apri((qc) => {
+        qc.setQueryData(queryKeys.categories.form, [{ id: 'cat-1', name: 'Panetteria', slug: 'panetteria', parent_id: null }]);
+      });
+      expect(radice.textContent).not.toContain('Prodotto non trovato');
+      expect(radice.textContent).toContain('Non riesco a leggere il prodotto');
+      expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });

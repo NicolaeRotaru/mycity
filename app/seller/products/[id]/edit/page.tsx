@@ -49,7 +49,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto } = useQuery({
+  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto, fetchStatus: prodottoFetchStatus } = useQuery({
     queryKey: queryKeys.seller.product(id),
     queryFn: async () => {
       const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
@@ -232,6 +232,9 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // R16-020 — Senza rete la lettura va in pausa (pending + paused, ne' caricamento ne' errore):
+  // non e' «Prodotto non trovato». Una query spenta (idle) non e' in pausa e non entra qui.
+  const prodottoInPausa = product === undefined && prodottoFetchStatus === 'paused';
   if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura || categorieInLettura) return <LoadingState />;
   if (categorieNonLette && categories.length === 0) {
     return (
@@ -252,17 +255,17 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    * taglie: al «Salva» saveProductVariantsServer le cancellava tutte, e negli
    * ordini gia' fatti la riga perdeva la taglia (order_items.variant_id a NULL).
    */
-  if (error || erroreVarianti || !product) {
+  if (error || erroreVarianti || prodottoInPausa || !product) {
     // R16-020 — Una lettura caduta (rete, errore del database) non è «Prodotto non trovato»:
     // lo dice con parole semplici e offre «Riprova». «Non trovato» solo se la lettura è riuscita.
-    const letturaCaduta = error ? !(error instanceof LetturaNegata) : Boolean(erroreVarianti);
+    const letturaCaduta = error ? !(error instanceof LetturaNegata) : Boolean(erroreVarianti) || prodottoInPausa;
     return (
       <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
         <p className="text-sm mb-3">
           {error instanceof LetturaNegata
             ? error.message
-            : error
+            : error || prodottoInPausa
               ? 'Non riesco a leggere il prodotto: controlla la connessione e riprova.'
               : erroreVarianti
                 ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
