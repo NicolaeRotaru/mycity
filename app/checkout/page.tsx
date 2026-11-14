@@ -587,12 +587,7 @@ export default function CheckoutPage() {
       if (!raw) return;
       // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
       const bozza = bozzaLetta(JSON.parse(raw), new Date());
-      // R19-009 — Scaduta (o illeggibile): non si rimette e non resta nel browser.
-      if (!bozza) {
-        localStorage.removeItem('mc_checkout_draft');
-        sessionStorage.removeItem('mc_checkout_draft');
-        return;
-      }
+      if (!bozza) return;
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
       setIndirizzoDellaBozza(bozza.form as Partial<typeof form>);
 
@@ -612,24 +607,6 @@ export default function CheckoutPage() {
       sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
   }, []);
-
-  /**
-   * 13/11/2026 (R19-009, giro di correzione) — LA BOZZA DA OSPITE IN UN ACCOUNT CHE HA GIÀ I SUOI DATI.
-   *
-   * La bozza la scrive sempre un ospite («Ordina» o «Ho già un account» senza accesso). Chi entra
-   * dopo può essere chi l'ha scritta oppure un altro sullo stesso browser, e da qui non si sa. Se
-   * l'account ha già indirizzi salvati, nome e telefono non vengono dalla bozza ma dal suo indirizzo
-   * predefinito: l'indirizzo scritto resta (R19-004), le generalità di chi l'ha scritto no.
-   */
-  useEffect(() => {
-    if (!indirizzoDellaBozza || savedAddresses.length === 0) return;
-    const def = savedAddresses.find((a) => a.is_default) ?? savedAddresses[0];
-    const nome = String(indirizzoDellaBozza.fullName ?? '');
-    const telefono = String(indirizzoDellaBozza.phone ?? '');
-    if (nome === def.full_name && telefono === def.phone) return;
-    setForm((prev) => (prev.fullName === nome && prev.phone === telefono ? { ...prev, fullName: def.full_name, phone: def.phone } : prev));
-    setIndirizzoDellaBozza({ ...indirizzoDellaBozza, fullName: def.full_name, phone: def.phone });
-  }, [indirizzoDellaBozza, savedAddresses]);
 
   // R19-012 — La consegna della bozza, quando la lettura del carrello ha portato gli orari dei negozi.
   useEffect(() => {
