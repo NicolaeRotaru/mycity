@@ -543,8 +543,7 @@ async function spostaIlCarrello(
           continue;
         }
       }
-      const prenotazioneDelFreno = giaResi > 0 && (await laPrenotazioneEDelFreno(admin, r.id));
-      if (giaResi > 0 && !prenotazioneDelFreno) {
+      if (giaResi > 0 && !(await laPrenotazioneEDelFreno(admin, r.id))) {
         logger.error('[veloce-non-confermata] sull ordine c è già un rimborso che non è l euro della veloce: non se ne prenota un altro', {
           orderId: r.id, giaResi, chiesti: -r.deltaCents,
         });
@@ -592,18 +591,6 @@ async function spostaIlCarrello(
         // simulare `refundOrder` senza la classe.)
         if ((err as { name?: unknown } | null)?.name === 'RimborsoGiaInCorso') {
           logger.warn('[veloce-non-confermata] un altro giro sta già rendendo l euro: questo giro non tocca il carrello', { orderId: r.id });
-          // 14/11/2026 (R17-016 correzione) — L'euro è già nel libro, prenotato da un giro di prima che non
-          // ha finito (forse morto prima di Stripe): prima di R17-016 arrivava almeno un avviso, poi più
-          // niente. Lo si dice, una volta per ordine, così nessuno lo rimborsa di persona (il libro andrebbe a 2 €).
-          // I due giri sovrapposti senza niente di già reso (R17-011) restano in silenzio.
-          if (prenotazioneDelFreno) {
-            await notifyAdmins(
-              '⚠️ Veloce: euro prenotato da un giro di prima',
-              `L'euro della veloce dell'ordine ${codiceDi(r.id)} è prenotato da un giro di prima che non ha ancora finito: il freno lo finisce da solo dopo 10 minuti, anche se nel frattempo l'ordine viene accettato o annullato. Non rimborsarlo tu: il libro dei rimborsi lo conta già.`,
-              '/admin/orders',
-              { unaVoltaPer: `veloce-euro-in-corso-${r.id}` },
-            ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: r.id, err: e }));
-          }
           return 'riprova';
         }
         logger.error('[veloce-non-confermata] rimborso dell euro della veloce NON partito', { orderId: r.id, err });
@@ -806,102 +793,8 @@ export type EsitoDelFreno =
       daRiprovare?: number;
       /** 12/11/2026 — Ordini già oltre la scadenza: li annulla expire-stale-orders, il freno non scrive. */
       giaScaduti?: number;
-      /** 14/11/2026 (R17-016 correzione) — Euro del freno rimasti prenotati, richiamati con la stessa chiave (`euroDelFrenoRimastiPrenotati`). */
-      euroRipresi?: number;
     }
   | { ok: false; error: string };
-
-/**
- * 14/11/2026 (R17-016 correzione) — L'EURO PRENOTATO DA UN GIRO MORTO, SU UN ORDINE CHE NON È PIÙ NUOVO.
- *
- * Il giro che muore fra la prenotazione dell'euro (`accumula_rimborso`, con la chiave del freno) e
- * Stripe lascia 1 € segnato come reso e nessun soldo uscito. Il giro dopo lo finiva solo se l'ordine
- * restava nuovo e «Adesso» (la ricerca qui sopra). Se nel frattempo il negozio lo accetta, o l'ordine
- * si annulla, nessuno lo puliva più: l'annullo rende «totale meno già rimborsato», cioè 1 € in meno
- * al cliente, e un rimborso a mano portava il libro a 2 €. Qui si cercano le prenotazioni del freno
- * prese da più di 10 minuti (chi le ha prese è morto) e da meno di un giorno, sugli ordini con la
- * carta ancora «Adesso» (il freno scrive la fascia DOPO che l'euro è uscito: «Adesso» vuol dire che
- * non ha finito) ma non più nuovi. Per ognuno si richiama `refundOrder` con la stessa chiave: se
- * l'euro è già uscito su Stripe ed è contato non rifà niente, se no lo rende una volta sola.
- * Senza la migrazione 412 la tabella non c'è: si salta in silenzio.
- */
-const LA_TABELLA_NON_CE = new Set(['PGRST205', '42P01']);
-
-async function euroDelFrenoRimastiPrenotati(
-  admin: SupabaseClient,
-  adesso: Date,
-  visti: ReadonlySet<string>,
-): Promise<{ ripresi: number; daRiprovare: number }> {
-  const esito = { ripresi: 0, daRiprovare: 0 };
-  const dieciMinutiFa = new Date(adesso.getTime() - 10 * 60_000).toISOString();
-  const unGiornoFa = new Date(adesso.getTime() - 24 * 3_600_000).toISOString();
-  let lettura: Risposta;
-  try {
-    lettura = await admin
-      .from('prenotazioni_dei_rimborsi')
-      .select('order_id, chiave, centesimi, preso_il')
-      .like('chiave', 'veloce_non_confermata_%')
-      .lt('preso_il', dieciMinutiFa)
-      .gt('preso_il', unGiornoFa)
-      .limit(100);
-  } catch (err) {
-    logger.error('[veloce-non-confermata] prenotazioni del freno non lette', { err });
-    return esito;
-  }
-  const { data: prenotazioni, error } = lettura;
-  if (error) {
-    if (!LA_TABELLA_NON_CE.has(String((error as { code?: string }).code ?? ''))) {
-      logger.error('[veloce-non-confermata] prenotazioni del freno non lette', { message: error.message });
-    }
-    return esito;
-  }
-  const delFreno = ((prenotazioni ?? []) as Array<{ order_id: string; chiave: string; centesimi: number }>)
-    .filter((p) => !visti.has(p.order_id) && p.chiave === chiaveDelFreno(p.order_id) && Number(p.centesimi) > 0);
-  if (delFreno.length === 0) return esito;
-  const { data: righe, error: errOrdini } = await leggi('euro-del-freno', (c) =>
-    admin.from('orders').select(c).in('id', delFreno.map((p) => p.order_id)));
-  if (errOrdini) {
-    logger.error('[veloce-non-confermata] ordini delle prenotazioni del freno non letti', { message: errOrdini.message });
-    return esito;
-  }
-  const ordini = (righe ?? []) as unknown as RigaVeloce[];
-  const { refundOrder } = await import('@/lib/stripe/payout');
-  for (const p of delFreno) {
-    const o = ordini.find((r) => r.id === p.order_id);
-    if (!o || o.payment_method === 'cod' || o.delivery_slot !== ETICHETTA_ADESSO || o.delivery_status === 'NEW') continue;
-    try {
-      await refundOrder({
-        orderId: o.id,
-        amountCents: Number(p.centesimi),
-        // L'euro della veloce è di MyCity (lib/constants.ts): dal negozio non si toglie niente.
-        quotaNegozioCents: 0,
-        reason: 'consegna veloce non confermata dal negozio in 10 minuti',
-        idempotencyKey: chiaveDelFreno(o.id),
-        notifyBuyer: false,
-        metadata: { motivo: 'veloce_non_confermata' },
-      });
-      esito.ripresi++;
-      logger.warn('[veloce-non-confermata] euro della veloce rimasto prenotato da un giro morto: finito di rendere', {
-        orderId: o.id, stato: o.delivery_status, centesimi: p.centesimi,
-      });
-    } catch (err) {
-      // Un altro giro lo sta finendo adesso: si riprova al giro dopo. Per nome, come sopra.
-      if ((err as { name?: unknown } | null)?.name === 'RimborsoGiaInCorso') {
-        esito.daRiprovare++;
-        continue;
-      }
-      logger.error('[veloce-non-confermata] euro della veloce rimasto prenotato: rimborso NON finito', { orderId: o.id, err });
-      await notifyAdmins(
-        '⚠️ Veloce: euro prenotato e non reso',
-        `Sull'ordine ${codiceDi(o.id)} (${o.delivery_status}) l'euro della veloce è segnato come reso da un giro del freno che è morto prima di finire, e il freno non è riuscito a renderlo (${err instanceof Error ? err.message : String(err)}). ` +
-          'Guarda su Stripe se l’euro con la chiave del freno è già uscito; se no, il freno riprova da solo ogni 5 minuti per un giorno. Non rimborsarlo tu senza aver guardato: il libro dei rimborsi lo conta già.',
-        '/admin/orders',
-        { unaVoltaPer: `veloce-euro-rimasto-${o.id}` },
-      ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err: e }));
-    }
-  }
-  return esito;
-}
 
 /** Il giro del freno: lo chiama app/api/cron/veloce-non-confermata ogni cinque minuti. */
 export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new Date()): Promise<EsitoDelFreno> {
@@ -999,11 +892,5 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       { unaVoltaPer: `veloce-fermo-${adesso.toISOString().slice(0, 13)}` },
     ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { err: e }));
   }
-  // R17-016 correzione — poi gli euro del freno rimasti prenotati su ordini non più nuovi (vedi sopra).
-  const euro = await euroDelFrenoRimastiPrenotati(admin, adesso, visti);
-  daRiprovare += euro.daRiprovare;
-  return {
-    ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti, annullatiNelFrattempo, daRiprovare, giaScaduti,
-    euroRipresi: euro.ripresi,
-  };
+  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti, annullatiNelFrattempo, daRiprovare, giaScaduti };
 }
