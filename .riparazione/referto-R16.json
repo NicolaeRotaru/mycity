@@ -1,13 +1,13 @@
 {
   "sessione": "R16",
-  "aggiornato": "2026-11-13 14:05",
+  "aggiornato": "2026-11-14 10:30",
   "finita": true,
-  "testa": "0628993d24e87d455ab2cab2afce4bf339f92830",
+  "testa": "d93ff753b80972d42d04bf64b9b6878bfad85d99",
   "verifica": {
-    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
     "esito": "verde",
-    "testa": "0628993d24e87d455ab2cab2afce4bf339f92830",
-    "nota": "Typecheck, lint e 1433 file di prova verdi (9768 casi, 1 saltato) sull'ultimo commit di codice."
+    "testa": "d93ff753b80972d42d04bf64b9b6878bfad85d99",
+    "nota": "Giro di correzione 14/11: typecheck, lint e 1435 file di prova verdi (9778 casi) sull'ultimo commit di codice."
   },
   "voci": [
     {
@@ -179,25 +179,33 @@
     {
       "id": "R16-019",
       "chiave": "rls-database|chiunque abbia un account può riempire i 30 posti del carosello delle storie in home e svuotarlo per tutti",
-      "esito": "riparato",
-      "commit": "d5441d45739688a8e232a7506a7033d29168005e",
+      "esito": "parziale",
+      "commit": "d93ff753b80972d42d04bf64b9b6878bfad85d99",
       "file_toccati": [
+        "components/home/StoriesCarousel.tsx",
         "migrations/404_le_storie_le_scrive_solo_un_negozio_approvato.sql"
       ],
       "prova_file": [
-        "tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql"
+        "tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql",
+        "tests/unit/riparazione-r16-carosello-filtra-prima.test.tsx"
       ],
-      "prova_comando": "tests/sql/harness/apply.sh r16_b_prova && psql -X -d r16_b_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql",
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-carosello-filtra-prima.test.tsx",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d5441d45^ --file migrations/404_le_storie_le_scrive_solo_un_negozio_approvato.sql --prove tests/sql/rls/riparazione-r16-storie-solo-negozi.test.sql --sql r16_rimessa_019 --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d93ff753b80972d42d04bf64b9b6878bfad85d99^ --file components/home/StoriesCarousel.tsx --prove tests/unit/riparazione-r16-carosello-filtra-prima.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La 404 sostituisce seller_stories_owner_write (035) con quattro regole: scrivere o modificare una storia solo se negozio approvato (ruolo seller e is_approved, come i prodotti nella 119); leggere e cancellare le proprie resta all'autore. Il carosello filtrava già i non-negozi prima del taglio a 30 (StoriesCarousel.tsx:75-80, dal 5/11), quindi non si tocca. Non applicata a nessun database vero.",
-      "verificato_da": "revisore wf_e8c81381 lotto B: prova SQL verde e run.sh intero verde sul database ricostruito; la 404 lascia al negozio leggere e cancellare le proprie storie; nota minore in nuovi_difetti_visti (l'admin nell'area negozio lascia una foto orfana)."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro: la 404 lascia scrivere storie solo al negozio approvato. Giro di correzione: il carosello filtra i negozi in vetrina dentro la query (join interno sulla vista seller_public_profiles) prima del tetto di 30, invece di tagliare a 200 e filtrare dopo.",
+      "verificato_da": "revisore del giro di correzione (modello grande): non_fatto su d93ff753. L'aggancio seller_public_profiles!inner(id) non porta il nome del vincolo; seller_story_views (migrations/035:57-62) è una tabella-ponte fra seller_stories e profiles, quindi PostgREST vede due relazioni verso la vista e risponderebbe PGRST201: scatterebbe sempre il ripiego, cioè il comportamento di prima. Ragionamento dalle regole di PostgREST, non provato su un PostgREST vero. Prova SQL della 404 e vicine verdi.",
+      "commit_voce": [
+        "d5441d45739688a8e232a7506a7033d29168005e",
+        "d93ff753b80972d42d04bf64b9b6878bfad85d99"
+      ],
+      "nota": "Giro di correzione (K08, 14/11): fatta la seconda metà, «il carosello filtra prima di tagliare, lato database». La query incorpora negozio:seller_public_profiles!inner(id) (la vista tiene solo is_approved, store_name non nullo, role seller) prima di order e limit(30): Postgres scarta le storie fuori vetrina e poi taglia. Il filtro client resta come seconda cintura. Ripiego: se il servizio dati risponde PGRST200/201 (relazione sconosciuta) legge come prima, 200 storie e poi filtro, con logger.warn. Serve al finto condiviso tests/unit/aiuti/database-della-vetrina.ts (non di R16) e a non spegnere la home se la cache dello schema non vede la relazione. Niente migrazione, scelta della regista. Non provato su un PostgREST vero. Bocciata dal revisore del giro (vedi verificato_da): il codice di d93ff753 non peggiora niente rispetto a prima (nel caso peggiore fa come prima), ma probabilmente non chiude la seconda metà. Fermato per tetto di costo superato: 11,34 $ su 9 $.",
+      "cosa_resta": "(1) L'aggancio col nome del vincolo: negozio:seller_public_profiles!seller_stories_seller_id_fkey!inner(id) in components/home/StoriesCarousel.tsx:84. (2) Il ripiego (righe 90-101) non fa passare storie fuori vetrina ma è il difetto originale con un solo console.warn: togliere PGRST201 dal ripiego, e il ripiego intero quando il finto condiviso tests/unit/aiuti/database-della-vetrina.ts (non di R16, circa righe 67-74 e 184) conosce l'aggancio seller_stories → seller_public_profiles (serve_file_altrui). (3) Il filtro sull'insegna non valida anche nella domanda (dettagli alla regista, riservati). (4) La prova: il finto deve rispondere PGRST201 senza il nome del vincolo, controllare che il taglio nella domanda sia 30 (oggi passa anche il codice vecchio con STORIE_LETTE=1000), avere il caso dell'insegna non valida e un ripiego con più di 200 storie."
     },
     {
       "id": "R16-012",
@@ -355,10 +363,11 @@
       "id": "R16-020",
       "chiave": "stati-ui|se la lettura del prodotto non riesce, la pagina di modifica dice «prodotto non trovato» e non offre «riprova»",
       "esito": "riparato",
-      "commit": "27b1a9ce5d1becfaadf109a6bdf5f068c9ada809",
+      "commit": "7f475f21b37394f5acc0a56911ee7eb57c255801",
       "commit_voce": [
         "d368bfe2b7a1a0fce5ee6e6bc49acd6217da9ee4",
-        "27b1a9ce5d1becfaadf109a6bdf5f068c9ada809"
+        "27b1a9ce5d1becfaadf109a6bdf5f068c9ada809",
+        "7f475f21b37394f5acc0a56911ee7eb57c255801"
       ],
       "file_toccati": [
         "app/seller/products/[id]/edit/page.tsx"
@@ -372,34 +381,42 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27b1a9ce^ --file \"app/seller/products/[id]/edit/page.tsx\" --prove tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7f475f21b37394f5acc0a56911ee7eb57c255801^ --file \"app/seller/products/[id]/edit/page.tsx\" --prove tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Solo PGRST116 vale «Prodotto non trovato»; ogni altro errore di lettura, compreso l'errore di getUser quando cade la rete (nome diverso da AuthSessionMissingError), mostra «Non riesco a leggere il prodotto…» con «Riprova». La sessione davvero mancante resta «Non autenticato», il prodotto di un altro negozio resta col suo messaggio.",
-      "verificato_da": "nessun revisore nel giro di completamento: voce minore (la regola delle 12:58 chiede il revisore solo per gravi e bloccanti) e tetto di costo raggiunto; prova eseguita e prova rimessa uscita 0; npm run verify verde su 0628993d."
+      "cosa_ho_fatto": "Primo giro: solo PGRST116 vale «Prodotto non trovato», ogni altro errore dà «Non riesco a leggere il prodotto…» con Riprova. Giro di correzione: lo stesso avviso con Riprova quando la lettura è in pausa perché il telefono è senza rete (onlineManager offline).",
+      "verificato_da": "revisore del giro di correzione (modello grande): regge. Sonde sulla pagina vera con onlineManager e retry 1: senza rete da subito, Riprova premuto offline, nuovo tentativo in pausa dopo un fallimento, 500 poi offline, ritorno della rete; PGRST116, prodotto altrui e «Non autenticato» invariati; la prova cade togliendo la correzione.",
+      "nota": "Giro di correzione (K08, 14/11): coperto il caso «senza rete». La lettura in pausa (product undefined e fetchStatus paused) mostra «Non riesco a leggere il prodotto…» con Riprova, non più «Prodotto non trovato». La query disabilitata (idle) resta fuori. PGRST116, prodotto altrui e «Non autenticato» invariati."
     },
     {
       "id": "R16-021",
       "chiave": "stati-ui|se le categorie non arrivano, il modulo «nuovo prodotto» mostra un elenco vuoto e poi chiede di scegliere una categoria che non c'è",
       "esito": "riparato",
-      "commit": "0834f8e1e16c1ede8420fb497cadb07d2d68c640",
+      "commit": "cdcb4f2eef6ae4d9207e7e195d132b870c12f5cf",
       "file_toccati": [
+        "app/seller/products/[id]/edit/page.tsx",
         "app/seller/products/new/page.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx"
+        "tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx",
+        "tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx"
       ],
-      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx",
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0834f8e1^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cdcb4f2eef6ae4d9207e7e195d132b870c12f5cf^ --file \"app/seller/products/new/page.tsx,app/seller/products/[id]/edit/page.tsx\" --prove tests/unit/riparazione-r16-nuovo-prodotto-categorie.test.tsx,tests/unit/riparazione-r16-modifica-lettura-caduta.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La pagina legge isError, isLoading e refetch delle categorie: mentre carica mostra il caricamento; se la lettura fallisce e l'elenco è vuoto, al posto del modulo compare l'avviso «Non riesco a leggere le categorie» con «Riprova», come nella pagina di modifica.",
-      "verificato_da": "revisore wf_e8c81381 lotto C: prova rilanciata, avviso con Riprova al posto del modulo vuoto; regge."
+      "cosa_ho_fatto": "Primo giro: avviso con Riprova se la lettura delle categorie fallisce. Giro di correzione: lo stesso avviso quando la lettura è in pausa senza rete, in new/page.tsx e nel gemello edit/page.tsx, mai il modulo con 0 categorie.",
+      "verificato_da": "revisore del giro di correzione (modello grande): regge. Sonde su «Nuovo» e «Modifica»: senza rete senza categorie, Riprova offline, nuovo tentativo in pausa, ritorno della rete (modulo con le categorie), categorie in memoria e niente rete (il modulo si apre); prova rimessa rossa senza la correzione.",
+      "commit_voce": [
+        "0834f8e1e16c1ede8420fb497cadb07d2d68c640",
+        "cdcb4f2eef6ae4d9207e7e195d132b870c12f5cf"
+      ],
+      "nota": "Giro di correzione (K08, 14/11): coperto il caso «senza rete». Categorie in pausa senza dati (isPending e fetchStatus paused, elenco vuoto) mostrano l'avviso «Non riesco a leggere le categorie» con Riprova, sia in nuovo prodotto sia nella pagina gemella di modifica. Con le categorie già in memoria il modulo si apre come prima."
     },
     {
       "id": "R16-003",
@@ -576,6 +593,41 @@
       "dimensione": "rls-database",
       "severita": "minore",
       "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "La modifica prodotto dell'amministratore dice «Prodotto non trovato» senza Riprova quando la lettura non riesce",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/products/[id]/edit/page.tsx:137-141",
+      "descrizione": "Fuori voce (K08 su R16-020): l'errore di Supabase non è un Error e cade nel ramo «non trovato». File non di R16."
+    },
+    {
+      "titolo": "«Duplica prodotto» senza rete apre il modulo vuoto finché la rete non torna",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/products/new/page.tsx:130,151,279",
+      "descrizione": "Le letture «from» (e «recesso», circa riga 102) non gestiscono la lettura in pausa (fetchStatus paused). Fuori dalle voci di questo giro."
+    },
+    {
+      "titolo": "Senza rete il modulo prodotto crede che il negozio non offra la consegna veloce",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "lib/queries/consegna-veloce-del-negozio.ts:52-56",
+      "descrizione": "Offline e senza dato in memoria: offre undefined e nonLetta false; il rischio è un salvataggio fatto offline. File non di R16."
+    },
+    {
+      "titolo": "Il finto condiviso della vetrina non conosce l'aggancio storie → vista dei negozi",
+      "dimensione": "test",
+      "severita": "minore",
+      "file": "tests/unit/aiuti/database-della-vetrina.ts:67-74,184",
+      "descrizione": "Risponde PGRST200, quindi le prove che lo usano coprono solo il ripiego del carosello e non la strada nuova. File non di R16."
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (carosello delle storie): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
     }
   ],
   "domande_per_nicola": [
@@ -584,7 +636,20 @@
     "R16-003: va bene che lo script del rilascio scriva per ogni migrazione nuova il commento '-- md5:<impronta>' nella colonna statements di supabase_migrations.schema_migrations? È un commento SQL (rieseguito non fa niente); le righe vecchie restano senza impronta e si confrontano solo per numero e nome. È la modifica al registro che il 5/11 era stata rimandata come «da firmare»."
   ],
   "conto": {
-    "agenti": 14,
-    "nota": "4 riparatori di lotto (A-D) + 1 correzione (R16-006) + 5 revisori (workflow wf_e8c81381) + lotto E (sonnet) + lotto F (R16-004) + 1 revisore di R16-004 sul modello grande = 14 su 18. Costo da get_session: 65,80 $ su un tetto di 66 $."
+    "agenti": 17,
+    "nota": "Primo giro: 14 (vedi storia del referto, 65,80 $). Giro di correzione 14/11: 3 subagenti (lotto R16-020/021 sonnet, R16-019 modello grande, 1 revisore modello grande). Costo della sessione del giro da get_session: 11,34 $ su un tetto di 9 $."
+  },
+  "passaggio": {
+    "quando": "2026-11-14 10:30",
+    "fatte": [
+      "R16-020 riparato e verificato (7f475f21)",
+      "R16-021 riparato e verificato (cdcb4f2e)"
+    ],
+    "aperte": [
+      "R16-019 parziale: d93ff753 bocciato dal revisore, resta quanto scritto in cosa_resta (1)-(4)"
+    ],
+    "spesa": "11,34 $ su un tetto di 9 $ (get_session); 3 subagenti su 3; storia 165 mila token",
+    "ramo": "claude/magical-hamilton-xouwr8-m16",
+    "nota": "Il giro si ferma per il tetto. Una 2.0, se la regista la apre, riprende solo R16-019 dai punti (1)-(4) partendo dalla testa del ramo."
   }
 }
