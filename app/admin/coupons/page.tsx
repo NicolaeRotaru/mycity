@@ -191,8 +191,6 @@ export default function AdminCouponsPage() {
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
                 min={0}
-                // R18-019: una percentuale oltre 100 regala più della spesa (scritto «150» invece di «15»).
-                max={form.type === 'PERCENT' ? 100 : undefined}
                 step={form.type === 'PERCENT' ? 1 : 0.5}
               />
             )}
