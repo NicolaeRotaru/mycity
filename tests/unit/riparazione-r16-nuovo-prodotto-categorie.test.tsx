@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { screen } from '@testing-library/dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 
 const stato = vi.hoisted(() => {
   type Esito = { data: unknown; error: unknown };
@@ -60,18 +60,20 @@ vi.mock('@/components/seller/ProductForm', async () => {
   return { default: (p: { categories: unknown[] }) => ce('p', null, `MODULO con ${p.categories.length} categorie`) };
 });
 
+import { queryKeys } from '@/lib/queries/keys';
 import NewProductPage from '@/app/seller/products/new/page';
 
 const accesi: Root[] = [];
 const aspetta = (ms: number) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 
-async function apri() {
+async function apri(prepara?: (qc: QueryClient) => void) {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   const radice = document.createElement('div');
   document.body.appendChild(radice);
   const root = createRoot(radice);
   accesi.push(root);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  prepara?.(qc);
   await act(async () => { root.render(createElement(QueryClientProvider, { client: qc }, createElement(NewProductPage))); });
   await aspetta(30);
   return radice;
@@ -82,6 +84,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   for (const r of accesi.splice(0)) act(() => r.unmount());
   document.body.innerHTML = '';
 });
@@ -107,5 +110,32 @@ describe('R16-021 · «Nuovo prodotto» senza categorie lette', () => {
     const radice = await apri();
     expect(radice.textContent).toContain('MODULO con 1 categorie');
     expect(radice.textContent).not.toContain('Non riesco a leggere le categorie');
+  });
+});
+
+describe('R16-021 · «Nuovo prodotto» senza rete: categorie in pausa', () => {
+  it('rete assente e nessuna categoria in memoria: l\'avviso con «Riprova», non il modulo con 0 categorie', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const radice = await apri();
+      expect(radice.textContent).not.toContain('MODULO');
+      expect(radice.textContent).toContain('Non riesco a leggere le categorie');
+      expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('rete assente ma categorie già in memoria: il modulo si apre', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const radice = await apri((qc) => {
+        qc.setQueryData(queryKeys.categories.form, [{ id: 'cat-1', name: 'Panetteria', slug: 'panetteria', parent_id: null }]);
+      });
+      expect(radice.textContent).toContain('MODULO con 1 categorie');
+      expect(radice.textContent).not.toContain('Non riesco a leggere le categorie');
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });
