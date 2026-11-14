@@ -1,6 +1,6 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-14 08:50",
+  "aggiornato": "2026-11-14 09:00",
   "finita": false,
   "testa": "7e5909b2aeafac50988356725f03cd07837c3d08",
   "verifica": {
@@ -640,7 +640,7 @@
     "testa_del_codice": "0da7241687f705f441a83ceae21cecdcb32f7b2e",
     "voci": {
       "R17-013": {
-        "stato": "fatto, revisore B in corso",
+        "stato": "parziale (revisore B): la regola regge, resta il ramo «a mano»",
         "commit": [
           "33cf043",
           "e49c4df"
@@ -650,7 +650,11 @@
         ],
         "prova": "tests/unit/riparazione-r17-cruscotto-quota-su-quello-che-resta.test.ts",
         "rimessa": "regge, uscita 0, --base 0a0fbac --file lib/stripe/webhook/rimborsi-da-fuori.ts",
-        "cosa": "contoDelRimborsoDaFuori: il rimborso che porta l'ordine al lordo pieno (non REVERSAL_FAILED) toglie al negozio netto meno già tolto, come refundOrder (1350, non 1279). e49c4df riporta il file sotto le 600 righe (guardia webhook-diviso-per-mestiere)."
+        "cosa": "contoDelRimborsoDaFuori: il rimborso che porta l'ordine al lordo pieno (non REVERSAL_FAILED) toglie al negozio netto meno già tolto, come refundOrder (1350, non 1279). e49c4df riporta il file sotto le 600 righe (guardia webhook-diviso-per-mestiere).",
+        "difetti_del_revisore": [
+          "BASSO, riprodotto: rimborsi-da-fuori.ts:175 (avviso a :514). Con REVERSAL_FAILED e il rimborso pieno resta la proporzione: refundOrder dice agli amministratori «in tutto 13,50 €», il cruscotto «si aggiungono 12,79 €». Chi segue l'avviso lascia 71 centesimi al negozio: è lo stesso difetto della voce, in quel ramo.",
+          "Nota: su un pagamento di un ordine solo il rimborso dal cruscotto che chiude passa dal ramo pieno; la cura conta per la divisione dei carrelli (registraSullOrdine)."
+        ]
       },
       "R17-017": {
         "stato": "regge (revisore A)",
@@ -683,7 +687,7 @@
         ]
       },
       "R17-016": {
-        "stato": "fatto, revisore B in corso",
+        "stato": "parziale (revisore B): il caso della voce è chiuso, ma un errore di Stripe nel secondo giro lo riapre",
         "commit": [
           "0da7241"
         ],
@@ -694,7 +698,14 @@
         "prova": "tests/unit/riparazione-r17-euro-del-freno-dopo-annullo.test.ts",
         "rimessa": "regge, uscita 0, --base 0da7241^ --file lib/ordini/veloce-non-confermata.ts,lib/stripe/payout.ts",
         "cosa": "(a) euroDelFrenoRimastiPrenotati in fondo a frenoDellaVeloce: prenotazioni del freno 10 min-24 h su ordini con la carta ancora «Adesso» non più NEW → refundOrder con la chiave del freno; contatore euroRipresi. (b) nei 10 minuti con giaResi > 0 e prenotazione del freno: avviso agli amministratori una volta per ordine prima di 'riprova'. Fuori dalla cura scritta: refundOrder (payout.ts ~2244) riconta nel tetto la cifra della chiave già nel libro (sull'ordine annullato si fermava con «importo non valido»); testo dell'avviso senza «a mano» per la prova esistente freno-morto-prima-di-stripe.",
-        "nota": "In produzione serve prima la migrazione 412 (non firmata per il database vero): senza, il secondo giro non trova la tabella e non fa niente. Costo: un euro già finito con l'ordine rimasto «Adesso» si richiama ogni 5 minuti per 24 ore (una lettura dell'elenco Stripe, non rifà niente)."
+        "nota": "In produzione serve prima la migrazione 412 (non firmata per il database vero): senza, il secondo giro non trova la tabella e non fa niente. Costo: un euro già finito con l'ordine rimasto «Adesso» si richiama ogni 5 minuti per 24 ore (una lettura dell'elenco Stripe, non rifà niente).",
+        "difetti_del_revisore": [
+          "ALTO, riprodotto: payout.ts:2569 + veloce-non-confermata.ts:897. Se nel secondo giro stripe.refunds.create lancia (rete, 5xx, 429, rifiuto), il catch di refundOrder storna la prenotazione e CANCELLA la riga del freno dal libro: il secondo giro legge solo quella tabella e non riprova più, il primo non prende l'ordine (non NEW). Ordine 1900, annullo 1800: l'euro non esce mai. L'avviso dei 10 minuti («riprova da solo per un giorno», «il libro lo conta già») diventa falso.",
+          "MEDIO, riprodotto: stesso catch. Risposta di Stripe persa nel secondo giro su ordine accettato: 1 € uscito, rimborsato torna a 0, riga sparita; l'annullo dopo chiede 1900 (nella prova escono 2000 su 1900; su Stripe vero rifiutato su un ordine solo, sul carrello esce dai soldi dell'altro ordine).",
+          "BASSO, riprodotto: payout.ts:2752 e :2423. La ripresa riscrive canceled_at sull'ordine annullato e, su un ordine con bonifico già stornato, payout_status REVERSED → REFUNDED (niente doppio storno).",
+          "BASSO, riprodotto: payout.ts:2181, veloce-non-confermata.ts:883 e :846. L'avviso «Rimborso ripreso: controlla i conti» non ha unaVoltaPer: può partire a ogni giro (fino a 288 in 24 ore). Gli euro già finiti contano come euroRipresi e scrivono «finito di rendere». limit(100) senza ordinamento include le righe riuscite delle ultime 24 ore.",
+          "BASSO, solo letto: payout.ts:2248. Il riconteggio del tetto vale anche per return_<id> e dispute_<id>: nessun doppio rimborso trovato (elenco Stripe prima, 'altra_cifra', tetto del lordo), resta un rischio con un rimborso a mano di mezzo."
+        ]
       }
     },
     "controlli": {
@@ -703,10 +714,10 @@
       "verify": "NON lanciato: fermato al tetto prima della fine delle correzioni."
     },
     "da_fare_per_la_2_0": [
-      "Leggere il rapporto del revisore B (R17-016 e R17-013) se è arrivato: la regista lo ha o lo chiede a questa sessione.",
+      "Il rapporto del revisore B è qui sopra (R17-016 e R17-013 parziali). Per R17-016 la cura più piccola del difetto ALTO: il secondo giro non deve perdere la riga del freno quando Stripe cade (oppure lo storno nel catch, per la chiave del freno, non deve cancellarla), da decidere senza allargare.",
       "Chiudere D1 e D2 di R17-015 (piccoli, in payout.ts), con un caso nella prova della voce che cade senza la cura; R17-015 resta parziale per D3/D4 con cosa_resta.",
       "Aggiornare le 4 voci del referto (esito, commit, prova, rimessa, verificato_da), npm run verify con NODE_OPTIONS=--max-old-space-size=6144 sulla testa, verifica.testa, finita true, valida-referto e guardia-ramo."
     ],
-    "spesa": "usage.cost_usd 20,39 $ a 08:49 (tetto 12 $); 3 subagenti su 4 (riparatore, revisore A, revisore B in corso)."
+    "spesa": "usage.cost_usd 20,39 $ a 08:49 (tetto 12 $), ultimo valore letto prima del rapporto del revisore B; 3 subagenti su 4 (riparatore, revisore A, revisore B), tutti finiti."
   }
 }
