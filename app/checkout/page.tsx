@@ -72,53 +72,6 @@ import { queryKeys } from '@/lib/queries/keys';
  */
 const MOTIVO_VELOCE_IN_ATTESA = 'Aspetto la risposta sulla consegna veloce: se non vuoi aspettare, scegli Oggi o Domani.';
 
-/**
- * 13/11/2026 (R19-015) — LA FASCIA E L'INDIRIZZO DEL PRIMO INVIO DI UN TENTATIVO.
- *
- * La chiave del tentativo resta legata al carrello: se la risposta si perde e il selettore sposta la
- * fascia da solo, una chiave nuova creerebbe un secondo ordine vero (provato e tolto il 5/11). Ma col
- * carrello uguale e un'altra fascia o un altro indirizzo, la rotta risponde «ripetuto» con l'ordine
- * di prima, e la cassa diceva «Ordine effettuato!» come se valesse la scelta nuova. Qui si ricorda
- * cosa portava il PRIMO invio con quella chiave, per dire la verità quando torna l'ordine di prima.
- */
-const CONSEGNA_DEL_TENTATIVO = 'mycity:cod:tentativo:consegna';
-/** `giorno`: la data «AAAA-MM-GG» del giorno di Roma della fascia (R19-017 ④); '' se non c'è. */
-type ConsegnaDelTentativo = { fascia: string; giorno: string; indirizzo: string };
-
-function consegnaDelPrimoInvio(chiave: string, adesso: ConsegnaDelTentativo): ConsegnaDelTentativo {
-  try {
-    const letta = JSON.parse(window.sessionStorage.getItem(CONSEGNA_DEL_TENTATIVO) ?? 'null') as
-      | { chiave?: unknown; fascia?: unknown; giorno?: unknown; indirizzo?: unknown }
-      | null;
-    if (letta && letta.chiave === chiave && typeof letta.fascia === 'string' && typeof letta.indirizzo === 'string') {
-      return { fascia: letta.fascia, giorno: typeof letta.giorno === 'string' ? letta.giorno : '', indirizzo: letta.indirizzo };
-    }
-    window.sessionStorage.setItem(CONSEGNA_DEL_TENTATIVO, JSON.stringify({ chiave, ...adesso }));
-  } catch {
-    /* memoria negata: si confronta con l'invio di adesso */
-  }
-  return adesso;
-}
-
-/**
- * 13/11/2026 (R19-015, giro di correzione) — Stessa consegna vuol dire stesso GIORNO e stesso
- * orario, non la stessa etichetta: dopo la mezzanotte «Domani · 9:00–11:00» di venerdì diventa
- * «Oggi · 9:00–11:00» (R19-017) ed è la stessa consegna di sabato. Confrontate come testo davano un
- * «l'ordine valido è quello di prima» falso. Senza la data (un invio salvato prima di questa
- * riparazione) si confronta l'etichetta, come prima.
- */
-function stessaConsegna(a: ConsegnaDelTentativo, b: ConsegnaDelTentativo): boolean {
-  if (a.indirizzo !== b.indirizzo) return false;
-  if (!a.giorno || !b.giorno) return a.fascia === b.fascia;
-  const orario = (fascia: string) => fascia.replace(/^(Oggi|Domani) · /, '');
-  return a.giorno === b.giorno && orario(a.fascia) === orario(b.fascia);
-}
-
-function fraseOrdineDiPrima(c: ConsegnaDelTentativo): string {
-  const dove = c.indirizzo ? ` (${c.indirizzo})` : '';
-  return `Questo carrello l'avevi già ordinato con «${c.fascia}»${dove}: l'ordine valido è quello e non ne abbiamo creato un altro. Per un'altra fascia o un altro indirizzo annullalo dalla pagina dell'ordine, finché il negozio non lo accetta, e rifallo.`;
-}
-
 type AddressForm = {
   fullName: string;
   address: string;
@@ -1021,10 +974,10 @@ export default function CheckoutPage() {
     [],
   );
 
-  const chiudiIlTentativo = useCallback(() => {
-    chiudiTentativo(typeof window === 'undefined' ? null : window.sessionStorage);
-    try { window.sessionStorage.removeItem(CONSEGNA_DEL_TENTATIVO); } catch { /* niente da chiudere */ }
-  }, []);
+  const chiudiIlTentativo = useCallback(
+    () => chiudiTentativo(typeof window === 'undefined' ? null : window.sessionStorage),
+    [],
+  );
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -1068,13 +1021,6 @@ export default function CheckoutPage() {
         .sort()
         .join('|');
       const chiaveTentativo = `cod-${nuovaChiaveTentativo(improntaCarrello)}`;
-      // R19-015 — fascia e indirizzo di adesso, e quelli del primo invio con questa chiave.
-      const consegnaOra: ConsegnaDelTentativo = {
-        fascia: deliverySlot ?? '',
-        giorno: dataDellaConsegna ?? '',
-        indirizzo: pickupInStore ? '' : `${form.address.trim()}, ${form.zip.trim()} ${form.city.trim()}`,
-      };
-      const consegnaDiPrima = consegnaDelPrimoInvio(chiaveTentativo, consegnaOra);
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },
@@ -1132,10 +1078,6 @@ export default function CheckoutPage() {
       // Analytics. Adesso legge `leggiOrdiniCod`, che conosce tutte e due le
       // forme della risposta.
       const { orderIds: createdOrders, ordini: ordiniVeri } = leggiOrdiniCod(body);
-      // R19-015 — «ripetuto» con un'altra fascia o un altro indirizzo: l'ordine è quello di prima.
-      const corpo = body as { ripetuto?: unknown; data?: { ripetuto?: unknown } | null };
-      const ripetuto = corpo.ripetuto === true || corpo.data?.ripetuto === true;
-      const ordineDiPrima = ripetuto && !stessaConsegna(consegnaDiPrima, consegnaOra) ? consegnaDiPrima : null;
       // #210 e #213 — Prima partiva UN evento solo, con due difetti dentro.
       //
       // Il primo: l'importo era `grandTotal`, cioe' la stima del browser prima
@@ -1155,9 +1097,9 @@ export default function CheckoutPage() {
           checkoutId: carrelloId,
         });
       }
-      return { orderIds: createdOrders, ordineDiPrima };
+      return createdOrders;
     },
-    onSuccess: ({ orderIds, ordineDiPrima }) => {
+    onSuccess: (orderIds) => {
       setInPartenza(true);
       // Il tentativo e' andato a buon fine: la sua chiave ha finito il lavoro.
       // Se restasse, il prossimo ordine identico si vedrebbe restituire questo.
@@ -1172,15 +1114,12 @@ export default function CheckoutPage() {
       clearCart({ dopoUnOrdine: true });
       // Behavioral Scientist + CRO: gratifica immediata su purchase success.
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
-      // R19-015 — Non con l'ordine di prima: lì la cassa ha appena detto che l'ordine nuovo non c'è,
-      // e i coriandoli sulla pagina dell'ordine direbbero il contrario.
-      try { if (!ordineDiPrima) sessionStorage.setItem('mc_just_ordered', '1'); } catch { /* noop */ }
-      if (ordineDiPrima) toast.warning(fraseOrdineDiPrima(ordineDiPrima), { duration: 15_000 });
+      try { sessionStorage.setItem('mc_just_ordered', '1'); } catch { /* noop */ }
       if (orderIds.length === 1) {
-        if (!ordineDiPrima) toast.success('Ordine effettuato!');
+        toast.success('Ordine effettuato!');
         router.push(`/orders/${orderIds[0]}`);
       } else {
-        if (!ordineDiPrima) toast.success(`${orderIds.length} ordini effettuati!`);
+        toast.success(`${orderIds.length} ordini effettuati!`);
         router.push('/orders');
       }
     },
