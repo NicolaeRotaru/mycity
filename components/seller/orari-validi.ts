@@ -20,8 +20,8 @@ const orario = (min: number): string =>
 /**
  * «00:00» in chiusura vuol dire mezzanotte di quel giorno (lo legge così anche lib/store-hours.ts):
  * un negozio aperto fino a mezzanotte scrive 18:00–00:00. Nel controllo vale solo se l'apertura c'è
- * ed è dopo mezzanotte (00:00–00:00 resta un errore); la proposta della fascia dopo la legge sempre
- * come mezzanotte (vedi `prossimaFascia`).
+ * ed è dopo mezzanotte (00:00–00:00 resta un errore); per la proposta della fascia dopo vedi
+ * `prossimaFascia`.
  */
 const chiusuraInMinuti = (apre: number, chiude: number): number =>
   chiude === 0 && apre > 0 ? 24 * 60 : chiude;
@@ -66,11 +66,14 @@ export function erroreDegliOrari(settimana: StoreHours): string | null {
  */
 export function prossimaFascia(fasce: HoursInterval[] | undefined): HoursInterval {
   const coda = fasce && fasce.length > 0 ? fasce[fasce.length - 1] : undefined;
-  // Per la proposta una chiusura «00:00» è SEMPRE mezzanotte, anche con l'apertura vuota o non valida
-  // (['', '00:00'] mentre il negoziante la riscrive, o ['00:00', '00:00'] già segnalata): leggerla come 0
-  // farebbe proporre di nuovo la notte, e rimessa l'apertura la fascia 03:00–06:00 passerebbe il controllo.
+  const apre = coda ? minuti(coda[0]) : NaN;
   const chiude = coda ? minuti(coda[1]) : NaN;
-  const ultima = chiude === 0 ? 24 * 60 : chiude;
+  // La proposta parte dopo la fine dell'ultima fascia. Se l'ultima non è una fascia valida dello stesso
+  // giorno — chiude a mezzanotte (18:00–00:00), dopo mezzanotte (18:00–01:00, che il negoziante correggerà
+  // in 00:00 o 23:59 come gli chiede il messaggio), oppure non ha un'apertura leggibile (['', '00:00'] mentre
+  // la riscrive) — per la proposta finisce a mezzanotte. Leggerla col suo numero faceva proporre la notte
+  // (03:00–06:00, 04:00–07:00), e corretta la riga quella fascia passava il controllo in silenzio.
+  const ultima = !Number.isNaN(chiude) && !(chiude > apre) ? 24 * 60 : chiude;
   if (Number.isNaN(ultima)) return ['09:00', '13:00'];
   const inizio = Math.min(ultima + 180, 22 * 60);
   return [orario(inizio), orario(Math.min(inizio + 180, 23 * 60 + 59))];

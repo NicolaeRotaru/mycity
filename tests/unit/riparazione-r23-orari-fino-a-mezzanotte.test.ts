@@ -83,3 +83,42 @@ describe("R23-015 correzione — la proposta non torna alla notte con l'apertura
     expect(erroreDelleFasce([...rimesse, proposta])).toMatch(/sovrappongono/);
   });
 });
+
+/**
+ * R23-015 correzione, seconda verifica (14/11/2026) — Restava la stessa strada con una chiusura dopo
+ * mezzanotte: un bar che scrive 18:00–01:00 (riga sbagliata) si sentiva proporre 04:00–07:00; corretta la
+ * chiusura in 00:00 o 23:59, come chiede il messaggio d'errore, la fascia delle 4 di notte passava il
+ * controllo. Una riga che non è una fascia valida dello stesso giorno, per la proposta, finisce a mezzanotte.
+ */
+describe('R23-015 correzione — la proposta dopo una riga sbagliata che passa la mezzanotte', () => {
+  const ore = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+  it('18:00–01:00 corretta in 00:00 o 23:59: la proposta non si salva in silenzio', () => {
+    for (const [a, c] of [['18:00', '01:00'], ['12:00', '00:30'], ['20:00', '02:59'], ['23:00', '00:01']]) {
+      const proposta = prossimaFascia([[a, c]]);
+      for (const corretta of ['00:00', '23:59']) {
+        expect(
+          erroreDelleFasce([[a, corretta], proposta]),
+          `${a}–${c} propone ${proposta.join('–')}, e corretta in ${a}–${corretta} passa il controllo`,
+        ).toMatch(/sovrappongono/);
+      }
+    }
+  });
+
+  it('nessuna riga sbagliata fa proporre una fascia di notte', () => {
+    for (let apre = 0; apre < 24 * 60; apre += 30) {
+      for (let chiude = 0; chiude < 24 * 60; chiude += 5) {
+        if (chiude > apre) continue; // riga valida dello stesso giorno: non è il caso di questa prova
+        for (const prima of [[], [['08:00', '12:00']]] as HoursInterval[][]) {
+          const proposta = prossimaFascia([...prima, [ore(apre), ore(chiude)]]);
+          expect(proposta, `dopo ${ore(apre)}–${ore(chiude)}`).toEqual(['22:00', '23:59']);
+        }
+      }
+    }
+  });
+
+  it('una fascia di notte valida, scritta apposta, resta letta col suo orario', () => {
+    expect(prossimaFascia([['00:00', '02:00']])).toEqual(['05:00', '08:00']);
+    expect(prossimaFascia([['18:00', '00:00'], ['01:00', '02:00']])).toEqual(['05:00', '08:00']);
+  });
+});
