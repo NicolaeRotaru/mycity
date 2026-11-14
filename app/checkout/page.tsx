@@ -56,7 +56,6 @@ import {
   fasciaDaRimettere,
   giornoDaRimettere,
   metodoDaRimettere,
-  type Bozza,
 } from '@/lib/bozza-checkout';
 import { OrderSummary, vaiAlPrimoBlocco } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
@@ -566,13 +565,6 @@ export default function CheckoutPage() {
 
   // Defer-the-wall: ripristina l'indirizzo digitato da ospite prima del login
   // (salvato in handleSubmit), così non va perso dopo l'accesso.
-  //
-  // 13/11/2026 (R19-012) — Giorno e fasce della bozza aspettano gli orari dei negozi. L'effetto gira
-  // una volta al montaggio, quando la lettura del carrello (e con lei `orariNegozi`) non è ancora
-  // arrivata: la regola unica riceveva una lista vuota e giovedì alle 14:00 rimetteva
-  // «Oggi · 16:30–18:00» a un forno chiuso. Qui si legge la bozza al montaggio, e la parte della
-  // consegna si rimette nell'effetto sotto, quando gli orari ci sono.
-  const consegnaDellaBozza = useRef<Bozza | null>(null);
   // R19-004 — L'indirizzo che la bozza ha rimesso nel modulo (vedi `mattonellaDellaBozza`).
   const [indirizzoDellaBozza, setIndirizzoDellaBozza] = useState<Partial<typeof form> | null>(null);
   useEffect(() => {
@@ -599,28 +591,20 @@ export default function CheckoutPage() {
       // 30/10/2026 (ondata 18) — L'ora di Roma, come la vetrina e le rotte: non quella del telefono.
       // 30/10/2026 (ondata 22) — La Date intera, coi minuti, e gli orari dei negozi: la stessa
       // regola della cassa e delle rotte. Con l'ora sola, alle 19:15 si rimetteva una fascia finita.
+      const adesso = romeNow();
       const metodo = metodoDaRimettere(bozza.metodoPagamento, stripeAvailable);
       if (metodo) setPaymentMethod(metodo);
-      consegnaDellaBozza.current = bozza;
+      const giorno = giornoDaRimettere(bozza.giorno, adesso, orariNegozi);
+      if (giorno) setSlotDay(giorno);
+      const oggi = fasciaDaRimettere('today', bozza.fasciaOggi, adesso, orariNegozi);
+      if (oggi) setSlotTodayTime(oggi);
+      const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, adesso, orariNegozi);
+      if (domani) setSlotTomorrowTime(domani);
 
       localStorage.removeItem('mc_checkout_draft');
       sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
   }, []);
-
-  // R19-012 — La consegna della bozza, quando la lettura del carrello ha portato gli orari dei negozi.
-  useEffect(() => {
-    const bozza = consegnaDellaBozza.current;
-    if (!bozza || !cartData) return;
-    consegnaDellaBozza.current = null;
-    const adesso = romeNow();
-    const giorno = giornoDaRimettere(bozza.giorno, adesso, orariNegozi);
-    if (giorno) setSlotDay(giorno);
-    const oggi = fasciaDaRimettere('today', bozza.fasciaOggi, adesso, orariNegozi);
-    if (oggi) setSlotTodayTime(oggi);
-    const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, adesso, orariNegozi);
-    if (domani) setSlotTomorrowTime(domani);
-  }, [cartData, orariNegozi]);
 
   /**
    * 13/11/2026 (R19-004, giro di correzione) — LA BOZZA TORNAVA IN UN MODULO NASCOSTO.
