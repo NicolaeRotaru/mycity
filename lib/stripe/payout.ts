@@ -179,7 +179,7 @@ export function contantiPagabiliDaStripe(
 async function bonificoGiaFatto(
   stripe: ReturnType<typeof getStripe>,
   q: { gruppo: string; ordineId: string; tentativo: number; delFattorino: boolean; turnoDiPrima: string | null },
-): Promise<{ id: string; amount: number | null } | null> {
+): Promise<{ id: string; amount: number | null; amount_reversed: number | null } | null> {
   try {
     const esistenti = await stripe.transfers.list({ transfer_group: q.gruppo, limit: 100 });
     const trovato = (esistenti.data ?? []).find(
@@ -188,7 +188,15 @@ async function bonificoGiaFatto(
         (t.metadata?.kind === 'rider_fee') === q.delFattorino &&
         (t.metadata?.tentativo ?? '0') === String(q.tentativo),
     );
-    return trovato ? { id: trovato.id, amount: typeof trovato.amount === 'number' ? trovato.amount : null } : null;
+    // 14/11/2026 (R17-015 correzione) — anche quanto ne è già stato stornato: al negozio è arrivato il netto
+    // del bonifico, ed è quello che `registraIlBonificoAlNegozio` confronta con la quota.
+    return trovato
+      ? {
+          id: trovato.id,
+          amount: typeof trovato.amount === 'number' ? trovato.amount : null,
+          amount_reversed: typeof trovato.amount_reversed === 'number' ? trovato.amount_reversed : null,
+        }
+      : null;
   } catch (e) {
     if (q.turnoDiPrima) {
       throw new Error(`elenco dei bonifici non consultabile dopo un turno di prima: non rifaccio il bonifico alla cieca (${q.ordineId})`);
@@ -377,7 +385,8 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       logger.warn('[stripe] bonifico al negozio gia esistente: registrato invece di rifarlo', {
         orderId: order.id, transferId: gia.id,
       });
-      return await registraIlBonificoAlNegozio(order.id, gia.id, gia.amount ?? daVersare);
+      // R17-015 correzione — il netto del bonifico ritrovato (meno quanto ne è già stato stornato).
+      return await registraIlBonificoAlNegozio(order.id, gia.id, gia.amount != null ? gia.amount - (gia.amount_reversed ?? 0) : daVersare);
     }
 
     const transfer = await stripe.transfers.create(
@@ -505,6 +514,67 @@ async function stornaIlBonificoDellOrdineRimborsato(
   return 'fallito';
 }
 
+/**
+ * 14/11/2026 (R17-015 correzione) — LA QUOTA SCRITTA MENTRE IL BONIFICO PARTIVA.
+ *
+ * Il bonifico parte con gli importi della riga presa col turno. Ma fra il turno e la scrittura di
+ * TRANSFERRED un rimborso può scrivere la quota del negozio «nel bonifico da fare» (lo stato è
+ * PROCESSING, il bonifico non risulta ancora partito): la quota restava solo sulla carta, e il
+ * negozio teneva il netto intero. La scrittura di TRANSFERRED restituisce la riga com'è DOPO, nella
+ * stessa istruzione: se il bonifico è più di quello che al negozio spetta adesso (il netto meno la
+ * quota tolta), la differenza si storna subito su quel bonifico. `seller_payout_reversed_cents` non
+ * si tocca: quella quota è già contata. La chiave dice bonifico e quota, così rifare lo stesso conto
+ * non fa un secondo storno, e non si confonde con quelle di `reverseOrderTransfer` (`_tot_`) e di
+ * `stornaIlBonificoDellOrdineRimborsato` (`_bonifico_`). Una riga senza i due importi (un finto
+ * vecchio che restituisce solo `id`) non si confronta. Non lancia: il bonifico è già uscito.
+ */
+const COLONNE_DOPO_IL_BONIFICO = 'id, seller_payout_cents, seller_payout_reversed_cents';
+
+async function stornaLaQuotaScrittaMentrePartiva(
+  orderId: string,
+  transferId: string,
+  importoCents: number,
+  riga: unknown,
+): Promise<void> {
+  const dopo = (riga ?? {}) as { seller_payout_cents?: number | null; seller_payout_reversed_cents?: number | null };
+  if (typeof dopo.seller_payout_cents !== 'number' || !('seller_payout_reversed_cents' in dopo)) return;
+  const quota = Number(dopo.seller_payout_reversed_cents ?? 0);
+  const eccesso = importoCents - Math.max(0, dopo.seller_payout_cents - quota);
+  if (eccesso <= 0) return;
+  const admin = getAdminSupabase();
+  try {
+    const reversal = await getStripe().transfers.createReversal(
+      transferId,
+      { amount: eccesso, metadata: { order_id: orderId } },
+      { idempotencyKey: `reversal_${orderId}_quota_${transferId}_${quota}` },
+    );
+    const { error } = await admin.from('orders').update({ stripe_reversal_id: reversal.id }).eq('id', orderId);
+    if (error) {
+      logger.error('[stripe] quota scritta mentre partiva il bonifico: storno fatto ma non scritto sull ordine', {
+        orderId, transferId, reversalId: reversal.id, message: error.message,
+      });
+    }
+    logger.spesa('[stripe] quota del negozio scritta mentre partiva il bonifico: differenza stornata', {
+      orderId, transferId, centesimi: eccesso,
+    });
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message : 'errore sconosciuto';
+    logger.error('[stripe] quota scritta mentre partiva il bonifico: storno non riuscito', { orderId, transferId, centesimi: eccesso, motivo });
+    const { error } = await admin
+      .from('orders')
+      .update({ payout_status: 'REVERSAL_FAILED', reversal_error: motivo.slice(0, 500) })
+      .eq('id', orderId);
+    if (error) logger.error('[stripe] storno mancato non segnato sull ordine', { orderId, message: error.message });
+    await notifyAdmins(
+      '⚠️ Storno al venditore non riuscito',
+      `Il bonifico ${transferId} di ${formatPriceFromCents(importoCents)} al negozio dell'ordine ${orderId} è partito mentre un rimborso ` +
+        `gli toglieva la sua quota: ${formatPriceFromCents(eccesso)} vanno ripresi, e lo storno non è riuscito (${motivo}). ` +
+        "Prima di riprenderli a mano guarda su Stripe (Connect → il bonifico → Storni) se lo storno c'è già.",
+      '/admin/orders',
+    ).catch(() => undefined);
+  }
+}
+
 async function registraIlBonificoAlNegozio(orderId: string, transferId: string, importoCents: number): Promise<PayoutResult> {
   const admin = getAdminSupabase();
   const adesso = new Date().toISOString();
@@ -513,7 +583,7 @@ async function registraIlBonificoAlNegozio(orderId: string, transferId: string, 
     .update({ stripe_transfer_id: transferId, payout_status: 'TRANSFERRED', payout_at: adesso })
     .eq('id', orderId)
     .eq('payout_status', 'PROCESSING')
-    .select('id');
+    .select(COLONNE_DOPO_IL_BONIFICO);
   if (errFine) {
     // Il bonifico e' partito ma l'ordine resta in PROCESSING: senza questo
     // avviso nessuno lo scopre, e il recupero automatico non saprebbe che
@@ -523,7 +593,12 @@ async function registraIlBonificoAlNegozio(orderId: string, transferId: string, 
     });
     return { ok: true, transferId };
   }
-  if (!Array.isArray(scritti) || scritti.length > 0) return { ok: true, transferId };
+  if (!Array.isArray(scritti)) return { ok: true, transferId };
+  if (scritti.length > 0) {
+    // R17-015 correzione — una quota scritta mentre il bonifico partiva si riprende adesso.
+    await stornaLaQuotaScrittaMentrePartiva(orderId, transferId, importoCents, scritti[0]);
+    return { ok: true, transferId };
+  }
 
   try {
     const { data: ora, error: errOra } = await admin
@@ -534,12 +609,17 @@ async function registraIlBonificoAlNegozio(orderId: string, transferId: string, 
     if (errOra || !ora) throw new Error(`ordine non riletto: ${errOra?.message ?? 'nessuna riga'}`);
     const statoOra = (ora as { payout_status?: string | null }).payout_status ?? null;
     if (statoOra === 'HELD' || statoOra === 'PENDING_SELLER_ONBOARDING') {
-      const { error } = await admin
+      const { data: scrittiOra, error } = await admin
         .from('orders')
         .update({ stripe_transfer_id: transferId, payout_status: 'TRANSFERRED', payout_at: adesso })
         .eq('id', orderId)
-        .eq('payout_status', statoOra);
+        .eq('payout_status', statoOra)
+        .select(COLONNE_DOPO_IL_BONIFICO);
       if (error) throw new Error(error.message);
+      // R17-015 correzione — anche qui: la quota scritta mentre il bonifico partiva si riprende adesso.
+      if (Array.isArray(scrittiOra) && scrittiOra.length > 0) {
+        await stornaLaQuotaScrittaMentrePartiva(orderId, transferId, importoCents, scrittiOra[0]);
+      }
       return { ok: true, transferId };
     }
     if (statoOra === 'REFUNDED') {
@@ -1169,19 +1249,52 @@ const TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA = 5;
  * della piattaforma, in silenzio. Con due copie il difetto poteva nascere una
  * volta sola; con una copia sola non può nascere affatto.
  *
+ * 14/11/2026 (R17-015 correzione) — E SOLO SE IL BONIFICO E' ANCORA DA FARE.
+ *
+ * La scrittura qui sotto guardava solo la quota, non lo stato del bonifico letto all'inizio di
+ * `refundOrder`, prima di Stripe. Ma mentre Stripe rimborsa il giro può prendere il turno e far
+ * partire il bonifico col netto intero: la quota finiva «nel bonifico da fare» di un bonifico già
+ * uscito, e nessuno la riprendeva più. Adesso la scrittura passa solo se anche lo stato del bonifico
+ * è quello letto. Se è cambiato si rilegge:
+ *  · TRANSFERRED: il bonifico è partito nel frattempo, la quota si riprende con uno storno; se lo
+ *    storno cade, lo si dice a `refundOrder`, che lo tratta come il suo recupero non riuscito;
+ *  · ancora da fare (HELD, PENDING_SELLER_ONBOARDING, PROCESSING…): si scrive sullo stato nuovo. Su
+ *    PROCESSING ci pensa `registraIlBonificoAlNegozio`, che riconfronta la quota col bonifico partito;
+ *  · altro (REVERSED, REFUNDED, REVERSAL_FAILED…): non si scrive, e resta nel log.
+ *
  * @returns i centesimi effettivamente addebitati al negozio da questa chiamata.
  */
+type QuotaAddebitata = {
+  /** I centesimi tolti al negozio da questa chiamata: dal bonifico da fare, o con lo storno. */
+  centesimi: number;
+  /** Il bonifico è partito mentre il rimborso usciva (la quota si è ripresa con uno storno, o ci si è provato). */
+  bonificoPartitoNelFrattempo: boolean;
+  /** Lo storno della quota su quel bonifico non è riuscito: il motivo. */
+  stornoNonRiuscito: string | null;
+};
+
+/** Gli stati in cui il bonifico al negozio deve ancora partire, o sta partendo adesso. */
+const BONIFICO_ANCORA_DA_FARE = new Set<string | null>([null, 'PENDING', 'HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING']);
+
 async function addebitaQuotaVenditoreSeNonPagato(
   admin: ReturnType<typeof getAdminSupabase>,
-  order: { id: string; payout_status?: string | null; seller_payout_cents?: number | null; seller_payout_reversed_cents?: number | null },
+  order: {
+    id: string;
+    payout_status?: string | null;
+    seller_payout_cents?: number | null;
+    seller_payout_reversed_cents?: number | null;
+    stripe_transfer_id?: string | null;
+    stripe_reversal_id?: string | null;
+  },
   sellerShare: number,
   giaStornato: number,
-): Promise<number> {
-  if (giaStornato !== 0 || sellerShare <= 0 || order.payout_status === 'TRANSFERRED') return giaStornato;
+): Promise<QuotaAddebitata> {
+  const soloDalBonifico = (centesimi: number): QuotaAddebitata => ({ centesimi, bonificoPartitoNelFrattempo: false, stornoNonRiuscito: null });
+  if (giaStornato !== 0 || sellerShare <= 0 || order.payout_status === 'TRANSFERRED') return soloDalBonifico(giaStornato);
   // 13/11/2026 (R17-024) — Il bonifico è già uscito e uno storno di prima non è riuscito: il giro non lo
   // paga più, quindi una quota «tolta dal bonifico da fare» resterebbe solo sulla carta. Si riprende a
   // mano (vedi `refundOrder`), come fa il rimborso dal cruscotto (rimborsi-da-fuori.ts, 'a-mano').
-  if (order.payout_status === 'REVERSAL_FAILED') return giaStornato;
+  if (order.payout_status === 'REVERSAL_FAILED') return soloDalBonifico(giaStornato);
 
   /**
    * 16/10/2026 (quinto riesame del lotto) — LA QUOTA SI SOMMA A QUELLA DI ADESSO.
@@ -1196,6 +1309,7 @@ async function addebitaQuotaVenditoreSeNonPagato(
    */
   const nettoVenditore = order.seller_payout_cents ?? 0;
   let letto: number | null = order.seller_payout_reversed_cents ?? null;
+  let statoLetto: string | null = order.payout_status ?? null;
   for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
     const giaAddebitato = letto ?? 0;
     const nuovoAddebito = Math.min(giaAddebitato + sellerShare, nettoVenditore);
@@ -1203,30 +1317,57 @@ async function addebitaQuotaVenditoreSeNonPagato(
     scrittura = letto === null
       ? scrittura.is('seller_payout_reversed_cents', null)
       : scrittura.eq('seller_payout_reversed_cents', letto);
+    // R17-015 correzione — e solo se il bonifico è ancora nello stato letto (vedi sopra).
+    scrittura = statoLetto === null
+      ? scrittura.is('payout_status', null)
+      : scrittura.eq('payout_status', statoLetto);
     const { data: scritti, error: errQuota } = await scrittura.select('id');
     if (errQuota) {
       logger.error('[refundOrder] quota venditore non addebitata', {
         orderId: order.id, message: errQuota.message,
       });
-      return giaStornato;
+      return soloDalBonifico(giaStornato);
     }
-    if (scritti && scritti.length > 0) return nuovoAddebito - giaAddebitato;
+    if (scritti && scritti.length > 0) return soloDalBonifico(nuovoAddebito - giaAddebitato);
 
     const { data: ora, error: errLettura } = await admin
       .from('orders')
-      .select('seller_payout_reversed_cents')
+      .select('payout_status, seller_payout_cents, seller_payout_reversed_cents, stripe_transfer_id, stripe_reversal_id')
       .eq('id', order.id)
       .single();
     if (errLettura || !ora) {
       logger.error('[refundOrder] quota venditore non addebitata: ordine cambiato e non riletto', {
         orderId: order.id, message: errLettura?.message,
       });
-      return giaStornato;
+      return soloDalBonifico(giaStornato);
     }
-    letto = (ora as { seller_payout_reversed_cents?: number | null }).seller_payout_reversed_cents ?? null;
+    const riletto = ora as Omit<ReversibleOrder, 'id'>;
+    letto = riletto.seller_payout_reversed_cents ?? null;
+    const statoPrima = statoLetto;
+    statoLetto = riletto.payout_status ?? null;
+    if (statoLetto === statoPrima) continue;
+    if (statoLetto === 'TRANSFERRED') {
+      // Il bonifico è partito mentre il rimborso usciva: la quota non scende più da lì, si riprende.
+      try {
+        const { reversedCents } = await reverseOrderTransfer({ ...order, ...riletto, id: order.id } as ReversibleOrder, sellerShare);
+        return { centesimi: reversedCents, bonificoPartitoNelFrattempo: true, stornoNonRiuscito: null };
+      } catch (err) {
+        const motivo = err instanceof Error ? err.message : 'errore sconosciuto';
+        logger.error('[refundOrder] bonifico partito mentre il rimborso usciva: storno della quota non riuscito', {
+          orderId: order.id, centesimi: sellerShare, err,
+        });
+        return { centesimi: 0, bonificoPartitoNelFrattempo: true, stornoNonRiuscito: motivo };
+      }
+    }
+    if (!BONIFICO_ANCORA_DA_FARE.has(statoLetto)) {
+      logger.error('[refundOrder] quota venditore non addebitata: il bonifico è cambiato di stato mentre il rimborso usciva', {
+        orderId: order.id, statoPrima, statoOra: statoLetto, centesimi: sellerShare,
+      });
+      return soloDalBonifico(giaStornato);
+    }
   }
   logger.error('[refundOrder] quota venditore non addebitata: l ordine cambia a ogni tentativo', { orderId: order.id });
-  return giaStornato;
+  return soloDalBonifico(giaStornato);
 }
 
 /**
@@ -2501,7 +2642,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // 21/8/2026 — Se il bonifico al negozio non e' ancora partito, la sua quota
   // si scala da quello che gli verra' versato (vedi la funzione): una sola
   // copia per tutti i modi di pagare.
-  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  const quotaAddebitata = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
+  const reversedCents = quotaAddebitata.centesimi;
+  // 14/11/2026 (R17-015 correzione) — Il bonifico è partito mentre il rimborso usciva e lo storno della
+  // quota non è riuscito: è lo stesso lavoro dichiarato del recupero caduto qui sopra (vedi più sotto).
+  if (quotaAddebitata.stornoNonRiuscito) recuperoNonRiuscito = quotaAddebitata.stornoNonRiuscito;
   // 13/11/2026 (R17-024) — IL BONIFICO E' USCITO E UNO STORNO DI PRIMA NON E' RIUSCITO: SI DICE, A MANO.
   // Lo storno qui sopra parte solo su TRANSFERRED e la quota non scende dal bonifico (già partito): senza
   // questo avviso i soldi restavano al negozio e nessuno lo sapeva. Col rimborso pieno la cifra è tutto
@@ -2576,7 +2721,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     // dei contanti lo riscriveva: era la stessa corsa, rimasta aperta li'.)
     // Lo stato del pagamento del bonifico dei contanti e' gia' scritto col segno.
     ...(avvisoDelBonifico ? {} : statoDelPagamento),
-    ...statoDelNegozio,
+    // R17-015 correzione — se il bonifico è partito mentre il rimborso usciva (e la quota si è ripresa
+    // con uno storno), il rimborso pieno lo chiude come un bonifico partito e ripreso: REVERSED.
+    ...(quotaAddebitata.bonificoPartitoNelFrattempo && 'payout_status' in statoDelNegozio
+      ? { payout_status: 'REVERSED' }
+      : statoDelNegozio),
     // La consegna segue l'ORDINE: si annulla quando l'ordine è chiuso, anche
     // se il rimborso non è pieno (vedi `annullaLOrdine`).
     //
