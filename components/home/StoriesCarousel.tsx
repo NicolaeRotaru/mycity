@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { queryKeys } from '@/lib/queries/keys';
 import { conNegozioApprovato } from '@/lib/queries/seller-public-profiles';
+import { logger } from '@/lib/logger';
 import StoryViewer from '@/components/StoryViewer';
 
 /**
@@ -67,16 +68,38 @@ export default function StoriesCarousel() {
       // rimasta senza logo e senza nome. La storia di un negozio che la vista
       // non restituisce (non approvato, sospeso, senza insegna) non si mostra:
       // prima compariva con «?» e «—» al posto del nome.
-      const { data } = await supabase
+      //
+      // 14/11/2026 (R16-019) — Il negozio si filtra DENTRO la domanda, prima del tetto. Prima si
+      // leggevano le 200 storie più recenti e solo dopo si toglievano quelle dei negozi fuori
+      // vetrina: 200 storie recenti di autori che non devono comparire (sospesi, senza insegna,
+      // non-negozi, rimaste da prima della 404) occupavano tutti i posti e il carosello restava
+      // vuoto per tutti. Ora la storia si aggancia con `!inner` alla vista pubblica dei negozi, la
+      // stessa che il carosello legge già e che chi non ha l'account può leggere: la vista tiene
+      // solo i negozi approvati, con insegna, di ruolo negozio. Postgres scarta le altre storie e
+      // POI ordina e taglia a 30. Il filtro qui sotto resta come seconda cintura e dà nome e logo.
+      const colonne = 'id, seller_id, image_url, caption, link_url, view_count, expires_at';
+      const adesso = new Date().toISOString();
+      const filtrate = await supabase
         .from('seller_stories')
-        .select('id, seller_id, image_url, caption, link_url, view_count, expires_at')
-        .gt('expires_at', new Date().toISOString())
+        .select(`${colonne}, negozio:seller_public_profiles!inner(id)`)
+        .gt('expires_at', adesso)
         .order('created_at', { ascending: false })
-        // 5/11/2026 — Si taglia DOPO aver tolto le storie dei non-negozi: tagliando prima, trenta
-        // storie recenti di un account qualunque riempivano tutti i posti e il carosello restava
-        // vuoto, comprese le storie vere dei negozi.
-        .limit(STORIE_LETTE);
-      const storie = (data ?? []) as Array<Omit<Story, 'seller'>>;
+        .limit(STORIE_MOSTRATE);
+      let righe = filtrate.data as Array<Omit<Story, 'seller'> & { negozio?: unknown }> | null;
+      const codice = (filtrate.error as { code?: string } | null)?.code;
+      if (codice === 'PGRST200' || codice === 'PGRST201') {
+        // Il servizio dati non conosce l'aggancio storia → vista: si legge come prima (200, poi il
+        // filtro), che non mostra mai un negozio fuori vetrina, invece di spegnere il carosello.
+        logger.warn('[storie] aggancio alla vista dei negozi non riconosciuto: filtro dopo il tetto', { codice });
+        const vecchia = await supabase
+          .from('seller_stories')
+          .select(colonne)
+          .gt('expires_at', adesso)
+          .order('created_at', { ascending: false })
+          .limit(STORIE_LETTE);
+        righe = vecchia.data as Array<Omit<Story, 'seller'>> | null;
+      }
+      const storie = (righe ?? []).map(({ negozio: _negozio, ...storia }) => storia);
       const conNegozio = (await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo')).slice(0, STORIE_MOSTRATE);
       return conNegozio.map(({ profiles, ...storia }) => ({
         ...storia,
