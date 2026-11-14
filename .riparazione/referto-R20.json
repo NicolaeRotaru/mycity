@@ -479,5 +479,6 @@
   "conto": {
     "agenti": 10,
     "nota": "4 subagenti che riparano (lotti 1-2 modello grande, 3-4 sonnet), 4 revisori (1-2 modello grande, 3-4 sonnet), più 1 riparatore e 1 revisore per il giro chiesto dalla guardia (prove comuni di R20-005 e R20-015). Il giro di correzione di R20-004 l’ha fatto il subagente del lotto 2."
-  }
+  },
+  "passaggio": "14/11 08:45, giro di correzione di R20-011 (sessione R20 O2 correzione), chiuso a 187 mila token di storia. Fatto: revert e607b68b (la prima versione tolta, come 01547939 nell'integrazione), correzione 30b7f9ed, verify verde su 30b7f9ed, valida-referto e guardia-ramo verdi. Non resta niente di aperto su R20. Da sapere per l'unione: con il ramo di integrazione a 4a3d9b8a app/rider/page.tsx e tests/unit/riparazione-r20-presa-ordine.test.ts danno conflitto, perché la base dell'unione (2851b087) ha ancora la prima versione. La soluzione è prendere la versione di questo ramo per tutti e due (git checkout --theirs, provata in un worktree a parte): il risultato è l'integrazione più la sola correzione. Spesa del giro: 3,45 $ da usage.cost_usd, 1 subagente."
 }
