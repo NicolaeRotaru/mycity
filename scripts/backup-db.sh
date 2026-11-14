@@ -337,17 +337,26 @@ STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DEST_PULITA}-storico}"
 #  - VUOTO DA SEMPRE e' legittimo: `reviews` puo' non avere ancora nessuna foto;
 #  - PIENO -> VUOTO no, se l'origine non restituisce piu' niente: `sync` ha spostato tutto nello
 #    storico, e dalla notte dopo la copia sarebbe «vuota prima e dopo», cioe' verde per sempre.
-# A distinguerli e' il database (storage.objects, lo stesso SUPABASE_DB_URL di pg_dump). Se elenca
-# file in quel secchio, la copia vuota e' un guasto: rosso, ogni notte, finche' non si sistema. Se
-# non ne elenca, il secchio l'ha svuotato l'app — la cancellazione di un account toglie le sue foto
-# da `reviews` (lib/account/cancellazione.ts), e se erano le ultime il secchio resta vuoto — e la
-# notte e' verde, con un avviso. Se il database non risponde decide la memoria in ${MEMORIA_COPIA}:
-# un secchio che ha avuto file resta «pieno» finche' il database non conferma che e' vuoto.
+# A distinguerli sono il database (storage.objects, lo stesso SUPABASE_DB_URL di pg_dump) e una
+# memoria fra le notti in ${MEMORIA_COPIA}, scritta ogni volta che si sa che il secchio ha file:
+#  - il database elenca file in quel secchio: la copia vuota e' un guasto (l'origine non li
+#    restituisce). Rosso, ogni notte, finche' non si sistema;
+#  - il database non ne elenca piu', e il secchio e' uno di quelli che l'APP svuota da sola
+#    (SECCHI_SVUOTATI_DALL_APP: la cancellazione di un account toglie le foto di `reviews`,
+#    lib/account/cancellazione.ts, e se erano le ultime il secchio resta vuoto): notte verde, con un
+#    avviso, e la memoria si toglie;
+#  - il database non ne elenca piu' e il secchio e' un altro (`products`, `stories`): l'app non lo
+#    svuota mai, quindi i file sono stati cancellati all'origine da fuori (a mano, uno script, una
+#    chiave rubata). E' la cancellazione di massa da cui la copia deve difendere: rosso, ogni notte,
+#    finche' qualcuno non toglie a mano la memoria del secchio;
+#  - il database non risponde: decide la memoria, e un secchio che ha avuto file resta rosso.
 #
 # Tutta la copia vuota no: su un marketplace vivo vuol dire che la copia non contiene niente, e
 # quella notte deve essere rossa.
 FOTO_RIAPERTE=0
 MEMORIA_COPIA="${DEST_PULITA}/_memoria-copia"
+# Gli stessi di SECCHI_CON_FILE_PERSONALI in lib/account/cancellazione.ts (una prova li tiene uguali).
+SECCHI_SVUOTATI_DALL_APP="kyc-docs cod-proof reviews"
 MEMORIA_LETTA=""
 SECCHI_ROSSI=""
 GUASTO_RIEPILOGO=""
@@ -360,7 +369,7 @@ file_nel_database() {
   [[ -n "${DB_URL:-}" ]] || return 1
   command -v psql >/dev/null 2>&1 || return 1
   n="$(printf '%s\n' "SELECT count(*) FROM storage.objects WHERE bucket_id = :'secchio' AND created_at < :'inizio';" \
-    | PGCONNECT_TIMEOUT=15 psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 \
+    | PGCONNECT_TIMEOUT=15 PGOPTIONS='-c statement_timeout=30000' psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 \
         -v secchio="$secchio" -v inizio="${INIZIO_COPIA:-now}" 2>/dev/null)" || return 1
   [[ "$n" =~ ^[0-9]+$ ]] || return 1
   printf '%s\n' "$n"
@@ -381,8 +390,13 @@ ricorda_che_aveva_file() {
     MEMORIA_LETTA+=$'\n'"${secchio}.aveva-file"
   else
     echo "[backup] ATTENZIONE: non riesco a scrivere la memoria del secchio ${secchio} in ${MEMORIA_COPIA}: una notte in cui il database non risponde, un secchio svuotato all'origine potrebbe passare per vuoto da sempre." >&2
+    riepilogo_lavoro "⚠️ La memoria della copia del secchio \`${secchio}\` non si scrive (${MEMORIA_COPIA}): se il database non risponde, un secchio svuotato potrebbe non accorgersene."
   fi
   return 0
+}
+
+svuotato_dall_app() {
+  [[ " ${SECCHI_SVUOTATI_DALL_APP} " == *" ${1} "* ]]
 }
 
 dimentica_che_aveva_file() {
@@ -416,6 +430,13 @@ riapri_una_foto() {
       ricorda_che_aveva_file "$secchio"
       echo "[backup] esito-foto: fallita — il database elenca ${nel_database} file nel secchio ${secchio}, ma dopo la sincronia la copia e' vuota: l'origine non li restituisce (STORAGE_SYNC_SOURCE sbagliata, o una chiave che non legge piu quel secchio). Quello che c'era nella copia e' nello storico (${STORICO_FOTO}), non perso." >&2
       GUASTO_RIEPILOGO="❌ **La copia del secchio \`${secchio}\` e' vuota** — il database ne elenca ${nel_database} file, l'origine non ne restituisce nessuno. Controlla \`STORAGE_SYNC_SOURCE\` e la chiave dell'origine; quello che c'era nella copia e' nello storico."
+      return 1
+    fi
+    if [[ "$nel_database" == "0" ]] && ! svuotato_dall_app "$secchio" \
+       && { [[ "${PRIMA_PIENO:-no}" == "si" ]] || aveva_file "$secchio"; }; then
+      ricorda_che_aveva_file "$secchio"
+      echo "[backup] esito-foto: fallita — il secchio ${secchio} aveva file e adesso e' vuoto anche nel database: i file sono stati cancellati all'origine, e l'app non svuota mai questo secchio (succede con una cancellazione a mano, uno script sbagliato o una chiave rubata). Quelli che c'erano sono nello storico (${STORICO_FOTO}), non persi. Se lo svuotamento e' voluto, togli ${MEMORIA_COPIA}/${secchio}.aveva-file." >&2
+      GUASTO_RIEPILOGO="❌ **Il secchio \`${secchio}\` e' stato svuotato all'origine** — aveva file, e adesso non ne ha piu nemmeno il database: l'app non svuota mai questo secchio. I file sono nello storico. Se e' voluto, togli \`${MEMORIA_COPIA}/${secchio}.aveva-file\`."
       return 1
     fi
     if [[ "$nel_database" == "0" ]]; then
@@ -519,7 +540,9 @@ else
          --backup-dir "${STORICO_FOTO}/${TS}/${secchio}"; then
       echo "[backup] esito-foto: fallita — il secchio ${secchio} non e' stato copiato. Le foto NON sono al sicuro." >&2
       riepilogo_lavoro "❌ **Le foto non sono state copiate** — il secchio \`${secchio}\` non e' stato sincronizzato."
-      exit 5
+      # R15-004 — Come per la rilettura qui sotto: si segna e si va avanti, l'uscita 5 arriva alla fine.
+      SECCHI_ROSSI+=" ${secchio}"
+      continue
     fi
     # La sincronia e' andata: adesso si va a riprendere una foto dalla copia e
     # la si legge. Vedi il commento lungo qui sopra — «uscita zero» e «si

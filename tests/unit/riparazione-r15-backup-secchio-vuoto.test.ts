@@ -129,3 +129,52 @@ describe('R15-004 · secondo giro: il secchio svuotato non torna verde', () => {
     expect(r.out).toContain('secchi da guardare: products')
   })
 })
+
+// R15-004, secondo giro, revisione: «il database dice 0» vale come svuotamento legittimo solo per i
+// secchi che l'app svuota da sola. `products` e `stories` l'app non li svuota mai: se ci arrivano a
+// zero, i file sono stati cancellati all'origine da fuori, ed e' proprio il caso da cui la copia difende.
+describe('R15-004 · secondo giro: la cancellazione di massa all origine resta rossa', () => {
+  it('products cancellato all origine anche nel database: rosso dalla prima notte, e le notti dopo', () => {
+    const m = mondoFinto()
+    m.cartella('b2:mycity-storico')
+    m.file('src:products', 'p.jpg')
+    m.file('src:stories', 's.jpg')
+    expect(m.lancia(base).uscita).toBe(0)
+    rmSync(join(m.radice, 'src', 'products', 'p.jpg'))
+    m.database({ products: 0, stories: 1 })
+    for (const notte of [2, 3]) {
+      const r = m.lancia({ ...base, DB_URL: DB_FINTO })
+      expect(r.uscita, `notte ${notte}: ${r.out}`).toBe(5)
+      expect(r.out).toContain("il secchio products aveva file e adesso e' vuoto anche nel database")
+      expect(r.out).not.toContain('::warning::')
+    }
+    // La via d'uscita, se lo svuotamento era voluto: togliere a mano la memoria del secchio.
+    rmSync(join(m.radice, 'b2', 'mycity-foto', '_memoria-copia', 'products.aveva-file'))
+    const dopo = m.lancia({ ...base, DB_URL: DB_FINTO })
+    expect(dopo.uscita, dopo.out).toBe(0)
+  })
+
+  it('i secchi che l app svuota da sola sono gli stessi di SECCHI_CON_FILE_PERSONALI', () => {
+    const script = readFileSync(join(process.cwd(), 'scripts/backup-db.sh'), 'utf8')
+    const cancellazione = readFileSync(join(process.cwd(), 'lib/account/cancellazione.ts'), 'utf8')
+    const nelloScript = script.match(/^SECCHI_SVUOTATI_DALL_APP="([^"]*)"/m)?.[1].split(/\s+/).sort()
+    const nelCodice = cancellazione
+      .match(/SECCHI_CON_FILE_PERSONALI\s*=\s*\[([^\]]*)\]/)?.[1]
+      .match(/'[^']+'/g)?.map((x) => x.slice(1, -1)).sort()
+    expect(nelloScript).toBeDefined()
+    expect(nelloScript).toEqual(nelCodice)
+    expect(nelloScript).not.toContain('products')
+    expect(nelloScript).not.toContain('stories')
+  })
+
+  it('una sincronia che fallisce su products non ferma la copia di stories', () => {
+    const m = mondoFinto()
+    m.cartella('b2:mycity-storico')
+    m.file('src:products', 'p.jpg')
+    m.file('src:stories', 'nuova.jpg')
+    const r = m.lancia({ ...base, FAKE_SYNC_FAIL: 'products' })
+    expect(r.uscita).toBe(5)
+    expect(existsSync(join(m.radice, 'b2', 'mycity-foto', 'stories', 'nuova.jpg')), r.out).toBe(true)
+    expect(r.out).toContain('secchi da guardare: products')
+  })
+})

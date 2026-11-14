@@ -20,6 +20,7 @@ const RCLONE_FINTO = [
   "  rcat) d=\"$(map \"$1\")\"; mkdir -p \"$(dirname \"$d\")\"; cat > \"$d\" ;;",
   "  deletefile) rm -f \"$(map \"$1\")\" ;;",
   "  sync)",
+  "    [[ -n \"${FAKE_SYNC_FAIL:-}\" && \"$1\" == *\"$FAKE_SYNC_FAIL\" ]] && { echo \"sync rifiutata\" >&2; exit 1; }",
   "    src=\"$(map \"$1\")\"; dst=\"$(map \"$2\")\"; bd=\"\"",
   "    [[ \"${3:-}\" == \"--backup-dir\" ]] && bd=\"$(map \"$4\")\"",
   "    if [[ -n \"$bd\" ]]; then bucket_ok \"$4\" || { echo \"storico mancante\" >&2; exit 1; }; fi",
