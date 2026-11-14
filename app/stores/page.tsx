@@ -7,7 +7,7 @@ import { Search, Store as IconaNegozio } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
-import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { chiaveDiOggi, isOpenNow, romeNow, type StoreHours } from '@/lib/store-hours';
 import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -248,9 +248,13 @@ export default function StoresPage() {
   // al minuto rifà la pagina anche quando nessuno tocca niente.
   // La stessa risposta va anche alla scheda (`apertoOra`): la scheda ha un battito suo, sfasato da quello
   // della pagina, e da sola poteva scrivere «Chiuso ora» per un negozio che il filtro teneva ancora in lista.
-  const todayKey = chiaveDiOggi();
-  const apertoAdesso = (s: (typeof stores)[number]) => isOpenNow(((s.store_hours ?? {}) as StoreHours)[todayKey]);
-  const filtered = onlyOpen ? ordinati.filter(apertoAdesso) : ordinati;
+  // Un'ora sola per la resa: filtro e scheda leggono lo stesso istante, anche se il minuto scatta in mezzo.
+  const oraDellaResa = romeNow();
+  const todayKey = chiaveDiOggi(oraDellaResa);
+  const apertiAdesso = new Set(
+    ordinati.filter((s) => isOpenNow(((s.store_hours ?? {}) as StoreHours)[todayKey], oraDellaResa)).map((s) => s.id),
+  );
+  const filtered = onlyOpen ? ordinati.filter((s) => apertiAdesso.has(s.id)) : ordinati;
 
   // C'E' UN FILTRO ACCESO? La riga di conteggio dice due cose diverse nei due casi.
   const filtriAccesi = search !== '' || onlyOpen || categoryId !== '';
@@ -395,7 +399,7 @@ export default function StoresPage() {
               posto="scheda-in-elenco"
               products={productsByStore[s.id] ?? []}
               reviews={reviewsByStore[s.id]}
-              apertoOra={apertoAdesso(s)}
+              apertoOra={apertiAdesso.has(s.id)}
             />
           ))}
         </div>
