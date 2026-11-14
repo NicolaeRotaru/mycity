@@ -1999,16 +1999,23 @@ export default function CheckoutPage() {
                 }
               : undefined
           }
+          // 14/11/2026 (R19-013, giro di correzione) — Sopra il tetto dei contanti, con la carta
+          // spenta, la barra diceva ancora «Ordina e paga alla consegna» accanto al motivo per cui non
+          // si può: adesso non promette un pagamento che la cassa non accetta.
           aria-label={
-            paymentMethod === 'card'
-              ? 'Paga con carta e conferma ordine'
-              : 'Ordina e paga alla consegna'
+            contantiFuoriLegge
+              ? `Non si può ordinare: sopra ${formatPrice(TETTO_CONTANTI_CENTS / 100)} non si paga in contanti`
+              : paymentMethod === 'card'
+                ? 'Paga con carta e conferma ordine'
+                : 'Ordina e paga alla consegna'
           }
           className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
         >
           {isCheckingOut
             ? (paymentMethod === 'card' ? 'Apertura…' : 'Elaborazione…')
-            : (paymentMethod === 'card' ? 'Paga con carta' : 'Ordina e paga alla consegna')}
+            : contantiFuoriLegge
+              ? 'Non si può ordinare'
+              : (paymentMethod === 'card' ? 'Paga con carta' : 'Ordina e paga alla consegna')}
         </button>
       </div>
     </div>
