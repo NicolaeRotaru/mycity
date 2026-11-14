@@ -17,7 +17,7 @@ const RCLONE_FINTO = [
   "  mkdir) [[ \"${FAKE_MKDIR_FAIL:-}\" == \"1\" ]] && exit 1; mkdir -p \"$(map \"$1\")\" ;;",
   "  lsf) d=\"$(map \"${@: -1}\")\"; [[ -d \"$d\" ]] || exit 0; (cd \"$d\" && find . -type f | sed 's|^\\./||' | sort) ;;",
   "  cat) cat \"$(map \"${@: -1}\")\" ;;",
-  "  rcat) d=\"$(map \"$1\")\"; mkdir -p \"$(dirname \"$d\")\"; cat > \"$d\" ;;",
+  "  rcat) [[ \"${FAKE_RCAT_FAIL:-}\" == \"1\" ]] && { cat >/dev/null; exit 1; }; d=\"$(map \"$1\")\"; mkdir -p \"$(dirname \"$d\")\"; cat > \"$d\" ;;",
   "  deletefile) rm -f \"$(map \"$1\")\" ;;",
   "  sync)",
   "    [[ -n \"${FAKE_SYNC_FAIL:-}\" && \"$1\" == *\"$FAKE_SYNC_FAIL\" ]] && { echo \"sync rifiutata\" >&2; exit 1; }",

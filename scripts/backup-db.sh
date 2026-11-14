@@ -368,8 +368,12 @@ file_nel_database() {
   local secchio="$1" n
   [[ -n "${DB_URL:-}" ]] || return 1
   command -v psql >/dev/null 2>&1 || return 1
-  n="$(printf '%s\n' "SELECT count(*) FROM storage.objects WHERE bucket_id = :'secchio' AND created_at < :'inizio';" \
-    | PGCONNECT_TIMEOUT=15 PGOPTIONS='-c statement_timeout=30000' psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 \
+  # Il tempo massimo sta DENTRO la domanda (SET LOCAL in una transazione), non nelle opzioni di avvio:
+  # un pooler davanti al database puo' rifiutarle, e allora il database risulterebbe sempre muto.
+  # `timeout` copre anche una rete che si blocca dopo la connessione.
+  n="$(printf '%s\n' "BEGIN;" "SET LOCAL statement_timeout = '30s';" \
+      "SELECT count(*) FROM storage.objects WHERE bucket_id = :'secchio' AND created_at < :'inizio';" "COMMIT;" \
+    | PGCONNECT_TIMEOUT=15 timeout 60 psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 \
         -v secchio="$secchio" -v inizio="${INIZIO_COPIA:-now}" 2>/dev/null)" || return 1
   [[ "$n" =~ ^[0-9]+$ ]] || return 1
   printf '%s\n' "$n"
@@ -377,20 +381,25 @@ file_nel_database() {
 
 # La memoria fra le notti: un file per secchio, «<secchio>.aveva-file», accanto ai secchi della copia
 # (non dentro uno di loro: `sync` lo sposterebbe nello storico). Si scrive ogni volta che si sa che il
-# secchio ha file, si toglie solo quando il database conferma che e' vuoto.
+# secchio ha file. Si toglie quando il database conferma vuoto un secchio che l'app svuota da sola;
+# per gli altri (`products`, `stories`) si toglie solo a mano, quando lo svuotamento e' voluto.
 aveva_file() {
   grep -qxF "${1}.aveva-file" <<<"$MEMORIA_LETTA"
 }
 
+MEMORIA_NON_SCRITTA=""
+
 ricorda_che_aveva_file() {
   local secchio="$1"
   aveva_file "$secchio" && return 0
+  [[ " ${MEMORIA_NON_SCRITTA} " == *" ${secchio} "* ]] && return 0
   if printf 'la copia di %s ha file (notte %s)\n' "$secchio" "$TS" \
        | rclone rcat "${MEMORIA_COPIA}/${secchio}.aveva-file" >/dev/null 2>&1; then
     MEMORIA_LETTA+=$'\n'"${secchio}.aveva-file"
   else
-    echo "[backup] ATTENZIONE: non riesco a scrivere la memoria del secchio ${secchio} in ${MEMORIA_COPIA}: una notte in cui il database non risponde, un secchio svuotato all'origine potrebbe passare per vuoto da sempre." >&2
-    riepilogo_lavoro "⚠️ La memoria della copia del secchio \`${secchio}\` non si scrive (${MEMORIA_COPIA}): se il database non risponde, un secchio svuotato potrebbe non accorgersene."
+    MEMORIA_NON_SCRITTA+=" ${secchio}"
+    echo "[backup] ATTENZIONE: non riesco a scrivere la memoria del secchio ${secchio} in ${MEMORIA_COPIA}: se il secchio venisse svuotato all'origine, sarebbe rosso solo la prima notte e dalla notte dopo passerebbe per vuoto da sempre." >&2
+    riepilogo_lavoro "⚠️ La memoria della copia del secchio \`${secchio}\` non si scrive (${MEMORIA_COPIA}): un secchio svuotato all'origine sarebbe rosso solo la prima notte."
   fi
   return 0
 }
@@ -423,7 +432,7 @@ riapri_una_foto() {
     # R15-004 — Il secchio e' vuoto nella copia. Il controllo sul totale lo lasciava passare se un
     # altro secchio si riapriva; e ricordarsi solo com'era la copia prima di QUESTO giro non basta,
     # perche' la notte rossa sposta tutto nello storico e dalla notte dopo il secchio e' «vuoto prima
-    # e dopo». Decide il database; se tace, la memoria fra le notti (vedi il commento lungo qui sopra).
+    # e dopo». Decidono il database e la memoria fra le notti (vedi il commento lungo qui sopra).
     local nel_database=""
     nel_database="$(file_nel_database "$secchio")" || nel_database=""
     if [[ -n "$nel_database" && "$nel_database" -gt 0 ]]; then
@@ -450,8 +459,10 @@ riapri_una_foto() {
     fi
     if [[ "${PRIMA_PIENO:-no}" == "si" ]] || aveva_file "$secchio"; then
       ricorda_che_aveva_file "$secchio"
-      echo "[backup] esito-foto: fallita — il secchio ${secchio} aveva file nella copia e adesso e' vuoto, e il database non ha risposto: non so dire se l'ha svuotato l'app (per esempio la cancellazione di un account) o se l'origine non si legge piu. I file sono nello storico (${STORICO_FOTO}), non persi. Se lo svuotamento e' voluto e il database continua a non rispondere, togli ${MEMORIA_COPIA}/${secchio}.aveva-file." >&2
-      GUASTO_RIEPILOGO="❌ **Il secchio \`${secchio}\` e' vuoto nella copia e prima aveva file** — il database non ha risposto, quindi non si sa se l'ha svuotato l'app o se l'origine non si legge piu. I file sono nello storico."
+      local forse="se i file sono stati cancellati all'origine da fuori (l'app non svuota mai questo secchio)"
+      svuotato_dall_app "$secchio" && forse="se l'ha svuotato l'app (per esempio la cancellazione di un account)"
+      echo "[backup] esito-foto: fallita — il secchio ${secchio} aveva file nella copia e adesso e' vuoto, e il database non ha risposto: non so dire ${forse} o se l'origine non si legge piu. I file sono nello storico (${STORICO_FOTO}), non persi. Se lo svuotamento e' voluto e il database continua a non rispondere, togli ${MEMORIA_COPIA}/${secchio}.aveva-file." >&2
+      GUASTO_RIEPILOGO="❌ **Il secchio \`${secchio}\` e' vuoto nella copia e prima aveva file** — il database non ha risposto, quindi non si sa ${forse} o se l'origine non si legge piu. I file sono nello storico."
       return 1
     fi
     echo "[backup] Il secchio ${secchio} non ha mai avuto file nella copia: niente da riaprire."

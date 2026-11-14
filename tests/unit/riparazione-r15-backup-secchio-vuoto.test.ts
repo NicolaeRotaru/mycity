@@ -59,6 +59,9 @@ describe('R15-004 · secondo giro: il secchio svuotato non torna verde', () => {
     expect(notte2.uscita, notte2.out).toBe(5)
     expect(notte2.out).toContain('il secchio products aveva file nella copia')
     expect(notte2.out).not.toContain('copiate e riaperte')
+    // L'app non svuota mai products: il messaggio non deve dare la colpa a una cancellazione d'account.
+    expect(notte2.out).not.toContain('cancellazione di un account')
+    expect(notte2.out).toContain("cancellati all'origine da fuori")
   })
 
   it('la memoria e quella dell ultima notte buona: verde, poi origine svuotata, poi due notti rosse', () => {
@@ -176,5 +179,22 @@ describe('R15-004 · secondo giro: la cancellazione di massa all origine resta r
     expect(r.uscita).toBe(5)
     expect(existsSync(join(m.radice, 'b2', 'mycity-foto', 'stories', 'nuova.jpg')), r.out).toBe(true)
     expect(r.out).toContain('secchi da guardare: products')
+  })
+})
+
+describe('R15-004 · secondo giro: la memoria che non si scrive si dice una volta, e dice il vero', () => {
+  it('un avviso per secchio, che non promette che basti il database', () => {
+    const m = mondoFinto()
+    m.cartella('b2:mycity-storico')
+    m.file('src:products', 'p.jpg')
+    m.file('src:stories', 's.jpg')
+    m.file('b2:mycity-foto/products', 'p.jpg')
+    m.file('b2:mycity-foto/stories', 's.jpg')
+    const r = m.lancia({ ...base, FAKE_RCAT_FAIL: '1' })
+    expect(r.uscita, r.out).toBe(0)
+    const avvisi = r.out.split('\n').filter((riga) => riga.includes('non riesco a scrivere la memoria'))
+    expect(avvisi).toHaveLength(2)
+    expect(avvisi.join('\n')).toContain('rosso solo la prima notte')
+    expect(avvisi.join('\n')).not.toContain('se il database non risponde')
   })
 })
