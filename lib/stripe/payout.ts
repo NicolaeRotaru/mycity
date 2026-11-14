@@ -2235,7 +2235,18 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   if (!bonificoDiPrima && rimborsabile.perche === 'nessun-incasso') {
     throw new RimborsoNonRitentabile(motivoNienteDaRestituire('nessun-incasso'));
   }
-  const safeAmountCents = Math.max(0, Math.min(rimborsoGiaUscito ? (rimborsoGiaUscito.amount ?? 0) : opts.amountCents, bonificoDiPrima ? grossCents : rimborsabile.massimoCents));
+  // 14/11/2026 (R17-016 correzione) — LA PRENOTAZIONE DI QUESTA CHIAVE E' GIA' NEL TOTALE RIMBORSATO.
+  // Il giro del freno morto fra la prenotazione e Stripe lascia l'euro nel totale senza soldi usciti; se
+  // intanto l'ordine si annulla, l'annullo rende «lordo meno già rimborsato» e qui il residuo è zero: la
+  // ripresa con la stessa chiave si fermava («importo non valido») e l'euro al cliente non tornava più.
+  // Se la chiave ha la sua prenotazione nel libro (412) la cifra è già contata, e il tetto la riconta:
+  // `accumula_rimborso` non la somma di nuovo ('ripresa', o 'altra_cifra' se la cifra è un'altra).
+  const giaPrenotataConLaChiave =
+    tipo === 'carta' && !!opts.idempotencyKey && !rimborsoGiaUscito && !bonificoDiPrima && rimborsabile.massimoCents < opts.amountCents
+      ? (await laChiaveENelLibro(admin, order.id, opts.idempotencyKey as string)) === true
+      : false;
+  const tettoDelRimborso = bonificoDiPrima ? grossCents : rimborsabile.massimoCents + (giaPrenotataConLaChiave ? opts.amountCents : 0);
+  const safeAmountCents = Math.max(0, Math.min(rimborsoGiaUscito ? (rimborsoGiaUscito.amount ?? 0) : opts.amountCents, tettoDelRimborso));
   if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // R71 — IN CHE MODO TORNANO I SOLDI. Carta → sulla carta. Contanti → la parte
