@@ -96,3 +96,52 @@ describe('R23-010 correzione — una resa nuova subito dopo la chiusura', () => 
     s.smonta();
   }, 60000);
 });
+
+/**
+ * R23-010 correzione, verifica (14/11/2026) — Il verificatore ha trovato l'ultima strada: su /stores i dati
+ * arrivano dopo il montaggio della pagina, e le schede partono col loro orologio dopo quello della pagina.
+ * Se la chiusura cade fra i due battiti, la scheda si rifà da sola e scrive «Chiuso ora», mentre il filtro
+ * la tiene in lista fino al battito dopo della pagina (fino a quasi un minuto). Qui lo sfasamento è largo
+ * (dati dopo 40 s) perché la prova non dipenda dall'istante esatto in cui parte l'orologio della pagina:
+ * la pagina batte verso le 12:59:30 (forno aperto) e le 13:00:30, la scheda alle 13:00:10 (forno chiuso).
+ */
+/** L'orologio avanza un secondo alla volta, come quello vero: con un salto solo React rifà le rese in ritardo. */
+async function avanza(secondi: number) {
+  for (let i = 0; i < secondi; i++) {
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  }
+}
+
+describe('R23-010 correzione — la scheda e il filtro con due orologi sfasati', () => {
+  it('fra il battito della scheda e quello della pagina il forno in lista non dice «Chiuso ora»', async () => {
+    const globali = globalThis as Record<string, unknown>;
+    globali.__DATI_QUERY__ = undefined;
+    const mod = await monta('app/stores/page.tsx');
+    vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, json: async () => ({ possibile: true }) }));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-29T11:58:30Z'));
+    const s = accendi(mod.default, {});
+
+    // I dati arrivano alle 12:59:10: la resa dopo monta le schede, coi loro orologi.
+    await avanza(40);
+    globali.__DATI_QUERY__ = DATI;
+    const aperti = controlli(s.radice).find((c) => nomeAccessibile(c).includes('Aperti ora'))!;
+    s.agisci(() => clicca(aperti));
+    expect(s.radice.textContent).toContain('Forno Mattutino');
+    expect(s.radice.textContent).not.toContain('Chiuso ora');
+
+    // 13:00:15 — la scheda ha battuto alle 13:00:10 (forno chiuso), la pagina non ancora.
+    await avanza(65);
+    const testo = s.radice.textContent ?? '';
+    expect(
+      testo.includes('Forno Mattutino') && testo.includes('Chiuso ora'),
+      'il forno è in lista con «Aperti ora» acceso e la sua scheda dice «Chiuso ora»',
+    ).toBe(false);
+
+    // Al battito dopo della pagina (verso le 13:00:30) il forno esce.
+    await avanza(20);
+    expect(s.radice.textContent).not.toContain('Forno Mattutino');
+    expect(s.radice.textContent).toContain('Bar Sempre Aperto');
+    s.smonta();
+  }, 60000);
+});

@@ -246,10 +246,11 @@ export default function StoresPage() {
   // nella ricerca, un ordinamento) teneva in lista il negozio mentre la sua scheda diceva «Chiuso ora».
   // Fuori dal useMemo apposta: una memoria non sa che l'ora è cambiata. Sono poche righe, e il battito
   // al minuto rifà la pagina anche quando nessuno tocca niente.
+  // La stessa risposta va anche alla scheda (`apertoOra`): la scheda ha un battito suo, sfasato da quello
+  // della pagina, e da sola poteva scrivere «Chiuso ora» per un negozio che il filtro teneva ancora in lista.
   const todayKey = chiaveDiOggi();
-  const filtered = onlyOpen
-    ? ordinati.filter((s) => isOpenNow(((s.store_hours ?? {}) as StoreHours)[todayKey]))
-    : ordinati;
+  const apertoAdesso = (s: (typeof stores)[number]) => isOpenNow(((s.store_hours ?? {}) as StoreHours)[todayKey]);
+  const filtered = onlyOpen ? ordinati.filter(apertoAdesso) : ordinati;
 
   // C'E' UN FILTRO ACCESO? La riga di conteggio dice due cose diverse nei due casi.
   const filtriAccesi = search !== '' || onlyOpen || categoryId !== '';
@@ -394,6 +395,7 @@ export default function StoresPage() {
               posto="scheda-in-elenco"
               products={productsByStore[s.id] ?? []}
               reviews={reviewsByStore[s.id]}
+              apertoOra={apertoAdesso(s)}
             />
           ))}
         </div>
