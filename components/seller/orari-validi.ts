@@ -19,8 +19,9 @@ const orario = (min: number): string =>
 
 /**
  * «00:00» in chiusura vuol dire mezzanotte di quel giorno (lo legge così anche lib/store-hours.ts):
- * un negozio aperto fino a mezzanotte scrive 18:00–00:00. Una regola sola per chi controlla le fasce
- * e per chi propone la prossima (R23-015 correzione: `prossimaFascia` leggeva ancora 00:00 come 0).
+ * un negozio aperto fino a mezzanotte scrive 18:00–00:00. Nel controllo vale solo se l'apertura c'è
+ * ed è dopo mezzanotte (00:00–00:00 resta un errore); la proposta della fascia dopo la legge sempre
+ * come mezzanotte (vedi `prossimaFascia`).
  */
 const chiusuraInMinuti = (apre: number, chiude: number): number =>
   chiude === 0 && apre > 0 ? 24 * 60 : chiude;
@@ -65,7 +66,11 @@ export function erroreDegliOrari(settimana: StoreHours): string | null {
  */
 export function prossimaFascia(fasce: HoursInterval[] | undefined): HoursInterval {
   const coda = fasce && fasce.length > 0 ? fasce[fasce.length - 1] : undefined;
-  const ultima = coda ? chiusuraInMinuti(minuti(coda[0]), minuti(coda[1])) : NaN;
+  // Per la proposta una chiusura «00:00» è SEMPRE mezzanotte, anche con l'apertura vuota o non valida
+  // (['', '00:00'] mentre il negoziante la riscrive, o ['00:00', '00:00'] già segnalata): leggerla come 0
+  // farebbe proporre di nuovo la notte, e rimessa l'apertura la fascia 03:00–06:00 passerebbe il controllo.
+  const chiude = coda ? minuti(coda[1]) : NaN;
+  const ultima = chiude === 0 ? 24 * 60 : chiude;
   if (Number.isNaN(ultima)) return ['09:00', '13:00'];
   const inizio = Math.min(ultima + 180, 22 * 60);
   return [orario(inizio), orario(Math.min(inizio + 180, 23 * 60 + 59))];

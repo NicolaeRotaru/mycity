@@ -63,3 +63,23 @@ describe('R23-015 correzione — la fascia proposta dopo una chiusura a mezzanot
     expect(prossimaFascia([['00:00', '08:00']])).toEqual(['11:00', '14:00']);
   });
 });
+
+/**
+ * R23-015 correzione, verifica (14/11/2026) — La stessa strada passava ancora da un'apertura vuota o non
+ * valida: con l'ultima fascia ['', '00:00'] (apertura svuotata mentre si riscrive) o ['00:00', '00:00'] la
+ * proposta tornava 03:00–06:00, e rimessa l'apertura 18:00 il controllo la lasciava salvare.
+ */
+describe("R23-015 correzione — la proposta non torna alla notte con l'apertura vuota", () => {
+  it.each([
+    [['', '00:00']],
+    [['00:00', '00:00']],
+    [['xx', '00:00']],
+    [['09:00', '12:00'], ['', '00:00']],
+  ] as HoursInterval[][])('dopo %j non propone 03:00–06:00', (...fasce) => {
+    const proposta = prossimaFascia(fasce);
+    expect(proposta, 'la proposta cade nella notte').toEqual(['22:00', '23:59']);
+    // Il negoziante rimette l'apertura: la proposta non passa il controllo in silenzio.
+    const rimesse = fasce.map(([a, c]) => [a === '' || a === 'xx' || a === '00:00' ? '18:00' : a, c] as HoursInterval);
+    expect(erroreDelleFasce([...rimesse, proposta])).toMatch(/sovrappongono/);
+  });
+});
