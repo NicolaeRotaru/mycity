@@ -333,10 +333,63 @@ STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DEST_PULITA}-storico}"
 # clausola rimasta fuori. Qui si fa ogni notte invece che ogni mese: dopo la
 # sincronia si va a RIPRENDERE una foto dalla copia e la si legge davvero.
 #
-# Un singolo secchio vuoto e' legittimo (`reviews` puo' non avere ancora
-# nessuna foto). Tutta la copia vuota no: su un marketplace vivo vuol dire che
-# la copia non contiene niente, e quella notte deve essere rossa.
+# Un secchio vuoto nella copia non e' sempre la stessa cosa (R15-004, secondo giro):
+#  - VUOTO DA SEMPRE e' legittimo: `reviews` puo' non avere ancora nessuna foto;
+#  - PIENO -> VUOTO no, se l'origine non restituisce piu' niente: `sync` ha spostato tutto nello
+#    storico, e dalla notte dopo la copia sarebbe «vuota prima e dopo», cioe' verde per sempre.
+# A distinguerli e' il database (storage.objects, lo stesso SUPABASE_DB_URL di pg_dump). Se elenca
+# file in quel secchio, la copia vuota e' un guasto: rosso, ogni notte, finche' non si sistema. Se
+# non ne elenca, il secchio l'ha svuotato l'app — la cancellazione di un account toglie le sue foto
+# da `reviews` (lib/account/cancellazione.ts), e se erano le ultime il secchio resta vuoto — e la
+# notte e' verde, con un avviso. Se il database non risponde decide la memoria in ${MEMORIA_COPIA}:
+# un secchio che ha avuto file resta «pieno» finche' il database non conferma che e' vuoto.
+#
+# Tutta la copia vuota no: su un marketplace vivo vuol dire che la copia non contiene niente, e
+# quella notte deve essere rossa.
 FOTO_RIAPERTE=0
+MEMORIA_COPIA="${DEST_PULITA}/_memoria-copia"
+MEMORIA_LETTA=""
+SECCHI_ROSSI=""
+GUASTO_RIEPILOGO=""
+
+# Quanti file elenca il database per il secchio, fra quelli nati prima che la sua copia partisse
+# (una foto caricata durante la sincronia non deve far sembrare guasta una copia vuota). Stampa il
+# numero; esce con 1 se il database non risponde o non c'e' modo di chiederglielo.
+file_nel_database() {
+  local secchio="$1" n
+  [[ -n "${DB_URL:-}" ]] || return 1
+  command -v psql >/dev/null 2>&1 || return 1
+  n="$(printf '%s\n' "SELECT count(*) FROM storage.objects WHERE bucket_id = :'secchio' AND created_at < :'inizio';" \
+    | PGCONNECT_TIMEOUT=15 psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 \
+        -v secchio="$secchio" -v inizio="${INIZIO_COPIA:-now}" 2>/dev/null)" || return 1
+  [[ "$n" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$n"
+}
+
+# La memoria fra le notti: un file per secchio, «<secchio>.aveva-file», accanto ai secchi della copia
+# (non dentro uno di loro: `sync` lo sposterebbe nello storico). Si scrive ogni volta che si sa che il
+# secchio ha file, si toglie solo quando il database conferma che e' vuoto.
+aveva_file() {
+  grep -qxF "${1}.aveva-file" <<<"$MEMORIA_LETTA"
+}
+
+ricorda_che_aveva_file() {
+  local secchio="$1"
+  aveva_file "$secchio" && return 0
+  if printf 'la copia di %s ha file (notte %s)\n' "$secchio" "$TS" \
+       | rclone rcat "${MEMORIA_COPIA}/${secchio}.aveva-file" >/dev/null 2>&1; then
+    MEMORIA_LETTA+=$'\n'"${secchio}.aveva-file"
+  else
+    echo "[backup] ATTENZIONE: non riesco a scrivere la memoria del secchio ${secchio} in ${MEMORIA_COPIA}: una notte in cui il database non risponde, un secchio svuotato all'origine potrebbe passare per vuoto da sempre." >&2
+  fi
+  return 0
+}
+
+dimentica_che_aveva_file() {
+  local secchio="$1"
+  rclone deletefile "${MEMORIA_COPIA}/${secchio}.aveva-file" >/dev/null 2>&1 || true
+  MEMORIA_LETTA="$(grep -vxF "${secchio}.aveva-file" <<<"$MEMORIA_LETTA" || true)"
+}
 
 riapri_una_foto() {
   local secchio="$1"
@@ -353,14 +406,34 @@ riapri_una_foto() {
 
   primo="${elenco%%$'\n'*}"
   if [[ -z "$primo" ]]; then
-    # R15-004 — Un secchio che prima della sincronia aveva file e adesso e' vuoto non e' «ancora
-    # senza foto»: l'origine e' stata svuotata (o non si legge piu) e `sync` ha spostato tutto
-    # nello storico. Il controllo sul totale lo lasciava passare se un altro secchio si riapriva.
-    if [[ "${PRIMA_PIENO:-no}" == "si" ]]; then
-      echo "[backup] esito-foto: fallita — il secchio ${secchio} aveva file nella copia e dopo la sincronia e' vuoto: l'origine e' stata svuotata o non si legge piu. I file sono nello storico (${STORICO_FOTO}/${TS}/${secchio}), non persi." >&2
+    # R15-004 — Il secchio e' vuoto nella copia. Il controllo sul totale lo lasciava passare se un
+    # altro secchio si riapriva; e ricordarsi solo com'era la copia prima di QUESTO giro non basta,
+    # perche' la notte rossa sposta tutto nello storico e dalla notte dopo il secchio e' «vuoto prima
+    # e dopo». Decide il database; se tace, la memoria fra le notti (vedi il commento lungo qui sopra).
+    local nel_database=""
+    nel_database="$(file_nel_database "$secchio")" || nel_database=""
+    if [[ -n "$nel_database" && "$nel_database" -gt 0 ]]; then
+      ricorda_che_aveva_file "$secchio"
+      echo "[backup] esito-foto: fallita — il database elenca ${nel_database} file nel secchio ${secchio}, ma dopo la sincronia la copia e' vuota: l'origine non li restituisce (STORAGE_SYNC_SOURCE sbagliata, o una chiave che non legge piu quel secchio). Quello che c'era nella copia e' nello storico (${STORICO_FOTO}), non perso." >&2
+      GUASTO_RIEPILOGO="❌ **La copia del secchio \`${secchio}\` e' vuota** — il database ne elenca ${nel_database} file, l'origine non ne restituisce nessuno. Controlla \`STORAGE_SYNC_SOURCE\` e la chiave dell'origine; quello che c'era nella copia e' nello storico."
       return 1
     fi
-    echo "[backup] Il secchio ${secchio} non ha nessun file nella copia: niente da riaprire."
+    if [[ "$nel_database" == "0" ]]; then
+      if [[ "${PRIMA_PIENO:-no}" == "si" ]] || aveva_file "$secchio"; then
+        echo "::warning::Il secchio ${secchio} non ha piu nessun file, nemmeno nel database: l'ha svuotato l'app (per esempio la cancellazione di un account toglie le sue foto). Quelli che c'erano sono nello storico (${STORICO_FOTO}), non persi." >&2
+        riepilogo_lavoro "⚠️ Il secchio \`${secchio}\` e' rimasto senza file anche nel database: l'ha svuotato l'app (per esempio la cancellazione di un account). I file tolti sono nello storico, non persi."
+        dimentica_che_aveva_file "$secchio"
+      fi
+      echo "[backup] Il secchio ${secchio} non ha nessun file, nemmeno nel database: niente da riaprire."
+      return 0
+    fi
+    if [[ "${PRIMA_PIENO:-no}" == "si" ]] || aveva_file "$secchio"; then
+      ricorda_che_aveva_file "$secchio"
+      echo "[backup] esito-foto: fallita — il secchio ${secchio} aveva file nella copia e adesso e' vuoto, e il database non ha risposto: non so dire se l'ha svuotato l'app (per esempio la cancellazione di un account) o se l'origine non si legge piu. I file sono nello storico (${STORICO_FOTO}), non persi. Se lo svuotamento e' voluto e il database continua a non rispondere, togli ${MEMORIA_COPIA}/${secchio}.aveva-file." >&2
+      GUASTO_RIEPILOGO="❌ **Il secchio \`${secchio}\` e' vuoto nella copia e prima aveva file** — il database non ha risposto, quindi non si sa se l'ha svuotato l'app o se l'origine non si legge piu. I file sono nello storico."
+      return 1
+    fi
+    echo "[backup] Il secchio ${secchio} non ha mai avuto file nella copia: niente da riaprire."
     return 0
   fi
 
@@ -379,6 +452,7 @@ riapri_una_foto() {
 
   echo "[backup] Riaperta dalla copia: ${secchio}/${primo} (${byte} byte letti)."
   FOTO_RIAPERTE=$((FOTO_RIAPERTE + 1))
+  ricorda_che_aveva_file "$secchio"
   return 0
 }
 
@@ -429,13 +503,18 @@ else
     fi
   fi
 
+  # La memoria fra le notti si legge una volta: se non si legge, vale come vuota (decide il database).
+  MEMORIA_LETTA="$(rclone lsf --files-only "$MEMORIA_COPIA" 2>/dev/null || true)"
+
   for secchio in $SECCHI_FOTO; do
     echo "[backup] Foto: ${SORGENTE_FOTO}${secchio} → ${DESTINAZIONE_FOTO}/${secchio}"
     echo "[backup] Le foto sparite dall'origine finiscono in ${STORICO_FOTO}/${TS}/${secchio}, non nel cestino."
     PRIMA_PIENO="no"
     if [[ -n "$(rclone lsf --files-only --recursive "${DESTINAZIONE_FOTO}/${secchio}" 2>/dev/null | head -n 1)" ]]; then
       PRIMA_PIENO="si"
+      ricorda_che_aveva_file "$secchio"
     fi
+    INIZIO_COPIA="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     if ! rclone sync "${SORGENTE_FOTO}${secchio}" "${DESTINAZIONE_FOTO}/${secchio}" \
          --backup-dir "${STORICO_FOTO}/${TS}/${secchio}"; then
       echo "[backup] esito-foto: fallita — il secchio ${secchio} non e' stato copiato. Le foto NON sono al sicuro." >&2
@@ -445,11 +524,20 @@ else
     # La sincronia e' andata: adesso si va a riprendere una foto dalla copia e
     # la si legge. Vedi il commento lungo qui sopra — «uscita zero» e «si
     # riapre» sono due cose diverse.
+    GUASTO_RIEPILOGO="❌ **La copia delle foto non si riapre** — il secchio \`${secchio}\` e' stato scritto ma non si rilegge. Guarda il registro del lavoro: quasi sempre e' la chiave che sa scrivere e non leggere."
     if ! riapri_una_foto "$secchio"; then
-      riepilogo_lavoro "❌ **La copia delle foto non si riapre** — il secchio \`${secchio}\` e' stato scritto ma non si rilegge. Guarda il registro del lavoro: quasi sempre e' la chiave che sa scrivere e non leggere."
-      exit 5
+      riepilogo_lavoro "$GUASTO_RIEPILOGO"
+      # R15-004 — Si segna e si va avanti: uscire qui lasciava senza copia, quella notte, tutti i
+      # secchi dopo questo (un `products` svuotato all'origine fermava `stories` e `reviews`).
+      SECCHI_ROSSI+=" ${secchio}"
+      continue
     fi
   done
+
+  if [[ -n "$SECCHI_ROSSI" ]]; then
+    echo "[backup] esito-foto: fallita — secchi da guardare:${SECCHI_ROSSI} (il motivo e' scritto qui sopra). Gli altri secchi sono stati copiati lo stesso." >&2
+    exit 5
+  fi
 
   # Nessun secchio ha restituito un solo file: la copia delle foto e' vuota.
   # Puo' essere un'origine sbagliata, una chiave senza lettura, un secchio
