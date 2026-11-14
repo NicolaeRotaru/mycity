@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Flame, Trophy, Gift, ChevronRight, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
+import { isAuthSessionMissingError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
@@ -58,11 +59,25 @@ export default function LoyaltyPage() {
     });
   }, [router]);
 
-  const { data: account, isError: contoNonLetto, refetch: rileggiConto } = useQuery<LoyaltyAccount | null>({
+  const {
+    data: account,
+    isError: contoNonLetto,
+    isPending: contoInLettura,
+    error: erroreDelConto,
+    refetch: rileggiConto,
+  } = useQuery<LoyaltyAccount | null>({
     queryKey: queryKeys.loyalty.accountByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: () => fetchLoyaltyAccount(),
   });
+
+  // R23-018 correzione (14/11/2026) — Senza più la sessione (uscito da un'altra scheda, sessione scaduta)
+  // `getUser` dà AuthSessionMissingError: non è un guasto da riprovare, si torna all'accesso. Prima la
+  // pagina mostrava «Non riusciamo a leggere i tuoi punti» con un «Riprova» che non poteva funzionare.
+  const sessioneFinita = isAuthSessionMissingError(erroreDelConto);
+  useEffect(() => {
+    if (sessioneFinita) router.push('/sign-in?returnTo=/profile/loyalty');
+  }, [sessioneFinita, router]);
 
   const { data: txs = [], isError: movimentiNonLetti, refetch: rileggiMovimenti } = useQuery<Tx[]>({
     queryKey: queryKeys.loyalty.txsByUser(userId ?? ''),
@@ -113,6 +128,11 @@ export default function LoyaltyPage() {
   });
 
   if (!userId) return <LoadingState />;
+
+  // R23-018 correzione — Finché il conto non è arrivato (anche mentre ritenta dopo un guasto, o resta in
+  // attesa della rete) non c'è nessun numero da scrivere: prima qui usciva «0 punti, Bronzo», e solo dopo
+  // i tentativi l'errore giusto.
+  if (sessioneFinita || (contoInLettura && !account)) return <LoadingState />;
 
   // Conto non letto (e niente di vecchio da mostrare): si dice, invece di scrivere «0 punti».
   if (contoNonLetto && !account) {

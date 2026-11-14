@@ -152,3 +152,59 @@ describe('R23-018 correzione — fetchLoyaltyAccount quando cade il controllo di
     await expect(fetchLoyaltyAccount()).resolves.toMatchObject({ points_balance: 1250 });
   });
 });
+
+/**
+ * R23-018 correzione, verifica (14/11/2026) — Il verificatore ha trovato due strade rimaste:
+ * 1) mentre il conto si legge (o ritenta dopo il getUser caduto) `account` è vuoto e la pagina scriveva
+ *    «0 punti, Bronzo» finché non arrivava l'errore;
+ * 2) senza sessione getUser dà AuthSessionMissingError: la pagina diceva «Non riusciamo a leggere i tuoi
+ *    punti… Riprova», con un Riprova che non può funzionare. Si torna all'accesso.
+ */
+describe('R23-018 correzione — mentre il conto si legge, e senza sessione', () => {
+  afterEach(() => { globali.__NAVIGAZIONI__ = undefined; });
+
+  it('conto ancora in lettura (o in un nuovo tentativo): niente «0 punti», niente «Bronzo»', async () => {
+    globali.__ESITO_QUERY__ = (o: { queryKey: unknown[] }) =>
+      eIlConto(o) ? { isPending: true, isLoading: true, isSuccess: false, data: undefined } : undefined;
+    globali.__DATI_QUERY__ = (o: { queryKey: unknown[] }) => (eIlConto(o) ? undefined : []);
+    const s = await apri();
+    const t = s.radice.textContent ?? '';
+    expect(t, 'mentre il conto arriva la pagina scrive zero punti').not.toMatch(/\b0\s*punti/);
+    expect(t).not.toContain('Bronzo');
+    expect(t).not.toContain('punti MyCity');
+    s.smonta();
+  }, 60000);
+
+  it('un conto letto e vuoto (cliente nuovo) resta «0 punti»: è un dato, non un guasto', async () => {
+    globali.__DATI_QUERY__ = (o: { queryKey: unknown[] }) => (eIlConto(o) ? null : []);
+    const s = await apri();
+    const t = s.radice.textContent ?? '';
+    expect(t).toContain('punti MyCity');
+    expect(t).toContain('Bronzo');
+    s.smonta();
+  }, 60000);
+
+  it('senza sessione si torna all\'accesso, invece di un «Riprova» che non può funzionare', async () => {
+    const { AuthSessionMissingError } = await import('@supabase/supabase-js');
+    globali.__NAVIGAZIONI__ = [];
+    globali.__ESITO_QUERY__ = (o: { queryKey: unknown[] }) =>
+      eIlConto(o) ? { isError: true, isSuccess: false, data: undefined, error: new AuthSessionMissingError() } : undefined;
+    globali.__DATI_QUERY__ = (o: { queryKey: unknown[] }) => (eIlConto(o) ? undefined : []);
+    const s = await apri();
+    const t = s.radice.textContent ?? '';
+    expect(globali.__NAVIGAZIONI__, 'la pagina non manda all\'accesso').toContainEqual({ tipo: 'push', dove: '/sign-in?returnTo=/profile/loyalty' });
+    expect(t).not.toContain('Non riusciamo a leggere i tuoi punti');
+    expect(t).not.toContain('Bronzo');
+    s.smonta();
+  }, 60000);
+
+  it('con la rete caduta, invece, resta l\'errore con «Riprova» (e nessun rimando all\'accesso)', async () => {
+    globali.__NAVIGAZIONI__ = [];
+    globali.__ESITO_QUERY__ = (o: { queryKey: unknown[] }) => (eIlConto(o) ? rete() : undefined);
+    globali.__DATI_QUERY__ = (o: { queryKey: unknown[] }) => (eIlConto(o) ? undefined : []);
+    const s = await apri();
+    expect(s.radice.textContent).toContain('Non riusciamo a leggere i tuoi punti');
+    expect(globali.__NAVIGAZIONI__).toEqual([]);
+    s.smonta();
+  }, 60000);
+});
