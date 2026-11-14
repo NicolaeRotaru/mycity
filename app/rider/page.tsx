@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef, useState } from 'react';
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -109,6 +111,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{children}</p>
   );
 }
+
+/**
+ * R20-011 — La presa non è riuscita perché l'ordine non è più prendibile: l'ha preso un altro
+ * fattorino, oppure non è più pronto (annullato, tornato in preparazione). `prendi_ordine` risponde
+ * GIA_PRESO in tutti e due i casi, quindi il testo non dice più «preso da un altro rider».
+ */
+class OrdineNonPiuDisponibile extends Error {}
 
 /** 5/11/2026 — Le consegne del fattorino ancora aperte: tutto tranne consegnato e annullato. */
 const STATI_DELLE_MIE_CONSEGNE_APERTE = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
@@ -311,6 +320,30 @@ export default function RiderDashboardPage() {
   const inPrep     = liberi.filter((o) => o.delivery_status === 'ACCEPTED').sort(byZone);
   const bachecaGuasta = letturaBacheca.data?.bachecaGuasta ?? false;
 
+  /** R20-011 — Toglie subito un ordine dagli ordini liberi in memoria (preso da me, o non più prendibile). */
+  const togliDallaBacheca = (orderId: string) => {
+    qc.setQueryData<typeof letturaBacheca.data>(queryKeys.rider.orders, (prima) =>
+      prima ? { ...prima, liberi: prima.liberi.filter((o) => o.id !== orderId) } : prima,
+    );
+  };
+
+  /**
+   * R20-011 — Gli ordini con una presa ancora in volo, TUTTI. `claim.variables` ricorda solo
+   * l'ultimo `mutate`: dopo un «Accetta» su un secondo ordine il primo tornava premibile mentre la
+   * sua presa viaggiava ancora, e un nuovo tocco mandava un secondo `prendi_ordine` sullo stesso
+   * ordine. Quello trovava `rider_id` già pieno (era suo) e il fattorino leggeva «l'ha preso un
+   * altro fattorino». Il ref scarta il doppio tocco anche prima che la pagina si ridisegni; lo
+   * stato fa girare e spegne il pulsante. Si svuota in `onSettled` della useMutation, che vale per
+   * ogni presa: i richiami passati a `mutate()` TanStack li chiama solo per l'ultima.
+   */
+  const preseInVolo = useRef<Set<string>>(new Set());
+  const [ordiniInVolo, setOrdiniInVolo] = useState<ReadonlySet<string>>(() => new Set());
+  const segnaInVolo = (orderId: string, inVolo: boolean) => {
+    if (inVolo) preseInVolo.current.add(orderId);
+    else preseInVolo.current.delete(orderId);
+    setOrdiniInVolo(new Set(preseInVolo.current));
+  };
+
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
       /*
@@ -332,13 +365,15 @@ export default function RiderDashboardPage() {
       if (error) throw error;
       const esito = data as { ok: boolean; id?: string; motivo?: string } | null;
       if (!esito?.ok || !esito.id) {
-        throw new Error(
+        const motivo =
           esito?.motivo === 'NON_FATTORINO'
             ? 'Il tuo profilo fattorino non è ancora approvato'
             // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
             : esito?.motivo === 'DOCUMENTI_SCADUTI'
               ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
-              : 'Ordine già preso da un altro rider',
+              : null;
+        throw motivo ? new Error(motivo) : new OrdineNonPiuDisponibile(
+          'Questo ordine non è più disponibile: l’ha preso un altro fattorino oppure non è più pronto.',
         );
       }
       const data2 = { id: esito.id };
@@ -353,12 +388,32 @@ export default function RiderDashboardPage() {
     },
     onSuccess: (data) => {
       trackRiderOrderAccepted(data.id);
+      togliDallaBacheca(data.id);
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // R20-011 — Un «Accetta» perso è un dato vecchio, non solo un messaggio: l'ordine esce subito
+    // dall'elenco e la bacheca si rilegge, invece di restare lì col suo «Accetta» fino al giro dopo.
+    onError: (err: unknown, orderId: string) => {
+      if (err instanceof OrdineNonPiuDisponibile) {
+        togliDallaBacheca(orderId);
+        qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+        toast.error(err.message);
+        return;
+      }
+      toast.error(friendlyError(err));
+    },
+    // R20-011 — Questa presa è tornata (bene o male): il suo pulsante si riaccende.
+    onSettled: (_data, _err, orderId: string) => segnaInVolo(orderId, false),
   });
+
+  /** R20-011 — Un tocco su «Accetta»: se la presa di quell'ordine è già in volo, non ne parte un'altra. */
+  const accetta = (orderId: string) => {
+    if (preseInVolo.current.has(orderId)) return;
+    segnaInVolo(orderId, true);
+    claim.mutate(orderId);
+  };
 
   // Toggle online/offline: stesso update profilo della pagina Disponibilità.
   const toggleOnline = useMutation({
@@ -613,8 +668,9 @@ export default function RiderDashboardPage() {
                     </div>
                     <Button
                       variant="accent"
-                      onClick={() => claim.mutate(o.id)}
-                      loading={claim.isPending}
+                      onClick={() => accetta(o.id)}
+                      // R20-011 — Gira, ed è spento, ogni pulsante con la sua presa in volo, e solo quelli.
+                      loading={ordiniInVolo.has(o.id)}
                     >
                       Accetta
                     </Button>
