@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 /**
  * R15-005 (il pezzo che si chiude qui) — la pagina «non trovata» non si presenta come la home.
@@ -20,15 +22,17 @@ vi.mock('next/font/google', () => ({
 }));
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'it', getMessages: async () => ({}) }));
 
-const { metadata: pagina404 } = await import('@/app/not-found');
+const { metadata: pagina404, default: PaginaNonTrovata } = await import('@/app/not-found');
 const { metadata: radice } = await import('@/app/layout');
 
-const TITOLO = 'Pagina non trovata · MyCity';
+const TITOLO = pagina404.title as string;
 type Campi = Record<string, unknown>;
 
 describe('R15-005 — la 404 ha titolo e anteprima suoi, e il resto della radice', () => {
   it('il titolo e la descrizione dicono che la pagina non c’è', () => {
-    expect(pagina404.title).toBe(TITOLO);
+    expect(TITOLO).toMatch(/^404\b/);
+    expect(TITOLO).toMatch(/non esiste/i);
+    expect(TITOLO).toMatch(/MyCity$/);
     expect(String(pagina404.description)).toContain('non esiste');
   });
 
@@ -55,5 +59,37 @@ describe('R15-005 — la 404 ha titolo e anteprima suoi, e il resto della radice
 
   it('il noindex non lo scrive la pagina: Next lo mette già sulle 404, e usciva doppio', () => {
     expect(pagina404.robots).toBeUndefined();
+  });
+});
+
+/**
+ * R15-005, correzione (14/11) — la scritta dell'h1 deve comparire UNA volta sola.
+ *
+ * Next 15 manda i metadati in streaming dentro il corpo della pagina: col titolo «Pagina non trovata ·
+ * MyCity» e l'h1 «Pagina non trovata», la prova e2e «404 page is custom» (getByText('Pagina non
+ * trovata')) trovava due elementi e cadeva. Qui si disegna la pagina vera e si confronta l'h1 col titolo
+ * dei metadati, con quello dell'anteprima e con quello di twitter.
+ */
+describe('R15-005 — il titolo dei metadati non ripete la scritta dell’h1', () => {
+  const html = renderToStaticMarkup(createElement(PaginaNonTrovata));
+  const h1 = (html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? '').replace(/<[^>]+>/g, '').trim();
+
+  it('l’h1 dice «Pagina non trovata», ed è uno solo', () => {
+    expect(h1).toBe('Pagina non trovata');
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+  });
+
+  it('né il titolo, né quello dell’anteprima, né quello di twitter contengono la scritta dell’h1', () => {
+    const titoli = [
+      pagina404.title,
+      (pagina404.openGraph as Campi).title,
+      (pagina404.twitter as Campi).title,
+    ].map((t) => String(t).toLowerCase());
+    for (const t of titoli) expect(t).not.toContain(h1.toLowerCase());
+  });
+
+  it('la scritta dell’h1 compare una volta sola nel corpo disegnato', () => {
+    const testo = html.replace(/<[^>]+>/g, ' ').toLowerCase();
+    expect(testo.split(h1.toLowerCase()).length - 1).toBe(1);
   });
 });
