@@ -689,7 +689,11 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
  */
 export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const expected = process.env.INTERNAL_API_SECRET;
+    // R23-009 correzione (14/11/2026) — Lo stesso «a capo» di CRON_SECRET: un segreto incollato su
+    // Vercel con l'invio in fondo non combaciava mai con l'intestazione (che arriva già ripulita), e
+    // /api/stripe/payout rispondeva 403 per sempre anche a chi aveva diritto. Si ripulisce come in
+    // withCronAuth; un segreto fatto solo di spazi vale come assente (503), mai come porta aperta.
+    const expected = process.env.INTERNAL_API_SECRET?.trim();
     if (!expected) {
       return ApiErrors.unavailable('INTERNAL_API_SECRET non configurato');
     }

@@ -121,3 +121,103 @@ describe('le porte di stato in produzione, col segreto che finisce con un «a ca
     expect(corpo.db).toBeUndefined();
   });
 });
+
+/**
+ * R23-009 correzione (14/11/2026) — Lo stesso «a capo» sugli altri due segreti dello stesso giro.
+ *
+ * Il collaudo (K06) ha trovato il gemello su INTERNAL_API_SECRET, che apre /api/stripe/payout, e su
+ * EDGE_TRUST_SECRET, che fa credere alla riga di Cloudflare con l'indirizzo vero. Fallivano chiusi,
+ * quindi non era un buco: ma la porta restava chiusa anche a chi aveva diritto. Qui la regola è la
+ * stessa di CRON_SECRET: un «a capo» in fondo non cambia il segreto, un segreto di soli spazi è
+ * assente, e niente entra con un segreto diverso o vuoto.
+ */
+const INTERNO = 'segreto-interno';
+
+function bussaDentro(segreto: string | null): NextRequest {
+  return new Request('https://mycity.test/api/stripe/payout', {
+    method: 'POST',
+    headers: segreto === null ? {} : { 'x-internal-secret': segreto },
+  }) as unknown as NextRequest;
+}
+
+describe('la rotta interna (payout), con INTERNAL_API_SECRET che finisce con un «a capo»', () => {
+  beforeEach(() => {
+    vi.stubEnv('INTERNAL_API_SECRET', `${INTERNO}\n`);
+  });
+
+  it('chi manda il segreto giusto entra, invece di prendere 403 per sempre', async () => {
+    const { withInternalAuth } = await import('@/lib/api/middleware');
+    const lavoro = vi.fn(async () => NextResponse.json({ fatto: true }));
+    const risposta = await withInternalAuth(lavoro)(bussaDentro(INTERNO));
+    expect(risposta.status, 'il segreto giusto risponde 403').toBe(200);
+    expect(lavoro).toHaveBeenCalledTimes(1);
+  });
+
+  it('anche con «\\r\\n» in fondo (incollato da Windows) il segreto giusto entra', async () => {
+    vi.stubEnv('INTERNAL_API_SECRET', `${INTERNO}\r\n`);
+    const { withInternalAuth } = await import('@/lib/api/middleware');
+    const lavoro = vi.fn(async () => NextResponse.json({ fatto: true }));
+    expect((await withInternalAuth(lavoro)(bussaDentro(INTERNO))).status).toBe(200);
+  });
+
+  it('un segreto diverso, un prefisso o nessuna intestazione restano fuori (403)', async () => {
+    const { withInternalAuth } = await import('@/lib/api/middleware');
+    const lavoro = vi.fn(async () => NextResponse.json({ fatto: true }));
+    const rotta = withInternalAuth(lavoro);
+    for (const gettone of ['segreto-sbagliato', 'segreto-intern', `${INTERNO}x`, '', null]) {
+      expect((await rotta(bussaDentro(gettone))).status, `entra con ${JSON.stringify(gettone)}`).toBe(403);
+    }
+    expect(lavoro).not.toHaveBeenCalled();
+  });
+
+  it('un segreto fatto solo di spazi o «a capo» vale come assente: 503, e nessuno entra', async () => {
+    for (const vuoto of ['\n', '   ', ' \r\n\t']) {
+      vi.stubEnv('INTERNAL_API_SECRET', vuoto);
+      vi.resetModules();
+      const { withInternalAuth } = await import('@/lib/api/middleware');
+      const lavoro = vi.fn(async () => NextResponse.json({ fatto: true }));
+      const rotta = withInternalAuth(lavoro);
+      for (const gettone of [null, '', ' ', vuoto]) {
+        expect((await rotta(bussaDentro(gettone))).status, `segreto ${JSON.stringify(vuoto)}, gettone ${JSON.stringify(gettone)}`).toBe(503);
+      }
+      expect(lavoro).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe("l'indirizzo vero dietro Cloudflare, con EDGE_TRUST_SECRET che finisce con un «a capo»", () => {
+  function daCloudflare(gettone: string | null): Request {
+    return new Request('https://mycity.test/api/qualcosa', {
+      headers: {
+        ...(gettone === null ? {} : { 'x-edge-token': gettone }),
+        'cf-connecting-ip': '203.0.113.7',
+        'x-forwarded-for': '198.51.100.9',
+      },
+    });
+  }
+
+  it('col gettone di bordo giusto vale la riga di Cloudflare', async () => {
+    vi.stubEnv('EDGE_TRUST_SECRET', 'bordo-fidato\n');
+    const { getClientIp } = await import('@/lib/rate-limit');
+    expect(getClientIp(daCloudflare('bordo-fidato')), 'il bordo fidato non combacia mai').toBe('203.0.113.7');
+  });
+
+  it('senza gettone, o con uno sbagliato, la riga di Cloudflare resta ignorata', async () => {
+    vi.stubEnv('EDGE_TRUST_SECRET', 'bordo-fidato\n');
+    const { getClientIp } = await import('@/lib/rate-limit');
+    for (const gettone of [null, '', 'bordo-sbagliato', 'bordo-fidat', 'bordo-fidato x']) {
+      expect(getClientIp(daCloudflare(gettone)), `crede a Cloudflare con ${JSON.stringify(gettone)}`).toBe('198.51.100.9');
+    }
+  });
+
+  it('un segreto di bordo fatto solo di spazi non fa credere a nessuno', async () => {
+    for (const vuoto of ['\n', '   ', ' \r\n']) {
+      vi.stubEnv('EDGE_TRUST_SECRET', vuoto);
+      vi.resetModules();
+      const { getClientIp } = await import('@/lib/rate-limit');
+      for (const gettone of [null, '', ' ', vuoto]) {
+        expect(getClientIp(daCloudflare(gettone)), `segreto ${JSON.stringify(vuoto)}, gettone ${JSON.stringify(gettone)}`).toBe('198.51.100.9');
+      }
+    }
+  });
+});
