@@ -22,6 +22,21 @@ import { indirizzoContatto } from '@/lib/contatti-pubblici';
  * deve partire.
  */
 
+// I messaggi a comparsa: si tengono quelli d'errore, per confrontarli col riquadro (giro di
+// correzione di R24-016, collaudo K06: il toast diceva «anti-robot … non si è caricato» mentre il
+// riquadro diceva «anti-bot … non ha risposto»).
+const avvisi = vi.hoisted(() => ({ errori: [] as string[] }));
+vi.mock('sonner', async (originale) => {
+  const vero = await originale<typeof import('sonner')>();
+  const toast = Object.assign((...a: Parameters<typeof vero.toast>) => vero.toast(...a), vero.toast, {
+    error: (m: unknown) => {
+      avvisi.errori.push(String(m));
+      return 0;
+    },
+  });
+  return { ...vero, toast };
+});
+
 type Pagina = ComponentType<Record<string, unknown>>;
 type G = Record<string, unknown> & {
   __QUERY_FINTA__?: string;
@@ -49,6 +64,7 @@ afterEach(() => {
   delete g.__QUERY_FINTA__;
   delete g.__AUTH_FINTA__;
   delete g.__NAVIGAZIONI__;
+  avvisi.errori = [];
   delete w.__turnstileLoaded;
   delete w.turnstile;
   vi.unstubAllGlobals();
@@ -115,5 +131,16 @@ describe('l’anti-robot che non si carica non promette una strada che non c’�
 
     expect(iscrizioni, 'senza gettone il modulo è partito lo stesso: il server lo rifiuta sempre').toHaveLength(0);
     expect(g.__NAVIGAZIONI__).toEqual([]);
+
+    // Il messaggio a comparsa dice lo stesso guasto del riquadro, con le stesse parole: lo stesso
+    // motivo («Il controllo anti-bot non si è aperto.») e la stessa strada (ricaricare o Google).
+    const motivo = 'Il controllo anti-bot non si è aperto.';
+    expect(testoVisibile(s.radice), 'controprova: il riquadro porta il motivo di Turnstile').toContain(motivo);
+    const avviso = avvisi.errori.at(-1) ?? '';
+    expect(avviso, 'premuto «Registrati» col riquadro rotto non è comparso nessun messaggio').not.toBe('');
+    expect(avviso.startsWith(motivo), `il messaggio a comparsa racconta un altro guasto del riquadro: «${avviso}»`).toBe(true);
+    expect(avviso).not.toMatch(/anti-robot/i);
+    expect(avviso).toMatch(/non può partire/);
+    expect(avviso).toMatch(/Google/);
   }, 30000);
 });
