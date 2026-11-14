@@ -2326,7 +2326,6 @@ export interface Database {
           decided_by: string | null;
           refunded_at: string | null;
           decision_notes: string | null;
-          customer_shipped_back_on: string | null;
         };
         Insert: {
           id?: string;
@@ -2347,7 +2346,6 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
-          customer_shipped_back_on?: string | null;
         };
         Update: {
           id?: string;
@@ -2368,7 +2366,6 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
-          customer_shipped_back_on?: string | null;
         };
         Relationships: [];
       };

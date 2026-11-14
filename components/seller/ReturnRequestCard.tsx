@@ -22,10 +22,6 @@ export type ReturnRow = {
   created_at: string;
   order_item_id?: string | null;
   decided_at?: string | null;
-  /** R17-003 — Il giorno in cui il cliente dice di aver rispedito la merce (migrazione 411). */
-  customer_shipped_back_on?: string | null;
-  /** R17-003 — Il numero di spedizione che il cliente ha dato insieme al giorno. */
-  tracking_number?: string | null;
 };
 
 const REASON_LABEL: Record<string, string> = {
@@ -206,22 +202,6 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
         {nota.esclusi && (
           <p role="note" className="text-secondary-800 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-2">
             <span className="font-semibold">Da sapere: </span>{nota.esclusi} Scrivi l&apos;importo da rimborsare senza quei prodotti.
-          </p>
-        )}
-
-        {/*
-          13/11/2026 (R17-003) — LA SPEDIZIONE LA DICHIARA IL CLIENTE, E IL NEGOZIO LA VEDE.
-          Prima «in rientro» lo scriveva solo il negozio: un recesso con il pacco gia' partito
-          arrivava al quindicesimo giorno ancora «Approvato», e la scheda offriva «Chiudi senza
-          rimborso». Adesso il cliente porta lui il reso in rientro, col giorno e il numero.
-        */}
-        {(ret.customer_shipped_back_on || ret.tracking_number) && (
-          <p role="note" className="text-primary-800 bg-primary-50 border border-primary-200 rounded-lg px-3 py-2">
-            <Truck size={14} className="inline mr-1 -mt-0.5" aria-hidden />
-            <span className="font-semibold">Il cliente dichiara di aver rispedito la merce</span>
-            {ret.customer_shipped_back_on ? <> il {formatDate(`${ret.customer_shipped_back_on.slice(0, 10)}T12:00:00`)}</> : null}
-            {ret.tracking_number ? <>, numero di spedizione <span className="font-mono">{ret.tracking_number}</span></> : null}.
-            {recesso && ' È un recesso: non si chiude senza rimborso. Quando arriva il pacco premi «Ho ricevuto la merce» e rimborsa.'}
           </p>
         )}
 
