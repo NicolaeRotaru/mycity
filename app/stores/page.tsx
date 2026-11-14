@@ -212,17 +212,12 @@ export default function StoresPage() {
 
   // L'ora di Piacenza, che batte al minuto come quella delle schede: con «Aperti ora» acceso l'elenco
   // si rifà quando un negozio chiude (prima restava com'era alla prima resa, con la scheda che
-  // diceva «Chiuso ora»). `null` prima dell'idratazione: allora vale l'orologio di sempre.
-  const adesso = useOraDiPiacenza();
+  // diceva «Chiuso ora»). Il battito serve solo a rifare la pagina: vedi `filtered` qui sotto.
+  useOraDiPiacenza();
 
-  const filtered = useMemo(() => {
-    const todayKey = chiaveDiOggi(adesso ?? undefined);
+  const ordinati = useMemo(() => {
     let result = stores.filter((s) => {
       if (search && !s.store_name?.toLowerCase().includes(search.toLowerCase())) return false;
-      if (onlyOpen) {
-        const hours = (s.store_hours ?? {}) as StoreHours;
-        if (!isOpenNow(hours[todayKey], adesso ?? undefined)) return false;
-      }
       if (categoryId) {
         const cats = categoriesByStore[s.id];
         if (!cats || !cats.has(categoryId)) return false;
@@ -243,7 +238,18 @@ export default function StoresPage() {
       result = [...result].sort((a, b) => (countByStore[b.id] ?? 0) - (countByStore[a.id] ?? 0));
     }
     return result;
-  }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore, adesso]);
+  }, [stores, search, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
+
+  // R23-010 correzione (14/11/2026) — «Aperti ora» si chiede a ogni resa con l'ora vera, la stessa che
+  // legge StorePreviewCard per scrivere «Aperto ora» o «Chiuso ora». Prima il filtro usava l'ora
+  // dell'ultimo battito, vecchia fino a 60 secondi: una resa nuova subito dopo la chiusura (una lettera
+  // nella ricerca, un ordinamento) teneva in lista il negozio mentre la sua scheda diceva «Chiuso ora».
+  // Fuori dal useMemo apposta: una memoria non sa che l'ora è cambiata. Sono poche righe, e il battito
+  // al minuto rifà la pagina anche quando nessuno tocca niente.
+  const todayKey = chiaveDiOggi();
+  const filtered = onlyOpen
+    ? ordinati.filter((s) => isOpenNow(((s.store_hours ?? {}) as StoreHours)[todayKey]))
+    : ordinati;
 
   // C'E' UN FILTRO ACCESO? La riga di conteggio dice due cose diverse nei due casi.
   const filtriAccesi = search !== '' || onlyOpen || categoryId !== '';
