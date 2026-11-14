@@ -1,13 +1,13 @@
 {
   "sessione": "R24",
-  "aggiornato": "2026-11-13 13:50",
+  "aggiornato": "2026-11-14 09:45",
   "finita": true,
-  "testa": "2d57b2e4245d24b5dce19b64b03892a41a75d35f",
+  "testa": "0c46f3a6078fd5756eed5405b37719d88fd4fcc6",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "2d57b2e4245d24b5dce19b64b03892a41a75d35f",
-    "nota": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify → uscita 0: typecheck, lint, 1434 file di prova verdi e 1 saltato (già saltato sulla base). Le prove comuni sono identiche alla base."
+    "testa": "0c46f3a6078fd5756eed5405b37719d88fd4fcc6",
+    "nota": "Giro di correzione (14/11): NODE_OPTIONS=--max-old-space-size=6144 npm run verify su 0c46f3a6 (git rev-parse HEAD nello stesso comando) → uscita 0: typecheck, lint, 1435 file di prova verdi e 1 saltato (9753 prove verdi, 1 saltata), come sulla base."
   },
   "voci": [
     {
@@ -179,31 +179,67 @@
     {
       "id": "R24-006",
       "chiave": "immagini-media|se la foto di un prodotto è stata cancellata, la scheda resta un riquadro bianco invece della foto di ripiego",
-      "esito": "riparato",
-      "commit": "398b860906c1e50bef7a8f90fccce13673b1634f",
+      "esito": "serve_file_altrui",
+      "commit": "3f67d2d62dfd01184cc6da69f8d0110133e511f7",
       "file_toccati": [
         "components/ui/FotoConRipiego.tsx",
         "components/ProductCard.tsx",
         "components/checkout/CartGroupsList.tsx",
         "components/home/TrendingNow.tsx",
-        "app/cart/page.tsx"
+        "app/cart/page.tsx",
+        "app/product/[id]/page.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx",
-        "tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx"
+        "tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx",
+        "tests/unit/riparazione-r24-foto-grande-con-ripiego.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx tests/unit/riparazione-r24-foto-grande-con-ripiego.test.tsx --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 398b860906c1e50bef7a8f90fccce13673b1634f^ --file components/ProductCard.tsx,components/checkout/CartGroupsList.tsx,components/home/TrendingNow.tsx,app/cart/page.tsx --prove tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx,tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx --json"
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f67d2d62dfd01184cc6da69f8d0110133e511f7^ --file \"app/product/[id]/page.tsx\" --prove tests/unit/riparazione-r24-foto-grande-con-ripiego.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nuovo componente FotoConRipiego (<Image> con onError che passa a /foto-mancante.svg, si ricorda l'indirizzo fallito e riprova se la src cambia) usato nella scheda prodotto, nella miniatura in cassa, in «Trending ora» e nella riga del carrello. Prova: componenti veri, si lancia l'evento error sull'immagine e si legge il src.",
-      "nota": "La prova rimessa è lanciata senza il file nuovo in --file: tolto, la prova cade per la struttura (uscita 3, il carrello e le schede non trovano l'import), non per il comportamento. Con i quattro file che lo usano riportati alla base la prova è rossa sul comportamento (uscita 0). Giro finale (2d57b2e4): Aggiunta in riparazione-r24-foto-che-non-risponde.test.tsx la prova su FotoConRipiego: ripiego che fallisce 5 volte, src fisso e ridisegni limitati..",
-      "verificato_da": "collaudo L3-P (sonnet): regge, senza onError 4 prove rosse; nessun giro infinito per costruzione (prova aggiunta nel giro finale). Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro: nuovo componente FotoConRipiego (<Image> con onError che passa a /foto-mancante.svg) nella scheda prodotto, nella miniatura in cassa, in «di tendenza» e nella riga del carrello. Giro di correzione (3f67d2d6, collaudo K06): nella pagina prodotto anche la foto grande (:708) e le miniature sotto (:772) passano a FotoConRipiego. La prova nuova monta la pagina vera, lancia l'errore dell'immagine e legge la src: la foto cancellata diventa il ripiego, quella buona resta.",
+      "nota": "Giro di correzione (14/11, «R24 secondo»): la parte che sta nei file di R24 è chiusa: app/product/[id]/page.tsx, prova rimessa uscita 0. Il resto della diagnosi di K06 sta in file che non sono di R24: sei file di nessuno, SponsoredCarousel (R20), HeroStoreCard (R08/R23) e la prova comune la-foto-chiesta-piu-piccola-del-riquadro (deroga solo per l'onda 1). Per questo l'esito è serve_file_altrui, con la diff esatta di ogni file. Le diff sono provate in una copia a parte: tsc verde; 41 file di prova collegati, 498 prove, verdi; la guardia comune passa da 20 a 32 riquadri misurati ed è verde. Chi smentisce (sonnet) ha visto la guardia diventare rossa mettendo apposta 40px in SponsoredCarousel. Fuori dalla diagnosi, visti da chi smentisce e lasciati: l'ingrandimento della foto (app/product/[id]/page.tsx:814, un <img> senza ripiego, mostra l'icona rotta) e le foto delle recensioni (:1526). Restano senza ripiego anche altre foto di prodotto fuori dall'elenco di K06: SearchBar.tsx:237, app/orders/page.tsx:389, app/orders/[id]/page.tsx:780, app/lists/[id]/page.tsx:352, DropOfDay.tsx:171, app/shared-cart/page.tsx:252, app/seller/products/page.tsx:452 e :557.",
+      "verificato_da": "Primo giro: collaudo L3-P (sonnet), regge. Giro di correzione: smentita indipendente (sonnet). Sulla pagina prodotto: la prova cade sul comportamento togliendo la correzione; priority, sizes, loader e className passano; la seconda foto non si nasconde; 35 file di prova che nominano la pagina, 419 prove, verdi. Rilievi fuori diagnosi: l'ingrandimento :814 e le foto delle recensioni :1526. Diff altrui: regge (8 righe coperte, import giusti, guardia rossa con un 40px messo apposta).",
+      "serve_file_altrui": [
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "righe 202 e 232 (e l'import a riga 5): le due miniature passano a FotoConRipiego; import Image sostituito, perché non resta nessuna <Image>.\nDiff:\n@@ -4,3 +4,3 @@ import { useMemo } from 'react';\n import Link from 'next/link';\n-import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import caricatoreFotoRemote from '@/lib/image-loader';\n@@ -201,3 +201,3 @@ export default function ReorderRail() {\n                   {p.image && (\n-                    <Image src={sizedImage(p.image, 'thumb')} alt={p.name} fill sizes=\"44px\" loader={caricatoreFotoRemote} className=\"object-cover\" />\n+                    <FotoConRipiego src={sizedImage(p.image, 'thumb')} alt={p.name} fill sizes=\"44px\" loader={caricatoreFotoRemote} className=\"object-cover\" />\n                   )}\n@@ -231,3 +231,3 @@ export default function ReorderRail() {\n                       <div key={`${o.id}-${i}`} className=\"relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-cream-100\">\n-                        {img && <Image src={sizedImage(img, 'thumb')} alt=\"\" fill sizes=\"48px\" loader={caricatoreFotoRemote} className=\"object-cover\" />}\n+                        {img && <FotoConRipiego src={sizedImage(img, 'thumb')} alt=\"\" fill sizes=\"48px\" loader={caricatoreFotoRemote} className=\"object-cover\" />}\n                       </div>"
+        },
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "riga 81 (e l'import a riga 4): la miniatura passa a FotoConRipiego; import Image sostituito.\nDiff:\n@@ -3,3 +3,3 @@\n import Link from 'next/link';\n-import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import { useQuery } from '@tanstack/react-query';\n@@ -80,3 +80,3 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro\n                 {img && (\n-                  <Image\n+                  <FotoConRipiego\n                     src={sizedImage(img, 160, { quadrato: true })}"
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "riga 97 (e l'import a riga 4): la miniatura passa a FotoConRipiego; import Image sostituito.\nDiff:\n@@ -3,3 +3,3 @@\n import Link from 'next/link';\n-import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import caricatoreFotoRemote from '@/lib/image-loader';\n@@ -96,3 +96,3 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {\n                 {img && (\n-                  <Image\n+                  <FotoConRipiego\n                     src={sizedImage(img, 160, { quadrato: true })}"
+        },
+        {
+          "file": "components/products/FrequentlyBoughtTogether.tsx",
+          "modifica": "riga 84 (e l'import a riga 4): la foto passa a FotoConRipiego; import Image sostituito.\nDiff:\n@@ -3,3 +3,3 @@\n import Link from 'next/link';\n-import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import { useQuery } from '@tanstack/react-query';\n@@ -83,3 +83,3 @@ export function FrequentlyBoughtTogether({\n                 {img && (\n-                  <Image\n+                  <FotoConRipiego\n                     src={sizedImage(img, 'card')}"
+        },
+        {
+          "file": "components/cart/CartUpsell.tsx",
+          "modifica": "riga 88 (e l'import a riga 4): la miniatura passa a FotoConRipiego; import Image sostituito.\nDiff:\n@@ -3,3 +3,3 @@\n import Link from 'next/link';\n-import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import caricatoreFotoRemote from '@/lib/image-loader';\n@@ -87,3 +87,3 @@ export function CartUpsell({ items }: Props) {\n                   {img && (\n-                    <Image\n+                    <FotoConRipiego\n                       src={sizedImage(img, 144, { quadrato: true })}"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "riga 117 (e l'import a riga 5), file di R20: la miniatura passa a FotoConRipiego; import Image sostituito.\nDiff:\n@@ -4,3 +4,3 @@ import { useEffect, useRef } from 'react';\n import Link from 'next/link';\n-import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import caricatoreFotoRemote from '@/lib/image-loader';\n@@ -116,3 +116,3 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {\n               <div className=\"relative aspect-square bg-cream-100\">\n-                {img && <Image src={sizedImage(img, 144, { quadrato: true })} alt={p.name} fill sizes=\"144px\" loader={caricatoreFotoRemote} className=\"object-cover\" />}\n+                {img && <FotoConRipiego src={sizedImage(img, 144, { quadrato: true })} alt={p.name} fill sizes=\"144px\" loader={caricatoreFotoRemote} className=\"object-cover\" />}\n               </div>"
+        },
+        {
+          "file": "components/home/HeroStoreCard.tsx",
+          "modifica": "riga 229 (più un import dopo riga 4), file di R08/R23: la miniatura del prodotto passa a FotoConRipiego. La copertina del negozio a riga 168 resta <Image> (non è una foto di prodotto, e minori-s09-home.test.ts:40 la legge così): import Image resta.\nDiff:\n@@ -4,2 +4,3 @@ import Link from 'next/link';\n import Image from 'next/image';\n+import FotoConRipiego from '@/components/ui/FotoConRipiego';\n import { useSyncExternalStore } from 'react';\n@@ -228,3 +229,3 @@ export default function HeroStoreCard() {\n                         <div className=\"aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative\">\n-                          {img && <Image src={sizedImage(img, 'thumb')} alt=\"\" fill sizes=\"96px\" loader={caricatoreFotoRemote} className=\"object-cover\" />}\n+                          {img && <FotoConRipiego src={sizedImage(img, 'thumb')} alt=\"\" fill sizes=\"96px\" loader={caricatoreFotoRemote} className=\"object-cover\" />}\n                         </div>"
+        },
+        {
+          "file": "tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts",
+          "modifica": "riga 111, prova comune: la regex /<Image[\\s\\S]{0,700}?\\/>/g diventa /<(?:Image|FotoConRipiego)[\\s\\S]{0,700}?\\/>/g, così le foto passate a FotoConRipiego restano nel conto (oggi escono in silenzio e la prova resta verde). Con la regex nuova e tutte le modifiche qui sopra la prova è verde.\nDiff:\n@@ -110,3 +110,6 @@ describe(\"l'invariante di STRUTTURA sul sito vero\", () => {\n       const src = readFileSync(f, 'utf8');\n-      const re = /<Image[\\s\\S]{0,700}?\\/>/g;\n+      // 14/11/2026 (R24-006) — Le foto di prodotto passano da FotoConRipiego, che dentro è\n+      // un'<Image> con le stesse misure: senza guardare anche lei, ogni foto spostata usciva\n+      // dal conto in silenzio e la prova restava verde.\n+      const re = /<(?:Image|FotoConRipiego)[\\s\\S]{0,700}?\\/>/g;\n       let m: RegExpExecArray | null;"
+        }
+      ]
     },
     {
       "id": "R24-007",
@@ -269,7 +305,7 @@
     {
       "id": "R24-009",
       "chiave": "navigazione-gerarchia|nella scheda prodotto il prezzo è quasi grande quanto il titolo e pesa meno del pulsante «+»",
-      "esito": "riparato",
+      "esito": "serve_file_altrui",
       "commit": "66c0ce245d6428c72f60449d32c35bec74f56132",
       "file_toccati": [
         "components/ProductCard.tsx"
@@ -285,10 +321,16 @@
         "uscita": 0,
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 66c0ce245d6428c72f60449d32c35bec74f56132^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il prezzo era già text-lg (18 px) contro il titolo a 13; restava il quadrato pieno bg-primary-600 del «+», ora un contorno (border-2 primary-600, fondo trasparente, hover primary-50). h-11 w-11 invariati: tocco da 44 px. Il contrasto del bordo (primary-600 su bianco 4,96:1) tiene.",
-      "nota": "Il prezzo scontato resta text-secondary-600 e il pieno text-ink-900: la voce lo osserva ma il fix del registro non lo chiede, non l'ho toccato. Giro finale (bf5d2a60): La prova ora controlla border-2 e border-primary-600/700/800 sul «+» (primary-200 la fa fallire).. Rimessa del giro: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf5d2a60^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx --json → uscita 2. Il prezzo scontato resta secondary-600: il fix del registro chiede solo il prezzo più grande e il «+» a contorno, e la prova comune minori-s09-aspetto.test.ts:210 pretende secondary-600.",
-      "verificato_da": "collaudo L3-P (sonnet): parziale sulla prova (il bordo del «+» non era misurato) e sul prezzo scontato citato dalla voce; vedi giro finale. Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+      "nota": "Giro di correzione (14/11, «R24 secondo»): in ProductCard il primo giro regge (collaudo K06). Il difetto che resta sta tutto in components/cart/CartUpsell.tsx, che non è un file di R24 (di nessuno, nessuna deroga per l'onda 2): nessun commit, la diff esatta è qui sotto. Provata in una copia a parte: tsc, eslint e prove collegate verdi. Rilievo di chi smentisce: a 16 px extrabold il prezzo sta negli 82 px liberi accanto al «+» fino a circa «999,00 €». Da circa «1.250,00 €» stringe il pulsante o viene tagliato. Chi prende il file sceglie: tenere text-base, allargare la scheda (w-40) o mettere il prezzo su una riga sua.",
+      "verificato_da": "Collaudo K06: ProductCard regge. Diff di CartUpsell: smentita indipendente (sonnet), parziale per il limite di larghezza dei prezzi da quattro cifre (scritto nella nota); classi uguali a ProductCard.tsx:286, shadow-sm-neutral esiste.",
+      "serve_file_altrui": [
+        {
+          "file": "components/cart/CartUpsell.tsx",
+          "modifica": "righe 106 e 111 (collaudo K06: prezzo 14 px contro nome 12 px e «+» quadrato pieno bg-primary-600, la stessa gerarchia rovesciata già chiusa in ProductCard). Il prezzo passa da text-sm font-bold a text-base font-extrabold (16 px contro i 12 del nome: la scheda è larga w-36 con p-2, quindi 128 px utili accanto ai 44 del pulsante; text-lg come in ProductCard rischia di stringere i prezzi lunghi); il «+» diventa a contorno come in ProductCard: border-2 border-primary-600 bg-transparent text-primary-700 shadow-sm-neutral hover:bg-primary-50, h-11 w-11 e anello di focus invariati. La prova da aggiungere col file: il prezzo più grande del nome e il «+» senza bg-primary-600 pieno (come tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx per ProductCard).\nDiff:\n@@ -105,3 +105,3 @@ export function CartUpsell({ items }: Props) {\n                 <div className=\"flex items-center justify-between mt-1.5\">\n-                  <span className=\"text-sm font-bold text-ink-900\">{formatPrice(p.price)}</span>\n+                  <span className=\"text-base font-extrabold text-ink-900\">{formatPrice(p.price)}</span>\n                   <button\n@@ -110,3 +110,3 @@ export function CartUpsell({ items }: Props) {\n                     aria-label={`Aggiungi ${p.name} al carrello`}\n-                    className=\"flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1\"\n+                    className=\"flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-primary-600 bg-transparent text-primary-700 shadow-sm-neutral transition-all hover:bg-primary-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1\"\n                   >"
+        }
+      ]
     },
     {
       "id": "R24-010",
@@ -438,8 +480,8 @@
     {
       "id": "R24-016",
       "chiave": "qa-flussi|la pagina di iscrizione promette ancora «puoi provare lo stesso a registrarti» quando l'anti-robot non si carica",
-      "esito": "riparato",
-      "commit": "d4a24f7822c63ce451765a7269fd8886cbf617e2",
+      "esito": "serve_file_altrui",
+      "commit": "0c46f3a6078fd5756eed5405b37719d88fd4fcc6",
       "file_toccati": [
         "app/sign-up/page.tsx"
       ],
@@ -452,12 +494,18 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a19ff892 --file app/sign-up/page.tsx --prove tests/unit/riparazione-r24-anti-robot-rotto.test.ts --json"
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0c46f3a6078fd5756eed5405b37719d88fd4fcc6^ --file app/sign-up/page.tsx --prove tests/unit/riparazione-r24-anti-robot-rotto.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Se il riquadro anti-robot non si carica il modulo non parte senza gettone (tolto `&& !captchaRotto`), la frase «Puoi provare lo stesso a registrarti» non c'è più e la pagina dice di ricaricare, registrarsi con Google o scrivere a info@ (mailto:). La prova monta la pagina vera con turnstile.render che lancia, e ora controlla anche che il link sia esattamente `mailto:` + indirizzoContatto('info') (con /contact restava verde). Regge col flusso della base (signUp dal browser, finto) e con la rotta di R24-020.",
-      "nota": "Altri commit: b5193318 (giro di correzione: prova col mailto, commento della pagina che non parla più della rotta come se ci fosse già). Dopo il revert di R24-020, git diff a19ff892 HEAD -- app/sign-up/page.tsx contiene solo questa correzione (l'import di indirizzoContatto sta dopo quello di conferma-email, per non toccare righe vicine al cherry-pick di b6f1ad54). Finché R24-020 non è cucita e il CAPTCHA su Supabase è spento, un signUp dal browser senza gettone passerebbe: la pagina ora non lo manda comunque.",
-      "verificato_da": "collaudo L1-A: regge (condizione e frase tornano rosse rimesse a mano); rinforzo della prova sul mailto in b5193318, non ricollaudato. Ricollaudo (sonnet): regge, la prova diventa rossa col link a /contact e senza il blocco senza gettone."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro: sull'iscrizione col riquadro anti-robot rotto il modulo non parte senza gettone, la frase «Puoi provare lo stesso a registrarti» non c'è più, e la pagina dice di ricaricare, usare Google o scrivere a info@ (mailto:). Giro di correzione (0c46f3a6, collaudo K06): il messaggio a comparsa dice lo stesso guasto del riquadro, col motivo di Turnstile («Il controllo anti-bot non si è aperto.» …) e la stessa strada, non più «anti-robot … non si è caricato». La prova confronta il toast col riquadro.",
+      "nota": "Giro di correzione (14/11, «R24 secondo»): sign-up è chiusa (prova rimessa uscita 0). Il difetto principale di K06 sta in app/contact/page.tsx, che non è un file di R24 (di nessuno, nessuna deroga per l'onda 2): esito serve_file_altrui, con la diff esatta. La diff è provata in una copia a parte: tsc, eslint e le prove della pagina Contatti verdi. app/api/contact/route.ts:58 (mio) non cambia: rifiutare senza gettone è giusto. Rilievi di chi smentisce, lasciati perché fuori diagnosi: la prova del toast copre un motivo di Turnstile su tre («non si è aperto»; gli altri finiscono anche loro col punto e si concatenano uguali); la frase «Completa il controllo anti-bot» del caso non rotto non la controlla nessuna prova.",
+      "verificato_da": "Primo giro: collaudo L1-A e ricollaudo (sonnet), regge. Giro di correzione: smentita indipendente (sonnet). Il toast torna rosso togliendo la correzione, e i tre motivi di Turnstile si concatenano bene. Diff di Contatti: parziale solo per le prove da aggiungere col file (scritte nella modifica); mailto ora con mailtoContatto('info'), come la riga 109.",
+      "serve_file_altrui": [
+        {
+          "file": "app/contact/page.tsx",
+          "modifica": "righe 49-52 (commento), 67 e 197-202 (collaudo K06: «Puoi provare lo stesso a inviare» col riquadro rotto; :67 manda il modulo senza gettone e app/api/contact/route.ts:58 lo rifiuta sempre con 400). A riga 67 si toglie «&& !captchaRotto»: senza gettone il modulo non parte, e il toast dice il motivo del riquadro più «Senza questo controllo il messaggio non può partire: ricarica la pagina o scrivici a info@…». Il riquadro (197-202) prende role=\"alert\", perde «Puoi provare lo stesso a inviare» e porta il link mailto: a indirizzoContatto('info'), come in app/sign-up/page.tsx. app/api/contact/route.ts:58 resta com'è: rifiutare senza gettone è giusto. La prova da aggiungere col file: come tests/unit/riparazione-r24-anti-robot-rotto.test.ts sulla pagina Contatti (turnstile.render che lancia, nessuna fetch a /api/contact, mailto esatto).\nDiff:\n@@ -49,5 +49,6 @@ export default function ContactPage() {\n   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,\n-  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per\n-  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'\n-  // comunque sul server, quindi non si apre nessun buco.\n+  // estensione che lo taglia, guasto loro), si dice cosa e' successo e cosa fare.\n+  // 14/11/2026 (R24-016) — Il modulo pero' non parte senza gettone: /api/contact\n+  // lo verifica e senza lo rifiuta sempre (400), quindi «puoi provare lo stesso»\n+  // era un giro senza uscita. La strada vera e' ricaricare o scrivere a info@.\n   const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);\n@@ -66,3 +67,6 @@ export default function ContactPage() {\n     // 🟡-2: CAPTCHA come su signup (se configurato).\n-    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) { toast.error('Completa la verifica anti-bot'); return; }\n+    if (TURNSTILE_SITE_KEY && !captchaToken) {\n+      toast.error(captchaRotto ? `${captchaRotto} Senza questo controllo il messaggio non può partire: ricarica la pagina o scrivici a ${indirizzoContatto('info')}.` : 'Completa la verifica anti-bot');\n+      return;\n+    }\n \n@@ -197,5 +201,6 @@ export default function ContactPage() {\n             {captchaRotto && (\n-              <p className=\"text-center text-sm text-ink-600\">\n-                {captchaRotto} Puoi provare lo stesso a inviare: se non funziona,\n-                ricarica la pagina o scrivici a {indirizzoContatto('info')}.\n+              <p role=\"alert\" className=\"text-center text-sm text-ink-600\">\n+                {captchaRotto} Senza questo controllo il messaggio non può partire:\n+                ricarica la pagina, oppure scrivici a{' '}\n+                <a className=\"underline\" href={mailtoContatto('info')}>{indirizzoContatto('info')}</a>.\n               </p>"
+        }
+      ]
     },
     {
       "id": "R24-017",

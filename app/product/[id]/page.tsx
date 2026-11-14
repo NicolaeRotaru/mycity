@@ -3,6 +3,7 @@
 import { useState, use, useRef, useEffect } from 'react';
 import { ANELLO, classiBottoneCuore } from '@/lib/design/cuore-preferito';
 import Image from 'next/image';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -705,7 +706,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   l'ingrandimento. */}
               {images.map((img, i) => (
                 <div key={i} className="relative h-full w-full shrink-0 snap-center">
-                  <Image
+                  <FotoConRipiego
                     src={sizedImage(img, 'detail')}
                     alt={i === 0 ? altPrimaFoto : `${product.name} — foto ${i + 1}`}
                     fill
@@ -769,7 +770,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     activeImg === i ? 'border-primary-600' : 'border-transparent hover:border-surface-300'
                   }`}
                 >
-                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" loader={caricatoreFotoRemote} className="object-cover" />
+                  <FotoConRipiego src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" loader={caricatoreFotoRemote} className="object-cover" />
                 </button>
               ))}
             </div>

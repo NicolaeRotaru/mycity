@@ -126,7 +126,9 @@ function SignUpInner() {
       return;
     }
     if (TURNSTILE_SITE_KEY && !captchaToken) {
-      toast.error(captchaRotto ? 'Il controllo anti-robot non si è caricato: ricarica la pagina o registrati con Google.' : 'Completa il controllo anti-bot');
+      // Il messaggio a comparsa dice lo stesso guasto del riquadro sotto il modulo (il motivo arriva
+      // da Turnstile: «non ha risposto», «non si è aperto»…), non un altro nome e un'altra causa.
+      toast.error(captchaRotto ? `${captchaRotto} Senza questo controllo l'iscrizione con email non può partire: ricarica la pagina o registrati con Google.` : 'Completa il controllo anti-bot');
       return;
     }
     setIsLoading(true);
