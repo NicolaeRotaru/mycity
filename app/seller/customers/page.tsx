@@ -92,7 +92,7 @@ export default function SellerCustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-36 md:pb-0">
       <SellerPageTitle
         eyebrow="Relazioni"
         title="Clienti"
@@ -125,7 +125,7 @@ export default function SellerCustomersPage() {
             type="button"
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
-            className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
+            className={`px-3 py-1.5 min-h-11 md:min-h-0 rounded-full font-semibold transition-colors ${
               filter === f.key ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
@@ -138,12 +138,42 @@ export default function SellerCustomersPage() {
           aria-label="Cerca un cliente per nome"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"
+          className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 min-h-11 md:min-h-0 text-sm flex-1 sm:flex-none sm:w-56"
         />
       </div>
 
-      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden overflow-x-auto">
-        <table className="w-full text-sm min-w-[700px]">
+      {/* R16-006 — Sul telefono una scheda per cliente: spesa, ultimo ordine e targhetta si vedono senza trascinare. */}
+      <ul data-testid="clienti-schede" className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <li className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-400">Nessun cliente</li>
+        ) : (
+          filtered.map((c) => {
+            const daysAgo = Math.floor((Date.now() - new Date(c.lastOrderAt).getTime()) / 86400000);
+            const isVip = c.ordersCount >= 5;
+            const isInactive = daysAgo > 30;
+            return (
+              <li key={c.userId} className="bg-white border border-cream-300 rounded-xl p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-ink-900">{c.fullName ?? 'Cliente'}</p>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {isVip && <span className="inline-flex items-center gap-1 bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Star size={12} className="text-accent-500" aria-hidden /> VIP</span>}
+                    {isInactive && <span className="inline-flex items-center gap-1 bg-secondary-100 text-secondary-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Moon size={12} className="text-secondary-500" aria-hidden /> Inattivo</span>}
+                    {!isInactive && !isVip && <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">Attivo</span>}
+                  </div>
+                </div>
+                <p className="text-sm text-ink-600">
+                  <span className="font-bold">{c.ordersCount}</span> {c.ordersCount === 1 ? 'ordine' : 'ordini'} · speso{' '}
+                  <span className="font-semibold text-olive-700">{formatPrice(c.totalSpent)}</span>
+                </p>
+                <p className="text-xs text-ink-500">Ultimo ordine: {formatDate(c.lastOrderAt)} ({daysAgo} giorni fa)</p>
+              </li>
+            );
+          })
+        )}
+      </ul>
+
+      <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-hidden overflow-x-auto">
+        <table className="hidden md:table w-full text-sm min-w-[700px]">
           <thead className="bg-cream-50 border-b border-cream-200 text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Cliente</th>
@@ -165,7 +195,6 @@ export default function SellerCustomersPage() {
                   <tr key={c.userId} className="border-t border-cream-200 hover:bg-cream-50">
                     <td className="p-3">
                       <p className="font-semibold text-ink-900">{c.fullName ?? 'Cliente'}</p>
-                      <p className="text-xs text-ink-400">ID: {c.userId.slice(0, 8)}…</p>
                     </td>
                     <td className="p-3 text-right font-bold">{c.ordersCount}</td>
                     <td className="p-3 text-right font-semibold text-olive-700">{formatPrice(c.totalSpent)}</td>
@@ -199,7 +228,7 @@ export default function SellerCustomersPage() {
         Questi nomi ti arrivano per gestire gli ordini: puoi usarli per preparare,
         consegnare e assistere chi ha comprato da te. Per mandare pubblicità serve il
         consenso di quella persona, raccolto da te.{' '}
-        <Link href="/terms#venditori" className="underline">Punto 9 delle condizioni</Link>.
+        <Link href="/terms#venditori" className="underline inline-flex items-center min-h-11 md:min-h-0">Punto 9 delle condizioni</Link>.
       </p>
     </div>
   );

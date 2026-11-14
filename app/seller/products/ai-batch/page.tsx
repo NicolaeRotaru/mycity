@@ -434,7 +434,12 @@ function CatalogTab() {
     if (!job) return;
     setApplying(true);
     try {
-      const data = await authedFetch('/api/ai/catalog-batch/apply', { method: 'POST', body: JSON.stringify({ jobId: job.id }) });
+      // R18-010 — Alla rotta vanno i prodotti dell'anteprima, uno per uno: senza l'elenco la
+      // rotta applica tutti i risultati del lavoro, anche quelli che il negozio non ha visto.
+      const data = await authedFetch('/api/ai/catalog-batch/apply', {
+        method: 'POST',
+        body: JSON.stringify({ jobId: job.id, productIds: job.results.map((r) => r.product_id) }),
+      });
       toast.success(`Applicato a ${data.applied} prodotti.`);
       // S10 (5/11/2026) — Chi è stato saltato si dice, col motivo.
       const saltati = (Array.isArray(data.esiti) ? data.esiti : []).filter(
@@ -531,7 +536,9 @@ function CatalogTab() {
               : `${job.counts.withChanges} prodotti con modifiche su ${job.counts.total}`}
           </p>
           <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto text-sm text-ink-600">
-            {job.results.slice(0, 50).map((r) => (
+            {/* R18-010 — Tutti i risultati, non i primi 50: «Applica» li scrive tutti (il lotto parte
+                al massimo su 200 prodotti), e si applica solo quello che il negozio ha visto. */}
+            {job.results.map((r) => (
               <li key={r.product_id} className="flex gap-2 border-b border-cream-100 py-1 last:border-0">
                 {isModerate ? (
                   r.flagged

@@ -118,6 +118,11 @@ export default function PrivacyPage() {
               non compare nell'informativa e' un trattamento senza informativa. */}
           <li><strong>Iscrizione alle notifiche push:</strong> indirizzo del servizio push del browser (endpoint di Apple, Google o Mozilla), le due chiavi di cifratura del dispositivo e la stringa del programma di navigazione (user-agent) — raccolti solo se attivi le notifiche, e cancellati quando le disattivi o quando il servizio push ci dice che quel dispositivo non esiste più.</li>
           <li><strong>Dati di navigazione:</strong> pagine visitate, click, tempo di permanenza (se attivi i cookie analytics).</li>
+          {/* 13/11/2026 (R21-012) — Gli «Ultimi visti» sono legati all'account e non comparivano. */}
+          <li><strong>Prodotti che hai guardato («Ultimi visti»):</strong> se hai fatto l&apos;accesso e attivi i cookie analytics, i prodotti che apri e quando, per mostrarteli di nuovo nel riquadro «Ultimi visti».</li>
+          {/* 13/11/2026 (R21-007) — Le segnalazioni non comparivano: né come dato raccolto né come
+              finalità. Chi segnala può lasciare email e testo anche senza account. */}
+          <li><strong>Segnalazioni di contenuti illeciti:</strong> il motivo, il testo che scrivi e, se la lasci, la tua email, per scriverti della segnalazione e del suo esito; se hai fatto l&apos;accesso, anche il collegamento al tuo account.</li>
         </ul>
       </LegalSection>
 
@@ -147,8 +152,12 @@ export default function PrivacyPage() {
                   documenti dei respinti a 90 giorni, quelli delle iscrizioni lasciate a metà a
                   30 e tutti alla cancellazione dell'account (lib/privacy/potature-ritenzione.ts,
                   lib/account/cancellazione.ts). La conservazione dice quello che il codice fa;
-                  finalità e base giuridica restano da far rivedere a un legale. */}
-              <tr><td className="border px-3 py-2">Verifica KYC e antiriciclaggio</td><td className="border px-3 py-2">Obbligo di legge</td><td className="border px-3 py-2">Fino alla cancellazione dell&apos;account, quando documenti e selfie si cancellano subito; domanda respinta: 90 giorni; iscrizione lasciata a metà: {GIORNI_DOCUMENTI_ISCRIZIONE_A_META} giorni</td></tr>
+                  finalità e base giuridica restano da far rivedere a un legale.
+                  13/11/2026 (R21-009) — Diceva anche «antiriciclaggio» e «Obbligo di legge»: un
+                  marketplace non risulta fra i soggetti obbligati alla normativa antiriciclaggio, e
+                  nessun codice tiene i documenti per quell'obbligo. Finalità e base giuridica sono la
+                  bozza del registro dei difetti, da far validare a un legale abilitato. */}
+              <tr><td className="border px-3 py-2">Verifica dell&apos;identità di Venditori e Rider (KYC)</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b) e legittimo interesse alla sicurezza della piattaforma (art. 6.1.f)</td><td className="border px-3 py-2">Fino alla cancellazione dell&apos;account, quando documenti e selfie si cancellano subito; domanda respinta: 90 giorni; iscrizione lasciata a metà: {GIORNI_DOCUMENTI_ISCRIZIONE_A_META} giorni</td></tr>
               {/* 27/8/2026 (R059) — La riga diceva 12 mesi e il lavoro notturno ne
                   applicava 14, e le righe di accesso non le cancellava mai
                   nessuno. Adesso il codice fa quello che c'è scritto qui, e
@@ -157,6 +166,12 @@ export default function PrivacyPage() {
               <tr><td className="border px-3 py-2">Sicurezza, anti-frode</td><td className="border px-3 py-2">Legittimo interesse (art. 6.1.f)</td><td className="border px-3 py-2">12 mesi: dopo, i log di accesso vengono cancellati e l&apos;indirizzo IP azzerato</td></tr>
               <tr><td className="border px-3 py-2">Newsletter e marketing</td><td className="border px-3 py-2">Consenso (art. 6.1.a)</td><td className="border px-3 py-2">Fino a revoca consenso</td></tr>
               <tr><td className="border px-3 py-2">Analytics aggregati</td><td className="border px-3 py-2">Consenso (cookie)</td><td className="border px-3 py-2">14 mesi</td></tr>
+              {/* 13/11/2026 (R21-012) — Gli «Ultimi visti» restavano per sempre e anche dopo la revoca.
+                  I mesi sono quelli della potatura notturna (MESI_DEGLI_ULTIMI_VISTI in
+                  lib/privacy/potature-ritenzione.ts); la cancellazione alla revoca la fa il database
+                  quando registra il «no» (migrations/450). La prova riparazione-r21-ultimi-visti li
+                  confronta. */}
+              <tr><td className="border px-3 py-2">«Ultimi visti» (prodotti che hai guardato)</td><td className="border px-3 py-2">Consenso (cookie analytics)</td><td className="border px-3 py-2">14 mesi dall&apos;ultima volta che hai aperto il prodotto; cancellati subito se togli il consenso ai cookie analytics mentre hai fatto l&apos;accesso</td></tr>
               {/* #75 — La posizione del fattorino durante la consegna veniva
                   raccolta di continuo e non compariva in nessuna riga di questa
                   tabella: nessuna base giuridica dichiarata, nessun tempo di
@@ -198,18 +213,39 @@ export default function PrivacyPage() {
               {/* 5/11/2026 — I messaggi del modulo Contatti non avevano una riga: i 24 mesi
                   comparivano solo dentro la frase sull'IBAN. Il numero è quello della potatura. */}
               <tr><td className="border px-3 py-2">Assistenza clienti (messaggi dal modulo Contatti)</td><td className="border px-3 py-2">Legittimo interesse a rispondere e a tenere traccia delle richieste (art. 6.1.f)</td><td className="border px-3 py-2">{MESI_DEI_MESSAGGI_DEI_CONTATTI} mesi</td></tr>
+              {/* 13/11/2026 (R21-010) — La chat col negozio non aveva una riga: né base giuridica né
+                  tempo. Il tempo è quello che fa il codice: i messaggi cadono con l'account di chi li
+                  ha scritti (messages.sender_id ON DELETE CASCADE, migrazione 026; il testo lo azzera
+                  prima lib/account/cancellazione.ts) e l'anteprima della conversazione torna
+                  all'ultimo messaggio rimasto (migrazione 215). Una scadenza in mesi non c'è:
+                  la sceglie Nicola. */}
+              <tr><td className="border px-3 py-2">Chat col negozio (messaggi fra cliente e negozio)</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b)</td><td className="border px-3 py-2">Ogni messaggio resta finché chi l&apos;ha scritto non cancella il proprio account: allora viene cancellato</td></tr>
+              {/* 13/11/2026 (R21-007) — L'email e il testo di chi segnala restavano per sempre, e qui
+                  non c'era la riga. I mesi sono quelli della potatura notturna (lib/privacy/potature-ritenzione.ts):
+                  la prova riparazione-r21-segnalazioni-email fa girare la potatura e pretende lo stesso numero. */}
+              <tr><td className="border px-3 py-2">Segnalazioni di contenuti illeciti (email di contatto e testo della segnalazione)</td><td className="border px-3 py-2">Obbligo di legge: ricevere le segnalazioni e comunicarne l&apos;esito (Reg. UE 2022/2065 sui servizi digitali, artt. 16-17; art. 6.1.c GDPR)</td><td className="border px-3 py-2">12 mesi dalla decisione sulla segnalazione: dopo, email e testo vengono cancellati</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>
         </div>
       </LegalSection>
 
-      <LegalSection id="destinatari" heading="4. Destinatari dei dati (sub-responsabili)">
+      {/* 13/11/2026 (R21-011) — Il titolo diceva «(sub-responsabili)», ma il negozio non lo è: riceve
+          i dati come titolare autonomo, ed è scritto così anche nei Termini (punto 9). */}
+      <LegalSection id="destinatari" heading="4. Destinatari dei dati">
         {/* 5/11/2026 — Il riassunto in cima prometteva il negozio e il rider, e qui non
-            c'erano: sono i destinatari che ricevono di più. */}
+            c'erano: sono i destinatari che ricevono di più.
+            13/11/2026 (R21-011) — Mancava in che ruolo li ricevono. Il negozio è titolare autonomo
+            (Termini, punto 9). Il ruolo del Rider no: i Termini (punto 10) dicono «titolare
+            autonomo», il registro dei difetti «per conto di MyCity»; lo decide Nicola col legale. */}
         <p>
-          <strong>Il negozio da cui compri</strong> e <strong>il Rider che consegna</strong> ricevono nome,
-          telefono, indirizzo e note di consegna, solo per il tuo ordine.
+          <strong>Il negozio da cui compri</strong> riceve nome, telefono, indirizzo e note di consegna, solo
+          per il tuo ordine. Su questi dati è titolare autonomo del trattamento: li usa per preparare,
+          consegnare e assistere quell&apos;ordine, compresi resi, reclami e obblighi fiscali e contabili,
+          con gli impegni scritti nei <Link href="/terms" className="text-primary-700 underline">Termini di servizio</Link>.
+        </p>
+        <p>
+          <strong>Il Rider che consegna</strong> riceve gli stessi dati, solo per quella consegna.
         </p>
         <p>
           I tuoi dati sono trattati da fornitori esterni che operano come Responsabili del

@@ -60,7 +60,7 @@ export const formatPriceFromCents = (cents: number) => formatPrice(cents / 100);
  * e lascia intatto il resto.
  */
 export const formatDate = (date: string | Date) =>
-  new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+  new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
 
 /**
  * Pluralizzatore italiano semplice (singolare/plurale).

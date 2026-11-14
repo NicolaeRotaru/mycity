@@ -74,6 +74,11 @@ type Props = {
   pickupDiscount: number;
   /** Percentuale sconto ritiro, per il badge quando non ancora attivo. */
   pickupDiscountPercent: number;
+  /**
+   * 13/11/2026 (R19-013) — Perché i contanti non si possono (sopra il tetto della legge,
+   * lib/ordini/tetto-dei-contanti.ts). Se c'è, la scelta dei contanti è spenta e la frase si legge lì.
+   */
+  motivoNoContanti?: string | null;
 };
 
 export function PaymentMethodSelector({
@@ -85,6 +90,7 @@ export function PaymentMethodSelector({
   onPickupChange,
   pickupDiscount,
   pickupDiscountPercent,
+  motivoNoContanti = null,
 }: Props) {
   return (
     /**
@@ -133,10 +139,12 @@ export function PaymentMethodSelector({
       )}
 
       <label
-        className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
-          value === 'cod'
-            ? 'border-olive-400 bg-olive-50'
-            : 'border-cream-300 bg-white hover:border-olive-200'
+        className={`flex items-start gap-3 rounded-xl border-2 p-4 transition-colors ${
+          motivoNoContanti
+            ? 'cursor-not-allowed border-cream-300 bg-cream-50'
+            : value === 'cod'
+              ? 'cursor-pointer border-olive-400 bg-olive-50'
+              : 'cursor-pointer border-cream-300 bg-white hover:border-olive-200'
         }`}
       >
         <input
@@ -144,6 +152,8 @@ export function PaymentMethodSelector({
           name="paymentMethod"
           value="cod"
           checked={value === 'cod'}
+          disabled={!!motivoNoContanti}
+          aria-describedby={motivoNoContanti ? 'motivo-no-contanti' : undefined}
           onChange={() => onChange('cod')}
           className="mt-2.5 accent-olive-600"
         />
@@ -156,6 +166,9 @@ export function PaymentMethodSelector({
             <Badge variant="cod">Zero rischio</Badge>
           </div>
           <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
+          {motivoNoContanti && (
+            <p id="motivo-no-contanti" className="mt-1 text-sm font-semibold text-secondary-800">{motivoNoContanti}</p>
+          )}
         </div>
       </label>
 

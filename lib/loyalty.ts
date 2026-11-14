@@ -47,11 +47,13 @@ export function pointsToEurValue(points: number): number {
 export async function fetchLoyaltyAccount(): Promise<LoyaltyAccount | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('loyalty_accounts')
     .select('*')
     .eq('user_id', user.id)
     .maybeSingle();
+  // Una lettura caduta non è «nessun conto»: l'errore esce, così chi legge non scambia il guasto per zero punti.
+  if (error) throw error;
   return data as LoyaltyAccount | null;
 }
 

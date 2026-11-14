@@ -12,6 +12,9 @@ type Props = {
   items: CartItem[];
 };
 
+/** Quante righe porta un link: lo stesso tetto che legge /shared-cart (MAX_ITEMS). */
+const RIGHE_PER_LINK = 50;
+
 /**
  * "Condividi carrello" — genera un link WhatsApp/Email/copy che apre la
  * pagina /shared-cart con la lista prodotti precompilata.
@@ -31,17 +34,24 @@ export default function ShareCartButton({ items }: Props) {
 
   // 5/11/2026 — La variante viaggia con la riga: nel testo («Torta · grande × 1») e nel link, come
   // terzo pezzo, così chi riceve la lista sa quale aveva scelto chi l'ha mandata.
-  const cartParam = items
-    .map((i) => `${i.id}:${i.quantity}${i.variantLabel ? `:${encodeURIComponent(i.variantLabel)}` : ''}`)
-    .join(',');
-  const shareUrl = `${baseUrl}/shared-cart?cart=${encodeURIComponent(cartParam)}`;
+  const voce = (i: CartItem) => `${i.id}:${i.quantity}${i.variantLabel ? `:${encodeURIComponent(i.variantLabel)}` : ''}`;
+  // 13/11/2026 (R19-016) — /shared-cart legge al massimo 50 righe per link (MAX_ITEMS, tetto
+  // anti-abuso): una lista più lunga si manda in più link, così nessun link nasce già tagliato.
+  const shareUrls: string[] = [];
+  for (let k = 0; k < items.length; k += RIGHE_PER_LINK) {
+    const cartParam = items.slice(k, k + RIGHE_PER_LINK).map(voce).join(',');
+    shareUrls.push(`${baseUrl}/shared-cart?cart=${encodeURIComponent(cartParam)}`);
+  }
+  const doveAprirla = shareUrls.length === 1
+    ? `Apri il link per vederla:\n${shareUrls[0]}`
+    : `La lista è lunga: apri tutti e ${shareUrls.length} i link per vederla intera:\n${shareUrls.map((u, n) => `${n + 1}) ${u}`).join('\n')}`;
 
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const itemList = items
     .slice(0, 8)
     .map((i) => `· ${i.name}${i.variantLabel ? ` · ${i.variantLabel}` : ''} × ${i.quantity}`)
     .join('\n');
-  const text = `Ciao! Ho preparato una lista della spesa su MyCity:\n\n${itemList}${items.length > 8 ? `\n... e altri ${items.length - 8}` : ''}\n\nTotale: ${formatPrice(total)}\n\nApri il link per vederla:\n${shareUrl}`;
+  const text = `Ciao! Ho preparato una lista della spesa su MyCity:\n\n${itemList}${items.length > 8 ? `\n... e altri ${items.length - 8}` : ''}\n\nTotale: ${formatPrice(total)}\n\n${doveAprirla}`;
 
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
   const emailUrl = `mailto:?subject=${encodeURIComponent('Lista della spesa MyCity')}&body=${encodeURIComponent(text)}`;
@@ -74,6 +84,11 @@ export default function ShareCartButton({ items }: Props) {
         <p className="text-sm text-ink-600 mb-4">
           Manda la lista al partner o a un amico per concordare la spesa. Apriranno il marketplace già con tutti gli articoli pronti.
         </p>
+        {shareUrls.length > 1 && (
+          <p className="text-sm text-ink-600 mb-4">
+            La lista ha {items.length} righe: la mando in {shareUrls.length} link, perché ogni link ne porta al massimo {RIGHE_PER_LINK}.
+          </p>
+        )}
         <div className="space-y-2">
           <a
             href={whatsappUrl}

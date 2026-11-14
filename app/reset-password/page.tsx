@@ -284,10 +284,10 @@ function ResetPasswordInner() {
     if (linkSent) {
       return (
         <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
-          <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+          <h1 className="font-serif text-4xl font-extrabold leading-tight text-ink-900">
             Controlla l&apos;email
           </h1>
-          <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+          <p className="mt-1.5 mb-7 text-base leading-relaxed text-ink-600">
             Ti abbiamo inviato un link per reimpostare la password. Controlla la posta (anche lo spam).
           </p>
           <div className="space-y-4">
@@ -306,7 +306,7 @@ function ResetPasswordInner() {
     }
     return (
       <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
-        <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+        <h1 className="font-serif text-4xl font-extrabold leading-tight text-ink-900">
           Reimposta la password
         </h1>
         {motivo && (
@@ -315,7 +315,7 @@ function ResetPasswordInner() {
             <p className="mt-1 leading-relaxed">{SPIEGAZIONE_RESET[motivo].testo}</p>
           </div>
         )}
-        <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+        <p className="mt-1.5 mb-7 text-base leading-relaxed text-ink-600">
           Inserisci la tua email: ti mandiamo un link per scegliere una nuova password.
         </p>
         <form onSubmit={requestLink} className="space-y-4">
@@ -357,10 +357,10 @@ function ResetPasswordInner() {
   // STATO: form nuova password (sessione di recovery attiva)
   return (
     <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
-      <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+      <h1 className="font-serif text-4xl font-extrabold leading-tight text-ink-900">
         Nuova password
       </h1>
-      <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+      <p className="mt-1.5 mb-7 text-base leading-relaxed text-ink-600">
         Scegli una password sicura, di almeno 8 caratteri, che non usi già altrove.
       </p>
       {emailDellaSessione && (

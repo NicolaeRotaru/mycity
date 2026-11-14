@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
 import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
 import { Select } from '@/components/ui/Field';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
@@ -28,7 +29,7 @@ export default function AdminNewProductPage() {
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
 
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [], isError: categoriesError, refetch: refetchCategories } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -37,7 +38,7 @@ export default function AdminNewProductPage() {
     },
   });
 
-  const { data: sellers = [], isLoading: sellersLoading } = useQuery({
+  const { data: sellers = [], isLoading: sellersLoading, isError: sellersError, refetch: refetchSellers } = useQuery({
     queryKey: queryKeys.admin.sellersForm,
     queryFn: async (): Promise<SellerOption[]> => {
       const { data, error } = await supabase
@@ -122,20 +123,41 @@ export default function AdminNewProductPage() {
         <p className="text-sm text-ink-500">Inserisci un prodotto in un negozio qualsiasi, anche importandolo da un marketplace.</p>
       </div>
 
-      <Select
-        label="Negozio di destinazione"
-        value={sellerId}
-        onChange={(e) => setSellerId(e.target.value)}
-        disabled={sellersLoading}
-        required
-      >
-        <option value="" disabled>— scegli il negozio —</option>
-        {sellers.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.store_name || (s.id === MYCITY_SELLER_ID ? 'MyCity' : s.id.slice(0, 8))}
-          </option>
-        ))}
-      </Select>
+      {/* R20-018 — Se l'elenco dei negozi (o delle categorie) non arriva, lo si dice con
+          «Riprova» invece di lasciare una tendina vuota e attiva; se i negozi non ci sono, lo si scrive. */}
+      {sellersError || categoriesError ? (
+        <ErrorState
+          variant="compact"
+          title={sellersError ? 'Non riesco a leggere l\'elenco dei negozi' : 'Non riesco a leggere le categorie'}
+          description="Non vuol dire che non ce ne siano: la lettura non è andata. Riprova."
+          retry={() => Promise.all([sellersError ? refetchSellers() : null, categoriesError ? refetchCategories() : null])}
+          supportHref={null}
+        />
+      ) : null}
+
+      {!sellersError && (
+        <div>
+          <Select
+            label="Negozio di destinazione"
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value)}
+            disabled={sellersLoading || sellers.length === 0}
+            required
+          >
+            <option value="" disabled>— scegli il negozio —</option>
+            {sellers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.store_name || (s.id === MYCITY_SELLER_ID ? 'MyCity' : s.id.slice(0, 8))}
+              </option>
+            ))}
+          </Select>
+          {!sellersLoading && sellers.length === 0 && (
+            <p role="status" className="text-sm text-ink-600 mt-1.5">
+              Non c&apos;è ancora nessun negozio: serve almeno un negozio per creare un prodotto.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 5/11/2026 (S05) — L'importazione da link usa l'AI per i negozi, spenta al
           lancio: la rotta risponde «non configurato». Si mostra solo se è accesa. */}

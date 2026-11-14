@@ -14,6 +14,7 @@ import RiderConnectButton from '@/components/rider/RiderConnectButton';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 import { riepilogoFattorino } from '@/lib/guadagni/fattorino';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
+import { giornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -64,17 +65,16 @@ export default function RiderEarningsPage() {
   const pending = riepilogo.inArrivo;
   const inContanti = riepilogo.inContanti;
 
-  // Mini-grafico ultimi 7 giorni
+  // Mini-grafico ultimi 7 giorni.
+  // R24-014 — I giorni sono quelli di Piacenza, come nel grafico del negozio (lib/guadagni/giorni.ts):
+  // tagliati all'ora di Greenwich, una consegna alle 00:30 finiva nella colonna del giorno prima, e
+  // fra mezzanotte e l'una (le due d'estate) mancava la colonna di oggi.
   const daily = useMemo(() => {
     const days: Record<string, { total: number; count: number }> = {};
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      days[d.toISOString().slice(0, 10)] = { total: 0, count: 0 };
-    }
+    for (const g of ultimiGiorniPiacenza(7)) days[g] = { total: 0, count: 0 };
     for (const o of orders) {
-      const k = (o.delivered_at ?? '').slice(0, 10);
+      if (!o.delivered_at) continue;
+      const k = giornoPiacenza(o.delivered_at);
       if (k in days) {
         days[k].total += compensoConsegnaEuro(o);
         days[k].count += 1;
@@ -101,8 +101,8 @@ export default function RiderEarningsPage() {
     <div className="pb-5">
       {/* ScreenHead */}
       <div className="px-5 pb-2 pt-4">
-        <h1 className="font-serif text-[26px] font-extrabold text-ink-900">Guadagni</h1>
-        <p className="mt-0.5 text-[13px] text-ink-500">Tutto quello che hai incassato</p>
+        <h1 className="font-serif text-2xl font-extrabold text-ink-900">Guadagni</h1>
+        <p className="mt-0.5 text-sm text-ink-500">Tutto quello che hai incassato</p>
       </div>
 
       {/* Period switcher */}
@@ -112,7 +112,7 @@ export default function RiderEarningsPage() {
             key={p.key}
             type="button"
             onClick={() => setPeriod(p.key)}
-            className={`shrink-0 rounded-full px-3.5 py-[7px] text-[13px] font-semibold transition-colors ${
+            className={`shrink-0 rounded-full px-3.5 py-[7px] text-sm font-semibold transition-colors ${
               period === p.key
                 ? 'bg-accent-500 text-ink-900'
                 : 'bg-surface-0 text-ink-600 ring-1 ring-inset ring-cream-300'
@@ -127,14 +127,14 @@ export default function RiderEarningsPage() {
       <div className="px-4 pb-4">
         <div className="rounded-2xl border border-accent-200 bg-gradient-to-br from-accent-100 to-cream-200 p-[22px]">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-accent-800">Hai guadagnato</p>
-          <p className="mt-1 font-serif text-[46px] font-extrabold leading-none text-ink-900">{formatPrice(totalEarned)}</p>
+          <p className="mt-1 font-serif text-5xl font-extrabold leading-none text-ink-900">{formatPrice(totalEarned)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <div className="rounded-md bg-white/60 px-3 py-2.5">
-              <p className="text-[10px] font-bold uppercase text-ink-500">Consegne</p>
+              <p className="text-2xs font-bold uppercase text-ink-500">Consegne</p>
               <p className="font-serif text-xl font-extrabold text-ink-900">{filtered.length}</p>
             </div>
             <div className="rounded-md bg-white/60 px-3 py-2.5">
-              <p className="text-[10px] font-bold uppercase text-ink-500">Media/consegna</p>
+              <p className="text-2xs font-bold uppercase text-ink-500">Media/consegna</p>
               <p className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(avgPerDelivery)}</p>
             </div>
           </div>
@@ -145,7 +145,7 @@ export default function RiderEarningsPage() {
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2.5 rounded-lg border border-primary-200 bg-primary-50 px-3.5 py-3">
           <TrendingUp size={18} className="shrink-0 text-primary-700" aria-hidden />
-          <p className="text-[13px] leading-relaxed text-primary-900">
+          <p className="text-sm leading-relaxed text-primary-900">
             Resta online nelle ore di punta (<strong>12–14</strong> e <strong>19–21</strong>) per chiudere prima la giornata.
           </p>
         </div>
@@ -167,8 +167,10 @@ export default function RiderEarningsPage() {
                       title={`${formatPrice(v.total)} · ${v.count} consegne`}
                     />
                   </div>
-                  <span className="text-[10px] text-ink-400">
-                    {new Date(day).toLocaleDateString('it', { weekday: 'short' }).slice(0, 1).toUpperCase()}
+                  <span className="text-2xs text-ink-400">
+                    {/* La colonna è una data di calendario (mezzanotte UTC di quel giorno): letta in UTC,
+                        la lettera è quella del suo giorno su qualunque telefono. */}
+                    {new Date(day).toLocaleDateString('it', { weekday: 'short', timeZone: 'UTC' }).slice(0, 1).toUpperCase()}
                   </span>
                 </div>
               );
@@ -183,7 +185,7 @@ export default function RiderEarningsPage() {
           <div className="flex items-start gap-2.5">
             <Landmark size={18} className="shrink-0 text-olive-700" aria-hidden />
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold text-olive-900">Compensi sul tuo IBAN</p>
+              <p className="text-sm font-bold text-olive-900">Compensi sul tuo IBAN</p>
               <p className="mt-1 text-xs leading-relaxed text-olive-800">
                 <strong>{formatPrice(paid)}</strong> già versati · <strong>{formatPrice(pending)}</strong> in arrivo
                 (consegne pagate con carta, o col credito MyCity sopra i contanti) · <strong>{formatPrice(inContanti)}</strong> tenuti in contanti alla consegna.
@@ -206,7 +208,7 @@ export default function RiderEarningsPage() {
 
       {/* Storico consegne (filtrato dal periodo) */}
       <div className="px-4">
-        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Storico consegne</p>
+        <p className="mb-2.5 text-sm font-bold uppercase tracking-[0.03em] text-ink-700">Storico consegne</p>
         {filtered.length === 0 ? (
           <div className="rounded-lg border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
             Nessuna consegna in questo periodo.
@@ -219,7 +221,7 @@ export default function RiderEarningsPage() {
                   <Check size={17} strokeWidth={2.4} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-semibold text-ink-900">
+                  <p className="truncate text-sm font-semibold text-ink-900">
                     {o.delivery_address
                       ? `${o.delivery_address}${o.delivery_city ? `, ${o.delivery_city}` : ''}`
                       : `Consegna${o.delivery_city ? ` a ${o.delivery_city}` : ''}`}

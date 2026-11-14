@@ -136,6 +136,9 @@ const CATEGORIE_DI_RISERVA: Categoria[] = [
   { slug: 'sport',         name: 'Sport' },
 ];
 
+/** Sotto md: colonne larghe almeno 8rem e al massimo mezza riga (gap-8 = 2rem). Vedi R15-008. */
+const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_2rem)/2)),1fr))]';
+
 const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
@@ -176,18 +179,29 @@ const Footer = () => {
   // risposta non c'è si elencano tutte, come prima: il server non precarica le piene, e un piede
   // senza categorie nell'HTML del server toglieva a Google anche quelle vere. Se la lettura
   // fallisce si torna all'elenco intero.
+  // 13/11/2026 (R15-002) — Quando si sa quali sono piene, si tengono solo da un elenco VERO. Se
+  // l'elenco era caduto o arrivato vuoto, si ripiegava sulla riserva scritta qui sopra: non ha id,
+  // non si può controllare, e passava intera — otto categorie, sette vuote, proprio quando il piede
+  // sapeva quali erano piene. Adesso in quel caso resta solo «Tutte le categorie».
   const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: !areaPro && !isSellerArea });
   const madriLette = (categorie ?? []).filter((c) => c.parent_id === null);
-  const madriTutte = madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
-  const madri = soloLePiene(madriTutte, piene.isError ? null : piene.data);
+  const pieneNote = piene.isError ? null : piene.data;
+  const madri = pieneNote
+    ? soloLePiene(madriLette, pieneNote)
+    : madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
 
   if (areaPro) return null;
 
   return (
     <footer className="bg-cream-200 border-t border-cream-300 text-ink-700 mt-12">
-      <div className={`container mx-auto px-4 sm:px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
+      {/* 13/11/2026 (R15-008) — Sul telefono le colonne erano due FISSE: col testo ingrandito al
+          massimo (1rem = 32px) «Abbigliamento», «Dichiarazione accessibilità» non ci stavano e
+          la pagina scorreva di lato, su ogni pagina pubblica. Adesso una colonna è larga almeno
+          8rem (cresce col testo) e al massimo metà riga: due colonne col testo normale, una sola
+          col testo grande. Dal computer in su, come prima. */}
+      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
-        <div className="col-span-2 md:col-span-1">
+        <div className="col-span-full md:col-span-1">
           {/*
             6/9/2026 — IL MARCHIO ERA DISEGNATO IN QUATTRO MODI DIVERSI.
             Il marchio vero (docs/mockup/assets) è in Fraunces peso 800 con la

@@ -79,6 +79,8 @@ export default function CookiesPage() {
           // anche senza: serve al registro degli accessi (components/ActivityTracker.tsx).
           { name: 'mc_sid', purpose: 'Identificativo della singola visita, nell\'archivio della scheda: tiene insieme gli accessi e le uscite dal tuo account nel registro di sicurezza e, solo se accetti le statistiche, le pagine viste nella stessa visita. Si cancella chiudendo la scheda.', duration: 'Sessione', provider: 'Prima parte (archivio della scheda)' },
           // 1/11/2026 — Il segno del rientro col link di recupero (lib/auth/segno-recupero.ts).
+          // 13/11/2026 (R19-008) — Il segno delle notifiche spente a fine sessione (components/Navbar.tsx).
+          { name: 'mc_notifiche_spente_all_uscita', purpose: 'Se la tua sessione finisce e le notifiche di questo dispositivo si spengono, ricorda di chi erano (il tuo identificativo interno, un codice, non il nome né l\'email) per dirtelo quando rientri, e solo a te. Si cancella appena te lo diciamo; dopo 30 giorni non si usa più.', duration: '30 giorni', provider: 'Prima parte (archivio locale)' },
           { name: 'mycity_recupero', purpose: 'Dopo che hai aperto il link per scegliere una nuova password, ricorda per un\'ora che vieni da quel link, così puoi cambiarla. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '1 ora', provider: 'Prima parte' },
           { name: '__cf_bm', purpose: 'Anti-bot Cloudflare (sicurezza)', duration: '30 minuti', provider: 'Cloudflare' },
           { name: 'cf-turnstile-*', purpose: 'CAPTCHA Turnstile', duration: 'Sessione', provider: 'Cloudflare' },

@@ -19,12 +19,12 @@ import {
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount } from '@/lib/cart';
 import { formatPrice, pluralize } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import ShareCartButton from '@/components/ShareCartButton';
@@ -598,7 +598,7 @@ export default function CartPage() {
               <div key={g.key} className="space-y-3">
                 {/* Header negozio */}
                 <div className="flex items-center gap-2 pt-1">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[9px] font-bold text-white">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-2xs font-bold text-white">
                     {storeInitials(g.storeName)}
                   </span>
                   <span className="text-sm font-bold text-ink-900">
@@ -618,7 +618,7 @@ export default function CartPage() {
                 {g.items.map((item) => (
                   <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
                     <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
-                      <Image
+                      <FotoConRipiego
                         src={sizedImage(item.image ?? FOTO_MANCANTE, 'thumb')}
                         alt={item.name}
                         fill

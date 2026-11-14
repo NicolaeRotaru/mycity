@@ -16,6 +16,7 @@ import { friendlyError } from '@/lib/errors';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 
 /**
  * #79 — Quale versione dei testi legali si sta accettando. Va tenuta allineata
@@ -103,9 +104,10 @@ function SignUpInner() {
   };
 
   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
-  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
-  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
-  // comunque sul server, quindi non si apre nessun buco.
+  // estensione che lo taglia, guasto loro), si dice cosa e' successo e cosa fare.
+  // 13/11/2026 (R24-016) — Non si promette piu' «puoi provare lo stesso»: senza
+  // gettone l'iscrizione viene rifiutata (da Supabase col CAPTCHA acceso, dalla
+  // rotta del server con R24-020), ed era un giro senza uscita.
   const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // S10 (5/11/2026) — Gli errori restano accanto al campo (con aria-invalid e
@@ -123,8 +125,8 @@ function SignUpInner() {
       requestAnimationFrame(() => document.getElementById('signup-consenso')?.focus());
       return;
     }
-    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) {
-      toast.error('Completa il controllo anti-bot');
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      toast.error(captchaRotto ? 'Il controllo anti-robot non si è caricato: ricarica la pagina o registrati con Google.' : 'Completa il controllo anti-bot');
       return;
     }
     setIsLoading(true);
@@ -199,10 +201,10 @@ function SignUpInner() {
 
   return (
     <>
-      <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+      <h1 className="font-serif text-4xl font-extrabold leading-tight text-ink-900">
         Crea il tuo account
       </h1>
-      <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+      <p className="mt-1.5 mb-7 text-base leading-relaxed text-ink-600">
         Ti serve solo per confermare l&apos;ordine — puoi pagare alla consegna.
       </p>
 
@@ -315,9 +317,10 @@ function SignUpInner() {
           </div>
         )}
         {captchaRotto && (
-          <p className="text-center text-sm text-ink-600">
-            {captchaRotto} Puoi provare lo stesso a registrarti: se non funziona,
-            ricarica la pagina o scrivici da <Link href="/contact" className="underline">Contatti</Link>.
+          <p role="alert" className="text-center text-sm text-ink-600">
+            {captchaRotto} Senza questo controllo l&apos;iscrizione con email non può partire:
+            ricarica la pagina, oppure registrati con Google qui sotto. Se non funziona, scrivici a{' '}
+            <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
           </p>
         )}
 
@@ -337,7 +340,7 @@ function SignUpInner() {
 
       <AuthAlternatives condizioniDalModulo={acceptTos} />
 
-      <p className="mt-6 text-[14px] text-ink-600">
+      <p className="mt-6 text-sm text-ink-600">
         Hai già un account?{' '}
         <Link href={accediHref(returnTo)} className="font-bold text-primary-700 hover:underline">Accedi</Link>
       </p>

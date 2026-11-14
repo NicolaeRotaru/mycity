@@ -589,23 +589,46 @@ export default function PostHogProvider() {
     };
   }, []);
 
-  // Capture Web Vitals (Core Web Vitals: LCP, FID/INP, CLS)
+  // Capture Web Vitals (Core Web Vitals: LCP, INP, CLS, piu' FCP e TTFB)
+  //
+  // R23-013 (13/11/2026) — LA PRIMA VISITA NON LA MISURAVA NESSUNO.
+  //
+  // Le misure si accendevano al montaggio e partivano con `track()`, che senza consenso
+  // statistico le butta (`getPosthog()` torna null). Alla prima visita il consenso non c'e'
+  // ancora: FCP e TTFB arrivano subito, e LCP si chiude al primo clic — spesso proprio quello
+  // sul banner, prima che il consenso sia scritto. Tutte e tre finivano nel vuoto, cioe' la
+  // visita a cache vuota, la piu' lenta e la piu' importante. E non tornano: web-vitals le da'
+  // una volta per pagina.
+  //
+  // Adesso le misure si accendono quando il consenso c'e': subito se c'era gia', altrimenti
+  // al suo arrivo. web-vitals legge le voci che il browser ha gia' registrato (buffered), quindi
+  // arrivano anche quelle di prima del clic. Prima del consenso non si misura e non parte niente.
   useEffect(() => {
     if (!POSTHOG_KEY) return;
     let cancelled = false;
-    (async () => {
-      const mod = await import('web-vitals').catch(() => null);
-      if (!mod || cancelled) return;
-      const sendVital = (name: string) => (metric: { value: number; rating: string }) => {
-        track('web_vital', { metric: name, value: metric.value, rating: metric.rating });
-      };
-      mod.onCLS(sendVital('CLS'));
-      mod.onLCP(sendVital('LCP'));
-      mod.onINP(sendVital('INP'));
-      mod.onFCP(sendVital('FCP'));
-      mod.onTTFB(sendVital('TTFB'));
-    })();
-    return () => { cancelled = true; };
+    let accese = false;
+    const accendi = () => {
+      if (accese || cancelled || !readConsent()?.analytics) return;
+      accese = true;
+      void (async () => {
+        const mod = await import('web-vitals').catch(() => null);
+        if (!mod || cancelled) return;
+        const sendVital = (name: string) => (metric: { value: number; rating: string }) => {
+          track('web_vital', { metric: name, value: metric.value, rating: metric.rating });
+        };
+        mod.onCLS(sendVital('CLS'));
+        mod.onLCP(sendVital('LCP'));
+        mod.onINP(sendVital('INP'));
+        mod.onFCP(sendVital('FCP'));
+        mod.onTTFB(sendVital('TTFB'));
+      })();
+    };
+    accendi();
+    window.addEventListener('mc:consent-change', accendi);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('mc:consent-change', accendi);
+    };
   }, []);
 
   return null;

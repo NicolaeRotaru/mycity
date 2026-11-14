@@ -43,8 +43,17 @@ export default function PageListEditor({
 
   const remove = (id: string) => {
     if (id === homeId) return;
-    if (!window.confirm('Eliminare questa pagina e le sue sezioni?')) return;
-    update(pages.filter((p) => p.id !== id));
+    // Le voci del menu che aprono questa pagina spariscono con lei: il negozio lo sa prima.
+    const voci = site.menu.links.filter((l) => l.target.kind === 'page' && l.target.pageId === id);
+    const avviso = voci.length
+      ? `Eliminare questa pagina e le sue sezioni?\n\nSparirà anche ${voci.length === 1 ? 'la voce' : 'le voci'} del menu che la ${voci.length === 1 ? 'apre' : 'aprono'}: ${voci.map((l) => `«${l.label || 'senza nome'}»`).join(', ')}.`
+      : 'Eliminare questa pagina e le sue sezioni?';
+    if (!window.confirm(avviso)) return;
+    onChange({
+      ...site,
+      pages: pages.filter((p) => p.id !== id),
+      menu: voci.length ? { ...site.menu, links: site.menu.links.filter((l) => !voci.includes(l)) } : site.menu,
+    });
   };
 
   return (

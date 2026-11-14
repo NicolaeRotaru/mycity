@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/Badge';
 import { queryKeys } from '@/lib/queries/keys';
 import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import { logger } from '@/lib/logger';
+import { dataEOraPiacenza } from '@/lib/admin/etichette';
 
 /**
  * Pagina Eventi MyCity — mercatino virtuale settimanale, flash sale, lancio prodotto.
@@ -57,6 +58,8 @@ function relativeTime(iso: string): string {
   const diffH = Math.round(diffMs / 3600_000);
   const diffD = Math.round(diffMs / 86_400_000);
   const past = diffMs < 0;
+  // 13/11/2026 (R18-018) — Nell'ultimo mezzo minuto diceva «tra 0 min».
+  if (!past && diffMs < 60_000) return 'tra meno di un minuto';
   if (Math.abs(diffMin) < 60) return past ? `${Math.abs(diffMin)} min fa` : `tra ${diffMin} min`;
   if (Math.abs(diffH) < 24) return past ? `${Math.abs(diffH)}h fa` : `tra ${diffH}h`;
   return past ? `${Math.abs(diffD)} giorni fa` : `tra ${diffD} giorni`;
@@ -118,6 +121,14 @@ export default function EventsPage() {
 
   // Un evento finito mentre la pagina è aperta sparisce al prossimo disegno,
   // senza aspettare la rilettura: «LIVE ORA · Termina 2 giorni fa» non esce più.
+  // 13/11/2026 (R18-018) — E il prossimo disegno arriva ogni mezzo minuto: prima
+  // arrivava solo con la rilettura, e un evento appena finito restava lì come
+  // «Termina tra 0 min» fino a un minuto.
+  const [, battito] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => battito((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
   const adesso = Date.now();
   const events = tuttiGliEventi.filter((ev) => Date.parse(ev.ends_at) > adesso);
 
@@ -251,7 +262,11 @@ export default function EventsPage() {
                   <div className="flex items-center gap-3 text-xs text-ink-500">
                     <span className="inline-flex items-center gap-1">
                       <Clock size={12} strokeWidth={2.2} />
-                      {isLive ? `Termina ${relativeTime(ev.ends_at)}` : `Inizia ${relativeTime(ev.starts_at)}`}
+                      {/* 13/11/2026 (R18-018) — Accanto al tempo relativo, giorno e ora di Piacenza:
+                          San Silvestro e Capodanno uscivano tutti e due «tra 54 giorni». */}
+                      {isLive
+                        ? `Termina ${relativeTime(ev.ends_at)} · ${dataEOraPiacenza(ev.ends_at)}`
+                        : `Inizia ${relativeTime(ev.starts_at)} · ${dataEOraPiacenza(ev.starts_at)}`}
                     </span>
                     <span className="inline-flex items-center gap-1">
                       <Users size={12} strokeWidth={2.2} />

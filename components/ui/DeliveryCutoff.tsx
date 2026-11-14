@@ -21,9 +21,12 @@ const UN_MINUTO = 60_000;
  * fra server e client. Batte al minuto e si ferma a scheda nascosta: serve solo a vedere un negozio
  * che apre o chiude mentre la pagina è aperta. Niente conto alla rovescia (29/10).
  */
-export function useOraDiPiacenza(): Date | null {
+export function useOraDiPiacenza(attivo: boolean = true): Date | null {
   const [adesso, setAdesso] = useState<Date | null>(null);
   useEffect(() => {
+    // Dove il riquadro non si vede (la home sul telefono) l'orologio non parte: niente battito al
+    // minuto per un'ora che nessuno legge.
+    if (!attivo) return;
     let id: ReturnType<typeof setInterval> | null = null;
     const ferma = () => { if (id) { clearInterval(id); id = null; } };
     const avvia = () => {
@@ -41,7 +44,7 @@ export function useOraDiPiacenza(): Date | null {
       ferma();
       document.removeEventListener('visibilitychange', suVisibilita);
     };
-  }, []);
+  }, [attivo]);
   return adesso;
 }
 

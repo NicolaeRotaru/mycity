@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Tags } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -12,6 +12,7 @@ import { Input, Select, Checkbox } from '@/components/ui/Field';
 import { slugify } from '@/lib/store-site';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import EmptyState from '@/components/EmptyState';
 
 /**
  * Admin: gestione categorie. SELECT pubblica; scrittura via /api/admin/categories
@@ -153,6 +154,13 @@ export default function AdminCategoriesPage() {
           description="Non vuol dire che non ce ne siano: la lettura non è andata. Riprova."
           retry={() => { void refetch(); }}
           supportHref={null}
+        />
+      ) : cats.length === 0 ? (
+        <EmptyState
+          variant="compact"
+          icon={Tags}
+          title="Nessuna categoria ancora"
+          description="Scrivi un nome nel modulo qui sopra e premi «Aggiungi»: sarà la prima categoria del catalogo."
         />
       ) : (
         <div className="space-y-2">

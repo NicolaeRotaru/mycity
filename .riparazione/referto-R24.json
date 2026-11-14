@@ -1,0 +1,730 @@
+{
+  "sessione": "R24",
+  "aggiornato": "2026-11-13 13:50",
+  "finita": true,
+  "testa": "2d57b2e4245d24b5dce19b64b03892a41a75d35f",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "2d57b2e4245d24b5dce19b64b03892a41a75d35f",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify → uscita 0: typecheck, lint, 1434 file di prova verdi e 1 saltato (già saltato sulla base). Le prove comuni sono identiche alla base."
+  },
+  "voci": [
+    {
+      "id": "R24-001",
+      "chiave": "coerenza-brand|ombre nere fredde accanto alle ombre calde del brand; il token creato apposta non è usato mai",
+      "esito": "parziale",
+      "commit": "69d4d608424a49ba4d718a5b84502723380d54ee",
+      "file_toccati": [
+        "app/search/page.tsx",
+        "components/home/DropOfDay.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-ombre-del-brand.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-ombre-del-brand.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 69d4d608424a49ba4d718a5b84502723380d54ee^ --file app/search/page.tsx,components/home/DropOfDay.tsx --prove tests/unit/riparazione-r24-ombre-del-brand.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il riquadro del codice di consegna (orders/[id]) e la scheda prodotto erano già a posto, e shadow-sm-neutral ha usi. Restavano tre ombre nere nei miei file: i pulsanti «Ordina» e «Filtri» della ricerca (shadow-sm → shadow-sm-neutral) e «Acquista subito» del Drop del giorno (shadow-lg → shadow-warm-lg).",
+      "cosa_resta": "Nei file degli altri restano circa 34 ombre nere della scala Tailwind (shadow, shadow-sm, shadow-md, shadow-lg, shadow-2xl) sotto app/ e components/; da mappare sui token (shadow-sm-neutral su bianco, shadow-warm/shadow-card, shadow-warm-lg) dai proprietari di quei file. In alternativa ridefinire boxShadow.sm/DEFAULT/md/lg in tailwind.config.ts.",
+      "nota": "Prova: Drop del giorno montato e classi del pulsante; per la ricerca (non si monta in prova) lettura del sorgente, dichiarata.",
+      "verificato_da": "collaudo L3-Q (sonnet): regge, nei miei file nessuna ombra nera, i token sm-neutral e warm-* stanno in tailwind.config.ts; il parziale è giusto (33 ombre nere in file altrui)."
+    },
+    {
+      "id": "R24-002",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "parziale",
+      "commit": "8f70c8d0e465fbd00eac4e27038d819ea2003b06",
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "app/orders/[id]/page.tsx",
+        "app/product/[id]/page.tsx",
+        "app/reset-password/page.tsx",
+        "app/rider/earnings/page.tsx",
+        "app/search/page.tsx",
+        "app/seller/products/page.tsx",
+        "app/sign-up/page.tsx",
+        "components/ProductCard.tsx",
+        "components/admin/AdminSidebar.tsx",
+        "components/home/TrendingNow.tsx",
+        "components/seller/SellerShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-scala-del-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-scala-del-testo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8f70c8d0e465fbd00eac4e27038d819ea2003b06^ --file app/cart/page.tsx,app/orders/[id]/page.tsx,app/product/[id]/page.tsx,app/reset-password/page.tsx,app/rider/earnings/page.tsx,app/search/page.tsx,app/seller/products/page.tsx,app/sign-up/page.tsx,components/ProductCard.tsx,components/admin/AdminSidebar.tsx,components/home/TrendingNow.tsx,components/seller/SellerShell.tsx --prove tests/unit/riparazione-r24-scala-del-testo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "72 `text-[Npx]` in 12 file passano al gradino della scala: 10/12/14/16 identici; 13 e 13,5 → text-sm, 15 → text-base, 9 → text-2xs, 22 e 26 → text-2xl, 34 → text-4xl, 46 → text-5xl (arrotondamenti al più vicino dal registro di R24-002). Righe di commento non toccate.",
+      "cosa_resta": "Nei miei file restano 21 `text-[11px]` (nella scala non c'è l'11 e il registro non dice se andare a 10 o a 12: serve un gradino nuovo in tailwind.config.ts, file altrui) e un `text-[13px]` solo in un commento di app/globals.css. Negli altri file restano circa 250 misure a mano (273 in tutto nel sito, 95 file), le cartelle più cariche: app/rider (73), app/seller (29), app/admin (22), components/seller (13), app/category (10), components/account (9), components/ui (8), components/products (8), app/about (8), components/home (6), components/admin (6), app/lavora-con-noi (6). Con altre misure fuori scala: 32, 28, 17, 54, mezzi pixel.",
+      "insieme_a": [
+        "R24-021"
+      ],
+      "nota": "Prova sul sorgente (le classi Tailwind non si vedono in jsdom), dichiarata. Passando a text-sm/xs/base/lg la riga prende l'altezza di riga della scala (prima ereditata). Il registro di R24-021 proponeva due gradini nuovi (13 e 11) in tailwind.config.ts: ho seguito R24-002 (13 → 14). I gradini della scala (text-xs, text-sm, text-base…) portano anche l'altezza di riga dichiarata nella scala, che text-[Npx] non dava: dove manca un leading-* (47 punti) pulsanti e chip crescono di circa 3px. È voluto: la scala è misura più interlinea. Si è scelto 13→14 perché è la strada del fix di R24-002 che sta nei miei file; i gradini nuovi da 13 e 11 andrebbero in tailwind.config.ts, che non è mio. Restano 20 text-[11px].",
+      "serve_file_altrui": [
+        {
+          "file": "tailwind.config.ts",
+          "modifica": "aggiungere in theme.extend.fontSize il gradino 'xxs': ['0.6875rem', {lineHeight: '1rem'}] (11px), poi sostituire i text-[11px] (21 nei miei file, circa 45 negli altri) con text-xxs; e migrare le ~250 misure rimaste negli altri file."
+        }
+      ],
+      "verificato_da": "collaudo L3-Q (sonnet): parziale, 13→14 applicato nei miei 12 file come chiede il fix; il registro proponeva anche i gradini nuovi da 13 e 11 in tailwind.config.ts (file non mio)."
+    },
+    {
+      "id": "R24-003",
+      "chiave": "frontend-ux|le stelle delle recensioni partono già a 5, e una seconda recensione viene buttata via dicendo «grazie»",
+      "esito": "parziale",
+      "commit": "04d6d01b3031c2d3c6faf2f560f8e2e1879d6296",
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-stelle-recensione-prodotto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-stelle-recensione-prodotto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && I=.git/indice-senza-003; rm -f $I; GIT_INDEX_FILE=$I git read-tree HEAD && git show f2d81af5 -- 'app/product/[id]/page.tsx' | GIT_INDEX_FILE=$I git apply -R --cached && git show 04d6d01b -- 'app/product/[id]/page.tsx' | GIT_INDEX_FILE=$I git apply -R --cached && B=$(git commit-tree $(GIT_INDEX_FILE=$I git write-tree) -p HEAD -m 'base senza R24-003, solo per la rimessa') && rm -f $I && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base $B --file 'app/product/[id]/page.tsx' --prove tests/unit/riparazione-r24-stelle-recensione-prodotto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Recensione del prodotto: le stelle partono da 0 e tornano a 0 dopo l'invio; «Pubblica recensione» resta spento finché non si vota; una seconda recensione (23505) dice «Hai già recensito questo prodotto: resta pubblicata la recensione di prima». Giro di correzione: un freno useRef al doppio invio, come R24-012, che si riapre solo sull'errore; dopo il successo resta chiuso e un altro invio dice «Hai già recensito» senza scrivere. Prova con un database finto (la seconda scrittura urta il vincolo): due invii nello stesso istante → 1 scrittura, «Grazie» e nessun «già recensito»; dopo un errore di rete si può riprovare. La recensione dell'ordine era già a posto dal 5/11.",
+      "cosa_resta": "Modificare una recensione esistente è una scelta di Nicola (domanda). Il link dell'email «Ordine consegnato» porta ancora a /orders/<id> e non al modulo (file altrui). Il pulsante «Lascia recensione» su app/orders/[id]/page.tsx:520 resta visibile, ma porta a una pagina che dice chiaramente «già recensito». Il modulo prodotto non controlla prima se hai già recensito: lo dice all'invio.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/email/templates.ts",
+          "modifica": "orderDeliveredTemplate, riga 384: const orderUrl = `${appUrl()}/orders/${args.orderId}/review`;"
+        }
+      ],
+      "domanda": "Chi ha già recensito un ordine o un prodotto deve poter modificare la sua recensione (oggi resta quella di prima e la pagina lo dice), sì o no?",
+      "nota": "Altri commit: f2d81af5 (giro di correzione). La pagina sulla testa è base + R24-018 + R24-003 (R24-013 tolta col revert); nessun commit del ramo la ha senza la sola R24-003 (04d6d01b^ ha dentro R24-013), quindi la base della rimessa la costruisce la ricetta nel comando, senza toccare ramo né albero: è HEAD con le due correzioni di R24-003 tolte dalla pagina (provato: è uguale a base + solo R24-018). Qui è uscita 67a37bf9 → uscita 0. Rimessa del solo giro: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f2d81af5^ --file 'app/product/[id]/page.tsx' --prove tests/unit/riparazione-r24-stelle-recensione-prodotto.test.tsx --json → uscita 0.",
+      "verificato_da": "collaudo L2: parziale con un difetto (niente freno al doppio invio sulla scheda prodotto); corretto in f2d81af5 con prova e rimessa, non ricollaudato. Ricollaudo: regge (4 mutanti rossi). Dopo un invio riuscito il modulo resta e invita a una seconda recensione che poi rifiuta dicendolo: lasciato, perché la voce aspetta la scelta di Nicola sulla modifica."
+    },
+    {
+      "id": "R24-004",
+      "chiave": "frontend-ux|se il nome del negozio comincia con un numero, un apostrofo, le virgolette o contiene una parola inglese come «table», il cliente in cassa legge «qualcosa non ha funzionato» invece del motivo vero",
+      "esito": "parziale",
+      "commit": "ec8a953b5ce78fb684e1f09ab07f6af1aa5b2867",
+      "file_toccati": [
+        "lib/errors.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-motivo-in-cassa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-motivo-in-cassa.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ec8a953b^ --file lib/errors.ts --prove tests/unit/riparazione-r24-motivo-in-cassa.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il segno lo mette la rotta: apiErrorMessage si ricorda le frasi dei rifiuti col codice CONFLICT (negozio chiuso, fascia, consegna veloce), al massimo le ultime 20, e friendlyError le lascia passare intere. «Bistrot La Table», «Row Bar» e «1920 Bottega» arrivano col motivo vero quando il rifiuto è un CONFLICT. Nessun codice nuovo in questo giro.",
+      "cosa_resta": "Il motivo «fuori zona» arriva ancora come «Qualcosa non ha funzionato» coi nomi come «Bistrot La Table»: app/api/orders/cod/route.ts:1055 e app/api/stripe/checkout/route.ts:629 rifiutano con invalidRequest(motivoFuoriZona(store_name)), cioè INVALID_REQUEST, di cui friendlyError non si fida (porta anche i testi grezzi di Zod).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "riga 1055: `return esciERilascia(ApiErrors.conflict(motivoFuoriZona(s.store_name)));` al posto di invalidRequest. Prima controllare che la cassa (app/checkout/page.tsx) non dipenda dallo stato 400 di questa risposta."
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "riga 629: `return ApiErrors.conflict(motivoFuoriZona(s.store_name));` al posto di invalidRequest, con lo stesso controllo sulla cassa."
+        }
+      ],
+      "nota": "Mi fido solo di CONFLICT, perché INVALID_REQUEST porta anche i testi grezzi di Zod.",
+      "verificato_da": "collaudo L1-A: parziale (resta la variante «fuori zona» da rotte non mie); nessuna fuga di testo interno nei ~100 rifiuti CONFLICT."
+    },
+    {
+      "id": "R24-005",
+      "chiave": "immagini-media|il segnaposto «foto mancante» arriva da un sito esterno e ha tre stili diversi",
+      "esito": "riparato",
+      "commit": "8c131077cb580089b2a0cfed83c720b4491d3486",
+      "file_toccati": [
+        "app/seller/products/page.tsx",
+        "components/seller/FeaturedProductsPicker.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-foto-mancante-venditore.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-foto-mancante-venditore.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8c131077cb580089b2a0cfed83c720b4491d3486^ --file app/seller/products/page.tsx,components/seller/FeaturedProductsPicker.tsx --prove tests/unit/riparazione-r24-foto-mancante-venditore.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Carrello, cassa, scheda e Drop del giorno usavano già /foto-mancante.svg (FOTO_MANCANTE); restavano i tre punti del venditore (elenco prodotti tabella e schede, selezione in evidenza), che ora usano lo stesso segnaposto locale: zero chiamate a placehold.co, una sola faccia.",
+      "insieme_a": [
+        "R24-015"
+      ],
+      "nota": "Stesse tre righe di R24-015: un commit solo. Prova: le pagine vere con un prodotto senza foto, si legge il src.",
+      "verificato_da": "collaudo L3-P (sonnet): regge, nessun sito esterno in app, components e lib, un solo stile (/foto-mancante.svg in public/), la prova diventa rossa rimettendo placehold.co."
+    },
+    {
+      "id": "R24-006",
+      "chiave": "immagini-media|se la foto di un prodotto è stata cancellata, la scheda resta un riquadro bianco invece della foto di ripiego",
+      "esito": "riparato",
+      "commit": "398b860906c1e50bef7a8f90fccce13673b1634f",
+      "file_toccati": [
+        "components/ui/FotoConRipiego.tsx",
+        "components/ProductCard.tsx",
+        "components/checkout/CartGroupsList.tsx",
+        "components/home/TrendingNow.tsx",
+        "app/cart/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx",
+        "tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 398b860906c1e50bef7a8f90fccce13673b1634f^ --file components/ProductCard.tsx,components/checkout/CartGroupsList.tsx,components/home/TrendingNow.tsx,app/cart/page.tsx --prove tests/unit/riparazione-r24-foto-che-non-risponde.test.tsx,tests/unit/riparazione-r24-foto-che-non-risponde-carrello.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuovo componente FotoConRipiego (<Image> con onError che passa a /foto-mancante.svg, si ricorda l'indirizzo fallito e riprova se la src cambia) usato nella scheda prodotto, nella miniatura in cassa, in «Trending ora» e nella riga del carrello. Prova: componenti veri, si lancia l'evento error sull'immagine e si legge il src.",
+      "nota": "La prova rimessa è lanciata senza il file nuovo in --file: tolto, la prova cade per la struttura (uscita 3, il carrello e le schede non trovano l'import), non per il comportamento. Con i quattro file che lo usano riportati alla base la prova è rossa sul comportamento (uscita 0). Giro finale (2d57b2e4): Aggiunta in riparazione-r24-foto-che-non-risponde.test.tsx la prova su FotoConRipiego: ripiego che fallisce 5 volte, src fisso e ridisegni limitati..",
+      "verificato_da": "collaudo L3-P (sonnet): regge, senza onError 4 prove rosse; nessun giro infinito per costruzione (prova aggiunta nel giro finale). Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+    },
+    {
+      "id": "R24-007",
+      "chiave": "microcopy|gli errori dei moduli controllati dal server arrivano al cliente in inglese, per esempio «string must contain at most 120 character»",
+      "esito": "parziale",
+      "commit": "99fc86a385a4455c68a1b44520bb0cf6e5682419",
+      "file_toccati": [
+        "lib/errors.ts",
+        "app/api/contact/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-errori-dal-server.test.ts",
+        "tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-errori-dal-server.test.ts tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 99fc86a3^ --file lib/errors.ts,app/api/contact/route.ts --prove tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts,tests/unit/riparazione-r24-errori-dal-server.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La rotta dei contatti importa lib/zod-i18n, quindi lì il traduttore è acceso sul server. In friendlyError i testi inglesi predefiniti di Zod che arrivano da una rotta senza traduttore escono con le frasi di FRASI_ZOD, o con una frase italiana generica. Giro di correzione: due regex per i numeri, con «or equal to» minimo/massimo, senza «Deve essere maggiore/minore di» («Number must be greater than 0» diceva «Valore minimo: 0»); «over N» e «more than N» contano N+1, «under N» N-1. «Expected 'a' | 'b', received number» e «Invalid datetime/cuid/time/…» (il \\b dopo «date» non scattava in «datetime») escono con la frase generica. Le prove usano anche i testi veri di Zod, presi con z.defaultErrorMap.",
+      "cosa_resta": "Le altre rotte che validano con Zod rispondono ancora in inglese finché il traduttore non è acceso nel modulo comune (serve_file_altrui). Sul server il traduttore si accende per tutto il processo solo quando una rotta che lo importa (contatti, o una che carica lib/errors) è già stata caricata: finché non c'è la riga in lib/api/responses.ts le altre rotte rispondono a volte in italiano e a volte in inglese. components/products/ImportFromUrlBox.tsx:84,116,125 mostra body.error.message così com'è, senza friendlyError (serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/api/responses.ts",
+          "modifica": "aggiungere in testa `import '@/lib/zod-i18n';` (la stessa riga di R24-019, una volta sola)"
+        },
+        {
+          "file": "components/products/ImportFromUrlBox.tsx",
+          "modifica": "righe 84 e 116: `throw new Error(apiErrorMessage(body, 'Copia foto non riuscita'))` / `throw new Error(apiErrorMessage(body, 'Import non riuscito'))`; riga 125: `toast.error(friendlyError(e))`, con import { apiErrorMessage, friendlyError } da '@/lib/errors'"
+        }
+      ],
+      "nota": "Altri commit: ab118c3d (giro di correzione). Rimessa del solo giro: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ab118c3d^ --file lib/errors.ts --prove tests/unit/riparazione-r24-errori-zod-in-italiano.test.ts,tests/unit/riparazione-r24-errori-dal-server.test.ts --json → uscita 0. lib/errors importa FRASI_ZOD da lib/zod-i18n, quindi z.setErrorMap si accende dovunque si carica lib/errors.",
+      "verificato_da": "collaudo L1-B: parziale con un difetto introdotto (greater than detto come minimo) e due testi inglesi che passavano; corretti in ab118c3d, non ricollaudati. Ricollaudo (sonnet): regge, tutte le varianti predefinite di Zod 3.25 escono in italiano giusto, nessuna frase italiana scambiata."
+    },
+    {
+      "id": "R24-008",
+      "chiave": "microcopy|chi si registra con una password troppo comune legge l'avviso in inglese e non capisce cosa cambiare",
+      "esito": "riparato",
+      "commit": "6a55e9a6f01cef689a86879fcc7b25f592449caa",
+      "file_toccati": [
+        "lib/errors.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-password-comune.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-password-comune.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a55e9a6^ --file lib/errors.ts --prove tests/unit/riparazione-r24-password-comune.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "traduciErroreAuth riconosce la password comune o rubata («known to be weak», pwned, leaked) e quella troppo semplice, con le frasi di /reset-password (PASSWORD_RUBATA, PASSWORD_SEMPLICE); friendlyError usa il codice weak_password solo se il testo non si riconosce. Giro di correzione: pwned/rubata si controlla PRIMA della lunghezza, come /reset-password (con «corta» e «rubata» insieme l'iscrizione diceva «almeno N caratteri»). La prova monta la pagina col flusso della base (signUp dal browser che restituisce AuthWeakPasswordError 422, reasons [pwned]) e regge anche con la rotta di R24-020; l'avviso deve essere esattamente PASSWORD_RUBATA, quindi se il codice vincesse sul testo la prova cadrebbe (provato).",
+      "nota": "Altri commit: 18701a0b (giro di correzione). La base 6a55e9a6^ toglie da lib/errors.ts tutte e due le parti di R24-008, e anche R24-004 e R24-007 (vengono dopo nella storia): la prova non le guarda. Non c'è un commit che tolga solo R24-008. Giro finale (b8d9956d): La sola lunghezza della password ora usa la frase di /reset-password con lo stesso N; nessuna prova esistente pretendeva la vecchia.. Rimessa del giro: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b8d9956d^ --file lib/errors.ts --prove tests/unit/riparazione-r24-password-comune.test.ts --json > rimessa-fin-008.json → uscita 0.",
+      "verificato_da": "collaudo L1-A: regge; rinforzi (toBe PASSWORD_RUBATA, rubata prima della lunghezza) in 18701a0b, non ricollaudati. Ricollaudo (sonnet): regge sulla password comune o rubata (pwned, length+pwned, characters+pwned danno PASSWORD_RUBATA su tutte e due le pagine); la frase della sola lunghezza è detta con parole diverse fra /sign-up e /reset-password (vedi nati). Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+    },
+    {
+      "id": "R24-009",
+      "chiave": "navigazione-gerarchia|nella scheda prodotto il prezzo è quasi grande quanto il titolo e pesa meno del pulsante «+»",
+      "esito": "riparato",
+      "commit": "66c0ce245d6428c72f60449d32c35bec74f56132",
+      "file_toccati": [
+        "components/ProductCard.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 66c0ce245d6428c72f60449d32c35bec74f56132^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il prezzo era già text-lg (18 px) contro il titolo a 13; restava il quadrato pieno bg-primary-600 del «+», ora un contorno (border-2 primary-600, fondo trasparente, hover primary-50). h-11 w-11 invariati: tocco da 44 px. Il contrasto del bordo (primary-600 su bianco 4,96:1) tiene.",
+      "nota": "Il prezzo scontato resta text-secondary-600 e il pieno text-ink-900: la voce lo osserva ma il fix del registro non lo chiede, non l'ho toccato. Giro finale (bf5d2a60): La prova ora controlla border-2 e border-primary-600/700/800 sul «+» (primary-200 la fa fallire).. Rimessa del giro: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf5d2a60^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx --json → uscita 2. Il prezzo scontato resta secondary-600: il fix del registro chiede solo il prezzo più grande e il «+» a contorno, e la prova comune minori-s09-aspetto.test.ts:210 pretende secondary-600.",
+      "verificato_da": "collaudo L3-P (sonnet): parziale sulla prova (il bordo del «+» non era misurato) e sul prezzo scontato citato dalla voce; vedi giro finale. Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+    },
+    {
+      "id": "R24-010",
+      "chiave": "qa-flussi|il modulo contatti e la porta cancella account giudicano support_email in due modi",
+      "esito": "scelta_di_nicola",
+      "file_toccati": [],
+      "domanda": "Su Vercel SUPPORT_EMAIL sta sul dominio dei contatti (NEXT_PUBLIC_CONTATTI_DOMINIO)? Se no, quale regola vale per il modulo contatti e per la porta Cancella account: inoltrare a qualunque casella, o solo a una sul dominio con chiave e mittente della posta?",
+      "nota": "La correzione (cd86f3b0) allineava il modulo alla porta, la voce voleva il verso opposto: non regge, tolta con revert (e8081209). chi-vuole-cancellarsi-trova-una-strada-che-funziona e minori-s08-contatti sono di nuovo identiche alla base. Col database acceso l'avviso di app/api/contact/route.ts:112 parte verso qualunque indirizzo scritto in SUPPORT_EMAIL, senza il controllo sul dominio che fa la porta Cancella account.",
+      "verificato_da": "collaudo L1-B: non regge, la voce voleva l'allineamento nel verso opposto (503 nuovi con SUPPORT_EMAIL fuori dominio o RESEND_FROM fuori dominio); tolta col revert."
+    },
+    {
+      "id": "R24-011",
+      "chiave": "qa-flussi|l'avviso «spesa sotto i 10 €… ti mancano x» nel carrello può ignorare la quantità senza che una prova della squadra diventi rossa",
+      "esito": "gia_riparato_prima",
+      "commit": "1fe70f294e334ad8334c5b63f074365ae8842d08",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r24-spesa-piccola-con-quantita.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-spesa-piccola-con-quantita.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "Il carrello conta già la quantità: app/cart/page.tsx:509 subtotalCents: Math.round(g.items.reduce((somma, it) => somma + it.price * it.quantity, 0) * 100), che arriva ad avvisoSpesaPiccola. Prova (commit 1fe70f29 e dea461d8): npx vitest run tests/unit/riparazione-r24-spesa-piccola-con-quantita.test.tsx --reporter=dot, 4 verdi: monta il carrello vero con 2×3 €, 3×4 €, 3×1,15 € e due varianti della stessa maglia da 2 pezzi a 2 €, e legge l'avviso a video.",
+      "cosa_ho_fatto": "Chiuso il buco di prova. Giro di correzione (dea461d8): un caso con due varianti dello stesso prodotto, quantità 2 ciascuna (spesa 8 €, mancano 2 €). Mutazioni a mano, mai committate, a app/cart/page.tsx:509: `it.price` (il mutante della voce) e `it.price * (it.variantId ? 1 : it.quantity)` (quello del collaudo) fanno cadere la prova; il secondo prima restava verde. Il file è stato rimesso com'era.",
+      "verificato_da": "collaudo L2: regge (il mutante della voce fa rosse le 3 prove); caso con due varianti aggiunto in dea461d8. Ricollaudo: regge, il mutante sulle varianti fa rosso il caso nuovo."
+    },
+    {
+      "id": "R24-012",
+      "chiave": "qa-flussi|col doppio clic la recensione parte due volte e il cliente legge «avevi già recensito»",
+      "esito": "riparato",
+      "commit": "8de3e9a49229f1c4e4929b9193c46e12bfe3f0e9",
+      "file_toccati": [
+        "app/orders/[id]/review/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-recensione-doppio-clic.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-recensione-doppio-clic.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a19ff892 --file 'app/orders/[id]/review/page.tsx' --prove tests/unit/riparazione-r24-recensione-doppio-clic.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Un freno sincrono (useRef inviando): due clic nello stesso istante fanno una sola scrittura. Giro di correzione: il freno si riapre solo su onError, non più con onSettled, perché col successo si riapriva prima che router.push cambiasse pagina (clic, risposta, secondo clic = 2 scritture e «Avevi già recensito»). Prova: clic, successo, secondo clic → 1 scrittura; dopo un errore si può riprovare. Stelle con frecce, Home e Fine; commenti con tetto 1000 e contatore.",
+      "nota": "Altri commit: 6c1351ad (giro di correzione). La pagina la toccano solo i commit di R24-012, quindi a19ff892 toglie esattamente la voce. Rimessa del solo giro: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6c1351ad^ --file 'app/orders/[id]/review/page.tsx' --prove tests/unit/riparazione-r24-recensione-doppio-clic.test.tsx --json → uscita 0. Le stelle restano pulsanti con aria-pressed: la guardia comune le-stelle-del-voto-dicono-quale-hai-scelto lo pretende. Giro finale (400f018b): loading={submit.isPending || submit.isSuccess}: dopo il successo il pulsante resta spento; prova su disabled e aria-busy.. Rimessa del giro: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 400f018b^ --file app/orders/[id]/review/page.tsx --prove tests/unit/riparazione-r24-recensione-doppio-clic.test.tsx --json > rimessa-fin-012.json → uscita 0.",
+      "verificato_da": "collaudo L2: parziale (freno sbloccato anche col successo, prima del cambio pagina); corretto in 6c1351ad (sblocco solo su errore) con prova e rimessa, non ricollaudato. Ricollaudo: regge (onSettled rimesso → rosso; errore e nuovo tentativo sbloccano il freno). Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+    },
+    {
+      "id": "R24-013",
+      "chiave": "qa-flussi|la scheda prodotto passa il prezzo pieno alla barra d'acquisto e al carrello con una promozione attiva",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "app/product/[id]/page.tsx, tests/unit/riparazione-r24-prezzo-promo-al-carrello.test.tsx (nuovo)",
+          "modifica": "git show b06c87d779fffc36f95099ade1af8032789d31c9 -- 'app/product/[id]/page.tsx' tests/unit/riparazione-r24-prezzo-promo-al-carrello.test.tsx | git apply -3 — si applica pulito sulla testa nuova (sopra R24-018 e il freno di R24-003) e NON porta components/ProductCard.tsx. La prova PERÒ DIPENDE dalla parte di ProductCard: il suo secondo describe («la scheda della vetrina sconta al centesimo come la cassa», righe 155-170) monta ProductCard ed è rosso senza quella parte. Subito dopo l'apply va tolto con questo script (provato), che leva anche gli import di ProductCard e formatPrice e le due frasi sulla vetrina nel commento di testa:\npython3 - <<'EOF'\np = 'tests/unit/riparazione-r24-prezzo-promo-al-carrello.test.tsx'\ns = open(p).read()\ns = s.replace(\" * visto cambiare niente. E la scheda della vetrina scontava senza arrotondare al centesimo come\\n * la cassa: 0,62 € col 25% faceva leggere 0,46 € mentre la cassa ne chiede 0,47.\\n\", \" * visto cambiare niente.\\n\", 1)\ns = s.replace(\" * Qui si montano la scheda prodotto e la scheda della vetrina VERE, si preme il loro pulsante\\n * d'acquisto e si guarda cosa entra nel carrello.\", \" * Qui si monta la scheda prodotto VERA, si preme il suo pulsante d'acquisto e si guarda cosa\\n * entra nel carrello.\", 1)\ns = s.replace(\"import { formatPrice } from '@/lib/format';\\n\", '', 1)\ns = s.replace(\"import ProductCard from '@/components/ProductCard';\\n\", '', 1)\ns = s[: s.index(\"\\ndescribe('R24-013 · la scheda della vetrina\")] + '\\n'\nassert 'ProductCard' not in s and 'formatPrice' not in s and 'vetrina' not in s\nopen(p, 'w').write(s)\nEOF\nCon lo script e la modifica alla prova 310 qui sotto, i 38 file di prova che leggono la scheda o ProductCard danno 414 verdi."
+        },
+        {
+          "file": "tests/unit/minori-s09-scheda-prodotto.test.ts",
+          "modifica": "Prova comune 310, righe 91-93 diventano: `it('al carrello va il prezzo che si mostra, scontato come in cassa (R24-013)', () => { expect(src.match(/price: prezzoPieno,/g)).toBeNull(); expect(src.match(/^\\s*price,$/gm)?.length).toBe(2); });` (provato)."
+        },
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "riga 39, queryFn: dopo `const righe = await leggiSimili(supabase, { productId, categoryId, sellerId });` mettere `const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));` (queryFn diventa async), con `import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';`, come components/cart/CartUpsell.tsx:53-54."
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "riga 72, queryFn: `const righe = await leggiVistiDiRecente(supabase, { userId: userId! });` poi `const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));`, con lo stesso import da '@/lib/promotions'."
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "riga 35, queryFn: `const righe = await leggiSponsorizzati(supabase, { placement, categorySlug, oggi: new Date().toISOString().slice(0, 10) });` poi `const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));`, con lo stesso import da '@/lib/promotions'."
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "riga 56, queryFn: `const righe = await leggiSuggerimentiRicerca(supabase, debounced);` poi `const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));`, con lo stesso import da '@/lib/promotions'."
+        },
+        {
+          "file": "components/products/FrequentlyBoughtTogether.tsx",
+          "modifica": "riga 62, scontare il prezzo con fetchActiveDiscounts/discountedUnitCents prima di metterlo nel carrello, come CartUpsell.tsx:53-54 (oggi `price: Number(p.price)`)."
+        }
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-prezzo-promo-al-carrello.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-prezzo-promo-al-carrello.test.tsx tests/unit/minori-s09-scheda-prodotto.test.ts --reporter=dot",
+      "cosa_ho_fatto": "Tolta dal ramo con revert di b06c87d7 (21f2a06c), senza conflitti: la pagina torna a «price: prezzoPieno» nei due addToCart e components/ProductCard.tsx torna alla base.",
+      "cosa_resta": "La parte di components/ProductCard.tsx (sconto al centesimo nella vetrina) è un'altra voce del registro non assegnata («con una promozione del negozio la vetrina scrive un prezzo e la cassa ne fa pagare un altro, di un centesimo per pezzo»): non va cucita con questa.",
+      "nota": "Contraddice la prova comune minori-s09-scheda-prodotto › 310 «al carrello va il prezzo pieno». Barra: R22-004 nella stessa onda; StickyAddToCart riceve già il prezzo scontato. Al cherry-pick aggiungere alla prova un caso «Compra ora» (app/product/[id]/page.tsx:653 sulla testa nuova, era :647): oggi rimettendo price: prezzoPieno solo lì la prova resta verde.",
+      "verificato_da": "collaudo L2: la patch della pagina è giusta (lo sconto non si applica mai due volte: carrello, cassa, carrello condiviso, CartUpsell e riordino rileggono products.price); buco: manca il caso «Compra ora»; tolta col revert per la prova comune minori-s09 › 310."
+    },
+    {
+      "id": "R24-014",
+      "chiave": "qa-flussi|il grafico della settimana nei guadagni del fattorino taglia i giorni all'ora di greenwich: le consegne dopo mezzanotte finiscono nel giorno prima",
+      "esito": "riparato",
+      "commit": "a6656b69d3be2d0a3565da0743962025e72bd5e8",
+      "file_toccati": [
+        "app/rider/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-grafico-fattorino-ora-di-roma.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-grafico-fattorino-ora-di-roma.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a6656b69^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r24-grafico-fattorino-ora-di-roma.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le colonne del grafico vengono da ultimiGiorniPiacenza(7) e ogni consegna va in giornoPiacenza(delivered_at), come lib/guadagni/giorni.ts. La lettera del giorno si legge con timeZone 'UTC' dalla data della colonna, uguale su ogni telefono. Prova con l'orologio finto sulla pagina vera: consegna alle 00:30 d'inverno, d'estate e la notte del cambio d'ora (25/10), più la colonna di oggi già alle 00:30; verde con TZ UTC, Europe/Rome e America/New_York.",
+      "verificato_da": "collaudo L2: regge (giorni di Piacenza, cambio d'ora del 25/10, colonna di oggi alle 00:30, estate a UTC+2: rosso col codice vecchio, verde col nuovo; verde anche con TZ America/New_York e Asia/Tokyo)."
+    },
+    {
+      "id": "R24-015",
+      "chiave": "qa-flussi|le pagine del venditore chiedono ancora il segnaposto a placehold.co",
+      "esito": "riparato",
+      "commit": "8c131077cb580089b2a0cfed83c720b4491d3486",
+      "file_toccati": [
+        "app/seller/products/page.tsx",
+        "components/seller/FeaturedProductsPicker.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-foto-mancante-venditore.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-foto-mancante-venditore.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8c131077cb580089b2a0cfed83c720b4491d3486^ --file app/seller/products/page.tsx,components/seller/FeaturedProductsPicker.tsx --prove tests/unit/riparazione-r24-foto-mancante-venditore.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le tre richieste a placehold.co (app/seller/products/page.tsx due volte, FeaturedProductsPicker una) ora puntano a FOTO_MANCANTE, il segnaposto locale che esisteva già.",
+      "insieme_a": [
+        "R24-005"
+      ],
+      "nota": "Stesso commit di R24-005.",
+      "verificato_da": "collaudo L3-P (sonnet): regge, insieme a R24-005."
+    },
+    {
+      "id": "R24-016",
+      "chiave": "qa-flussi|la pagina di iscrizione promette ancora «puoi provare lo stesso a registrarti» quando l'anti-robot non si carica",
+      "esito": "riparato",
+      "commit": "d4a24f7822c63ce451765a7269fd8886cbf617e2",
+      "file_toccati": [
+        "app/sign-up/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-anti-robot-rotto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-anti-robot-rotto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a19ff892 --file app/sign-up/page.tsx --prove tests/unit/riparazione-r24-anti-robot-rotto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se il riquadro anti-robot non si carica il modulo non parte senza gettone (tolto `&& !captchaRotto`), la frase «Puoi provare lo stesso a registrarti» non c'è più e la pagina dice di ricaricare, registrarsi con Google o scrivere a info@ (mailto:). La prova monta la pagina vera con turnstile.render che lancia, e ora controlla anche che il link sia esattamente `mailto:` + indirizzoContatto('info') (con /contact restava verde). Regge col flusso della base (signUp dal browser, finto) e con la rotta di R24-020.",
+      "nota": "Altri commit: b5193318 (giro di correzione: prova col mailto, commento della pagina che non parla più della rotta come se ci fosse già). Dopo il revert di R24-020, git diff a19ff892 HEAD -- app/sign-up/page.tsx contiene solo questa correzione (l'import di indirizzoContatto sta dopo quello di conferma-email, per non toccare righe vicine al cherry-pick di b6f1ad54). Finché R24-020 non è cucita e il CAPTCHA su Supabase è spento, un signUp dal browser senza gettone passerebbe: la pagina ora non lo manda comunque.",
+      "verificato_da": "collaudo L1-A: regge (condizione e frase tornano rosse rimesse a mano); rinforzo della prova sul mailto in b5193318, non ricollaudato. Ricollaudo (sonnet): regge, la prova diventa rossa col link a /contact e senza il blocco senza gettone."
+    },
+    {
+      "id": "R24-017",
+      "chiave": "qa-flussi|la frase vecchia sui formati foto resta in friendlyerror",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "lib/errors.ts, tests/unit/riparazione-r24-formati-foto.test.ts (nuovo), tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts",
+          "modifica": "git cherry-pick c7ab6b48512890f3edbf15d2744582dd566b070b → un conflitto negli import in testa a lib/errors.ts: si tengono tutte e due le parti, prima `import { TIPI_IMMAGINE } from './storage/regole-secchi';` e `import { formatiLeggibili } from './storage/carica-immagine';`, poi il commento R24-007 e `import { FRASI_ZOD } from './zod-i18n';`; poi `git add lib/errors.ts && git cherry-pick --continue`. Provato in una copia: la-foto-rifiutata…, formati-foto, errori-zod-in-italiano, password-comune, motivo-in-cassa → 60 verdi."
+        },
+        {
+          "file": "tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts",
+          "modifica": "Prova comune, la porta il cherry-pick: riga 46, `expect(detto).toBe('Formato non accettato: usa una foto JPG, PNG o WEBP.');` diventa `// 13/11/2026 (R24-017) — i sette formati della porta, non i tre di prima.` più `expect(detto).toBe('Formato non accettato: usa una foto JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF.');`"
+        }
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-formati-foto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-formati-foto.test.ts tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts --reporter=dot",
+      "cosa_ho_fatto": "Tolta dal ramo con revert di c7ab6b48 (d78125f3); conflitto in lib/errors.ts risolto tenendo l'import FRASI_ZOD di R24-007. La correzione resta quella di c7ab6b48: la frase sul formato rifiutato si costruisce con formatiLeggibili(TIPI_IMMAGINE), come la porta di carica-immagine.",
+      "cosa_resta": "Nessuna parte fuori dal codice: resta solo la cucitura, con la prova comune aggiornata dal cherry-pick.",
+      "nota": "Contraddice la prova comune la-foto-rifiutata-lo-dice-in-italiano, che pretende la frase dei tre formati.",
+      "verificato_da": "collaudo L1-B: regge (frase identica a quella della porta, prova esatta); tolta col revert per la prova comune la-foto-rifiutata."
+    },
+    {
+      "id": "R24-018",
+      "chiave": "qa-flussi|un capo con più di cento combinazioni di taglia e colore perde le ultime in silenzio, e il cliente che le sceglie non può comprarle",
+      "esito": "parziale",
+      "commit": "64dc1b395527036b4dba25a21c510aa0bfa8461c",
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-varianti-oltre-cento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-varianti-oltre-cento.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && I=.git/indice-senza-018; rm -f $I; GIT_INDEX_FILE=$I git read-tree HEAD && git show 64dc1b39 -- 'app/product/[id]/page.tsx' | GIT_INDEX_FILE=$I git apply -R --cached && B=$(git commit-tree $(GIT_INDEX_FILE=$I git write-tree) -p HEAD -m 'base senza R24-018, solo per la rimessa') && rm -f $I && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base $B --file 'app/product/[id]/page.tsx' --prove tests/unit/riparazione-r24-varianti-oltre-cento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla scheda una combinazione che non esiste non chiede più «Scegli taglia e colore». Con tutte le opzioni scelte la scheda dice «Questa combinazione non c'è: prova un'altra opzione», la disponibilità «Combinazione non disponibile» e il pulsante «Non disponibile». Con le altre scelte già fatte, i valori senza variante appaiono barrati e il lettore di schermo li legge «non disponibile con XXL». La prova monta la scheda vera: 6 taglie × 17 colori, tagliati a 100.",
+      "cosa_resta": "Lato negozio il tetto di 100 combinazioni taglia ancora in silenzio: il conto va mostrato e il salvataggio bloccato in ProductForm, file di un'altra sessione (serve_file_altrui). lib/products/variants.ts non è stato toccato.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/ProductForm.tsx",
+          "modifica": "In applyAxes (righe 298-307) calcolare types prima di setVariantAxes; poi const quante = types.reduce((n, t) => n * Math.min(MAX_OPTION_VALUES, new Set(t.values.map((v) => v.trim().toLowerCase()).filter(Boolean)).size), 1); if (quante > MAX_VARIANTS) { toast.error(`${quante} combinazioni: il massimo è ${MAX_VARIANTS}. Togli qualche valore o dividi il capo in due prodotti.`); return; } (si esce senza applicare gli assi). Nel blocco «Disponibilità per variante» (circa riga 1064) mostrare {variants.length} combinazioni (massimo {MAX_VARIANTS}). Import di MAX_VARIANTS e MAX_OPTION_VALUES da '@/lib/products/variants'."
+        }
+      ],
+      "nota": "Rimessa rifatta sulla testa nuova (dopo il revert di R24-013 la pagina è base + R24-018 + R24-003): la ricetta nel comando costruisce, senza toccare ramo né albero, HEAD con la sola R24-018 tolta dalla pagina (provato: il diff con la testa è esattamente quello di 64dc1b39). Qui è uscita 630c137a → uscita 0. Anche timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a19ff892 --file 'app/product/[id]/page.tsx' --prove tests/unit/riparazione-r24-varianti-oltre-cento.test.tsx --json → uscita 0 (toglie anche R24-003). I valori barrati restano cliccabili, come gli «esaurito» di R02-008. La prova comune riparazione-r02-variante-esaurita-a11y resta verde.",
+      "verificato_da": "collaudo L2: regge come parziale (il taglio a 100 avviene quando il negozio genera le varianti; la scheda le legge tutte)."
+    },
+    {
+      "id": "R24-019",
+      "chiave": "qa-flussi|traduttore degli errori di zod: tre frasi sbagliate e acceso solo nel browser",
+      "esito": "parziale",
+      "commit": "fa846baede4bb56f846137741b0168b9104f805e",
+      "file_toccati": [
+        "lib/zod-i18n.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-traduttore-zod.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-traduttore-zod.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa846bae^ --file lib/zod-i18n.ts --prove tests/unit/riparazione-r24-traduttore-zod.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le tre frasi: il tipo si dice in italiano («Valore non valido: serve un numero»), il plurale è giusto («1 elemento», «Massimo 1 carattere»), il valore fuori elenco non mostra le chiavi interne. Giro di correzione: issue.inclusive non era guardato e z.number().positive() su 0 diceva «Valore minimo: 0»; ora il limite compreso dice «Valore minimo/massimo: n», quello escluso «Deve essere maggiore/minore di n». Le prove aggiungono positive, gt, negative, lt e max(1) su un testo lungo, che deve dire «Massimo 1 carattere» (col plurale fisso restava verde).",
+      "cosa_resta": "Il traduttore acceso sul server per tutte le rotte: serve una riga in un file non mio (serve_file_altrui). Con R24-007 è acceso nella rotta dei contatti e dovunque si carica lib/errors.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/api/responses.ts",
+          "modifica": "aggiungere in testa, dopo `import { NextResponse } from 'next/server';`, la riga `import '@/lib/zod-i18n';` (le 41 rotte di app/api che importano zod importano tutte ApiErrors da qui, quindi il traduttore è acceso prima che validino)"
+        }
+      ],
+      "nota": "Altri commit: b9e086ab (giro di correzione). Rimessa del solo giro: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9e086ab^ --file lib/zod-i18n.ts --prove tests/unit/riparazione-r24-traduttore-zod.test.ts --json → uscita 0. Giro finale (b5ed3537): Aggiunto il ramo array in too_big: «Massimo N elementi» / «Massimo 1 elemento», con prova.. Rimessa del giro: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b5ed3537^ --file lib/zod-i18n.ts --prove tests/unit/riparazione-r24-traduttore-zod.test.ts --json > rimessa-fin-019.json → uscita 0.",
+      "verificato_da": "collaudo L1-B: regge come parziale; limite escluso (inclusive) e singolare «Massimo 1 carattere» corretti in b9e086ab, non ricollaudati. Ricollaudo (sonnet): regge sul limite compreso o escluso e sui plurali; mancava il ramo array del massimo (vedi giro di correzione). Il giro finale risponde ai rilievi del collaudo con prova (suite verde), senza un secondo collaudo."
+    },
+    {
+      "id": "R24-020",
+      "chiave": "sicurezza-auth|la registrazione non passa ancora dal server: niente freno sulle iscrizioni e niente verifica anti-robot",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "app/api/auth/registrazione/route.ts (nuovo), app/sign-up/page.tsx, tests/unit/riparazione-r24-iscrizione-dal-server.test.ts (nuovo)",
+          "modifica": "git cherry-pick b6f1ad543082819384d4fd3968480c2fab7856c3 65102761e8dcacb5e44e540f482c0d7ebe4a679e — in quest'ordine. Provato in una copia sulla testa dea461d8: si applica pulito, senza conflitti (l'import di indirizzoContatto di R24-016 sta apposta dopo quello di conferma-email), e iscrizione-dal-server, le-pagine-vere-dell-accesso…, password-comune, anti-robot-rotto e api-auth danno 56 verdi. Le prove di R24-008 e R24-016 reggono già le due strade (signUp dal browser e la rotta): non vanno toccate."
+        },
+        {
+          "file": "tests/unit/le-pagine-vere-dell-accesso-non-chiudono-fuori-nessuno.test.ts",
+          "modifica": "Prova comune: la modifica la porta il cherry-pick di b6f1ad54. Nel caso ① (righe 129-135) il blocco `g.__AUTH_FINTA__ = { signUp: (dati) => { iscrizioni.push(dati); return { data: { user: { id: 'maria', email: 'maria.rossi@esempio.it' }, session: null }, error: null }; } };` (col suo commento) diventa il commento «13/11/2026 (R24-020) — L'iscrizione passa dalla rotta del server: con la conferma dell'email accesa, la rotta crea l'utente ma NON restituisce una sessione.» più `vi.stubGlobal('fetch', async (dove: unknown, opzioni?: { body?: string }) => { if (String(dove) === '/api/auth/registrazione') iscrizioni.push(JSON.parse(opzioni?.body ?? '{}')); return { ok: true, status: 201, json: async () => ({ ok: true, session: null }) }; });`. Le asserzioni non cambiano."
+        },
+        {
+          "file": ".env.example",
+          "modifica": "sotto TURNSTILE_SECRET_KEY aggiungere: `# Chi verifica il gettone anti-robot dell'iscrizione: 1 = Supabase (CAPTCHA acceso in Authentication → Attack Protection), vuoto = la rotta con siteverify (CAPTCHA spento su Supabase). Mai tutti e due: il gettone vale una volta sola.` e `CAPTCHA_SU_SUPABASE=`"
+        },
+        {
+          "file": "app/api/auth/signup/route.ts",
+          "modifica": "cancellare il file: nessuno lo chiama, la registrazione passa da app/api/auth/registrazione/route.ts"
+        },
+        {
+          "file": "tests/unit/api-auth.test.ts",
+          "modifica": "togliere l'import `POST as signupPOST` da '@/app/api/auth/signup/route' e tutto il blocco describe('POST /api/auth/signup'); la rotta nuova ha le sue prove in tests/unit/riparazione-r24-iscrizione-dal-server.test.ts"
+        },
+        {
+          "file": "app/sign-in/page.tsx",
+          "modifica": "nel commento della riga 146 sostituire `/api/auth/signup` con `/api/auth/registrazione`"
+        },
+        {
+          "file": "app/api/auth/registrazione/route.ts (dalla patch b6f1ad54+65102761)",
+          "modifica": "Il freno (route.ts:57) conta prima di tutto: spostare il conteggio dopo le verifiche di forma, Termini e gettone, e non contare quando Supabase o Cloudflare rispondono 5xx o non rispondono (oggi cinque 503 bloccano la rete per un'ora). Cloudflare irraggiungibile deve dare 503, non 400."
+        },
+        {
+          "file": "tests/unit/riparazione-r24-iscrizione-dal-server.test.ts (dalla patch)",
+          "modifica": "Aggiungere un caso con CAPTCHA_SU_SUPABASE assente (oggi le righe 229 e 338 la impostano vuota) e uno con il valore 'true'; oggi i mutanti `?? '1'` e `v === '1'` a route.ts:51 restano verdi. Aggiungere CAPTCHA_SU_SUPABASE a .env.example."
+        },
+        {
+          "file": "app/api/auth/signin/route.ts",
+          "modifica": "Righe 66 e 72: la stessa scelta con CAPTCHA_SU_SUPABASE (accesa: niente siteverify e gettone a Supabase; spenta: siteverify e niente gettone a Supabase). Senza, accendere la variabile rompe ogni accesso con email («Email o password non corretti»)."
+        },
+        {
+          "file": "app/sign-in/page.tsx e app/reset-password/page.tsx",
+          "modifica": "resetPasswordForEmail (sign-in:249, reset-password:260) deve passare captchaToken quando CAPTCHA_SU_SUPABASE è accesa: oggi parte senza gettone e Supabase lo rifiuterebbe."
+        }
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-iscrizione-dal-server.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-iscrizione-dal-server.test.ts --reporter=dot",
+      "cosa_ho_fatto": "Prima di toglierla ho corretto la patch (65102761): il gettone lo verifica uno solo, deciso da CAPTCHA_SU_SUPABASE (non segreta). Accesa («1» o «true»): niente siteverify e il gettone va a Supabase; spenta: siteverify nella rotta e il gettone NON va a Supabase. Supabase che non risponde (stato 0, 5xx, esitoErroreDiAccesso) dà 503 SERVICE_UNAVAILABLE, non un 400. La prova ha un Cloudflare finto a uso singolo condiviso fra siteverify e il Supabase finto e gira nei due stati, più la chiave del freno signup:<rete> e l'errore di setSession che la pagina deve dire (17 verdi; i mutanti vecchia rotta, chiave senza rete, niente 503, gettone sempre a Supabase, siteverify sempre e niente throw su setSession la fanno cadere). Poi tolta dal ramo con due revert: 000198c9 (di 65102761) e 15f47081 (di b6f1ad54).",
+      "cosa_resta": "Fuori dal codice (Nicola): accendere il CAPTCHA Turnstile su Supabase (Authentication → Attack Protection) SOLO insieme a CAPTCHA_SU_SUPABASE=1 su Vercel; con la variabile spenta il CAPTCHA su Supabase deve restare spento. Impostare il limite delle iscrizioni per rete in Supabase Auth → Rate Limits: il freno della rotta, se Upstash cade, conta per copia del processo. Prima di accendere il CAPTCHA su Supabase va sistemata anche la rotta di accesso (app/api/auth/signin/route.ts:66-72), che verifica e poi passa lo stesso gettone (vedi nuovi_difetti_visti, file non mio). Prima di accendere CAPTCHA_SU_SUPABASE vanno allineati accesso e recupero password (serve_file_altrui).",
+      "nota": "Contraddice la prova comune le-pagine-vere-dell-accesso-non-chiudono-fuori-nessuno (la sua forma di base finge signUp dal browser). Rimessa della correzione 65102761, prima del revert: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 65102761^ --file app/api/auth/registrazione/route.ts --prove tests/unit/riparazione-r24-iscrizione-dal-server.test.ts --json → uscita 0 (regge). La rimessa di b6f1ad54 dava 3 perché la rotta è un file nuovo che nessun file importa. Dopo il cherry-pick, finché R24-016 è nel ramo, senza gettone la pagina non manda niente (coerente con la rotta).",
+      "verificato_da": "collaudo L1-A: non reggeva (gettone Turnstile verificato due volte, rotta inutilizzabile col CAPTCHA su Supabase); patch corretta in 65102761 (un solo verificatore, CAPTCHA_SU_SUPABASE), poi tolta col revert per la prova comune; la cucitura (patch riprese + prove comuni adattate) è stata provata in una copia: suite verde. La patch corretta non è stata ricollaudata (sessione fermata per il tetto di costo). Ricollaudo della patch 65102761: la rotta regge nei due stati (8 mutanti rossi), ma restano da sistemare alla ripresa i punti scritti in serve_file_altrui."
+    },
+    {
+      "id": "R24-021",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "parziale",
+      "commit": "8f70c8d0e465fbd00eac4e27038d819ea2003b06",
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "app/orders/[id]/page.tsx",
+        "app/product/[id]/page.tsx",
+        "app/reset-password/page.tsx",
+        "app/rider/earnings/page.tsx",
+        "app/search/page.tsx",
+        "app/seller/products/page.tsx",
+        "app/sign-up/page.tsx",
+        "components/ProductCard.tsx",
+        "components/admin/AdminSidebar.tsx",
+        "components/home/TrendingNow.tsx",
+        "components/seller/SellerShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r24-scala-del-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r24-scala-del-testo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8f70c8d0e465fbd00eac4e27038d819ea2003b06^ --file app/cart/page.tsx,app/orders/[id]/page.tsx,app/product/[id]/page.tsx,app/reset-password/page.tsx,app/rider/earnings/page.tsx,app/search/page.tsx,app/seller/products/page.tsx,app/sign-up/page.tsx,components/ProductCard.tsx,components/admin/AdminSidebar.tsx,components/home/TrendingNow.tsx,components/seller/SellerShell.tsx --prove tests/unit/riparazione-r24-scala-del-testo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "72 `text-[Npx]` in 12 file passano al gradino della scala: 10/12/14/16 identici; 13 e 13,5 → text-sm, 15 → text-base, 9 → text-2xs, 22 e 26 → text-2xl, 34 → text-4xl, 46 → text-5xl (arrotondamenti al più vicino dal registro di R24-002). Righe di commento non toccate.",
+      "cosa_resta": "Nei miei file restano 21 `text-[11px]` (nella scala non c'è l'11 e il registro non dice se andare a 10 o a 12: serve un gradino nuovo in tailwind.config.ts, file altrui) e un `text-[13px]` solo in un commento di app/globals.css. Negli altri file restano circa 250 misure a mano (273 in tutto nel sito, 95 file), le cartelle più cariche: app/rider (73), app/seller (29), app/admin (22), components/seller (13), app/category (10), components/account (9), components/ui (8), components/products (8), app/about (8), components/home (6), components/admin (6), app/lavora-con-noi (6). Con altre misure fuori scala: 32, 28, 17, 54, mezzi pixel.",
+      "insieme_a": [
+        "R24-002"
+      ],
+      "nota": "Prova sul sorgente (le classi Tailwind non si vedono in jsdom), dichiarata. Passando a text-sm/xs/base/lg la riga prende l'altezza di riga della scala (prima ereditata). Il registro di R24-021 proponeva due gradini nuovi (13 e 11) in tailwind.config.ts: ho seguito R24-002 (13 → 14). I gradini della scala (text-xs, text-sm, text-base…) portano anche l'altezza di riga dichiarata nella scala, che text-[Npx] non dava: dove manca un leading-* (47 punti) pulsanti e chip crescono di circa 3px. È voluto: la scala è misura più interlinea. Si è scelto 13→14 perché è la strada del fix di R24-002 che sta nei miei file; i gradini nuovi da 13 e 11 andrebbero in tailwind.config.ts, che non è mio. Restano 20 text-[11px].",
+      "serve_file_altrui": [
+        {
+          "file": "tailwind.config.ts",
+          "modifica": "aggiungere in theme.extend.fontSize il gradino 'xxs': ['0.6875rem', {lineHeight: '1rem'}] (11px), poi sostituire i text-[11px] (21 nei miei file, circa 45 negli altri) con text-xxs; e migrare le ~250 misure rimaste negli altri file."
+        }
+      ],
+      "verificato_da": "collaudo L3-Q (sonnet): parziale, le classi esistono e toccano solo la misura; i gradini text-sm/xs/base portano con sé l'altezza di riga della scala (47 punti senza leading-*, pulsanti e chip circa 3px più alti), ora dichiarato nella nota."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il gettone anti-robot si consuma due volte: accendendo il CAPTCHA su Supabase, accesso e iscrizione con email si rompono",
+      "dimensione": "sicurezza-auth",
+      "severita": "grave",
+      "file": "app/api/auth/signin/route.ts:66-71",
+      "descrizione": "La rotta di accesso verifica il gettone Turnstile con siteverify (lib/captcha.ts) e poi passa lo stesso gettone a Supabase. Un gettone Cloudflare vale una volta sola: col CAPTCHA acceso su Supabase la seconda verifica fallirebbe (timeout-or-duplicate). È latente finché il CAPTCHA su Supabase resta spento; va provato in palestra prima di accenderlo, e va scelto chi verifica, il server o Supabase. Dedotto dal codice, non visto girare."
+    },
+    {
+      "titolo": "Il filtro «Oggi» nei guadagni del fattorino taglia la giornata a mezzanotte del telefono, non di Piacenza",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/rider/earnings/page.tsx:50-53",
+      "descrizione": "startOfToday.setHours(0,0,0,0) usa il fuso del browser. Il grafico ora usa i giorni di Piacenza, quindi su un telefono con un altro fuso «Oggi» e la colonna di oggi possono non coincidere. Fuori dalla voce R24-014. Anche «7 giorni» conta 168 ore all'indietro (:55) invece di 7 giorni di Piacenza, quindi totale e grafico possono non coincidere. Proposta: inizioGiornoPiacenza."
+    },
+    {
+      "titolo": "Con una promozione la vetrina scrive un prezzo e la cassa ne fa pagare un altro, di un centesimo per pezzo (voce già nel registro, non assegnata in onda 2)",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/ProductCard.tsx:56",
+      "descrizione": "ProductCard sconta senza arrotondare al centesimo come la cassa (discountedUnitCents): 0,62 € col 25% si legge 0,46 € e la cassa ne chiede 0,47. La correzione era nel commit b06c87d7 (parte di components/ProductCard.tsx), tolta col revert di R24-013 perché è un'altra voce."
+    },
+    {
+      "titolo": "Le maschere di caricamento delle foto accettano solo JPG, PNG e WEBP, mentre la porta e lo Storage ne accettano sette",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/StoreMediaManager.tsx:54-58 · components/ImageUrlField.tsx:59-63 · components/VendorForm.tsx:131-135 · components/SellerApplicationForm.tsx:194",
+      "descrizione": "La porta (lib/storage/carica-immagine.ts) accetta JPG, PNG, WEBP, GIF, AVIF, HEIC e HEIF; le quattro maschere hanno accept stretto a tre formati. Proposta: usare attributoAccept()/mappaAccept() della porta. Può essere una scelta: le HEIC non si vedono in anteprima nel browser."
+    },
+    {
+      "titolo": "Chi sceglie «fattorino» nell'iscrizione e poi si registra con Google diventa cliente, e non trova una strada per diventare fattorino",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/sign-up/page.tsx (pulsante Google)",
+      "descrizione": "Il ruolo scelto non passa a signInWithOAuth: l'account nasce buyer. Era così già prima; ora il testo dell'anti-robot rotto (R24-016) indica anche Google come strada. Resta l'iscrizione con email."
+    },
+    {
+      "titolo": "«Spesso comprati insieme» mette nel carrello il prezzo pieno anche con una promozione attiva",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/products/FrequentlyBoughtTogether.tsx:62",
+      "descrizione": "Lo stesso difetto di R24-013 accanto: il carosello aggiunge al carrello products.price senza fetchActiveDiscounts, mentre CartUpsell sconta (CartUpsell.tsx:53-54). La cassa ricalcola comunque, ma il carrello avvisa «il prezzo è cambiato»."
+    },
+    {
+      "titolo": "La pagina contatti promette ancora «Puoi provare lo stesso a inviare» quando l'anti-robot non si carica",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/contact/page.tsx:199",
+      "descrizione": "Lo stesso difetto di R24-016 sulla pagina contatti, che usa lo stesso anti-robot: il modulo poi viene rifiutato."
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza-auth",
+      "severita": "grave",
+      "file": "(nel referto privato)",
+      "riservato": true
+    },
+    {
+      "titolo": "next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "next.config.js:51",
+      "descrizione": "Dopo R24-005 e R24-015 nessun file chiede più placehold.co: la voce in remotePatterns si può togliere."
+    },
+    {
+      "titolo": "Altre foto di prodotto restano senza ripiego quando la foto è stata cancellata",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "app/product/[id]/page.tsx:708 e :772 · components/RecentlyViewed.tsx:97 · components/cart/CartUpsell.tsx:88",
+      "descrizione": "R24-006 ha messo FotoConRipiego nei punti della voce; questi altri <Image> mostrano ancora un riquadro vuoto. I due della scheda prodotto stanno in un mio file ma fuori dall'elenco della voce."
+    }
+  ],
+  "domande_per_nicola": [
+    "R24-010: Su Vercel SUPPORT_EMAIL sta sul dominio dei contatti (NEXT_PUBLIC_CONTATTI_DOMINIO)? Se no, quale regola vale per il modulo contatti e per la porta Cancella account: inoltrare a qualunque casella, o solo a una sul dominio con chiave e mittente della posta?",
+    "R24-003: Chi ha già recensito un ordine o un prodotto deve poter modificare la sua recensione (oggi resta quella di prima e la pagina lo dice), sì o no?"
+  ],
+  "conto": {
+    "agenti": 12,
+    "nota": "12 subagenti: 3 che riparano (lotti 1, 2 e 3, il 3 su sonnet), 7 collaudi (L1-A, L1-B, L2, due ricollaudi del giro di correzione, L3-P e L3-Q su sonnet), 2 giri di correzione (il secondo su sonnet). Fermata per il tetto alle 08:20 e ripresa alle 13:00 per decisione di Nicola (onda 2 al 100%, tetto 70 $)."
+  }
+}

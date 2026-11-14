@@ -14,6 +14,7 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
+import { friendlyError } from '@/lib/errors';
 
 type Review = {
   id: string;
@@ -192,8 +193,10 @@ function ReviewCard({ review }: { review: Review }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reply: text }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json?.error?.message ?? 'Errore durante il salvataggio');
+      // Una risposta che non è JSON (la pagina HTML di un 504 del gateway) non deve
+      // arrivare al negozio come «Unexpected token '<'»: si legge come «non partita».
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error?.message ?? 'La risposta non è partita. Riprova tra poco.');
       setSavedReply(text);
       setShowReply(false);
       // 12/11/2026 (R07-020) — La risposta restava solo nello stato della scheda: tornando
@@ -206,7 +209,7 @@ function ReviewCard({ review }: { review: Review }) {
       void qc.invalidateQueries({ queryKey: queryKeys.seller.reviews });
       toast.success('Risposta pubblicata');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Impossibile pubblicare la risposta');
+      toast.error(friendlyError(e));
     } finally {
       setSending(false);
     }
@@ -245,7 +248,7 @@ function ReviewCard({ review }: { review: Review }) {
           <button
             type="button"
             onClick={() => { setReply(savedReply ?? ''); setShowReply(true); }}
-            className="inline-flex items-center gap-1.5 text-sm text-primary-700 hover:underline font-semibold"
+            className="inline-flex items-center gap-1.5 min-h-11 px-2 -ml-2 text-sm text-primary-700 hover:underline font-semibold"
           >
             <MessageCircle size={16} aria-hidden /> {savedReply ? 'Modifica risposta' : 'Rispondi'}
           </button>
@@ -270,7 +273,7 @@ function ReviewCard({ review }: { review: Review }) {
             <button
               type="button"
               onClick={() => { setShowReply(false); setReply(savedReply ?? ''); }}
-              className="px-3 py-1.5 rounded text-sm text-ink-600 hover:bg-cream-100"
+              className="px-4 py-2.5 min-h-11 rounded text-sm text-ink-600 hover:bg-cream-100"
             >
               Annulla
             </button>
@@ -279,7 +282,7 @@ function ReviewCard({ review }: { review: Review }) {
               onClick={sendReply}
               loading={sending}
               disabled={!reply.trim()}
-              size="sm"
+              size="md"
             >Pubblica risposta</Button>
           </div>
         </div>

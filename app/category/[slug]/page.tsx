@@ -16,6 +16,13 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
+/**
+ * 13/11/2026 (R15-010) — Una categoria senza prodotti diceva «Non abbiamo trovato questo
+ * prodotto»: la frase della ricerca (`search.noResultsDescription`), che su una categoria non ha
+ * senso — nessuno ha cercato un prodotto. Qui si dice cosa succede davvero.
+ */
+const CATEGORIA_ANCORA_VUOTA = 'In questa categoria non ci sono ancora prodotti dei negozi di Piacenza. Guarda le altre categorie o cerca quello che ti serve.';
+
 export default function CategoryPage(props: { params: Promise<{ slug: string }> }) {
   const params = use(props.params);
   const { slug } = params;
@@ -353,7 +360,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
         {[...subcategories.map((s) => s.id), category.id].every((fila) => contiDelleFile[fila] === 0) && (
             <div className="rounded-2xl border border-cream-300 bg-white px-4 py-12 text-center">
               <p className="font-serif text-lg font-bold text-ink-900">{t('noResultsGeneric')}</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">{t('noResultsDescription')}</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">{CATEGORIA_ANCORA_VUOTA}</p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <Link href="/categorie" className="rounded-full border border-cream-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:border-primary-400">
                   Vedi tutte le categorie
@@ -516,7 +523,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           maxColumns={4}
           onCount={setResultCount}
           emptyTitle={t('noResultsGeneric')}
-          emptyDescription={activeFilters > 0 ? t('noResultsFiltered') : t('noResultsDescription')}
+          emptyDescription={activeFilters > 0 ? t('noResultsFiltered') : CATEGORIA_ANCORA_VUOTA}
           onReset={activeFilters > 0 ? reset : undefined}
           emptySuggestions={
             <div className="mt-6 space-y-6">

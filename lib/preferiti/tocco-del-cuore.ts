@@ -30,6 +30,17 @@ import { queryKeys } from '@/lib/queries/keys';
  * c'è React, non c'è rete e non c'è il database: c'è solo la regola. L'aggancio la usa, non la
  * ricopia.
  *
+ * ── 13/11/2026 (R15-013) — Una fila per prodotto ───────────────────────────────────────────
+ * Tre tocchi veloci partivano come tre scritture in parallelo. Con la rete che ne consegna una in
+ * ritardo l'ordine si invertiva: «aggiungi», poi l'«aggiungi» del terzo tocco che trova la riga
+ * ancora lì (doppione, 409), e solo dopo il «togli» del secondo. Il 409 ribaltava il cuore e il
+ * «togli» in ritardo cancellava la riga: cuore vuoto e nessun preferito, con l'ultimo tocco
+ * «aggiungi». Adesso le scritture sullo stesso prodotto partono in fila, una dopo l'altra, quindi
+ * l'ultima ad arrivare è quella dell'ultimo tocco. E un rifiuto ribalta il cuore solo se viene
+ * dall'ultimo tocco: se dopo ce n'è un altro, a schermo c'è già quello che il cliente ha scelto, e
+ * lo scrive la scrittura che segue. La rilettura dell'elenco aspetta che la fila sia vuota, perché
+ * una lettura a metà fila riporterebbe a schermo uno stato di passaggio.
+ *
  * 🟢 Puro: nessuna rete, nessun orologio.
  */
 
@@ -58,6 +69,28 @@ export function versoDaScrivere(mostrato: ReadonlySet<string>, idProdotto: strin
 }
 
 /**
+ * Le file delle scritture, una per prodotto. Stanno fuori da `opzioniDelTocco` perché l'aggancio le
+ * ricrea a ogni disegno, e ogni scheda ha il suo aggancio: la fila deve essere una sola per tutta
+ * la cache. `ultimo` è il numero dell'ultimo tocco sul prodotto, `coda` la fine della fila.
+ */
+type Fila = { coda: Promise<void>; ultimo: number };
+const FILE_DEI_TOCCHI = new WeakMap<QueryClient, Map<string, Fila>>();
+
+function filaDelProdotto(qc: QueryClient, idProdotto: string): Fila {
+  let file = FILE_DEI_TOCCHI.get(qc);
+  if (!file) {
+    file = new Map();
+    FILE_DEI_TOCCHI.set(qc, file);
+  }
+  let fila = file.get(idProdotto);
+  if (!fila) {
+    fila = { coda: Promise.resolve(), ultimo: 0 };
+    file.set(idProdotto, fila);
+  }
+  return fila;
+}
+
+/**
  * Le regole del tocco, pronte da dare a `useMutation`.
  *
  * `scrivi` è l'unico pezzo che tocca il mondo (accesso e database): sta nell'aggancio, così qui
@@ -83,19 +116,36 @@ export function opzioniDelTocco(
       qc.setQueryData(CHIAVE_PREFERITI, dopo);
       const verso = versoDaScrivere(dopo, idProdotto);
 
+      // Il posto in fila si prende nello stesso blocco: l'ordine delle scritture è quello dei tocchi.
+      const fila = filaDelProdotto(qc, idProdotto);
+      const numero = ++fila.ultimo;
+      const scrittura = fila.coda.then(() => scrivi(idProdotto, verso));
+      fila.coda = scrittura.then(
+        () => undefined,
+        () => undefined,
+      );
+
       try {
-        // ② Solo adesso si va in rete, con il verso deciso nell'istante del ribaltamento.
-        await scrivi(idProdotto, verso);
+        // ② Si va in rete con il verso deciso nell'istante del ribaltamento, e solo quando la
+        //    scrittura del tocco prima, sullo stesso prodotto, ha avuto la sua risposta.
+        await scrittura;
       } catch (errore) {
         // ③ Il server ha rifiutato: torna indietro QUESTO cuore, non tutta la lista. Rimettere la
         //    fotografia di prima cancellerebbe i cuori toccati nel frattempo su altre schede.
-        const corrente = qc.getQueryData<Set<string>>(CHIAVE_PREFERITI) ?? dopo;
-        qc.setQueryData(CHIAVE_PREFERITI, insiemeDopoIlTocco(corrente, idProdotto));
+        //    Solo se è l'ultimo tocco: se ne è arrivato un altro, il cuore a schermo è già quello
+        //    scelto dopo, e la sua scrittura è in fila.
+        if (numero === fila.ultimo) {
+          const corrente = qc.getQueryData<Set<string>>(CHIAVE_PREFERITI) ?? dopo;
+          qc.setQueryData(CHIAVE_PREFERITI, insiemeDopoIlTocco(corrente, idProdotto));
+        }
         throw errore;
       } finally {
-        // ④ In ogni caso si rilegge l'elenco vero: se due tocchi si sono accavallati, qui la lista
-        //    torna quella del database.
-        void qc.invalidateQueries({ queryKey: CHIAVE_PREFERITI });
+        // ④ Finita la fila si rilegge l'elenco vero: se qualcosa si è accavallato, qui la lista
+        //    torna quella del database. A metà fila no: tornerebbe uno stato di passaggio.
+        if (numero === fila.ultimo) {
+          FILE_DEI_TOCCHI.get(qc)?.delete(idProdotto);
+          void qc.invalidateQueries({ queryKey: CHIAVE_PREFERITI });
+        }
       }
     },
   };

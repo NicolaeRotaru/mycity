@@ -244,8 +244,9 @@ function CaricamentoDaFile() {
       {/* Step 2: Upload */}
       <section className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
         <h2 className="font-serif font-bold text-lg text-ink-900 mb-3">Step 2 · Carica il tuo CSV</h2>
-        <label className="block">
-          <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+        <label className="block rounded-xl focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2">
+          {/* R18-002 — Era `hidden` (display:none): da tastiera il riquadro non esisteva. `sr-only` lo lascia raggiungibile con Tab. */}
+          <input type="file" accept=".csv,text/csv" onChange={handleFile} className="sr-only" aria-label="Scegli il file CSV" />
           <div className="border-2 border-dashed border-cream-300 hover:border-primary-300 rounded-xl p-8 text-center cursor-pointer transition-colors">
             <Upload size={32} className="mx-auto text-ink-400 mb-2" />
             <p className="text-sm font-semibold text-ink-700">Clicca per selezionare il file CSV</p>

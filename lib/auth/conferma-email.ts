@@ -111,9 +111,15 @@ export const CODICE_EMAIL_DA_CONFERMARE = 'EMAIL_NOT_VERIFIED';
 export type EsitoAccesso =
   | { tipo: 'ok' }
   | { tipo: 'email-da-confermare' }
-  | { tipo: 'errore'; messaggio: string; codice?: string };
+  | { tipo: 'errore'; messaggio: string; codice?: string; attesaSecondi?: number };
 
-export function esitoDellaRispostaDiAccesso(ok: boolean, corpo: unknown): EsitoAccesso {
+/**
+ * 13/11/2026 (R21-018) — `retryAfter`: l'intestazione `Retry-After` della
+ * risposta. Col freno dei tentativi la rotta sa al secondo quanto aspettare, ma
+ * la pagina non la leggeva: «Accedi» restava premibile e nessun conto alla
+ * rovescia. Adesso, per un 429 (`RATE_LIMITED`), l'esito porta `attesaSecondi`.
+ */
+export function esitoDellaRispostaDiAccesso(ok: boolean, corpo: unknown, retryAfter?: string | null): EsitoAccesso {
   if (ok) return { tipo: 'ok' };
   const errore = (corpo as { error?: unknown } | null)?.error;
   if (errore && typeof errore === 'object' && (errore as { code?: unknown }).code === CODICE_EMAIL_DA_CONFERMARE) {
@@ -129,7 +135,10 @@ export function esitoDellaRispostaDiAccesso(ok: boolean, corpo: unknown): EsitoA
     errore && typeof errore === 'object' && typeof (errore as { code?: unknown }).code === 'string'
       ? (errore as { code: string }).code
       : undefined;
-  return { tipo: 'errore', messaggio, ...(codice ? { codice } : {}) };
+  const secondi = codice === 'RATE_LIMITED' && retryAfter != null ? Math.ceil(Number(retryAfter)) : NaN;
+  // Un numero assurdo (negativo, più di un'ora) non spegne il pulsante: resta la frase della rotta.
+  const attesaSecondi = Number.isFinite(secondi) && secondi > 0 && secondi <= 3600 ? secondi : undefined;
+  return { tipo: 'errore', messaggio, ...(codice ? { codice } : {}), ...(attesaSecondi ? { attesaSecondi } : {}) };
 }
 
 /**

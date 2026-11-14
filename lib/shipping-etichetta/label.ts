@@ -15,6 +15,7 @@
 import { testoPerEtichetta } from './testo-winansi';
 import PDFDocument from 'pdfkit';
 import { formatPriceFromCents } from '@/lib/format';
+import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 
 export type LabelData = {
   orderId: string;
@@ -27,6 +28,8 @@ export type LabelData = {
   sellerName: string;
   totalCents: number;
   isCod: boolean;
+  /** Quando consegnare, già detto in chiaro da fasciaLeggibile(): «Adesso · arrivo in …» (veloce) o «mar 3/11 · 9:00–12:00». */
+  consegna?: string | null;
 };
 
 const MM_TO_PT = 72 / 25.4;
@@ -61,6 +64,18 @@ export async function buildShippingLabel(data: LabelData): Promise<Buffer> {
       doc.fillColor('#000000').fontSize(9).font('Helvetica-Bold').text('ORDINE:');
       doc.fontSize(14).font('Courier-Bold').text(`#${data.orderId.slice(0, 8).toUpperCase()}`);
       doc.moveDown(0.6);
+
+      // Quando consegnare (R16-016): la veloce in grande, la fascia col giorno vero.
+      if (data.consegna) {
+        if (data.consegna === ETICHETTA_ADESSO) {
+          doc.fontSize(16).font('Helvetica-Bold').fillColor('#C0492C').text('CONSEGNA VELOCE');
+          doc.fontSize(9).font('Helvetica').fillColor('#000000').text(testoPerEtichetta(data.consegna));
+        } else {
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666').text('CONSEGNA:');
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(testoPerEtichetta(data.consegna));
+        }
+        doc.moveDown(0.6);
+      }
 
       // Mittente
       doc.fontSize(7).font('Helvetica-Bold').fillColor('#666666').text('DA:');

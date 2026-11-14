@@ -4,7 +4,6 @@ import { memo, useEffect, useState } from 'react';
 import { classiCuore } from '@/lib/design/cuore-preferito';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -19,6 +18,7 @@ import { useProfile } from './hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 
 interface ProductCardProps {
   id: string;
@@ -166,7 +166,7 @@ const ProductCard = ({
       {/* FOTO dominante (~3/5) — object-cover su sfondo bianco: la foto riempie
           il riquadro quadrato (come le demo), niente bande beige sulle foto dei negozi. */}
       <div className="relative aspect-square w-full overflow-hidden bg-white pointer-events-none">
-        <Image
+        <FotoConRipiego
           src={img}
           /* 27/8/2026 (R117) — qui c'era `alt={name}`, e il nome del prodotto
              finiva detto tre volte per ogni scheda: nel link che copre la card,
@@ -233,7 +233,7 @@ const ProductCard = ({
             <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>
           </div>
         )}
-        <h3 className="line-clamp-2 min-h-[2.6em] text-[13px] font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
+        <h3 className="line-clamp-2 min-h-[2.6em] text-sm font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
           {name}
         </h3>
 
@@ -276,12 +276,14 @@ const ProductCard = ({
                 <span className="text-lg font-extrabold text-ink-900">{formatPrice(price)}</span>
               )}
             </div>
+            {/* Il «+» è un contorno, non un quadrato pieno: il colore pieno resta al prezzo, che è
+                quello che si vuole leggere per primo. L'area di tocco non cambia (h-11 w-11). */}
             <button
               type="button"
               onClick={handleAdd}
               disabled={isOutOfStock}
               aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
-              className="pointer-events-auto ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm-neutral transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+              className="pointer-events-auto ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-primary-600 bg-transparent text-primary-700 shadow-sm-neutral transition-all hover:bg-primary-50 active:scale-95 disabled:cursor-not-allowed disabled:border-cream-200 disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
               <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>

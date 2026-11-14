@@ -21,6 +21,7 @@ import { shippingForEuro } from '@/lib/shipping';
 import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
 import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
+import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, TETTO_CONTANTI_CENTS, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -79,6 +80,22 @@ type AddressForm = {
   phone: string;
   notes: string;
 };
+
+/**
+ * 13/11/2026 (R19-017 ④) — La data «AAAA-MM-GG» del giorno di Roma a cui si riferisce la fascia.
+ *
+ * Nella richiesta andava solo l'etichetta («Domani · 9:00–11:00»), e la rotta la legge col suo
+ * orologio: premuto venerdì alle 23:59:59 e arrivato dopo la mezzanotte, «Domani» diventava
+ * domenica. La data si calcola con l'ora di Roma dello stesso disegno che ha scritto l'etichetta.
+ * `oraDiRoma` è quella di `romeNow()`: i campi del giorno sono già quelli di Roma.
+ */
+function dataDelGiornoDellaFascia(fascia: string | null, oraDiRoma: Date): string | null {
+  if (!fascia) return null;
+  const traGiorni = fascia.startsWith('Domani') ? 1 : 0;
+  return new Date(Date.UTC(oraDiRoma.getFullYear(), oraDiRoma.getMonth(), oraDiRoma.getDate() + traGiorni))
+    .toISOString()
+    .slice(0, 10);
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -255,6 +272,18 @@ export default function CheckoutPage() {
           lng: s.store_lng ?? null,
           orari: s.store_hours ?? null,
         });
+      }
+      // R19-006 — Il proprietario di un negozio non ancora approvato non è nella vista pubblica:
+      // il suo nome si legge dalla riga di `profiles` che può già leggere (le regole fanno tornare
+      // solo la sua, per gli altri niente). Solo il nome: coordinate e orari restano come per la vista.
+      const senzaVista = [...new Set(allSellerIds)].filter((id) => !negozi.has(id));
+      if (senzaVista.length > 0) {
+        try {
+          const { data: proprie } = await supabase.from('profiles').select('id, store_name').in('id', senzaVista);
+          for (const r of (proprie ?? []) as Array<{ id: string; store_name: string | null }>) {
+            if (r.store_name) sellerInfo.set(r.id, { name: r.store_name, lat: null, lng: null, orari: null });
+          }
+        } catch { /* resta «Negozio»: come prima */ }
       }
 
       const sellerMap = new Map<string, {
@@ -489,6 +518,8 @@ export default function CheckoutPage() {
 
   // Defer-the-wall: ripristina l'indirizzo digitato da ospite prima del login
   // (salvato in handleSubmit), così non va perso dopo l'accesso.
+  // R19-004 — L'indirizzo che la bozza ha rimesso nel modulo (vedi `mattonellaDellaBozza`).
+  const [indirizzoDellaBozza, setIndirizzoDellaBozza] = useState<Partial<typeof form> | null>(null);
   useEffect(() => {
     try {
       // #112 — La bozza dell'ordine stava nella memoria della SCHEDA
@@ -503,6 +534,7 @@ export default function CheckoutPage() {
       const bozza = bozzaLetta(JSON.parse(raw), new Date());
       if (!bozza) return;
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
+      setIndirizzoDellaBozza(bozza.form as Partial<typeof form>);
 
       // Lo sconto: si rimette il CODICE, e la verifica che c'è già nella pagina lo ricontrolla sul
       // carrello di adesso. Se nel frattempo il carrello è cambiato, lo dice invece di mostrarlo.
@@ -527,8 +559,41 @@ export default function CheckoutPage() {
     } catch { /* noop */ }
   }, []);
 
+  /**
+   * 13/11/2026 (R19-004, giro di correzione) — LA BOZZA TORNAVA IN UN MODULO NASCOSTO.
+   *
+   * Chi ha già indirizzi salvati vede le mattonelle, e il modulo resta nascosto finché non tocca
+   * «Inserisci nuovo indirizzo». Tornando dall'accesso, la bozza rimetteva nel modulo l'indirizzo
+   * scritto da ospite: nessuna mattonella combaciava, nessuna era scelta, e si ordinava su un
+   * indirizzo che non si vedeva. Ora l'indirizzo della bozza, se non è già uno di quelli salvati,
+   * compare come prima mattonella («Appena scritto»), scelta: si vede dove arriva l'ordine, e si
+   * può passare a un indirizzo salvato e tornare indietro.
+   */
+  const ID_INDIRIZZO_DELLA_BOZZA = 'indirizzo-della-bozza';
+  const viaDellaBozza = String(indirizzoDellaBozza?.address ?? '');
+  const cittaDellaBozza = String(indirizzoDellaBozza?.city ?? '');
+  const nomeDellaBozza = String(indirizzoDellaBozza?.fullName ?? '');
+  const mattonellaDellaBozza =
+    viaDellaBozza.trim()
+    && savedAddresses.length > 0
+    && !savedAddresses.some((a) => a.address === viaDellaBozza && a.city === cittaDellaBozza && (a.full_name ?? '') === nomeDellaBozza)
+      ? {
+        id: ID_INDIRIZZO_DELLA_BOZZA,
+        label: 'Appena scritto',
+        full_name: nomeDellaBozza,
+        address: viaDellaBozza,
+        city: cittaDellaBozza,
+        is_default: false,
+      }
+      : null;
+  const indirizziDaMostrare = mattonellaDellaBozza ? [mattonellaDellaBozza, ...savedAddresses] : savedAddresses;
+
   const applySavedAddress = (id: string) => {
     if (!id) return;
+    if (id === ID_INDIRIZZO_DELLA_BOZZA && indirizzoDellaBozza) {
+      setForm((prev) => ({ ...prev, ...indirizzoDellaBozza }));
+      return;
+    }
     const a = savedAddresses.find((x) => x.id === id);
     if (!a) return;
     setForm({
@@ -581,7 +646,19 @@ export default function CheckoutPage() {
   });
   // null SOLO quando la fascia non serve: una fascia non valida ferma l'ordine.
   const deliverySlot = etichettaPerLOrdine(consegna);
+  // R19-017 ④ — Il giorno vero della fascia, dallo stesso disegno dell'etichetta. Le rotte oggi
+  // leggono solo l'etichetta: il campo in più non cambia niente finché non lo leggono (R23-005).
+  const dataDellaConsegna = dataDelGiornoDellaFascia(deliverySlot, romeNow());
   const consegnaConfermabile = siPuoConfermare(consegna);
+  // 13/11/2026 (R19-017) — Il giorno di Roma dell'ultimo disegno. Se all'invio è già un altro, è
+  // passata la mezzanotte senza che la cassa ridisegnasse: «Domani» sullo schermo era il giorno di
+  // ieri, e l'ordine nascerebbe per il giorno dopo. Si ridisegna (il selettore riporta la fascia al
+  // giorno giusto e lo dice) e si chiede di ripremere.
+  const giornoDelDisegno = useRef(oraDiApertura.toDateString());
+  useEffect(() => {
+    giornoDelDisegno.current = romeNow().toDateString();
+  });
+  const [, ridisegnaDopoMezzanotte] = useState(0);
 
   // 29/10/2026 — «Adesso» si offre solo se il server dice che si può mantenere: dalle 8 alle 21,
   // negozi aperti, un fattorino approvato e online (`veloceSiPuo`, la stessa decisione delle due
@@ -768,6 +845,23 @@ export default function CheckoutPage() {
     creditoDisponibileCents: walletCents ?? 0,
   });
 
+  /*
+   * 13/11/2026 (R19-013) — SOPRA IL TETTO DELLA LEGGE I CONTANTI NON SI PROPONGONO.
+   *
+   * La rotta dei contanti rifiuta sopra 4.999,99 € (lib/ordini/tetto-dei-contanti.ts), ma la cassa
+   * offriva i contanti lo stesso: si compilava tutto e il «no» arrivava solo dopo «Ordina». Il tetto
+   * è lo stesso, sullo stesso numero della rotta: il lordo, prima del credito (totale + credito usato).
+   * Con la carta accesa si passa alla carta; senza, la cassa dice perché l'ordine così non parte.
+   */
+  const contantiSopraIlTetto = sopraIlTettoDeiContanti(Math.round((riepilogo.totale + riepilogo.creditoUsato) * 100));
+  const motivoNoContanti = stripeAvailable
+    ? MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI
+    : `Sopra ${formatPrice(TETTO_CONTANTI_CENTS / 100)} non si può pagare in contanti, e il pagamento con carta oggi non è attivo: così questo ordine non si può fare.`;
+  const contantiFuoriLegge = paymentMethod === 'cod' && contantiSopraIlTetto;
+  useEffect(() => {
+    if (contantiSopraIlTetto && stripeAvailable && paymentMethod === 'cod') setPaymentMethod('card');
+  }, [contantiSopraIlTetto, stripeAvailable, paymentMethod]);
+
   // La frase sulla consegna ha una casa sola: `promessaSpedizione` la fa nascere dal costo di
   // consegna vero. 27/10/2026 — La soglia dei 30 € per negozio non esiste più (si paga solo la
   // consegna, una sola per tutto il carrello): la barra «ti mancano X €» e il conto sul negozio più lontano
@@ -951,6 +1045,8 @@ export default function CheckoutPage() {
           // cade il saldo vale 0, la casella non compare, e il server non deve spenderlo lo stesso.
           useCredit: useCredit && (walletCents ?? 0) > 0,
           deliverySlot,
+          // R19-017 ④ — la data del giorno di Roma della fascia, «AAAA-MM-GG» (null col ritiro).
+          delivery_date: dataDellaConsegna,
           // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
           // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
           checkoutId: idCheckout,
@@ -1079,6 +1175,8 @@ export default function CheckoutPage() {
           pickupDiscountCents,
           pickupInStore,
           deliverySlot,
+          // R19-017 ④ — la data del giorno di Roma della fascia, «AAAA-MM-GG» (null col ritiro).
+          delivery_date: dataDellaConsegna,
           // R163 — viaggia fino al webhook dentro la riga di intento: e' li' che
           // nasce `order_placed` per la carta.
           checkoutId: idCheckout,
@@ -1175,7 +1273,7 @@ export default function CheckoutPage() {
   const fuoriZona = gruppoFuoriZona !== undefined;
 
   const ordineBloccato =
-    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || fuoriZona || !consegnaConfermabile || veloceDaAspettare;
+    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || fuoriZona || !consegnaConfermabile || veloceDaAspettare || contantiFuoriLegge;
 
   /*
    * 6/9/2026 — E LA FRASE CHE SPIEGA IL BLOCCO, MOTIVO PER MOTIVO.
@@ -1207,7 +1305,9 @@ export default function CheckoutPage() {
               ? rigaQuandoArriva(consegna)
               : veloceDaAspettare
                 ? (veloceDisponibile === null ? MOTIVO_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
-                : null;
+                : contantiFuoriLegge
+                  ? motivoNoContanti
+                  : null;
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
@@ -1220,6 +1320,22 @@ export default function CheckoutPage() {
     }
     if (form.phone.trim().replace(/\D/g, '').length < 8) e.phone = 'Numero di telefono non valido';
     return e;
+  };
+
+  // R19-004 — Un solo modo di salvare la bozza prima di andare all'accesso: lo usano «Ordina» da ospite
+  // e il link «Ho già un account». Passa da `bozzaDaSalvare`, quindi porta anche la scadenza.
+  const salvaLaBozzaPerAccesso = () => {
+    try {
+      localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
+        form,
+        couponCode: appliedCoupon?.coupon.code ?? couponCode,
+        metodoPagamento: paymentMethod,
+        giorno: slotDay,
+        fasciaOggi: slotTodayTime,
+        fasciaDomani: slotTomorrowTime,
+        adesso: new Date(),
+      })));
+    } catch { /* noop */ }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1256,6 +1372,12 @@ export default function CheckoutPage() {
       toast.error('Scegli le opzioni (taglia/colore) per alcuni articoli prima di ordinare.');
       return;
     }
+    // R19-017 — «Domani» scelto ieri sera e mezzanotte passata senza ridisegnare: prima si ridisegna.
+    if (slotDay === 'tomorrow' && !pickupInStore && romeNow().toDateString() !== giornoDelDisegno.current) {
+      ridisegnaDopoMezzanotte((n) => n + 1);
+      toast.error('È passata la mezzanotte: «Oggi» e «Domani» sono cambiati. Controlla il giorno di consegna qui sopra e premi di nuovo.');
+      return;
+    }
     // La fascia si ricontrolla QUI, sull'ora di adesso.
     //
     // Il pulsante si spegne da solo quando la fascia scade, ma solo se la pagina
@@ -1281,6 +1403,11 @@ export default function CheckoutPage() {
       toast.error(motivoDelBlocco ?? MOTIVO_VELOCE_IN_ATTESA);
       return;
     }
+    // R19-013 — Sopra il tetto della legge i contanti non partono, comunque arrivi l'invio.
+    if (contantiFuoriLegge) {
+      toast.error(motivoNoContanti);
+      return;
+    }
     trackCheckoutStep('address', { city: form.city });
     // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
     // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
@@ -1288,17 +1415,7 @@ export default function CheckoutPage() {
       // Non solo l'indirizzo: chi torna dall'accesso deve ritrovare il totale che aveva accettato.
       // Dello sconto si salva il CODICE e mai la cifra — la bozza sta nel browser, e nel browser
       // ci scrive chiunque. Al ritorno il codice passa dalla verifica come il primo giorno.
-      try {
-        localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
-          form,
-          couponCode: appliedCoupon?.coupon.code ?? couponCode,
-          metodoPagamento: paymentMethod,
-          giorno: slotDay,
-          fasciaOggi: slotTodayTime,
-          fasciaDomani: slotTomorrowTime,
-          adesso: new Date(),
-        })));
-      } catch { /* noop */ }
+      salvaLaBozzaPerAccesso();
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
@@ -1381,7 +1498,7 @@ export default function CheckoutPage() {
           <p className="text-sm text-olive-900">
             <strong>Compila pure il tuo indirizzo qui sotto.</strong> Ti chiederemo di accedere solo al momento di confermare l&apos;ordine — i dati che inserisci restano salvati.
           </p>
-          <Link href="/sign-in?returnTo=/checkout" className="text-sm font-semibold text-primary-700 hover:underline shrink-0">
+          <Link href="/sign-in?returnTo=/checkout" onClick={salvaLaBozzaPerAccesso} className="text-sm font-semibold text-primary-700 hover:underline shrink-0">
             Ho già un account →
           </Link>
         </div>
@@ -1393,13 +1510,29 @@ export default function CheckoutPage() {
           <StepCard n={1} icon={MapPin} title="Indirizzo di consegna">
             <ShippingAddressForm
               form={form}
-              savedAddresses={savedAddresses}
+              savedAddresses={indirizziDaMostrare}
               caricamento={nonSoAncoraGliIndirizzi}
               errors={errors}
               onChange={handleChange}
               onSubmit={handleSubmit}
               onApplySavedAddress={applySavedAddress}
             />
+            {/* R19-003 — L'avviso «fuori zona» sta anche qui, accanto all'indirizzo: sul telefono il
+                riepilogo è in fondo e chi scrive l'indirizzo lo scoprirebbe all'ultimo tocco.
+                Sta sopra gli altri riquadri: se a fermare l'ordine è un motivo che viene prima
+                (scorte, varianti), qui si informa e basta (`data-informativo`), così «vai al primo
+                blocco» porta al motivo vero e non a questo. */}
+            {fuoriZona && (
+              <div
+                role="alert"
+                data-avviso="fuori-zona"
+                data-informativo={motivoDelBlocco === motivoFuoriZona(gruppoFuoriZona?.storeName) ? undefined : ''}
+                className="mt-3 flex items-start gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800"
+              >
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span>{motivoFuoriZona(gruppoFuoriZona?.storeName)}</span>
+              </div>
+            )}
           </StepCard>
 
           {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
@@ -1439,7 +1572,7 @@ export default function CheckoutPage() {
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
-                    {consegnaDaPagare === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(consegnaDaPagare)}
+                    {groups.length === 0 ? '—' : consegnaDaPagare === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(consegnaDaPagare)}
                   </span>
                 </div>
                 {/* 3/9/2026 — «Gratis» da solo, mentre il riepilogo qui a fianco
@@ -1467,6 +1600,7 @@ export default function CheckoutPage() {
               onPickupChange={setPickupInStore}
               pickupDiscount={pickupDiscount}
               pickupDiscountPercent={PICKUP_DISCOUNT_PERCENT}
+              motivoNoContanti={contantiSopraIlTetto ? motivoNoContanti : null}
             />
 
             {/* Credito MyCity — solo COD in questo flusso */}
@@ -1510,16 +1644,19 @@ export default function CheckoutPage() {
                   <p className="mt-0.5 text-sm text-ink-600">
                     Per ora il credito si usa solo pagando alla consegna. Con la carta questo ordine lo paghi per intero e il credito resta tuo, da spendere su un altro ordine.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod('cod');
-                      trackCheckoutStep('payment_method', { method: 'cod' });
-                    }}
-                    className="mt-2 rounded-lg bg-primary-700 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
-                  >
-                    Paga alla consegna e usa il credito
-                  </button>
+                  {/* R19-013 — sopra il tetto della legge i contanti non si propongono. */}
+                  {!contantiSopraIlTetto && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod('cod');
+                        trackCheckoutStep('payment_method', { method: 'cod' });
+                      }}
+                      className="mt-2 rounded-lg bg-primary-700 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+                    >
+                      Paga alla consegna e usa il credito
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1660,7 +1797,8 @@ export default function CheckoutPage() {
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
             <div role="alert" className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-              <span><strong>Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.</span>
+              <span className="flex-1"><strong>Non riesco a leggere il carrello.</strong> Nessuna cifra finché non lo leggo: riprova, oppure ricarica la pagina.</span>
+              <button type="button" onClick={() => void rileggiLaCassa()} className="shrink-0 font-bold underline">Riprova</button>
             </div>
           )}
         </div>

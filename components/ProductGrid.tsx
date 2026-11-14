@@ -18,7 +18,7 @@ import {
 } from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
 import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
-import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
+import { contaProdottiDellaGriglia, inizioFinestraNovita, leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
@@ -108,6 +108,20 @@ interface Props {
    * prima cosa (novita', piu-venduti, ricerca, categoria).
    */
   prioritaPrimeFoto?: boolean;
+  /**
+   * 13/11/2026 (R15-011) — Solo i prodotti «nuovi» (pubblicati negli ultimi `NEW_PRODUCT_DAYS`
+   * giorni, gli stessi del badge «Nuovo») e, sopra la griglia, il numero VERO di quanti sono,
+   * non delle schede già caricate. Opt-in: le altre griglie non cambiano.
+   */
+  soloNovita?: boolean;
+  /**
+   * 13/11/2026 (R15-009) — Solo i prodotti con almeno una recensione. Serve a «I più recensiti»:
+   * senza, la pagina presentava come «scelti dai clienti» gli ultimi 40 pubblicati, tutti a zero
+   * recensioni. Il taglio lo fa il database (`prodotti_con_voto_almeno(0)` = chi ha recensioni),
+   * quindi non esclude chi ne ha molte ma è stato pubblicato prima degli ultimi 40.
+   * Opt-in: ricerca, categorie e negozi con «Più recensiti» scelto a mano non cambiano.
+   */
+  soloRecensiti?: boolean;
   /** Modalità "sezione" (solo con `rail`): mostra un'intestazione "titolo + Vedi tutto"
    *  sopra la rail e si auto-nasconde quando non ci sono prodotti. Usata nelle pagine
    *  categoria-hub, una rail per sottocategoria. */
@@ -136,7 +150,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloNovita, soloRecensiti, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -185,12 +199,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   });
   const apertiOra = domandaAperti.data;
 
+  const vistaPerVoto = (minRating !== undefined && minRating > 0) || !!soloRecensiti;
   const domandaVoto = useQuery<string[]>({
     queryKey: queryKeys.products.conVotoAlmeno(minRating ?? 0),
-    enabled: minRating !== undefined && minRating > 0,
+    enabled: vistaPerVoto,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating });
+      const { data, error } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating ?? 0 });
       if (error) throw error;
       return ((data ?? []) as Array<{ product_id: string }>).map((r) => r.product_id);
     },
@@ -198,7 +213,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const idsColVoto = domandaVoto.data;
   const filtroInErrore =
     (!!onlyOpenStores && domandaAperti.isError) ||
-    (minRating !== undefined && minRating > 0 && domandaVoto.isError);
+    (vistaPerVoto && domandaVoto.isError);
 
   /**
    * 30/8/2026 (R080) — «CARICA ALTRI» RISCARICAVA OGNI VOLTA ANCHE I PRODOTTI
@@ -229,15 +244,17 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     ? Math.min(maxPricePieno ?? Infinity, prezzoSotto - 0.005)
     : maxPricePieno;
 
+  const creatiDal = soloNovita ? inizioFinestraNovita() : undefined;
+
   const domanda = useInfiniteQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, soloRecensiti, sort, creatiDal }),
     initialPageParam: 0,
     // Senza gli insiemi la query non parte: partirebbe senza filtro, e
     // mostrerebbe proprio i prodotti che il filtro doveva escludere.
     enabled:
       (!onlyOpenStores || apertiOra !== undefined) &&
-      (!(minRating !== undefined && minRating > 0) || idsColVoto !== undefined),
+      (!vistaPerVoto || idsColVoto !== undefined),
     queryFn: async ({ pageParam }) => {
       // 27/8/2026 (R069, R073) — la lettura vera sta in `lib/queries/griglia-prodotti.ts`, dove una
       // prova la puo' eseguire: qui dentro nessuno poteva accorgersi ne' del viaggio in piu' ai
@@ -252,7 +269,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         minPrice,
         onlyInStock,
         apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
-        idsColVoto: minRating !== undefined && minRating > 0 ? idsColVoto ?? [] : undefined,
+        idsColVoto: vistaPerVoto ? idsColVoto ?? [] : undefined,
+        creatiDal,
         tetto: righePerPagina,
         finestra: finestraDellaPagina(pageParam as number, righePerPagina),
       });
@@ -261,6 +279,17 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   });
 
   const { isLoading, isError, refetch, isFetching } = domanda;
+
+  // 13/11/2026 (R15-011) — Quanti sono davvero, non quante schede sono arrivate. Solo per le
+  // griglie che lo chiedono (`soloNovita`): le altre continuano a contare le schede a schermo.
+  const domandaTotale = useQuery<number | null>({
+    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal }),
+    enabled: !!soloNovita,
+    staleTime: 60_000,
+    queryFn: () => contaProdottiDellaGriglia(supabase, { categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal }),
+  });
+  const totaleVero = soloNovita ? domandaTotale.data : null;
+  const totaleInAttesa = !!soloNovita && domandaTotale.isLoading;
 
   /**
    * 6/9/2026 — CAMBIANDO UN FILTRO LA GRIGLIA RESTAVA IDENTICA, SENZA UN SEGNO.
@@ -438,9 +467,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
   // il messaggio d'errore.
   useEffect(() => {
-    if (!onCount || caricando || inErrore) return;
-    onCount(filtered.length);
-  }, [onCount, caricando, inErrore, filtered.length]);
+    if (!onCount || caricando || inErrore || totaleInAttesa) return;
+    onCount(totaleVero ?? filtered.length);
+  }, [onCount, caricando, inErrore, filtered.length, totaleVero, totaleInAttesa]);
 
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
   // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
@@ -620,7 +649,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // corrispondeva a niente di visibile.
       compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       hasVariants={p.has_variants ?? false}
-      priority={prioritaPrimeFoto && i < 4}
+      // 13/11/2026 (R15-006) — Una fila (`rail`) sta sempre sotto qualcos'altro: in home è la sesta
+      // sezione, nelle categorie viene dopo l'intestazione e le altre file. Niente foto «urgenti».
+      priority={prioritaPrimeFoto && !formaFila && i < 4}
     />
   );
 
