@@ -1,13 +1,13 @@
 {
   "sessione": "R23",
-  "aggiornato": "2026-11-13 13:20",
+  "aggiornato": "2026-11-14 09:53",
   "finita": true,
-  "testa": "0d499c53e2ded00b3ab343fe1793c03634ea9a05",
+  "testa": "721b18bc75466b872d5d41fccf61cfff345d47d1",
   "verifica": {
-    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
     "esito": "verde",
-    "testa": "0d499c53e2ded00b3ab343fe1793c03634ea9a05",
-    "nota": "1433 file di prova verdi, 1 saltato (9752 prove); lint 0 errori e 91 avvisi; tsc verde con 8 GB (con la memoria di default esce per memoria finita)"
+    "testa": "721b18bc75466b872d5d41fccf61cfff345d47d1",
+    "nota": "1433 file di prova verdi, 1 saltato (9781 prove); lint 0 errori e 91 avvisi; tsc verde con 6 GB. Giro di correzione di R23 (onda 2) sulle voci R23-009, R23-010, R23-015, R23-018."
   },
   "voci": [
     {
@@ -251,12 +251,13 @@
     {
       "id": "R23-009",
       "chiave": "deploy-sre|se il segreto dei lavori su vercel finisce con un «a capo», anche il primo giro a mano risponde «non autorizzato»",
-      "esito": "riparato",
-      "commit": "52b08f8a",
+      "esito": "serve_file_altrui",
+      "commit": "835cc36ed5c2b80df9bd9780b1216b66c6b9f1e6",
       "file_toccati": [
         "lib/api/middleware.ts",
         "app/api/health/route.ts",
         "app/api/health/ready/route.ts",
+        "lib/rate-limit.ts",
         "tests/unit/riparazione-r23-segreto-con-a-capo.test.ts"
       ],
       "prova_file": [
@@ -268,20 +269,30 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 52b08f8a^ --file lib/api/middleware.ts,app/api/health/route.ts,app/api/health/ready/route.ts --prove tests/unit/riparazione-r23-segreto-con-a-capo.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 835cc36^ --file lib/api/middleware.ts,lib/rate-limit.ts --prove tests/unit/riparazione-r23-segreto-con-a-capo.test.ts --json",
+        "a_mano": true,
+        "nota": "prova rimessa fatta a mano, con lo stesso effetto del programma: git checkout 835cc36^ -- lib/api/middleware.ts lib/rate-limit.ts, poi la prova, rossa sul comportamento (4 prove su 14), poi i file rimessi. Il programma prova-rimessa.mjs di ad-mycity in questa sessione non si è potuto lanciare (il classificatore della sessione ha negato gli script di ad-mycity): va rilanciato col comando qui sopra."
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il segreto atteso CRON_SECRET ora si ripulisce come il gettone in withCronAuth, /api/health e /api/health/ready: con un «a capo» finale il giro a mano entra. Un segreto fatto solo di spazi conta come assente (503).",
-      "nota": "Facoltativo per Nicola: ripulire comunque il valore di CRON_SECRET su Vercel.",
-      "verificato_da": "qa: prova 7/7, 312 file vicini verdi, rimessa (0); provati \\r\\n e segreto di soli spazi"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro: CRON_SECRET ripulito in withCronAuth, /api/health e /api/health/ready. Giro di correzione (K06): ripuliti allo stesso modo anche INTERNAL_API_SECRET in withInternalAuth (/api/stripe/payout non risponde più 403 per sempre a chi ha diritto; soli spazi = 503) ed EDGE_TRUST_SECRET in getClientIp (soli spazi = nessun bordo fidato). Il confronto resta segretiCombaciano (tempo costante).",
+      "nota": "Resta il terzo gemello in app/api/track/route.ts:75, file di R14: la modifica esatta è in serve_file_altrui. Facoltativo per Nicola: ripulire comunque su Vercel i valori di CRON_SECRET, INTERNAL_API_SECRET ed EDGE_TRUST_SECRET.",
+      "verificato_da": "verificatore A (lente permessi, giro di correzione): prova 14/14 e 8 casi suoi; segreti di soli '', \\n, \\t, \\r\\n, \\v\\f, BOM, spazi unicode o misti con intestazione assente, vuota, ' ' o 'a' → sempre 503 e mai bordo fidato; con 'S\\n' entra solo 'S' (fuori prefissi, suffissi, doppio segreto, spazi interni, \\u00a0, BOM, maiuscole, 'Bearer S'); spia su segretiCombaciano: riceve il segreto già ripulito; 342 file di prova vicini verdi (2453).",
+      "commit_primo_giro": "52b08f8a",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/track/route.ts",
+          "modifica": "riga 75: `const segretoDiBordo = process.env.EDGE_TRUST_SECRET?.trim();` al posto di `process.env.EDGE_TRUST_SECRET`, come lib/rate-limit.ts:335 dopo la correzione di R23-009. Con un «a capo» finale su Vercel x-edge-token non combacia mai e il paese e la città cf-* restano ignorati (fallisce chiuso); la guardia `!!segretoDiBordo &&` della riga 76 fa già valere un segreto di soli spazi come assente. Il file è di R14 (onda 2)."
+        }
+      ]
     },
     {
       "id": "R23-010",
       "chiave": "frontend-ux|con «aperti ora» acceso, l'elenco dei negozi non si aggiorna all'orario di chiusura e tiene in lista negozi con scritto «chiuso ora»",
-      "esito": "riparato",
-      "commit": "9ec7e9a9a5fa7afb5a6a7463891d88cad019c641",
+      "esito": "serve_file_altrui",
+      "commit": "721b18bc75466b872d5d41fccf61cfff345d47d1",
       "file_toccati": [
         "app/stores/page.tsx",
+        "components/StorePreviewCard.tsx",
         "tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts"
       ],
       "prova_file": [
@@ -293,11 +304,26 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9ec7e9a9a5fa7afb5a6a7463891d88cad019c641^ --file app/stores/page.tsx --prove tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 39ea5f8^ --file app/stores/page.tsx,components/StorePreviewCard.tsx --prove tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts --json",
+        "a_mano": true,
+        "nota": "prova rimessa fatta a mano, con lo stesso effetto del programma: git checkout 39ea5f8^ -- app/stores/page.tsx components/StorePreviewCard.tsx, poi la prova, rossa sul comportamento (2 prove su 4; tolte solo le correzioni dopo la prima (base 7b33fea^) resta rossa quella degli orologi sfasati), poi i file rimessi. Il programma prova-rimessa.mjs di ad-mycity in questa sessione non si è potuto lanciare (il classificatore della sessione ha negato gli script di ad-mycity): va rilanciato col comando qui sopra."
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La pagina usa useOraDiPiacenza() e lo passa a chiaveDiOggi e isOpenNow dentro il useMemo `filtered`, con `adesso` nelle dipendenze: l'elenco si rifà al minuto. Prova montata con l'orologio finto: alle 12:59:30 il forno aperto 9-13 è in lista, dopo 60 secondi esce.",
-      "verificato_da": "qa: prova e rimessa (0), prove esistenti di app/stores/page.tsx verdi; adesso null prima dell'idratazione usa l'orologio di prima; il battito si ferma a scheda nascosta"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro: /stores si rifà al battito del minuto. Giro di correzione (K06 e verificatore): «Aperti ora» si chiede a ogni resa con l'ora vera, fuori dal useMemo (sparita la finestra di 60 s in cui una resa nuova teneva in lista il negozio con «Chiuso ora»); e la pagina passa a StorePreviewCard `apertoOra` calcolato nella stessa resa del filtro, perché la scheda ha un orologio suo, sfasato da quello della pagina; un'ora sola per la resa e un solo insieme dei negozi aperti, usato da filtro e scheda. Senza `apertoOra` (vetrine della home) la scheda fa il conto da sola come prima.",
+      "verificato_da": "verificatore B (giro di correzione): 54 prove su /stores verdi, ha trovato la scheda sfasata (chiusa con apertoOra); verificatore C: 12 scenari con dati in ritardo da 0 a 55 s e orologio a passi di un secondo per 240 s, filtro acceso e spento, StoreShowcase invariata, niente idratazione: regge (ha notato il doppio calcolo dell'ora, chiuso in 721b18b); verificatore D (modello piccolo): 721b18b regge, 55 prove verdi.",
+      "commit_primo_giro": "9ec7e9a9a5fa7afb5a6a7463891d88cad019c641",
+      "commit_correzione": [
+        "39ea5f844b35761a77a322ee55dc0c1a037042e4",
+        "7b33fea3af22077e3d8cf81f92a9a2e9886cdb5d",
+        "721b18bc75466b872d5d41fccf61cfff345d47d1"
+      ],
+      "serve_file_altrui": [
+        {
+          "file": "components/ProductGrid.tsx",
+          "modifica": "Filtro «Negozi aperti ora» di /search e /category (righe 378-385 e 428): importare `useOraDiPiacenza` da '@/components/ui/DeliveryCutoff'; prima del useMemo `filtered` mettere `const battito = useOraDiPiacenza(!!onlyOpenStores);` e aggiungere `battito` alle dipendenze della riga 428 (c'è già eslint-disable-next-line alla 427), lasciando chiaveDiOggi()/isOpenNow() senza argomento, cioè con l'ora vera. Così alla chiusura i prodotti escono entro il minuto. ProductCard non scrive aperto/chiuso, quindi basta la memoria rifatta al minuto; la RPC negozi_aperti_adesso (staleTime 5 min) può restare. Il file è di R15 (onda 2)."
+        }
+      ],
+      "nota": "Resta il gemello nella griglia prodotti, components/ProductGrid.tsx, file di R15: la modifica esatta è in serve_file_altrui."
     },
     {
       "id": "R23-011",
@@ -407,7 +433,7 @@
       "id": "R23-015",
       "chiave": "qa-flussi|il negozio aperto fino a mezzanotte non riesce a salvare 18:00–00:00, e il messaggio non dice di scrivere 23:59",
       "esito": "riparato",
-      "commit": "21fdd994dd96f968d87204fc4cb7f9757c3996ba",
+      "commit": "7a8093a0e5c89453f1235bcd8195eb49f7992d80",
       "file_toccati": [
         "components/seller/orari-validi.ts",
         "tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts"
@@ -421,11 +447,20 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 21fdd994dd96f968d87204fc4cb7f9757c3996ba^ --file components/seller/orari-validi.ts --prove tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 43b44e6^ --file components/seller/orari-validi.ts --prove tests/unit/riparazione-r23-orari-fino-a-mezzanotte.test.ts --json",
+        "a_mano": true,
+        "nota": "prova rimessa fatta a mano, con lo stesso effetto del programma: git checkout 43b44e6^ -- components/seller/orari-validi.ts, poi la prova, rossa sul comportamento (8 prove su 15; tolte le ultime due correzioni (base abad477^) 6, tolta solo l'ultima (base 7a8093a^) 2), poi i file rimessi. Il programma prova-rimessa.mjs di ad-mycity in questa sessione non si è potuto lanciare (il classificatore della sessione ha negato gli script di ad-mycity): va rilanciato col comando qui sopra."
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "erroreDelleFasce legge la chiusura «00:00» (con apertura dopo mezzanotte) come mezzanotte, come già fanno lib/store-hours.ts e la migrazione 231. 00:00–00:00 e le chiusure invertite restano errori, e la sovrapposizione vede la fascia fino a 24:00. Il messaggio d'errore ora cita «00:00 o 23:59».",
-      "verificato_da": "qa: prova e rimessa (0); varianti 00:00–00:00 (errore), 23:00–00:00 con 22:00–23:30 (sovrapposte), 00:00–08:00 e 08:00–12:00 + 18:00–00:00 (ok); stessa regola di intervalloInMinuti in lib/store-hours.ts"
+      "cosa_ho_fatto": "Primo giro: erroreDelleFasce accetta 18:00–00:00 e il messaggio cita 00:00 o 23:59. Giro di correzione (K06 e due verificatori): per prossimaFascia un'ultima riga che non è una fascia valida dello stesso giorno (chiusura 00:00, chiusura prima o uguale all'apertura come 18:00–01:00, apertura vuota o illeggibile) finisce a mezzanotte: la proposta è 22:00–23:59, che il controllo segnala come sovrapposta quando la riga, corretta, arriva a mezzanotte. Mai più 03:00–06:00 o 04:00–07:00 salvabili.",
+      "verificato_da": "verificatore A: chiuso il caso 18:00–00:00, trovata l'apertura vuota (chiusa in abad477); verificatore C: 9 aperture per chiusure ogni 5 minuti, trovata la chiusura dopo mezzanotte 18:00–01:00 (chiusa in 7a8093a); verificatore D (modello piccolo): prova a caso con più fasce, ordine misto, chiusure vuote, «9:00», «0:00», «24:00»: nessuna proposta di notte salvo dopo una fascia di notte valida; regge.",
+      "commit_primo_giro": "21fdd994dd96f968d87204fc4cb7f9757c3996ba",
+      "commit_correzione": [
+        "43b44e6b94e0b6ddc3d8a9e4e352c3be14165c17",
+        "abad477b337a2b8291ab789e5445828378befab7",
+        "7a8093a0e5c89453f1235bcd8195eb49f7992d80"
+      ],
+      "nota": "I casi normali non cambiano: 09–13 propone 16–19, 00–08 propone 11–14, senza fasce 09–13."
     },
     {
       "id": "R23-016",
@@ -462,7 +497,7 @@
       "id": "R23-018",
       "chiave": "stati-ui|nella pagina dei punti i numeri sono scritti senza il punto delle migliaia e, se la lettura non riesce, la pagina mostra zero punti",
       "esito": "riparato",
-      "commit": "1f38eb7841ea1d289af4b84e0f73708eb0ec18df",
+      "commit": "ef4645eeb5fd7c5b5a0c97773d2058a4ff459481",
       "file_toccati": [
         "app/profile/loyalty/page.tsx",
         "lib/loyalty.ts",
@@ -477,12 +512,19 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1f38eb7841ea1d289af4b84e0f73708eb0ec18df^ --file app/profile/loyalty/page.tsx,lib/loyalty.ts --prove tests/unit/riparazione-r23-punti-numeri-e-errore.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a170503^ --file app/profile/loyalty/page.tsx,lib/loyalty.ts --prove tests/unit/riparazione-r23-punti-numeri-e-errore.test.ts --json",
+        "a_mano": true,
+        "nota": "prova rimessa fatta a mano, con lo stesso effetto del programma: git checkout a170503^ -- app/profile/loyalty/page.tsx lib/loyalty.ts, poi la prova, rossa sul comportamento (4 prove su 12; tolta solo la seconda correzione (base ef4645e^) 2), poi i file rimessi. Il programma prova-rimessa.mjs di ad-mycity in questa sessione non si è potuto lanciare (il classificatore della sessione ha negato gli script di ad-mycity): va rilanciato col comando qui sopra."
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Saldo, «mancano», movimenti e punti convertibili passano da Intl.NumberFormat('it-IT') (12.345, +15.000 pt). Se la lettura del conto non riesce la pagina mostra un errore con «Riprova», e lo stesso per i movimenti: mai «0 punti» né «Nessun movimento». «Al Oro» diventa «All'Oro».",
-      "nota": "Con it-IT i numeri a 4 cifre restano senza punto (1234): è la regola ICU, la stessa dei prezzi.",
-      "verificato_da": "qa: prova e rimessa (0); fetchLoyaltyAccount ha un solo chiamante, che ora mostra ErrorState; gli altri usi di lib/loyalty importano solo touchLoyaltyStreak e TIER_META"
+      "cosa_ho_fatto": "Primo giro: numeri con Intl it-IT ed errori di lettura detti. Giro di correzione (K06 e verificatore): useGrouping 'always' (1250 → «1.250», «+1.000 pt», «+250 pt»); fetchLoyaltyAccount lancia l'errore di getUser invece di tornare null; finché il conto non è arrivato (anche durante i tentativi o in pausa senza rete) la pagina mostra il caricamento, mai «0 punti, Bronzo»; senza sessione (AuthSessionMissingError) rimanda a /sign-in invece di un «Riprova» inutile. Un cliente nuovo senza riga vede ancora 0 punti, Bronzo (è un dato).",
+      "nota": "I browser senza Intl.NumberFormat v3 (Chrome prima della 106, Safari prima della 15.4, Firefox prima della 116) leggono 'always' come true e scrivono ancora «1250»: non si rompe niente. Visto dal verificatore, fuori da questa voce e già prima: il getUser iniziale della pagina (app/profile/loyalty/page.tsx:53-56) con la rete caduta all'apertura manda a /sign-in un cliente che ha ancora la sessione.",
+      "verificato_da": "verificatore B: formato -1.000/0/100/999/1.000/1.250/12.345, tsc accetta 'always'; ha trovato lo zero durante la lettura e il Riprova senza sessione (chiusi in ef4645e); verificatore C con react-query 5.100.14 e auth-js 2.106.1 veri: isPending vero durante i tentativi e in pausa, cliente nuovo 0 punti, AuthSessionMissingError riconosciuto, nessun rimando con errore di rete: regge.",
+      "commit_primo_giro": "1f38eb7841ea1d289af4b84e0f73708eb0ec18df",
+      "commit_correzione": [
+        "a1705031badd57dab795a095d4e878a9f7539cd4",
+        "ef4645eeb5fd7c5b5a0c97773d2058a4ff459481"
+      ]
     }
   ],
   "nuovi_difetti_visti": [
