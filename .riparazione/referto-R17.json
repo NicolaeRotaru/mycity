@@ -1,7 +1,7 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-13 16:10",
-  "finita": true,
+  "aggiornato": "2026-11-14 08:50",
+  "finita": false,
   "testa": "7e5909b2aeafac50988356725f03cd07837c3d08",
   "verifica": {
     "comando": "npm run verify",
@@ -634,5 +634,79 @@
   "conto": {
     "agenti": 15,
     "nota": "15 subagenti su 22: 5 nella prima parte (3 riparatori, 2 revisori grandi), poi 4 riparatori di lotto (L4-L6 grandi, L7 piccolo, interrotto e ripreso da 1 piccolo) e 5 revisori (4 grandi, 1 piccolo). Tetto 105 $ (85 + 20 firmati da Nicola alle 15:23)."
+  },
+  "passaggio": {
+    "perche": "Giro di correzione O2 (strada a) fermato al tetto: usage.cost_usd 20,39 $ su 12 $ e 257 mila token di storia su 150 mila. La 2.0 la apre la regista (session_015BmpnVKqiFCVbsAjWm364m).",
+    "testa_del_codice": "0da7241687f705f441a83ceae21cecdcb32f7b2e",
+    "voci": {
+      "R17-013": {
+        "stato": "fatto, revisore B in corso",
+        "commit": [
+          "33cf043",
+          "e49c4df"
+        ],
+        "file": [
+          "lib/stripe/webhook/rimborsi-da-fuori.ts"
+        ],
+        "prova": "tests/unit/riparazione-r17-cruscotto-quota-su-quello-che-resta.test.ts",
+        "rimessa": "regge, uscita 0, --base 0a0fbac --file lib/stripe/webhook/rimborsi-da-fuori.ts",
+        "cosa": "contoDelRimborsoDaFuori: il rimborso che porta l'ordine al lordo pieno (non REVERSAL_FAILED) toglie al negozio netto meno già tolto, come refundOrder (1350, non 1279). e49c4df riporta il file sotto le 600 righe (guardia webhook-diviso-per-mestiere)."
+      },
+      "R17-017": {
+        "stato": "regge (revisore A)",
+        "commit": [
+          "63c057d"
+        ],
+        "file": [
+          "lib/stripe/payout.ts"
+        ],
+        "prova": "tests/unit/riparazione-r17-tentativo-senza-la-126.test.ts",
+        "rimessa": "regge, uscita 0, --base 63c057d^",
+        "cosa": "Ripiego a due gradini per COLONNE_PAYOUT e COLONNE_RIDER: prima senza la 126, poi senza 124+126 (42703 vale schema indietro). Lacuna non bloccante: il secondo gradino del fattorino non ha una prova."
+      },
+      "R17-015": {
+        "stato": "parziale (revisore A): due regressioni della correzione da chiudere prima di dirla fatta",
+        "commit": [
+          "70a7ced"
+        ],
+        "file": [
+          "lib/stripe/payout.ts"
+        ],
+        "prova": "tests/unit/riparazione-r17-quota-scritta-mentre-parte-il-bonifico.test.ts",
+        "rimessa": "regge, uscita 0, --base 70a7ced^",
+        "cosa": "(a) addebitaQuotaVenditoreSeNonPagato filtra anche payout_status e, se riletto TRANSFERRED, storna con reverseOrderTransfer; (b) registraIlBonificoAlNegozio storna subito l'eccesso (chiave reversal_<id>_quota_<transfer>_<quota>); rimborso pieno col bonifico partito nel frattempo scrive REVERSED (payout.ts ~2737).",
+        "difetti_del_revisore": [
+          "D1 REGRESSIONE (soldi): payout.ts:599 (b) + :2766 (controllo R17-025) + :473. Rimborso pieno 30 €/27 € al negozio: il rimborso legge HELD, il turno parte, la quota 2700 si scrive su PROCESSING, (b) storna 2700, poi la scrittura finale del rimborso mette REFUNDED su TRANSFERRED e stornaIlBonificoDellOrdineRimborsato trova il bonifico già stornato e risponde 'niente' SENZA scrivere: l'ordine resta REFUNDED. Se la banca respinge il rimborso, rimborso-respinto (rimborso-respinto.ts:168) non alza il tentativo e il giro registra il vecchio bonifico stornato come TRANSFERRED da 0 €: il negozio perde 27 €. Prima della correzione finiva REVERSED e il bonifico si rifaceva. Cura proposta (piccola): in stornaIlBonificoDellOrdineRimborsato, quanto <= 0 = bonifico già ripreso tutto: scrivere lo stesso REVERSED (stripe_transfer_id, payout_at, seller_payout_reversed_cents = netto) filtrato su REFUNDED, come dopo uno storno riuscito.",
+          "D2 REGRESSIONE (falso avviso): payout.ts:565. Se lo storno di (b) cade perché il controllo R17-025 ha già stornato lo stesso bonifico, (b) scrive REVERSAL_FAILED filtrando solo l'id sopra il REVERSED e avvisa «27 € da riprendere» già rientrati. Cura proposta: la scrittura di REVERSAL_FAILED di (b) filtra payout_status = 'TRANSFERRED' e l'avviso parte solo se la scrittura ha preso la riga.",
+          "D3 residuo, non regressione: payout.ts:1362. Quota di un rimborso in volo mentre un altro storno di (b) cade (REVERSAL_FAILED): ramo 'altro' con il solo log, 4,50 € senza lavoro dichiarato.",
+          "D4 residuo: payout.ts:599/546. Processo morto fra la scrittura TRANSFERRED e lo storno di (b): quota sulla carta senza segno. Schema già nel deposito: il segno «storno da fare» (lib/stripe/storno-senza-esito.ts). Più grande: secondo il mandato «non allargare» resta come cosa_resta."
+        ]
+      },
+      "R17-016": {
+        "stato": "fatto, revisore B in corso",
+        "commit": [
+          "0da7241"
+        ],
+        "file": [
+          "lib/ordini/veloce-non-confermata.ts",
+          "lib/stripe/payout.ts"
+        ],
+        "prova": "tests/unit/riparazione-r17-euro-del-freno-dopo-annullo.test.ts",
+        "rimessa": "regge, uscita 0, --base 0da7241^ --file lib/ordini/veloce-non-confermata.ts,lib/stripe/payout.ts",
+        "cosa": "(a) euroDelFrenoRimastiPrenotati in fondo a frenoDellaVeloce: prenotazioni del freno 10 min-24 h su ordini con la carta ancora «Adesso» non più NEW → refundOrder con la chiave del freno; contatore euroRipresi. (b) nei 10 minuti con giaResi > 0 e prenotazione del freno: avviso agli amministratori una volta per ordine prima di 'riprova'. Fuori dalla cura scritta: refundOrder (payout.ts ~2244) riconta nel tetto la cifra della chiave già nel libro (sull'ordine annullato si fermava con «importo non valido»); testo dell'avviso senza «a mano» per la prova esistente freno-morto-prima-di-stripe.",
+        "nota": "In produzione serve prima la migrazione 412 (non firmata per il database vero): senza, il secondo giro non trova la tabella e non fa niente. Costo: un euro già finito con l'ordine rimasto «Adesso» si richiama ogni 5 minuti per 24 ore (una lettura dell'elenco Stripe, non rifà niente)."
+      }
+    },
+    "controlli": {
+      "prove_vicine": "125 file / 921 prove verdi sulla testa 0da7241 (riparatore); payout vicine 114 file / 811 prove verdi (revisore A); tsc --noEmit uscita 0.",
+      "guardia_ramo": "rossa per 2, tutti e due già alla punta 0a0fbac: bb53b6be (revert di R17-005, deroga già nel referto) e lib/database.types.ts (file di un'altra sessione, toccato da R17-014 dcdb68d, voce già data per buona). I 5 commit di questo giro non lo toccano.",
+      "verify": "NON lanciato: fermato al tetto prima della fine delle correzioni."
+    },
+    "da_fare_per_la_2_0": [
+      "Leggere il rapporto del revisore B (R17-016 e R17-013) se è arrivato: la regista lo ha o lo chiede a questa sessione.",
+      "Chiudere D1 e D2 di R17-015 (piccoli, in payout.ts), con un caso nella prova della voce che cade senza la cura; R17-015 resta parziale per D3/D4 con cosa_resta.",
+      "Aggiornare le 4 voci del referto (esito, commit, prova, rimessa, verificato_da), npm run verify con NODE_OPTIONS=--max-old-space-size=6144 sulla testa, verifica.testa, finita true, valida-referto e guardia-ramo."
+    ],
+    "spesa": "usage.cost_usd 20,39 $ a 08:49 (tetto 12 $); 3 subagenti su 4 (riparatore, revisore A, revisore B in corso)."
   }
 }
