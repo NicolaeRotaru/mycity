@@ -39,7 +39,10 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 // I numeri dei punti si scrivono all'italiana, col punto delle migliaia (12.345), come i prezzi.
-const NUMERO_IT = new Intl.NumberFormat('it-IT');
+// R23-018 correzione (14/11/2026) — Senza `useGrouping: 'always'` la regola italiana di Intl mette il
+// punto solo da cinque cifre in su: 1250 punti uscivano «1250», «+1000 pt». Con 'always' anche
+// quattro cifre hanno il punto: «1.250», «+1.000 pt».
+const NUMERO_IT = new Intl.NumberFormat('it-IT', { useGrouping: 'always' });
 
 export default function LoyaltyPage() {
   const router = useRouter();
