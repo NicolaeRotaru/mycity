@@ -332,7 +332,10 @@ export function getClientIp(req: Request): string {
    * Quando combacia con `EDGE_TRUST_SECRET`, allora quella riga l'ha scritta
    * Cloudflare e vale.
    */
-  const segretoDiBordo = process.env.EDGE_TRUST_SECRET;
+  // R23-009 correzione (14/11/2026) — Ripulito come CRON_SECRET: con un «a capo» finale incollato su
+  // Vercel `x-edge-token` (che arriva già senza spazi in fondo) non combaciava mai. Un segreto di soli
+  // spazi diventa vuoto, cioè nessun bordo fidato: la riga di Cloudflare resta ignorata.
+  const segretoDiBordo = process.env.EDGE_TRUST_SECRET?.trim();
   if (segretoDiBordo && segretiCombaciano(req.headers.get('x-edge-token'), segretoDiBordo)) {
     const cloudflare = req.headers.get('cf-connecting-ip');
     if (cloudflare) return cloudflare.trim();

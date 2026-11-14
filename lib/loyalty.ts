@@ -45,7 +45,12 @@ export function pointsToEurValue(points: number): number {
  * via touch_loyalty_streak se non esiste.
  */
 export async function fetchLoyaltyAccount(): Promise<LoyaltyAccount | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  // R23-018 correzione (14/11/2026) — Con la rete caduta `getUser` non lancia: torna
+  // `{ user: null, error }`. Leggerlo come «nessun utente» rendeva null, e la pagina scriveva
+  // «0 punti, Bronzo». Anche questo guasto esce come errore: la pagina dice che non riesce a leggere
+  // (o tiene i punti di prima), mai zero.
+  const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+  if (erroreUtente) throw erroreUtente;
   if (!user) return null;
   const { data, error } = await supabase
     .from('loyalty_accounts')

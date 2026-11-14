@@ -46,6 +46,14 @@ interface Props {
    * solo la pagina che la disegna.
    */
   posto: PostoDellaFoto;
+  /**
+   * R23-010 correzione (14/11/2026) — «Aperto ora» già deciso dalla pagina che filtra l'elenco (/stores
+   * con «Aperti ora»). La scheda ha un orologio suo, che parte quando arrivano i dati e batte sfasato da
+   * quello della pagina: se la chiusura cadeva fra i due battiti, la scheda scriveva «Chiuso ora» e il
+   * filtro la teneva in lista fino al battito dopo (quasi un minuto). Con questo valore la scheda dice
+   * la stessa cosa del filtro, nella stessa resa. Senza (le vetrine della home) fa il conto da sola.
+   */
+  apertoOra?: boolean;
 }
 
 /**
@@ -54,10 +62,10 @@ interface Props {
  * rating con stella, 3 anteprime ordinate, un solo CTA. Usata nelle rail
  * orizzontali (home). Per le pagine-lista lunghe c'è invece StoreListRow.
  */
-const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false, posto }: Props) => {
+const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false, posto, apertoOra }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
   const todayKey = chiaveDiOggi();
-  const open = isOpenNow(hours[todayKey]);
+  const open = apertoOra ?? isOpenNow(hours[todayKey]);
   // 30/10/2026 — «consegna oggi» seguiva «aperto adesso»: alle 9 il forno aperto fino alle 13 lo
   // diceva anche senza fattorino, quando le fasce del pomeriggio cadono a forno chiuso. Ora lo decide
   // la regola della vetrina e della cassa (`consegnaDellaVetrina`), con l'ora del browser.
