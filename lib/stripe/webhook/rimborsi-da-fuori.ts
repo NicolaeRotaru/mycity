@@ -151,9 +151,19 @@ export type ContoRimborsoDaFuori = {
  * La quota del negozio è la stessa di `refundOrder`: la piattaforma restituisce
  * la sua commissione, e al negozio si toglie solo la sua parte del netto, in
  * proporzione al rimborso (rimborso × netto del negozio ÷ lordo dell'ordine).
+ *
+ * 14/11/2026 (R17-013 correzione) — E, come in `refundOrder`, la registrazione
+ * che porta l'ordine al lordo pieno prende quello che al negozio RESTA (il netto
+ * meno quanto gli è già stato tolto), non la proporzione. Prima qui c'era solo
+ * la proporzione, e il commento qui sopra diceva il falso: ordine da 19 €, al
+ * forno 13,50 €, l'euro della veloce reso senza toccare il forno, poi 18 € dal
+ * cruscotto: gli si toglievano 18 × 13,50 / 19 = 12,79 €, e 71 centesimi
+ * restavano al forno su un ordine rimborsato tutto. Con uno storno caduto
+ * (REVERSAL_FAILED) quello che resta non si sa: lì resta la proporzione.
  */
 export function contoDelRimborsoDaFuori(
-  ordine: Pick<OrdineDelRimborso, 'total_price' | 'refunded_amount_cents' | 'seller_payout_cents'>,
+  ordine: Pick<OrdineDelRimborso, 'total_price' | 'refunded_amount_cents' | 'seller_payout_cents'> &
+    Partial<Pick<OrdineDelRimborso, 'payout_status' | 'seller_payout_reversed_cents'>>,
   rimborsatoSuStripeCents: number,
   /** La somma dei rimborsi da fuori non ancora registrati: più di così non è «da fuori». */
   daFuoriSuStripeCents: number = Number.POSITIVE_INFINITY,
@@ -162,14 +172,20 @@ export function contoDelRimborsoDaFuori(
   const giaRegistratoCents = ordine.refunded_amount_cents ?? 0;
   const tetto = Math.min(Math.max(0, rimborsatoSuStripeCents), Math.max(0, lordoCents));
   const nuovoCents = Math.max(0, Math.min(tetto - giaRegistratoCents, daFuoriSuStripeCents));
+  const totaleCents = giaRegistratoCents + nuovoCents;
   const netto = ordine.seller_payout_cents ?? 0;
+  const restaAlNegozio = Math.max(0, netto - Number(ordine.seller_payout_reversed_cents ?? 0));
   const quotaNegozioCents =
-    lordoCents > 0 ? Math.min(Math.round((nuovoCents * netto) / lordoCents), netto) : 0;
+    lordoCents <= 0 || nuovoCents <= 0
+      ? 0
+      : totaleCents >= lordoCents && ordine.payout_status !== 'REVERSAL_FAILED'
+        ? restaAlNegozio
+        : Math.min(Math.round((nuovoCents * netto) / lordoCents), netto);
   return {
     lordoCents,
     giaRegistratoCents,
     nuovoCents,
-    totaleCents: giaRegistratoCents + nuovoCents,
+    totaleCents,
     quotaNegozioCents,
   };
 }
