@@ -1,13 +1,13 @@
 {
  "sessione": "R15",
- "aggiornato": "2026-11-13 13:02",
+ "aggiornato": "2026-11-14 11:20",
  "finita": true,
- "testa": "1b84dfed207e75607f80d2b3559e94d56d553ac7",
+ "testa": "dc3280bdffd544194c5979a0dd5c752fe9495ef8",
  "verifica": {
-  "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+  "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
   "esito": "verde",
-  "testa": "1b84dfed207e75607f80d2b3559e94d56d553ac7",
-  "nota": "typecheck, lint, vitest: 1437 file e 9714 prove verdi, 1 saltata già prima. Il primo giro su ea2e8c26 era rosso su nessuna-colonna-che-non-esiste (vedi R15-011, corretto in 1b84dfed)."
+  "testa": "dc3280bdffd544194c5979a0dd5c752fe9495ef8",
+  "nota": "Giro di correzione dell'onda 2 (R15-004, R15-005): typecheck, lint, vitest 1437 file e 9726 prove verdi, 1 saltata già prima. Verde anche su 0b27c8f e 88eb976."
  },
  "voci": [
   {
@@ -133,10 +133,11 @@
    "id": "R15-004",
    "chiave": "deploy-sre|un secchio di foto svuotato all'origine passa per verde: il controllo di vuoto guarda il totale, non il singolo secchio",
    "esito": "riparato",
-   "commit": "c3e076df7e6b4c3db43afc6e3e069b3bd7d5e94a",
+   "commit": "dc3280bdffd544194c5979a0dd5c752fe9495ef8",
    "file_toccati": [
     "scripts/backup-db.sh",
-    "tests/unit/riparazione-r15-backup-secchio-vuoto.test.ts"
+    "tests/unit/riparazione-r15-backup-secchio-vuoto.test.ts",
+    "tests/unit/riparazione-r15-rclone-finto.ts"
    ],
    "prova_file": [
     "tests/unit/riparazione-r15-backup-secchio-vuoto.test.ts"
@@ -147,20 +148,21 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c3e076df^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r15-backup-secchio-vuoto.test.ts --json"
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f6150e4b9e5ceeb776132b414c9097a566a035a3 --file scripts/backup-db.sh --prove tests/unit/riparazione-r15-backup-secchio-vuoto.test.ts --json (uscita 0, rossa sul comportamento; uscita 0 anche con --base dc3280bd^, 88eb976d^ e 9b61e166^)"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Prima di ogni sincronia si ricorda se il secchio nella copia aveva file; se dopo la sincronia e vuoto la notte esce rossa (uscita 5) col nome del secchio, anche se un altro secchio si riapre. Un secchio vuoto prima e dopo (reviews nuovo) resta legittimo. Provato con rclone finto e dati finti.",
+   "cosa_ho_fatto": "Quando un secchio è vuoto nella copia dopo la sincronia, lo script chiede al database quanti file ha in storage.objects, contando solo quelli nati prima dell'inizio della copia (psql sullo stesso SUPABASE_DB_URL, con un tempo massimo dentro la query). Le uscite: più di 0 vuol dire che l'origine non li restituisce, ed è rosso ogni notte. 0 su un secchio che l'app svuota da sola (gli stessi di SECCHI_CON_FILE_PERSONALI, cioè reviews fra quelli copiati) è verde, con ::warning:: e una riga nel riepilogo. 0 su products o stories, che avevano file, vuol dire cancellazione di massa all'origine: rosso ogni notte, finché qualcuno non toglie a mano <dest>/_memoria-copia/<secchio>.aveva-file. Se il database non risponde decide quella memoria fra le notti. Un secchio rosso, o una sincronia fallita, non ferma più gli altri: l'uscita 5 arriva alla fine. Il commento della regola distingue «vuoto da sempre» da «pieno→vuoto».",
    "insieme_a": [
     "R15-003"
    ],
-   "verificato_da": "revisore generico (sonnet) che prova a smentire, collaudo di chiusura: verdetto «regge»; ha rilanciato la prova, guardato il diff e cercato varianti"
+   "verificato_da": "Giro di correzione dell'onda 2, due revisori generici (modello grande) che provano a smentire. Il primo, su 9b61e166, ha dato «parziale»: col database a 0 anche una cancellazione di massa di products all'origine passava verde dalla prima notte (corretto in 88eb976d), più testi e sincronia fallita. Il secondo, su 88eb976d, ha dato «regge» in 21 varianti sue: due testi sbagliati e PGOPTIONS forse rifiutato dal pooler, tutti corretti in dc3280bd.",
+   "nota": "Giro di correzione dell'onda 2, per il collaudo K08. Il primo commit della voce è c3e076df; quelli della correzione sono 9b61e166, 88eb976d e dc3280bd. I tre residui di K08 sono chiusi. (1) Notte 2 e rilancio restano rossi: la memoria vive nella destinazione, e il database li tiene rossi finché elenca file. (2) L'ultima foto di reviews tolta da una cancellazione d'account, col database a 0, dà verde con avviso: niente rosso falso, e il messaggio non parla di origine svuotata. (3) Il commento è riscritto. Chiuso anche «products svuotato ferma stories». La query è provata su un Postgres locale con la funzione vera estratta dallo script: conteggi giusti, esclusa la foto nata dopo l'inizio, nome con apice e tentativo di iniezione innocui, database irraggiungibile o tabella bloccata trattati come muti (bloccata: 30 secondi). Mai l'URL vero. Prove vicine del backup: 16 file, 149 prove verdi."
   },
   {
    "id": "R15-005",
    "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
    "esito": "parziale",
-   "commit": "b66f29ddf99487cd4161aec600c25fa55ede7201",
+   "commit": "0b27c8ff3666d1ff07ae431b24e79a56f9bfac65",
    "file_toccati": [
     "app/not-found.tsx",
     "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts"
@@ -174,14 +176,20 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b66f29dd^ --file app/not-found.tsx --prove tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts --json (con base f880877f^ esce 3 per costruzione, perché lì metadata non c'era; il difetto rimesso a mano con metadata = {} fa cadere la prova sul comportamento, 4 su 5)"
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0b27c8ff^ --file app/not-found.tsx --prove tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts --json (uscita 0, rossa sul comportamento: 2 su 8 cadono col vecchio titolo)"
    },
    "copre_tutta_la_voce": false,
    "cosa_ho_fatto": "app/not-found.tsx: openGraph e twitter partono da quelli della radice, letti da app/layout.tsx (`import { metadata as metadatiDellaRadice } from './layout'` e spread), non ricopiati a mano; cambiano solo titolo e descrizione. Tolto `robots: { index: false }`: Next scrive già da sé il noindex sulle 404 (NonIndex in node_modules/next/dist/server/app-render/app-render.js:155-167), e usciva doppio. Con next dev e Supabase finto, /zzz-non-esiste risponde 404 con <title>Pagina non trovata · MyCity</title>, og:title e og:description della 404, og:site_name MyCity, og:locale it_IT, og:type website, twitter:card summary_large_image, e UNA sola meta robots noindex. La prova importa `metadata` da app/not-found.tsx e da app/layout.tsx (caratteri e lingua di Next finti) e controlla titolo, descrizione, og:site_name/locale/type uguali alla radice, twitter:card summary_large_image, nessun robots. tsc (6 GB) 0, eslint 0, la prova e quella che importa il layout (riparazione-r10-manifest-nel-head) 8/8. Rimessa: con la base chiesta (f880877f^) esce 3, perché lì `metadata` in not-found non esisteva ancora e la prova lo nomina; rimesso il difetto com'è scritto nella voce (not-found con `metadata = {}`, cioè titolo e anteprima della home) la prova va rossa sul comportamento, 4 su 5; e la rimessa con base b66f29dd^ (il not-found del primo giro, og che sostituisce e noindex doppio) esce 0, «rossa, sul comportamento» (/tmp/r15-rimessa-R15-005-secondo-giro.json).",
    "cosa_resta": "Il codice 200 al posto di 404 su /product, /store, /category, /u e /store/<id>/<pagina> inesistenti. Lo tengono DUE scheletri di caricamento, nessuno dei due risolto qui: app/loading.tsx (mio) sta alla radice, quindi tutto sotto il layout radice è dentro il suo Suspense, e in Next 15.5 lo scheletro parte subito con 200: un notFound() che arriva dopo (anche quello che /u chiama già) aggiunge solo noindex. Per /store/<id> e /store/<id>/<pagina> c'è anche app/store/loading.tsx (non mio), che avvolge app/store/[id]/layout.tsx: il revisore ha provato con next dev che senza lo scheletro della radice e con notFound() nel layout del negozio la risposta resta 200, e diventa 404 solo togliendo anche app/store/loading.tsx. Le strade. (a) Togliere tutti e due gli scheletri: le pagine senza scheletro proprio perdono «Stiamo caricando…» e il negozio il suo ScheletroNegozio, il primo byte aspetta le letture del server, e tests/unit/minori-s09-aspetto.test.ts:219-224 sorveglia la scritta di app/loading.tsx; insieme, i layout di prodotto, negozio, pagina del negozio e categoria devono chiamare notFound() solo quando la riga sicuramente non esiste, letta col client di servizio: il client anonimo non vede il prodotto o il negozio non approvato che il venditore apre per guardarlo. (b) Un controllo in middleware.ts (non mio) che per un id inesistente fa NextResponse.rewrite verso un percorso che non esiste, con status 404: il revisore l'ha provato e dà 404 ANCHE con app/loading.tsx al suo posto (la frase del primo giro, «con app/loading.tsx alla radice non dà il 404», era sbagliata). Il rischio vero della strada (b) è un altro: il middleware deve sapere con certezza che la riga non esiste. Letto col client anonimo, un prodotto o un negozio non ancora approvato o nascosto risulta «inesistente», e la pagina che il suo venditore apre per guardarlo gli risponderebbe 404; per evitarlo serve una lettura col client di servizio (o una funzione del database che dica solo «esiste sì/no»), cioè una lettura in più nel middleware a ogni richiesta di quelle pagine. Dal collaudo: app/opengraph-image.tsx:9 La 404 vera porta ancora l'immagine dell'anteprima della home. È la convenzione a file della radice, con og:image:alt «MyCity Piacenza — il marketplace dei negozi della tua città». Cambiano titolo e descrizione, l'immagine resta quella della home. È voluto («anteprima grande della radice»), ma la voce diceva «titolo e anteprima della home». Non l'ho verificato in next dev. app/not-found.tsx:1-30 Il 404 vero sulle cinque famiglie di pagine non è fatto: lo tengono app/loading.tsx e app/store/loading.tsx. Alla domanda per Nicola forse manca una terza strada, che NON ho verificato: notFound() nel generateMetadata dei layout, più htmlLimitedBots in next.config, perché i metadati per i robot non vadano in streaming. Googlebot in Next 15.5 è un robot «dom» (is-bot.js:36), quindi oggi riceve i metadati in streaming.",
    "domanda": "Per avere il 404 vero sulle pagine inesistenti, Nicola sceglie fra: (a) togliere tutti e due gli scheletri di caricamento, quello della radice (app/loading.tsx, «Stiamo caricando…») e quello del negozio (app/store/loading.tsx), accettando che il primo byte di quelle pagine aspetti le letture del server; oppure (b) un controllo nel middleware, una lettura in più a ogni richiesta di prodotto, negozio e categoria, da fare col client di servizio perché i venditori non ricevano 404 sulle loro pagine ancora nascoste?",
-   "verificato_da": "revisore generico (modello grande) che prova a smentire, collaudo di chiusura: verdetto «parziale»; ha rilanciato la prova, guardato il diff e cercato varianti (next dev e curl)",
-   "nota": "Il primo commit della voce è f880877f; questo è b66f29dd. L'import di ./layout da not-found è stato provato anche in Next vero (next dev con Supabase finto: la 404 si compila e si disegna)."
+   "verificato_da": "Primo giro: revisore generico (modello grande), verdetto «parziale». Giro di correzione: revisore generico (sonnet) che prova a smentire 0b27c8f, verdetto «parziale» solo perché non poteva girare la e2e nel browser. La e2e l'ho girata io con build e next start: rossa sulla base, verde sulla testa.",
+   "nota": "Giro di correzione dell'onda 2, con la decisione di Nicola del 14/11 alle 10:20 («5 A»: si corregge). Il titolo dei metadati, e con lui og:title e twitter:title, ora è «404 · Questa pagina non esiste · MyCity», con parole diverse dall'h1. Così «Pagina non trovata» compare una volta sola, anche coi metadati in streaming nel corpo. La e2e non è toccata. Sulla 404 vera (curl): una sola meta robots noindex, og:site_name MyCity, og:locale it_IT, og:type website, twitter:card summary_large_image. Il resto della voce, cioè il codice 404 vero sulle pagine di prodotti, negozi e categorie, resta nel cosa_resta con la domanda per Nicola. Primi commit della voce: f880877f e b66f29dd.",
+   "prova_e2e": {
+    "comando": "npm run build (variabili finte come in e2e-senza-chiavi), poi next start -p 3000, poi E2E_BASE_URL=http://localhost:3000 npx playwright test -c <config che usa /opt/pw-browsers/chromium> tests/e2e/03-cart-and-search.spec.ts -g \"404 page is custom\" --project=chromium",
+    "uscita": 0,
+    "base": "uscita 1 sulla base f6150e4, strict mode violation: getByText('Pagina non trovata') resolved to 2 elements (h1 e <title>Pagina non trovata · MyCity</title>)",
+    "testa": "uscita 0 su 0b27c8f; verdi anche 07 «404 page renders for invalid route» e tutte le 14 prove di 03 e 07. I commit dopo toccano solo lo script del backup e le sue prove, non il sito."
+   }
   },
   {
    "id": "R15-006",
@@ -669,6 +677,27 @@
    "severita": "minore",
    "file": "lib/queries/griglia-prodotti.ts",
    "descrizione": "contaProdottiDellaGriglia (riga 294) non scarta i prodotti dei negozi non approvati; la lettura sì (riga 271). Il numero in alto può superare quanto si può davvero vedere."
+  },
+  {
+   "titolo": "La scheda di un negozio inesistente ripete «Pagina non trovata» nel titolo e nella pagina, come faceva la 404",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/store/[id]/[slug]/layout.tsx:29",
+   "descrizione": "Il titolo dei metadati di notFound è 'Pagina non trovata · MyCity', e l'EmptyState di app/store/[id]/[slug]/page.tsx:41 ha lo stesso testo. Coi metadati in streaming nel corpo, la scritta compare due volte: un getByText su quella scritta cadrebbe come la e2e della 404. Oggi nessuna e2e la cerca. Il file è nella scheda di R15, ma è fuori dalla diagnosi di questo giro: lasciato com'è, come ha detto la regista. Cura: un titolo con parole diverse, come in app/not-found.tsx."
+  },
+  {
+   "titolo": "Il documento della copia notturna dice ancora che un secchio vuoto è sempre legittimo",
+   "dimensione": "deploy-sre",
+   "severita": "minore",
+   "file": "docs/backup-restore.md:263-265",
+   "descrizione": "Il documento ha ancora la regola vecchia («Un singolo secchio vuoto resta legittimo…»), che R15-004 ha cambiato. Modifica: un secchio vuoto da sempre è legittimo; uno che aveva file e ora è vuoto è rosso, se il database ne elenca ancora oppure se è products o stories, che l'app non svuota mai. Per reviews svuotato dall'app (cancellazione d'account) la notte è verde con avviso. Se lo svuotamento di products o stories è voluto, si toglie a mano <dest>/_memoria-copia/<secchio>.aveva-file. Il file non è nella scheda di R15."
+  },
+  {
+   "titolo": "Le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts:71",
+   "descrizione": "Queste prove, e le altre con SUPABASE_DB_URL verso localhost, quando un secchio è vuoto fanno chiamare allo script il psql vero della macchina verso postgresql://finto:finto@localhost:5432. Passano perché la connessione fallisce (database muto). Basterebbe un psql finto accanto a FINTO_PGDUMP in tests/unit/aiuti/finto-rclone.ts. Non sono file di R15."
   }
  ],
  "domande_per_nicola": [
@@ -677,6 +706,11 @@
  ],
  "conto": {
   "agenti": 13,
-  "nota": "13 subagenti su 22: lotto 1 = 1 riparatore e 3 revisori, 1 correzione (002, 005), lotto 2 = 1 riparatore sonnet, lotto 3 = 2 riparatori (grande e sonnet) e 5 revisori. Costo della sessione 52,6 $ prima della chiusura, tetto 60 $. Per il tetto non c'è stato il giro di correzione dei rilievi del collaudo di chiusura (R15-018 riprodotto, la seconda metà di 009, il filtro dei negozi approvati nel conteggio di 011, il secondo avviso di 001): sono nei cosa_resta e nelle note. La correzione di 1b84dfed, uno spostamento meccanico, l'ha fatta R15."
+  "nota": "13 subagenti su 22: lotto 1 = 1 riparatore e 3 revisori, 1 correzione (002, 005), lotto 2 = 1 riparatore sonnet, lotto 3 = 2 riparatori (grande e sonnet) e 5 revisori. Costo della sessione 52,6 $ prima della chiusura, tetto 60 $. Per il tetto non c'è stato il giro di correzione dei rilievi del collaudo di chiusura (R15-018 riprodotto, la seconda metà di 009, il filtro dei negozi approvati nel conteggio di 011, il secondo avviso di 001): sono nei cosa_resta e nelle note. La correzione di 1b84dfed, uno spostamento meccanico, l'ha fatta R15.",
+  "giro_di_correzione_onda_2": {
+   "agenti": 3,
+   "costo_usd": 12.44,
+   "nota": "3 subagenti su 3: due revisori in un workflow (004 modello grande, 005 sonnet) e un revisore grande sulla revisione di 004. Costo 12,44 $ alle 11:17 (usage.cost_usd), sopra il tetto di 9 $: il campo mancava in get_session alle 09:52, l'ho detto subito alla regista. Contesto 287 mila token alla chiusura."
+  }
  }
 }
