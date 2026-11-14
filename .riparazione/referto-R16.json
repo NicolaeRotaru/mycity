@@ -623,7 +623,7 @@
       "descrizione": "Risponde PGRST200, quindi le prove che lo usano coprono solo il ripiego del carosello e non la strada nuova. File non di R16."
     },
     {
-      "titolo": "Falla di sicurezza da chiudere (carosello delle storie): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "rls-database",
       "severita": "minore",
       "file": "(nel referto privato)",
