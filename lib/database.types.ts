@@ -1673,6 +1673,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      prenotazioni_dei_rimborsi: {
+        Row: {
+          order_id: string;
+          chiave: string;
+          centesimi: number;
+          preso_il: string;
+        };
+        Insert: {
+          order_id: string;
+          chiave: string;
+          centesimi: number;
+          preso_il?: string;
+        };
+        Update: {
+          order_id?: string;
+          chiave?: string;
+          centesimi?: number;
+          preso_il?: string;
+        };
+        Relationships: [];
+      };
       product_list_items: {
         Row: {
           list_id: string;
@@ -2305,6 +2326,7 @@ export interface Database {
           decided_by: string | null;
           refunded_at: string | null;
           decision_notes: string | null;
+          customer_shipped_back_on: string | null;
         };
         Insert: {
           id?: string;
@@ -2325,6 +2347,7 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
+          customer_shipped_back_on?: string | null;
         };
         Update: {
           id?: string;
@@ -2345,6 +2368,7 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
+          customer_shipped_back_on?: string | null;
         };
         Relationships: [];
       };

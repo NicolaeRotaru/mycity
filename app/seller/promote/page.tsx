@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { dataDellaCampagna } from './data-campagna';
+import { statoEffettivoDellaCampagna } from '@/lib/admin/vista-delle-campagne';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -259,7 +260,9 @@ export default function SellerPromotePage() {
             <TrendingUp size={18} className="text-primary-600" aria-hidden /> Le tue campagne
           </h2>
           <div className="divide-y divide-cream-200">
-            {campaigns.map((c) => (
+            {campaigns.map((c) => {
+              const stato = statoEffettivoDellaCampagna(c);
+              return (
               <div key={c.id} className="py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-semibold text-ink-900 truncate">{c.product?.name ?? '—'}</p>
@@ -268,11 +271,12 @@ export default function SellerPromotePage() {
                 <div className="text-right shrink-0">
                   <p className="text-xs text-ink-500">{c.impressions.toLocaleString('it-IT')} viste · {c.clicks} click</p>
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
-                    c.status === 'active' ? 'bg-olive-100 text-olive-800' : c.status === 'paused' ? 'bg-accent-100 text-accent-800' : 'bg-cream-100 text-ink-600'
-                  }`}>{c.status === 'active' ? 'Attiva' : c.status === 'paused' ? 'In pausa' : 'Conclusa'}</span>
+                    stato === 'active' ? 'bg-olive-100 text-olive-800' : stato === 'paused' ? 'bg-accent-100 text-accent-800' : 'bg-cream-100 text-ink-600'
+                  }`}>{stato === 'active' ? 'Attiva' : stato === 'paused' ? 'In pausa' : 'Conclusa'}</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}

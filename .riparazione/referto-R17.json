@@ -1,0 +1,638 @@
+{
+  "sessione": "R17",
+  "aggiornato": "2026-11-13 16:10",
+  "finita": true,
+  "testa": "7e5909b2aeafac50988356725f03cd07837c3d08",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "7e5909b2aeafac50988356725f03cd07837c3d08",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify sull’ultimo commit di codice 7e5909b2 (= testa): typecheck, lint e vitest con 1438 file e 9719 prove verdi. guardia-ramo (cervello di ad-mycity 37f078a2) resta rossa SOLO per il commit bb53b6be: è il revert intero di d5687bbc (R17-005, serve_file_altrui) col messaggio standard «Revert \"R17-005 …\"» senza l’id davanti; la storia non si riscrive, la deroga è nella lista della fermata 3 per la firma di Nicola (come il revert 10708bcf di R13)."
+  },
+  "voci": [
+    {
+      "id": "R17-002",
+      "chiave": "pagamenti-stripe|il bonifico del lunedì al negozio non si può segnare: i soldi dei contanti restano «in attesa» per sempre, sia per il negozio sia per nicola",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "(commit da riprendere con cherry-pick, in quest’ordine)",
+          "modifica": "git cherry-pick b912629d804074b7fdc03f2356db62043bd7817a d282dda3 6b0b78cf846816721ff32d74c48442ea82cdf012 — migrazione 410, app/admin/payouts/page.tsx, lib/stripe/payout.ts, lib/database.types.ts (3 righe payout_manual_ref), prove r17, commenti 350→410 in lib/guadagni/negozio.ts, lib/stripe/payout.ts:191, app/api/cron/release-payouts/route.ts:392. Tolti dal ramo col revert dc9609c4 perché il pannello contraddice una prova comune. d282dda3 si applica dopo c6713b6b (R17-001), che è sul ramo."
+        },
+        {
+          "file": "tests/unit/riparazione-r11-bonifico-non-due-volte.test.tsx",
+          "modifica": "(1) nel finto rpc: `return { data: stato.segnati, error: null };` → `return { data: { ok: true, segnati: stato.segnati }, error: null };` (la funzione della 410 risponde con un esito, tutto o niente). (2) nel primo caso: `vi.stubGlobal(prompt, () => TRN-1);` → `const risposte = [18,00, TRN-1]; vi.stubGlobal(prompt, () => risposte.shift() ?? null);` (prima la cifra versata, poi il riferimento). (3) nel secondo caso: `vi.stubGlobal(prompt, () => TRN-2);` → `const risposte = [36,00, TRN-2]; vi.stubGlobal(prompt, () => risposte.shift() ?? null);`. Asserzioni uguali. È il diff di quel file nel commit b912629d."
+        }
+      ],
+      "nota": "Anche ripresa, la voce resta PARZIALE (revisore grande da solo + regia, 13/11). Tre punti, decisi parziale dalla regia (13/11): (1) il caso 36/18 da un’altra strada: Nicola versa 36 €, su un ordine si apre un reso DOPO il bonifico, quell’ordine non si può segnare (stessi cancelli del giro), Nicola segna 18 €; se il reso viene respinto, il lunedì dopo l’ordine chiede di nuovo 18 € e si paga due volte (migrations/410…sql:151). Chiuderlo vuol dire segnare come pagato anche un ordine fermo che Nicola ha davvero pagato: è la domanda 1 per Nicola. (2) Il FOR UPDATE (migrations/410…sql:122) chiude la corsa con uno storno in arrivo, ma nessuna prova lo controlla: tolto, le prove restano verdi. (3) Nel caso della storia il rifiuto del pannello (app/admin/payouts/page.tsx:186) non nomina l’ordine fermo né dice di non ripagarlo; il consiglio compare solo nel rifiuto ORDINI_CAMBIATI (riga 130). Prove della patch: npx vitest run --reporter=dot tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-bonifico-del-lunedi.test.sql && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql; prova rimessa: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file lib/stripe/payout.ts,app/admin/payouts/page.tsx --prove tests/unit/riparazione-r17-bonifico-del-lunedi.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b912629d^ --file migrations/410_il_bonifico_del_lunedi_si_segna_per_l_importo_versato.sql --prove tests/sql/rls/riparazione-r17-lo-stato-del-bonifico-a-mano.test.sql --sql r17_rimessa --json → uscita 0 (la prova SQL piena chiama una funzione che sulla base non esiste: uscita 3 per costruzione; collaudo a mano con il comportamento della 350 rimesso: 15 rossi). Revisione: revisore grande (subagente), da solo: rilanciate le prove dichiarate (12/12 unitarie, SQL verdi, run.sh 61 file verdi, 104 file vicini con 843 prove verdi) e le due prove rimesse (0 e 0) da una copia separata; rimesso nella 410 il comportamento della 350: 15 rossi sul comportamento; corse a mano con due sessioni psql (due clic insieme, storno in arrivo), negozi diversi, importi zero/negativi/nulli, stati TRANSFERRED/REFUNDED/REVERSED, ruoli negozio/anon/service_role, SECURITY DEFINER con search_path, GRANT, doppia applicazione, database pieno: reggono. Verdetto parziale per i tre punti di cosa_resta."
+    },
+    {
+      "id": "R17-001",
+      "chiave": "pagamenti-stripe|la pagina guadagni, con i soli contanti, dice al negozio commissione zero e soldi mai versati",
+      "esito": "parziale",
+      "commit": "c6713b6b939b016752bee8bafa89d99d05790750",
+      "file_toccati": [
+        "app/seller/earnings/page.tsx",
+        "lib/guadagni/negozio.ts",
+        "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6713b6b939b016752bee8bafa89d99d05790750^ --file app/seller/earnings/page.tsx,lib/guadagni/negozio.ts --prove tests/unit/riparazione-r17-guadagni-coi-contanti.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "riepilogoNegozio conta anche il contrassegno consegnato: lordo (col credito MyCity), commissione application_fee_cents, netto seller_payout_cents meno gli storni, conteggio per metodo; versato = TRANSFERRED/PAID_MANUALLY, in attesa = HELD/PROCESSING/PENDING più il contante ancora dal fattorino. La pagina mostra torre, grafico e storico anche coi contanti, dice «in attesa del bonifico del lunedì» e, finché CARTA_ACCESA è false, toglie frase e rinvio al conto Stripe. Il ritiro pagato al banco (CASH_IN_STORE) resta fuori dalla torre (commissione dovuta, non trattenuta: la mostra il riquadro dei contanti). Nessuna prova esistente toccata: la prova comune tests/unit/minori-s01-numeri-del-negozio.test.ts, che legge la pagina per nome, è tornata uguale alla base nel commit 28a4f5a7 «R17-001» (la pagina passa di nuovo activeCard, che ora vale gli ordini attivi del riepilogo, carta e contanti). La prova rimessa è stata rilanciata sullo stato finale (base c6713b6b^): uscita 0. ",
+      "cosa_resta": "Tre punti. (1) «già versati» resta 0 finché sul ramo nessuno scrive PAID_MANUALLY: dipende da R17-002, tolta (serve_file_altrui). (2) Con CARTA_ACCESA=false la pagina Guadagni mostra ancora StripeConnectButton («Collega conto per ricevere pagamenti»). (3) La frase «Già tolta: a te X netti» fa pensare che lordo meno commissione dia il netto, ma il lordo comprende la consegna. Il completamento di (2) e (3) c’è nel commit ce3cf81b (il punto 2 reggeva al revisore), ma è stato tolto col revert d5b463ff perché la consegna calcolata per differenza conta due volte gli storni (23 € con 4 € di storno → «7,00 € di consegna» invece di 3,00): va ripreso leggendo la consegna vera (shipping_cost + delivery_fee_cents), che la query della pagina oggi non legge (page.tsx:135).",
+      "verificato_da": "revisore grande (subagente), da solo: rilanciati 12 file di prova (100 verdi) e la prova rimessa da una copia separata (regge, uscita 0); riepilogoNegozio nuovo e della base fatti girare su dati finti (lo scenario della voce, sola carta, misto contanti) e confrontati con confirm_cod_remittance, refundOrder e la cassa dei contanti: la commissione è quella trattenuta davvero, la sola carta è identica alla base, annullati/rimborsati fuori, storni dal netto, AWAITING_REMITTANCE in attesa senza doppi; minori-s01 uguale alla base. Verdetto parziale per i punti di cosa_resta. Completamento (ce3cf81b): revisore (subagente): prova del riparatore, prova comune minori-s01 (identica ad a19ff892) e le altre prove che importano la pagina verdi (7 file, 58 test), rimessa regge; punto 2 (pulsante Connect e rimando Stripe solo a carta accesa) regge. Variante su riepilogoNegozio vero: un contrassegno da 23 EUR con 4 EUR di storno fa scrivere alla pagina «7,00 EUR di consegna» invece di 3, con rimborso parziale 5 e storno 4 scrive «2,00 EUR di consegna»."
+    },
+    {
+      "id": "R17-003",
+      "chiave": "privacy-legale|il negozio può chiudere un recesso senza rimborso dopo 14 giorni anche se il cliente ha riportato o spedito la merce, perché il cliente non ha modo di dirlo",
+      "esito": "parziale",
+      "commit": "63eae464111b74a30a163134cca21863dca31947",
+      "file_toccati": [
+        "app/api/returns/[id]/avanza/route.ts",
+        "components/seller/ReturnRequestCard.tsx",
+        "lib/database.types.ts",
+        "migrations/411_il_cliente_dice_di_aver_rispedito_il_reso.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-recesso-merce-spedita.test.ts",
+        "tests/sql/rls/riparazione-r17-recesso-merce-spedita.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-recesso-merce-spedita.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-recesso-merce-spedita.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63eae464111b74a30a163134cca21863dca31947^ --file app/api/returns/[id]/avanza/route.ts,components/seller/ReturnRequestCard.tsx,lib/database.types.ts --prove tests/unit/riparazione-r17-recesso-merce-spedita.test.ts,tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63eae464111b74a30a163134cca21863dca31947^ --file migrations/411_il_cliente_dice_di_aver_rispedito_il_reso.sql --prove tests/sql/rls/riparazione-r17-recesso-merce-spedita.test.sql --sql r17_rimessa --json",
+        "nota": "Nella corsa SQL, alla base, i controlli 1a-1c e 5a cadono sul comportamento (il recesso con la merce in viaggio si chiudeva davvero); i controlli 4a-4g cadono per struttura (42703, la colonna nasce con la 411). L'uscita 0 la decide il comportamento. riparazione-r11-tipi-che-possono-restare-vuoti è solo usata come prova, non toccata."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_resta": "Il modulo lato cliente «Ho rispedito la merce» (app/orders/[id]/return/page.tsx) e le due colonne nella lettura del reso della pagina ordine del negozio (app/seller/orders/[id]/page.tsx): senza il primo il cliente non ha ancora un tasto; senza la seconda la scheda del negozio non riceve la dichiarazione. Vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/orders/[id]/return/page.tsx",
+          "modifica": "Nel ramo `if (resoAperto)` (righe 237-270), quando `resoAperto.status === 'APPROVED'`, aggiungi un blocco sopra «Ritira la richiesta»: titolo «Hai già rispedito la merce?», testo «Dillo al negozio: da quando lo segnali il reso non si può chiudere senza rimborso. Tieni la ricevuta della spedizione.», un <input type=\"date\"> «Giorno della spedizione» (obbligatorio, max = oggi), un <input type=\"text\" maxLength={100}> «Numero di spedizione (se ce l'hai)», e un bottone «Ho rispedito la merce» (spento senza data o durante l'invio). Nuovi stati: speditoIl, numeroSpedizione, dichiarazioneInCorso. Al clic: stesse intestazioni di `ritira()` (bearer di supabase.auth.getSession()), `fetch(`/api/returns/${resoAperto.id}/avanza`, { method: 'POST', body: JSON.stringify({ stato: 'SHIPPED_BACK', speditoIl, ...(numeroSpedizione.trim() ? { numeroSpedizione: numeroSpedizione.trim() } : {}) }) })`; se !r.ok → `throw new Error(apiErrorMessage(data, 'La spedizione non si è segnata.'))` con toast.error(friendlyError(e)); se ok → toast.success('Spedizione segnalata al negozio') e router.push(`/orders/${params.id}`). La rotta risponde 400 con il motivo (data mancante, futura o prima della richiesta), 409 se il reso non è APPROVED."
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "Riga 266, la select di `letturaReso`: aggiungi `, tracking_number, customer_shipped_back_on` (i campi nuovi di ReturnRow). `tracking_number` esiste dalla 024. `customer_shipped_back_on` nasce con la 411: finché la 411 non è applicata, chiedila con un ripiego (se l'errore ha code 42703, rileggi senza quella colonna), altrimenti la lettura cade e la scheda del reso sparisce."
+        }
+      ],
+      "cosa_ho_fatto": "La rotta avanza lascia al cliente dell'ordine il passo APPROVED → SHIPPED_BACK, col giorno (non futuro, non prima della richiesta) e il numero di spedizione in tracking_number; negozio e amministratore ricevono 403 se mandano quei campi; avviso al negozio; prima della 411 un ripiego senza la colonna. Da SHIPPED_BACK la regola esistente (percheIlRecessoNonSiChiude, regole-del-rimborso.ts:393-397) nega già la chiusura e il cron (OPEN_RETURN_STATUSES, release-payouts:83, righe 232 e 491) tiene fermo il bonifico: quei due file non servivano. La scheda del negozio mostra la dichiarazione. Migrazione 411 (non applicata): la colonna customer_shipped_back_on e un guardiano della riga (la dichiarazione si scrive solo in quel passo e poi non cambia; un recesso SHIPPED_BACK o RECEIVED non diventa mai CANCELED o REJECTED). lib/database.types.ts: solo le righe del generatore (file assegnato a R17 dalla regia)."
+    },
+    {
+      "id": "R17-004",
+      "chiave": "api-backend|un reso già rimborsato per intero, con l'esito non scritto sul reso, non si chiude con «rimborsato»",
+      "esito": "riparato",
+      "commit": "fb5774562e2c04d31058589742ab960a98259cb3",
+      "file_toccati": [
+        "app/api/returns/[id]/avanza/route.ts",
+        "lib/stripe/payout.ts",
+        "tests/unit/riparazione-r17-reso-gia-rimborsato-sulla-carta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-reso-gia-rimborsato-sulla-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-reso-gia-rimborsato-sulla-carta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fb5774562e2c04d31058589742ab960a98259cb3^ --file app/api/returns/[id]/avanza/route.ts,lib/stripe/payout.ts --prove tests/unit/riparazione-r17-reso-gia-rimborsato-sulla-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In avanza, quando sulla carta il residuo non basta (già rimborsato per intero o importo oltre il residuo), prima di rispondere 409/400 si chiede a Stripe se il rimborso della chiave return_<id> è già uscito (ilRimborsoDellaChiaveGiaUscito, ora esportata da payout.ts senza cambiarla): se sì il reso si chiude «rimborsato» con la cifra uscita, refundOrder lo riconosce e non rimborsa né storna di nuovo. Senza quel rimborso, o con la lettura di Stripe caduta, resta il controllo sul residuo di prima. Prova end-to-end create → decide (500) → avanza RECEIVED/REFUNDED col refundOrder vero. Nota: payout.ts cambia solo l'export; alla base la rotta riceve undefined, il try/catch lo tratta come lettura caduta e la prova cade sul comportamento. Le prove di R17-003 restano verdi.",
+      "verificato_da": "revisore (subagente): prova verde alla testa e rimessa regge (rossa sul comportamento togliendo ciascun file); 137 file di prove che toccano avanza/payout/veloce verdi (1011 test). Letto il controllo: i rimborsi failed/canceled non contano, la lettura caduta lascia il 409/400 di prima."
+    },
+    {
+      "id": "R17-005",
+      "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+      "esito": "serve_file_altrui",
+      "commit": "d5687bbc5fa4808b8435ffcabf01a3ac5346576e",
+      "revert": "bb53b6beebd8a17ca7d93d476d123f59b5ecfb13",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/database-coi-permessi.ts",
+          "modifica": "nell'elenco COLONNE di 'products' aggiungere 'tags' dopo 'external_source_url' (il finto database rifiuta la colonna products.tags che la scheda ora chiede). Poi cherry-pick di d5687bbc (lib/queries/catalogo.ts: tags nella COLONNE_SCHEDA_PRODOTTO, filtro tagDeiMarchiDellaScheda che lascia solo Km 0/Artigianale, prova riparazione-r17-scheda-tag-dei-marchi): con questa riga le 12 prove collegate sono verdi (330 test). Senza, 25 test di il-catalogo-regge-con-i-profili-chiusi falliscono; per questo il commit e' stato tolto con git revert bb53b6be."
+        }
+      ],
+      "cosa_ho_fatto": "Scritta la correzione e la prova, ma rossa su una prova comune per un finto database di altre sessioni: voce tolta col revert, da riprendere col cherry-pick e la riga indicata. Nota: la colonna tags (migrazione 071) va confermata presente in produzione."
+    },
+    {
+      "id": "R17-006",
+      "chiave": "frontend-ux|il link a un negozio tagliato a metà dice «problema di collegamento, riprova» invece di «negozio non trovato»",
+      "esito": "riparato",
+      "commit": "337b3d39",
+      "file_toccati": [
+        "lib/queries/catalogo.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-negozio-link-tagliato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-negozio-link-tagliato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 337b3d39^ --file lib/queries/catalogo.ts --prove tests/unit/riparazione-r17-negozio-link-tagliato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "domandaNegozio tratta il 22P02 come negozio non trovato (null), come gia' fa leggiRigaDelProdotto; le pagine /store/<id> mostrano «Negozio non trovato».",
+      "verificato_da": "revisore (subagente): prova verde e rimessa 0 (rossa alla base, verde con la correzione); domandaNegozio ritorna null su 22P02 dopo il ripiego di schema e rilancia gli altri errori; 33 file di prove vicine verdi (334 test)."
+    },
+    {
+      "id": "R17-007",
+      "chiave": "pagamenti-stripe|tre tempi diversi per lo stesso bonifico nel codice — e un quarto nelle faq del venditore",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/stripe/tempi-bonifico.ts:28 ORE_ATTESA_BONIFICO=1 usata da app/api/cron/release-payouts/route.ts:29 (HOLD_HOURS) e app/api/stripe/payout/route.ts:36; app/seller/earnings/commissione.ts:152 e app/seller/help/domande.ts:10-12 usano fraseAttesaBonifico(); i commenti +3gg sono corretti (lib/stripe/payout.ts:43).",
+      "verificato_da": "revisore (subagente): controllato alla testa che cron e payout/route usano ORE_ATTESA_BONIFICO, le faq usano fraseAttesaBonifico, 'mensile il giorno 5' e '+3gg' non sono piu' testo vivo; prove vicine verdi."
+    },
+    {
+      "id": "R17-008",
+      "chiave": "pagamenti-stripe|le campagne sponsorizzate scadute restano «attiva» per sempre, e il filtro «finite» dell'amministrazione è sempre vuoto",
+      "esito": "riparato",
+      "commit": "36def6d03bd7692d5e5b83e147aa5ee8c5f1fb52",
+      "file_toccati": [
+        "lib/admin/vista-delle-campagne.ts",
+        "app/admin/sponsored/page.tsx",
+        "app/seller/promote/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-campagne-scadute-finite.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-campagne-scadute-finite.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3fc335511faa1689a0568ebb1ec59987e44bf2b2^ --file lib/admin/vista-delle-campagne.ts --prove tests/unit/riparazione-r17-campagne-scadute-finite.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Lo stato mostrato si deriva dalla data di fine nel giorno di Piacenza (statoEffettivoDellaCampagna, applicato dentro vistaDelleCampagne e nella pagina del negozio); il filtro attive/finite dell'amministrazione usa la stessa regola nella lettura. Commit 3fc33551 + 36def6d0 (stesso id). La rimessa morde sul solo file lib: le due pagine non hanno prova propria.",
+      "verificato_da": "revisore (subagente): prova verde, rimessa 0; end_date e' di tipo date, confronto per giorno di Piacenza con fine inclusa coerente con la vetrina (gte end_date oggi); filtro attive/finite lato lettura e pausa preservata; prove vicine verdi. Le due pagine non hanno prova propria."
+    },
+    {
+      "id": "R17-009",
+      "chiave": "pagamenti-stripe|un negozio con stripe a metà legge «pagamenti pronti» e la lista delle cose da fare sparisce, ma il server non gli manda il bonifico",
+      "esito": "riparato",
+      "commit": "27a880f8a765497014667c9532e1d3d90d923549",
+      "file_toccati": [
+        "components/seller/pronto-a-incassare.ts",
+        "components/seller/SellerOnboardingChecklist.tsx",
+        "components/seller/SellerHealthScore.tsx",
+        "components/seller/StripeConnectButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-pronto-a-incassare-come-il-server.test.ts",
+        "tests/unit/minori-s06-bacheca-del-negozio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r17-pronto-a-incassare-come-il-server.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27a880f8a765497014667c9532e1d3d90d923549^ --file components/seller/pronto-a-incassare.ts --prove tests/unit/riparazione-r17-pronto-a-incassare-come-il-server.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "pagamentiPronti legge CARTA_ACCESA: carta accesa = conto Stripe e payouts_enabled (come releaseOrderPayout), carta spenta = IBAN valido; lista, punteggio e StripeConnectButton usano la stessa regola (stripePronto). esito-stripe.ts gia' guardava payouts_enabled, invariato. Toccata la prova esistente minori-s06-bacheca-del-negozio (legge solo file nostri): la riga «solo incassi Stripe = pronto» ora dice false. La rimessa morde sul solo file pronto-a-incassare.ts.",
+      "verificato_da": "revisore (subagente): prova e minori-s06 verdi, rimessa 0; stripePronto = conto e payouts_enabled come releaseOrderPayout, caso 'incassi accesi senza versamenti' ora false; 33 file vicini verdi."
+    },
+    {
+      "id": "R17-010",
+      "chiave": "pagamenti-stripe|con la veloce pagata tutta o quasi col credito su un ordine carta, l'euro va sulla carta e stripe puo' rifiutarlo: finisce a mano",
+      "esito": "riparato",
+      "commit": "43a9791bd15277318889ead4f3b8498c96a9a269",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts",
+        "tests/unit/riparazione-r17-veloce-carta-quasi-tutta-credito.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-veloce-carta-quasi-tutta-credito.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-veloce-carta-quasi-tutta-credito.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 43a9791bd15277318889ead4f3b8498c96a9a269^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r17-veloce-carta-quasi-tutta-credito.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel freno, se la parte dell'ordine pagata con la carta (total_price, nessun altro rimborso sopra) non copre l'euro, refundOrder non si chiama: l'euro torna sul credito con rendiSulCredito (cod_refund, veloce_non_confermata_<id>, unico nel diario) e il conto si riscrive come sui contanti (consegna −1 €, lordo −1 €, credito speso −1 €, carta com'era). Il cliente legge «ti torna sul credito MyCity»; se il credito non torna resta «a mano» con un avviso preciso agli amministratori. Con la carta che copre l'euro resta il rimborso sulla carta.",
+      "verificato_da": "revisore (subagente): prova verde e rimessa regge; letto il ramo: total_price (carta) resta com'era, credito reso con la chiave unica del diario, refundOrder non chiamato. Variante mia carta 0,60 + credito su carrello di due negozi riscritto a metà: credito reso una volta, nessun «a mano», zero chiamate a refundOrder."
+    },
+    {
+      "id": "R17-011",
+      "chiave": "pagamenti-stripe|due giri del freno sovrapposti sullo stesso ordine carta prenotano due volte l'euro: stripe ne rende uno solo, il libro ne segna 2",
+      "esito": "riparato",
+      "commit": "ca3b8f693b5802613030357b714c055df10c3dba",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-freno-sovrapposto.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-freno-sovrapposto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ca3b8f693b5802613030357b714c055df10c3dba^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r17-freno-sovrapposto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con la chiave sulla prenotazione (412, commit di R17-014) il secondo giro sovrapposto non prenota più l'euro (alla base della scheda la prova dà 200 su 100); nel freno, quando refundOrder risponde che lo stesso rimborso è in corso, il giro esce con 'riprova' senza scrivere fascia né «a mano» (prima il secondo giro spostava il carrello e diceva a Maria e agli amministratori di rendere a mano l'euro già reso).",
+      "verificato_da": "revisore (subagente): prova verde alla testa, rimessa regge; due sessioni psql reali sulla stessa chiave insieme: la seconda aspetta il FOR UPDATE e riceve in_corso, totale 20 € non 40 (la base della cura del freno); 132 file di prove che importano payout/freno/webhook verdi (992 prove)."
+    },
+    {
+      "id": "R17-012",
+      "chiave": "pagamenti-stripe|se la scrittura del secondo ordine del carrello cade, il giro dopo promette al cliente un euro da rendere a mano che e' gia' stato tolto",
+      "esito": "riparato",
+      "commit": "b15033d6a5802f8ae9ab796e0a4a4129d63e12c5",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts",
+        "tests/unit/riparazione-r17-veloce-carrello-riscritto-a-meta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-veloce-carrello-riscritto-a-meta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-veloce-carrello-riscritto-a-meta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b15033d6a5802f8ae9ab796e0a4a4129d63e12c5^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r17-veloce-carrello-riscritto-a-meta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'avviso «freno fermo a metà» dice su quale ordine l'euro è già tolto dalla consegna. Al giro dopo, se consegnaSenzaLaVeloce non riconosce il conto, contoGiaRiscrittoAMeta rimette l'euro della veloce a un ordine già spostato in fascia e accetta solo se la regola riconosce quel conto e ridà esattamente la consegna scritta adesso: allora l'euro è già tolto, il cliente legge «non lo paghi» col totale vero alla porta e nessuno legge «a mano». Senza un conto che torna resta «a mano» come prima. Nessuna colonna nuova: il segno è il conto stesso, verificato con la regola della cassa.",
+      "verificato_da": "revisore (subagente): prova verde e rimessa regge. Varianti mie: guasto ripetuto per due giri e chiusura al terzo (euro tolto una volta sola, 31,00 alla porta, nessun «a mano»); carrello con la carta e il credito (R17-010) riscritto a metà: al giro dopo credito una volta e frase corretta."
+    },
+    {
+      "id": "R17-013",
+      "chiave": "pagamenti-stripe|dopo l'euro della veloce reso senza toccare il negozio, il rimborso pieno successivo gli riprende meno della sua quota (71 cent su maria)",
+      "esito": "riparato",
+      "commit": "3018413b9cca2b299e9e220c619a631b4104baea",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-quota-su-quello-che-resta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-quota-su-quello-che-resta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3018413b9cca2b299e9e220c619a631b4104baea^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r17-quota-su-quello-che-resta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il rimborso che porta l'ordine al lordo pieno toglie al negozio quello che gli resta (netto meno già tolto): dopo l'euro della veloce a quota 0 il reso pieno toglie 13,50 € e non 12,79. Con REVERSAL_FAILED resta la proporzione.",
+      "nota": "La proporzione «su quello che resta» anche sui parziali è stata provata e cambia i numeri attesi di 5 casi in 4 prove comuni (il-rimborso-parziale-dal-cruscotto-scende-dal-bonifico, riparazione-r03-reso-carta-dopo-rimborso-diviso, riparazione-r03-reso-ripreso-non-rimborsa-due-volte, un-reso-e-un-rimborso-respinto-insieme-non-si-cancellano): i parziali restano in proporzione al lordo, e la differenza la riprende il rimborso che chiude l'ordine.",
+      "verificato_da": "revisore (subagente): prova verde e rimessa regge; letta la formula: sul rimborso pieno senza parziali di prima restaAlNegozio = netto, uguale alla vecchia proporzione, quindi i casi esistenti non cambiano (prove vicine verdi). Nota non bloccante: la quota del rimborso che chiude puo' superare l'importo di quel rimborso (euro veloce + parziale + ultimo piccolo), coerente con 'al negozio non resta niente su un ordine reso tutto'."
+    },
+    {
+      "id": "R17-014",
+      "chiave": "pagamenti-stripe|due rimborsi dello stesso reso lanciati nello stesso istante si contano due volte: 40 € segnati su 20 € usciti",
+      "esito": "riparato",
+      "commit": "dcdb68db710a65a329baf65d18311258fed012a4",
+      "commit_della_voce": [
+        "dcdb68db710a65a329baf65d18311258fed012a4",
+        "4fb7ab98142b463db79d8809abbb92256254409d"
+      ],
+      "file_toccati": [
+        "migrations/412_il_libro_dei_rimborsi_ha_una_chiave_per_prenotazione.sql",
+        "lib/stripe/payout.ts",
+        "lib/database.types.ts",
+        "lib/stripe/webhook/rimborsi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-libro-dei-rimborsi-chiave.test.ts",
+        "tests/unit/riparazione-r17-rimborso-respinto-libera-la-prenotazione.test.ts",
+        "tests/unit/aiuti/libro-dei-rimborsi-r17.ts",
+        "tests/sql/rls/riparazione-r17-libro-dei-rimborsi.test.sql",
+        "tests/sql/rls/riparazione-r17-libro-dei-rimborsi-prenotazioni.test.sql"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-libro-dei-rimborsi-chiave.test.ts tests/unit/riparazione-r17-rimborso-respinto-libera-la-prenotazione.test.ts && tests/sql/harness/apply.sh mycity_test && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-libro-dei-rimborsi.test.sql && psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r17-libro-dei-rimborsi-prenotazioni.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dcdb68db710a65a329baf65d18311258fed012a4^ --file lib/stripe/payout.ts,lib/database.types.ts --prove tests/unit/riparazione-r17-libro-dei-rimborsi-chiave.test.ts,tests/unit/riparazione-r11-viste-nei-tipi.test.ts --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dcdb68db710a65a329baf65d18311258fed012a4^ --file migrations/412_il_libro_dei_rimborsi_ha_una_chiave_per_prenotazione.sql --prove tests/sql/rls/riparazione-r17-libro-dei-rimborsi.test.sql --sql r17_rimessa --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4fb7ab98142b463db79d8809abbb92256254409d^ --file lib/stripe/webhook/rimborsi.ts --prove tests/unit/riparazione-r17-rimborso-respinto-libera-la-prenotazione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 412: accumula_rimborso e storna_rimborso prendono la chiave che va a Stripe (tabella prenotazioni_dei_rimborsi, risposta nuova/in_corso/ripresa/altra_cifra, ripresa dopo 10 minuti) e rimborso_gia_prenotato; refundOrder prenota con la chiave (ripiego senza chiave su PGRST202), la seconda richiesta della stessa chiave si ferma con RimborsoGiaInCorso (ritentabile) senza stornare la prenotazione della prima. Secondo commit: l'avviso del rimborso respinto dalla banca toglie anche la prenotazione della sua chiave (senza, il reso rifatto usciva col libro a zero). database.types.ts: solo le righe del generatore per la tabella nuova.",
+      "nota": "La prova SQL della rimessa chiama le funzioni come il sito (con la chiave, e senza se la funzione con la chiave non c'è) e guarda i totali; la seconda prova SQL (prenotazioni: risposte, ripresa dopo 10 minuti, permessi) nomina la tabella nuova e non è nella rimessa. Rimborsi in contanti ripresi dopo 10 minuti ('ripresa') possono ancora togliere la quota al negozio due volte se il tentativo morto l'aveva già tolta (come prima: il libro però non conta più due volte).",
+      "verificato_da": "revisore (subagente): tre rimesse tutte 0 (la prima senza la prova r11 dava non_morde su database.types.ts: con la r11 regge); apply.sh rva con 195 migrazioni, le due prove SQL verdi (10 e 11 controlli); corsa vera su Postgres con due sessioni sulla stessa chiave (nuova + in_corso, 2000 non 4000) e due riprese sulla stessa prenotazione scaduta (ripresa + in_corso, nessuna somma)."
+    },
+    {
+      "id": "R17-015",
+      "chiave": "pagamenti-stripe|il bonifico al negozio usa l'importo letto prima di prendere il turno: un rimborso registrato in quel momento non scende dal bonifico",
+      "esito": "riparato",
+      "commit": "f66d4510233ebbf3f2763fecad201c0b65294235",
+      "file_toccati": [
+        "lib/stripe/payout.ts",
+        "tests/unit/riparazione-r17-bonifico-importo-dopo-il-turno.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-bonifico-importo-dopo-il-turno.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-bonifico-importo-dopo-il-turno.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f66d4510233ebbf3f2763fecad201c0b65294235^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r17-bonifico-importo-dopo-il-turno.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scrittura del turno (negozio e fattorino) restituisce anche gli importi, e il bonifico si calcola su quella riga: un rimborso scritto fra la prima lettura e il turno scende dal bonifico (16,06 € invece di 18,00). Lo stesso per il compenso del fattorino; se coi numeri di adesso non c'è niente da versare il turno si restituisce.",
+      "verificato_da": "revisore (subagente): prova della voce e 116 file di prove che importano payout/rimborsi/release-payouts verdi alla testa (888 test); letto il diff: il turno negozio e fattorino restituisce gli importi e daVersare si calcola su quella riga."
+    },
+    {
+      "id": "R17-016",
+      "chiave": "pagamenti-stripe|il giro che muore fra accumula_rimborso e stripe lascia 1 € prenotato senza soldi usciti; un rimborso a mano dall'admin lo porta a 2",
+      "esito": "riparato",
+      "commit": "4eda498b1b7435d0af4d493a9022955de5207f15",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-freno-morto-prima-di-stripe.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-freno-morto-prima-di-stripe.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4eda498b1b7435d0af4d493a9022955de5207f15^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r17-freno-morto-prima-di-stripe.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il freno chiede al libro (rimborso_gia_prenotato, 412) se l'euro prenotato senza rimborso nell'elenco è suo: se sì richiama refundOrder con la stessa chiave invece di passare «a mano»; entro 10 minuti aspetta (in corso), dopo refundOrder riprende la prenotazione senza sommarla e rende l'euro una volta. Il pezzo in lib/stripe/payout.ts (la ripresa) sta nel commit di R17-014; un rimborso sull'ordine che non è del freno resta a una persona come prima.",
+      "verificato_da": "revisore (subagente): prova verde e rimessa regge; due riprese concorrenti della prenotazione scaduta del freno su Postgres reale: una sola prende ('ripresa'), l'altra 'in_corso', totale invariato; letto il ramo: entro 10 minuti il freno esce con 'riprova' senza 'a mano'."
+    },
+    {
+      "id": "R17-017",
+      "chiave": "pagamenti-stripe|la protezione dal doppio bonifico al negozio e al fattorino dura solo 24 ore",
+      "esito": "riparato",
+      "commit": "369f27616465f8e862e3b450a4f8cebe711b67e3",
+      "file_toccati": [
+        "lib/stripe/payout.ts",
+        "tests/unit/riparazione-r17-doppio-bonifico-dopo-24-ore.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-doppio-bonifico-dopo-24-ore.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-doppio-bonifico-dopo-24-ore.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 369f27616465f8e862e3b450a4f8cebe711b67e3^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r17-doppio-bonifico-dopo-24-ore.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima di ogni bonifico al negozio e al fattorino si guarda sempre l'elenco dei bonifici del gruppo dell'ordine su Stripe (permanente, non 24 ore): quello dello stesso tentativo si registra invece di rifarlo; il compenso del fattorino porta il tentativo nell'etichetta. Se l'elenco non risponde e il database dice che un turno di prima ha già chiesto il bonifico (payout_claimed_at / rider_payout_claimed_at letti prima del turno), non si rifà alla cieca: l'ordine torna in coda. Il rimesso in coda dei turni appesi in app/api/cron/release-payouts/route.ts resta com'è: ora è protetto dall'elenco (il suo commento che cita la sola chiave non l'ho toccato).",
+      "verificato_da": "revisore (subagente): prova e prove vicine verdi; letto: transfers.list sempre prima di create per negozio e fattorino, tentativo nell'etichetta del fattorino, payout_claimed_at mai azzerato quindi su elenco muto dopo un turno di prima non si rifà alla cieca."
+    },
+    {
+      "id": "R17-018",
+      "chiave": "pagamenti-stripe|reso con la carta ripreso dopo 24 ore: un rimborso già fatto fuori da stripe fa saltare il conteggio e lo storno al negozio",
+      "esito": "riparato",
+      "commit": "f3f465830252781f3966f4f9e237f1034c269ea2",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-rimborso-ripreso-non-contato.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-rimborso-ripreso-non-contato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f3f465830252781f3966f4f9e237f1034c269ea2^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r17-rimborso-ripreso-non-contato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il rimborso creato con la prenotazione a chiave porta nei metadati libro_dei_rimborsi; alla ripresa per lui «non contato» lo decide il libro (rimborso_gia_prenotato): con 5 € resi fuori da Stripe, risposta persa e chiave scaduta l'ordine arriva a 25 € e al negozio si tolgono i suoi 18 €. I rimborsi nati prima della 412 (senza il segno) restano sul conto dei totali, così un rimborso vecchio non si conta due volte.",
+      "verificato_da": "revisore (subagente): prova verde e rimessa regge; letto il ramo: il libro decide solo per i rimborsi col metadato libro_dei_rimborsi, senza la 412 (null) si torna al conto sui totali come prima; prove vicine verdi."
+    },
+    {
+      "id": "R17-019",
+      "chiave": "pagamenti-stripe|se il processo muore fra il rimborso uscito e la scrittura nell'elenco, un nuovo tentativo registra di nuovo",
+      "esito": "riparato",
+      "commit": "e04ce170274963565fd7cdd198782cbc79aa84b3",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-rimborso-ripreso-gia-contato.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-rimborso-ripreso-gia-contato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e04ce170274963565fd7cdd198782cbc79aa84b3^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r17-rimborso-ripreso-gia-contato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La ripresa riconosce il rimborso già uscito dal libro (prenotazione della chiave presente = contato), non dall'elenco né dal conto sui totali: col rimborso uscito, l'elenco non scritto e 20 € dal cruscotto non ancora registrati non lo registra di nuovo (alla base 40 € nel libro, al commit prima 36 € tolti al negozio). Il caso del freno morto dopo Stripe e prima dell'elenco (prova ②) lo chiude il commit di R17-016.",
+      "verificato_da": "revisore (subagente): prova verde e rimessa regge; variante corsa: un secondo tentativo mentre il primo e' dopo Stripe trova il rimborso, il libro dice contato e non prenota ne' toglie quota (solo l'avviso agli amministratori); il caso del tentativo morto dopo Stripe e prima della quota resta a una persona, come dichiarato."
+    },
+    {
+      "id": "R17-020",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso vecchio mentre ne parte uno che porta l'ordine al totale, l'ordine resta «rimborsato del tutto» e il negozio non riceve più il resto del bonifico",
+      "esito": "parziale",
+      "commit": "49312af26fb78d8971912b919228bb0d150fe56d",
+      "file_toccati": [
+        "lib/stripe/payout.ts",
+        "tests/unit/riparazione-r17-rimborso-pieno-e-respinto-insieme.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-rimborso-pieno-e-respinto-insieme.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-rimborso-pieno-e-respinto-insieme.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 49312af26fb78d8971912b919228bb0d150fe56d^ --file lib/stripe/payout.ts --prove tests/unit/riparazione-r17-rimborso-pieno-e-respinto-insieme.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'ultima scrittura di refundOrder (payment_status, payout_status, consegna) passa solo con .eq('refunded_amount_cents', newRefundedTotal); se non prende la riga si rilegge e i due stati si ricavano dal rimborsato di adesso confrontato col lordo: non più pieno → PARTIALLY_REFUNDED e payout_status non si scrive (il bonifico resta HELD col resto, 4,05 € nel caso della voce). Un'eccezione della scrittura diventa l'errore già detto agli amministratori. La consegna annullata e la merce a scaffale seguono ancora la decisione di chiudere presa all'inizio.",
+      "cosa_resta": "Il revisore ha trovato: lib/stripe/payout.ts:2575 — Se il rimborsato è sceso sotto il lordo mentre il rimborso usciva, delivery_status CANCELED e rimettiLaMerceAScaffale seguono ancora la decisione «pieno» presa prima (ordineDaChiudere): sull'ordine non consegnato il bonifico resta HELD ma il giro (app/api/cron/release-payouts/route.ts:207, delivery_status=DELIVERED) e releaseOrderPayout (payout.ts:217) non lo pagano mai; il negozio perde il resto come nella voce. · lib/stripe/payout.ts:1372 — Minore: la scrittura ricalcolata dopo la rilettura passa senza condizione sul rimborsato riletto (seconda corsa possibile).",
+      "verificato_da": "revisore (subagente): rimessa ok; variante con la stessa prova ma ordine non ancora consegnato (delivery_status ACCEPTED): esito pagamento PARTIALLY_REFUNDED, bonifico HELD, ma consegna CANCELED. Il giro dei bonifici chiede delivery_status DELIVERED, quindi i 4,05 € restano non versati e la merce torna a scaffale."
+    },
+    {
+      "id": "R17-021",
+      "chiave": "pagamenti-stripe|la cintura che doveva impedire di restituire due volte lo stesso buono non esiste nel database",
+      "esito": "non_fatto",
+      "nota": "Il riparatore la dava già riparata, il revisore no: lib/stripe/webhook/rimborsi.ts:356 — La chiave per ordine è il primo ordine del carrello con quel codice, da una lettura senza ordinamento (riga 53). Dopo un rimborso rifiutato (ordini di nuovo PAID) il secondo charge.refunded può scegliere l'altro ordine, il cui coupon_released_at è vuoto: il buono torna due volte (verificato in SQL: uses_count 10 -> 8). · migrations/200_il_codice_sconto_torna_una_volta_per_ordine.sql:1 — Da applicare a mano: finché manca in produzione il codice ripiega sulla firma vecchia su PGRST202, che non è legata all'ordine (il difetto del titolo). Non verificabile da qui. Da riparare nell’onda dopo (tetto dei soldi)."
+    },
+    {
+      "id": "R17-022",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso dal cruscotto che aspetta ancora la divisione, il sito lo toglie dagli ordini che non l'avevano mai registrato",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/rimborso-respinto.ts",
+          "modifica": "In pianoDelRimborsoRespinto, prima di dividere il rimborso respinto fra gli ordini: considerare «da rimettere» solo gli ordini che avevano davvero registrato questo rimborso, cioè quelli il cui stripe_refund_id (rimborsiGiaScritti) contiene refundId. Se con refundId valorizzato nessun ordine lo elenca, restituire scritture=[] (non toccare nessun importo). Mantenere la divisione proporzionale solo fra gli ordini che lo elencano. La decisione «non era registrato» (nessun elenco e nessuna etichetta registrato_da_fuori) va presa in handleRefundUpdated (lib/stripe/webhook/rimborsi.ts, mio) prima di chiamare il piano, passando solo gli ordini filtrati."
+        },
+        {
+          "file": "tests/unit/il-rimborso-respinto-si-rimette-a-posto-una-volta-sola.test.ts",
+          "modifica": "PROVA COMUNE (importa @/app/api/stripe/webhook/route e @/lib/stripe/rimborso-respinto): il caso «carrello di due negozi, rimborso dal cruscotto» crea due ordini con stripe_refund_id:null e si aspetta la divisione proporzionale 3€/7€ di re_9 non registrato. Dopo la correzione un rimborso non registrato su nessun ordine non va più diviso: aggiornare la prova mettendo re_9 nell'elenco stripe_refund_id dei due ordini (rimborso davvero registrato) prima del respinto, oppure cambiare l'attesa in «nessun importo tolto»."
+        },
+        {
+          "file": "tests/unit/il-rimborso-parziale-dal-cruscotto-scende-dal-bonifico.test.ts",
+          "modifica": "PROVA COMUNE (importa @/lib/ordini/annulla): i casi che chiamano handleRefundUpdated su un ordine con refunded_amount_cents valorizzato ma stripe_refund_id non impostato si aspettano che l'importo scenda; dopo la correzione serve che l'id del rimborso respinto sia nell'elenco stripe_refund_id dell'ordine (come lo scrive registraSullOrdine) perché l'importo si tolga. Aggiornare i setup di quei casi aggiungendo l'id del rimborso all'elenco."
+        }
+      ],
+      "nota": "La cura naturale è nel piano (rimborso-respinto.ts, non mio); il filtro in handleRefundUpdated (mio) da solo rende rosse due prove comuni che fissano la vecchia divisione proporzionale di un rimborso non registrato. Per non indebolire prove comuni che importano file di altre sessioni, la voce passa alla regia."
+    },
+    {
+      "id": "R17-023",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso parziale su un ordine col bonifico già partito, al negozio resta tolta la sua quota",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/rimborso-respinto.ts",
+          "modifica": "In valoriDellOrdine aggiungere il ramo TRANSFERRED (oggi non è né bonificoChiusoDalRimborso né bonificoAncoraDaFare, quindi al negozio non si scrive niente): quando il bonifico è già partito e il rimborso parziale aveva ripreso la quota con uno storno, un respinto deve ridare al negozio quotaNegozio. Restituire la quota da riaccreditare (p.es. in ScritturaDelRimborsoRespinto, un campo riaccreditoNegozioCents) e abbassare seller_payout_reversed_cents di quotaNegozio; l'esecuzione del nuovo trasferimento (chiave riaccredito_<refund.id>) va fatta in handleRefundUpdated (lib/stripe/webhook/rimborsi.ts, mio) leggendo stripe_account_id del negozio e stripe_transfer_group. In alternativa, come minimo, aggiungere all'avviso agli amministratori la cifra da restituire a mano."
+        }
+      ],
+      "nota": "RISERVA: ridare automaticamente la quota al negozio è una mossa di soldi (serve una scelta di Nicola: trasferimento automatico vs avviso a mano). La decisione di cosa scrivere sta in valoriDellOrdine (rimborso-respinto.ts, non mio). Non ho potuto fare nemmeno il solo avviso nel mio file senza sforare il tetto di 600 righe della prova comune webhook-diviso-per-mestiere su lib/stripe/webhook/rimborsi.ts (già a 598): la voce passa alla regia con la scelta di Nicola segnata."
+    },
+    {
+      "id": "R17-024",
+      "chiave": "pagamenti-stripe|se uno storno al negozio è già fallito e poi l'ordine viene rimborsato tutto, il segno «da recuperare a mano» sparisce e il resto del netto non lo riprende nessuno",
+      "esito": "riparato",
+      "commit": "40bb42637fc364f19b743730216c8e0d65cb3007",
+      "file_toccati": [
+        "lib/stripe/payout.ts",
+        "lib/stripe/webhook/rimborsi.ts",
+        "tests/unit/riparazione-r17-storno-fallito-poi-rimborso-pieno.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-storno-fallito-poi-rimborso-pieno.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-storno-fallito-poi-rimborso-pieno.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 40bb42637fc364f19b743730216c8e0d65cb3007^ --file lib/stripe/payout.ts,lib/stripe/webhook/rimborsi.ts --prove tests/unit/riparazione-r17-storno-fallito-poi-rimborso-pieno.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nei due percorsi del rimborso pieno (handleChargeRefunded e refundOrder) un ordine REVERSAL_FAILED non si riscrive più REFUNDED: lo stato resta e agli admin si dice la cifra intera ancora da riprendere (netto meno quanto è già rientrato). In refundOrder la quota non si scala più «dal bonifico da fare» quando il bonifico è già uscito (addebitaQuotaVenditoreSeNonPagato esce su REVERSAL_FAILED). Tenuto rimborsi.ts sotto il tetto di 600 righe della prova comune e ogni esito del database letto (prova comune esiti-buttati); le due prove comuni che mockano payout restano com'erano.",
+      "verificato_da": "revisore (subagente): rimessa ok e prove vicine verdi; letti i due percorsi: REVERSAL_FAILED non più riscritto, avviso con netto meno rientrato (deduplicato per rimborso), addebitaQuotaVenditoreSeNonPagato esce su REVERSAL_FAILED."
+    },
+    {
+      "id": "R17-025",
+      "chiave": "pagamenti-stripe|un rimborso pieno che arriva mentre parte il bonifico lascia al negozio la sua quota",
+      "esito": "riparato",
+      "commit": "f4a41e4803c155a236df59f8eeca0559a8d657f1",
+      "file_toccati": [
+        "lib/stripe/payout.ts",
+        "lib/stripe/webhook/rimborsi.ts",
+        "tests/unit/riparazione-r17-rimborso-pieno-e-bonifico-in-corso.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r17-rimborso-pieno-e-bonifico-in-corso.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r17-rimborso-pieno-e-bonifico-in-corso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f4a41e4803c155a236df59f8eeca0559a8d657f1^ --file lib/stripe/payout.ts,lib/stripe/webhook/rimborsi.ts --prove tests/unit/riparazione-r17-rimborso-pieno-e-bonifico-in-corso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il rimborso pieno dal cruscotto col bonifico in corso (PROCESSING) lancia prima di toccare qualunque cosa, così Stripe ripete (come il parziale in rimborsi-da-fuori.ts, che non ho toccato). releaseOrderPayout scrive TRANSFERRED e HELD solo su PROCESSING: se un rimborso pieno (webhook o refundOrder) ha chiuso il bonifico mentre partiva (REFUNDED) lo storna tutto e l'ordine passa a REVERSED con tutto il netto ripreso. In più, chi scrive REFUNDED dopo che il giro ha già scritto TRANSFERRED (webhook e refundOrder) rilegge e storna il bonifico.",
+      "verificato_da": "revisore (subagente): rimessa ok; ripercorse le interleaving giro/webhook/refundOrder (HELD letto→TRANSFERRED→REFUNDED sopra: rilettura e storno; PROCESSING→REFUNDED: il giro trova REFUNDED e storna; webhook su PROCESSING lancia). Nessuno stato REFUNDED+transfer_id lasciato dal giro."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nello storico dei guadagni la colonna «Netto» non toglie gli storni, mentre torre e riquadro li tolgono",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "app/seller/earnings/page.tsx:414",
+      "descrizione": "La colonna Netto dello storico mostra seller_payout_cents, mentre il resto della pagina usa nettoDopoStorni: dopo un rimborso parziale il negozio legge due netti diversi per lo stesso ordine."
+    },
+    {
+      "titolo": "Un rimborso pieno letto come HELD un attimo prima del bonifico a mano scrive REFUNDED sopra PAID_MANUALLY",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:1838",
+      "descrizione": "Corsa fra refundOrder e segna_bonifico_manuale: l’avviso «togli la quota» parte comunque (i soldi non si perdono), ma lo stato mostrato è sbagliato. Stessa famiglia di R17-025."
+    },
+    {
+      "titolo": "Ogni tappa del reso cancella la nota del negozio, anche quando la tappa la fa il cliente",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/returns/[id]/avanza/route.ts:391",
+      "descrizione": "L’update del turno scrive decision_notes: body.note ?? null anche nel ritiro del cliente, in SHIPPED_BACK e in RECEIVED senza nota: si perde la nota di approvazione (per esempio l’indirizzo per il reso)."
+    },
+    {
+      "titolo": "Il turno del fattorino si restituisce senza condizione e senza leggere l’esito",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:708",
+      "descrizione": "Visto dal revisore di R17-015: la restituzione del turno non controlla che il turno sia ancora del giro che lo restituisce."
+    },
+    {
+      "titolo": "Un bonifico ritrovato su Stripe più grande del residuo porta l’ordine a TRANSFERRED senza stornare la differenza",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:370",
+      "descrizione": "Letto, non eseguito, dal revisore di R17-017."
+    },
+    {
+      "titolo": "La stessa chiave dello storno al negozio può partire con due importi diversi e mandare un falso avviso agli amministratori",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:458",
+      "descrizione": "Caso teorico visto dal revisore di R17-025."
+    },
+    {
+      "titolo": "Il reso già rimborsato si chiude con la cifra uscita su Stripe, non con quella chiesta, e il negozio non lo sa",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/returns/[id]/avanza/route.ts",
+      "descrizione": "Appunto del revisore di R17-004."
+    }
+  ],
+  "domande_per_nicola": [
+    "R17-002: un ordine che hai già pagato a mano ma che riceve un reso prima di segnarlo oggi non si segna (stessi cancelli del giro); il pannello dice di annotarlo e non ripagarlo. Vuoi poterlo segnare PAID_MANUALLY anche se è fermo? Toglierebbe del tutto il rischio di pagarlo due volte.",
+    "R17-002: vuoi che il database tenga il conto delle quote da trattenere dopo un rimborso su un ordine già pagato a mano, così «Da versare lunedì» le toglie da solo? Oggi parte solo un avviso.",
+    "R17-003: il cliente dichiara di aver spedito ma il pacco non arriva mai: oggi nessuno può chiudere il recesso senza rimborso, né il negozio né l’amministratore (lo blocca la rotta e, con la 411, il database). Vuoi una strada per l’amministratore, dopo aver sentito il cliente?",
+    "R17-003: l’art. 56 c.3 del Codice del consumo dice che con la prova della spedizione il rimborso è dovuto anche prima che la merce arrivi. Oggi si rimborsa solo da RECEIVED. La dichiarazione con il numero di spedizione deve valere come prova, cioè rimborso già da SHIPPED_BACK?",
+    "R17-003: una dichiarazione di spedizione fatta dopo i 14 giorni oggi è accettata, purché il reso sia ancora APPROVED (scelta prudente). Va bene così?",
+    "R17-005: la colonna products.tags (migrazione 071) esiste nel database vero? La correzione (d5687bbc, tolta col revert bb53b6be perché contraddice la prova comune tests/unit/aiuti/database-coi-permessi.ts) legge quella colonna."
+  ],
+  "conto": {
+    "agenti": 15,
+    "nota": "15 subagenti su 22: 5 nella prima parte (3 riparatori, 2 revisori grandi), poi 4 riparatori di lotto (L4-L6 grandi, L7 piccolo, interrotto e ripreso da 1 piccolo) e 5 revisori (4 grandi, 1 piccolo). Tetto 105 $ (85 + 20 firmati da Nicola alle 15:23)."
+  }
+}
