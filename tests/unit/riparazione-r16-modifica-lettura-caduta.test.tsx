@@ -170,3 +170,37 @@ describe('R16-020 · senza rete la lettura del prodotto è in pausa, non «Prodo
     }
   });
 });
+
+describe('R16-021 · «Modifica prodotto» senza rete: categorie in pausa', () => {
+  const CATEGORIE = [{ id: 'cat-1', name: 'Panetteria', slug: 'panetteria', parent_id: null }];
+
+  it('rete assente, prodotto in memoria ma nessuna categoria: l\'avviso con «Riprova», non il modulo', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const radice = await apri((qc) => {
+        qc.setQueryData(queryKeys.seller.product(ID), { ...PRODOTTO, non_recedibile: false });
+        qc.setQueryData([...queryKeys.seller.product(ID), 'variants'], []);
+      });
+      expect(radice.textContent).not.toContain('MODULO');
+      expect(radice.textContent).toContain('Non riesco a leggere le categorie');
+      expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('rete assente ma categorie, prodotto e varianti in memoria: il modulo si apre', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const radice = await apri((qc) => {
+        qc.setQueryData(queryKeys.seller.product(ID), { ...PRODOTTO, non_recedibile: false });
+        qc.setQueryData([...queryKeys.seller.product(ID), 'variants'], []);
+        qc.setQueryData(queryKeys.categories.form, CATEGORIE);
+      });
+      expect(radice.textContent).toContain('MODULO');
+      expect(radice.textContent).not.toContain('Non riesco a leggere le categorie');
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+});

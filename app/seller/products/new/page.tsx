@@ -73,7 +73,7 @@ function NewProductInner() {
   // R16-021 — Il ripiego `= []` faceva passare una lettura caduta per «non ci sono categorie»:
   // il modulo chiedeva di sceglierne una che non c'era. Come in «Modifica prodotto», senza
   // categorie il modulo non si apre e la pagina lo dice con «Riprova».
-  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, refetch: rileggiCategorie } = useQuery({
+  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, isPending: categorieSenzaDati, fetchStatus: categorieFetchStatus, refetch: rileggiCategorie } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase
@@ -278,7 +278,7 @@ function NewProductInner() {
 
       {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura ? (
         <LoadingState />
-      ) : categorieNonLette && categories.length === 0 ? (
+      ) : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0 ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
           <p className="text-sm mb-3">

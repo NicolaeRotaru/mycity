@@ -110,7 +110,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   // Il ripiego `= []` faceva passare una lettura caduta per «non ci sono
   // categorie»: il prodotto sembrava averla persa. Senza categorie il modulo
   // non si apre, e la pagina lo dice con «Riprova».
-  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, refetch: rileggiCategorie } = useQuery({
+  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, isPending: categorieSenzaDati, fetchStatus: categorieFetchStatus, refetch: rileggiCategorie } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -236,7 +236,8 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   // non e' «Prodotto non trovato». Una query spenta (idle) non e' in pausa e non entra qui.
   const prodottoInPausa = product === undefined && prodottoFetchStatus === 'paused';
   if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura || categorieInLettura) return <LoadingState />;
-  if (categorieNonLette && categories.length === 0) {
+  // R16-021 — Senza rete la lettura delle categorie e' in pausa (senza dati): stesso avviso, mai il modulo vuoto.
+  if ((categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0) {
     return (
       <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
