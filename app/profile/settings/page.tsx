@@ -194,7 +194,12 @@ export default function SettingsPage() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
-        router.push('/sign-in?returnTo=/profile/settings');
+        // 14/11/2026 (R19-020, giro di correzione) — Il ritorno porta anche la query: da
+        // `?tab=danger` si torna su quella scheda, non sulla prima. Come il portiere
+        // (`ritornoDopoLAccesso` in middleware.ts): oltre i 512 caratteri resta il solo percorso.
+        const conQuery = `/profile/settings${window.location.search}`;
+        const ritorno = conQuery.length <= 512 ? conQuery : '/profile/settings';
+        router.push(`/sign-in?returnTo=${encodeURIComponent(ritorno)}`);
         return;
       }
       setEmail(data.user.email ?? '');
