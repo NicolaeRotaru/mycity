@@ -1,13 +1,13 @@
 {
   "sessione": "R22",
-  "aggiornato": "2026-11-13 09:55",
+  "aggiornato": "2026-11-14 09:33",
   "finita": true,
-  "testa": "edacdd69d9b095e211e377e3d6ff7a00fe72f864",
+  "testa": "2c5387bf7ac4ce551ccfc8ccd329093a02ead7f2",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "edacdd69d9b095e211e377e3d6ff7a00fe72f864",
-    "nota": "typecheck, lint e vitest: 1435 file passati, 1 saltato (9713 prove); lanciato con NODE_OPTIONS=--max-old-space-size=6144 e aspettato nello stesso turno. guardia-ramo verde sullo stesso SHA."
+    "testa": "2c5387bf7ac4ce551ccfc8ccd329093a02ead7f2",
+    "nota": "giro di correzione R22-002 (14/11): typecheck, lint e vitest, 1435 file passati e 1 saltato (9719 prove), lanciato con NODE_OPTIONS=--max-old-space-size=6144 su 2c5387bf e aspettato nello stesso turno; guardia-ramo verde sullo stesso SHA. Prima: typecheck, lint e vitest: 1435 file passati, 1 saltato (9713 prove); lanciato con NODE_OPTIONS=--max-old-space-size=6144 e aspettato nello stesso turno. guardia-ramo verde sullo stesso SHA."
   },
   "voci": [
     {
@@ -76,7 +76,7 @@
       "id": "R22-002",
       "chiave": "deploy-sre|alla riaccensione della posta, le email ormai scadute fanno la fila davanti a quelle nuove",
       "esito": "riparato",
-      "commit": "dce0a2434d0cc490a69dedca3579c8a8f13c68a4",
+      "commit": "2c5387bf7ac4ce551ccfc8ccd329093a02ead7f2",
       "file_toccati": [
         "app/api/cron/send-emails/route.ts"
       ],
@@ -89,12 +89,12 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dce0a243^ --file app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2c5387bf^ --file app/api/cron/send-emails/route.ts --prove tests/unit/riparazione-r22-scadute-fuori-dalla-fila.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Solo codice, niente migrazione, 165 intatta: prima della presa il giro chiude in blocco (col motivo) le righe non spedite e non annullate con scade_at passato, lasciando stare quelle prenotate da un giro in corso; se la scrittura cade il giro va avanti come prima. Prova: coda in memoria che fa come la 165, 100 scadute e 1 fresca: la fresca parte al primo giro.",
-      "verificato_da": "revisore A in un worktree a 5fd4ce74, verdetto «regge»: Ho rilanciato riparazione-r22-scadute-fuori-dalla-fila.test.ts: verde. Le prove vicine sono verdi, tra cui la-coda-email-non-spedisce-quello-che-e-scaduto e minori-s03-coda-email. Ho confrontato con la presa della 165: claimed_at più vecchio di 15 minuti, attempts<5, sent_at e cancelled_at vuoti. La chiusura in blocco usa gli stessi 15 minuti e filtra sent_at IS NULL, cancelled_at IS NULL e scade_at <= adesso, con cl…",
-      "nota": "La chiusura in blocco usa la colonna scade_at della 165: sul database senza la 165 non ha effetto (degrada alla chiusura riga per riga di prima, e il logger.warn si ripete a ogni giro). La 165 va applicata prima di riaccendere la posta: lo decide Nicola."
+      "cosa_ho_fatto": "Solo codice, niente migrazione, 165 intatta: prima della presa il giro chiude in blocco (col motivo) le righe non spedite e non annullate con scade_at passato, lasciando stare quelle prenotate da un giro in corso; se la scrittura cade il giro va avanti come prima. Prova: coda in memoria che fa come la 165, 100 scadute e 1 fresca: la fresca parte al primo giro. Giro di correzione (14/11, dopo K05): senza la 165 la chiusura su scade_at cade, e allora le scadute si chiudono in blocco con la stessa regola di processBatch senza la 165. Mai rinviata (last_error nullo o vuoto): send_at + 3 giorni. Rinviata: created_at + ritardo previsto del modello + 3 giorni, con le costanti in comune. Prova: nuovo blocco «senza la 165» (database finto che rifiuta scade_at, presa vecchia senza la colonna). Con 100 scadute e una fresca, la fresca parte al primo giro e le scadute sono chiuse col motivo. Controprove: la riga prenotata resta, il winback_60d rinviato a 61 giorni resta aperto, una riga di 2 giorni parte.",
+      "verificato_da": "giro di correzione: revisore indipendente (subagente generico, mandato di smentire) su 80e65e2, verdetto «regge con riserve». 60 code a caso senza la 165: nessuna riga chiusa a torto, nessuna scaduta nel giro; il blocco nuovo è rosso (4 su 9) sulla route di prima. Le due riserve sul codice sono corrette nel commit finale: last_error vuoto e livello del log. La terza resta nella nota. Prima: revisore A in un worktree a 5fd4ce74, verdetto «regge»: Ho rilanciato riparazione-r22-scadute-fuori-dalla-fila.test.ts: verde. Le prove vicine sono verdi, tra cui la-coda-email-non-spedisce-quello-che-e-scaduto e minori-s03-coda-email. Ho confrontato con la presa della 165: claimed_at più vecchio di 15 minuti, attempts<5, sent_at e cancelled_at vuoti. La chiusura in blocco usa gli stessi 15 minuti e filtra sent_at IS NULL, cancelled_at IS NULL e scade_at <= adesso, con cl…",
+      "nota": "Copre i due stati: con la 165 chiude su scade_at come prima; senza la 165 (lo stato vero di oggi) chiude col calcolo di processBatch. Un errore su scade_at diverso dalla colonna assente (42703) resta un avviso. Resta, già così nel percorso con la 165: una riga non annullata con attempts>=5 (la presa non la prende mai) viene chiusa col motivo «scaduta» e il suo last_error vero si perde; non parte nessuna email in più. Le query (not.is.null, neq vuoto, not.in) sono lette su postgrest-js, non provate su un PostgREST vero."
     },
     {
       "id": "R22-007",

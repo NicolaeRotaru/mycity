@@ -151,6 +151,10 @@ const RITARDO_PREVISTO_GIORNI: Record<string, number> = {
   winback_60d: 60,
 };
 
+/** Quanto vale una riga dopo l'ora prevista: la regola della 165, la stessa qui sotto senza la 165. */
+const GIORNO_MS = 86_400_000;
+const VALIDITA_MS = 3 * GIORNO_MS;
+
 function scaduta(row: { scade_at?: string | null }): boolean {
   if (!row.scade_at) return false;
   const quando = Date.parse(row.scade_at);
@@ -167,28 +171,69 @@ const MOTIVO_SCADUTA = 'scaduta: non partita entro la scadenza (scade_at)';
  * posti del giro. Il giorno della riaccensione, con cento scadute in coda, «il tuo ordine è
  * pronto» partiva al settimo giro, un'ora dopo. Qui si chiudono in blocco, col motivo, prima
  * della presa; quelle prenotate da un giro in corso le lascia a lui (le controlla `scaduta`).
- * Se la scrittura non riesce (per esempio senza la colonna della 165) il giro va avanti come
- * prima: le scadute si chiudono una per una quando vengono prese.
+ *
+ * 14/11/2026 (R22-002, giro di correzione) — SENZA LA 165 SI CHIUDONO COL CALCOLO.
+ *
+ * Nel database vero la 165 non c'e': la chiusura su `scade_at` cadeva, e le scadute tornavano a
+ * occupare i quindici posti del giro (collaudo: sent=0, scadute=15, la fresca ferma). Adesso, se la
+ * chiusura su `scade_at` cade, le scadute si chiudono in blocco con la stessa regola che `processBatch`
+ * usa riga per riga senza la 165: riga mai rinviata, `send_at` + 3 giorni; riga gia' rinviata (ha
+ * `last_error`), nascita + ritardo previsto del modello + 3 giorni. Una riga che il giro riga per riga
+ * terrebbe aperta qui non si chiude. Solo se cade anche questo si torna alla chiusura una per una.
  */
 async function chiudiLeScaduteInBlocco(supa: any): Promise<number> {
   const adesso = new Date();
   const prenotazioneScaduta = new Date(adesso.getTime() - 15 * 60_000).toISOString();
   const valori = { cancelled_at: adesso.toISOString(), claimed_at: null, last_error: MOTIVO_SCADUTA };
+  const libere = [
+    (q: any) => q.is('claimed_at', null),
+    (q: any) => q.lt('claimed_at', prenotazioneScaduta),
+  ];
   let chiuse = 0;
-  try {
-    for (const libere of [
-      (q: any) => q.is('claimed_at', null),
-      (q: any) => q.lt('claimed_at', prenotazioneScaduta),
-    ]) {
-      const { data, error } = await libere(
-        supa.from('email_queue').update(valori)
-          .is('sent_at', null)
-          .is('cancelled_at', null)
-          .lte('scade_at', adesso.toISOString()),
-      ).select('id');
-      if (error) throw new Error(String((error as { message?: unknown }).message ?? error));
-      chiuse += Array.isArray(data) ? data.length : 0;
+  /** Chiude le righe aperte e libere che ognuna delle `scelte` riconosce scadute. Un errore cade a chi chiama. */
+  const chiudi = async (scelte: Array<(q: any) => any>): Promise<void> => {
+    for (const scelta of scelte) {
+      for (const libera of libere) {
+        const { data, error } = await scelta(libera(
+          supa.from('email_queue').update(valori)
+            .is('sent_at', null)
+            .is('cancelled_at', null),
+        )).select('id');
+        if (error) {
+          throw Object.assign(new Error(String((error as { message?: unknown }).message ?? error)), {
+            code: (error as { code?: unknown }).code,
+          });
+        }
+        chiuse += Array.isArray(data) ? data.length : 0;
+      }
     }
+  };
+  try {
+    await chiudi([(q) => q.lte('scade_at', adesso.toISOString())]);
+    return chiuse;
+  } catch (e) {
+    // Senza la 165 (colonna assente, 42703) e' lo stato atteso: basta una riga d'informazione. Ogni altro
+    // errore (un timeout, un permesso) con la 165 al suo posto resta un avviso, come prima.
+    const message = e instanceof Error ? e.message : String(e);
+    const colonnaAssente = (e as { code?: unknown })?.code === '42703' || /scade_at.*does not exist/i.test(message);
+    (colonnaAssente ? logger.info : logger.warn)('[cron] chiusura su scade_at non riuscita: le scadute si chiudono in blocco col calcolo', {
+      message,
+    });
+  }
+  // Senza la 165: la regola di `processBatch` («SENZA LA 165 LA SCADENZA SI CALCOLA QUI»).
+  const natePrimaDi = (ritardoGiorni: number) =>
+    new Date(adesso.getTime() - VALIDITA_MS - ritardoGiorni * GIORNO_MS).toISOString();
+  const conRitardo = Object.keys(RITARDO_PREVISTO_GIORNI);
+  // «Gia' rinviata» come in `processBatch`: `last_error` non vuoto. Nullo o vuoto vuol dire mai rinviata.
+  const rinviata = (q: any) => q.not('last_error', 'is', null).neq('last_error', '');
+  try {
+    await chiudi([
+      (q) => q.is('last_error', null).lte('send_at', natePrimaDi(0)),
+      (q) => q.eq('last_error', '').lte('send_at', natePrimaDi(0)),
+      ...conRitardo.map((modello) => (q: any) =>
+        rinviata(q).eq('template', modello).lte('created_at', natePrimaDi(RITARDO_PREVISTO_GIORNI[modello]))),
+      (q) => rinviata(q).not('template', 'in', `(${conRitardo.join(',')})`).lte('created_at', natePrimaDi(0)),
+    ]);
   } catch (e) {
     logger.warn('[cron] scadute non chiuse in blocco: si chiudono una per una quando il giro le prende', {
       message: e instanceof Error ? e.message : String(e),
@@ -373,10 +418,10 @@ async function processBatch(
         // dalla nascita nuda, che chiuderebbe le email programmate più avanti al primo intoppo.
         const quando = r
           ? r.last_error
-            ? Date.parse(String(r.created_at)) + (RITARDO_PREVISTO_GIORNI[row.template] ?? 0) * 86_400_000
+            ? Date.parse(String(r.created_at)) + (RITARDO_PREVISTO_GIORNI[row.template] ?? 0) * GIORNO_MS
             : Date.parse(String(r.send_at))
           : NaN;
-        if (Number.isFinite(quando)) row.scade_at = new Date(quando + 3 * 86_400_000).toISOString();
+        if (Number.isFinite(quando)) row.scade_at = new Date(quando + VALIDITA_MS).toISOString();
       }
     } catch (e) {
       logger.warn('[cron] scadenza delle righe non calcolata: si comportano come prima', {
