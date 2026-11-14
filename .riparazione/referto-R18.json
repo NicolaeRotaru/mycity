@@ -1,13 +1,13 @@
 {
   "sessione": "R18",
-  "aggiornato": "2026-11-13 13:55",
+  "aggiornato": "2026-11-14 09:40",
   "finita": true,
-  "testa": "5188ab6cb7c235d0eaeed55e6f5680c8680f758b",
+  "testa": "69a1e6996fba33c6b6f57c1e7deb055752b2afc2",
   "verifica": {
-    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
     "esito": "verde",
-    "testa": "5188ab6cb7c235d0eaeed55e6f5680c8680f758b",
-    "nota": "typecheck, lint e vitest: 1430 file, 9679 prove, 394 s. In più sulla stessa testa: apply.sh + run.sh (199 migrazioni, tutti i controlli verdi), migrazione-su-database-pieno.sh verde, guardia-ramo verde."
+    "testa": "69a1e6996fba33c6b6f57c1e7deb055752b2afc2",
+    "nota": "typecheck, lint e vitest: 1430 file, 9680 prove, 351 s, sulla testa 69a1e699 (giro di correzione del 14/11). In più sulla stessa testa: apply.sh (200 migrazioni) + run.sh (66 file, tutti verdi); vitest dei file toccati e di chi li importa (20 file, 229 prove)."
   },
   "voci": [
     {
@@ -78,26 +78,40 @@
     {
       "id": "R18-002",
       "chiave": "accessibilita|le foto delle recensioni e l'importazione dei prodotti da file non si aprono da tastiera",
-      "esito": "riparato",
-      "commit": "e69b5fbf",
+      "esito": "serve_file_altrui",
+      "commit": "69a1e6996fba33c6b6f57c1e7deb055752b2afc2",
       "file_toccati": [
-        "app/seller/products/import/page.tsx",
-        "app/orders/[id]/return/page.tsx"
+        "tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx",
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e69b5fbf^ --file app/seller/products/import/page.tsx,app/orders/[id]/return/page.tsx --prove tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e69b5fbf^ --file \"app/orders/[id]/return/page.tsx\" --prove tests/unit/riparazione-r18-campi-file-da-tastiera.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Importazione CSV: input sr-only con aria-label e anello focus-within sul riquadro. Reso: aria-label sull'input e focus-within sulla label. Le foto della recensione erano già a posto dal 5/11.",
-      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Giro di correzione (collaudo K07, parziale): import CSV, reso e foto delle recensioni erano già a posto. Nel ramo la parte reso della prova ora monta la pagina vera del reso (prima cercava nel sorgente) e controlla anche l'attributo hidden e il tabIndex, come l'import CSV. Restano i due campi file del fattorino senza anello di fuoco: CashConfirmDialog.tsx (R21) e app/rider/onboarding/page.tsx (R19), file di altre sessioni dell'onda 2, quindi serve_file_altrui con la diff esatta qui sotto.",
+      "verificato_da": "verificatore A del giro di correzione: la prova monta davvero la pagina del reso; togliendo focus-within o mettendo className hidden cade; ha visto che attributo hidden + tabIndex -1 passavano: aggiunti i due controlli (rossa con quell'attributo, verde senza). Verificatore B sulla copia: le due modifiche del fattorino reggono (cade togliendo ognuna), un solo input file per file, «block» non cambia la griglia (grid-cols-2), anello dentro gap e padding.",
+      "nota": "Le due modifiche altrui e la prova nuova sono state provate su una copia fuori dal ramo (worktree dalla testa di questo ramo): prova 2/2 verde, prova-rimessa uscita 0 (cade togliendo la correzione da ognuno dei due file). Vanno applicate insieme: la prova nuova è rossa senza le due modifiche.",
+      "serve_file_altrui": [
+        {
+          "file": "components/rider/CashConfirmDialog.tsx (di R21 nell'onda 2)",
+          "modifica": "Riga 319, il label di PhotoSlot. Diff esatta (insieme a onboarding):\ndiff --git a/app/rider/onboarding/page.tsx b/app/rider/onboarding/page.tsx\nindex 3a22572..58b44e4 100644\n--- a/app/rider/onboarding/page.tsx\n+++ b/app/rider/onboarding/page.tsx\n@@ -330,7 +330,7 @@ export default function RiderOnboardingPage() {\n                     {uploaded && <div className=\"mt-1 text-xs text-olive-700 flex items-center gap-1.5\"><Check size={14} strokeWidth={2.2} aria-hidden /> Caricato</div>}\n                   </div>\n                   <label\n-                    className={`inline-flex items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 ${etaConfermata ? 'cursor-pointer hover:bg-cream-200' : 'cursor-not-allowed opacity-50'}`}\n+                    className={`inline-flex items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2 ${etaConfermata ? 'cursor-pointer hover:bg-cream-200' : 'cursor-not-allowed opacity-50'}`}\n                     title={etaConfermata ? undefined : 'Salva prima i dati del passo 1'}\n                   >\n                     {uploading === d.kind ? tForms('uploading') : (uploaded ? tForms('replacePhoto') : tForms('uploadPhoto'))}\ndiff --git a/components/rider/CashConfirmDialog.tsx b/components/rider/CashConfirmDialog.tsx\nindex 558f07d..bfcbb9e 100644\n--- a/components/rider/CashConfirmDialog.tsx\n+++ b/components/rider/CashConfirmDialog.tsx\n@@ -316,7 +316,7 @@ function PhotoSlot({\n   onChange: (f: File) => void;\n }) {\n   return (\n-    <label className=\"cursor-pointer\">\n+    <label className=\"block cursor-pointer rounded-lg focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2\">\n       <div className=\"text-xs font-medium text-ink-700\">\n         {label} {required && <span className=\"text-rose-600\">*</span>}\n       </div>\n"
+        },
+        {
+          "file": "app/rider/onboarding/page.tsx (di R19 nell'onda 2)",
+          "modifica": "Riga 333, il label dei documenti: si aggiunge «focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2» dopo «text-ink-700». È la seconda parte della diff scritta sopra."
+        },
+        {
+          "file": "tests/unit/riparazione-r18-foto-e-documenti-del-fattorino-da-tastiera.test.ts (NUOVO, insieme ai due file sopra)",
+          "modifica": "Contenuto esatto del file:\n/**\n * @vitest-environment jsdom\n */\nimport { describe, it, expect, afterEach } from 'vitest';\nimport type { ComponentType } from 'react';\nimport { monta } from './aiuti/monta-componente';\nimport { accendi, attendi } from './aiuti/schermo';\n\n/**\n * R18-002 (giro di correzione, collaudo K07) — I campi «scegli file» del fattorino sono `sr-only`:\n * col Tab ci si arriva, ma il fuoco non si vedeva da nessuna parte. Il riquadro che li contiene\n * (le foto dei contanti e della consegna nel pannello dei contanti, i documenti dell'iscrizione)\n * deve mostrare l'anello quando il campo dentro ha il fuoco, come l'importazione CSV e il reso.\n * Si montano il pannello e la pagina veri.\n */\n\nconst globali = globalThis as Record<string, unknown>;\nafterEach(() => {\n  document.body.innerHTML = '';\n  for (const k of ['__CLIENT_SUPABASE__', '__UTENTE__']) globali[k] = undefined;\n});\n\nfunction campiFile(radice: ParentNode) {\n  return [...radice.querySelectorAll('input[type=\"file\"]')] as HTMLInputElement[];\n}\nfunction controllaAnello(input: HTMLInputElement, dove: string) {\n  expect(input.classList.contains('hidden'), `${dove}: un campo hidden non si raggiunge col Tab`).toBe(false);\n  expect(input.classList.contains('sr-only'), `${dove}: il campo resta nascosto alla vista ma raggiungibile`).toBe(true);\n  const riquadro = input.closest('label');\n  expect(riquadro, `${dove}: il campo sta dentro il suo riquadro`).toBeTruthy();\n  expect(riquadro!.className, `${dove}: il riquadro mostra il fuoco`).toContain('focus-within:ring-2');\n  expect(riquadro!.className, `${dove}: l'anello si vede sul fondo chiaro`).toContain('focus-within:ring-primary-700');\n}\n\ndescribe('R18-002 — foto e documenti del fattorino col fuoco visibile', () => {\n  it('pannello dei contanti: la foto dei contanti e quella della consegna mostrano il fuoco', async () => {\n    const Pannello = (await monta('components/rider/CashConfirmDialog.tsx')).default as ComponentType<Record<string, unknown>>;\n    const s = accendi(Pannello, { orderId: 'ordine-1', expectedCents: 6000, aperto: true, onChiudi: () => {} });\n    const campi = campiFile(document);\n    expect(campi.length, 'controprova: due foto nel pannello').toBe(2);\n    campi.forEach((c, i) => controllaAnello(c, `foto ${i + 1} del pannello dei contanti`));\n    s.smonta();\n  }, 60000);\n\n  it('iscrizione del fattorino: ogni documento da caricare mostra il fuoco', async () => {\n    globali.__UTENTE__ = { id: 'fattorino-1', email: 'f@test.it' };\n    const profilo = {\n      id: 'fattorino-1', legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_fiscal_code: 'RSSMRA90A01G535X',\n      legal_birth_date: '1990-01-01', rider_vehicle_type: 'BIKE',\n    };\n    globali.__CLIENT_SUPABASE__ = {\n      from: () => {\n        const c: Record<string, unknown> = {};\n        for (const m of ['select', 'eq', 'neq', 'in', 'order', 'limit', 'update']) c[m] = () => c;\n        c.single = async () => ({ data: profilo, error: null });\n        c.maybeSingle = c.single;\n        c.then = (r: (v: unknown) => unknown) => Promise.resolve({ data: profilo, error: null }).then(r);\n        return c;\n      },\n    };\n    const Pagina = (await monta('app/rider/onboarding/page.tsx')).default;\n    const s = accendi(Pagina as never, {});\n    for (let i = 0; i < 10; i++) await attendi();\n    const campi = campiFile(document);\n    expect(campi.length, 'controprova: i documenti da caricare si vedono').toBeGreaterThanOrEqual(2);\n    campi.forEach((c, i) => controllaAnello(c, `documento ${i + 1} dell'iscrizione`));\n    s.smonta();\n  }, 60000);\n});\n"
+        }
+      ]
     },
     {
       "id": "R18-003",
@@ -299,12 +313,9 @@
     {
       "id": "R18-011",
       "chiave": "qa-flussi|la promo «oggi, fino a mezzanotte» finisce a mezzanotte del fuso del telefono, non di piacenza",
-      "esito": "riparato",
-      "commit": "3ec4673a5c9a591b2ecd34c4c28a1f411f19ef25",
-      "file_toccati": [
-        "app/seller/promotions/page.tsx",
-        "tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx"
-      ],
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
       "prova_file": [
         "tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx"
       ],
@@ -316,9 +327,20 @@
         "uscita": 0,
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ec4673a^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r18-promo-mezzanotte-di-piacenza.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "endDateFor('today') ora calcola l'ultimo istante del giorno di Piacenza: inizioGiornoPiacenza(giorno dopo) meno un millesimo, con giornoPiacenza e inizioGiornoPiacenza di lib/tempo-piacenza.ts usati senza modificarli. Le tre date mostrate (anteprima, «Fino al», «Terminata») hanno timeZone Europe/Rome (FUSO_PIACENZA). La prova monta la pagina col processo in America/New_York (e Asia/Tokyo), orologio finto, sceglie «Oggi» e preme «Crea promo»: ends_at = 22:59:59.999Z il 6/11 (inverno), 21:59:59.999Z il 15/7 (estate), la sera di New York quando a Piacenza è già il giorno dopo, e le due domeniche del cambio d'ora (25/10 e 29/3).",
-      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Giro di correzione (collaudo K07, parziale): la pagina promozioni (3ec4673a) è a posto. Resta la vetrina del negozio: components/store-sections/PromotionsSection.tsx:27 scrive «fino al» con toLocaleDateString senza fuso. Il file non è di nessuna sessione dell'onda 2 (R03 nell'onda 1), quindi serve_file_altrui con la diff esatta.",
+      "verificato_da": "verificatore B del giro di correzione, sulla copia: lib/tempo-piacenza non ha import né server-only (si importa nei componenti client); PromotionsSection:28 è l'unica data di promo della vetrina; la prova cade togliendo la correzione e il TZ cambiato lo rimette tests/unit/_setup.ts.",
+      "nota": "Provata su una copia fuori dal ramo: la prova nuova monta la sezione col processo in Asia/Tokyo, Pacific/Auckland, America/New_York ed Europe/Rome; 3/3 verde con la modifica, prova-rimessa uscita 0 (cade togliendo la correzione, anche con TZ=Europe/Rome prima di lanciare).",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/PromotionsSection.tsx (di nessuna sessione nell'onda 2; R03 nell'onda 1)",
+          "modifica": "Righe 5-6 (import) e 27. Diff esatta:\ndiff --git a/components/store-sections/PromotionsSection.tsx b/components/store-sections/PromotionsSection.tsx\nindex 1f199f3..2ad9d5d 100644\n--- a/components/store-sections/PromotionsSection.tsx\n+++ b/components/store-sections/PromotionsSection.tsx\n@@ -3,6 +3,7 @@\n import { Tag } from 'lucide-react';\n import type { SectionContext } from './SectionContext';\n import { Badge } from '@/components/ui/Badge';\n+import { FUSO_PIACENZA } from '@/lib/tempo-piacenza';\n \n /** Promozioni attive del negozio (badge sconto + scadenza). */\n export default function PromotionsSection({ ctx }: { ctx: SectionContext }) {\n@@ -24,7 +25,7 @@ export default function PromotionsSection({ ctx }: { ctx: SectionContext }) {\n             <Badge variant=\"discount\" className=\"rounded-full\">-{p.discount_percent}%</Badge>\n             <span className=\"font-medium text-ink-800\">{p.title}</span>\n             <span className=\"text-ink-400 text-xs whitespace-nowrap\">\n-              fino al {new Date(p.ends_at).toLocaleDateString('it-IT')}\n+              fino al {new Date(p.ends_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}\n             </span>\n           </span>\n         ))}\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r18-vetrina-promo-fino-al-di-piacenza.test.tsx (NUOVO, insieme al file sopra)",
+          "modifica": "Contenuto esatto del file:\n/**\n * @vitest-environment jsdom\n */\nimport { describe, it, expect, afterEach } from 'vitest';\nimport { createElement } from 'react';\nimport { renderToStaticMarkup } from 'react-dom/server';\nimport PromotionsSection from '@/components/store-sections/PromotionsSection';\nimport type { SectionContext } from '@/components/store-sections/SectionContext';\n\n/**\n * R18-011 (giro di correzione, collaudo K07) — La vetrina del negozio scriveva «fino al» con\n * toLocaleDateString senza fuso: la promo «Oggi» del 6/11 finisce alle 23:59:59.999 di Piacenza\n * (22:59:59.999Z), e da un telefono a est di Roma si leggeva «fino al 7/11». La data della\n * vetrina è quella di Piacenza, da qualunque fuso la si guardi, anche nei giorni del cambio d'ora.\n */\n\nconst fusoDiPrima = process.env.TZ;\nafterEach(() => { process.env.TZ = fusoDiPrima; });\n\nfunction vetrina(endsAt: string, fuso: string): string {\n  process.env.TZ = fuso;\n  const ctx = { promos: [{ id: 'p1', title: 'Oggi', discount_percent: 10, ends_at: endsAt }] } as unknown as SectionContext;\n  return renderToStaticMarkup(createElement(PromotionsSection, { ctx }));\n}\n\ndescribe('R18-011 — «fino al» della vetrina è il giorno di Piacenza', () => {\n  it('la promo «Oggi» del 6/11 (fine 22:59:59.999Z) si legge «fino al 06/11/2026» anche da Tokyo e da Auckland', () => {\n    for (const fuso of ['Asia/Tokyo', 'Pacific/Auckland', 'America/New_York', 'Europe/Rome']) {\n      const html = vetrina('2026-11-06T22:59:59.999Z', fuso);\n      expect(html, fuso).toContain('fino al 06/11/2026');\n      expect(html, fuso).not.toContain('fino al 07/11/2026');\n    }\n  });\n\n  it(\"d'estate (fine 21:59:59.999Z del 15/7) e nelle domeniche del cambio d'ora resta il giorno di Piacenza\", () => {\n    const casi: Array<[string, string]> = [\n      ['2026-07-15T21:59:59.999Z', 'fino al 15/07/2026'],\n      ['2026-10-25T22:59:59.999Z', 'fino al 25/10/2026'],\n      ['2027-03-28T21:59:59.999Z', 'fino al 28/03/2027'],\n    ];\n    for (const [fine, atteso] of casi) {\n      expect(vetrina(fine, 'Asia/Tokyo'), fine).toContain(atteso);\n    }\n  });\n\n  it(\"controprova: a New York la sera del 6/11 a Piacenza è già il 7 e la vetrina dice 7\", () => {\n    // 6/11 23:30Z = 7/11 00:30 a Piacenza, 6/11 18:30 a New York.\n    expect(vetrina('2026-11-06T23:30:00.000Z', 'America/New_York')).toContain('fino al 07/11/2026');\n  });\n});\n"
+        }
+      ]
     },
     {
       "id": "R18-012",
@@ -367,25 +389,39 @@
     {
       "id": "R18-014",
       "chiave": "qa-flussi|la risalita dei genitori delle categorie non ha un tetto",
-      "esito": "riparato",
-      "commit": "5188ab6c",
+      "esito": "parziale",
+      "commit": "b9184071c0bc026c462a247da50dffd16ff72b93",
       "file_toccati": [
+        "migrations/426_la_risalita_delle_categorie_si_ferma_su_un_cerchio.sql",
         "lib/category-attributes.ts"
       ],
       "prova_file": [
+        "tests/sql/rls/riparazione-r18-categorie-in-cerchio.test.sql",
         "tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts",
+      "prova_comando": "export PGHOST=/var/run/postgresql; bash tests/sql/harness/apply.sh r18_prova && psql -X -d r18_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r18-categorie-in-cerchio.test.sql ; npx vitest run --reporter=dot tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5188ab6c^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b918407^ --file migrations/426_la_risalita_delle_categorie_si_ferma_su_un_cerchio.sql --prove tests/sql/rls/riparazione-r18-categorie-in-cerchio.test.sql --sql r18_rimessa --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b918407^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r18-categorie-con-un-cerchio.test.ts --json (tutte e due uscita 0)"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La risalita dei genitori ha un tetto di 20 passi e un insieme dei già visti: un cerchio A→B→A si ferma. La prova conta le chiamate a find, così senza correzione cade invece di bloccarsi.",
-      "verificato_da": "nessun revisore indipendente: tetto di costo (70 $) raggiunto dopo il lotto 5; solo le prove rimesse e il verify del capo squadra"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Giro di correzione (collaudo K07, non_regge). Database: la migrazione nuova 426 rifà con CREATE OR REPLACE le risalite della 363 (guardiano dei prodotti alimentari e radice_con_obbligo_alimentare) e quella della vecchia guardia della 126 con la lista dei già visti: un cerchio A⇄B non manda più in timeout il salvataggio. Il tetto fisso di 20 passi è tolto, anche da lib/category-attributes.ts (dalla 5188ab6c): perdeva l'obbligo alimentare oltre il 21esimo livello. Prova SQL rossa 5/9 senza la 426, verde 9/9 con.",
+      "verificato_da": "verificatore A del giro di correzione (subagente generico, mandato di smentire): ricostruito il database (200 migrazioni), pg_get_functiondef prima/dopo identico a parte la risalita, proprietario e permessi invariati, run.sh 66 file verdi, cerchi a 3, autoanello, spostamenti dal pannello: corretti. Ha trovato che il tetto fisso di 20 passi della prima stesura lasciava pubblicare senza allergeni un prodotto oltre il 21esimo livello sotto «alimentari» (anche in lib/category-attributes.ts) e che la guardia orfana della 126 risaliva senza controllo: corretti tutti e due in b918407 (tetto tolto, resta la lista dei già visti; 126 rifatta nella 426) e coperti dai casi ⑦ e ⑧ della prova SQL e dal caso dei 30 livelli della prova unitaria; con un tetto di 20 rimesso la prova SQL torna rossa. Il nuovo testo non è stato riguardato da un terzo verificatore (tetto di 3 subagenti). Verificatore B: ProductForm sulla copia regge (cade in 2 s togliendo la correzione, nessun altro while sui parent_id).",
+      "cosa_resta": "Il modulo prodotto: components/seller/ProductForm.tsx:268-276 (resolveTop) risale i genitori con un while senza controllo prima di arrivare alla libreria. È di R13 nell'onda 2: serve_file_altrui con la diff esatta qui sotto.",
+      "nota": "La 426 è una migrazione nuova: gira solo sul Postgres locale e nell'harness (apply.sh 200 migrazioni, run.sh 66 file verdi sulla testa). Sul database vero la applica solo Nicola, con la sua firma. Il numero 426 è di questa voce (decisione della regista O2, 14/11): la patch di R18-024, ancora da applicare, prenderà un numero nuovo nell'onda 3. La modifica di ProductForm e la sua prova sono state provate su una copia fuori dal ramo: prova 2/2 verde (monta il ProductForm vero su A⇄B e conta le chiamate a find), prova-rimessa uscita 0.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/ProductForm.tsx (di R13 nell'onda 2)",
+          "modifica": "Righe 268-276, resolveTop. Diff esatta:\ndiff --git a/components/seller/ProductForm.tsx b/components/seller/ProductForm.tsx\nindex d6ae090..d3252ef 100644\n--- a/components/seller/ProductForm.tsx\n+++ b/components/seller/ProductForm.tsx\n@@ -265,11 +265,16 @@ export default function ProductForm({\n   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------\n   const currentCategoryId = watch('category_id') || '';\n   const topCategories = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);\n+  // R18-014 — come getAttributesForCategory: l'insieme dei già visti. Un cerchio nei dati\n+  // (A sotto B, B sotto A) faceva girare questo while per sempre e la pagina del prodotto\n+  // restava bloccata. Ogni passo va solo verso una categoria mai vista, quindi finisce.\n   const resolveTop = (catId: string): string => {\n     let cur = categories.find((c) => c.id === catId);\n+    const visti = new Set<string>(cur ? [cur.id] : []);\n     while (cur?.parent_id) {\n       const parent = categories.find((c) => c.id === cur!.parent_id);\n-      if (!parent) break;\n+      if (!parent || visti.has(parent.id)) break;\n+      visti.add(parent.id);\n       cur = parent;\n     }\n     return cur?.id ?? '';\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r18-modulo-prodotto-categorie-in-cerchio.test.tsx (NUOVO, insieme al file sopra)",
+          "modifica": "Contenuto esatto del file:\n/**\n * @vitest-environment jsdom\n */\nimport { describe, it, expect, vi } from 'vitest';\nimport { act, createElement } from 'react';\nimport { createRoot } from 'react-dom/client';\n\n/**\n * R18-014 (giro di correzione, collaudo K07) — Il tetto alla risalita dei genitori c'era solo in\n * lib/category-attributes.ts. Il modulo prodotto risaliva i padri con un suo while (resolveTop)\n * PRIMA di arrivare alla funzione corretta: con categorie A sotto B e B sotto A la pagina girava\n * per sempre. Qui si monta il ProductForm vero; il find delle categorie conta le chiamate e\n * dopo 5.000 si ferma con un errore, così senza la correzione la prova cade invece di bloccarsi.\n */\nvi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn(), loading: vi.fn(), dismiss: vi.fn() }) }));\nvi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));\nvi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => '/' }));\nvi.mock('next/image', () => ({ default: () => null }));\nvi.mock('@/lib/supabase/client', () => ({\n  supabase: { auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }), getUser: async () => ({ data: { user: { id: 's1' } } }) } },\n}));\n(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;\n\nconst { default: ProductForm } = await import('@/components/seller/ProductForm');\n\ntype Cat = { id: string; name: string; slug: string; parent_id: string | null };\nconst TETTO = 5000;\n\nfunction conConteggio(lista: Cat[]) {\n  const conto = { chiamate: 0 };\n  Object.defineProperty(lista, 'find', {\n    value(this: Cat[], ...a: Parameters<Cat[]['find']>) {\n      if (++conto.chiamate > TETTO) throw new Error(`categorie: ${conto.chiamate} chiamate a find, la risalita gira in tondo`);\n      return Array.prototype.find.apply(this, a as never);\n    },\n  });\n  return conto;\n}\n\nasync function monta(categorie: Cat[], categoryId: string) {\n  const box = document.createElement('div');\n  document.body.appendChild(box);\n  const root = createRoot(box);\n  let errore: unknown = null;\n  try {\n    await act(async () => {\n      root.render(createElement(ProductForm, {\n        mode: 'edit', categories: categorie, aiAccesa: false, sellerOffersExpress: false, consegnaDelNegozioNonLetta: false,\n        onSubmit: () => {},\n        initialValues: { name: 'Vaso', description: 'Vaso in ceramica fatto a mano', price: 10, unit: 'pezzo', stock: 1,\n          category_id: categoryId, images: ['https://x/1.jpg'], attributes: {}, tags: [], status: 'draft', variants: [] },\n      }));\n    });\n  } catch (e) { errore = e; }\n  const etichetta = (t: string) => [...box.querySelectorAll('label')].find((l) => (l.textContent ?? '').includes(t));\n  const selectDi = (t: string) => {\n    const l = etichetta(t);\n    const id = l?.getAttribute('for');\n    return (id ? document.getElementById(id) : l?.parentElement?.querySelector(\"select\")) as HTMLSelectElement | null;\n  };\n  return { box, errore, selectDi, smonta: () => { act(() => root.unmount()); box.remove(); } };\n}\n\ndescribe('R18-014 — il modulo prodotto regge un cerchio nelle categorie', () => {\n  it('categorie A⇄B: il modulo si apre, senza girare in tondo', async () => {\n    const categorie: Cat[] = [\n      { id: 'a', name: 'Cerchio A', slug: 'cerchio-a', parent_id: 'b' },\n      { id: 'b', name: 'Cerchio B', slug: 'cerchio-b', parent_id: 'a' },\n      { id: 'casa', name: 'Casa', slug: 'casa', parent_id: null },\n    ];\n    const conto = conConteggio(categorie);\n    const m = await monta(categorie, 'a');\n    expect(m.errore, String((m.errore as Error)?.message ?? '')).toBeNull();\n    expect(conto.chiamate).toBeLessThan(TETTO);\n    expect(m.box.textContent).toContain('Categoria');\n    m.smonta();\n  });\n\n  it('controprova: una sottocategoria vera mostra ancora la sua radice e se stessa', async () => {\n    const categorie: Cat[] = [\n      { id: 'casa', name: 'Casa', slug: 'casa', parent_id: null },\n      { id: 'vasi', name: 'Vasi', slug: 'vasi', parent_id: 'casa' },\n      { id: 'sport', name: 'Sport', slug: 'sport', parent_id: null },\n    ];\n    conConteggio(categorie);\n    const m = await monta(categorie, 'vasi');\n    expect(m.errore).toBeNull();\n    expect(m.selectDi('Categoria')?.value).toBe('casa');\n    expect(m.selectDi('Sottocategoria')?.value).toBe('vasi');\n    m.smonta();\n  });\n});\n"
+        }
+      ]
     },
     {
       "id": "R18-015",
@@ -682,7 +718,8 @@
         }
       ],
       "insieme_a": "R18-021",
-      "verificato_da": "revisore C: git cherry-pick --no-commit d7e40adc + git apply della patch 19/34 su 8bab0265: apply.sh 199 migrazioni, run.sh tutto verde, pieno verde con la 426 ultima, 59 prove unitarie su migrations/ verdi; prova 426 rossa senza la 426 e verde con; da anon con la 426 33 letture pubbliche (viste, search_products_smart, vetrina_home, active_promo_products, store_cards, catalogo...) senza errori, profiles negata; le tre funzioni INVOKER che nominano «profiles» leggono solo seller_public_profiles; nessuna pagina o rotta pubblica legge profiles da anon (middleware e lib/supabase/server solo con utente, il resto col client di servizio)."
+      "verificato_da": "revisore C: git cherry-pick --no-commit d7e40adc + git apply della patch 19/34 su 8bab0265: apply.sh 199 migrazioni, run.sh tutto verde, pieno verde con la 426 ultima, 59 prove unitarie su migrations/ verdi; prova 426 rossa senza la 426 e verde con; da anon con la 426 33 letture pubbliche (viste, search_products_smart, vetrina_home, active_promo_products, store_cards, catalogo...) senza errori, profiles negata; le tre funzioni INVOKER che nominano «profiles» leggono solo seller_public_profiles; nessuna pagina o rotta pubblica legge profiles da anon (middleware e lib/supabase/server solo con utente, il resto col client di servizio).",
+      "nota": "Giro di correzione del 14/11: il numero 426 ora è della migrazione di R18-014 (426_la_risalita_delle_categorie_si_ferma_su_un_cerchio.sql). La patch di questa voce, ancora da applicare, prenderà un numero nuovo nell'onda 3 (decisione della regista O2)."
     },
     {
       "id": "R18-025",
@@ -769,6 +806,20 @@
       "severita": "minore",
       "file": "app/seller/promotions/page.tsx:311",
       "descrizione": "eslint jsx-a11y/label-has-associated-control (avviso già presente sulla base): <label> senza controllo associato davanti ai due radio; sarebbe un fieldset con legend, come «Sconto»."
+    },
+    {
+      "titolo": "il campo file nascosto della fotocamera del negoziante si raggiunge col Tab ma non mostra il fuoco",
+      "dimensione": "accessibilita",
+      "severita": "minore",
+      "file": "components/seller/CameraCapture.tsx:146-151",
+      "descrizione": "Input file sr-only senza anello di fuoco e senza tabIndex=-1: fa doppione col pulsante «Usa la fotocamera del telefono». Visto dal verificatore B del giro di correzione di R18; fuori dai file di R18."
+    },
+    {
+      "titolo": "nella vetrina del negozio la data delle recensioni è nel fuso del telefono, non di piacenza",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/store-sections/ReviewsSection.tsx:109",
+      "descrizione": "toLocaleDateString('it-IT') senza timeZone: una recensione delle 23:30 di Piacenza da un telefono a est si legge col giorno dopo, e server (UTC) e browser possono scrivere due date diverse. Visto dal verificatore B del giro di correzione di R18; fuori dai file di R18."
     }
   ],
   "domande_per_nicola": [
