@@ -216,6 +216,57 @@ INSERT INTO esiti SELECT '⑦ la chiave di servizio salva anche le colonne dell 
      FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f2'),
   (SELECT name || ' · ' || coalesce(external_marketplace, '-') FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f2');
 
+-- ⑧
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"e4050000-0000-0000-0000-000000000001","role":"service_role"}';
+DO $$
+DECLARE v_mercato text; v_prezzo numeric;
+BEGIN
+  BEGIN
+    PERFORM public.salva_prodotto_e_varianti(
+      'e4050000-0000-0000-0000-0000000000f1', '{"external_marketplace":"other"}'::jsonb);
+    SELECT external_marketplace INTO v_mercato FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f1';
+    INSERT INTO esiti VALUES ('⑧ il negozio non salva le colonne dell''amministrazione', false,
+      'nessun errore · external_marketplace = ' || coalesce(v_mercato, '-'));
+  EXCEPTION WHEN OTHERS THEN
+    SELECT external_marketplace INTO v_mercato FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f1';
+    INSERT INTO esiti VALUES ('⑧ il negozio non salva le colonne dell''amministrazione',
+      SQLSTATE = '42501' AND SQLERRM = 'colonna_non_ammessa' AND v_mercato IS NULL,
+      SQLSTATE || ' ' || SQLERRM || ' · external_marketplace = ' || coalesce(v_mercato, '-'));
+  END;
+
+  BEGIN
+    PERFORM public.salva_prodotto_e_varianti(
+      'e4050000-0000-0000-0000-0000000000f1', '{"price":0}'::jsonb);
+    SELECT price INTO v_prezzo FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f1';
+    INSERT INTO esiti VALUES ('⑧ il negozio non salva un prezzo a zero', false,
+      'nessun errore · prezzo ' || coalesce(v_prezzo::text, '-') || ' €');
+  EXCEPTION WHEN OTHERS THEN
+    SELECT price INTO v_prezzo FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f1';
+    INSERT INTO esiti VALUES ('⑧ il negozio non salva un prezzo a zero',
+      SQLSTATE = '22023' AND SQLERRM = 'prezzo_non_valido' AND v_prezzo IS NOT DISTINCT FROM 15,
+      SQLSTATE || ' ' || SQLERRM || ' · prezzo ' || coalesce(v_prezzo::text, '-') || ' €');
+  END;
+END $$;
+RESET ROLE;
+RESET request.jwt.claims;
+
+SET LOCAL ROLE service_role;
+SET LOCAL request.jwt.claims = '{"role":"service_role"}';
+DO $$
+DECLARE v_prezzo numeric;
+BEGIN
+  PERFORM public.salva_prodotto_e_varianti(
+    'e4050000-0000-0000-0000-0000000000f2', '{"price":0}'::jsonb);
+  SELECT price INTO v_prezzo FROM public.products WHERE id = 'e4050000-0000-0000-0000-0000000000f2';
+  INSERT INTO esiti VALUES ('⑧ la chiave di servizio salva un prezzo a zero',
+    v_prezzo IS NOT DISTINCT FROM 0, 'prezzo ' || coalesce(v_prezzo::text, '-') || ' €');
+EXCEPTION WHEN OTHERS THEN
+  INSERT INTO esiti VALUES ('⑧ la chiave di servizio salva un prezzo a zero', false, SQLSTATE || ' ' || SQLERRM);
+END $$;
+RESET ROLE;
+RESET request.jwt.claims;
+
 DO $$
 DECLARE r record; rossi int;
 BEGIN
