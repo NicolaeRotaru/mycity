@@ -207,10 +207,20 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   // fallisce e nessun pagamento partirebbe (lib/db/migrazione-124.ts).
   // R17-017 — `payout_claimed_at`: dice se un turno di prima ha già chiesto un bonifico (vedi `bonificoGiaFatto`).
   const COLONNE_PAYOUT = 'id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, payout_claimed_at, stripe_charge_id, stripe_transfer_group, delivery_status, payment_method, delivered_at';
+  // 14/11/2026 (R17-017 correzione) — IL RIPIEGO A DUE GRADINI. Per leggere `payout_claimed_at` (126) il
+  // ripiego toglieva in un colpo solo anche le colonne della 124, `payout_tentativo` compreso: su un
+  // database con la 124 ma senza la 126 il tentativo letto diventava 0, e `bonificoGiaFatto` scambiava il
+  // vecchio bonifico già stornato (tentativo 0) per quello di adesso. Prima si toglie solo la 126; la 124
+  // si toglie solo se manca anche lei.
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (payout venditore)',
     () => admin.from('orders').select(COLONNE_PAYOUT).eq('id', orderId).single(),
-    () => admin.from('orders').select(senzaColonne(COLONNE_PAYOUT, [...COLONNE_124, ...COLONNE_126_DEI_TURNI])).eq('id', orderId).single(),
+    () =>
+      conRipiegoSchema(
+        'orders.select (payout venditore) senza la 126',
+        () => admin.from('orders').select(senzaColonne(COLONNE_PAYOUT, COLONNE_126_DEI_TURNI)).eq('id', orderId).single(),
+        () => admin.from('orders').select(senzaColonne(COLONNE_PAYOUT, [...COLONNE_124, ...COLONNE_126_DEI_TURNI])).eq('id', orderId).single(),
+      ),
   );
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
@@ -586,10 +596,17 @@ export const FILTRO_RIDER_RITENTABILI =
 export async function releaseRiderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
   const COLONNE_RIDER = 'id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, rider_payout_claimed_at, stripe_charge_id, stripe_transfer_group, total_price, pickup_in_store, cash_confirmed_at';
+  // 14/11/2026 (R17-017 correzione) — Il ripiego a due gradini, come per il negozio: senza la 126 si
+  // perde solo `rider_payout_claimed_at`, non anche `rider_payout_tentativo` della 124.
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (compenso fattorino)',
     () => admin.from('orders').select(COLONNE_RIDER).eq('id', orderId).single(),
-    () => admin.from('orders').select(senzaColonne(COLONNE_RIDER, [...COLONNE_124, ...COLONNE_126_DEI_TURNI])).eq('id', orderId).single(),
+    () =>
+      conRipiegoSchema(
+        'orders.select (compenso fattorino) senza la 126',
+        () => admin.from('orders').select(senzaColonne(COLONNE_RIDER, COLONNE_126_DEI_TURNI)).eq('id', orderId).single(),
+        () => admin.from('orders').select(senzaColonne(COLONNE_RIDER, [...COLONNE_124, ...COLONNE_126_DEI_TURNI])).eq('id', orderId).single(),
+      ),
   );
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
