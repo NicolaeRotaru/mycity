@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { withAuthRateLimit, type OpzioniAccesso } from '@/lib/api/middleware';
-import { apiError } from '@/lib/api/responses';
+import { withAuthRateLimit } from '@/lib/api/middleware';
+import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
 import { logger } from '@/lib/logger';
-import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 
 export const runtime = 'nodejs';
 
@@ -49,32 +48,18 @@ async function tutta(
   return { data: righe, error: null, alTetto: Array.isArray(dopo.data) && dopo.data.length > 0 };
 }
 
-function senzaChiave(cosa: string, e: unknown): NextResponse {
-  // 27/10/2026 — «Servizio non configurato» lasciava la persona davanti a un
-  // muro: il diritto alla portabilità resta, cambia solo la strada.
-  logger.error('[account-export] esportazione automatica spenta: manca la chiave di servizio', {
-    errore: e instanceof Error ? e.message : 'errore',
-  });
-  // 27/10/2026 (secondo giro) — Con la frase viaggia il collegamento
-  // (`details.recapito`): la pagina lo offre come pulsante. Senza casella e
-  // senza un modulo che arrivi a qualcuno è null, e la frase lo dice.
-  const strada = stradaAManoPerIDiritti(cosa);
-  return apiError(503, strada.frase, 'SERVICE_UNAVAILABLE', { recapito: strada.recapito });
-}
-
 /**
- * 27/10/2026 (quarto giro, fase 2) — PRIMA CHI SEI, POI LA CHIAVE.
- *
- * Qui c'era un involucro che guardava la chiave PRIMA del controllo d'accesso:
- * senza chiave rispondeva 503 con la strada a mano a chiunque bussasse, anche
- * a chi non aveva fatto l'accesso, che deve ricevere 401 nel formato ApiErrors.
- * Adesso decide `withAuth`: prima chi sei (401 se nessuno), poi, se la chiave
- * manca, la strada a mano. Prova:
+ * 27/10/2026 — Senza la chiave di servizio «Servizio non configurato» lasciava la persona
+ * davanti a un muro: il diritto alla portabilità resta, cambia solo la strada (503 con la
+ * strada a mano). Prima chi sei (`withAuth`, 401 se nessuno), poi la chiave. Prova:
  * tests/unit/prima-chi-sei-poi-la-chiave-sulle-porte-dei-diritti.test.ts
+ *
+ * R23-002 (13/11/2026) — La risposta senza chiave stava copiata qui e nella cancellazione, e le
+ * copie si erano separate: questa riga d'errore non diceva chi aveva chiesto. Adesso è una sola
+ * (lib/privacy/porta-dei-diritti.ts), e nella porta non c'è più il `catch` sulla chiave che
+ * non scattava mai: la chiave l'ha già chiesta `withAuth`.
  */
-function sullaPorta(cosa: string): OpzioniAccesso {
-  return { seMancaLaChiave: (_chi, e) => senzaChiave(cosa, e) };
-}
+const SENZA_CHIAVE = sullaPortaDeiDiritti('[account-export] esportazione automatica spenta', 'Scaricare i tuoi dati');
 
 /**
  * GDPR Art. 20 — Portabilità dei dati.
@@ -103,17 +88,12 @@ function sullaPorta(cosa: string): OpzioniAccesso {
 // dati è un diritto, e come tutti i diritti si esercita qualche volta, non
 // trecento al minuto. Tre al giorno.
 const scarica = withAuthRateLimit(
-  { name: 'account-export', max: 3, windowMs: 24 * 60 * 60_000, ...sullaPorta('Scaricare i tuoi dati') },
+  { name: 'account-export', max: 3, windowMs: 24 * 60 * 60_000, ...SENZA_CHIAVE },
   async ({ user }): Promise<NextResponse> => {
   const userId = user.id;
   const userEmail = user.email ?? null;
 
-  let admin;
-  try {
-    admin = getAdminSupabase();
-  } catch (e) {
-    return senzaChiave('Scaricare i tuoi dati', e);
-  }
+  const admin = getAdminSupabase();
 
   // Query parallele
   const [

@@ -1,6 +1,34 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Home, Search, Store, BookOpen, Lightbulb, Mail, MapPin, Package, ShoppingCart } from 'lucide-react';
+import { metadata as metadatiDellaRadice } from './layout';
+
+/**
+ * 13/11/2026 (R15-005) — LA 404 PORTAVA IL TITOLO E L'ANTEPRIMA DELLA HOME.
+ *
+ * Senza intestazioni sue, la pagina «non trovata» ereditava quelle del layout radice: nella
+ * scheda del browser, su Google e nell'anteprima di WhatsApp un indirizzo sbagliato si
+ * presentava come «MyCity Piacenza — Marketplace dei negozi della tua città». Adesso dice cos'è.
+ */
+// 14/11/2026 (R15-005, correzione) — Il titolo usa parole DIVERSE dall'h1 qui sotto («Pagina non
+// trovata»). Next 15 manda i metadati in streaming dentro il corpo della pagina: con le stesse parole
+// la scritta compariva due volte, e chi la cerca sulla pagina (la prova «404 page is custom») ne
+// trovava due invece di una.
+const TITOLO_404 = '404 · Questa pagina non esiste · MyCity';
+const FRASE_404 = 'La pagina che cerchi non esiste o è stata spostata.';
+
+// 13/11/2026 (R15-005, secondo giro) — openGraph e twitter di una pagina SOSTITUISCONO quelli della
+// radice, non si uniscono: scritti solo con titolo e descrizione, sulla 404 sparivano og:site_name,
+// og:locale e og:type, e twitter:card scendeva da summary_large_image a summary. Adesso si parte da
+// quelli della radice (app/layout.tsx, letti da lì e non ricopiati) e cambiano solo titolo e
+// descrizione. Il «noindex» non sta qui: Next lo scrive già da sé sulle 404, e qui usciva doppio.
+export const metadata: Metadata = {
+  title: TITOLO_404,
+  description: FRASE_404,
+  openGraph: { ...metadatiDellaRadice.openGraph, title: TITOLO_404, description: FRASE_404 },
+  twitter: { ...metadatiDellaRadice.twitter, title: TITOLO_404, description: FRASE_404 },
+};
 
 export default function NotFound() {
   return (

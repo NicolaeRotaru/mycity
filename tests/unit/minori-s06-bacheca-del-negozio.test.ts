@@ -7,9 +7,9 @@ import { pagamentiPronti, prodottiPubblicati, ETICHETTA_PAGAMENTI } from '@/comp
  * dicono la stessa cosa su prodotti pubblicati e pagamenti.
  */
 describe('314 — una regola sola', () => {
-  it('pagamenti: IBAN o Stripe', () => {
+  it('pagamenti: IBAN a carta spenta, Stripe a carta accesa', () => {
     expect(pagamentiPronti({ billing_iban: 'IT60X0542811101000000123456' })).toBe(true);
-    expect(pagamentiPronti({ stripe_charges_enabled: true })).toBe(true);
+    expect(pagamentiPronti({ stripe_charges_enabled: true })).toBe(false); // R17-009: con la carta spenta conta solo l'IBAN
     expect(pagamentiPronti({ billing_iban: '  ' })).toBe(false);
     expect(pagamentiPronti(null)).toBe(false);
   });

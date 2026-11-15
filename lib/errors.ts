@@ -9,6 +9,10 @@
  */
 
 import { trackErrorShown } from './analytics/events';
+import { PASSWORD_RUBATA, PASSWORD_SEMPLICE } from './auth/errori-nuova-password';
+// 13/11/2026 (R24-007) — Importarlo accende anche il traduttore italiano di Zod (z.setErrorMap)
+// dove si carica questo file: è voluto, è la stessa lingua.
+import { FRASI_ZOD } from './zod-i18n';
 
 const SUPABASE_CODE_MAP: Record<string, string> = {
   '23505': 'Questo valore è già stato usato. Prova con uno diverso.',
@@ -22,6 +26,16 @@ const SUPABASE_CODE_MAP: Record<string, string> = {
 };
 
 const GENERIC_FALLBACK = 'Qualcosa non ha funzionato. Riprova fra un momento.';
+
+/**
+ * 13/11/2026 (R24-008) — I CODICI DI SUPABASE AUTH. Qui il testo del messaggio vince
+ * sul codice, perché dice il MOTIVO: `weak_password` arriva sia per una password
+ * rubata sia per una troppo semplice, e il consiglio giusto è diverso. Il codice fa
+ * da ripiego quando il testo non si riconosce.
+ */
+const CODICI_AUTH: Record<string, string> = {
+  weak_password: PASSWORD_SEMPLICE,
+};
 
 /**
  * LE PAROLE CHE SOLO UN MOTORE SCRIVE — la rete che mancava all'ultimo ramo.
@@ -87,9 +101,17 @@ export function traduciErroreAuth(msg: string): string | null {
   // I quattro della registrazione e del cambio password, che prima uscivano in inglese.
   if (m.includes('user already registered') || m.includes('already been registered'))
     return 'Esiste già un account con questa email. Prova ad accedere.';
+  // 13/11/2026 (R24-008) — «Password is known to be weak and easy to guess» è la password
+  // comune o già finita negli elenchi rubati (reasons: pwned): usciva in inglese sotto il
+  // campo della registrazione. Le frasi sono quelle di /reset-password, una sola per lo
+  // stesso errore (lib/auth/errori-nuova-password.ts). Sta PRIMA della lunghezza, come là:
+  // se Supabase dice «corta» e «rubata» insieme, allungare la stessa password non basta.
+  if (m.includes('known to be weak') || m.includes('pwned') || m.includes('leaked password'))
+    return PASSWORD_RUBATA;
   if (m.includes('password should be at least')) {
     const n = m.match(/at least (\d+)/)?.[1];
-    return n ? `La password deve essere di almeno ${n} caratteri` : 'La password è troppo corta';
+    // Stessa frase di /reset-password (R24-008), con lo stesso N.
+    return n ? `La password è troppo corta: usane una di almeno ${n} caratteri.` : 'La password è troppo corta';
   }
   if (m.includes('unable to validate email address') || m.includes('invalid email'))
     return 'Questa email non sembra valida. Controlla come l’hai scritta.';
@@ -97,6 +119,9 @@ export function traduciErroreAuth(msg: string): string | null {
   // «troppe email a questo indirizzo» lo leggeva anche chi non ne aveva mai ricevuta una.
   if (m.includes('email rate limit exceeded'))
     return 'In questo momento non riusciamo a mandare email: riprova fra qualche minuto.';
+  // R24-008 — La password troppo semplice (la rubata è più sopra, prima della lunghezza).
+  if (m.includes('weak password') || m.includes('password is too weak') || m.includes('password should contain'))
+    return PASSWORD_SEMPLICE;
   if (m.includes('new password should be different'))
     return 'La password nuova deve essere diversa da quella attuale';
   if (m.includes('same password'))
@@ -113,6 +138,86 @@ export function traduciErroreAuth(msg: string): string | null {
 }
 
 /**
+ * 13/11/2026 (R24-004) — LE FRASI CHE UNA NOSTRA ROTTA HA SCRITTO PER IL CLIENTE.
+ *
+ * Il filtro dell'ultimo ramo di `friendlyError` indovina «questa frase è nostra» dalla
+ * forma: comincia per lettera (o cifra, virgolette, apostrofo), niente codice tecnico in
+ * testa, niente parole da database. Un rifiuto in cassa comincia col nome del negozio:
+ * «Bistrot La Table adesso è chiuso…», «Row Bar…», «1920 Bottega…» finivano nel generico,
+ * e il cliente riprovava lo stesso ordine senza sapere perché.
+ *
+ * Qui il segno lo mette chi la frase la conosce: una rotta che rifiuta con
+ * `ApiErrors.conflict` (codice CONFLICT, la forma dei rifiuti «con un motivo» —
+ * negozio chiuso, fascia passata, consegna veloce non possibile) scrive per il
+ * cliente. `apiErrorMessage` se la ricorda, e `friendlyError` la lascia passare intera,
+ * parentesi comprese. I filtri restano per tutto il resto: errori grezzi, 500, testi
+ * che non hanno quel segno.
+ */
+const CODICI_SCRITTI_PER_L_UTENTE = new Set(['CONFLICT']);
+const FRASI_DELLE_ROTTE: string[] = [];
+const TETTO_FRASI_DELLE_ROTTE = 20;
+
+function ricordaFraseDellaRotta(frase: string): void {
+  if (FRASI_DELLE_ROTTE.includes(frase)) return;
+  FRASI_DELLE_ROTTE.push(frase);
+  if (FRASI_DELLE_ROTTE.length > TETTO_FRASI_DELLE_ROTTE) FRASI_DELLE_ROTTE.shift();
+}
+
+/**
+ * 13/11/2026 (R24-007) — LE FRASI INGLESI DI ZOD CHE ARRIVANO DAL SERVER.
+ *
+ * Una rotta che non ha acceso il traduttore (lib/zod-i18n) risponde col testo
+ * predefinito di Zod — «String must contain at most 120 character(s)», «Required»,
+ * «Expected number, received string» — e l'ultimo ramo lo lasciava passare perché ha
+ * la forma di una frase. Qui si riconoscono quei testi e si danno le stesse frasi del
+ * traduttore. `frase: null` con `tecnico: true` = ha la forma di un testo di Zod ma
+ * non ho una frase pronta: non si mostra così com'è.
+ */
+function traduciTestoDiZod(messaggio: string): { frase: string | null; tecnico: boolean } {
+  const m = messaggio.trim();
+  let r: RegExpMatchArray | null;
+  if (m === 'Required') return { frase: FRASI_ZOD.obbligatorio, tecnico: true };
+  if ((r = m.match(/^Expected (\w+), received (\w+)$/)))
+    return { frase: r[2] === 'undefined' || r[2] === 'null' ? FRASI_ZOD.obbligatorio : FRASI_ZOD.tipo(r[1]), tecnico: true };
+  // Giro di correzione — il limite compreso («at least», «or equal to») e quello escluso
+  // («over», «more than», «greater than» da solo) non sono la stessa frase: «Number must be
+  // greater than 0» non è «Valore minimo: 0». I conteggi sono interi: «over 5» = almeno 6.
+  if ((r = m.match(/^String must contain at least (\d+) character(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoCaratteri(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^String must contain over (\d+) character(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoCaratteri(Number(r[1]) + 1), tecnico: true };
+  if ((r = m.match(/^String must contain at most (\d+) character(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.massimoCaratteri(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^String must contain under (\d+) character(?:\(s\))?$/)) && Number(r[1]) > 1)
+    return { frase: FRASI_ZOD.massimoCaratteri(Number(r[1]) - 1), tecnico: true };
+  if ((r = m.match(/^Number must be greater than or equal to (-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.minimo(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Number must be greater than (-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.maggioreDi(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Number must be less than or equal to (-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.massimo(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Number must be less than (-?\d+(?:\.\d+)?)$/)))
+    return { frase: FRASI_ZOD.minoreDi(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Array must contain at least (\d+) element(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoElementi(Number(r[1])), tecnico: true };
+  if ((r = m.match(/^Array must contain more than (\d+) element(?:\(s\))?$/)))
+    return { frase: FRASI_ZOD.almenoElementi(Number(r[1]) + 1), tecnico: true };
+  if (m === 'Invalid email') return { frase: FRASI_ZOD.email, tecnico: true };
+  if (m === 'Invalid url') return { frase: FRASI_ZOD.url, tecnico: true };
+  if (m === 'Invalid uuid') return { frase: FRASI_ZOD.uuid, tecnico: true };
+  if (m === 'Invalid') return { frase: FRASI_ZOD.formato, tecnico: true };
+  if (/^Invalid enum value\. Expected /.test(m)) return { frase: FRASI_ZOD.scelta, tecnico: true };
+  // Giro di correzione — «Expected 'a' | 'b', received number» (un elenco con un valore del
+  // tipo sbagliato) e «Invalid datetime/cuid/time…» passavano in inglese: il `\b` dopo «date»
+  // non scatta dentro «datetime». Le validazioni di Zod sono elencate per intero, a fine testo.
+  const tecnico =
+    /^(String must contain|Number must be|BigInt must be|Array must contain|Set must contain|Date must be|Expected .+, received \S+$|Invalid (literal value|discriminator value|enum value|arguments|return type|function arguments|function return type|input: must)\b|Invalid (email|url|emoji|uuid|nanoid|cuid2?|ulid|regex|datetime|date|time|duration|ip|cidr|base64(url)?|jwt)$|Unrecognized key\(s\) in object|Intersection results could not be merged)/.test(
+      m,
+    );
+  return { frase: null, tecnico };
+}
+
+/**
  * Trasforma errori Supabase/Stripe/fetch in messaggi user-friendly italiani.
  * Logga il messaggio originale per debugging via PostHog.
  */
@@ -125,6 +230,15 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
     if (e.code && SUPABASE_CODE_MAP[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return SUPABASE_CODE_MAP[e.code];
+    }
+    if (e.code && CODICI_AUTH[e.code]) {
+      trackErrorShown(e.code, e.message ?? '', context?.page);
+      return traduciErroreAuth(e.message ?? '') ?? CODICI_AUTH[e.code];
+    }
+    if (e.message && FRASI_DELLE_ROTTE.includes(e.message)) {
+      // R24-004 — Scritta da una nostra rotta per il cliente: passa com'è (vedi sopra).
+      trackErrorShown(e.code ?? 'dalla_rotta', e.message, context?.page);
+      return e.message;
     }
     if (e.message) {
       /**
@@ -153,6 +267,14 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       if (inItaliano) {
         trackErrorShown(e.code ?? 'auth', e.message, context?.page);
         return inItaliano;
+      }
+      // 13/11/2026 (R24-007) — Il testo predefinito di Zod che una rotta senza traduttore
+      // rimanda in inglese («String must contain at most 120 character(s)», «Required»):
+      // qui esce con le frasi del traduttore; quello senza frase pronta non passa così.
+      const daZod = traduciTestoDiZod(e.message);
+      if (daZod.tecnico) {
+        trackErrorShown(e.code ?? 'validazione', e.message, context?.page);
+        return daZod.frase ?? 'Uno dei dati inseriti non va bene: controllalo e riprova.';
       }
       // Fix #17: trackErrorShown in ogni ramo (era tracciato solo per i codici Supabase mappati).
       if (/duplicate key value/i.test(e.message)) {
@@ -294,7 +416,11 @@ export function apiErrorMessage(body: unknown, fallback = 'Operazione non riusci
   if (typeof e === 'string' && e.trim()) return e;
   if (e && typeof e === 'object' && 'message' in e) {
     const m = (e as { message?: unknown }).message;
-    if (typeof m === 'string' && m.trim()) return m;
+    if (typeof m === 'string' && m.trim()) {
+      const codice = (e as { code?: unknown }).code;
+      if (typeof codice === 'string' && CODICI_SCRITTI_PER_L_UTENTE.has(codice)) ricordaFraseDellaRotta(m);
+      return m;
+    }
   }
   return fallback;
 }

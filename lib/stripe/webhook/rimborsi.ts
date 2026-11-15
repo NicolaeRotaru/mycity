@@ -18,7 +18,7 @@
  */
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
-import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
+import { reverseOrderTransfer, reverseRiderTransfer, type ReversibleOrder } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
@@ -91,6 +91,14 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // l'importo è già scritto. Il perché sta in `rimborsi-da-fuori.ts`.
     await registraRimborsoParzialeDaFuori(charge, orders);
     return;
+  }
+
+  // 13/11/2026 (R17-025) — IL BONIFICO AL NEGOZIO E' IN CORSO (PROCESSING): SI ASPETTA, COME PER IL
+  // PARZIALE. Lì lo storno (solo TRANSFERRED) non parte, si scriveva REFUNDED e il giro ci scriveva sopra
+  // TRANSFERRED col netto al negozio. Si lancia prima di toccare qualunque cosa, Stripe ripete, poi storna.
+  const bonificiInCorso = orders.filter((o) => o.payout_status === 'PROCESSING').map((o) => o.id);
+  if (bonificiInCorso.length > 0) {
+    throw new Error(`[stripe] rimborso pieno con il bonifico al negozio in corso (${bonificiInCorso.join(', ')}): si riprova dopo`);
   }
 
   // 🟢-1: charge.refunds non è sempre espanso nel payload → fallback via API per
@@ -199,7 +207,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     if (fallito) {
       patch.payout_status = 'REVERSAL_FAILED';
       patch.reversal_error = fallito.motivo.slice(0, 500);
-    } else if (!reversedIds.includes(o.id)) {
+    } else if (!reversedIds.includes(o.id) && o.payout_status !== 'REVERSAL_FAILED') {
+      // 13/11/2026 (R17-024) — REVERSAL_FAILED resta: è il segno «da recuperare a mano» (avviso qui sotto).
       patch.payout_status = 'REFUNDED';
     }
 
@@ -233,6 +242,49 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
       );
     }
   }
+  // 13/11/2026 (R17-025) — Il giro può aver pagato un ordine letto HELD mentre questo avviso lavorava: la
+  // scrittura qui sopra (solo per id) gli ha messo REFUNDED sopra TRANSFERRED. Si rilegge e lo si storna; lo storno mancato va fra quelli a mano.
+  const idDaFare = new Set(
+    orders.filter((o) => !o.stripe_transfer_id && (o.payout_status === 'HELD' || o.payout_status === 'PENDING_SELLER_ONBOARDING')).map((o) => o.id as string),
+  );
+  if (idDaFare.size > 0) {
+    const { data: dopo } = await admin
+      .from('orders')
+      .select('id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id')
+      .eq('stripe_payment_intent', pi);
+    for (const r of (dopo ?? []) as unknown as ReversibleOrder[]) {
+      if (!idDaFare.has(r.id) || r.payout_status !== 'REFUNDED' || !r.stripe_transfer_id) continue;
+      try {
+        await reverseOrderTransfer({ ...r, payout_status: 'TRANSFERRED' });
+      } catch (e) {
+        const motivo = e instanceof Error ? e.message : 'errore sconosciuto';
+        logger.error('[stripe] bonifico pagato durante il rimborso pieno: storno non riuscito', { orderId: r.id, e });
+        stornoFallito.push({ id: r.id, motivo });
+        idFalliti.push(r.id);
+        const { error: errSegno } = await admin
+          .from('orders')
+          .update({ payout_status: 'REVERSAL_FAILED', reversal_error: motivo.slice(0, 500) })
+          .eq('id', r.id);
+        if (errSegno) logger.error('[stripe] storno mancato non segnato sull ordine', { orderId: r.id, message: errSegno.message });
+      }
+    }
+  }
+
+  // 13/11/2026 (R17-024) — REVERSAL_FAILED resta (esclusione qui sopra); agli admin la cifra da riprendere.
+  for (const o of orders) {
+    if (o.payout_status !== 'REVERSAL_FAILED' || o.payment_status === 'REFUNDED') continue;
+    const daRiprendere = Math.max(0, Number(o.seller_payout_cents ?? 0) - Number(o.seller_payout_reversed_cents ?? 0));
+    if (daRiprendere <= 0) continue;
+    await notifyAdmins(
+      '⚠️ Quota del negozio da recuperare a mano',
+      `L'ordine ${o.id} è stato rimborsato per intero dal cruscotto Stripe. Il bonifico al negozio era già partito e uno storno ` +
+        `precedente non è riuscito: al negozio vanno ripresi in tutto ${formatPriceFromCents(daRiprendere)} (il netto meno quanto è ` +
+        "già rientrato). Prima di stornarli a mano, guarda su Stripe (Connect → il bonifico → Storni) quanto è già rientrato.",
+      '/admin/orders',
+      { unaVoltaPer: `quota-a-mano:${o.id}:${refundId ?? charge.id}` },
+    );
+  }
+
   if (stornoFallito.length > 0) {
     await notifyAdmins(
       '⚠️ Storno al venditore non riuscito',
@@ -358,6 +410,29 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
  * liquidato. E' l'innesco tipico di una contestazione che poi si perde,
  * perche' le nostre prove dicono il contrario di quello che e' successo.
  */
+/**
+ * 13/11/2026 (R17-014) — IL RIMBORSO RESPINTO LIBERA LA SUA PRENOTAZIONE NEL LIBRO.
+ *
+ * Dalla migrazione 412 `refundOrder` prenota il rimborso con la chiave che va a Stripe
+ * (`metadata.chiave_rimborso`), e la stessa chiave non si somma due volte. Qui l'importo respinto si
+ * toglie dall'ordine con la scrittura del segno «respinto», ma la prenotazione della chiave restava:
+ * rifatto con la stessa chiave (lo stesso reso rimborsato di nuovo dopo il rifiuto della banca), il
+ * rimborso nuovo usciva senza contarsi, e il libro diceva 0 € su 20 usciti. Si toglie la riga, non
+ * l'importo (già tolto qui sopra). Un database senza la 412 non ha la tabella: niente da togliere.
+ * Un'altra caduta lancia: Stripe riprova l'avviso, e il segno già scritto non fa rifare il resto.
+ */
+async function liberaLaPrenotazioneNelLibro(admin: ReturnType<typeof getAdminSupabase>, refund: Stripe.Refund): Promise<void> {
+  const m = (refund.metadata ?? {}) as Record<string, string>;
+  const ordine = (m.order_id ?? '').trim();
+  const chiave = (m.chiave_rimborso ?? '').trim();
+  if (!ordine || !chiave) return;
+  const { error } = await admin.from('prenotazioni_dei_rimborsi').delete().eq('order_id', ordine).eq('chiave', chiave);
+  if (!error) return;
+  const codice = (error as { code?: string }).code;
+  if (codice === 'PGRST205' || codice === '42P01') return;
+  throw new Error(`[stripe] prenotazione del rimborso respinto non tolta dal libro: ${error.message}`);
+}
+
 export async function handleRefundUpdated(refund: Stripe.Refund) {
   if (refund.status !== 'failed' && refund.status !== 'canceled') return;
 
@@ -476,6 +551,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     // rimborsare il cliente due volte a mano).
     logger.info('[stripe] rimborso respinto già registrato: niente da rifare', { refundId: refund.id, ordini: piano.giaFatti });
     if (refund.id) await avvisaGliAmministratori();
+    await liberaLaPrenotazioneNelLibro(admin, refund);
     return;
   }
 
@@ -518,4 +594,5 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   }
 
   await avvisaGliAmministratori();
+  await liberaLaPrenotazioneNelLibro(admin, refund);
 }

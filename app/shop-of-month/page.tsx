@@ -32,6 +32,11 @@ import { leggiNegozioDelMese, type NegozioDelMese } from '@/lib/queries/negozio-
 
 type Pick = NegozioDelMese;
 
+/** «novembre», dal primo del mese già calcolato nel fuso di Piacenza (a mezzogiorno UTC il giorno non cambia). */
+function nomeDelMese(primoDelMese: string): string {
+  return new Date(`${primoDelMese}T12:00:00Z`).toLocaleDateString('it-IT', { month: 'long', timeZone: 'UTC' });
+}
+
 type LeaderboardRow = {
   seller_id: string;
   store_name: string | null;
@@ -67,7 +72,7 @@ export default function ShopOfMonthPage() {
     })();
   }, [firstOfMonth]);
 
-  const { data: pick } = useQuery({
+  const { data: pick, isError: sceltaCaduta, isSuccess: sceltaLetta, refetch: rileggiScelta } = useQuery({
     queryKey: queryKeys.shopOfMonth.page,
     // 15/10/2026 (R3) — La lettura vive in lib/queries/negozio-del-mese.ts: agganciava il
     // negozio a `profiles`, e dopo la migrazione 161 la scelta del mese spariva per ogni cliente.
@@ -122,6 +127,25 @@ export default function ShopOfMonthPage() {
           Vota il tuo preferito una volta al mese.
         </p>
       </header>
+
+      {/* R21-019 — La scelta della redazione non si legge, oppure non c'è ancora: si dice. */}
+      {sceltaCaduta && (
+        <div role="alert" className="text-sm text-ink-600 flex flex-wrap items-center justify-center gap-2">
+          <span>Non riesco a leggere la scelta della redazione.</span>
+          <button
+            type="button"
+            onClick={() => { void rileggiScelta(); }}
+            className="font-semibold text-primary-700 underline"
+          >
+            Riprova
+          </button>
+        </div>
+      )}
+      {!sceltaCaduta && sceltaLetta && !pick?.seller && (
+        <p className="text-center text-ink-600">
+          La scelta di {nomeDelMese(firstOfMonth)} arriva presto: intanto vota il tuo preferito qui sotto.
+        </p>
+      )}
 
       {/* Hero pick attuale */}
       {pick?.seller && (

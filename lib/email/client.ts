@@ -48,6 +48,15 @@ export type SendEmailInput = {
    * scritte apposta: chi ne scrive una sa di scriverla.
    */
   tipo?: TipoEmail;
+  /**
+   * 13/11/2026 (R22-001, R22-011) — LO STESSO MESSAGGIO PORTA SEMPRE LA STESSA CHIAVE.
+   *
+   * Dopo il tetto dei dieci secondi l'esito è ignoto: Resend può averla già spedita. Qui dentro
+   * non si ritenta, ma la coda (app/api/cron/send-emails) riprendeva la riga cinque minuti dopo
+   * e la mandava di nuovo. Con la chiave Resend riconosce il secondo invio dello stesso messaggio
+   * (entro 24 ore) e non lo rispedisce. Chi la passa deve darla stabile: una per riga di coda.
+   */
+  idempotencyKey?: string;
 };
 
 export type SendEmailResult =
@@ -161,6 +170,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         }
       : undefined,
   };
+  const opzioni = input.idempotencyKey ? conChiaveDiIdempotenza(resend, input.idempotencyKey) : undefined;
   let lastErr = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
     /**
@@ -179,11 +189,19 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       // peggiore il webhook di Stripe, che se non riceve risposta ritenta e poi
       // disattiva l'endpoint.
       const { data, error } = await Promise.race([
-        resend.emails.send(payload),
+        resend.emails.send(payload, opzioni),
         new Promise<never>((_, rifiuta) =>
           setTimeout(() => rifiuta(new Error(TIMEOUT_INVIO)), 10_000)),
       ]);
       if (!error) return { ok: true, id: data?.id ?? '' };
+      // 13/11/2026 (R22-001, R22-011) — Il 409 «stessa chiave, corpo diverso» vuol dire che Resend
+      // ha già accettato il messaggio di questa chiave (sulle promozioni il link di disiscrizione
+      // cambia a ogni giro): è già spedita, non un errore. Il 409 delle richieste concorrenti resta
+      // un errore e la coda lo ritenta più tardi.
+      if (opzioni && String(error.name) === 'invalid_idempotent_request') {
+        logger.warn('[email] Resend ha già accettato questo messaggio con la stessa chiave: non si rispedisce');
+        return { ok: true, id: '' };
+      }
       lastErr = error.message ?? 'resend error';
       ritentabile = ['rate_limit_exceeded', 'internal_server_error', 'application_error'].includes(String(error.name));
     } catch (err) {
@@ -199,6 +217,26 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
 }
 
 const TIMEOUT_INVIO = 'invio email oltre i 10 secondi';
+
+type OpzioniInvio = Parameters<Resend['emails']['send']>[1];
+
+/**
+ * L'intestazione `Idempotency-Key` di Resend. resend 3.5 non ha l'opzione, ma sparge le opzioni
+ * sopra la richiesta (`{ method, headers, body, ...opzioni }`): si passano le sue intestazioni,
+ * chiave d'accesso compresa, più la nostra. Le versioni nuove leggono `idempotencyKey` da sole.
+ * Se le intestazioni dell'SDK non si trovano non si rischia di togliere la chiave d'accesso.
+ */
+function conChiaveDiIdempotenza(resend: Resend, chiave: string): OpzioniInvio {
+  const base = (resend as unknown as { headers?: unknown }).headers;
+  if (!(base instanceof Headers) || !base.has('Authorization')) {
+    // resend 3.5 ignora `idempotencyKey`: qui la chiave non arriva a Resend, e va detto.
+    logger.warn('[email] intestazioni di Resend non trovate: la chiave di idempotenza potrebbe non arrivare');
+    return { idempotencyKey: chiave } as unknown as OpzioniInvio;
+  }
+  const headers = new Headers(base);
+  headers.set('Idempotency-Key', chiave);
+  return { idempotencyKey: chiave, headers } as unknown as OpzioniInvio;
+}
 
 /**
  * Aggiunge la riga di disiscrizione in fondo al corpo HTML, una volta sola.

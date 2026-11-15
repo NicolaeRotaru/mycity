@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuth, withAuthRateLimit, type OpzioniAccesso } from '@/lib/api/middleware';
-import { ApiErrors, apiError } from '@/lib/api/responses';
-import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
+import { withAuth, withAuthRateLimit } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
+import { sullaPortaDeiDiritti } from '@/lib/privacy/porta-dei-diritti';
 import { motivoDellAttesa } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { sendEmail } from '@/lib/email/client';
@@ -14,45 +14,24 @@ import { NOMI_TEMPLATE_CICLO_DI_VITA, TEMPLATE_DI_SERVIZIO, richiestaCancellazio
  * «Servizio non configurato»: vero per noi, un muro per chi vuole cancellarsi.
  * Adesso la risposta dice la strada a mano (la casella privacy, o il modulo
  * dei contatti finché la casella non c'è). Resta 503: il servizio è giù davvero.
- */
-const ANNULLA = 'Annullare la richiesta di cancellazione';
-
-function senzaChiave(cosa: string, e: unknown, chi?: { id: string } | null): NextResponse {
-  // 5/11/2026 — La riga non diceva chi aveva chiesto: quando la chiave torna,
-  // nessuno poteva richiamare la persona. Si annota l'identificativo interno
-  // (non l'email) e il diritto chiesto.
-  logger.error('[account-delete] cancellazione automatica spenta: manca la chiave di servizio', {
-    errore: e instanceof Error ? e.message : 'errore',
-    utente: chi?.id ?? null,
-    diritto: cosa,
-  });
-  // 27/10/2026 (secondo giro) — Con la frase viaggia il collegamento
-  // (`details.recapito`): la pagina lo offre come pulsante. Senza casella e
-  // senza un modulo che arrivi a qualcuno è null, e la frase lo dice.
-  // 5/11/2026 — Per annullare non vale «entro un mese»: la cancellazione parte
-  // 7 giorni dopo la richiesta, e l'oggetto dell'email deve dire l'urgenza.
-  const strada = cosa === ANNULLA
-    ? stradaAManoPerIDiritti(cosa, undefined, undefined, {
-        oggetto: 'Fermate la cancellazione del mio account',
-        chiusa: 'Scrivici subito: la cancellazione definitiva parte 7 giorni dopo la richiesta.',
-      })
-    : stradaAManoPerIDiritti(cosa);
-  return apiError(503, strada.frase, 'SERVICE_UNAVAILABLE', { recapito: strada.recapito });
-}
-
-/**
- * 27/10/2026 (quarto giro, fase 2) — PRIMA CHI SEI, POI LA CHIAVE.
  *
- * Qui c'era un involucro che guardava la chiave PRIMA del controllo d'accesso:
- * senza chiave rispondeva 503 con la strada a mano a chiunque bussasse, anche
- * a chi non aveva fatto l'accesso, che deve ricevere 401 nel formato ApiErrors.
- * Adesso decide `withAuth`: prima chi sei (401 se nessuno), poi, se la chiave
- * manca, la strada a mano. Prova:
+ * 27/10/2026 (quarto giro, fase 2) — PRIMA CHI SEI, POI LA CHIAVE: decide
+ * `withAuth` (401 se nessuno), poi, se la chiave manca, la strada a mano. Prova:
  * tests/unit/prima-chi-sei-poi-la-chiave-sulle-porte-dei-diritti.test.ts
+ *
+ * R23-002 (13/11/2026) — La risposta senza chiave sta in lib/privacy/porta-dei-diritti.ts,
+ * una copia sola per queste tre porte e per quella dell'esportazione. E dentro le porte non
+ * c'è più un `try { getAdminSupabase() } catch`: la chiave l'ha già chiesta `withAuth`, e
+ * senza chiave la porta non arriva mai qui.
  */
-function sullaPorta(cosa: string): OpzioniAccesso {
-  return { seMancaLaChiave: (chi, e) => senzaChiave(cosa, e, chi.user) };
-}
+const REGISTRO = '[account-delete] cancellazione automatica spenta';
+const ANNULLA = 'Annullare la richiesta di cancellazione';
+// 5/11/2026 — Per annullare non vale «entro un mese»: la cancellazione parte
+// 7 giorni dopo la richiesta, e l'oggetto dell'email deve dire l'urgenza.
+const ANNULLA_SUBITO = {
+  oggetto: 'Fermate la cancellazione del mio account',
+  chiusa: 'Scrivici subito: la cancellazione definitiva parte 7 giorni dopo la richiesta.',
+};
 
 export const runtime = 'nodejs';
 
@@ -74,13 +53,8 @@ export const runtime = 'nodejs';
  */
 
 // Rate limit destructive: 3 richieste / ora — anti-abuse + protezione (GDPR)
-const chiedi = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000, ...sullaPorta("Cancellare l'account") }, async ({ user }): Promise<NextResponse> => {
-  let admin;
-  try {
-    admin = getAdminSupabase();
-  } catch (e) {
-    return senzaChiave("Cancellare l'account", e, user);
-  }
+const chiedi = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000, ...sullaPortaDeiDiritti(REGISTRO, "Cancellare l'account") }, async ({ user }): Promise<NextResponse> => {
+  const admin = getAdminSupabase();
 
   const { data: profile, error: erroreLettura } = await admin
     .from('profiles')
@@ -197,12 +171,7 @@ async function smettiDiScrivergli(admin: ReturnType<typeof getAdminSupabase>, us
 }
 
 const annulla = withAuth(async ({ user }): Promise<NextResponse> => {
-  let admin;
-  try {
-    admin = getAdminSupabase();
-  } catch (e) {
-    return senzaChiave(ANNULLA, e, user);
-  }
+  const admin = getAdminSupabase();
 
   const { error } = await admin
     .from('profiles')
@@ -214,15 +183,10 @@ const annulla = withAuth(async ({ user }): Promise<NextResponse> => {
     return ApiErrors.internal('Impossibile annullare la richiesta. Riprova.');
   }
   return NextResponse.json({ ok: true, message: 'Richiesta annullata.' });
-}, sullaPorta(ANNULLA));
+}, sullaPortaDeiDiritti(REGISTRO, ANNULLA, ANNULLA_SUBITO));
 
 const leggiLoStato = withAuth(async ({ user }): Promise<NextResponse> => {
-  let admin;
-  try {
-    admin = getAdminSupabase();
-  } catch (e) {
-    return senzaChiave('Vedere lo stato della cancellazione', e, user);
-  }
+  const admin = getAdminSupabase();
 
   const { data } = await admin
     .from('profiles')
@@ -237,7 +201,7 @@ const leggiLoStato = withAuth(async ({ user }): Promise<NextResponse> => {
     pending: true,
     ...(await statoDellaRichiesta(admin, user.id, data.deletion_requested_at)),
   });
-}, sullaPorta('Vedere lo stato della cancellazione'));
+}, sullaPortaDeiDiritti(REGISTRO, 'Vedere lo stato della cancellazione'));
 
 /**
  * Lo stato di una richiesta già registrata: date, giorni che restano e il

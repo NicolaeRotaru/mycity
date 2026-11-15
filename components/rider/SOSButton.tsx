@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { AlertTriangle, Phone, MapPin, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import { captureError } from '@/lib/analytics/sentry';
  *   (evita falsi positivi)."
  *
  * Flusso:
- *   1. Click SOS → dialog di conferma
+ *   1. Click SOS → dialog di conferma, e subito parte la richiesta della posizione (R16-009)
  *   2. Conferma → subito il tastierino col 112 (tel:), sincrono, senza attese
  *   3. Poi, con un tempo massimo: insert in rider_sos_events con posizione GPS
  *      → il trigger del database crea una notifica nel pannello per gli admin
@@ -45,21 +45,48 @@ function conTempoMassimo<T>(lavoro: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/** Posizione GPS best effort: null se non arriva in tempo (anche se il browser ignora il suo timeout). */
-async function leggiPosizione(): Promise<{ lat: number; lng: number } | null> {
+type Posizione = { lat: number; lng: number };
+
+/**
+ * R16-009 — La posizione si chiede QUANDO SI APRE IL DIALOGO, non alla conferma: con la pagina
+ * ancora davanti il telefono risponde, e alla conferma la posizione e' gia' pronta. Quando il
+ * tastierino del 112 si apre la pagina va in secondo piano e il GPS puo' non rispondere piu'.
+ * `ultima` e' l'ultima posizione arrivata (watchPosition la tiene fresca finche' il dialogo e'
+ * aperto); `primo` si risolve al primo fix (o a null se il GPS non c'e' o rifiuta).
+ */
+type LetturaGps = { ultima: Posizione | null; primo: Promise<Posizione | null>; ferma: () => void };
+
+function avviaLetturaGps(): LetturaGps {
+  const lettura: LetturaGps = { ultima: null, primo: Promise.resolve(null), ferma: () => undefined };
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return lettura;
+  const geo = navigator.geolocation;
+  // 5/11/2026 — maximumAge: col 112 aperto la pagina va in secondo piano e un fix nuovo può non
+  // arrivare mai; una posizione di un minuto fa (quella che il telefono ha già) vale più di niente.
+  const opzioni = { timeout: TEMPO_MASSIMO_GPS_MS, enableHighAccuracy: true, maximumAge: 60_000 };
+  lettura.primo = new Promise<Posizione | null>((resolve) => {
+    const arrivata = (pos: GeolocationPosition) => {
+      lettura.ultima = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      resolve(lettura.ultima);
+    };
+    try { geo.getCurrentPosition(arrivata, () => resolve(lettura.ultima), opzioni); } catch { resolve(null); }
+    try {
+      if (typeof geo.watchPosition === 'function') {
+        const id = geo.watchPosition(arrivata, () => undefined, opzioni);
+        lettura.ferma = () => { try { geo.clearWatch?.(id); } catch { /* niente da fermare */ } };
+      }
+    } catch { /* il watch e' un di piu': resta getCurrentPosition */ }
+  });
+  return lettura;
+}
+
+/** Posizione GPS best effort per l'avviso: quella gia' arrivata, o quella che arriva entro il tempo massimo. */
+async function posizionePronta(lettura: LetturaGps): Promise<Posizione | null> {
+  if (lettura.ultima) return lettura.ultima;
   try {
-    const pos = await conTempoMassimo(
-      new Promise<GeolocationPosition>((resolve, reject) => {
-        if (typeof navigator === 'undefined' || !navigator.geolocation) return reject(new Error('No geo'));
-        // 5/11/2026 — maximumAge: col 112 aperto la pagina va in secondo piano e un fix nuovo può non
-        // arrivare mai; una posizione di un minuto fa (quella che il telefono ha già) vale più di niente.
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: TEMPO_MASSIMO_GPS_MS, enableHighAccuracy: true, maximumAge: 60_000 });
-      }),
-      TEMPO_MASSIMO_GPS_MS + 500,
-    );
-    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const pos = await conTempoMassimo(lettura.primo, TEMPO_MASSIMO_GPS_MS + 500);
+    return lettura.ultima ?? pos;
   } catch {
-    return null;
+    return lettura.ultima;
   }
 }
 
@@ -68,8 +95,11 @@ async function leggiPosizione(): Promise<{ lat: number; lng: number } | null> {
  * L'utente si legge dalla sessione salvata sul telefono (getSession), senza chiamata di rete:
  * chi puo' scrivere lo decide comunque la regola del database (rider_id = auth.uid()).
  */
-async function inviaAvvisoSOS(orderId: string | undefined): Promise<boolean> {
-  const [{ data: { session } }, posizione] = await Promise.all([supabase.auth.getSession(), leggiPosizione()]);
+async function inviaAvvisoSOS(
+  orderId: string | undefined,
+  posizioneRichiesta: Promise<{ lat: number; lng: number } | null>,
+): Promise<boolean> {
+  const [{ data: { session } }, posizione] = await Promise.all([supabase.auth.getSession(), posizioneRichiesta]);
   const user = session?.user;
   if (!user) return false;
   const riga = {
@@ -101,6 +131,19 @@ export default function SOSButton({ orderId }: Props) {
   const pulsanteRef = useRef<HTMLButtonElement>(null);
   useBottomSheetA11y(open, pannelloRef, pulsanteRef, () => setOpen(false));
   const [sending, setSending] = useState(false);
+  const gpsRef = useRef<LetturaGps | null>(null);
+
+  // R16-009 — Il GPS si ferma quando il dialogo si chiude (Annulla, X, Esc, fine dell'avviso) e allo smontaggio.
+  useEffect(() => {
+    if (!open) { gpsRef.current?.ferma(); gpsRef.current = null; }
+  }, [open]);
+  useEffect(() => () => { gpsRef.current?.ferma(); }, []);
+
+  const apriDialogo = () => {
+    gpsRef.current?.ferma();
+    gpsRef.current = avviaLetturaGps();
+    setOpen(true);
+  };
 
   const triggerSOS = async () => {
     // 1/11/2026 — PRIMA IL 112, POI TUTTO IL RESTO.
@@ -120,6 +163,14 @@ export default function SOSButton({ orderId }: Props) {
     //
     // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
     // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
+    //
+    // R16-009 (13/11/2026) — La posizione l'ha già chiesta il dialogo quando si è aperto (apriDialogo),
+    // con la pagina ancora davanti: qui si usa quella arrivata, senza chiedere niente. Il tastierino
+    // si apre subito, dentro il gesto del fattorino, senza nessuna attesa. L'avviso aspetta la
+    // posizione che manca al massimo TEMPO_MASSIMO_GPS_MS, poi parte comunque.
+    const lettura = gpsRef.current ?? avviaLetturaGps();
+    gpsRef.current = lettura;
+    const posizioneRichiesta = posizionePronta(lettura);
     window.location.href = 'tel:112';
     setSending(true);
 
@@ -130,7 +181,7 @@ export default function SOSButton({ orderId }: Props) {
     // secondi l'evento c'è. Si distingue «non è partito» (errore) da «non lo so ancora» (tempo scaduto).
     let tempoScaduto = false;
     try {
-      alertSent = await conTempoMassimo(inviaAvvisoSOS(orderId), TEMPO_MASSIMO_AVVISO_MS);
+      alertSent = await conTempoMassimo(inviaAvvisoSOS(orderId, posizioneRichiesta), TEMPO_MASSIMO_AVVISO_MS);
     } catch (e) {
       tempoScaduto = e instanceof Error && e.message.startsWith('SOS: nessuna risposta');
       captureError(e, { context: 'SOSButton' });
@@ -173,7 +224,7 @@ export default function SOSButton({ orderId }: Props) {
       */}
       <button
         ref={pulsanteRef}
-        onClick={() => setOpen(true)}
+        onClick={apriDialogo}
         aria-label="SOS emergenza"
         className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-warm-xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
       >

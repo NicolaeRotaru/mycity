@@ -8,6 +8,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import CollectionHeader from '@/components/CollectionHeader';
 import { statoDellaVista } from '@/lib/stato-vista';
+import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
 type Cat = { id: string; slug: string; name: string; icon: string | null; parent_id: string | null };
 
@@ -27,6 +28,13 @@ export default function CategoriePage() {
       return (data ?? []) as Cat[];
     },
   });
+  // 13/11/2026 (R15-010) — Qui si disegnavano tutte le madri, anche Giocattoli con zero prodotti
+  // (lei e le sue cinque figlie), mentre il piede e il menu in alto la toglievano: due parti della
+  // stessa pagina in disaccordo, e un clic che porta al vuoto. Stessa lettura e stessa chiave di
+  // vetrina, piede e menu: restano solo le categorie con almeno un prodotto. Si aspetta la risposta
+  // (la pagina mostra già il caricamento) per non far comparire e poi sparire una scheda; se la
+  // lettura fallisce si mostrano tutte, come prima.
+  const piene = useQuery(domandaCategoriePiene(supabase));
 
   /**
    * 27/8/2026 (R090) — QUI SI DISEGNAVA UNA GRIGLIA VUOTA SOTTO IL TITOLO «CATEGORIE».
@@ -36,7 +44,9 @@ export default function CategoriePage() {
    * che bastava ricaricare. Gli stati sono tre — carico · rotto · vuoto — ed è la stessa regola che
    * `components/CategoryShowcase.tsx` applica già da giorni.
    */
-  const vista = statoDellaVista({ letto: !isLoading, caricando: isLoading, errore: isError || undefined, quanti: cats.length });
+  const caricando = isLoading || (piene.isLoading && !piene.isError);
+  const visibili = soloLePiene(cats, piene.isError ? null : piene.data);
+  const vista = statoDellaVista({ letto: !caricando, caricando, errore: isError || undefined, quanti: visibili.length });
 
   if (vista.mostraScheletro) return <LoadingState />;
   if (vista.mostraErrore) {
@@ -53,8 +63,8 @@ export default function CategoriePage() {
     );
   }
 
-  const tops = cats.filter((c) => c.parent_id === null);
-  const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id);
+  const tops = visibili.filter((c) => c.parent_id === null);
+  const childrenOf = (id: string) => visibili.filter((c) => c.parent_id === id);
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 space-y-6 max-w-7xl">

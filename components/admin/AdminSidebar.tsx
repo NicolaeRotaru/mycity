@@ -87,7 +87,7 @@ function isActive(pathname: string, href: string): boolean {
 function AdminLogo() {
   const branding = useBranding();
   return (
-    <div className="font-serif text-[22px] font-extrabold leading-none tracking-tight">
+    <div className="font-serif text-2xl font-extrabold leading-none tracking-tight">
       <span className="text-accent-300">{branding.wordmark.accent}</span>
       <span className="text-white">{branding.wordmark.rest}</span>
       <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-secondary-300">
@@ -127,7 +127,7 @@ function AdminNav({
     <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
       {NAV.map((sec) => (
         <div key={sec.group} className="mb-2">
-          <p className="mx-3 mb-1 mt-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-white/40">
+          <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-white/40">
             {sec.group}
           </p>
           {sec.items.map((n) => {
@@ -140,7 +140,7 @@ function AdminNav({
                 href={n.href}
                 onClick={onNavigate}
                 aria-current={on ? 'page' : undefined}
-                className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-[13.5px] transition-colors ${
+                className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors ${
                   on
                     ? 'bg-primary-700 font-bold text-white'
                     : 'font-medium text-white/[0.78] hover:bg-white/5 hover:text-white'
@@ -150,7 +150,7 @@ function AdminNav({
                 <span className="flex-1">{n.label}</span>
                 {count > 0 && (
                   <span
-                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1.5 text-[10px] font-bold leading-none text-white"
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1.5 text-2xs font-bold leading-none text-white"
                     aria-label={`${count} da gestire`}
                   >
                     {count > 99 ? '99+' : count}
@@ -186,7 +186,7 @@ function CampanellaAdmin({ chiara = false, onNavigate }: { chiara?: boolean; onN
       className={
         chiara
           ? 'relative inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white'
-          : 'flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white'
+          : 'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white'
       }
     >
       <Bell size={chiara ? 20 : 16} strokeWidth={2.2} aria-hidden />
@@ -210,11 +210,11 @@ function AdminFooter({
   return (
     <div className="shrink-0 border-t border-white/10 p-3">
       <div className="mb-1 flex items-center gap-2.5 px-2 py-1.5">
-        <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-secondary-600 text-[13px] font-bold text-white">
+        <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-secondary-600 text-sm font-bold text-white">
           {initials}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-bold text-white">{name}</p>
+          <p className="truncate text-sm font-bold text-white">{name}</p>
           <p className="text-[11px] text-white/50">Admin</p>
         </div>
       </div>
@@ -222,14 +222,14 @@ function AdminFooter({
       <Link
         href="/"
         onClick={onNavigate}
-        className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white"
+        className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white"
       >
         <Home size={16} strokeWidth={2.2} aria-hidden /> Torna al sito
       </Link>
       <button
         type="button"
         onClick={onSignOut}
-        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-secondary-600/20 hover:text-white"
+        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium text-white/[0.78] transition-colors hover:bg-secondary-600/20 hover:text-white"
       >
         <LogOut size={16} strokeWidth={2.2} aria-hidden /> Esci
       </button>

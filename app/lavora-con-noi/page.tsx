@@ -108,7 +108,9 @@ export default function LavoraConNoiPage() {
           <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-label text-accent-300 mb-3.5">
             <Briefcase size={14} strokeWidth={2.4} aria-hidden /> Lavora con noi
           </span>
-          <h1 className="font-serif text-4xl md:text-5xl lg:text-[54px] font-extrabold leading-[1.05] mb-4 max-w-[18ch]">
+          {/* 13/11/2026 (R15-008) — Col testo ingrandito al massimo «commercio» a 72px era più largo dello
+              schermo e la pagina arrivava a 473px: la parola va a capo (con il trattino, dove il browser sa farlo). */}
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-[54px] font-extrabold leading-[1.05] mb-4 max-w-[18ch] break-words hyphens-auto">
             Costruiamo il commercio di quartiere del futuro.
           </h1>
           <p className="text-lg md:text-xl leading-relaxed text-white/90 max-w-[54ch]">
@@ -129,7 +131,10 @@ export default function LavoraConNoiPage() {
             {PATHS.map(({ Icon, title, body, href, cta }) => (
               <div
                 key={title}
-                className="bg-white border border-cream-300 rounded-2xl p-6 flex flex-col shadow-warm-sm"
+                // 13/11/2026 (R15-008) — Col testo ingrandito al massimo il riquadro (p-6 = 48px per lato) e il
+                // bottone (parole che non vanno a capo) arrivavano a 369px su 360: meno margine sul telefono,
+                // e il testo del bottone può andare a capo.
+                className="min-w-0 bg-white border border-cream-300 rounded-2xl p-4 sm:p-6 flex flex-col shadow-warm-sm"
               >
                 <span className="w-[50px] h-[50px] rounded-lg bg-primary-100 text-primary-700 inline-flex items-center justify-center mb-4">
                   <Icon size={24} strokeWidth={2.2} aria-hidden />
@@ -138,9 +143,9 @@ export default function LavoraConNoiPage() {
                 <p className="text-sm leading-relaxed text-ink-600 mb-5 flex-1">{body}</p>
                 <Link
                   href={href}
-                  className="inline-flex items-center gap-1.5 self-start rounded-full bg-primary-700 text-white font-bold text-sm px-4 py-2.5 hover:bg-primary-800 transition-colors"
+                  className="inline-flex max-w-full items-center gap-1.5 self-start rounded-full bg-primary-700 text-white font-bold text-sm px-4 py-2.5 hover:bg-primary-800 transition-colors"
                 >
-                  {cta} <ArrowRight size={16} strokeWidth={2.2} aria-hidden />
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{cta}</span> <ArrowRight size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />
                 </Link>
               </div>
             ))}

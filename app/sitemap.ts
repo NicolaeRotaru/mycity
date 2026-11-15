@@ -3,6 +3,8 @@ import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { leggiInBlocchiTutte, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { logger } from '@/lib/logger';
 import { env } from '@/lib/env';
+// Lo stesso conto della vetrina, del piede e del menu (una casa sola: `lib/queries/categorie-piene.ts`).
+import { categorieConProdotti } from '@/lib/queries/categorie-piene';
 
 export const revalidate = 3600; // sitemap rigenerato ogni ora
 
@@ -44,26 +46,6 @@ const STATIC_PATHS: Array<{ path: string; priority: number; changeFrequency: 'da
  * disponibili di seller approvati + tutti gli store approvati. Letta da
  * Googlebot, Bingbot ecc. La cache è gestita da Next con `revalidate = 3600`.
  */
-/**
- * Le categorie che hanno almeno un prodotto: la sua, e tutte quelle sopra di lei. Il tetto ai
- * passi tiene fermo il giro anche se un giorno una categoria finisse per essere madre di sé stessa.
- */
-function categorieConProdotti(
-  categorie: ReadonlyArray<{ id: string; parent_id?: string | null }>,
-  prodotti: ReadonlyArray<{ category_id?: string | null }>,
-): Set<string> {
-  const madreDi = new Map(categorie.map((c) => [c.id, c.parent_id ?? null]));
-  const piene = new Set<string>();
-  for (const p of prodotti) {
-    let id = p.category_id ?? null;
-    for (let passi = 0; id && !piene.has(id) && passi < 10; passi += 1) {
-      piene.add(id);
-      id = madreDi.get(id) ?? null;
-    }
-  }
-  return piene;
-}
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Un solo posto decide l'indirizzo del sito (lib/env.ts). Con la copia locale
   // che ripiegava su localhost, ogni riga della sitemap indicava a Google una
@@ -157,7 +139,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const tutteLeCategorie = (categories.data ?? []) as CategorySlug[];
   // 5/11/2026 — Anche se cade la lettura dei NEGOZI si tengono tutte: senza negozi l'elenco dei
   // prodotti esce vuoto «senza errore», e prima la mappa toglieva a Google ogni categoria.
-  const conProdotti = products.error || stores.error ? null : categorieConProdotti(tutteLeCategorie, (products.data ?? []) as ProductSlug[]);
+  const conProdotti = products.error || stores.error ? null : new Set(categorieConProdotti(tutteLeCategorie, (products.data ?? []) as ProductSlug[]));
   const categorieDaMandare = conProdotti ? tutteLeCategorie.filter((c) => conProdotti.has(c.id)) : tutteLeCategorie;
 
   const categoryEntries: MetadataRoute.Sitemap = categorieDaMandare.map((c) => ({

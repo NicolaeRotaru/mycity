@@ -3,7 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
-import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -101,6 +101,25 @@ function externalPatch(d: { external_source_url?: string | null; external_market
   return patch;
 }
 
+/**
+ * R16-004 — Le varianti non sono passate: il prodotto torna com'era prima del
+ * salvataggio. La scorta torna indietro solo se in banca dati c'è ancora quella
+ * appena scritta (una vendita arrivata nel frattempo non si cancella).
+ * Vero se il prodotto è tornato com'era (o non c'era niente da rimettere).
+ */
+async function rimettiComEra(
+  admin: ReturnType<typeof getAdminSupabase>,
+  id: string,
+  prima: Record<string, unknown> | null,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  if (!prima) return true;
+  let scrittura = admin.from('products').update(prima).eq('id', id);
+  if (typeof patch.stock === 'number') scrittura = scrittura.eq('stock', patch.stock);
+  const { data, error } = await scrittura.select('id');
+  return !error && Array.isArray(data) && data.length > 0;
+}
+
 export const POST = withAdminAuth(async ({ user, req }) => {
   let body: unknown;
   try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
@@ -192,6 +211,24 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     else condizione = scortaVista;
   }
 
+  // R16-004 — TUTTO O NIENTE. Con le varianti, prima si guarda che le loro
+  // scorte siano ancora quelle viste (se no non si scrive niente), e si legge
+  // com'era il prodotto: se poi le varianti cadono, il prodotto torna così.
+  let prima: Record<string, unknown> | null = null;
+  if (variants) {
+    try {
+      await controllaScorteVarianti(admin, id, variants as ProductVariant[], scorteViste);
+    } catch (errore) {
+      if (errore instanceof DaCompletare) return ApiErrors.conflict(errore.message);
+      return ApiErrors.internal('Errore nel salvataggio delle varianti');
+    }
+    if (Object.keys(patch).length > 0) {
+      const { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
+      if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+      prima = data as unknown as Record<string, unknown> | null;
+    }
+  }
+
   if (Object.keys(patch).length > 0) {
     if (condizione === undefined) {
       const { error } = await admin.from('products').update(patch).eq('id', id);
@@ -216,9 +253,11 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     try {
       await saveProductVariantsServer(admin, id, variants as ProductVariant[], scorteViste);
     } catch (errore) {
+      const rimesso = await rimettiComEra(admin, id, prima, patch);
+      const nota = rimesso ? '' : ' Le altre modifiche però sono rimaste salvate: riapri la scheda e controlla.';
       // La variante venduta mentre la scheda era aperta: il motivo, non «Riprova».
-      if (errore instanceof DaCompletare) return ApiErrors.conflict(errore.message);
-      return ApiErrors.internal('Errore nel salvataggio delle varianti');
+      if (errore instanceof DaCompletare) return ApiErrors.conflict(errore.message + nota);
+      return ApiErrors.internal(`Errore nel salvataggio delle varianti.${nota}`);
     }
   }
 

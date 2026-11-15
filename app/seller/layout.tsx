@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { SubscriptionBanner } from '@/components/seller/SubscriptionBanner';
 import SellerShell from '@/components/seller/SellerShell';
@@ -34,7 +35,7 @@ type StatoRichiestaNegozio = {
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider } = useProfile();
+  const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider, isError, refetch } = useProfile();
   const isApproved = !!profile?.is_approved;
   const allowed = (isSeller && isApproved) || isAdmin;
   type SellerProfileExt = Partial<StatoRichiestaNegozio>;
@@ -69,7 +70,12 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   // Fallback per database senza migration 021/022: se non c'e' status,
   // un seller non approvato e' trattato come pending
   const pending = isSeller && !isApproved && !isSuspended && !isRejected;
-  const wrongRole = isAuthenticated && !isSeller && !isAdmin; // buyer o rider qui
+  // 13/11/2026 (R19-023) — Un profilo che non si è letto (guasto, oppure
+  // lettura in pausa senza rete) non è «un altro tipo di account»: al negozio
+  // approvato si diceva di iscriversi di nuovo. Il ruolo si giudica solo su un
+  // profilo letto davvero; altrimenti si dice che la lettura non è riuscita.
+  const profiloNonLetto = isAuthenticated && !profile;
+  const wrongRole = isAuthenticated && !!profile && !isSeller && !isAdmin; // buyer o rider qui
 
   useEffect(() => {
     if (isLoading) return;
@@ -85,6 +91,20 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   const rileggeUnNonInviata = daLeggereLaRichiesta && richiesta.isFetching && !richiestaInviata;
   if (isLoading || !isAuthenticated || (daLeggereLaRichiesta && richiesta.isLoading) || rileggeUnNonInviata) {
     return <LoadingState />;
+  }
+
+  if (profiloNonLetto) {
+    return (
+      <ErrorState
+        title="Non riesco a leggere i dati del tuo account"
+        description={
+          isError
+            ? 'La lettura non è riuscita. Non vuol dire che il tuo negozio non ci sia più: riprova fra un momento.'
+            : 'Sembra che manchi la connessione. Non vuol dire che il tuo negozio non ci sia più: riprova appena torna la rete.'
+        }
+        onRetry={refetch ? () => refetch() : undefined}
+      />
+    );
   }
 
   // Buyer o rider che ha cliccato /seller per sbaglio (o ha digitato la URL)

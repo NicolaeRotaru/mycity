@@ -55,6 +55,8 @@ const STATO_CONTESTAZIONE: Record<string, string> = {
   warning_needs_response: 'avviso della banca: serve una risposta',
   needs_response: 'la banca chiede una risposta',
   under_review: 'in esame dalla banca',
+  // R21-017 — Il webhook scrive la contestazione in banca in maiuscolo (OPEN, WON, LOST): «WON» usciva grezzo.
+  WON: 'vinta',
   won: 'vinta',
   lost: 'persa',
 };

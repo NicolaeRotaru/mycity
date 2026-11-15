@@ -19,6 +19,7 @@ import { TETTO_ORDINI_LETTI, avvisoDelTettoOrdini } from '@/lib/guadagni/tetto-o
 import { spiegazioneCommissione } from './commissione';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
+import { CARTA_ACCESA } from '@/lib/funzioni-al-lancio';
 
 type PeriodKey = '7d' | '30d' | '90d' | 'all';
 
@@ -45,6 +46,7 @@ type OrderRow = {
   stripe_transfer_id: string | null;
   stripe_reversal_id: string | null;
   pickup_in_store: boolean | null;
+  wallet_applied_cents: number | null;
 };
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
@@ -102,6 +104,9 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
 /** Quando arrivano i soldi: la stessa frase della spiegazione della commissione. */
 const tempiBonifico = spiegazioneCommissione().find((p) => p.tema === 'bonifico');
 
+/** R17-001 — Con la carta spenta tutto quello che aspetta è contanti: lo versiamo il lunedì. */
+const inAttesa = CARTA_ACCESA ? 'in attesa del bonifico' : 'in attesa del bonifico del lunedì';
+
 export default function SellerEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
 
@@ -126,7 +131,8 @@ export default function SellerEarningsPage() {
           // lo confrontava con la sua dashboard Stripe i conti non tornavano.
           // E' la telefonata «dove sono i miei soldi», che sul payout erode la
           // fiducia piu' di qualunque altra cosa.
-          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id, pickup_in_store',
+          // R17-001 — `wallet_applied_cents`: nei contanti `total_price` è scritto dopo il credito MyCity.
+          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id, pickup_in_store, wallet_applied_cents',
         )
         .eq('seller_id', user.id)
         // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
@@ -166,18 +172,20 @@ export default function SellerEarningsPage() {
     return orders.filter((o) => new Date(o.created_at).getTime() >= cutoff);
   }, [orders, period]);
 
-  // Solo ordini carta passano dai payout Stripe. I refund/storni non contano nel netto.
-  const cardOrders = useMemo(() => filtered.filter((o) => o.payment_method !== 'cod'), [filtered]);
-  const activeCard = useMemo(
-    () => cardOrders.filter((o) => o.payout_status !== 'REFUNDED' && o.payout_status !== 'REVERSED'),
-    [cardOrders],
+  // R17-001 — Lo storico elenca anche i contanti, col loro stato: al lancio sono tutti gli ordini.
+  // Un contrassegno ci entra da consegnato: prima nessuno ha ancora pagato niente.
+  const storico = useMemo(
+    () => filtered.filter((o) => o.payment_method !== 'cod' || o.delivery_status === 'DELIVERED'),
+    [filtered],
   );
 
   // I conti stanno in lib/guadagni/negozio.ts: sono soldi di una persona e
   // vanno provati fuori dal componente (#60).
-  const riepilogo = riepilogoNegozio(filtered);
+  // R17-001 — Carta e contanti: con i soli contanti la torre diceva commissione zero.
+  const riepilogo = useMemo(() => riepilogoNegozio(filtered), [filtered]);
   const grossCents = riepilogo.lordoCents;
   const feeCents = riepilogo.commissioniCents;
+  const nettoCents = riepilogo.nettoCents;
   const heldCents = riepilogo.inArrivoCents;
   const paidCents = riepilogo.versatiCents;
   const stornatiCents = riepilogo.stornatiCents;
@@ -204,6 +212,9 @@ export default function SellerEarningsPage() {
   // sua prova, e usa l'orologio di Piacenza come tutte le altre pagine.
   // 5/11/2026 — Solo gli ordini attivi, come il riquadro del lordo: un ordine
   // annullato o rimborsato non e' incasso di nessun giorno.
+  // R17-001 — Gli stessi ordini del lordo, contanti compresi: con la sola carta il grafico restava piatto.
+  // Il nome resta activeCard (gli ordini attivi) perché lo legge la prova comune minori-s01-numeri-del-negozio.
+  const activeCard = riepilogo.contati;
   const daily = useMemo(() => incassoPerGiorno(activeCard), [activeCard]);
   const maxDaily = Math.max(...daily.map(([, v]) => v), 1);
 
@@ -258,12 +269,22 @@ export default function SellerEarningsPage() {
 
       {/* KPI tower */}
       <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Stat label="Fatturato lordo (carta)" value={formatPrice(grossCents / 100)} hint={`${activeCard.length} ordini`} tone="primary" />
-        <Stat label="Commissione MyCity" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" tone="secondary" />
+        <Stat
+          label="Fatturato lordo"
+          value={formatPrice(grossCents / 100)}
+          hint={`${riepilogo.ordiniContanti + riepilogo.ordiniCarta} ordini · ${riepilogo.ordiniContanti} in contanti, ${riepilogo.ordiniCarta} con carta`}
+          tone="primary"
+        />
+        <Stat
+          label="Commissione MyCity"
+          value={'− ' + formatPrice(feeCents / 100)}
+          hint={`Già tolta: a te ${formatPrice(nettoCents / 100)} netti`}
+          tone="secondary"
+        />
         <Stat
           label="Incassato"
           value={formatPrice(paidCents / 100)}
-          hint={`${formatPrice(heldCents / 100)} in arrivo dopo la consegna${stornatiCents > 0 ? ` · ${formatPrice(stornatiCents / 100)} storni` : ''}`}
+          hint={`${formatPrice(heldCents / 100)} ${inAttesa}${stornatiCents > 0 ? ` · ${formatPrice(stornatiCents / 100)} storni` : ''}`}
           tone="olive"
           highlight
         />
@@ -339,7 +360,7 @@ export default function SellerEarningsPage() {
             <h2 className="mb-1 flex items-center gap-2 font-bold text-olive-900"><Landmark size={20} className="text-olive-600" aria-hidden /> Bonifici</h2>
             <p className="text-sm text-olive-800">
               <strong>{formatPrice(paidCents / 100)}</strong> già versati ·{' '}
-              <strong>{formatPrice(heldCents / 100)}</strong> in attesa di liquidazione
+              <strong>{formatPrice(heldCents / 100)}</strong> {inAttesa}
               {stornatiCents > 0 && (
                 <> · <strong>{formatPrice(stornatiCents / 100)}</strong> tornati indietro per rimborsi o contestazioni</>
               )}.
@@ -350,12 +371,13 @@ export default function SellerEarningsPage() {
                   Stripe del negozio, non in banca, e al lancio si paga in contanti col
                   bonifico del lunedì. La frase è la stessa della spiegazione qui sotto. */}
               {tempiBonifico && <>{tempiBonifico.prima}{tempiBonifico.forte}{tempiBonifico.dopo}{' '}</>}
-              Per saldo e bonifici reali apri il tuo conto Stripe.
+              {/* R17-001 — Finché la carta è spenta i contanti non passano da Stripe: niente rimando lì. */}
+              {CARTA_ACCESA && 'Per saldo e bonifici reali apri il tuo conto Stripe.'}
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
             <StripeConnectButton />
-            <StripeDashboardButton />
+            {CARTA_ACCESA && <StripeDashboardButton />}
           </div>
         </div>
       </Card>
@@ -364,10 +386,10 @@ export default function SellerEarningsPage() {
       <Card variant="bordered" padding="none" className="mt-5 overflow-hidden">
         <div className="border-b border-cream-200 px-5 py-4">
           <h2 className="font-serif text-[17px] font-bold text-ink-900">Storico pagamenti</h2>
-          <p className="text-xs text-ink-500">Stato reale del bonifico per ogni ordine carta</p>
+          <p className="text-xs text-ink-500">Stato reale del bonifico per ogni ordine, carta e contanti</p>
         </div>
-        {cardOrders.length === 0 ? (
-          <div className="p-8 text-center text-sm text-ink-400">Ancora nessun ordine pagato con carta nel periodo selezionato.</div>
+        {storico.length === 0 ? (
+          <div className="p-8 text-center text-sm text-ink-400">Ancora nessun ordine pagato nel periodo selezionato.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -380,13 +402,14 @@ export default function SellerEarningsPage() {
                 </tr>
               </thead>
               <tbody>
-                {cardOrders.slice(0, 30).map((o) => {
+                {storico.slice(0, 30).map((o) => {
                   const badge = payoutBadge(o);
                   return (
                     <tr key={o.id} className="border-t border-cream-200">
                       {/* R11-013 — sul telefono la data va sotto il numero: la colonna Stato non esce più dallo schermo. */}
                       <td className="px-3 py-3 font-mono text-[13px] text-ink-700 sm:px-5">
                         #{o.id.slice(0, 8)}
+                        <span className="block font-sans text-[11px] text-ink-500">{o.payment_method === 'cod' ? 'Contanti' : 'Carta'}</span>
                         <span className="block font-sans text-[11px] text-ink-500 sm:hidden">{fmtDate(o.created_at)}</span>
                       </td>
                       <td className="hidden px-5 py-3 text-[13px] text-ink-500 sm:table-cell">{fmtDate(o.created_at)}</td>

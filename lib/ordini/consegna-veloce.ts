@@ -18,7 +18,24 @@ import { negozioPuoServire } from '@/lib/store-hours';
  * /api/consegna/veloce (che la cassa e il carrello leggono) e la riga del carrello. Se una lettura
  * non riesce, la veloce non si offre: mai promettere alla cieca.
  * Prova: tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts.
+ *
+ * 13/11/2026 (R15-015) — UN FATTORINO ACCESO NON VUOL DIRE UN FATTORINO LIBERO.
+ * Con un fattorino solo, dieci clienti alle 12:00 ricevevano tutti «arrivo in 30-60 minuti»: nessuno
+ * contava le veloci che i fattorini avevano già in mano. Adesso `contaVelociInCorso` le conta (vendute
+ * e non ancora consegnate) e `veloceSiPuo` le confronta con quante ne possono portare i fattorini
+ * accesi: fattorini × `VELOCI_PER_FATTORINO`. Quel numero è una scelta di Nicola: finché non c'è, il
+ * conteggio non decide e la veloce si vende come prima.
+ * Prova: tests/unit/riparazione-r15-la-veloce-conta-quelle-in-mano.test.ts.
  */
+
+/**
+ * Quante consegne veloci può avere in mano un fattorino nello stesso momento. `null` = non ancora
+ * deciso: lo sceglie Nicola (domanda nel referto R15), qui non si inventa.
+ */
+const VELOCI_PER_FATTORINO: number | null = null;
+
+/** Gli stati di una consegna venduta e non ancora finita: dal «nuovo» al «in strada». */
+const STATI_DELLA_CONSEGNA_IN_CORSO = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
 
 /** La fascia salvata sull'ordine è la veloce? È l'ingresso `consegnaVeloce` del conto. */
 export function eConsegnaVeloce(a: { fascia: string | null | undefined; ritiroInNegozio: boolean }): boolean {
@@ -36,6 +53,13 @@ export function veloceSiPuo(s: {
   negozi: Array<{ nome: string; orari: unknown }> | null;
   /** I fattorini approvati e online. `null` = la lettura non è riuscita. */
   fattoriniOnline: number | null;
+  /**
+   * Le veloci già vendute e non ancora consegnate (`contaVelociInCorso`). `null` = la lettura non è
+   * riuscita. Assente = chi chiama non le conta.
+   */
+  velociInCorso?: number | null;
+  /** Quante veloci può avere in mano un fattorino. Assente = `VELOCI_PER_FATTORINO`. */
+  velociPerFattorino?: number | null;
 }): EsitoVeloce {
   if (!expressSiPuo(s.adesso.getHours())) {
     // 5/11/2026 — Le ore dalle costanti di lib/quando-arriva, come ORE_DELLA_VELOCE: prima erano scritte a mano.
@@ -63,6 +87,20 @@ export function veloceSiPuo(s: {
   if (s.fattoriniOnline < 1) {
     return { possibile: false, perche: `Adesso non c'è un fattorino libero per la consegna veloce. ${SCEGLI_UNA_FASCIA}` };
   }
+  // 13/11/2026 (R15-015) — Le veloci già in mano contano: i fattorini accesi ne portano al massimo
+  // fattorini × tetto. Senza il tetto (scelta di Nicola) o senza il conteggio, si decide come prima.
+  const tetto = s.velociPerFattorino === undefined ? VELOCI_PER_FATTORINO : s.velociPerFattorino;
+  if (tetto !== null && s.velociInCorso !== undefined) {
+    if (s.velociInCorso === null) {
+      return { possibile: false, perche: `Adesso non riesco a confermare la consegna veloce. ${SCEGLI_UNA_FASCIA}` };
+    }
+    if (s.velociInCorso >= s.fattoriniOnline * tetto) {
+      return {
+        possibile: false,
+        perche: `Adesso i fattorini hanno già in mano tutte le consegne veloci che possono portare. ${SCEGLI_UNA_FASCIA}`,
+      };
+    }
+  }
   return { possibile: true };
 }
 
@@ -82,6 +120,27 @@ export async function contaFattoriniOnline(db: SupabaseClient<any, any, any>): P
       .eq('rider_is_online', true);
     if (error) return null;
     return count ?? 0;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 13/11/2026 (R15-015) — Quante consegne veloci sono già vendute e non ancora finite: fascia
+ * «Adesso», stato fra il nuovo e il «in strada». Le ha in mano un fattorino o le aspetta.
+ * `null` se la lettura fallisce o non dà un numero: un conteggio caduto non vale zero.
+ * Serve il client di servizio: gli ordini degli altri al cliente non si leggono.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function contaVelociInCorso(db: SupabaseClient<any, any, any>): Promise<number | null> {
+  try {
+    const { count, error } = await db
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('delivery_slot', ETICHETTA_ADESSO)
+      .in('delivery_status', STATI_DELLA_CONSEGNA_IN_CORSO);
+    if (error || count == null) return null;
+    return count;
   } catch {
     return null;
   }

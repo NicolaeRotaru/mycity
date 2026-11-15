@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Gift } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
@@ -87,6 +88,18 @@ export default function RegaliClient() {
         titoloNascosto="Le idee regalo"
         minPrice={GIFT_MIN_PRICE}
         categoryIds={giftCategoryIds.length > 0 ? giftCategoryIds : undefined}
+        emptyTitle="Nessuna idea regalo per ora"
+        emptyDescription="In questo momento non ci sono prodotti adatti da regalare. Intanto puoi sfogliare tutto il catalogo."
+        emptySuggestions={
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <Link href="/search" className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800">
+              Sfoglia tutti i prodotti
+            </Link>
+            <Link href="/categorie" className="rounded-full border border-cream-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:border-primary-400">
+              Vai alle categorie
+            </Link>
+          </div>
+        }
       />
     </div>
   );

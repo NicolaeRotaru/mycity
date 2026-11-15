@@ -15,6 +15,9 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+// 13/11/2026 (R24-007) — Il traduttore italiano di Zod acceso anche qui, sul server: senza,
+// un campo mancante o del tipo sbagliato tornava al browser in inglese («Required»).
+import '@/lib/zod-i18n';
 
 export const runtime = 'nodejs';
 

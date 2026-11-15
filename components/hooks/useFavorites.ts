@@ -7,6 +7,9 @@ import { trackFavoriteAdded } from '@/lib/analytics/events';
 import { idUtenteInMemoria } from '@/components/hooks/useUtente';
 import { opzioniDelTocco, type Verso } from '@/lib/preferiti/tocco-del-cuore';
 
+/** Il codice di Postgres per «questa riga c'è già» (vincolo di unicità). */
+const CODICE_RIGA_GIA_PRESENTE = '23505';
+
 /**
  * I preferiti dell'utente collegato.
  *
@@ -78,10 +81,14 @@ export const useFavorites = () => {
       return;
     }
     const { error } = await supabase.from('favorites').insert({ user_id: userId, product_id: productId });
-    if (error) throw error;
+    // 13/11/2026 (R15-013) — Una riga che c'è già (23505, 409: la coppia utente-prodotto è unica)
+    // vuol dire che il preferito è salvato, cioè quello che il cuore mostra. Prima era un errore: il
+    // cuore si ribaltava, compariva «non sono riuscito a salvare» e il preferito restava salvato.
+    if (error && error.code !== CODICE_RIGA_GIA_PRESENTE) throw error;
     // Il conteggio parte DOPO che la riga è entrata davvero: prima si contava un preferito
-    // aggiunto anche quando l'inserimento era fallito, e il numero cresceva senza la riga.
-    trackFavoriteAdded(productId);
+    // aggiunto anche quando l'inserimento era fallito, e il numero cresceva senza la riga. Una riga
+    // che c'era già non è un preferito nuovo.
+    if (!error) trackFavoriteAdded(productId);
   };
 
   const toggle = useMutation(opzioniDelTocco(qc, scriviIlPreferito));

@@ -24,6 +24,16 @@ const ERROR_LABELS: Record<string, string> = {
   CODE_NOT_ISSUED: 'Il codice per questo ordine non è stato generato: chiama l’assistenza.',
 };
 
+/**
+ * R20-001 — Senza rete il codice non è stato controllato: non è un codice sbagliato. Prima la
+ * risposta «TypeError: Failed to fetch» finiva in «Verifica fallita», e il fattorino richiedeva al
+ * cliente un codice che era giusto. I testi sono quelli dei browser (Chrome, Safari, Firefox).
+ */
+const NIENTE_RETE = 'Niente rete: il codice non è stato controllato, non è sbagliato. Riprova appena c’è connessione.';
+const eUnErroreDiRete = (testo: string) =>
+  (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+  /failed to fetch|load failed|networkerror|network request failed|fetch failed|network error/i.test(testo);
+
 const VerifyCodeDialog = ({
   open, title, description, onClose, onSubmit, ctaLabel,
   ctaColor = 'bg-olive-600 hover:bg-olive-700',
@@ -31,12 +41,15 @@ const VerifyCodeDialog = ({
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // R20-001 — L'errore è della rete, non del codice: il campo non si segna come sbagliato.
+  const [diRete, setDiRete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setCode('');
       setError(null);
+      setDiRete(false);
       // Focus su iOS richiede un piccolo delay
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -53,13 +66,26 @@ const VerifyCodeDialog = ({
     }
     setSubmitting(true);
     setError(null);
+    setDiRete(false);
     try {
       const result = await onSubmit(cleaned);
       if (!result.ok) {
-        setError(ERROR_LABELS[result.reason ?? ''] ?? 'Verifica fallita');
+        const motivo = result.reason ?? '';
+        if (!ERROR_LABELS[motivo] && eUnErroreDiRete(motivo)) {
+          setDiRete(true);
+          setError(NIENTE_RETE);
+        } else {
+          setError(ERROR_LABELS[motivo] ?? 'Verifica fallita');
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Errore');
+      const messaggio = err instanceof Error ? err.message : '';
+      if (eUnErroreDiRete(messaggio)) {
+        setDiRete(true);
+        setError(NIENTE_RETE);
+      } else {
+        setError(err instanceof Error ? err.message : 'Errore');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -85,9 +111,10 @@ const VerifyCodeDialog = ({
           onChange={(e) => {
             setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
             setError(null);
+            setDiRete(false);
           }}
           placeholder="000000"
-          aria-invalid={error ? true : undefined}
+          aria-invalid={error && !diRete ? true : undefined}
           className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-cream-300 rounded-xl py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus:border-primary-700"
           autoComplete="one-time-code"
         />

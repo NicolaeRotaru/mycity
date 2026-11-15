@@ -187,17 +187,49 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
     scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Mark-read quando entro o ricevo
+  // 13/11/2026 (R22-012) — «ARRIVATO» NON È «VISTO».
+  // La chat lasciata aperta in sottofondo sul computer del negozio segnava come letto ogni
+  // messaggio appena arrivava: il contatore tornava a zero e sul telefono del fornaio, in
+  // laboratorio, non c'era nessun «non letto». Si segna letto solo con la pagina visibile, e
+  // quando la pagina torna in primo piano.
+  // «Vista» = scheda in primo piano E finestra con il fuoco: un browser lasciato dietro un altro
+  // programma resta «visible» ma non è guardato.
+  const paginaViva = () =>
+    typeof document === 'undefined' || (document.visibilityState === 'visible' && document.hasFocus());
+  const [paginaVisibile, setPaginaVisibile] = useState(paginaViva);
+  // Se mark-read risponde non ok, si riprova al prossimo focus / visibilitychange.
+  const daRiprovare = useRef(false);
+  const [tentativo, setTentativo] = useState(0);
   useEffect(() => {
-    if (!userId || messages.length === 0) return;
+    const aggiorna = () => {
+      setPaginaVisibile(paginaViva());
+      if (daRiprovare.current && paginaViva()) {
+        daRiprovare.current = false;
+        setTentativo((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', aggiorna);
+    window.addEventListener('focus', aggiorna);
+    window.addEventListener('blur', aggiorna);
+    return () => {
+      document.removeEventListener('visibilitychange', aggiorna);
+      window.removeEventListener('focus', aggiorna);
+      window.removeEventListener('blur', aggiorna);
+    };
+  }, []);
+
+  // Mark-read quando entro o ricevo, se la pagina si vede
+  useEffect(() => {
+    if (!userId || messages.length === 0 || !paginaVisibile) return;
     fetch('/api/chat/mark-read', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ conversationId: params.id }),
-    }).then(() => {
-      qc.invalidateQueries({ queryKey: queryKeys.messages.conversations });
-    }).catch(() => { /* noop */ });
-  }, [userId, messages.length, params.id, qc]);
+    }).then((r) => {
+      if (r.ok) qc.invalidateQueries({ queryKey: queryKeys.messages.conversations });
+      else daRiprovare.current = true;
+    }).catch(() => { daRiprovare.current = true; });
+  }, [userId, messages.length, params.id, qc, paginaVisibile, tentativo]);
 
   const sendMutation = useMutation({
     mutationFn: async (body: string) => {
@@ -213,19 +245,24 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       return res.json();
     },
     onSuccess: () => {
-      setText('');
       // Niente refetch: il Realtime ci aggiorna; ma se per qualche motivo
       // non arriva subito, invalida dopo 1s come safety net.
       setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.messages.byParam(params.id) }), 1000);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown, inviato: string) => {
+      toast.error(friendlyError(err));
+      // Il campo si è svuotato all'invio: se l'invio cade il testo torna, davanti a quello nuovo.
+      setText((attuale) => (attuale ? `${inviato} ${attuale}` : inviato));
+    },
   });
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = text.trim();
-    // Il doppio invio lo ferma questo controllo, non lo spegnimento del campo.
+    // Il doppio invio lo ferma questo controllo: un secondo Invio mentre il primo è in volo non
+    // parte e il testo resta nel campo (R22-003: il campo si svuota solo quando il primo è partito).
     if (!trimmed || sendMutation.isPending) return;
+    setText('');
     sendMutation.mutate(trimmed);
   };
 
@@ -398,7 +435,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           />
           <button
             type="submit"
-            disabled={sendMutation.isPending || !text.trim()}
+            disabled={!text.trim()}
             aria-label="Invia"
             className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white rounded-full p-3"
           >

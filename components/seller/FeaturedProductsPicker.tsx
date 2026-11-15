@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { formatPrice } from '@/lib/format';
 import { queryKeys } from '@/lib/queries/keys';
 import { MAX_FEATURED } from '@/lib/store-customization';
@@ -80,7 +81,7 @@ export default function FeaturedProductsPicker({ value = [], onChange }: Props) 
           const selected = value.includes(p.id);
           const order = value.indexOf(p.id) + 1;
           const disabled = !selected && value.length >= MAX_FEATURED;
-          const img = sizedImage(p.images?.[0] ?? 'https://placehold.co/100x100/FBF7F0/C0492C?text=Foto', 'thumb');
+          const img = sizedImage(p.images?.[0] ?? FOTO_MANCANTE, 'thumb');
           return (
             <li key={p.id}>
               <button

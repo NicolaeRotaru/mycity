@@ -161,7 +161,7 @@ export default function MessagesListPage() {
   return (
     <div>
       <header className="mb-6">
-        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Attività</p>
+        <p className="text-xs font-bold uppercase tracking-label text-primary-700">Attività</p>
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
           Messaggi
         </h1>

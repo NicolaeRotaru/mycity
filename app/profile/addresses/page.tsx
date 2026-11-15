@@ -244,13 +244,13 @@ export default function AddressesPage() {
               {a.phone}
             </p>
             {a.notes && <p className="mt-1 text-xs italic text-ink-400">{a.notes}</p>}
-            <div className="mt-auto flex gap-2 pt-4">
-              <Button variant="secondary" size="sm" icon={Pencil} onClick={() => startEdit(a)}>
+            <div className="mt-auto flex flex-wrap gap-3 pt-4">
+              <Button variant="secondary" size="md" icon={Pencil} onClick={() => startEdit(a)}>
                 {tActions('edit')}
               </Button>
               <Button
                 variant="ghost"
-                size="sm"
+                size="md"
                 icon={Trash2}
                 onClick={async () => {
                   const ok = await confirmDialog({

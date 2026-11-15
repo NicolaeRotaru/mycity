@@ -166,9 +166,9 @@ function NotifPopover({
         className="absolute right-0 top-[calc(100%+10px)] z-modal w-[330px] max-w-[88vw] overflow-hidden rounded-xl border border-cream-200 bg-surface-0 text-ink-900 shadow-warm-xl"
       >
         <div className="flex items-center justify-between border-b border-cream-200 px-4 py-3">
-          <span className="font-serif text-[16px] font-bold">Notifiche</span>
+          <span className="font-serif text-base font-bold">Notifiche</span>
           {unread > 0 && (
-            <span className="text-[12px] font-semibold text-primary-700">{unread} non lette</span>
+            <span className="text-xs font-semibold text-primary-700">{unread} non lette</span>
           )}
         </div>
         <div className="px-4 py-6 text-center text-sm text-ink-500">
@@ -179,7 +179,7 @@ function NotifPopover({
         <Link
           href="/notifications"
           onClick={onClose}
-          className="block w-full border-t border-cream-200 bg-cream-50 px-4 py-3 text-center text-[13px] font-semibold text-ink-700 hover:bg-cream-100"
+          className="block w-full border-t border-cream-200 bg-cream-50 px-4 py-3 text-center text-sm font-semibold text-ink-700 hover:bg-cream-100"
         >
           Centro notifiche
         </Link>
@@ -303,7 +303,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           }`}
         >
           {!collapsed && (
-            <Link href="/seller/dashboard" className="font-serif text-[22px] font-extrabold leading-none tracking-tight">
+            <Link href="/seller/dashboard" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
               <span className="text-accent-300">My</span>
               <span className="text-white">City</span>
               <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-ink-300">
@@ -347,7 +347,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             </span>
             {!collapsed && (
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-extrabold">Copilot</span>
+                <span className="block text-sm font-extrabold">Copilot</span>
                 <span className="block text-[11px] text-white/80">Gestisci parlando</span>
               </span>
             )}
@@ -360,7 +360,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           {NAV.map((sec) => (
             <div key={sec.group} className="mb-1.5">
               {!collapsed && (
-                <p className="mx-3 mb-1 mt-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-white/40">
+                <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-white/40">
                   {sec.group}
                 </p>
               )}
@@ -374,7 +374,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
                     href={n.href}
                     aria-current={on ? 'page' : undefined}
                     title={n.label}
-                    className={`relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-[13.5px] transition-colors ${
+                    className={`relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition-colors ${
                       collapsed ? 'lg:justify-center lg:px-2.5' : ''
                     } ${
                       on
@@ -409,7 +409,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           <Link
             href="/?shop=1"
             title="Vai al marketplace"
-            className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white ${
+            className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white ${
               collapsed ? 'lg:justify-center lg:px-2.5' : ''
             }`}
           >
@@ -420,7 +420,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             type="button"
             onClick={handleSignOut}
             title="Esci"
-            className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-secondary-600/20 hover:text-white ${
+            className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium text-white/[0.78] transition-colors hover:bg-secondary-600/20 hover:text-white ${
               collapsed ? 'lg:justify-center lg:px-2.5' : ''
             }`}
           >
@@ -467,7 +467,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             {/* Pubblica prodotto */}
             <Link
               href="/seller/products/new"
-              className="inline-flex items-center gap-1.5 rounded-full bg-primary-700 px-3.5 py-2.5 text-[13px] font-bold text-white shadow-warm-sm transition-colors hover:bg-primary-800"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary-700 px-3.5 py-2.5 text-sm font-bold text-white shadow-warm-sm transition-colors hover:bg-primary-800"
             >
               <Plus size={16} strokeWidth={2.4} aria-hidden />
               <span className="hidden sm:inline">Pubblica prodotto</span>
@@ -501,11 +501,11 @@ export default function SellerShell({ children }: { children: React.ReactNode })
 
             {/* Avatar negozio */}
             <Link href="/seller/profile" className="flex items-center gap-2" title={storeName}>
-              <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[13px] font-bold text-white">
+              <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
                 {initials}
               </span>
               <span className="hidden leading-tight md:block">
-                <span className="block max-w-[140px] truncate text-[13px] font-bold text-ink-900">{storeName}</span>
+                <span className="block max-w-[140px] truncate text-sm font-bold text-ink-900">{storeName}</span>
                 <span className="block text-[11px] text-ink-400">Venditore</span>
               </span>
             </Link>
@@ -530,7 +530,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           href={COPILOT_HREF}
           aria-label="Chiedi al Copilot"
           title="Chiedi al Copilot"
-          className="fixed bottom-6 right-6 z-overlay inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 px-4 py-3.5 text-[14px] font-bold text-white shadow-warm-xl hover:from-primary-700 hover:to-secondary-700"
+          className="fixed bottom-6 right-6 z-overlay inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 px-4 py-3.5 text-sm font-bold text-white shadow-warm-xl hover:from-primary-700 hover:to-secondary-700"
         >
           <Sparkles size={19} aria-hidden />
           <span className="hidden sm:inline">Copilot</span>

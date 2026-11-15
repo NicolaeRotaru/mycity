@@ -163,7 +163,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // Il dettaglio lo vede chi ha il segreto dei lavori periodici, non il mondo.
   // Il monitor esterno guarda il codice HTTP, che non cambia: 200 pronto, 503
   // no. Chi vuole sapere PERCHÉ deve dimostrare di essere di casa.
-  const segreto = process.env.CRON_SECRET;
+  // R23-009 — ripulito come il gettone (vedi withCronAuth): un «a capo» in fondo al segreto non
+  // deve chiudere la porta a chi ce l'ha.
+  const segreto = process.env.CRON_SECRET?.trim();
   const autorizzato =
     process.env.NODE_ENV !== 'production' ||
     (!!segreto && segretiCombaciano(gettoneBearer(req.headers.get('authorization')), segreto));

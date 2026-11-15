@@ -45,7 +45,7 @@ export default function RiderProfilePage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url')
+        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url, rider_haccp_url')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -137,6 +137,10 @@ export default function RiderProfilePage() {
   const licenseExpires = (p?.rider_license_expires_on as string | null) ?? null;
   const insuranceExpires = (p?.rider_insurance_expires_on as string | null) ?? null;
   const idUploaded = !!(p?.kyc_id_doc_front_url as string | null);
+  // 13/11/2026 (R19-005) — La scadenza dell'HACCP non la scrive nessuno (non è
+  // nel modulo né fra le colonne modificabili, migrazione 119): l'attestato
+  // caricato si riconosce dal file, non dalla data.
+  const haccpUploaded = !!(p?.rider_haccp_url as string | null);
   const vehicleLabel = vehicleType ? (VEHICLE_LABELS[vehicleType] ?? vehicleType) : 'Non specificato';
   const VehicleIcon = vehicleType === 'CAR' ? Car : Bike;
 
@@ -156,7 +160,8 @@ export default function RiderProfilePage() {
   const oggi = giornoPiacenza();
   const scaduto = (d: string | null) => !!d && d.slice(0, 10) < oggi;
   const soon = (d: string | null) => !!d && (new Date(d).getTime() - Date.now()) < 60 * 86400000; // <60gg
-  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing';
+  // 'review': caricato, nessuno l'ha ancora esaminato (R19-005: prima diceva «In scadenza»).
+  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing' | 'review';
   const statoDellaScadenza = (d: string | null): DocStatus => (!d ? 'missing' : scaduto(d) ? 'expired' : soon(d) ? 'soon' : 'ok');
   // Solo patente e polizza fermano le consegne (migrazione 270); l'HACCP è facoltativo.
   const testoDellaScadenza = (d: string, ferma = true) =>
@@ -177,13 +182,15 @@ export default function RiderProfilePage() {
     },
     {
       Icon: FileCheck, label: 'Documento identità',
-      sub: idUploaded ? (approvato ? 'Verificato' : 'In attesa di verifica') : 'Da caricare',
-      status: idUploaded ? (approvato ? 'ok' : 'soon') : 'missing',
+      sub: idUploaded ? (approvato ? 'Verificato' : 'Caricato · In attesa di verifica') : 'Da caricare',
+      status: idUploaded ? (approvato ? 'ok' : 'review') : 'missing',
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',
-      sub: haccpExpires ? testoDellaScadenza(haccpExpires, false) : 'Facoltativo (food)',
-      status: statoDellaScadenza(haccpExpires),
+      sub: haccpExpires
+        ? testoDellaScadenza(haccpExpires, false)
+        : haccpUploaded ? (approvato ? 'Caricato' : 'Caricato · In attesa di verifica') : 'Facoltativo (food)',
+      status: haccpExpires || !haccpUploaded ? statoDellaScadenza(haccpExpires) : approvato ? 'ok' : 'review',
     },
   ];
   const STATUS_META: Record<DocStatus, { bg: string; text: string; label: string; Icon: LucideIcon }> = {
@@ -191,6 +198,7 @@ export default function RiderProfilePage() {
     soon:    { bg: 'bg-accent-50',    text: 'text-accent-700',    label: 'In scadenza', Icon: Clock },
     expired: { bg: 'bg-secondary-50', text: 'text-secondary-700', label: 'Scaduto',     Icon: CircleAlert },
     missing: { bg: 'bg-secondary-50', text: 'text-secondary-600', label: 'Mancante',    Icon: CircleAlert },
+    review:  { bg: 'bg-accent-50',    text: 'text-accent-700',    label: 'In verifica', Icon: Clock },
   };
 
   return (

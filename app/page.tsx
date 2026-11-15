@@ -1,4 +1,5 @@
 import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
+import { QUANDO_ARRIVA_SENZA_NEGOZIO } from '@/lib/promesse-pubbliche';
 import { frasePagamento } from '@/lib/promesse-pubbliche';
 import { headers } from 'next/headers';
 import { HydrationBoundary } from '@tanstack/react-query';
@@ -35,7 +36,8 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
         {/* 5/11/2026 — «casa, elettronica» erano categorie vuote: si dice quello che c'è. */}
         Pane, alimentari e prodotti dei negozi: ordini dai commercianti
         della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
-        Consegna in giornata.
+        {/* R20-009 — «In giornata» da solo prometteva oltre gli orari: si dice come la cassa. */}
+        Consegna {QUANDO_ARRIVA_SENZA_NEGOZIO}, a negozio aperto.
       </>
     ),
     ctaPrimary: 'Inizia a esplorare',

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 /**
  * Viewer fullscreen riusabile per le storie (Instagram-like).
@@ -141,6 +142,13 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
 
   const active = stories[index];
   if (!active) return null;
+  /**
+   * 13/11/2026 (R16-011) — Il «Scopri di più» porta solo dentro MyCity. Il link lo scrive il
+   * negozio a mano, e prima si apriva così com'era: anche un sito esterno, senza dire al cliente
+   * che stava uscendo da MyCity. Vale solo un percorso del sito, con la stessa regola dei ritorni
+   * dopo l'accesso (lib/safe-redirect.ts): un link che non la passa non si mostra.
+   */
+  const linkInterno = safeInternalPath(active.link_url, '');
 
   return (
     <div
@@ -259,9 +267,9 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
               </p>
             </div>
           )}
-          {active.link_url && (
+          {linkInterno && (
             <Link
-              href={active.link_url}
+              href={linkInterno}
               className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-white text-ink-900 font-bold px-5 py-2 rounded-full shadow-warm-lg whitespace-nowrap"
             >
               Scopri di più →

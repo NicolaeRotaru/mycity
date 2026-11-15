@@ -49,7 +49,7 @@ export default function SellerOnboardingChecklist() {
         .from('profiles')
         .select(`
           store_name, store_logo, store_address, store_lat, store_lng,
-          store_hours, stripe_charges_enabled, stripe_payouts_enabled, billing_iban
+          store_hours, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, billing_iban
         `)
         .eq('id', user.id)
         .single();

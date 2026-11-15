@@ -1,8 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import { Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
@@ -40,7 +40,7 @@ export function CartGroupsList({ groups }: Props) {
           {g.items.map((item) => (
             <div key={`${item.id}::${item.variantId ?? ''}`} className="flex gap-3 items-center pl-2 py-1">
               <div className="relative w-10 h-10 bg-cream-100 rounded shrink-0 overflow-hidden">
-                <Image
+                <FotoConRipiego
                   src={sizedImage(item.image ?? FOTO_MANCANTE, 'thumb')}
                   alt={item.name}
                   fill

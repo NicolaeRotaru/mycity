@@ -419,10 +419,11 @@ export default function NewReturnPage() {
             </div>
           ))}
           {photos.length < 8 && (
-            <label className="inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-cream-300 text-2xl text-ink-400 hover:bg-cream-50">
+            <label className="inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-cream-300 text-2xl text-ink-400 hover:bg-cream-50 focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2">
               {uploading ? '…' : '+'}
               <input
                 type="file"
+                aria-label="Aggiungi una foto alla richiesta di reso"
                 /* 8/9/2026 — erano tre tipi scritti a mano qui accanto, mentre la porta e il
                    deposito ne accettano sette (070). Il cliente che allega la foto del prodotto
                    rotto scattata con l'iPhone non la vedeva nemmeno comparire nella finestra di

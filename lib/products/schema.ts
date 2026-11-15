@@ -63,6 +63,19 @@ export function condizioneDaScegliere(c: unknown): c is ProductCondition {
   return typeof c === 'string' && (CONDIZIONI_DA_SCEGLIERE as readonly string[]).includes(c);
 }
 
+/** Una negazione («non», «not», «mai», «n't»): davanti a «nuovo» lo toglie. */
+const NEGAZIONE = /\b(non|not|mai|never|no|né)\b|n't/;
+
+/** Un paragone («come», «quasi», «simile», «pare»…): davanti a «nuovo» dice che somiglia al nuovo, non che lo è. */
+const PARAGONE =
+  /\b(come|quasi|pari|simile|simili|pare|sembra|sembrano|tipo|praticamente|pressoch[eé]|fosse|like|as|nearly|almost)\b|\bda\s*$/;
+
+/** «Mai usato» / «non usato» (e l'inglese): il resto della frase fino alla virgola resta in coda. */
+const USO_NEGATO = /\b(mai|non|never|not)\b([^,.;]{0,20}?)\b(usat\w*|used)\b([^,.;]*)/;
+
+/** Dopo «mai/non usato», una misura di tempo o di quantità dell'uso subito dopo: l'oggetto è stato usato. */
+const MISURA_DOPO = /^\s*(molto|tanto\s+(tempo|spesso)|più|piu\b|spesso|a\s+lungo|da\b|dal\b|dall|per\b|negli\b|nell|nei\b|much|often|anymore|for\b|since|in\s+the\s+(last|past))/;
+
 /**
  * Normalizza testo libero (AI o vecchio attributo per-categoria `stato`) nella
  * condizione standardizzata. '' se non riconosciuta.
@@ -70,15 +83,29 @@ export function condizioneDaScegliere(c: unknown): c is ProductCondition {
 export function normalizeCondition(s: string): ProductCondition | '' {
   const t = s.toLowerCase();
   if (t.includes('ricond') || t.includes('refurb')) return 'ricondizionato';
-  // 2289 — «Nuovo, mai usato»: la negazione dell'uso dice nuovo (prima vinceva «usat»).
-  if (/\b(mai|non|never|not)\b[^,.;]{0,20}\b(usat|used)/.test(t)) return 'nuovo';
-  // 2261 — «Seminuovo», «come nuovo», «quasi nuovo», «non nuovo» non sono nuovi: prima
-  // bastava la sillaba «nuov» e un oggetto usato entrava in vetrina come nuovo.
+  // R16-005 — «Seminuovo» è usato.
+  if (/semi[\s-]?nuov/.test(t)) return 'usato';
+  // R16-005 — UNA REGOLA, non una lista di frasi: «nuovo» (nuov…/new) vale nuovo solo se, nella
+  // sua frase (fino alla virgola), non ha DAVANTI una negazione né un paragone. «Non più nuovo»,
+  // «non proprio nuovo», «come fosse nuovo», «simile al nuovo», «not quite new»: usato.
+  const nuovo = /nuov|\bnew\b/.exec(t);
+  if (nuovo) {
+    const frase = t.slice(0, nuovo.index).split(/[,.;]/).pop() ?? '';
+    // «mai usato nuovo»: il «mai» appartiene a «usato», non a «nuovo».
+    const davanti = frase.replace(new RegExp(USO_NEGATO.source, 'g'), ' ');
+    if (NEGAZIONE.test(davanti) || PARAGONE.test(davanti)) return 'usato';
+  }
+  // 2289 — «Nuovo, mai usato» dice nuovo (prima vinceva «usat»). R16-005 — Ma non se subito dopo
+  // c'è una misura dell'uso («non usato per anni», «dal 2019», «non è stato usato molto», «non più usato»).
+  // Le parole «troppo», «tanto» altrove nella frase («mai usato perché troppo piccolo») non contano.
+  const uso = USO_NEGATO.exec(t);
+  if (uso) {
+    if (/\b(più|piu|anymore|longer)\b/.test(uso[2])) return 'usato';
+    return MISURA_DOPO.test(uso[4]) ? 'usato' : 'nuovo';
+  }
   // 2268 — Anche «used», «second hand», «di seconda mano» si riconoscono come usato.
-  if (
-    /seminuov|semi-nuov|semi nuov|\bcome\s+nuov|\bquasi\s+nuov|\bnon\s+nuov|usat|second[\s-]?hand|seconda mano|\bused\b|pre-?owned/.test(t)
-  ) return 'usato';
-  if (t.includes('nuov') || /\bnew\b|\bbrand new\b/.test(t)) return 'nuovo';
+  if (/usat|second[\s-]?hand|seconda mano|\bused\b|pre-?owned/.test(t)) return 'usato';
+  if (nuovo) return 'nuovo';
   return '';
 }
 

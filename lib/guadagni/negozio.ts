@@ -34,16 +34,27 @@ export type OrdineNegozio = {
   application_fee_cents: number | null;
   /** Ritiro in negozio: col contante il cliente paga al banco, non al fattorino. */
   pickup_in_store?: boolean | null;
+  /** R17-001 — Un contrassegno entra nel fatturato solo da consegnato: prima i soldi non ci sono. */
+  delivery_status?: string | null;
+  /** R17-001 — Il credito MyCity speso: nei contanti `total_price` è scritto dopo averlo tolto. */
+  wallet_applied_cents?: number | null;
 };
 
-export type RiepilogoNegozio = {
-  /** Fatturato lordo sugli ordini con carta, al netto dei rimborsi, in centesimi. */
+export type RiepilogoNegozio<T extends OrdineNegozio = OrdineNegozio> = {
+  /** Fatturato lordo, carta e contanti, al netto dei rimborsi, in centesimi. */
   lordoCents: number;
-  /** Commissione marketplace trattenuta. */
+  /** Commissione marketplace trattenuta: quella scritta sull'ordine (`application_fee_cents`). */
   commissioniCents: number;
+  /** R17-001 — Il netto del negozio sugli stessi ordini, meno gli storni. */
+  nettoCents: number;
+  /** R17-001 — Gli ordini contati nel lordo, per metodo: il negozio legge con che cosa ha incassato. */
+  ordiniCarta: number;
+  ordiniContanti: number;
+  /** R17-001 — Gli stessi ordini, per il grafico dei giorni: grafico e lordo contano gli stessi. */
+  contati: T[];
   /** Già versato sull'IBAN. */
   versatiCents: number;
-  /** In attesa di liquidazione (trattenuti + bonifici in corso). */
+  /** In attesa di liquidazione (trattenuti + bonifici in corso + contanti consegnati ancora dal fattorino). */
   inArrivoCents: number;
   /** Tornato indietro per rimborsi o contestazioni. */
   stornatiCents: number;
@@ -83,11 +94,42 @@ const STATI_CON_BONIFICO = ['TRANSFERRED', 'PAID_MANUALLY', 'HELD', 'PENDING_SEL
  */
 export const STATI_VERSATI = ['TRANSFERRED', 'PAID_MANUALLY'];
 
-export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
-  const conCarta = ordini.filter((o) => o.payment_method !== 'cod');
-  const attivi = conCarta.filter(
-    (o) => o.payout_status !== 'REFUNDED' && o.payout_status !== 'REVERSED',
+/**
+ * R17-001 — I CONTANTI ENTRANO NEL FATTURATO, NELLA COMMISSIONE E NEL NETTO.
+ *
+ * Lordo e commissione si contavano solo sugli ordini con carta. Al lancio si
+ * paga solo in contanti (CARTA_ACCESA = false), quindi il negozio leggeva
+ * «commissione − 0,00 €» e «0 ordini», mentre su ogni contrassegno la
+ * commissione è scritta dalla cassa (`application_fee_cents`, la stessa che
+ * il bonifico del lunedì toglie versando solo `seller_payout_cents`).
+ *
+ * Un contrassegno conta da consegnato, come nel riquadro dei contanti: prima
+ * il fattorino non ha raccolto niente. Il ritiro pagato al banco resta fuori:
+ * quella commissione non è trattenuta, la deve il negozio, e il riquadro dei
+ * contanti la mostra a parte (R11-005).
+ */
+function contaNelFatturato(o: OrdineNegozio): boolean {
+  if (o.payout_status === 'REFUNDED' || o.payout_status === 'REVERSED') return false;
+  if (o.payment_method !== 'cod') return true;
+  return o.delivery_status === 'DELIVERED' && !pagatoAlBanco(o);
+}
+
+/**
+ * R17-001 — Il contrassegno consegnato e non ancora rimesso (AWAITING_REMITTANCE)
+ * è soldi del negozio in mano al fattorino: non è versato, ma è in attesa del
+ * bonifico. Prima non stava in nessuna delle due colonne.
+ */
+function contantiDalFattorino(o: OrdineNegozio): boolean {
+  return (
+    o.payment_method === 'cod' &&
+    o.payout_status === 'AWAITING_REMITTANCE' &&
+    o.delivery_status === 'DELIVERED' &&
+    !pagatoAlBanco(o)
   );
+}
+
+export function riepilogoNegozio<T extends OrdineNegozio>(ordini: T[]): RiepilogoNegozio<T> {
+  const attivi = ordini.filter(contaNelFatturato);
 
   // Per i bonifici si guardano tutti gli ordini, contrassegno compreso: quello
   // che conta e' se un bonifico e' partito, non con che cosa ha pagato il cliente.
@@ -97,12 +139,17 @@ export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
   return {
     lordoCents: attivi.reduce((s, o) => s + incassatoDellOrdineCents(o), 0),
     commissioniCents: attivi.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0),
+    nettoCents: somma(attivi),
+    ordiniCarta: attivi.filter((o) => o.payment_method !== 'cod').length,
+    ordiniContanti: attivi.filter((o) => o.payment_method === 'cod').length,
+    contati: attivi,
     versatiCents: somma(conBonifico.filter((o) => STATI_VERSATI.includes(o.payout_status ?? ''))),
-    inArrivoCents: somma(
-      conBonifico.filter((o) =>
-        ['HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'].includes(o.payout_status ?? ''),
-      ),
-    ),
+    inArrivoCents:
+      somma(
+        conBonifico.filter((o) =>
+          ['HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'].includes(o.payout_status ?? ''),
+        ),
+      ) + somma(ordini.filter(contantiDalFattorino)),
     stornatiCents: ordini.reduce((s, o) => s + (o.seller_payout_reversed_cents ?? 0), 0),
   };
 }

@@ -170,9 +170,13 @@ export default function SellPage() {
           legalLastName:   profile?.legal_last_name  ?? profile?.full_name?.split(' ').slice(1).join(' ') ?? '',
           legalFiscalCode: profile?.legal_fiscal_code ?? '',
           legalBirthDate:  profile?.legal_birth_date ?? '',
-          legalResidenceAddr: profile?.legal_residence_addr ?? profile?.address ?? '',
-          legalResidenceCity: profile?.legal_residence_city ?? profile?.city ?? '',
-          legalResidenceZip:  profile?.legal_residence_zip  ?? profile?.zip  ?? '',
+          // R16-010 (13/11/2026) — La residenza non si precompila più da indirizzo, CAP e città
+          // del profilo: dal 5/11 il Profilo non li mostra e nessuno li può più correggere, quindi
+          // qui arrivava un indirizzo vecchio che il negoziante non aveva modo di rettificare.
+          // Si precompila solo con la residenza che ha scritto lui in questo modulo.
+          legalResidenceAddr: profile?.legal_residence_addr ?? '',
+          legalResidenceCity: profile?.legal_residence_city ?? '',
+          legalResidenceZip:  profile?.legal_residence_zip  ?? '',
           businessLegalName: profile?.business_legal_name ?? '',
           businessVatNumber: profile?.business_vat_number ?? '',
           businessAddress:   profile?.business_address ?? '',

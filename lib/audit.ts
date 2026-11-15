@@ -51,26 +51,49 @@ function annotaGuasto(dove: string, entry: AuditEntry, errore: { message?: strin
   });
 }
 
+/**
+ * 13/11/2026 (R16-014) — CHI HA FATTO L'AZIONE, NON «ADMIN» PER TUTTI.
+ *
+ * Lo specchio in `activity_events` scriveva sempre «Azione admin», ma `writeAudit` lo chiamano
+ * anche fattorini e negozi (documenti caricati, verifica inviata, prodotti caricati dal file):
+ * nel pannello sembravano azioni dello staff. Il ruolo si legge dal profilo di chi agisce. Se la
+ * lettura non riesce non si indovina: la riga dice «Azione», senza dire di chi. Nessun guasto
+ * annotato: il registro vero (`audit_logs`) e' gia' scritto, questa e' solo l'etichetta.
+ */
+async function ruoloDi(supa: ReturnType<typeof getAdminSupabase>, actorId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supa.from('profiles').select('role').eq('id', actorId).maybeSingle();
+    const ruolo = (data as { role?: unknown } | null)?.role;
+    return !error && typeof ruolo === 'string' ? ruolo : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function writeAudit(entry: AuditEntry): Promise<void> {
   try {
     const supa = getAdminSupabase();
-    const { error: erroreRegistro } = await supa.from('audit_logs').insert({
-      actor_id: entry.actorId,
-      action: entry.action,
-      target_table: entry.targetTable ?? null,
-      target_id: entry.targetId ?? null,
-      metadata: entry.metadata ?? null,
-      ip: entry.ip ?? null,
-      user_agent: entry.userAgent ?? null,
-    });
+    const [{ error: erroreRegistro }, ruolo] = await Promise.all([
+      supa.from('audit_logs').insert({
+        actor_id: entry.actorId,
+        action: entry.action,
+        target_table: entry.targetTable ?? null,
+        target_id: entry.targetId ?? null,
+        metadata: entry.metadata ?? null,
+        ip: entry.ip ?? null,
+        user_agent: entry.userAgent ?? null,
+      }),
+      ruoloDi(supa, entry.actorId),
+    ]);
     annotaGuasto('audit_logs', entry, erroreRegistro);
+    const chi = ruolo === 'admin' ? 'admin' : ruolo ? 'utente' : null;
     // Mirror nel firehose di sorveglianza così l'admin vede TUTTO in un posto
     // solo (categoria "moderation"). Best-effort: non blocca la richiesta.
     const { error: erroreFirehose } = await supa.from('activity_events').insert({
       category: 'moderation',
       event_type: entry.action,
-      action: 'admin',
-      summary: `Azione admin: ${entry.action}`,
+      action: chi,
+      summary: `${chi === 'admin' ? 'Azione admin' : chi === 'utente' ? 'Azione utente' : 'Azione'}: ${entry.action}`,
       actor_id: entry.actorId,
       target_table: entry.targetTable ?? null,
       target_id: entry.targetId ?? null,

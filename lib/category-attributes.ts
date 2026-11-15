@@ -282,6 +282,8 @@ export function formatAttributeValue(value: unknown, key?: string): string {
  * alimenti qualunque sia il suo nome. Chi passa categorie senza la colonna
  * (database prima della 363) ricade sul nome, come prima.
  */
+const PROFONDITA_MASSIMA_CATEGORIE = 20;
+
 type CategoriaPerAttributi = {
   id: string;
   slug: string;
@@ -298,10 +300,14 @@ export function getAttributesForCategory(
   // Collaudo K03: l'obbligo vale se lo porta la categoria o uno qualunque dei padri
   // (come il guardiano del database), non solo la radice.
   let obbligoAlimentare = cur?.richiede_dichiarazioni_alimentari === true;
-  // Risali fino al livello top
-  while (cur?.parent_id) {
+  // Risali fino al livello top. R18-014 — con un tetto di passi e l'insieme dei già visti: un
+  // cerchio nei dati (A→B→A) non deve far girare il modulo prodotto per sempre.
+  const visti = new Set<string>([cur?.id ?? '']);
+  let passi = 0;
+  while (cur?.parent_id && passi++ < PROFONDITA_MASSIMA_CATEGORIE) {
     const parent: CategoriaPerAttributi | undefined = categories.find((c) => c.id === cur!.parent_id);
-    if (!parent) break;
+    if (!parent || visti.has(parent.id)) break;
+    visti.add(parent.id);
     cur = parent;
     if (cur.richiede_dichiarazioni_alimentari === true) obbligoAlimentare = true;
   }

@@ -34,7 +34,9 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
   if (!config.imageUrl) return null;
 
   const overlay = config.overlay ?? 'dark';
-  const overlayClass = overlay === 'dark' ? 'bg-black/40' : overlay === 'light' ? 'bg-white/30' : '';
+  // Come la home e le pagine CMS: con il velo «nessuno» resta una sfumatura minima dal basso,
+  // altrimenti la scritta bianca sulla foto chiara non si legge.
+  const overlayClass = overlay === 'dark' ? 'bg-black/40' : overlay === 'light' ? 'bg-white/30' : 'bg-gradient-to-t from-black/45 via-black/10 to-transparent';
   const textClass = overlay === 'light' ? 'text-ink-900' : 'text-white';
 
   const href = config.cta ? ctaHref(config.cta.target, ctx.storeId, ctx.site) : null;
@@ -46,7 +48,7 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
     <section className="relative w-full h-56 sm:h-72 overflow-hidden rounded-2xl border border-cream-300 shadow-warm">
       <Image
         src={sizedImage(config.imageUrl, 'hero')}
-        alt={config.heading ?? ''}
+        alt={config.alt ?? ''}
         fill
         sizes="(max-width: 768px) 100vw, 1024px"
         loader={caricatoreFotoRemote}

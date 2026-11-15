@@ -14,6 +14,7 @@ import {
   type Giorno,
 } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
+import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
 
 /**
  * Selettore della fascia di consegna ("Quando vuoi riceverlo", step 2).
@@ -101,6 +102,16 @@ export function avvisoFasciaScaduta(vecchia: string, nuova: string | null): stri
     return `La fascia «${vecchia}» adesso non si può più e per oggi non ne resta nessuna: ho spostato la consegna a domani. Scegli qui sotto l’ora che ti va bene.`;
   }
   return `La fascia «${vecchia}» adesso non si può più: ho messo «${nuova}». Controlla qui sotto che l’ora ti vada bene.`;
+}
+
+/**
+ * 13/11/2026 (R19-017) — La riga che si legge quando passa la mezzanotte con «Domani» scelto.
+ * `oggi` = la data che il cliente aveva in mente («sab 7/11»); `fascia` = l'orario («9:00–11:00»);
+ * `domani` = la data che adesso porta «Domani»; `resta` = se quella fascia si può ancora servire.
+ */
+export function avvisoMezzanotte(a: { oggi: string; fascia: string; domani: string; resta: boolean }): string {
+  if (a.resta) return `È passata la mezzanotte: la consegna resta per ${a.oggi}, ${a.fascia}, che adesso è «Oggi».`;
+  return `È passata la mezzanotte: «Domani» adesso è ${a.domani}, e la fascia ${a.fascia} di ${a.oggi} non si può più. Scegli qui sopra il giorno e l’ora che ti vanno bene.`;
 }
 
 /** 30/10/2026 (ondata 18) — Mentre il server non ha ancora detto se la veloce si può. */
@@ -244,6 +255,30 @@ export function DeliverySlotPicker({
   // Le fasce di oggi di questo disegno: al prossimo, l'effetto qui sopra le confronta con l'ora nuova.
   useEffect(() => {
     fasceDiOggiPrima.current = todayTimes;
+  });
+
+  // 13/11/2026 (R19-017) — A MEZZANOTTE «DOMANI» CAMBIA GIORNO, LA SCELTA DEL CLIENTE NO.
+  //
+  // Le date di «Oggi» e «Domani» si ricalcolano a ogni battito: venerdì alle 23:59 il cliente sceglie
+  // «Domani · 9:00–11:00» (sabato), a mezzanotte «Domani» diventa domenica e la scelta restava lì,
+  // muta: l'ordine nasceva per domenica. Qui, quando il giorno cambia a pagina aperta, la fascia si
+  // riporta al giorno che il cliente aveva in mente con la regola della carta pagata dopo mezzanotte
+  // (`fasciaAlGiornoDellOrdine`): «Domani» di ieri è «Oggi». E una riga lo dice. Si mette prima
+  // dell'effetto di «Domani» qui sotto, che altrimenti sposterebbe la scelta per conto suo.
+  const giornoDelDisegnoPrima = useRef<{ data: string; istante: number } | null>(null);
+  useEffect(() => {
+    const prima = giornoDelDisegnoPrima.current;
+    const istante = Date.now();
+    giornoDelDisegnoPrima.current = { data: dataOggi, istante };
+    if (!prima || prima.data === dataOggi || day !== 'tomorrow') return;
+    const fascia = tomorrowTime.replace(/^Domani · /, '');
+    const oggi = fasciaAlGiornoDellOrdine(tomorrowTime, prima.istante, istante);
+    const resta = !!oggi && todayTimes.includes(oggi);
+    setAvvisoSpostata(avvisoMezzanotte({ oggi: dataOggi, fascia, domani: dataDomani, resta }));
+    if (resta && oggi) {
+      onTodayTimeChange(oggi);
+      onDayChange('today');
+    }
   });
 
   // 30/10/2026 (ondata 21) — Lo stesso per «Domani»: sabato per la domenica chiusa non resta

@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -395,7 +396,7 @@ export default function SellerProductsPage() {
               type="button"
               onClick={() => setTab(t.key)}
               aria-pressed={on}
-              className={`rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+              className={`rounded-full px-3.5 py-2 text-sm font-semibold transition-colors ${
                 on
                   ? 'bg-primary-700 text-white'
                   : 'bg-white text-ink-600 ring-1 ring-inset ring-cream-300 hover:bg-cream-50'
@@ -449,7 +450,7 @@ export default function SellerProductsPage() {
                       <div className="flex items-center gap-3">
                         <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-cream-100">
                           <Image
-                            src={sizedImage(p.images?.[0] ?? 'https://placehold.co/100x100/eee/aaa?text=?', 'thumb')}
+                            src={sizedImage(p.images?.[0] ?? FOTO_MANCANTE, 'thumb')}
                             alt={p.name}
                             fill
                             sizes="44px"
@@ -472,7 +473,7 @@ export default function SellerProductsPage() {
                           onChange={(e) => setField(p.id, 'price', e.target.value)}
                           inputMode="decimal"
                           aria-label={`Prezzo di ${p.name}`}
-                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
+                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-sm font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                         />
                       ) : (
                         <span className="font-bold text-ink-900">{formatPrice(Number(p.price))}</span>
@@ -489,7 +490,7 @@ export default function SellerProductsPage() {
                           onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
                           inputMode="numeric"
                           aria-label={`Stock di ${p.name}`}
-                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
+                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-sm font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                         />
                       ) : (
                         p.stock ?? 0
@@ -554,7 +555,7 @@ export default function SellerProductsPage() {
                 <div className="flex gap-3">
                   <Link href={`/product/${p.id}`} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-cream-100">
                     <Image
-                      src={sizedImage(p.images?.[0] ?? 'https://placehold.co/100x100/eee/aaa?text=?', 'thumb')}
+                      src={sizedImage(p.images?.[0] ?? FOTO_MANCANTE, 'thumb')}
                       alt={p.name}
                       fill
                       sizes="64px"
@@ -579,7 +580,7 @@ export default function SellerProductsPage() {
                             onChange={(e) => setField(p.id, 'price', e.target.value)}
                             inputMode="decimal"
                             aria-label={`Prezzo di ${p.name}`}
-                            className="w-20 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
+                            className="w-20 rounded-md border border-cream-300 px-2 py-1 text-right text-sm font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
                         {p.has_variants ? (
@@ -592,7 +593,7 @@ export default function SellerProductsPage() {
                             onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
                             inputMode="numeric"
                             aria-label={`Stock di ${p.name}`}
-                            className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
+                            className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-sm font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
                         )}

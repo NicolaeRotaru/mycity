@@ -15,8 +15,19 @@ type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insu
 
 type DocDef = { kind: DocKind; label: string; required: boolean; hint: string };
 
+/**
+ * 13/11/2026 (R19-002) — IL TETTO VERO È 4 MB, NON 8.
+ *
+ * La pagina prometteva 8 MB, ma da circa 4,4 MB la piattaforma risponde prima
+ * della nostra rotta con un 413 in testo semplice: il fattorino leggeva
+ * «Unexpected token 'R'… is not valid JSON». Il tetto che arriva davvero si
+ * scrive qui, si controlla prima di inviare, e il rifiuto si dice in italiano.
+ */
+const TETTO_DOCUMENTO_MB = 4;
+const FILE_TROPPO_GRANDE = `File troppo grande, massimo ${TETTO_DOCUMENTO_MB} MB. Scatta una foto più leggera (o riducila) e riprova.`;
+
 const DOCS: DocDef[] = [
-  { kind: 'id_front',       label: 'Documento d’identità — fronte',  required: true,  hint: 'Carta d’identità o passaporto. JPG/PNG/PDF max 8 MB.' },
+  { kind: 'id_front',       label: 'Documento d’identità — fronte',  required: true,  hint: `Carta d’identità o passaporto. JPG/PNG/PDF max ${TETTO_DOCUMENTO_MB} MB.` },
   { kind: 'id_back',        label: 'Documento d’identità — retro',   required: false, hint: 'Necessario per carta d’identità italiana.' },
   { kind: 'selfie',         label: 'Selfie con documento',           required: true,  hint: 'Foto del tuo viso tenendo il documento accanto, per face match.' },
   { kind: 'rider_license',  label: 'Patente di guida',               required: true,  hint: 'Obbligatoria per scooter/auto.' },
@@ -95,6 +106,10 @@ export default function RiderOnboardingPage() {
       toast.error('Prima salva i tuoi dati nel passo 1: senza data di nascita non possiamo accettare documenti.');
       return;
     }
+    if (file.size > TETTO_DOCUMENTO_MB * 1024 * 1024) {
+      toast.error(FILE_TROPPO_GRANDE);
+      return;
+    }
     setUploading(kind);
     try {
       const fd = new FormData();
@@ -106,8 +121,10 @@ export default function RiderOnboardingPage() {
         headers: { 'Authorization': `Bearer ${session?.access_token ?? ''}` },
         body: fd,
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(apiErrorMessage(data, 'Upload fallito'));
+      // Un 413 della piattaforma non è JSON: si legge senza far cadere tutto.
+      const data = await r.json().catch(() => null);
+      if (r.status === 413) throw new Error(FILE_TROPPO_GRANDE);
+      if (!r.ok || !data) throw new Error(apiErrorMessage(data, 'Upload fallito'));
       toast.success(`${kind} caricato`);
       setProfile((p) => ({ ...(p ?? {}), [columnForKind(kind)]: data.url }));
     } catch (e) {

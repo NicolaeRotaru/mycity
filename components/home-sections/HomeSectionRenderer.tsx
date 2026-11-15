@@ -75,7 +75,7 @@ const DEFAULT_TRUST_BULLETS = [
   // «Carta o contanti, decidi tu» prometteva anche la carta al rider, che non esiste: al checkout
   // la carta si paga subito su Stripe. La frase nasce dall'elenco dei metodi.
   { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: `${frasePagamento()}: l’account serve solo per confermare l’ordine.` },
-  { Icon: HomeIcon,  color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
+  { Icon: HomeIcon,  color: 'primary',   t: 'Commercianti locali', d: 'Negozi di Piacenza, approvati da noi prima di entrare.' },
   // 28/10/2026 — Era la promessa dei minuti della veloce («Rider del territorio») senza un rider approvato:
   // la promessa firmata da Nicola il 26/10 è «in giornata», fino a 5 km dal negozio.
   { Icon: Truck,     color: 'accent',    t: 'Consegna in giornata',     d: `Fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, negli orari di apertura.` },

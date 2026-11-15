@@ -36,20 +36,37 @@ type Dettaglio = ColonneSalvo<
   | 'coupon_code' | 'payment_method' | 'payment_status' | 'delivery_status' | 'pickup_in_store'
   | 'delivery_slot' | 'created_at' | 'accepted_at' | 'ready_at' | 'picked_up_at' | 'delivered_at'
   | 'canceled_at' | 'delivery_full_name' | 'delivery_phone' | 'delivery_address' | 'delivery_city'
-  | 'delivery_zip' | 'delivery_notes' | 'refunded_amount_cents' | 'payout_status' | 'dispute_status',
+  | 'delivery_zip' | 'delivery_notes' | 'refunded_amount_cents' | 'payout_status' | 'dispute_status'
+  | 'internal_dispute_status',
   { delivery_status: OrderStatus }
 > & {
   seller: Colonne<'profiles', 'store_name'> | null;
   rider: Colonne<'profiles', 'full_name'> | null;
   order_items: Colonne<'order_items', 'id' | 'quantity' | 'unit_price' | 'product_name'>[] | null;
+  /** I reclami ancora aperti su questo ordine; `null` = la lettura non è riuscita. */
+  reclamiAperti: Colonne<'disputes', 'id' | 'status' | 'created_at'>[] | null;
 };
+
+/**
+ * 13/11/2026 (R21-017) — IL RECLAMO APERTO SI VEDE, E DICE PERCHÉ IL BONIFICO È FERMO.
+ *
+ * La riga «Contestazione» leggeva solo `dispute_status`, cioè la contestazione aperta in banca, che
+ * con la carta spenta resta sempre vuota. Dalla migrazione 184 aprire un reclamo non scrive più
+ * niente sull'ordine: il reclamo vive solo in `disputes`, ed è lì che lo legge il giro dei bonifici
+ * per fermare il pagamento (stati 'open' e 'under_review', come in app/api/cron/release-payouts).
+ * Nicola vedeva «Bonifico al negozio: trattenuto» e «Contestazione: —», cioè nessun motivo.
+ * Adesso la riga mostra i reclami aperti, il reclamo interno (`internal_dispute_status`) e la
+ * contestazione in banca; e accanto al bonifico fermo c'è il motivo. Qui si legge e si dice e
+ * basta: chi decide se pagare resta il giro dei bonifici.
+ */
+const STATI_RECLAMO_APERTO = ['open', 'under_review'];
 
 const COLONNE_DETTAGLIO = `
   id, user_id, seller_id, rider_id, total_price, shipping_cost, discount_amount, coupon_code,
   payment_method, payment_status, delivery_status, pickup_in_store, delivery_slot, created_at,
   accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
   delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
-  refunded_amount_cents, payout_status, dispute_status,
+  refunded_amount_cents, payout_status, dispute_status, internal_dispute_status,
   seller:profiles!orders_seller_id_fkey ( store_name ),
   rider:profiles!orders_rider_id_fkey   ( full_name ),
   order_items ( id, quantity, unit_price, product_name )
@@ -83,7 +100,15 @@ export default function AdminOrderDetailPage() {
         .eq('id', id)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? null) as unknown as Dettaglio | null;
+      if (!data) return null;
+      // Una lettura dei reclami non riuscita non vuol dire «nessun reclamo»: si dice che non si è letta.
+      const reclami = await supabase
+        .from('disputes')
+        .select('id, status, created_at')
+        .eq('order_id', id)
+        .in('status', STATI_RECLAMO_APERTO);
+      const reclamiAperti = reclami.error ? null : ((reclami.data ?? []) as Dettaglio['reclamiAperti']);
+      return { ...(data as unknown as Omit<Dettaglio, 'reclamiAperti'>), reclamiAperti };
     },
     refetchInterval: 60_000,
   });
@@ -144,6 +169,16 @@ export default function AdminOrderDetailPage() {
 
   const righe = o.order_items ?? [];
   const codice = `#${o.id.slice(0, 6).toUpperCase()}`;
+  const reclami = o.reclamiAperti;
+  const interna = o.internal_dispute_status;
+  const inBanca = o.dispute_status;
+  // Perché il bonifico non parte, detto con le stesse ragioni per cui lo ferma il giro dei bonifici.
+  const motiviDelFermo = [
+    reclami === null ? 'reclami non letti' : reclami.length > 0 ? 'reclamo aperto' : null,
+    interna && interna !== 'RESOLVED' ? `contestazione interna (${etichettaContestazione(interna)})` : null,
+    inBanca && inBanca.toLowerCase() !== 'won' ? 'contestazione in banca' : null,
+  ].filter(Boolean);
+  const bonificoFermo = o.payout_status === 'HELD';
   const tappe: [string, string | null][] = [
     ['Creato', o.created_at],
     ['Accettato', o.accepted_at],
@@ -215,8 +250,27 @@ export default function AdminOrderDetailPage() {
             <Riga etichetta="Rimborsato">
               {o.refunded_amount_cents ? formatPrice(o.refunded_amount_cents / 100) : '—'}
             </Riga>
-            <Riga etichetta="Bonifico al negozio">{etichettaStatoBonifico(o.payout_status)}</Riga>
-            <Riga etichetta="Contestazione">{etichettaContestazione(o.dispute_status)}</Riga>
+            <Riga etichetta="Bonifico al negozio">
+              {etichettaStatoBonifico(o.payout_status)}
+              {bonificoFermo && motiviDelFermo.length > 0 ? ` · fermo per: ${motiviDelFermo.join(', ')}` : ''}
+            </Riga>
+            <Riga etichetta="Contestazione">
+              {reclami === null && <span className="block">reclami: non riesco a leggerli, riprova fra un momento</span>}
+              {reclami !== null && reclami.length > 0 && (
+                <span className="block">
+                  {reclami.length === 1
+                    ? `reclamo aperto dal ${dataEOraPiacenza(reclami[0].created_at)}`
+                    : `${reclami.length} reclami aperti`}
+                  {' · '}
+                  <Link href="/admin/disputes" className="font-semibold text-primary-700 hover:underline">
+                    apri i reclami
+                  </Link>
+                </span>
+              )}
+              {interna && <span className="block">interna: {etichettaContestazione(interna)}</span>}
+              {inBanca && <span className="block">in banca: {etichettaContestazione(inBanca)}</span>}
+              {reclami !== null && reclami.length === 0 && !interna && !inBanca && '—'}
+            </Riga>
           </dl>
         </section>
 

@@ -151,10 +151,95 @@ const RITARDO_PREVISTO_GIORNI: Record<string, number> = {
   winback_60d: 60,
 };
 
+/** Quanto vale una riga dopo l'ora prevista: la regola della 165, la stessa qui sotto senza la 165. */
+const GIORNO_MS = 86_400_000;
+const VALIDITA_MS = 3 * GIORNO_MS;
+
 function scaduta(row: { scade_at?: string | null }): boolean {
   if (!row.scade_at) return false;
   const quando = Date.parse(row.scade_at);
   return Number.isFinite(quando) && quando <= Date.now();
+}
+
+const MOTIVO_SCADUTA = 'scaduta: non partita entro la scadenza (scade_at)';
+
+/**
+ * 13/11/2026 (R22-002) — LE SCADUTE SI CHIUDONO TUTTE INSIEME, PRIMA DI PRENDERE IL GIRO.
+ *
+ * `claim_pending_emails` (migrazione 165) prende le righe in ordine di `send_at` e non guarda
+ * `scade_at`: le scadute si chiudevano solo dopo essere state prese, una per uno dei quindici
+ * posti del giro. Il giorno della riaccensione, con cento scadute in coda, «il tuo ordine è
+ * pronto» partiva al settimo giro, un'ora dopo. Qui si chiudono in blocco, col motivo, prima
+ * della presa; quelle prenotate da un giro in corso le lascia a lui (le controlla `scaduta`).
+ *
+ * 14/11/2026 (R22-002, giro di correzione) — SENZA LA 165 SI CHIUDONO COL CALCOLO.
+ *
+ * Nel database vero la 165 non c'e': la chiusura su `scade_at` cadeva, e le scadute tornavano a
+ * occupare i quindici posti del giro (collaudo: sent=0, scadute=15, la fresca ferma). Adesso, se la
+ * chiusura su `scade_at` cade, le scadute si chiudono in blocco con la stessa regola che `processBatch`
+ * usa riga per riga senza la 165: riga mai rinviata, `send_at` + 3 giorni; riga gia' rinviata (ha
+ * `last_error`), nascita + ritardo previsto del modello + 3 giorni. Una riga che il giro riga per riga
+ * terrebbe aperta qui non si chiude. Solo se cade anche questo si torna alla chiusura una per una.
+ */
+async function chiudiLeScaduteInBlocco(supa: any): Promise<number> {
+  const adesso = new Date();
+  const prenotazioneScaduta = new Date(adesso.getTime() - 15 * 60_000).toISOString();
+  const valori = { cancelled_at: adesso.toISOString(), claimed_at: null, last_error: MOTIVO_SCADUTA };
+  const libere = [
+    (q: any) => q.is('claimed_at', null),
+    (q: any) => q.lt('claimed_at', prenotazioneScaduta),
+  ];
+  let chiuse = 0;
+  /** Chiude le righe aperte e libere che ognuna delle `scelte` riconosce scadute. Un errore cade a chi chiama. */
+  const chiudi = async (scelte: Array<(q: any) => any>): Promise<void> => {
+    for (const scelta of scelte) {
+      for (const libera of libere) {
+        const { data, error } = await scelta(libera(
+          supa.from('email_queue').update(valori)
+            .is('sent_at', null)
+            .is('cancelled_at', null),
+        )).select('id');
+        if (error) {
+          throw Object.assign(new Error(String((error as { message?: unknown }).message ?? error)), {
+            code: (error as { code?: unknown }).code,
+          });
+        }
+        chiuse += Array.isArray(data) ? data.length : 0;
+      }
+    }
+  };
+  try {
+    await chiudi([(q) => q.lte('scade_at', adesso.toISOString())]);
+    return chiuse;
+  } catch (e) {
+    // Senza la 165 (colonna assente, 42703) e' lo stato atteso: basta una riga d'informazione. Ogni altro
+    // errore (un timeout, un permesso) con la 165 al suo posto resta un avviso, come prima.
+    const message = e instanceof Error ? e.message : String(e);
+    const colonnaAssente = (e as { code?: unknown })?.code === '42703' || /scade_at.*does not exist/i.test(message);
+    (colonnaAssente ? logger.info : logger.warn)('[cron] chiusura su scade_at non riuscita: le scadute si chiudono in blocco col calcolo', {
+      message,
+    });
+  }
+  // Senza la 165: la regola di `processBatch` («SENZA LA 165 LA SCADENZA SI CALCOLA QUI»).
+  const natePrimaDi = (ritardoGiorni: number) =>
+    new Date(adesso.getTime() - VALIDITA_MS - ritardoGiorni * GIORNO_MS).toISOString();
+  const conRitardo = Object.keys(RITARDO_PREVISTO_GIORNI);
+  // «Gia' rinviata» come in `processBatch`: `last_error` non vuoto. Nullo o vuoto vuol dire mai rinviata.
+  const rinviata = (q: any) => q.not('last_error', 'is', null).neq('last_error', '');
+  try {
+    await chiudi([
+      (q) => q.is('last_error', null).lte('send_at', natePrimaDi(0)),
+      (q) => q.eq('last_error', '').lte('send_at', natePrimaDi(0)),
+      ...conRitardo.map((modello) => (q: any) =>
+        rinviata(q).eq('template', modello).lte('created_at', natePrimaDi(RITARDO_PREVISTO_GIORNI[modello]))),
+      (q) => rinviata(q).not('template', 'in', `(${conRitardo.join(',')})`).lte('created_at', natePrimaDi(0)),
+    ]);
+  } catch (e) {
+    logger.warn('[cron] scadute non chiuse in blocco: si chiudono una per una quando il giro le prende', {
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+  return chiuse;
 }
 
 /**
@@ -180,6 +265,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
   }
   const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  // 0) R22-002 — Le scadute escono dalla fila prima della presa (vedi `chiudiLeScaduteInBlocco`).
+  const scaduteInBlocco = await chiudiLeScaduteInBlocco(supa);
 
   // 1) Claim batch (atomic UPDATE … RETURNING per evitare double-send)
   /**
@@ -229,7 +317,10 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // lo dice ad alta voce (lib/email/sentinella-posta-ordini.ts) e non ferma mai il giro.
   const postaOrdini = await controllaPostaDegliOrdini(supa);
 
-  return await processBatch(supa, (batch ?? []) as any[], { postaOrdini: postaOrdini.stato });
+  return await processBatch(supa, (batch ?? []) as any[], {
+    postaOrdini: postaOrdini.stato,
+    ...(scaduteInBlocco > 0 ? { scaduteInBlocco } : {}),
+  });
 });
 
 export const GET = handler;
@@ -327,10 +418,10 @@ async function processBatch(
         // dalla nascita nuda, che chiuderebbe le email programmate più avanti al primo intoppo.
         const quando = r
           ? r.last_error
-            ? Date.parse(String(r.created_at)) + (RITARDO_PREVISTO_GIORNI[row.template] ?? 0) * 86_400_000
+            ? Date.parse(String(r.created_at)) + (RITARDO_PREVISTO_GIORNI[row.template] ?? 0) * GIORNO_MS
             : Date.parse(String(r.send_at))
           : NaN;
-        if (Number.isFinite(quando)) row.scade_at = new Date(quando + 3 * 86_400_000).toISOString();
+        if (Number.isFinite(quando)) row.scade_at = new Date(quando + VALIDITA_MS).toISOString();
       }
     } catch (e) {
       logger.warn('[cron] scadenza delle righe non calcolata: si comportano come prima', {
@@ -343,7 +434,7 @@ async function processBatch(
     if (scaduta(row)) {
       skipped++;
       scadute++;
-      await annullaRiga(supa, row.id, 'scaduta: non partita entro la scadenza (scade_at)');
+      await annullaRiga(supa, row.id, MOTIVO_SCADUTA);
       continue;
     }
     const userProfile = profili.get(row.user_id) ?? null;
@@ -436,6 +527,10 @@ async function processBatch(
        */
       tipo: isMarketing ? 'marketing' : 'transazionale',
       tags: [{ name: 'template', value: row.template }],
+      // 13/11/2026 (R22-001, R22-011) — Dopo un timeout la riga torna fra cinque minuti, ma la
+      // prima email può essere già uscita: la chiave è la stessa a ogni tentativo della riga, e
+      // Resend non spedisce due volte. Righe diverse hanno chiavi diverse.
+      idempotencyKey: `email-queue/${row.id}`,
     });
     if ('ok' in res && res.ok) {
       sent++;

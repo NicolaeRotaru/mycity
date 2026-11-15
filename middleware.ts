@@ -84,6 +84,22 @@ function eIlPagamento(pathname: string): boolean {
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+/**
+ * 13/11/2026 (R19-020) — IL RITORNO DOPO L'ACCESSO PORTA ANCHE LA QUERY.
+ *
+ * `returnTo` teneva solo il percorso: chi apriva l'email «Annulla la
+ * cancellazione» senza sessione rientrava su /profile/settings, scheda
+ * Account, invece che su ?tab=… . Il ritorno resta un percorso interno: il
+ * percorso viene dalla richiesta stessa (comincia con un solo «/», quello di
+ * un'area protetta) e la pagina di accesso lo ripassa da `safeInternalPath`.
+ * Oltre i 512 caratteri `safeInternalPath` lo scarterebbe del tutto: allora si
+ * torna al solo percorso, come prima.
+ */
+function ritornoDopoLAccesso(pathname: string, search: string): string {
+  const conQuery = pathname + search;
+  return conQuery.length <= 512 ? conQuery : pathname;
+}
+
 function findRoleRule(pathname: string) {
   return ROLE_PROTECTED.find((r) => pathname.startsWith(r.prefix));
 }
@@ -424,7 +440,9 @@ export async function middleware(req: NextRequest) {
     if (!needsAuth) return res;
     const url = req.nextUrl.clone();
     url.pathname = '/sign-in';
-    url.searchParams.set('returnTo', pathname);
+    // R19-020 — La query va dentro returnTo, non sulla pagina di accesso.
+    url.search = '';
+    url.searchParams.set('returnTo', ritornoDopoLAccesso(pathname, req.nextUrl.search));
     const r = NextResponse.redirect(url);
     conPoliticaDiSicurezza(r.headers, csp);
     return r;
@@ -563,7 +581,8 @@ export async function middleware(req: NextRequest) {
   if (decisione.azione === 'chiudi-al-login') {
     const url = req.nextUrl.clone();
     url.pathname = '/sign-in';
-    url.searchParams.set('returnTo', pathname);
+    url.search = '';
+    url.searchParams.set('returnTo', ritornoDopoLAccesso(pathname, req.nextUrl.search));
     return withCsp(NextResponse.redirect(url));
   }
   // «Tira dritto come ospite»: il catalogo si vede anche quando il servizio di

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, ArrowRight, Flame, ShoppingBag, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -10,6 +9,7 @@ import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiTendenze, type Tendenza } from '@/lib/queries/fasce-prodotti';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 
 type Trending = Tendenza;
 
@@ -86,7 +86,7 @@ export default function TrendingNow() {
             >
               <div className="relative aspect-square bg-cream-100 overflow-hidden">
                 {img ? (
-                  <Image
+                  <FotoConRipiego
                     src={sizedImage(img, 'card')}
                     alt={p.name}
                     fill
@@ -109,7 +109,7 @@ export default function TrendingNow() {
                   </div>
                 )}
                 {it.view_count > 5 && (
-                  <div className="absolute bottom-2 right-2 bg-ink-900/80 backdrop-blur text-white text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <div className="absolute bottom-2 right-2 bg-ink-900/80 backdrop-blur text-white text-2xs font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                     <Eye size={12} aria-hidden /> {it.view_count}
                   </div>
                 )}

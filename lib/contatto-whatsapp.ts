@@ -55,6 +55,28 @@ export function numeroWhatsApp(grezzo?: string | null): string | null {
   // Un numero vero non è tutto zeri dopo il prefisso internazionale. Il segnaposto sì, e così ogni
   // sua variante scritta a mano: 39 000…, 39 3000000000, e le altre che nascono copiando l'esempio.
   if (/^0+$/.test(cifre.slice(3))) return null;
+  // R22-014 — Gli stessi controlli sul numero normalizzato: con 0039 davanti il segnaposto o i soli
+  // zeri sfuggivano ai controlli sulle cifre grezze.
+  const numero = conPrefissoItaliano(String(grezzo ?? ''), cifre);
+  if (numero === SEGNAPOSTO || /^0+$/.test(numero.slice(3))) return null;
+  return numero;
+}
+
+/**
+ * 13/11/2026 (R22-014) — Il numero scritto all'italiana prende il 39.
+ *
+ * wa.me legge le prime cifre come prefisso del paese: «333 1234567» senza +39 apriva il 33, la
+ * Francia, e chi cercava aiuto finiva su un contatto che non è il nostro. È la stessa regola di
+ * `numeroWhatsappItaliano` (lib/store-customization.ts, la 580, per il bottone della vetrina):
+ * 0039 e +39 restano 39, un cellulare (3…) o un fisso (0…) scritti senza prefisso lo prendono.
+ * Non la si importa da lì perché quel modulo si porta dietro zod e i cataloghi della vetrina, e
+ * questo file sta nel piè di pagina di ogni pagina.
+ */
+function conPrefissoItaliano(scritto: string, cifre: string): string {
+  if (cifre.startsWith('00')) return cifre.slice(2);
+  if (scritto.trim().startsWith('+')) return cifre;
+  if (cifre.startsWith('39') && cifre.length >= 11) return cifre;
+  if (/^3\d{8,9}$/.test(cifre) || cifre.startsWith('0')) return `39${cifre}`;
   return cifre;
 }
 

@@ -121,8 +121,8 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Occhiello" value={c.eyebrow ?? ''} maxLength={60} onChange={(e) => set({ eyebrow: e.target.value })} placeholder="I più amati" />
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Prodotti che vanno forte" />
+          <Input label="Occhiello" value={c.eyebrow ?? ''} maxLength={60} onChange={(e) => set({ eyebrow: e.target.value })} placeholder="Appena arrivati" />
+          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Ultimi arrivati dai negozi" />
           <Select label="Numero di prodotti" value={String(c.limit ?? 12)} onChange={(e) => set({ limit: Number(e.target.value) })}>
             {[4, 8, 12, 16, 20, 24].map((n) => <option key={n} value={n}>{n}</option>)}
           </Select>

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { useTranslations } from 'next-intl';
+import { NEW_PRODUCT_DAYS } from '@/lib/constants';
 
 /** Opzioni di ordinamento della toolbar collezione (allineate a search/category). */
 const COLLECTION_SORTS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc'];
@@ -45,7 +47,25 @@ export default function NovitaPage() {
         </div>
       </CollectionHeader>
 
-      <ProductGrid sort={sort} maxColumns={4} onCount={setCount} titoloNascosto="I prodotti nuovi" />
+      <ProductGrid
+        soloNovita
+        sort={sort}
+        maxColumns={4}
+        onCount={setCount}
+        titoloNascosto="I prodotti nuovi"
+        emptyTitle="Nessuna novità negli ultimi giorni"
+        emptyDescription={`Nessun negozio ha pubblicato prodotti nuovi negli ultimi ${NEW_PRODUCT_DAYS} giorni. Intanto puoi sfogliare tutto il catalogo.`}
+        emptySuggestions={
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <Link href="/search" className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800">
+              Sfoglia tutti i prodotti
+            </Link>
+            <Link href="/categorie" className="rounded-full border border-cream-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:border-primary-400">
+              Vai alle categorie
+            </Link>
+          </div>
+        }
+      />
     </div>
   );
 }

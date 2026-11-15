@@ -33,11 +33,14 @@ type RigaDelMese = Omit<NegozioDelMese, 'seller'> & { seller_id: string | null }
 
 /** La scelta del mese (`mese` = primo giorno del mese, fuso di Piacenza), o `null`. */
 export async function leggiNegozioDelMese(supa: LettoreVista, mese: string): Promise<NegozioDelMese | null> {
-  const { data } = await supa
+  const { data, error } = await supa
     .from('shop_of_month')
     .select('id, cover_image_url, headline, story, discount_code, discount_percent, month, seller_id')
     .eq('month', mese)
     .maybeSingle();
+  // 13/11/2026 (R21-019) — Una lettura caduta non è «nessuna scelta»: l'errore va a chi chiede,
+  // che può dire «non riesco a leggere» invece di far finta che la redazione non abbia scelto.
+  if (error) throw error;
   const riga = (data ?? null) as RigaDelMese | null;
   if (!riga) return null;
 

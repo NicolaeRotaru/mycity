@@ -33,7 +33,13 @@
  * mezzo a `next/server`, questa decisione una prova non la puo' ESEGUIRE.
  */
 
-import { potaOrfaniKyc, type ClienteOrfani } from './orfani-kyc';
+import {
+  GIORNI_DI_SICUREZZA_ORFANI,
+  TETTO_ORFANI_PER_NOTTE,
+  potaOrfaniKyc,
+  type ClienteOrfani,
+  type VoceSecchio,
+} from './orfani-kyc';
 
 /** Cosa risponde una scrittura del database: PostgREST non lancia, restituisce. */
 type Risposta = { error: { message: string } | null };
@@ -45,6 +51,22 @@ type Risposta = { error: { message: string } | null };
  * messaggio dai Contatti — leggono lo stesso numero.
  */
 export const MESI_DEI_MESSAGGI_DEI_CONTATTI = 24;
+
+/**
+ * 13/11/2026 (R21-007) — Quanti mesi restano email e testo di una segnalazione dopo la decisione.
+ * L'informativa (app/privacy/page.tsx) scrive lo stesso numero: la prova
+ * `riparazione-r21-segnalazioni-email` fa girare la potatura e pretende che coincidano.
+ */
+const MESI_DELLE_SEGNALAZIONI_DECISE = 12;
+
+/**
+ * 13/11/2026 (R21-012) — Quanti mesi resta un prodotto fra gli «Ultimi visti» dall'ultima volta
+ * che lo si è guardato. Gli «Ultimi visti» si scrivono solo col consenso ai cookie statistici:
+ * sono un dato di analitica, e per l'analitica l'informativa promette 14 mesi (gli stessi delle
+ * potature di `activity_events` qui sotto). L'informativa (app/privacy/page.tsx) scrive lo stesso
+ * numero: la prova `riparazione-r21-ultimi-visti` fa girare la potatura e pretende che coincidano.
+ */
+const MESI_DEGLI_ULTIMI_VISTI = 14;
 
 /** La catena di filtri che le potature usano davvero, e nient'altro. */
 type Filtrabile = PromiseLike<Risposta> & {
@@ -311,6 +333,18 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         registro.info('[cron-deletions] visite prodotto consolidate', { consolidate });
       },
     },
+    // 13/11/2026 (R21-012) — GLI «ULTIMI VISTI» RESTAVANO PER SEMPRE.
+    // `product_views` si consolida e si cancella, `recently_viewed` no: la cronologia dei
+    // prodotti guardati, legata all'account, non scadeva mai. Ogni prodotto se ne va passati i
+    // mesi dichiarati dall'ultima volta che la persona l'ha aperto (`viewed_at` si rinfresca a
+    // ogni visita). Chi toglie il consenso perde la sua lista subito (migrazione 450).
+    {
+      cosa: 'recently_viewed',
+      fai: (admin) => esigi(admin
+        .from('recently_viewed')
+        .delete()
+        .lt('viewed_at', mesi(MESI_DEGLI_ULTIMI_VISTI))),
+    },
     // E le righe di semplice navigazione si cancellano, non si sbiancano: senza
     // questo la tabella cresceva per sempre. Le altre categorie restano perche'
     // servono da traccia di sicurezza e contabile.
@@ -344,6 +378,19 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         .from('contact_messages')
         .delete()
         .lt('created_at', mesi(MESI_DEI_MESSAGGI_DEI_CONTATTI))),
+    },
+    // 13/11/2026 (R21-007) — CHI SEGNALAVA UN CONTENUTO LASCIAVA LA SUA EMAIL LI' PER SEMPRE.
+    // Email di contatto e testo libero di una segnalazione servono a esaminarla e a dire
+    // com'e' finita. Passati i mesi dichiarati dalla decisione si tolgono; la riga resta, senza
+    // dati personali, come traccia di cosa e' stato segnalato e deciso. Il filtro sui campi
+    // ancora pieni rende la potatura ripetibile senza riscrivere ogni notte le righe gia' pulite.
+    {
+      cosa: 'segnalazioni',
+      fai: (admin) => esigi(admin
+        .from('segnalazioni')
+        .update({ email_contatto: null, dettaglio: null })
+        .lt('deciso_at', mesi(MESI_DELLE_SEGNALAZIONI_DECISE))
+        .or('email_contatto.not.is.null,dettaglio.not.is.null')),
     },
     // 6/9/2026 — L'ISCRIZIONE CHE NESSUNO HA MAI CONFERMATO RESTAVA QUI PER
     // SEMPRE. Il modulo della newsletter e' pubblico: chiunque puo' scriverci
@@ -403,6 +450,8 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
     // il cliente cancellava l'account non venivano nemmeno cercate. Novanta
     // giorni dalla consegna: il tempo della quadratura di cassa e di un
     // reclamo. Dopo, e' la fotografia di una casa e basta.
+    // 13/11/2026 (R21-013) — Se qui lo storage rifiuta la rimozione, le colonne sono già azzerate:
+    // la notte dopo quei file sono orfani e li ritoglie `potaturaDegliOrfaniDelleProve`.
     {
       cosa: 'foto-consegna',
       fai: (admin, registro) =>
@@ -532,9 +581,209 @@ function potaturaKycIscrizioneAMeta(prima: string): Potatura {
   };
 }
 
-/** Tutto quello che la notte deve potare: le finestre dichiarate e gli orfani di kyc-docs. */
+/**
+ * 13/11/2026 (R21-013) — LE FOTO DELLA PORTA DI CASA RIFATTE DAL FATTORINO RESTAVANO PER SEMPRE.
+ *
+ * Ogni volta che il fattorino sceglie una foto (contanti, pacco lasciato), il file va subito in
+ * `cod-proof/<fattorino>/<ordine>/` con un nome nuovo (lib/storage/carica-immagine.ts). Se la
+ * rifà o chiude il pannello, il file di prima non lo indica nessuna colonna: la scadenza dei 90
+ * giorni (`foto_consegna_da_cancellare`) e la cancellazione dell'account trovano i file solo
+ * attraverso le colonne dell'ordine, e il fattorino non può cancellare dal magazzino (nessuna
+ * regola glielo permette, apposta: una prova d'incasso non la deve poter togliere chi l'ha fatta).
+ * E se lo storage rifiutava la rimozione nella potatura dei 90 giorni, le colonne erano già
+ * azzerate e nessuno riprovava.
+ *
+ * Qui il giro al contrario, sul modello di lib/privacy/orfani-kyc.ts: si ELENCA il magazzino, si
+ * leggono i percorsi vivi negli ordini, e si tolgono i file che nessun ordine indica più. Così se
+ * ne vanno le foto rifatte, quelle di un pannello chiuso senza confermare, e quelle che la
+ * potatura dei 90 giorni non è riuscita a togliere (la notte dopo sono orfane: si riprova qui).
+ * Le stesse prudenze: un file più giovane di `GIORNI_DI_SICUREZZA_ORFANI` non si tocca (si carica
+ * PRIMA della conferma), un tetto per notte, e prima di togliere si rilegge l'ordine della
+ * cartella: se la rilettura non riesce, o l'ordine non c'è, quella cartella non si tocca.
+ */
+const SECCHIO_PROVE = 'cod-proof';
+/**
+ * TUTTE le colonne dell'ordine che possono indicare un file di cod-proof: un file indicato da una
+ * qualsiasi non è orfano. `delivery_signature_url` (migrations/024:33) oggi non la scrive nessuno,
+ * ma se un giorno la si scrive i suoi file non devono sparire come orfani (collaudo del lotto 2).
+ */
+const COLONNE_PROVE = ['cash_photo_url', 'delivery_photo_url', 'cash_signature_url', 'delivery_signature_url'] as const;
+const COLONNE_PROVE_LETTE = ['id', ...COLONNE_PROVE].join(', ');
+const FORMA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Dal valore della colonna al percorso nel magazzino («<fattorino>/<ordine>/<file>»). */
+function percorsoDellaProva(valore: unknown): string | null {
+  if (typeof valore !== 'string' || valore.trim() === '') return null;
+  let p = valore.trim();
+  if (/^https?:\/\//i.test(p)) {
+    const i = p.indexOf(`/${SECCHIO_PROVE}/`);
+    if (i < 0) return null;
+    p = p.slice(i + SECCHIO_PROVE.length + 2).split('?')[0];
+    try { p = decodeURIComponent(p); } catch { /* resta com'e' */ }
+  }
+  p = p.replace(/^\/+/, '');
+  if (p.startsWith(`${SECCHIO_PROVE}/`)) p = p.slice(SECCHIO_PROVE.length + 1);
+  return p || null;
+}
+
+function percorsiDellOrdine(riga: Record<string, unknown>, dove: Set<string>): void {
+  for (const c of COLONNE_PROVE) {
+    const p = percorsoDellaProva(riga[c]);
+    if (p) dove.add(p);
+  }
+}
+
+async function elencaProve(admin: ClienteOrfani, prefisso: string, pagina: number): Promise<VoceSecchio[]> {
+  const voci: VoceSecchio[] = [];
+  for (let offset = 0; ; offset += pagina) {
+    const { data, error } = await admin.storage.from(SECCHIO_PROVE).list(prefisso, {
+      limit: pagina, offset, sortBy: { column: 'name', order: 'asc' },
+    });
+    if (error) throw new Error(`elenco del secchio ${SECCHIO_PROVE}/${prefisso} non letto: ${error.message}`);
+    const lette = data ?? [];
+    voci.push(...lette);
+    if (lette.length < pagina) return voci;
+  }
+}
+
+function etaDellaProva(voce: VoceSecchio): number | null {
+  const tempi = [voce.created_at, voce.updated_at].map((t) => (t ? Date.parse(t) : NaN)).filter(Number.isFinite);
+  return tempi.length > 0 ? Math.max(...tempi) : null;
+}
+
+export type RiepilogoOrfaniProve = { listati: number; orfani: number; daTogliere: number; rimossi: number; rinviati: number };
+
+async function potaOrfaniDelleProve(
+  admin: ClienteOrfani,
+  registro: Registro,
+  adessoMs: number,
+  opzioni: { soloConta?: boolean; pagina?: number } = {},
+): Promise<RiepilogoOrfaniProve> {
+  const pagina = opzioni.pagina ?? 100;
+  const limite = adessoMs - GIORNI_DI_SICUREZZA_ORFANI * 86_400_000;
+
+  // ① L'elenco: <fattorino>/<ordine>/<file>. Quello che non sta a quella profondità non si tocca.
+  const file: Array<{ percorso: string; ordine: string; eta: number | null }> = [];
+  for (const fattorino of await elencaProve(admin, '', pagina)) {
+    if (fattorino.id !== null) continue;
+    for (const ordine of await elencaProve(admin, fattorino.name, pagina)) {
+      if (ordine.id !== null || !FORMA_UUID.test(ordine.name)) continue;
+      for (const f of await elencaProve(admin, `${fattorino.name}/${ordine.name}`, pagina)) {
+        if (f.id === null) continue;
+        file.push({ percorso: `${fattorino.name}/${ordine.name}/${f.name}`, ordine: ordine.name, eta: etaDellaProva(f) });
+      }
+    }
+  }
+
+  // ② I percorsi vivi negli ordini, letti DOPO l'elenco, a chiave.
+  const vivi = new Set<string>();
+  const filtro = COLONNE_PROVE.map((c) => `${c}.not.is.null`).join(',');
+  let ultimo: string | null = null;
+  for (;;) {
+    let q = admin.from('orders').select(COLONNE_PROVE_LETTE).or(filtro).order('id', { ascending: true });
+    if (ultimo !== null) q = q.gt('id', ultimo);
+    const { data, error } = await q.limit(pagina);
+    if (error) throw new Error(`riferimenti alle prove di consegna non letti: ${error.message}`);
+    if (!Array.isArray(data)) throw new Error('riferimenti alle prove di consegna non letti: nessuna riga restituita');
+    for (const riga of data) percorsiDellOrdine(riga, vivi);
+    if (data.length < pagina) break;
+    const id = data[data.length - 1]?.id;
+    if (typeof id !== 'string' || (ultimo !== null && id <= ultimo)) {
+      throw new Error('riferimenti alle prove di consegna non letti: la pagina non avanza');
+    }
+    ultimo = id;
+  }
+
+  // ③ Gli orfani abbastanza vecchi, i più vecchi per primi, fino al tetto.
+  const orfani = file.filter((f) => !vivi.has(f.percorso));
+  const maturi = orfani
+    .filter((f): f is { percorso: string; ordine: string; eta: number } => f.eta !== null && f.eta < limite)
+    .sort((a, b) => a.eta - b.eta);
+  const scelti = maturi.slice(0, TETTO_ORFANI_PER_NOTTE);
+
+  // ③-bis L'ultimo controllo: si rilegge l'ordine della cartella.
+  const perOrdine = new Map<string, string[]>();
+  for (const f of scelti) perOrdine.set(f.ordine, [...(perOrdine.get(f.ordine) ?? []), f.percorso]);
+  const daTogliere: string[] = [];
+  for (const [ordine, candidati] of perOrdine) {
+    try {
+      const { data, error } = await admin.from('orders').select(COLONNE_PROVE_LETTE).eq('id', ordine);
+      if (error || !Array.isArray(data) || data.length !== 1) {
+        registro.warn('[cron-deletions] orfani cod-proof: ordine non riletto, non si tocca niente', {
+          ordine, err: error?.message ?? `${Array.isArray(data) ? data.length : 0} righe`,
+        });
+        continue;
+      }
+      const ancoraVivi = new Set<string>();
+      percorsiDellOrdine(data[0], ancoraVivi);
+      daTogliere.push(...candidati.filter((p) => !ancoraVivi.has(p)));
+    } catch (e) {
+      registro.warn('[cron-deletions] orfani cod-proof: ordine non riletto, non si tocca niente', {
+        ordine, err: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  // ④ La rimozione, a gruppi. In «solo conta» lo storage non si chiama.
+  let rimossi = 0;
+  const rifiutati: string[] = [];
+  for (let i = 0; !opzioni.soloConta && i < daTogliere.length; i += pagina) {
+    const gruppo = daTogliere.slice(i, i + pagina);
+    const { error } = await admin.storage.from(SECCHIO_PROVE).remove(gruppo);
+    if (error) {
+      registro.warn('[cron-deletions] orfani cod-proof non rimossi', { err: error.message, percorsi: gruppo });
+      rifiutati.push(...gruppo);
+      continue;
+    }
+    rimossi += gruppo.length;
+  }
+  const riepilogo = {
+    listati: file.length, orfani: orfani.length, daTogliere: daTogliere.length, rimossi, rinviati: maturi.length - scelti.length,
+  };
+  registro.info('[cron-deletions] orfani del secchio cod-proof', riepilogo);
+  if (rifiutati.length > 0) throw new Error(`${rifiutati.length} orfani non rimossi dal secchio ${SECCHIO_PROVE}`);
+  return riepilogo;
+}
+
+/** Il passo della notte per le prove di consegna orfane. Fuori da `potatureDiRitenzione` come quello di kyc-docs. */
+export function potaturaDegliOrfaniDelleProve(adessoMs: number): Potatura {
+  return {
+    cosa: 'prove-di-consegna-orfane',
+    fai: async (admin, registro) => {
+      await potaOrfaniDelleProve(admin as unknown as ClienteOrfani, registro, adessoMs);
+    },
+  };
+}
+
+/**
+ * Il conto delle prove orfane, senza toglierne nessuna (elencare e leggere gli ordini sono
+ * letture; lo storage passato rifiuta `remove`), per il giro a mano che conta prima di cancellare.
+ */
+export async function contaOrfaniDelleProve(admin: ClienteOrfani, adessoMs: number = Date.now()): Promise<ContoFile> {
+  const cosa = 'prove-di-consegna-orfane';
+  const senzaTogliere: ClienteOrfani = {
+    from: (tabella) => admin.from(tabella),
+    storage: {
+      from: (secchio) => {
+        const vero = admin.storage.from(secchio);
+        return {
+          list: (prefisso, opzioni) => vero.list(prefisso, opzioni),
+          remove: () => Promise.reject(new Error(NON_SI_CONTA_SENZA_FARLA)),
+        };
+      },
+    },
+  };
+  try {
+    const r = await potaOrfaniDelleProve(senzaTogliere, registroMuto, adessoMs, { soloConta: true });
+    return { cosa, file: r.daTogliere };
+  } catch (e) {
+    return { cosa, file: null, nonContata: e instanceof Error ? e.message : 'errore' };
+  }
+}
+
+/** Tutto quello che la notte deve potare: le finestre dichiarate e gli orfani di kyc-docs e di cod-proof. */
 export function potatureNotturne(adessoMs: number): Potatura[] {
-  return [...potatureDiRitenzione(adessoMs), potaturaDegliOrfaniKyc(adessoMs)];
+  return [...potatureDiRitenzione(adessoMs), potaturaDegliOrfaniKyc(adessoMs), potaturaDegliOrfaniDelleProve(adessoMs)];
 }
 
 /**
