@@ -149,8 +149,9 @@ export async function annullaERimborsa(
   // ② Se non torna nemmeno cosi', lo si dice: errore nel registro, avviso agli
   // amministratori con ordine, cliente e importo, e la cifra mancante esce
   // nell'esito (`creditoNonTornatoCents`). Ritorna i centesimi NON restituiti.
-  async function restituisciCredito(): Promise<number> {
-    const walletCents = Number(order.wallet_applied_cents ?? 0);
+  // 15/11/2026 (R27-018) — Meno il credito passato agli ordini rimasti del carrello (`creditoTrattenutoCents`).
+  async function restituisciCredito(trattenutoCents = 0): Promise<number> {
+    const walletCents = Math.max(0, Number(order.wallet_applied_cents ?? 0) - trattenutoCents);
     if (walletCents <= 0) return 0;
     let ultimoErrore: unknown = null;
     for (let tentativo = 1; tentativo <= TENTATIVI_STORNO_CREDITO; tentativo++) {
@@ -319,7 +320,8 @@ export async function annullaERimborsa(
       // di carta si annullava restituendo 10 €. La funzione del database che
       // faceva il rifiuto del negozio lo restituiva già: senza questa riga,
       // farlo passare di qui sarebbe un passo indietro per chi compra.
-      const creditoNonTornato = await restituisciCredito();
+      const trattenuto = giro?.creditoTrattenutoCents ?? 0;
+      const creditoNonTornato = await restituisciCredito(trattenuto);
       await restituisciCoupon();
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
@@ -331,7 +333,7 @@ export async function annullaERimborsa(
           ? { ...giro.avviso, tornaCents: residuoCent, spesaCents: null }
           : giro.avviso;
         await avvisaLaCampanellaDelCarrello(admin, order.user_id, avvisoVero, 'carta');
-        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato), opts.reason, { avviso: avvisoVero, come: 'carta' }, {
+        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato + trattenuto), opts.reason, { avviso: avvisoVero, come: 'carta' }, {
           annullatoDalCliente: opts.metadata?.source === 'buyer_cancel',
         });
       }
@@ -408,7 +410,8 @@ export async function annullaERimborsa(
   // 30/10/2026 — Coi contanti la consegna dei negozi rimasti si rifà: cambia quanto si paga alla porta.
   const giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
 
-  const creditoNonTornato = await restituisciCredito();
+  const trattenuto = giro?.creditoTrattenutoCents ?? 0;
+  const creditoNonTornato = await restituisciCredito(trattenuto);
   await restituisciCoupon();
 
   // 27/10/2026 — Sulla carta avvisa `refundOrder` («Rimborso emesso»). Qui,
@@ -418,7 +421,7 @@ export async function annullaERimborsa(
   const come: ComeHaPagato = order.payment_method === 'cod' ? 'contanti' : 'da-pagare';
   await avvisaIlClienteDellAnnullo(
     admin,
-    conIlCreditoTornato(creditoNonTornato),
+    conIlCreditoTornato(creditoNonTornato + trattenuto),
     opts.reason,
     giro?.avviso ? { avviso: giro.avviso, come } : null,
     // 5/11/2026 — chi annulla da solo non legge «Motivo: annullato dal cliente».
@@ -581,7 +584,7 @@ export async function avvisaLaCampanellaDelCarrello(
 const COLONNE_GIRO =
   'id, user_id, delivery_status, total_price, gross_total_cents, wallet_applied_cents, shipping_cost, ' +
   'delivery_fee_cents, rider_fee_cents, discount_amount, delivery_slot, pickup_in_store, stripe_session_id, created_at, ' +
-  'refunded_amount_cents, cash_confirmed_at';
+  'refunded_amount_cents, cash_confirmed_at, payment_method, payment_status, stripe_payment_intent';
 
 type RigaDelGiro = {
   id: string;
@@ -600,6 +603,9 @@ type RigaDelGiro = {
   created_at: string | null;
   refunded_amount_cents: number | null;
   cash_confirmed_at?: string | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  stripe_payment_intent?: string | null;
 };
 
 /** Le stesse colonne senza quelle della 124: prima della migrazione `lordoDi` rifà il lordo da totale e credito. */
@@ -660,9 +666,22 @@ export type GiroDelCarrello = {
    * (carrello di un negozio solo, ritiro in negozio, un ordine già consegnato): il testo resta quello di oggi.
    */
   avviso: AvvisoDelCarrello | null;
+  /**
+   * 15/11/2026 (R27-018, R27-019) — Il credito MyCity dell'ordine che se ne va che NON torna al
+   * cliente: è passato agli ordini rimasti, a pagare la parte della differenza della consegna che
+   * la carta non copre. Chi restituisce il credito ne rende `wallet_applied_cents` meno questo.
+   */
+  creditoTrattenutoCents?: number;
 };
 
-type ConsegnaScritta = { delivery_fee_cents: number; rider_fee_cents: number; gross_total_cents: number; total_price: number };
+type ConsegnaScritta = {
+  delivery_fee_cents: number;
+  rider_fee_cents: number;
+  gross_total_cents: number;
+  total_price: number;
+  /** Solo quando cambia (R27-018): il credito MyCity che passa dall'ordine che se ne va ai rimasti. */
+  wallet_applied_cents?: number;
+};
 const consegnaDi = (r: RigaDelGiro): ConsegnaScritta => ({
   delivery_fee_cents: Number(r.delivery_fee_cents ?? 0),
   rider_fee_cents: Number(r.rider_fee_cents ?? 0),
@@ -779,12 +798,18 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
   };
   const passo = async (r: RigaDelGiro, da: ConsegnaScritta, a: ConsegnaScritta): Promise<boolean> => {
     if (!(await scriviSeUguale(admin, r, da, a))) return false;
-    scritte.push({ r, prima: da, dopo: a });
+    // Se la scrittura sposta il credito, `rimetti` lo deve riportare com'era.
+    const prima = a.wallet_applied_cents != null && da.wallet_applied_cents == null
+      ? { ...da, wallet_applied_cents: Number(r.wallet_applied_cents ?? 0) }
+      : da;
+    scritte.push({ r, prima, dopo: a });
     return true;
   };
 
   let tutto = false;
   let conto: ReturnType<typeof consegnaDopoLAnnullo> = null;
+  /** R27-018 — Il credito MyCity che ogni riga riceve (i rimasti) o cede (chi se ne va). */
+  const creditoA = new Map<string, number>();
   let carrello: RigaDelGiro[] | null = null;
   try {
     // 1. IL SEGNO, PRIMA DEL CONTO: il fattorino a 0 sull'ordine che se ne va. Ogni altro annullo
@@ -826,13 +851,45 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
     // Niente da spostare: resta il segno (l'ordine se ne va comunque), che `rimetti` toglie.
     if (!conto) return { ...comE, rimetti };
 
-    // 3. Prima l'ordine che se ne va (il rimborso scende), poi quelli che restano.
-    const verso = (r: RigaDelGiro, da: ConsegnaScritta, riga: RigaRicalcolata): ConsegnaScritta => ({
-      delivery_fee_cents: riga.deliveryFeeCents,
-      rider_fee_cents: riga.riderFeeCents,
-      gross_total_cents: da.gross_total_cents + riga.deltaCents,
-      total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents) / 100,
+    // 15/11/2026 (R27-018, R27-019) — CON LA CARTA L'ADDEBITO NON CRESCE. Il totale dell'ordine che
+    // se ne va è la parte pagata con la carta: se non basta a cedere la differenza della consegna, il
+    // resto l'aveva pagato col credito MyCity. Prima il totale si fermava a zero (`Math.max`) e il
+    // credito tornava tutto: pane 18 € tutto a credito, frutta 13 € con la carta, il forno rifiuta →
+    // la frutta saliva a 15 € scritti su 13 addebitati, tornavano 18 € di credito, e il cliente pagava
+    // 13 € invece di 15. Ora quel credito passa agli ordini che salgono: la frutta resta 13 € sulla
+    // carta più 2 € di credito, e del pane tornano 16 €. Coi contanti no: la differenza la paga chi
+    // apre la porta, e il credito torna tutto, come prima.
+    const pagatoConLaCarta = restaDaRimborsareSullaCarta({
+      payment_method: ordine.payment_method ?? null,
+      payment_status: ordine.payment_status ?? null,
+      stripe_payment_intent: ordine.stripe_payment_intent ?? null,
     });
+    if (pagatoConLaCarta) {
+      let resta = Math.min(
+        Number(ordine.wallet_applied_cents ?? 0),
+        Math.max(0, -(centesimi(ordine.total_price) + conto.annullato.deltaCents)),
+      );
+      let spostato = 0;
+      for (const riga of conto.rimasti) {
+        const quota = Math.min(resta, Math.max(0, riga.deltaCents));
+        if (quota > 0) creditoA.set(riga.id, quota);
+        resta -= quota;
+        spostato += quota;
+      }
+      if (spostato > 0) creditoA.set(orderId, -spostato);
+    }
+
+    // 3. Prima l'ordine che se ne va (il rimborso scende), poi quelli che restano.
+    const verso = (r: RigaDelGiro, da: ConsegnaScritta, riga: RigaRicalcolata): ConsegnaScritta => {
+      const credito = creditoA.get(r.id) ?? 0;
+      return {
+        delivery_fee_cents: riga.deliveryFeeCents,
+        rider_fee_cents: riga.riderFeeCents,
+        gross_total_cents: da.gross_total_cents + riga.deltaCents,
+        total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents - Math.max(0, credito)) / 100,
+        ...(credito !== 0 ? { wallet_applied_cents: Number(r.wallet_applied_cents ?? 0) + credito } : {}),
+      };
+    };
     tutto = await passo(ordine, segno, verso(ordine, segno, conto.annullato));
     for (const riga of conto.rimasti) {
       if (!tutto) break;
@@ -863,7 +920,8 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
         consegnaPrimaCents: prima.delivery_fee_cents,
         consegnaCents: dopo.delivery_fee_cents,
         totalePrimaCents: Math.round(prima.total_price * 100),
-        totaleCents: Math.round(dopo.total_price * 100),
+        // R27-018 — Col credito passato dall'ordine che se ne va il totale è la carta più quel credito.
+        totaleCents: Math.round(dopo.total_price * 100) + Math.max(0, creditoA.get(r.id) ?? 0),
       };
     });
   const consegnaCents = scritte[1].dopo.delivery_fee_cents;
@@ -872,6 +930,7 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
   return {
     totaleCents: tornaCents,
     differenzaCents: conto.differenzaCents,
+    creditoTrattenutoCents: Math.max(0, -(creditoA.get(orderId) ?? 0)),
     rimetti,
     avviso: {
       ordineId: orderId,
