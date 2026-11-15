@@ -19,6 +19,7 @@ import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
+import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
@@ -226,12 +227,22 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * Costa un viaggio in più prima delle letture in parallelo. Vale il prezzo:
    * liberare dopo aver letto le disponibilità non serve a niente, il numero in
    * mano sarebbe già quello vecchio.
+   *
+   * 15/11/2026 (R26-021) — MA NON PRIMA DEI RIFIUTI. La pulizia chiude su Stripe
+   * le pagine di pagamento degli altri tentativi: girava prima di ogni
+   * convalida, e un tentativo respinto (fascia chiusa, negozio chiuso, fuori
+   * zona, prodotto non vendibile) uccideva una cassa ancora buona. Adesso parte
+   * solo quando la richiesta ha passato tutti i controlli che non dipendono
+   * dalle scorte (`pulisci`, piu' sotto); se ha liberato qualcosa, le scorte si
+   * rileggono prima di contarle.
    */
-  const riserveLiberate = await liberaRiserveAbbandonate(admin, {
-    buyerId: user.id,
-    improntaDaTenere: improntaCarrello,
-    soloConProdotti: uniqueProductIds,
-  });
+  let pulizia: Promise<RiserveLiberate> | null = null;
+  const pulisci = (): Promise<RiserveLiberate> =>
+    (pulizia ??= liberaRiserveAbbandonate(admin, {
+      buyerId: user.id,
+      improntaDaTenere: improntaCarrello,
+      soloConProdotti: uniqueProductIds,
+    }));
 
   const [prodottiLetti, discountMap, variantiLette, venditoriLetti, tentativoGiaAperto] = await Promise.all([
     supa
@@ -303,6 +314,21 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
      * chi scrive questa rotta non può più restituire una cassa senza averlo
      * guardato, perché senza quel resoconto non gli si compila.
      */
+    // R26-021 — La veloce si controlla PRIMA della pulizia: un rifiuto non chiude le altre casse.
+    if (eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore })) {
+      const veloceOra = veloceSiPuo({
+        adesso: romeNow(),
+        negozi: venditoriLetti.error || !venditoriLetti.data
+          ? null
+          : venditoriLetti.data.map((s) => ({
+              nome: (s as { store_name?: string | null }).store_name ?? 'Il negozio',
+              orari: (s as { store_hours?: unknown }).store_hours,
+            })),
+        fattoriniOnline: await contaFattoriniOnline(admin),
+      });
+      if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
+    }
+
     let sessioneRiletta: SessioneRiletta = null;
     try {
       sessioneRiletta = await getStripe().checkout.sessions.retrieve(sessioneGiaAperta.stripe_session_id);
@@ -313,7 +339,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       logger.warn('[stripe] sessione precedente non rileggibile, ne apro una nuova', { e });
     }
 
-    const riuso = riusoDellaCassaAperta(riserveLiberate, sessioneRiletta);
+    const riuso = riusoDellaCassaAperta(await pulisci(), sessioneRiletta);
     if (riuso.esito === 'ferma_tutto') {
       logger.error('[stripe] cassa gia aperta NON restituita: un pagamento vecchio e ancora pagabile', {
         userId: user.id,
@@ -331,19 +357,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
        * l'euro della veloce, mentre una richiesta nuova prendeva 409. Stessa
        * decisione, stesso messaggio.
        */
-      if (eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore })) {
-        const veloceOra = veloceSiPuo({
-          adesso: romeNow(),
-          negozi: venditoriLetti.error || !venditoriLetti.data
-            ? null
-            : venditoriLetti.data.map((s) => ({
-                nome: (s as { store_name?: string | null }).store_name ?? 'Il negozio',
-                orari: (s as { store_hours?: unknown }).store_hours,
-              })),
-          fattoriniOnline: await contaFattoriniOnline(admin),
-        });
-        if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
-      }
+      // R26-021 — il controllo della veloce sta sopra, prima della pulizia.
       /**
        * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
        *
@@ -512,72 +526,28 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     if (!veloce.possibile) return ApiErrors.conflict(veloce.perche);
   }
 
-  // --- 3. Validazioni per ogni gruppo + costruzione line items per Stripe.
-  type StripeItem = {
-    productId: string;
-    name: string;
-    quantity: number;
-    unitAmountCents: number;
-    imageUrl?: string;
-    variantId?: string | null;
-    variantLabel?: string | null;
-  };
-  const stripeGroups: Array<{ sellerId: string; storeName: string; items: Array<StripeItem> }> = [];
-  const subtotalPerGroupCents: number[] = [];
-
+  /**
+   * 15/11/2026 (R26-021) — TUTTI I RIFIUTI CHE NON DIPENDONO DALLE SCORTE,
+   * PRIMA DELLA PULIZIA.
+   *
+   * Le righe del carrello si guardano una prima volta sui dati gia' letti: un
+   * prodotto non vendibile, del negozio sbagliato o con la variante sbagliata
+   * si rifiuta qui. Le scorte no: quelle le tiene ancora in ostaggio il
+   * tentativo abbandonato, e si contano dopo la pulizia (ciclo qui sotto).
+   */
   for (const g of body.groups) {
-    const stripeItems: Array<StripeItem> = [];
-    let groupSubtotalCents = 0;
-
     for (const it of g.items) {
-      /**
-       * 6/9/2026 — LA STESSA REGOLA DEI CONTANTI, NON UNA SUA COPIA.
-       *
-       * Prodotto esistente, del negozio giusto, disponibile, variante valida e
-       * sua, scorte, prezzo scontato: erano trenta righe identiche a quelle di
-       * app/api/orders/cod/route.ts. Adesso decidono insieme, in
-       * lib/ordini/valida-carrello.ts — messaggi e codici di risposta invariati.
-       */
-      const esito = validaRigaDelCarrello({
+      const primaOcchiata = validaRigaDelCarrello({
         riga: it,
         sellerId: g.sellerId,
         prodotti: products,
         varianti: variantMap,
         sconti: discountMap,
       });
-      if (!esito.ok) return rispostaPerCarrelloNonVendibile(esito.scarto);
-
-      const p = esito.prodotto;
-      const cover = Array.isArray(p.images) ? p.images[0] : null;
-      stripeItems.push({
-        productId: esito.riga.productId,
-        name: esito.riga.variantLabel ? `${p.name} (${esito.riga.variantLabel})` : p.name,
-        quantity: esito.riga.quantity,
-        unitAmountCents: esito.riga.unitCents,
-        imageUrl: typeof cover === 'string' ? cover : undefined,
-        variantId: esito.riga.variantId,
-        variantLabel: esito.riga.variantLabel,
-      });
-      groupSubtotalCents += esito.riga.unitCents * esito.riga.quantity;
+      if (!primaOcchiata.ok && primaOcchiata.scarto.motivo !== 'SCORTE_INSUFFICIENTI') {
+        return rispostaPerCarrelloNonVendibile(primaOcchiata.scarto);
+      }
     }
-
-    stripeGroups.push({
-      sellerId: g.sellerId,
-      storeName: sellerNameMap.get(g.sellerId) ?? 'Negozio',
-      items: stripeItems,
-    });
-    subtotalPerGroupCents.push(groupSubtotalCents);
-  }
-
-  // --- 4. RICALCOLO SERVER-SIDE di spedizione, sconto ritiro e coupon.
-  // SICUREZZA (H1): i prezzi unitari sono già stati ricalcolati dal DB (step 3).
-  // Qui ricalcoliamo dalla fonte autorevole anche spedizione, sconto ritiro e
-  // sconto coupon, IGNORANDO body.couponDiscountCents / pickupDiscountCents /
-  // groups[].shippingCents. Senza questo, un client poteva inviare uno sconto
-  // pari al totale e pagare ~€0,01 qualunque ordine.
-  const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
-  if (grandSubtotalCents <= 0) {
-    return ApiErrors.invalidRequest('Importo non valido.');
   }
 
   // 4a. Dove va la consegna: le coordinate servono sia alla zona (qui sotto) sia
@@ -631,6 +601,108 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     }
   }
 
+  // 31/10/2026 — I codici sconto in cassa sono spenti (CODICI_SCONTO_IN_CASSA): un
+  // codice di MyCity oggi lo pagherebbe il negozio al 90%. Si rifiuta qui, dove si
+  // rifiuta un codice non valido, prima di rivendicarlo.
+  if (!CODICI_SCONTO_IN_CASSA && body.couponCode?.trim()) {
+    return ApiErrors.invalidRequest('I codici sconto non sono attivi: togli il codice e riprova.');
+  }
+
+  // R26-021 — Passati i rifiuti, si libera quello che questa persona teneva in ostaggio.
+  const riserveLiberate = await pulisci();
+  let prodottiPerIlConto = products;
+  if (riserveLiberate.liberati.length > 0) {
+    // La merce liberata e' tornata a scaffale DOPO la lettura: le scorte si rileggono.
+    const [scorteProdotti, scorteVarianti] = await Promise.all([
+      supa.from('products').select('id, stock').in('id', uniqueProductIds),
+      allVariantIds.length > 0
+        ? supa.from('product_variants').select('id, stock').in('id', allVariantIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; stock: number | null }>, error: null }),
+    ]);
+    if (scorteProdotti.error || scorteVarianti.error) {
+      logger.warn('[stripe] scorte non rilette dopo la pulizia: conto su quelle di prima', {
+        message: scorteProdotti.error?.message ?? scorteVarianti.error?.message,
+      });
+    } else {
+      const scorte = new Map(
+        ((scorteProdotti.data ?? []) as Array<{ id: string; stock: number | null }>).map((r) => [r.id, r.stock]),
+      );
+      prodottiPerIlConto = products.map((p) => (scorte.has(p.id) ? { ...p, stock: scorte.get(p.id) ?? p.stock } : p));
+      for (const r of (scorteVarianti.data ?? []) as Array<{ id: string; stock: number | null }>) {
+        const v = variantMap.get(r.id);
+        if (v) variantMap.set(r.id, { ...v, stock: r.stock ?? 0 });
+      }
+    }
+  }
+
+  // --- 3. Validazioni per ogni gruppo + costruzione line items per Stripe.
+  type StripeItem = {
+    productId: string;
+    name: string;
+    quantity: number;
+    unitAmountCents: number;
+    imageUrl?: string;
+    variantId?: string | null;
+    variantLabel?: string | null;
+  };
+  const stripeGroups: Array<{ sellerId: string; storeName: string; items: Array<StripeItem> }> = [];
+  const subtotalPerGroupCents: number[] = [];
+
+  for (const g of body.groups) {
+    const stripeItems: Array<StripeItem> = [];
+    let groupSubtotalCents = 0;
+
+    for (const it of g.items) {
+      /**
+       * 6/9/2026 — LA STESSA REGOLA DEI CONTANTI, NON UNA SUA COPIA.
+       *
+       * Prodotto esistente, del negozio giusto, disponibile, variante valida e
+       * sua, scorte, prezzo scontato: erano trenta righe identiche a quelle di
+       * app/api/orders/cod/route.ts. Adesso decidono insieme, in
+       * lib/ordini/valida-carrello.ts — messaggi e codici di risposta invariati.
+       */
+      const esito = validaRigaDelCarrello({
+        riga: it,
+        sellerId: g.sellerId,
+        prodotti: prodottiPerIlConto,
+        varianti: variantMap,
+        sconti: discountMap,
+      });
+      if (!esito.ok) return rispostaPerCarrelloNonVendibile(esito.scarto);
+
+      const p = esito.prodotto;
+      const cover = Array.isArray(p.images) ? p.images[0] : null;
+      stripeItems.push({
+        productId: esito.riga.productId,
+        name: esito.riga.variantLabel ? `${p.name} (${esito.riga.variantLabel})` : p.name,
+        quantity: esito.riga.quantity,
+        unitAmountCents: esito.riga.unitCents,
+        imageUrl: typeof cover === 'string' ? cover : undefined,
+        variantId: esito.riga.variantId,
+        variantLabel: esito.riga.variantLabel,
+      });
+      groupSubtotalCents += esito.riga.unitCents * esito.riga.quantity;
+    }
+
+    stripeGroups.push({
+      sellerId: g.sellerId,
+      storeName: sellerNameMap.get(g.sellerId) ?? 'Negozio',
+      items: stripeItems,
+    });
+    subtotalPerGroupCents.push(groupSubtotalCents);
+  }
+
+  // --- 4. RICALCOLO SERVER-SIDE di spedizione, sconto ritiro e coupon.
+  // SICUREZZA (H1): i prezzi unitari sono già stati ricalcolati dal DB (step 3).
+  // Qui ricalcoliamo dalla fonte autorevole anche spedizione, sconto ritiro e
+  // sconto coupon, IGNORANDO body.couponDiscountCents / pickupDiscountCents /
+  // groups[].shippingCents. Senza questo, un client poteva inviare uno sconto
+  // pari al totale e pagare ~€0,01 qualunque ordine.
+  const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
+  if (grandSubtotalCents <= 0) {
+    return ApiErrors.invalidRequest('Importo non valido.');
+  }
+
   /**
    * 4b. Coupon: ri-validato e ri-calcolato dal coupon reale (mai dal client),
    * e rivendicato in modo atomico.
@@ -645,12 +717,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * ingresso il resoconto della pulizia: chiedere il codice prima di aver
    * liberato non si compila più.
    */
-  // 31/10/2026 — I codici sconto in cassa sono spenti (CODICI_SCONTO_IN_CASSA): un
-  // codice di MyCity oggi lo pagherebbe il negozio al 90%. Si rifiuta qui, dove si
-  // rifiuta un codice non valido, prima di rivendicarlo.
-  if (!CODICI_SCONTO_IN_CASSA && body.couponCode?.trim()) {
-    return ApiErrors.invalidRequest('I codici sconto non sono attivi: togli il codice e riprova.');
-  }
+  // R26-021 — il rifiuto dei codici spenti sta sopra, prima della pulizia.
   const codiceSconto = await rivendicaIlCodiceSconto(
     riserveLiberate,
     { admin, lettura: supa },
