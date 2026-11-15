@@ -566,8 +566,8 @@ export async function avvisaLaCampanellaDelCarrello(
  * e resta l'errore nel registro. Ritorna il totale nuovo dell'ordine annullato, o null.
  *
  * 30/10/2026 (collaudo) — Tre regole, perché i soldi tornino giusti anche con due annulli insieme:
- * ① prima del conto l'ordine che se ne va mette il SEGNO (fattorino a 0): chi legge dopo vede un
- * conto fuori regola e non sposta niente su di lui; ② ogni riga si scrive solo se è ancora come la si
+ * ① prima del conto l'ordine che se ne va mette il SEGNO (fattorino a 0): chi legge dopo lo conta già
+ * fuori dal giro e non sposta niente su di lui (R27-017); ② ogni riga si scrive solo se è ancora come la si
  * è letta, contando le righe toccate: se un altro è arrivato prima, quello già scritto torna indietro
  * e si rilegge; ③ si rende il totale scritto adesso, mai quello che il chiamante aveva in mano (il
  * giro degli scaduti rendeva 13 € invece di 15). Se poi il rimborso non parte, `rimetti` riporta il
@@ -610,6 +610,8 @@ const leggiIlGiro = (dove: string, q: (colonne: string) => PromiseLike<Risposta>
   conRipiegoSchema<Risposta>(`annulla.${dove}`, () => q(COLONNE_GIRO), () => q(COLONNE_GIRO_PRIMA_DELLA_124));
 
 const centesimi = (euro: number | string | null | undefined) => Math.round(Number(euro ?? 0) * 100);
+/** Il segno di un annullo in corso: il fattorino a 0 su un ordine con la consegna (la regola non dà mai 0). */
+const haIlSegno = (r: RigaDelGiro) => r.rider_fee_cents != null && Number(r.rider_fee_cents) === 0;
 const lordoDi = (r: RigaDelGiro) =>
   r.gross_total_cents != null ? Number(r.gross_total_cents) : centesimi(r.total_price) + Number(r.wallet_applied_cents ?? 0);
 
@@ -786,9 +788,9 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
   let carrello: RigaDelGiro[] | null = null;
   try {
     // 1. IL SEGNO, PRIMA DEL CONTO: il fattorino a 0 sull'ordine che se ne va. Ogni altro annullo
-    //    dello stesso carrello che legge dopo vede un conto che non è quello della regola e non
-    //    tocca niente; chi aveva letto prima trova la riga cambiata e rilegge. Senza, due annulli
-    //    quasi insieme si leggevano a vicenda e il secondo rendeva 13 € invece di 15.
+    //    dello stesso carrello che legge dopo lo conta come già uscito dal giro (sotto, al passo 2);
+    //    chi aveva letto prima trova la riga cambiata e rilegge. Senza, due annulli quasi insieme si
+    //    leggevano a vicenda e il secondo rendeva 13 € invece di 15.
     const comEra = consegnaDi(ordine);
     const segno: ConsegnaScritta = { ...comEra, rider_fee_cents: 0 };
     if (!(await passo(ordine, comEra, segno))) return 'CAMBIATO';
@@ -809,7 +811,12 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
           shippingCents: spedizione,
           deliveryFeeCents: consegna,
           riderFeeCents: Number(r.rider_fee_cents ?? 0),
-          giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+          // 15/11/2026 (R27-017) — Il segno di un altro annullo in corso (fattorino a 0, stato
+          // ancora vivo) vuol dire che quell'ordine se ne va: si conta già fuori dal giro. Prima il
+          // conto con lui dentro non era quello della regola, e due rifiuti nello stesso istante in un
+          // carrello di tre negozi (pane, frutta, carne) rendevano pieno tutti e due: la carne restava
+          // con 1 € di consegna e 1 € al fattorino per tutto il giro, invece di 3 e 3.
+          giaAnnullato: r.id !== orderId && (r.delivery_status === 'CANCELED' || haIlSegno(r)),
         };
       });
       conto =
