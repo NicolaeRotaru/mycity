@@ -11,5 +11,15 @@
       "mcp__Vercel",
       "mcp__Stripe"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task|Workflow",
+        "hooks": [
+          { "type": "command", "command": "node ../ad-mycity/cervello/riparazione/freno-subagenti.mjs", "timeout": 10 }
+        ]
+      }
+    ]
   }
 }
