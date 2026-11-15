@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { after } from 'next/server';
 import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
@@ -485,6 +486,18 @@ export async function restituisciIlCreditoDellAnnullo(
  * giu' non deve far credere al chiamante che sia fallito. Ma non tace: se la
  * email non parte, lo scrive nel registro degli errori col motivo.
  * La usano `annullaERimborsa` e il giro degli ordini scaduti.
+ *
+ * 15/11/2026 (R27-005) — L'EMAIL ESCE DOPO LA RISPOSTA, E SE NON PARTE RESTA UN SEGNO.
+ *
+ * `sendEmail` fa due tentativi da 10 secondi (lib/email/client.ts): con la posta lenta il «Rifiuta»
+ * del negozio e l'«Annulla» del cliente restavano appesi fino a circa 20 s dopo che l'annullo era già
+ * scritto, e nel giro degli scaduti (cento ordini, 300 s al massimo) l'attesa della posta mangiava il
+ * tempo degli ordini. E un'email caduta restava solo nel registro. Adesso l'email si registra con
+ * `after()` di Next: la risposta parte subito e la piattaforma tiene viva la funzione finché l'email
+ * non è partita (come `dopoLaRisposta` in lib/api/dopo-la-risposta.ts; ma fuori da una richiesta —
+ * una prova, uno script — qui l'email si aspetta, come prima, invece di partire senza nessuno che la
+ * aspetti). Se non parte, un avviso agli amministratori, una volta per ordine, perché la si rimandi.
+ * Una coda che la ritenti da sola non c'è ancora.
  */
 export async function avvisaIlClienteDellAnnullo(
   admin: SupabaseClient,
@@ -492,16 +505,50 @@ export async function avvisaIlClienteDellAnnullo(
   motivo: string | null | undefined,
   carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
   opzioni?: { annullatoDalCliente?: boolean },
-): Promise<boolean> {
+): Promise<void> {
+  const lavoro = async (): Promise<void> => {
+    // Solo la posta caduta: senza indirizzo (account cancellato, lettura caduta) non c'è niente da rimandare.
+    if ((await mandaLEmailDellAnnullo(admin, ordine, motivo, carrello, opzioni)) !== 'caduta') return;
+    try {
+      await notifyAdmins(
+        '⚠️ Email di annullo non partita',
+        `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è annullato, ma l'email che lo dice al cliente non è partita ` +
+          '(il motivo è nel registro degli errori). Il cliente lo vede solo nella campanella del sito: ' +
+          `rimandagliela o scrivigli tu (cliente ${ordine.user_id}, ordine ${ordine.id}).`,
+        '/admin/orders',
+        { unaVoltaPer: `email-annullo-${ordine.id}` },
+      );
+    } catch (err) {
+      logger.error('[annullo] avviso dell email di annullo non partita NON scritto', {
+        orderId: ordine.id, err: err instanceof Error ? err.message : err,
+      });
+    }
+  };
   try {
-    if (!ordine.user_id) return false;
+    after(lavoro);
+  } catch {
+    await lavoro();
+  }
+}
+
+async function mandaLEmailDellAnnullo(
+  admin: SupabaseClient,
+  ordine: { id: string; user_id: string | null; seller_id?: string | null; wallet_applied_cents?: number | null },
+  motivo: string | null | undefined,
+  carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
+  opzioni?: { annullatoDalCliente?: boolean },
+): Promise<'partita' | 'caduta' | 'non-provata'> {
+  // 'caduta' = la posta l'ha rifiutata o non ha risposto; 'non-provata' = indirizzo non letto, già nel registro.
+  let allaPosta = false;
+  try {
+    if (!ordine.user_id) return 'non-provata';
     const { data, error } = await admin.auth.admin.getUserById(ordine.user_id);
     const email = data?.user?.email;
     if (error || !email) {
       logger.error('[annullo] email di annullo non spedita: indirizzo non letto', {
         orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
       });
-      return false;
+      return 'non-provata';
     }
     // 5/11/2026 — Il nome del negozio: in un carrello con più negozi dice quale ordine se ne va.
     // Se la lettura non riesce l'email parte lo stesso, senza nome.
@@ -533,6 +580,7 @@ export async function avvisaIlClienteDellAnnullo(
     });
     const html = t.html;
     const text = t.text;
+    allaPosta = true;
     const res = await sendEmail({
       to: email,
       subject: t.subject,
@@ -546,14 +594,14 @@ export async function avvisaIlClienteDellAnnullo(
         orderId: ordine.id,
         motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
       });
-      return false;
+      return 'caduta';
     }
-    return true;
+    return 'partita';
   } catch (e) {
     logger.error('[annullo] email di annullo NON partita', {
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return allaPosta ? 'caduta' : 'non-provata';
   }
 }
 
