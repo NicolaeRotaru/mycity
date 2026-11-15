@@ -160,6 +160,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           { idempotencyKey: `refund_scaduto_${pendingCheckoutId}` },
         );
       } catch (err) {
+        // R25-001 — GIÀ RIMBORSATA DAL CRUSCOTTO mentre l'avviso falliva (e il giro ha scaduto il carrello): Stripe rifiuta, e si ripeteva per tre giorni senza avvisi.
+        if ((err as { code?: string })?.code === 'charge_already_refunded') { await notifyAdmins('⚠️ Pagamento su carrello scaduto già rimborsato', `Il pagamento del carrello scaduto ${pendingCheckoutId} risultava già rimborsato per intero (di solito dal cruscotto Stripe): nessun ordine e nessun nuovo rimborso. Controlla su Stripe che il cliente abbia avuto i soldi.`, '/admin/orders', { unaVoltaPer: `scaduto-gia-rimborsato:${pendingCheckoutId}` }); return; }
         logger.error('[stripe] rimborso su riserva scaduta fallito', { pendingCheckoutId, err });
         throw err;   // Stripe riprova: meglio ritentare che tenere soldi non dovuti
       }
@@ -272,10 +274,9 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       throw e;
     }
   }
-  // R25-001 — RIMBORSATA PER INTERO O CONTESTATA mentre questo avviso falliva: nasceva un ordine «pagato», il negozio preparava e il
-  // giro dei bonifici lo pagava. Ora non nasce: lo sa un amministratore e il carrello si chiude come scaduto (merce e codice tornano).
+  // R25-001 — RIMBORSATA PER INTERO O CONTESTATA mentre questo avviso falliva: nasceva un ordine «pagato» e il giro lo pagava. Ora no: lo sa un admin e il carrello scade.
   if (cartaTornata) {
-    await notifyAdmins('⚠️ Pagamento già rimborsato o contestato: nessun ordine', `Quando è arrivato il pagamento del carrello ${pendingCheckoutId} la carta risultava già rimborsata per intero o contestata: l'ordine non è nato e il negozio non è stato avvisato. Se un tentativo di prima aveva già creato degli ordini, il carrello resta aperto e va guardato a mano.`, '/admin/orders', { unaVoltaPer: `carta-tornata:${pendingCheckoutId}` });
+    await notifyAdmins('⚠️ Pagamento già rimborsato o contestato: nessun ordine', `Quando è arrivato il pagamento del carrello ${pendingCheckoutId} la carta risultava già rimborsata per intero o contestata: l'ordine non è nato e il negozio non è stato avvisato. Se un tentativo di prima aveva già creato degli ordini, il carrello resta aperto e va guardato a mano. Se è una contestazione, guardala su Stripe: se è solo una richiesta di informazioni della banca (non una contestazione vera) va deciso a mano se rimborsare il cliente o far nascere l'ordine.`, '/admin/orders', { unaVoltaPer: `carta-tornata:${pendingCheckoutId}` });
     await handleCheckoutExpired(session);
     return;
   }
@@ -594,5 +595,4 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     .eq('id', pendingCheckoutId), 'carrello segnato come completato');
 }
 
-// Il carrello scaduto ha il suo file (R81, tetto delle 600): si riesporta perché la rotta e le prove lo cercano qui.
-export { handleCheckoutExpired };
+export { handleCheckoutExpired }; // Il carrello scaduto ha il suo file (R81, tetto delle 600): si riesporta perché la rotta e le prove lo cercano qui.

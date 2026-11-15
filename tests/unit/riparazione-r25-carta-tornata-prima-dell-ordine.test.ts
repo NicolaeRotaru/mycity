@@ -19,6 +19,7 @@ type Riga = Record<string, unknown>;
 const db: Record<string, Riga[]> = {};
 const rpc: Array<{ nome: string; args: unknown }> = [];
 let carica: Partial<Stripe.Charge> | string = 'ch_1';
+let creaRimborso: (...a: unknown[]) => Promise<unknown> = async () => ({ id: 're_x' });
 
 function tabella(nome: string): Riga[] {
   db[nome] ??= [];
@@ -43,7 +44,7 @@ function query(nome: string) {
         }
         if (r.id && t.some((o) => o.id === r.id)) return { data: null, error: { code: '23505', message: 'duplicate key' } };
       }
-      data = righeNuove.map((r) => ({ id: `${nome}_${t.length + 1}`, ...r }));
+      data = righeNuove.map((r) => ({ id: `${nome}_${t.length + 1}`, ...(nome === 'orders' ? { refunded_amount_cents: 0, seller_payout_reversed_cents: 0 } : {}), ...r }));
       t.push(...data);
     } else if (modo === 'update') {
       data = scelte();
@@ -94,7 +95,7 @@ vi.mock('@/lib/stripe/client', async (originale) => ({
   ...((await originale()) as Record<string, unknown>),
   getStripe: () => ({
     paymentIntents: { retrieve: async () => ({ id: 'pi_1', latest_charge: carica }) },
-    refunds: { list: async () => ({ data: [] }), create: async () => ({ id: 're_x' }) },
+    refunds: { list: async () => ({ data: [], has_more: false }), create: async (...a: unknown[]) => creaRimborso(...a), update: async (id: string) => ({ id }) },
   }),
 }));
 
@@ -128,6 +129,7 @@ beforeEach(() => {
   rpc.length = 0;
   tabella('profiles').push({ id: 'admin-1', role: 'admin' });
   carica = 'ch_1';
+  creaRimborso = async () => ({ id: 're_x' });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -237,5 +239,94 @@ describe('R25-001 · il rimborso arrivato prima dell ordine non si perde in sile
     await handleCheckoutCompleted(sessione);
     await expect(handleChargeRefunded(r)).resolves.toBeUndefined();
     expect(ordiniPagati()).toEqual([]);
+  });
+});
+
+// Giro di correzione C1 (revisore V1): gli scenari che la prima riparazione lasciava aperti.
+describe('R25-001 · C1 · ordini già nati, carrello scaduto, richiesta di informazioni', () => {
+  const ordineA = (extra: Record<string, unknown>) => ({
+    id: 'ordine-a', stripe_session_id: 'cs_1', seller_id: 'negozio-a', user_id: 'cliente-1', payment_status: 'PAID', delivery_status: 'NEW',
+    payout_status: 'HELD', total_price: 20, refunded_amount_cents: 0, seller_payout_cents: 1800, seller_payout_reversed_cents: 0,
+    stripe_payment_intent: 'pi_1', stripe_charge_id: 'ch_1', stripe_refund_id: null, internal_dispute_status: null, stripe_transfer_id: null, ...extra,
+  });
+  const rimborsoDi50 = (rimborsato: number, rimborsi: Array<Record<string, unknown>>) => ({
+    id: 'ch_1', payment_intent: 'pi_1', amount: 5000, amount_refunded: rimborsato, refunded: rimborsato >= 5000, disputed: false,
+    metadata: { pending_checkout_id: 'pc_1' }, transfer_group: 'mc_pc_1', refunds: { data: rimborsi, has_more: false },
+  }) as unknown as Stripe.Charge;
+  const fermi = () => tabella('orders').filter((o) => o.internal_dispute_status === 'RIMBORSO_DA_RIPARTIRE').map((o) => o.seller_id);
+
+  it('V1-A carrello scaduto dal giro, carta già rimborsata dal cruscotto: nessun secondo rimborso, un avviso, e Stripe smette di ripetere', async () => {
+    const sessione = carrello('EXPIRED', [gruppo('pane-quotidiano', 3000, 'pane')]);
+    carica = { id: 'ch_1', amount: 3000, amount_refunded: 3000, refunded: true, disputed: false };
+    // Stripe vero: un pagamento già rimborsato per intero non si rimborsa di nuovo.
+    creaRimborso = async () => { throw Object.assign(new Error('Charge ch_1 has already been refunded.'), { code: 'charge_already_refunded', type: 'StripeInvalidRequestError' }); };
+    for (let i = 0; i < 3; i++) await expect(handleCheckoutCompleted(sessione), `tentativo ${i + 1}: Stripe ripete per tre giorni`).resolves.toBeUndefined();
+    expect(tabella('orders')).toEqual([]);
+    expect(avvisiAgliAdmin().map((n) => n.title)).toContain('⚠️ Pagamento su carrello scaduto già rimborsato');
+    expect(avvisiAgliAdmin().map((n) => n.title)).not.toContain('⚠️ Pagamento su carrello scaduto');
+  });
+
+  it('V1-A un altro rifiuto di Stripe sul carrello scaduto si ripete ancora (500)', async () => {
+    const sessione = carrello('EXPIRED', [gruppo('pane-quotidiano', 3000, 'pane')]);
+    creaRimborso = async () => { throw Object.assign(new Error('rete giù'), { code: 'api_connection_error' }); };
+    await expect(handleCheckoutCompleted(sessione)).rejects.toThrow('rete giù');
+  });
+
+  it('V1-B A nato in un tentativo di prima, il cruscotto rende 30 € prima che B nasca: si ripete, e al ritentativo i bonifici di A e B si fermano', async () => {
+    const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
+    tabella('orders').push(ordineA({}));
+    const r = rimborsoDi50(3000, [{ id: 're_cruscotto', amount: 3000, status: 'succeeded', metadata: {}, created: 1 }]);
+    await expect(handleChargeRefunded(r), 'il rimborso con il carrello aperto usciva 200 e si perdeva').rejects.toThrow(/pc_1/);
+    carica = { id: 'ch_1', amount: 5000, amount_refunded: 3000, refunded: false, disputed: false };
+    await handleCheckoutCompleted(sessione);
+    expect(statoDelCarrello()).toBe('COMPLETED');
+    await handleChargeRefunded(r);
+    expect(fermi().sort(), 'B nato col netto pieno e nessun bonifico fermo').toEqual(['negozio-a', 'negozio-b']);
+    expect(avvisiAgliAdmin().map((n) => n.title)).toContain('⚠️ Rimborso dal cruscotto da dividere fra i negozi');
+  });
+
+  it('V1-B2 il sito rende A (20 €), poi il cruscotto 10 € prima che B nasca: al ritentativo B è fermo e il rimborso è da dividere', async () => {
+    const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
+    tabella('orders').push(ordineA({ payment_status: 'REFUNDED', delivery_status: 'CANCELED', payout_status: 'REFUNDED', refunded_amount_cents: 2000, seller_payout_reversed_cents: 1800, stripe_refund_id: 're_sito' }));
+    const r = rimborsoDi50(3000, [
+      { id: 're_cruscotto', amount: 1000, status: 'succeeded', metadata: {}, created: 2 },
+      { id: 're_sito', amount: 2000, status: 'succeeded', metadata: { order_id: 'ordine-a' }, created: 1 },
+    ]);
+    await expect(handleChargeRefunded(r)).rejects.toThrow(/pc_1/);
+    carica = { id: 'ch_1', amount: 5000, amount_refunded: 3000, refunded: false, disputed: false };
+    await handleCheckoutCompleted(sessione);
+    await handleChargeRefunded(r);
+    expect(fermi(), 'i 10 € dal cruscotto si perdevano e B nasceva col netto pieno').toContain('negozio-b');
+    expect(avvisiAgliAdmin().find((n) => n.title === '⚠️ Rimborso dal cruscotto da dividere fra i negozi')?.body).toMatch(/10,00/);
+  });
+
+  it('V1-C un negozio solo, rimborso parziale (10 €) prima dell ordine: si ripete e poi si scrive', async () => {
+    const sessione = carrello('PENDING', [gruppo('pane-quotidiano', 3000, 'pane')]);
+    const r = {
+      id: 'ch_1', payment_intent: 'pi_1', amount: 3000, amount_refunded: 1000, refunded: false, metadata: { pending_checkout_id: 'pc_1' }, transfer_group: 'mc_pc_1',
+      refunds: { data: [{ id: 're_c', amount: 1000, status: 'succeeded', metadata: {}, created: 1 }], has_more: false },
+    } as unknown as Stripe.Charge;
+    await expect(handleChargeRefunded(r)).rejects.toThrow();
+    carica = { id: 'ch_1', amount: 3000, amount_refunded: 1000, refunded: false, disputed: false };
+    await handleCheckoutCompleted(sessione);
+    await handleChargeRefunded(r);
+    expect(tabella('orders')[0]).toMatchObject({ payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 1000, seller_payout_reversed_cents: 900 });
+  });
+
+  it('V1-F A nato prima, il cruscotto rende tutto (50 €): A rimborsato subito, B non nasce', async () => {
+    const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
+    tabella('orders').push(ordineA({}));
+    await handleChargeRefunded(rimborsoDi50(5000, [{ id: 're_cruscotto', amount: 5000, status: 'succeeded', metadata: {}, created: 1 }]));
+    carica = { id: 'ch_1', amount: 5000, amount_refunded: 5000, refunded: true, disputed: false };
+    await handleCheckoutCompleted(sessione);
+    expect(tabella('orders').find((o) => o.id === 'ordine-a')).toMatchObject({ payment_status: 'REFUNDED', payout_status: 'REFUNDED' });
+    expect(tabella('orders').find((o) => o.seller_id === 'negozio-b')).toBeUndefined();
+  });
+
+  it('contestata (forse solo una richiesta di informazioni della banca): l avviso dice che va deciso a mano', async () => {
+    const sessione = carrello('PENDING', [gruppo('pane-quotidiano', 3000, 'pane')]);
+    carica = { id: 'ch_1', amount: 3000, amount_refunded: 0, refunded: false, disputed: true };
+    await handleCheckoutCompleted(sessione);
+    expect(avvisiAgliAdmin()[0]?.body).toMatch(/richiesta di informazioni.*deciso a mano se rimborsare il cliente o far nascere l'ordine/);
   });
 });

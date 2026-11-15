@@ -43,14 +43,16 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   // R81 — Una lettura caduta non è «nessun ordine»: prima il gestore usciva
   // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
   if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
+  // R25-001 — IL RIMBORSO ARRIVATO PRIMA DELL'ORDINE. Col carrello ancora aperto (o appena completato) l'ordine sta per nascere:
+  // uscire bene perdeva il rimborso, e l'ordine nasceva pagato. Si lancia: Stripe ripete l'avviso e trova gli ordini. Vale anche
+  // con una parte degli ordini già nata e un rimborso parziale: il resto nasceva col netto pieno e il rimborso non si scriveva.
+  const pieno = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
+  const carrello = charge.metadata?.pending_checkout_id || /^mc_(.+)$/.exec(charge.transfer_group ?? '')?.[1];
+  if (carrello && (!orders?.length || !pieno)) {
+    const { data: c, error: errC } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
+    if (errC || c?.status === 'PENDING' || (c?.status === 'COMPLETED' && !orders?.length)) throw new Error(`[stripe] rimborso arrivato prima dell'ordine (carrello ${carrello}): si riprova`);
+  }
   if (!orders || orders.length === 0) {
-    // R25-001 — IL RIMBORSO ARRIVATO PRIMA DELL'ORDINE. Col carrello ancora aperto (o appena completato) l'ordine sta per nascere:
-    // uscire bene perdeva il rimborso, e l'ordine nasceva pagato. Si lancia: Stripe ripete l'avviso e trova gli ordini.
-    const carrello = charge.metadata?.pending_checkout_id || /^mc_(.+)$/.exec(charge.transfer_group ?? '')?.[1];
-    if (carrello) {
-      const { data: c, error: errC } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
-      if (errC || c?.status === 'PENDING' || c?.status === 'COMPLETED') throw new Error(`[stripe] rimborso arrivato prima dell'ordine (carrello ${carrello}): si riprova`);
-    }
     // 31/10/2026 (178) — Un pagamento senza ordini puo' essere quello di un
     // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un
     // rimborso parziale non si indovina quanto togliere: lo si dice e basta.
@@ -58,7 +60,6 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // sola anche se Stripe riconsegna l'evento; 'non_trovato' = nessun buono
     // con quel pagamento (ancora): il database se lo annota e, se il buono
     // nasce dopo, nasce spento. Un errore si rilancia, cosi' Stripe riprova.
-    const pieno = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
     if (!pieno) {
       logger.warn('[stripe] rimborso parziale su un pagamento senza ordini: nessun annullo automatico del buono', { paymentIntent: pi });
       return;
