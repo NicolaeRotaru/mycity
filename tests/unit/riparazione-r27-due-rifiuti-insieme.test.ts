@@ -56,7 +56,7 @@ describe('R27-017 — due rifiuti nello stesso istante in un carrello di tre neg
     let sblocca!: () => void;
     fermaLaFrutta = new Promise<void>((r) => (sblocca = r));
     const fruttaArrivata = new Promise<void>((r) => (fruttaAlRimborso = r));
-    let laFrutta: Promise<unknown> | null = null;
+    let laFrutta = null as Promise<{ ok: boolean }> | null;
     // Il pane ha appena scritto il suo segno (terza istruzione sugli ordini): in quell'istante la
     // frutta rifiuta, mette il suo segno, legge il carrello col segno del pane e arriva al rimborso.
     // Solo dopo il pane legge il carrello, col segno della frutta.
@@ -76,7 +76,8 @@ describe('R27-017 — due rifiuti nello stesso istante in un carrello di tre neg
     };
     const pane = await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'Rifiutato dal negozio' });
     sblocca();
-    const frutta = (await laFrutta) as { ok: boolean };
+    const frutta = await (laFrutta as Promise<{ ok: boolean }> | null);
+    if (!frutta) throw new Error('la frutta non ha rifiutato');
     expect([pane.ok, frutta.ok]).toEqual([true, true]);
     expect(resi()).toEqual([['frutta', 1300], ['pane', 1600]]);
     expect(riga('carne')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 14, gross_total_cents: 1400 });
