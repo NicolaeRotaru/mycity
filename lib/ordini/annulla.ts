@@ -8,7 +8,13 @@ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere'
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
 import { ordineAnnullatoTemplate } from '@/lib/email/templates';
-import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
+import {
+  consegnaDopoLAnnullo,
+  consegnaSenzaLaVeloce,
+  type ConsegnaDopoLAnnullo,
+  type OrdineDelGiro,
+  type RigaRicalcolata,
+} from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
 // la migrazione 124: senza ripiego, prima della 124 la lettura falliva intera e la regola del negozio
@@ -690,6 +696,44 @@ async function scriviSeUguale(
   return Array.isArray(data) && data.length > 0;
 }
 
+/**
+ * 15/11/2026 (R27-016) — IL CARRELLO CON LA CARTA SPOSTATO DAL FRENO DELLA VELOCE.
+ *
+ * Con la carta il freno (lib/ordini/veloce-non-confermata.ts) scrive solo la fascia nuova e rende
+ * l'euro della veloce con un rimborso: la consegna scritta tiene ancora l'euro, e con la fascia
+ * nuova nessun conto la riconosceva. Al rifiuto di un negozio non si rifaceva niente: pane 15 +
+ * frutta 12 con la veloce, il freno rende 1 € e sposta il carrello, il forno rifiuta → la frutta
+ * restava con 1 € di consegna e 1 € al fattorino (la regola: 3 e 3) e dal forno tornavano 18 €
+ * invece di 16. Qui il conto si fa sulla consegna senza l'euro già reso, e si riscrive con l'euro
+ * dentro, come sta scritto: il suo rimborso è già contato in `refunded_amount_cents`, e il
+ * rimborso dell'annullo rende il totale nuovo meno quello (19 − 2 − 1 = 16 €).
+ * Se l'euro non è ancora tornato sulla carta (lo rende una persona) non si tocca niente, come prima.
+ */
+function contoDopoIlFrenoDellaCarta(
+  ordini: OrdineDelGiro[],
+  annullaId: string,
+  righe: RigaDelGiro[],
+): ConsegnaDopoLAnnullo | null {
+  const senza = consegnaSenzaLaVeloce(ordini);
+  if (!senza || senza.toltaCents === 0) return null;
+  const euro = new Map<string, number>();
+  for (const r of senza.righe) {
+    if (r.deltaCents === 0) continue;
+    const riga = righe.find((x) => x.id === r.id);
+    if (!riga?.stripe_session_id?.trim() || Number(riga.refunded_amount_cents ?? 0) < -r.deltaCents) return null;
+    euro.set(r.id, -r.deltaCents);
+  }
+  const conto = consegnaDopoLAnnullo({
+    ordini: ordini.map((o) => ({ ...o, deliveryFeeCents: o.deliveryFeeCents - (euro.get(o.id) ?? 0) })),
+    annullaId,
+    consegnaVeloce: false,
+    pickupInStore: false,
+  });
+  if (!conto) return null;
+  const conLEuro = (r: RigaRicalcolata): RigaRicalcolata => ({ ...r, deliveryFeeCents: r.deliveryFeeCents + (euro.get(r.id) ?? 0) });
+  return { ...conto, rimasti: conto.rimasti.map(conLEuro), annullato: conLEuro(conto.annullato) };
+}
+
 /** Un giro solo: 'CAMBIATO' se un'altra scrittura è arrivata prima (niente resta scritto). */
 async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null | 'CAMBIATO'> {
   const { data: lui, error } = await leggiIlGiro('ordine', (c) => admin.from('orders').select(c).eq('id', orderId).maybeSingle());
@@ -752,26 +796,25 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
     // 2. Il conto sul carrello letto DOPO il segno; l'ordine che se ne va col conto di prima.
     carrello = await ordiniDelCarrello(admin, ordine);
     if (nelCarrello(carrello)) {
-      conto = consegnaDopoLAnnullo({
-        ordini: carrello.map((c) => {
-          const r = c.id === orderId ? ordine : c;
-          const consegna = Number(r.delivery_fee_cents ?? 0);
-          const spedizione = centesimi(r.shipping_cost);
-          const merce = lordoDi(r) - consegna - spedizione;
-          return {
-            id: r.id,
-            spesaCents: merce + centesimi(r.discount_amount),
-            merceCents: merce,
-            shippingCents: spedizione,
-            deliveryFeeCents: consegna,
-            riderFeeCents: Number(r.rider_fee_cents ?? 0),
-            giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
-          };
-        }),
-        annullaId: orderId,
-        consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
-        pickupInStore: false,
+      const veloce = eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false });
+      const ordiniDelConto: OrdineDelGiro[] = carrello.map((c) => {
+        const r = c.id === orderId ? ordine : c;
+        const consegna = Number(r.delivery_fee_cents ?? 0);
+        const spedizione = centesimi(r.shipping_cost);
+        const merce = lordoDi(r) - consegna - spedizione;
+        return {
+          id: r.id,
+          spesaCents: merce + centesimi(r.discount_amount),
+          merceCents: merce,
+          shippingCents: spedizione,
+          deliveryFeeCents: consegna,
+          riderFeeCents: Number(r.rider_fee_cents ?? 0),
+          giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+        };
       });
+      conto =
+        consegnaDopoLAnnullo({ ordini: ordiniDelConto, annullaId: orderId, consegnaVeloce: veloce, pickupInStore: false })
+        ?? (veloce ? null : contoDopoIlFrenoDellaCarta(ordiniDelConto, orderId, carrello));
     }
     // Niente da spostare: resta il segno (l'ordine se ne va comunque), che `rimetti` toglie.
     if (!conto) return { ...comE, rimetti };
