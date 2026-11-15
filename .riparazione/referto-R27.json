@@ -1,0 +1,215 @@
+{
+  "sessione": "R27",
+  "aggiornato": "2026-11-16 00:55",
+  "finita": false,
+  "testa": "b27a30524aa61d0d010437f696a954ec8048898c",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_lanciato",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R27-016",
+      "chiave": "pagamenti-stripe|carrello carta spostato dal freno: se dopo un negozio rifiuta, la consegna dei rimasti non si ricalcola piu'",
+      "esito": "riparato",
+      "commit": "bf9a3d771184b2338912688486ed37355090bbf2",
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-freno-della-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-freno-della-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf9a3d771184b2338912688486ed37355090bbf2^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-freno-della-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova contoDopoIlFrenoDellaCarta: con la fascia nuova e il conto non riconosciuto, il conto si fa sulla consegna senza l'euro della veloce, solo se l'euro è già tornato sulla carta (refunded_amount_cents). Poi si riscrive con l'euro dentro. Caso: pane 15 + frutta 12 con la veloce. Il forno rifiuta: la frutta passa a 3 € di consegna e 3 € al fattorino (15 €), e tornano 16 € invece di 18.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R27-017",
+      "chiave": "pagamenti-stripe|due rifiuti nello stesso istante in un carrello di tre negozi: il terzo resta con 1 € di consegna e 1 € al fattorino",
+      "esito": "riparato",
+      "commit": "98c25c8187169e50f6a2010b098c9827180dd310",
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 98c25c8187169e50f6a2010b098c9827180dd310^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il segno di un altro annullo in corso (fattorino a 0 su un ordine ancora vivo) ora conta come ordine già uscito dal giro. La prova fa scrivere il segno a pane e frutta prima che uno dei due legga il carrello. Risultato: tornano 16 + 13 € su 43 e la carne passa a 3 € di consegna e 3 € al fattorino (14 €), come con due rifiuti uno dopo l'altro. Prima tornavano 18 + 13 e la carne restava a 1 e 1.",
+      "nota": "La prova è stata ritoccata dopo, solo nei tipi, nel commit R27-varie b27a3052 (tsc la leggeva sempre nulla).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R27-018",
+      "chiave": "pagamenti-stripe|ordine coperto dal credito e pagato con la carta: al cliente tornano 2 € in più e la frutta resta incassata a 13 €",
+      "esito": "riparato",
+      "commit": "9be4a476412d71f735c264f315d24a539067f0a1",
+      "insieme_a": [
+        "R27-019"
+      ],
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-credito-e-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-credito-e-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9be4a476412d71f735c264f315d24a539067f0a1^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-credito-e-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con la carta, la parte della differenza della consegna che il totale sulla carta di chi se ne va non copre si paga col credito MyCity. Quel credito passa agli ordini che salgono (wallet_applied_cents) e non torna al cliente. La restituzione del credito ne tiene conto (creditoTrattenutoCents), anche nell'email. Caso: pane 18 € tutto a credito, frutta 13 € con la carta, il forno rifiuta. Tornano 16 € di credito invece di 18, e la frutta resta 13 € sulla carta più 2 € di credito (15). Coi contanti non cambia niente (provato). Se il rimborso cade, il credito torna com'era (provato).",
+      "nota": "refundOrder è simulato come nelle altre prove del carrello. Con quello vero il rimborso zero sulla carta è rifiutato: difetto nuovo già presente sulla base, in nuovi_difetti_visti.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R27-019",
+      "chiave": "pagamenti-stripe|se il credito mycity copre quasi tutto l ordine annullato, la differenza della consegna non viene tolta da nessuna parte",
+      "esito": "riparato",
+      "commit": "9be4a476412d71f735c264f315d24a539067f0a1",
+      "insieme_a": [
+        "R27-018"
+      ],
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-credito-e-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-credito-e-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9be4a476412d71f735c264f315d24a539067f0a1^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-credito-e-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa correzione di R27-018, nelle stesse righe (verso() e la restituzione del credito). Caso: A pagato 17,50 € di credito e 0,50 € di carta, B 13 € con la carta, A rifiuta. Tornano 16 € di credito invece di 17,50. B è scritto 13,50 € sulla carta, uguale all'addebito, più 1,50 € di credito. lib/ordini/prezzi.ts non toccato: consegnaAnnullato non scende mai sotto zero perché il tetto limita la differenza alla consegna di chi se ne va (lo controlla anche la proprietà V1 esistente), quindi la perdita stava solo in verso().",
+      "verificato_da": ""
+    },
+    {
+      "id": "R27-002",
+      "chiave": "api-backend|il cron degli ordini scaduti ricopia la logica di annullo invece di usare annullaerimborsa",
+      "esito": "parziale",
+      "commit": "9c7b6b29ba27e62e85524fd0a92105453257d716",
+      "file_toccati": [
+        "lib/ordini/annulla.ts",
+        "app/api/cron/expire-stale-orders/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-giro-con-le-regole-dell-annullo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-giro-con-le-regole-dell-annullo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c7b6b29ba27e62e85524fd0a92105453257d716^ --file app/api/cron/expire-stale-orders/route.ts,lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-giro-con-le-regole-dell-annullo.test.ts --json",
+        "nota": "Con la sola route (--file app/api/cron/expire-stale-orders/route.ts) uscita 0, regge: annulla.ts riportato alla base perde le due funzioni esportate nuove, quindi il rosso è solo di struttura."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Credito e merce adesso tornano con due funzioni esportate da annulla.ts, usate sia da annullaERimborsa sia dal giro: restituisciIlCreditoDellAnnullo (tre tentativi, credito trattenuto di R27-018) e rimettiAScaffaleDopoLAnnullo. Erano copie nel giro. La prova è sul giro: il credito che cade una volta torna al secondo tentativo; una chiamata della merce che lancia non ferma più credito ed email; dal giro tornano 16 € e non 18. Codice sconto ed email erano già condivisi.",
+      "cosa_resta": "Il giro non chiama ancora annullaERimborsa e tiene suo l'ordine dei passi: turno preso prima del rimborso anche con la carta, ordine rimesso in coda se Stripe non risponde, lasciato annullato con avviso se il rimborso è impossibile, totale riletto senza giro, 'carta' anche per gli ordini già rimborsati, campanelle a cliente e negozio, avvisi del carrello a fine giro (R27-009). Per passare da annullaERimborsa servono lì: la presa del turno prima del rimborso con la carta, un esito 'ritentabile' del rimborso, la rilettura del totale e un modo di rimandare gli avvisi. È un rifacimento sui soldi, da fare con le prove dei rimborsi (già nota S03 del 5/11).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R27-009",
+      "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+      "esito": "riparato",
+      "commit": "7e5cdeb98be99ee8d4419eb14e9b734dee5751e0",
+      "file_toccati": [
+        "app/api/cron/expire-stale-orders/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7e5cdeb98be99ee8d4419eb14e9b734dee5751e0^ --file app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giro raccoglie email e campanelle del carrello e le scrive a fine giro (avvisiDiFineGiro). Gli annullati del giro escono dai rimasti, e il conto nuovo lo dice solo l'avviso più recente del carrello, con le cifre della conferma come 'prima'. Carrello scaduto tutto (pane 18, frutta 13, carne 12, contanti): tre email senza 'alla porta paghi' e nessuna campanella 'il conto è cambiato'. Scaduti pane e frutta: un avviso solo, 'carne 14,00 € invece di 12,00 €', con la frutta ai 13,00 € della conferma e non ai 15.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R27-005",
+      "chiave": "architettura|email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+      "esito": "parziale",
+      "commit": "2eac61a8d0f64c412bff7dc7d399d79339089870",
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-email-dopo-la-risposta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-email-dopo-la-risposta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2eac61a8d0f64c412bff7dc7d399d79339089870^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-email-dopo-la-risposta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "avvisaIlClienteDellAnnullo registra l'email con after() di next/server. Così il Rifiuta, l'Annulla e il giro rispondono senza aspettare la posta (il giro passa dalla stessa funzione, la route non cambia). Fuori da una richiesta after() lancia e l'email si aspetta come prima: per questo le prove esistenti restano verdi. Se la posta rifiuta l'email, oltre al registro parte un avviso agli amministratori, una volta per ordine (unaVoltaPer email-annullo-<id>). Niente avviso quando manca solo l'indirizzo.",
+      "cosa_resta": "Ritentare da sola l'email caduta usando la coda che c'è già (email_queue e il giro send-emails), senza tabelle nuove. Serve un modello 'order_canceled' in TEMPLATE_CICLO_DI_VITA e TEMPLATE_DI_SERVIZIO di lib/email/templates.ts, che rifà l'email dai metadata {order_id, motivo, come, righe del carrello, credito tornato}. Sulla posta rifiutata, avvisaIlClienteDellAnnullo scrive una riga in email_queue (user_id, template 'order_canceled', metadata) al posto dell'avviso. File altrui: lib/email/templates.ts, app/api/cron/send-emails/route.ts. after() tiene viva la funzione solo fino al suo maxDuration: il giro da 100 ordini resta legato ai 300 s. La prova esistente tests/unit/minori-s03-ordini-scaduti.test.ts:186 («il giro aspetta l email prima di rispondere») ha un presupposto vecchio ma resta verde; non toccata perché usa file di R25.",
+      "verificato_da": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Un ordine con la carta pagato tutto o quasi col credito MyCity non si annulla: il rimborso di zero sulla carta è rifiutato",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/ordini/annulla.ts:276 · lib/stripe/payout.ts:2098",
+      "descrizione": "Nel ramo carta di annullaERimborsa, quando il totale sulla carta è 0, si chiama refundOrder con amountCents 0. refundOrder lancia RimborsoNonRitentabile ('importo rimborso non valido'): l'annullo risponde RIMBORSO_FALLITO e il carrello torna com'era. Nel giro degli scaduti l'ordine resta annullato senza credito reso, da chiudere a mano. Valeva già sulla base. Oggi dorme: la cassa con la carta non applica credito."
+    },
+    {
+      "titolo": "Con la carta e un po' di credito, il rimborso dell'annullo non porta l'ordine ad annullato",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:2224-2228 · lib/ordini/annulla.ts:310",
+      "descrizione": "refundOrder segna l'ordine CANCELED solo se il rimborsato arriva al lordo, che comprende il credito. annullaERimborsa rende sulla carta solo total_price e non passa annullaLOrdine: un ordine carta più credito resta vivo dopo il rimborso, contro il commento 'refundOrder ha già impostato CANCELED'. Oggi dorme come il precedente."
+    },
+    {
+      "titolo": "Un beforeEach che restituisce il finto lo fa chiamare a vitest come pulizia",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/il-ricalcolo-dopo-un-annullo-regge-veloce-rimborso-caduto-e-annulli-insieme.test.ts:57",
+      "descrizione": "beforeEach(() => refundOrder.mockClear()) restituisce il mock, e vitest chiama il valore restituito come funzione di pulizia: refundOrder parte una volta in più senza argomenti. Lì non fa danno perché l'implementazione non legge l'argomento; con un'implementazione che lo legge la prova cade per un motivo finto."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": "lotto 1 (modello grande, 7 voci)."
+  }
+}
