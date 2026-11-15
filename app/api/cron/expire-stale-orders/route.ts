@@ -19,7 +19,12 @@ import {
   rimettiAScaffaleDopoLAnnullo,
 } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
-import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
+import {
+  righePerChiChiudeAMano,
+  type AvvisoDelCarrello,
+  type ComeHaPagato,
+  type OrdineRimasto,
+} from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
 
 /**
@@ -84,6 +89,56 @@ function orariDelNegozio(riga: unknown): unknown {
   return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
 }
 
+/**
+ * 15/11/2026 (R27-009) — GLI AVVISI DEL CARRELLO SI SCRIVONO A FINE GIRO, CON LE CIFRE DI FINE GIRO.
+ *
+ * Email e campanella partivano ordine per ordine, dentro il giro. Se scadeva tutto il carrello
+ * insieme (pane, frutta e carne coi contanti) arrivavano tre email e due campanelle «il conto è
+ * cambiato», e la prima diceva «alla porta paghi 15 €» per un ordine annullato un istante dopo.
+ * Adesso il giro le raccoglie e le scrive alla fine: gli ordini annullati nello stesso giro escono
+ * dai rimasti, il conto nuovo lo dice solo l'avviso più recente di ogni carrello (con le cifre della
+ * conferma come «prima»), e se il carrello è scaduto tutto non c'è nessun conto nuovo da dire.
+ */
+type AvvisoDaScrivere = {
+  ordineId: string;
+  userId: string | null;
+  carta: boolean;
+  come: ComeHaPagato;
+  perLEmail: { id: string; user_id: string | null; seller_id?: string | null; wallet_applied_cents?: number | null };
+  avviso: AvvisoDelCarrello | null;
+};
+
+function avvisiDiFineGiro(lista: AvvisoDaScrivere[], annullati: Set<string>): Array<AvvisoDelCarrello | null> {
+  // Le cifre della conferma: quelle della prima volta che un ordine compare fra i rimasti.
+  const conferma = new Map<string, OrdineRimasto>();
+  for (const m of lista) for (const r of m.avviso?.rimasti ?? []) if (!conferma.has(r.ordineId)) conferma.set(r.ordineId, r);
+  const finali: Array<AvvisoDelCarrello | null> = lista.map(() => null);
+  const giaDetti = new Set<string>();
+  for (let i = lista.length - 1; i >= 0; i--) {
+    const a = lista[i].avviso;
+    if (!a) continue;
+    const delCarrello = [a.ordineId, ...a.rimasti.map((r) => r.ordineId)];
+    // Un avviso più recente dello stesso carrello ha già le cifre di fine giro.
+    if (delCarrello.some((id) => giaDetti.has(id))) continue;
+    delCarrello.forEach((id) => giaDetti.add(id));
+    const rimasti = a.rimasti
+      .filter((r) => !annullati.has(r.ordineId))
+      .map((r) => ({
+        ...r,
+        consegnaPrimaCents: conferma.get(r.ordineId)?.consegnaPrimaCents ?? r.consegnaPrimaCents,
+        totalePrimaCents: conferma.get(r.ordineId)?.totalePrimaCents ?? r.totalePrimaCents,
+      }));
+    if (rimasti.length === 0) continue;
+    finali[i] = {
+      ...a,
+      pagatoCents: conferma.get(a.ordineId)?.totalePrimaCents ?? a.pagatoCents,
+      negoziRimasti: rimasti.length,
+      rimasti,
+    };
+  }
+  return finali;
+}
+
 export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
@@ -130,6 +185,9 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   let inAttesaDellaDivisione = 0;
   /** Annullati, ma la merce o il credito non sono tornati: lo sanno gli amministratori. */
   let ripristiniFalliti = 0;
+  /** R27-009 — Gli avvisi al cliente, scritti a fine giro; e gli ordini che il giro lascia annullati. */
+  const daAvvisare: AvvisoDaScrivere[] = [];
+  const annullatiNelGiro = new Set<string>();
 
   for (const o of candidates ?? []) {
     // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
@@ -267,6 +325,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
               }),
             );
             daChiudereAMano++;
+            annullatiNelGiro.add(o.id);
             continue;
           }
 
@@ -297,6 +356,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
               }),
             );
             daChiudereAMano++;
+            annullatiNelGiro.add(o.id);
           } else {
             logger.warn('[cron] expire-stale-orders: rimborso fallito, ordine rimesso in coda', { id: o.id });
             failed++;
@@ -376,13 +436,17 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       const pagatoConLaCarta =
         isCardPaid || (o.payment_method === 'card' && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(String(o.payment_status)));
       const come: ComeHaPagato = pagatoConLaCarta ? 'carta' : o.payment_method === 'cod' ? 'contanti' : 'da-pagare';
-      const carrello = giro?.avviso ? { avviso: giro.avviso, come } : null;
-      if (!isCardPaid || carrello) {
+      // 15/11/2026 (R27-009) — Email e campanella del carrello si scrivono a fine giro (`avvisiDiFineGiro`).
+      daAvvisare.push({
+        ordineId: o.id,
+        userId: o.user_id,
+        carta: isCardPaid,
+        come,
         // 5/11/2026 — Se lo storno del credito è fallito l'email non dice «credito restituito».
-        const perLEmail = { ...o, wallet_applied_cents: creditoTornato ? Math.max(0, Number(o.wallet_applied_cents ?? 0) - trattenutoCents) : 0 };
-        await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
-      }
-      await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
+        perLEmail: { ...o, wallet_applied_cents: creditoTornato ? Math.max(0, Number(o.wallet_applied_cents ?? 0) - trattenutoCents) : 0 },
+        avviso: giro?.avviso ?? null,
+      });
+      annullatiNelGiro.add(o.id);
 
       canceled++;
     } catch (e) {
@@ -392,6 +456,16 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         error: e instanceof Error ? e.message : String(e),
       });
     }
+  }
+
+  const finali = avvisiDiFineGiro(daAvvisare, annullatiNelGiro);
+  for (const [i, m] of daAvvisare.entries()) {
+    const carrello = finali[i] ? { avviso: finali[i] as AvvisoDelCarrello, come: m.come } : null;
+    // Sulla carta «Rimborso emesso» l'ha già mandato refundOrder: un'email in più solo col conto del carrello.
+    if (!m.carta || carrello) {
+      await avvisaIlClienteDellAnnullo(admin, m.perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
+    }
+    await avvisaLaCampanellaDelCarrello(admin, m.userId, finali[i], m.come);
   }
 
   if (canceled > 0 || failed > 0 || daChiudereAMano > 0 || inAttesaDellaDivisione > 0) {
