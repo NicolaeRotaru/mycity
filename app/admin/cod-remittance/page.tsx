@@ -93,12 +93,15 @@ export default function AdminCodRemittancePage() {
   const [contati, setContati] = useState('');
   const [nota, setNota] = useState('');
 
+  // 15/11/2026 (R26-009) — La riga in più (TETTO + 1) non arrivava mai: il server ne restituisce
+  // al massimo mille (max_rows). L'avviso non scattava e il «totale da rimettere» sembrava completo.
+  // Adesso il totale lo conta il database (count exact), come bonifici e prodotti.
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.codRemittances,
-    queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await supabase
+    queryFn: async (): Promise<Row[] & { totale?: number }> => {
+      const { data, error, count } = await supabase
         .from('orders')
-        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)')
+        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)', { count: 'exact' })
         .eq('payment_method', 'cod')
         .eq('delivery_status', 'DELIVERED')
         .eq('payout_status', 'AWAITING_REMITTANCE')
@@ -107,11 +110,13 @@ export default function AdminCodRemittancePage() {
         .limit(TETTO_RIMESSE + 1);
       // Una lettura caduta non e' «nessuna rimessa»: l'errore deve arrivare alla pagina.
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      const righe = (data ?? []) as unknown as Row[];
+      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
 
-  const tagliato = rows.length > TETTO_RIMESSE;
+  const totaleRighe = (rows as Row[] & { totale?: number }).totale ?? rows.length;
+  const tagliato = Math.max(totaleRighe, rows.length) > TETTO_RIMESSE;
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
     for (const o of rows.slice(0, TETTO_RIMESSE)) {
