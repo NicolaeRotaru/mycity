@@ -2,19 +2,7 @@
  * Il webhook Stripe che crea gli ordini, e quello che gestisce un carrello
  * scaduto. È la strada su cui passano tutti i soldi del marketplace.
  *
- * #12 — Perché sta qui e non in `app/api/stripe/webhook/route.ts`.
- *
- * Quel file era uno solo, da mille righe, con dentro otto mestieri senza
- * rapporto fra loro: creazione ordini, buoni regalo, spazi sponsorizzati,
- * abbonamenti, rimborsi, contestazioni, storni, esiti dei pagamenti. Ogni
- * modifica ai buoni regalo si portava dietro il rischio di toccare la
- * creazione degli ordini, perché stavano nello stesso file e la revisione
- * mostrava un diff dentro un blocco da mille righe. È la strada su cui
- * passano tutti i soldi del marketplace: è l'ultimo posto dove si vuole una
- * revisione difficile da leggere.
- *
- * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
- * webhook sono la dimostrazione che non si è rotto niente.
+ * #12 — Sta qui e non nella rotta del webhook (mille righe, otto mestieri): il perché nella prova `webhook-diviso-per-mestiere`.
  */
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
@@ -28,6 +16,7 @@ import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email
 import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
 import { scritturaObbligatoria } from './esito';
 import { chiudiIlCarrelloPerQuadratura } from './quadratura';
+import { handleCheckoutExpired } from './carrello-scaduto';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
@@ -120,6 +109,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // Idempotenza checkout-level: se già processato, no-op.
   if (pending.status === 'COMPLETED') {
     logger.info('[stripe] pending_checkout già COMPLETED, skip', { pendingCheckoutId });
+    return;
+  }
+  // R25-001 — Anche CANCELED e MISMATCH sono finali: la merce è già tornata in vendita. Il pagamento non passa in silenzio.
+  if (pending.status === 'CANCELED' || pending.status === 'MISMATCH') {
+    await notifyAdmins('⚠️ Pagamento su un carrello già chiuso', `Il pagamento del carrello ${pendingCheckoutId} è arrivato a carrello già chiuso (${pending.status}): nessun ordine creato. Guarda su Stripe se è già rimborsato; se no, va rimborsato a mano.`, '/admin/orders', { unaVoltaPer: `carrello-chiuso:${pendingCheckoutId}` });
     return;
   }
 
@@ -257,11 +251,13 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // Recupera la latest_charge dal PaymentIntent per popolare stripe_charge_id
   // (serve a /api/stripe/payout per usare source_transaction).
   let stripeChargeId: string | null = null;
+  let cartaTornata = false;
   if (paymentIntent) {
     try {
       const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] });
       const lc = pi.latest_charge;
       stripeChargeId = typeof lc === 'string' ? lc : (lc?.id ?? null);
+      cartaTornata = !!lc && typeof lc !== 'string' && (lc.refunded || lc.amount_refunded >= lc.amount || lc.disputed);
     } catch (e) {
       // 052 — Questo NON è un dettaglio best-effort. Senza `stripe_charge_id` il
       // pagamento al negozio parte senza `source_transaction`: Stripe lo prende
@@ -275,6 +271,13 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       });
       throw e;
     }
+  }
+  // R25-001 — RIMBORSATA PER INTERO O CONTESTATA mentre questo avviso falliva: nasceva un ordine «pagato», il negozio preparava e il
+  // giro dei bonifici lo pagava. Ora non nasce: lo sa un amministratore e il carrello si chiude come scaduto (merce e codice tornano).
+  if (cartaTornata) {
+    await notifyAdmins('⚠️ Pagamento già rimborsato o contestato: nessun ordine', `Quando è arrivato il pagamento del carrello ${pendingCheckoutId} la carta risultava già rimborsata per intero o contestata: l'ordine non è nato e il negozio non è stato avvisato. Se un tentativo di prima aveva già creato degli ordini, il carrello resta aperto e va guardato a mano.`, '/admin/orders', { unaVoltaPer: `carta-tornata:${pendingCheckoutId}` });
+    await handleCheckoutExpired(session);
+    return;
   }
 
   // 31/10/2026 — LA FASCIA SI GUARDA QUANDO SI PAGA, E SI SCRIVE DAL GIORNO DELL'ORDINE.
@@ -591,7 +594,5 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     .eq('id', pendingCheckoutId), 'carrello segnato come completato');
 }
 
-// Il carrello scaduto ha il suo file (R81, 15/10/2026): questo era a una riga
-// dal tetto delle 600, e la riparazione di R81 ne aggiungeva. Si riesporta da
-// qui perché la rotta e le prove lo cercano qui.
-export { handleCheckoutExpired } from './carrello-scaduto';
+// Il carrello scaduto ha il suo file (R81, tetto delle 600): si riesporta perché la rotta e le prove lo cercano qui.
+export { handleCheckoutExpired };

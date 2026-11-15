@@ -2,19 +2,7 @@
  * Rimborsi: quello che Stripe ha già emesso, e quello che la banca del
  * cliente rifiuta dopo.
  *
- * #12 — Perché sta qui e non in `app/api/stripe/webhook/route.ts`.
- *
- * Quel file era uno solo, da mille righe, con dentro otto mestieri senza
- * rapporto fra loro: creazione ordini, buoni regalo, spazi sponsorizzati,
- * abbonamenti, rimborsi, contestazioni, storni, esiti dei pagamenti. Ogni
- * modifica ai buoni regalo si portava dietro il rischio di toccare la
- * creazione degli ordini, perché stavano nello stesso file e la revisione
- * mostrava un diff dentro un blocco da mille righe. È la strada su cui
- * passano tutti i soldi del marketplace: è l'ultimo posto dove si vuole una
- * revisione difficile da leggere.
- *
- * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
- * webhook sono la dimostrazione che non si è rotto niente.
+ * #12 — Sta qui e non nella rotta del webhook (mille righe, otto mestieri): il perché nella prova `webhook-diviso-per-mestiere`.
  */
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
@@ -56,6 +44,13 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
   if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
   if (!orders || orders.length === 0) {
+    // R25-001 — IL RIMBORSO ARRIVATO PRIMA DELL'ORDINE. Col carrello ancora aperto (o appena completato) l'ordine sta per nascere:
+    // uscire bene perdeva il rimborso, e l'ordine nasceva pagato. Si lancia: Stripe ripete l'avviso e trova gli ordini.
+    const carrello = charge.metadata?.pending_checkout_id || /^mc_(.+)$/.exec(charge.transfer_group ?? '')?.[1];
+    if (carrello) {
+      const { data: c, error: errC } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
+      if (errC || c?.status === 'PENDING' || c?.status === 'COMPLETED') throw new Error(`[stripe] rimborso arrivato prima dell'ordine (carrello ${carrello}): si riprova`);
+    }
     // 31/10/2026 (178) — Un pagamento senza ordini puo' essere quello di un
     // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un
     // rimborso parziale non si indovina quanto togliere: lo si dice e basta.
