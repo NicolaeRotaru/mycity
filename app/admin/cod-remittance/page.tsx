@@ -67,6 +67,8 @@ type Group = {
    * rimessa li salta, e il negozio non viene pagato finche' l'incasso non c'e'.
    */
   senzaIncasso: Row[];
+  /** 15/11/2026 (R26-019) — Gli ordini mostrati: la conferma rilascia solo questi. */
+  orderIds: string[];
 };
 
 /**
@@ -128,8 +130,10 @@ export default function AdminCodRemittancePage() {
         orders: 0,
         toRemitCents: 0,
         senzaIncasso: [],
+        orderIds: [],
       };
       g.orders += 1;
+      g.orderIds.push(o.id);
       g.toRemitCents += Math.max(0, cents);
       if (incassoDaDichiarare(o)) g.senzaIncasso.push(o);
       map.set(key, g);
@@ -138,15 +142,15 @@ export default function AdminCodRemittancePage() {
   }, [rows]);
 
   const confirm = useMutation({
-    mutationFn: async ({ riderId, date, contatiCents, attesiCents, nota: notaInviata }: {
-      riderId: string; date: string; contatiCents: number; attesiCents: number; nota?: string;
+    mutationFn: async ({ riderId, date, contatiCents, attesiCents, orderIds, nota: notaInviata }: {
+      riderId: string; date: string; contatiCents: number; attesiCents: number; orderIds: string[]; nota?: string;
     }): Promise<{ rilasciati: number; saltati: number }> => {
       // Cookie-based (niente Bearer): l'RPC confirm_cod_remittance verifica
       // is_admin() leggendo l'auth.uid() dell'admin via getServerSupabase.
       const res = await fetch('/api/admin/cod-remittance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ riderId, date, contatiCents, attesiCents, ...(notaInviata ? { nota: notaInviata } : {}) }),
+        body: JSON.stringify({ riderId, date, contatiCents, attesiCents, orderIds, ...(notaInviata ? { nota: notaInviata } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Errore conferma rimessa');
@@ -248,7 +252,7 @@ export default function AdminCodRemittancePage() {
                         if (!pronto || contatiCents === null) return;
                         confirm.mutate({
                           riderId: g.riderId, date: g.date, contatiCents, attesiCents: g.toRemitCents,
-                          nota: diverso ? nota.trim() : undefined,
+                          orderIds: g.orderIds, nota: diverso ? nota.trim() : undefined,
                         });
                       }}
                     >
