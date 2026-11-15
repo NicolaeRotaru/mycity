@@ -10,7 +10,14 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+import {
+  avvisaIlClienteDellAnnullo,
+  avvisaLaCampanellaDelCarrello,
+  ricalcolaLaConsegnaDelGiro,
+  restituisciIlCodiceDellOrdine,
+  restituisciIlCreditoDellAnnullo,
+  rimettiAScaffaleDopoLAnnullo,
+} from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -298,28 +305,23 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         }
       } else {
         // COD o non pagato: niente da rimborsare, solo il ripristino della merce.
-        const { error: rErr } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
-        if (rErr) {
-          logger.warn('[cron] expire-stale-orders: restore_stock fallito', { id: o.id, message: rErr.message });
-          nonTornato.push('la merce non è tornata a scaffale');
-        }
+        // 15/11/2026 (R27-002) — Lo stesso passo di `annullaERimborsa` (lib/ordini/annulla.ts), non una copia.
+        if (!(await rimettiAScaffaleDopoLAnnullo(admin, o.id))) nonTornato.push('la merce non è tornata a scaffale');
       }
 
       // Storno del credito wallet eventualmente speso (entrambi i percorsi).
-      const walletCents = Number(o.wallet_applied_cents ?? 0);
-      let creditoTornato = true;
-      if (walletCents > 0) {
-        const { error: wErr } = await admin.rpc('wallet_credit', {
-          p_user: o.user_id,
-          p_cents: walletCents,
-          p_reason: 'order_auto_canceled',
-          p_ref: o.id,
-        });
-        if (wErr) {
-          logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
-          creditoTornato = false;
-          nonTornato.push(`il credito MyCity speso (${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato al cliente`);
-        }
+      // 15/11/2026 (R27-002) — Con la regola di `annullaERimborsa`: tre tentativi invece di uno, e meno
+      // il credito che il carrello rifatto ha passato agli ordini rimasti (R27-018). L'avviso agli
+      // amministratori resta quello di qui sotto, uno solo con la merce.
+      const trattenutoCents = giro?.creditoTrattenutoCents ?? 0;
+      const creditoNonTornatoCents = await restituisciIlCreditoDellAnnullo(admin, o, {
+        motivo: 'order_auto_canceled',
+        trattenutoCents,
+        avvisaGliAmministratori: false,
+      });
+      const creditoTornato = creditoNonTornatoCents === 0;
+      if (!creditoTornato) {
+        nonTornato.push(`il credito MyCity speso (${(creditoNonTornatoCents / 100).toFixed(2).replace('.', ',')} €) non è tornato al cliente`);
       }
 
       // 5/11/2026 — Merce o credito non tornati: l'ordine è già annullato e il giro non lo riprende.
@@ -377,7 +379,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       const carrello = giro?.avviso ? { avviso: giro.avviso, come } : null;
       if (!isCardPaid || carrello) {
         // 5/11/2026 — Se lo storno del credito è fallito l'email non dice «credito restituito».
-        const perLEmail = creditoTornato ? o : { ...o, wallet_applied_cents: 0 };
+        const perLEmail = { ...o, wallet_applied_cents: creditoTornato ? Math.max(0, Number(o.wallet_applied_cents ?? 0) - trattenutoCents) : 0 };
         await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
       }
       await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);

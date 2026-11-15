@@ -150,48 +150,14 @@ export async function annullaERimborsa(
   // amministratori con ordine, cliente e importo, e la cifra mancante esce
   // nell'esito (`creditoNonTornatoCents`). Ritorna i centesimi NON restituiti.
   // 15/11/2026 (R27-018) — Meno il credito passato agli ordini rimasti del carrello (`creditoTrattenutoCents`).
-  async function restituisciCredito(trattenutoCents = 0): Promise<number> {
-    const walletCents = Math.max(0, Number(order.wallet_applied_cents ?? 0) - trattenutoCents);
-    if (walletCents <= 0) return 0;
-    let ultimoErrore: unknown = null;
-    for (let tentativo = 1; tentativo <= TENTATIVI_STORNO_CREDITO; tentativo++) {
-      try {
-        const { error: wErr } = await admin.rpc('wallet_credit', {
-          p_user: order.user_id,
-          p_cents: walletCents,
-          p_reason: opts.motivoCredito ?? 'order_canceled',
-          p_ref: order.id,
-        });
-        if (!wErr) return 0;
-        ultimoErrore = wErr.message;
-      } catch (err) {
-        ultimoErrore = err instanceof Error ? err.message : err;
-      }
-      logger.warn('[annullaERimborsa] storno credito fallito, ritento', { orderId: order.id, tentativo, err: ultimoErrore });
-      if (tentativo < TENTATIVI_STORNO_CREDITO) {
-        await new Promise((r) => setTimeout(r, PAUSA_STORNO_CREDITO_MS * tentativo));
-      }
-    }
-    logger.error('[annullaERimborsa] credito MyCity NON restituito: ordine annullato, soldi del cliente fermi', {
-      orderId: order.id,
-      userId: order.user_id,
-      cents: walletCents,
-      err: ultimoErrore,
+  // 15/11/2026 (R27-002) — La regola sta in `restituisciIlCreditoDellAnnullo`, più sotto: la usa anche
+  // il giro degli ordini scaduti, che ne aveva una copia sua con un tentativo solo.
+  const restituisciCredito = (trattenutoCents = 0): Promise<number> =>
+    restituisciIlCreditoDellAnnullo(admin, order, {
+      motivo: opts.motivoCredito ?? 'order_canceled',
+      trattenutoCents,
+      avvisaGliAmministratori: true,
     });
-    try {
-      await notifyAdmins(
-        '⚠️ Credito MyCity non restituito dopo un annullo',
-        `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma il credito MyCity che il cliente aveva speso ` +
-          `(${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato sul suo saldo: la scrittura è caduta ` +
-          `${TENTATIVI_STORNO_CREDITO} volte. Un nuovo annullo non ci riprova, perché l'ordine risulta già annullato. ` +
-          `Va restituito a mano (cliente ${order.user_id}, ordine ${order.id}).`,
-        '/admin/orders',
-      );
-    } catch (err) {
-      logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
-    }
-    return walletCents;
-  }
 
   // 31/10/2026 (collaudo) — L'email di annullo scrive «Il credito MyCity che avevi usato (4,00 €) ti è
   // stato restituito» leggendo `wallet_applied_cents`. Se lo storno è caduto, quella riga mentiva: l'email
@@ -388,13 +354,8 @@ export async function annullaERimborsa(
 
   // 5/11/2026 — La merce che non torna a scaffale non deve passare in silenzio:
   // l'ordine e' gia' annullato, un secondo annullo non ci riprova.
-  try {
-    const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
-    if (errScaffale) throw new Error(errScaffale.message);
-  } catch (err) {
-    logger.error('[annullaERimborsa] merce non rimessa a scaffale dopo l annullo', {
-      orderId: order.id, err: err instanceof Error ? err.message : err,
-    });
+  // 15/11/2026 (R27-002) — Lo stesso passo del giro degli ordini scaduti: `rimettiAScaffaleDopoLAnnullo`.
+  if (!(await rimettiAScaffaleDopoLAnnullo(admin, order.id))) {
     try {
       await notifyAdmins(
         '⚠️ Merce non rimessa a scaffale dopo un annullo',
@@ -430,6 +391,85 @@ export async function annullaERimborsa(
   if (giro?.avviso) await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, come);
 
   return { ok: true, refundId: null, ...(creditoNonTornato > 0 ? { creditoNonTornatoCents: creditoNonTornato } : {}) };
+}
+
+/**
+ * 15/11/2026 (R27-002) — La merce dell'ordine annullato torna a scaffale: un passo solo per
+ * `annullaERimborsa` e per il giro degli ordini scaduti. Non lancia mai: risponde false se la merce
+ * non è tornata (l'errore è già nel registro), e l'avviso lo scrive chi chiama. Nel giro una
+ * chiamata che lanciava (invece di rispondere con un errore) faceva saltare anche il credito e
+ * l'email dell'ordine, già annullato.
+ */
+export async function rimettiAScaffaleDopoLAnnullo(admin: SupabaseClient, orderId: string): Promise<boolean> {
+  try {
+    const { error } = await admin.rpc('restore_stock_for_order', { p_order_id: orderId });
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (err) {
+    logger.error('[annullaERimborsa] merce non rimessa a scaffale dopo l annullo', {
+      orderId, err: err instanceof Error ? err.message : err,
+    });
+    return false;
+  }
+}
+
+/**
+ * Il credito MyCity speso sull'ordine annullato torna al cliente: il perché dei tentativi e
+ * dell'avviso sta in `annullaERimborsa`, sopra. Ritorna i centesimi NON restituiti.
+ *
+ * 15/11/2026 (R27-002) — UNA REGOLA SOLA, PER L'ANNULLO E PER IL GIRO DEGLI ORDINI SCADUTI. Il giro
+ * ne aveva una copia sua: un tentativo solo, e il credito di chi lo aveva pagato con 20 € restava
+ * fermo al primo timeout; e senza il credito trattenuto dal carrello (R27-018) tornava tutto.
+ * `avvisaGliAmministratori: false` è per chi l'avviso lo scrive da sé (il giro ne fa uno solo
+ * con la merce e il credito insieme).
+ */
+export async function restituisciIlCreditoDellAnnullo(
+  admin: SupabaseClient,
+  order: { id: string; user_id: string; wallet_applied_cents?: number | null },
+  opzioni: { motivo: string; trattenutoCents?: number; avvisaGliAmministratori: boolean },
+): Promise<number> {
+  const trattenutoCents = opzioni.trattenutoCents ?? 0;
+  const walletCents = Math.max(0, Number(order.wallet_applied_cents ?? 0) - trattenutoCents);
+  if (walletCents <= 0) return 0;
+  let ultimoErrore: unknown = null;
+  for (let tentativo = 1; tentativo <= TENTATIVI_STORNO_CREDITO; tentativo++) {
+    try {
+      const { error: wErr } = await admin.rpc('wallet_credit', {
+        p_user: order.user_id,
+        p_cents: walletCents,
+        p_reason: opzioni.motivo,
+        p_ref: order.id,
+      });
+      if (!wErr) return 0;
+      ultimoErrore = wErr.message;
+    } catch (err) {
+      ultimoErrore = err instanceof Error ? err.message : err;
+    }
+    logger.warn('[annullaERimborsa] storno credito fallito, ritento', { orderId: order.id, tentativo, err: ultimoErrore });
+    if (tentativo < TENTATIVI_STORNO_CREDITO) {
+      await new Promise((r) => setTimeout(r, PAUSA_STORNO_CREDITO_MS * tentativo));
+    }
+  }
+  logger.error('[annullaERimborsa] credito MyCity NON restituito: ordine annullato, soldi del cliente fermi', {
+    orderId: order.id,
+    userId: order.user_id,
+    cents: walletCents,
+    err: ultimoErrore,
+  });
+  if (!opzioni.avvisaGliAmministratori) return walletCents;
+  try {
+    await notifyAdmins(
+      '⚠️ Credito MyCity non restituito dopo un annullo',
+      `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma il credito MyCity che il cliente aveva speso ` +
+        `(${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato sul suo saldo: la scrittura è caduta ` +
+        `${TENTATIVI_STORNO_CREDITO} volte. Un nuovo annullo non ci riprova, perché l'ordine risulta già annullato. ` +
+        `Va restituito a mano (cliente ${order.user_id}, ordine ${order.id}).`,
+      '/admin/orders',
+    );
+  } catch (err) {
+    logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
+  }
+  return walletCents;
 }
 
 /**
