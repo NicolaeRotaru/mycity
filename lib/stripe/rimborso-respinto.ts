@@ -50,11 +50,6 @@ export type OrdineDelRimborsoRespinto = {
   stripe_refund_id?: string | null;
   /** C'è la pausa del carrello che aspetta la divisione di un rimborso dal cruscotto? (R28-014) */
   internal_dispute_status?: string | null;
-  /** Servono a ridare al negozio la quota stornata col bonifico già partito (R28-015). */
-  seller_id?: string | null;
-  stripe_charge_id?: string | null;
-  stripe_transfer_group?: string | null;
-  reversal_error?: string | null;
 };
 
 /** Una scrittura sull'ordine, con le condizioni perché passi. */
@@ -63,12 +58,6 @@ export type ScritturaDelRimborsoRespinto = {
   /** Quanto del rimborso respinto si toglie da questo ordine (centesimi). */
   quotaCents: number;
   valori: Record<string, unknown>;
-  /**
-   * R28-015 — Quanto ridare al negozio con un bonifico nuovo (centesimi): la sua quota ripresa con uno
-   * storno quando il bonifico era già partito. Zero negli altri casi. Il bonifico lo fa il gestore
-   * dell'avviso (lib/stripe/webhook/rimborso-respinto-dalla-banca.ts) prima di scrivere `valori`.
-   */
-  riaccreditoNegozioCents: number;
   /**
    * La scrittura passa solo se l'ordine ha ancora questi valori, cioè quelli
    * letti: né un altro passaggio dello stesso avviso, né un altro rimborso, né
@@ -121,11 +110,7 @@ export function quotaGiaTolta(
  * Cosa scrivere su un ordine da cui si toglie `quota` di un rimborso respinto.
  * È la contabilità di sempre (R039 del 27/8, R85 del 15/10), più il segno.
  */
-function valoriDellOrdine(
-  ordine: OrdineDelRimborsoRespinto,
-  quota: number,
-  segno: string | null,
-): { valori: Record<string, unknown>; riaccreditoNegozioCents: number } {
+function valoriDellOrdine(ordine: OrdineDelRimborsoRespinto, quota: number, segno: string | null): Record<string, unknown> {
   const restante = Math.max(0, (ordine.refunded_amount_cents ?? 0) - quota);
 
   /**
@@ -164,23 +149,8 @@ function valoriDellOrdine(
    */
   const bonificoAncoraDaFare = ordine.payout_status === 'HELD' || ordine.payout_status === 'PENDING_SELLER_ONBOARDING';
   const stornoRidotto = Math.max(0, (ordine.seller_payout_reversed_cents ?? 0) - quotaNegozio);
-  /**
-   * 16/11/2026 (R28-015) — E SE IL BONIFICO ERA GIÀ PARTITO?
-   *
-   * Un rimborso PARZIALE su un ordine col bonifico già versato ('TRANSFERRED') riprende la quota del
-   * negozio con uno storno su Stripe: `seller_payout_reversed_cents` sale e il bonifico resta
-   * 'TRANSFERRED'. Se poi la banca del cliente respingeva il rimborso, qui per il negozio non si
-   * scriveva niente: la piattaforma teneva i soldi rientrati e anche la quota stornata. Un caso:
-   * ordine da 20 € con 16 € al negozio già versati, 5 € resi dal cruscotto (4 € stornati al negozio),
-   * rimborso respinto: il negozio restava con 12 € per una vendita da 16. Adesso la quota gli torna con
-   * un bonifico nuovo (`riaccreditoNegozioCents`) e lo stornato scende della stessa cifra. Mai più di
-   * quanto risulta stornato: se lo storno non c'è stato, non c'è niente da ridare.
-   */
-  const riaccreditoNegozioCents = ordine.payout_status === 'TRANSFERRED'
-    ? Math.min(quotaNegozio, Math.max(0, ordine.seller_payout_reversed_cents ?? 0))
-    : 0;
 
-  const valori = {
+  return {
     refunded_amount_cents: restante,
     payment_status: restante > 0 ? 'PARTIALLY_REFUNDED' : 'PAID',
     ...(segno ? { stripe_refund_id: elencoDaScrivere(rimborsiGiaScritti(ordine), [segno]) } : {}),
@@ -201,11 +171,10 @@ function valoriDellOrdine(
               }
             : {}),
         }
-      : bonificoAncoraDaFare || riaccreditoNegozioCents > 0
+      : bonificoAncoraDaFare
         ? { seller_payout_reversed_cents: stornoRidotto }
         : {}),
   };
-  return { valori, riaccreditoNegozioCents };
 }
 
 /**
@@ -269,12 +238,10 @@ export function pianoDelRimborsoRespinto(
           : Math.round(daDividere / daFare.length);
     giaAssegnato += calcolata;
     const quota = Math.min(Math.max(calcolata, 0), suo);
-    const { valori, riaccreditoNegozioCents } = valoriDellOrdine(o, quota, refundId ? segnoDelRimborsoRespinto(refundId, quota) : null);
     return {
       ordineId: o.id,
       quotaCents: quota,
-      valori,
-      riaccreditoNegozioCents,
+      valori: valoriDellOrdine(o, quota, refundId ? segnoDelRimborsoRespinto(refundId, quota) : null),
       seAncora: {
         refunded_amount_cents: o.refunded_amount_cents ?? null,
         payout_status: o.payout_status ?? null,
