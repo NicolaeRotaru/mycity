@@ -1,0 +1,198 @@
+{
+ "sessione": "R25",
+ "aggiornato": "2026-11-16 00:35",
+ "finita": true,
+ "testa": "97b6d3b514ba84a14a238ee8438161ea98411cb8",
+ "verifica": {
+  "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
+  "esito": "verde",
+  "testa": "97b6d3b514ba84a14a238ee8438161ea98411cb8",
+  "nota": "typecheck 0 errori; lint 0 errori e 99 avvisi; vitest 1577 file passati e 1 saltato, 10423 prove passate e 1 saltata. NODE_OPTIONS serve perché tsc da solo finisce la memoria del processo."
+ },
+ "voci": [
+  {
+   "id": "R25-001",
+   "chiave": "pagamenti-stripe|se il cliente viene rimborsato prima che il suo ordine nasca, l'ordine nasce lo stesso come pagato e il negozio viene pagato",
+   "esito": "parziale",
+   "commit": "97b6d3b514ba84a14a238ee8438161ea98411cb8",
+   "file_toccati": [
+    "lib/stripe/webhook/ordini.ts",
+    "lib/stripe/webhook/rimborsi.ts",
+    "lib/stripe/webhook/rimborsi-da-fuori.ts",
+    "tests/unit/riparazione-r25-carta-tornata-prima-dell-ordine.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r25-carta-tornata-prima-dell-ordine.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r25-carta-tornata-prima-dell-ordine.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 76d4c4d79254284a0330eb865ff029db5261e26e --file lib/stripe/webhook/ordini.ts,lib/stripe/webhook/rimborsi.ts,lib/stripe/webhook/rimborsi-da-fuori.ts --prove tests/unit/riparazione-r25-carta-tornata-prima-dell-ordine.test.ts --json",
+    "nota": "tutta la voce, tre commit (f7590d7b, 5f68467d, 97b6d3b5): ognuno dei tre file rimesso alla base fa cadere la prova sul comportamento; regge anche la sola ultima correzione con --base 5f68467d"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Se alla rilettura la carta risulta rimborsata per intero o contestata l'ordine non nasce (avviso, carrello chiuso con merce e codice restituiti); CANCELED e MISMATCH sono finali. Un rimborso senza ordini su un carrello aperto fa rispondere 500 perché Stripe lo ripeta; con ordini nati ma carrello incompleto (meno ordini dei negozi) un rimborso parziale ferma i bonifici del carrello e chiede la ripartizione, e chi nasce dopo nasce col bonifico fermo. Il carrello scaduto già rimborsato o contestato avvisa gli admin invece di far ripetere Stripe.",
+   "nota": "Tre commit dopo due revisori: V1 (parziale: carrello di due negozi con A già nato; EXPIRED già rimborsato) corretto in 5f68467d; V1b (parziale: la guardia del 500 perdeva il rimborso sui carrelli pagati a metà che restano PENDING per sempre; corsa fra lettura ordini e carrello) corretto in 97b6d3b5. Prova di 21 casi con gli scenari dei revisori. Residui: una finestra di pochi secondi in cui B legge la carta prima del rimborso e nasce dopo che il gestore del rimborso ha letto solo [A] (A fermo, B HELD col netto pieno: serve un controllo nel database); due avvisi «da dividere» sullo stesso rimborso quando nasce B (rumore); la richiesta di informazioni della banca ha solo un avviso più chiaro; la contestazione fra rilettura e nascita resta in dispute.ts (serve_file_altrui).",
+   "verificato_da": "qa V1: parziale (carrello di due negozi con A già nato; EXPIRED già rimborsato) → corretto in 5f68467d. qa V1b: parziale (la guardia del 500 perdeva il rimborso sui carrelli pagati a metà; corsa fra lettura degli ordini e del carrello) → corretto in 97b6d3b5. qa V1c: regge, nessuna regressione rispetto alla base; prova R25 21/21, 148 file collegati 1061/1061, tsc pulito; restano la corsa di B con la carta letta prima del rimborso e l'avviso doppio.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/stripe/webhook/dispute.ts",
+     "modifica": "In handleDisputeCreated, all'inizio del ramo `if (orders.length === 0)` (prima di `richiestaSulBuonoSoloAvviso`): ricavare il carrello dal PaymentIntent (getStripe().paymentIntents.retrieve(dispute.payment_intent): metadata.pending_checkout_id, oppure transfer_group mc_<id>); se c'è, leggere pending_checkouts.status e, se la lettura fallisce o lo stato è PENDING o COMPLETED, lanciare `[stripe] contestazione arrivata prima dell'ordine (carrello <id>): si riprova` (risposta 500, Stripe ripete; al ritentativo ordini.ts vede lc.disputed e l'ordine non nasce). Aggiungere l'import di getStripe da '@/lib/stripe/client'. La prova V1-D (in scratchpad R25) va adattata con il finto paymentIntents.retrieve che rende metadata e transfer_group."
+    }
+   ],
+   "cosa_resta": "1) Una finestra di pochi secondi: B rilegge la carta prima del rimborso dal cruscotto e nasce dopo che il gestore del rimborso ha letto solo [A]; A resta fermo, B nasce HELD col netto pieno (lib/stripe/webhook/ordini.ts:256-259 e :462). Per chiuderla serve un controllo nel database. 2) La contestazione che arriva fra la rilettura e la nascita degli ordini: la guardia va messa in lib/stripe/webhook/dispute.ts (serve_file_altrui qui sotto). 3) La richiesta di informazioni della banca è trattata come una contestazione: ha solo un avviso più chiaro (ordini.ts:260). 4) Rumore: l'avviso «da dividere» arriva doppio quando nasce B (rimborsi-da-fuori.ts:584 senza unaVoltaPer), e su un carrello EXPIRED con ordini dice «carrello ancora aperto». La voce ha già avuto due giri di correzione: per la regola 8 passa a Nicola."
+  },
+  {
+   "id": "R25-002",
+   "chiave": "api-backend|nelle azioni dell'amministrazione un guasto del database diventa «non trovato», e nei dati del negozio un trattino",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-003",
+   "chiave": "api-backend|se due giri del sorvegliante partono nello stesso istante, l'amministratore riceve due volte la stessa campanella",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-004",
+   "chiave": "api-backend|se il database non risponde, chi decide un reso legge «ordine non trovato» o «non autorizzato»",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-005",
+   "chiave": "api-backend|un lavoro a orario che va in errore a ogni giro risulta vivo, e per alcuni lavori nessuno viene avvisato",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-006",
+   "chiave": "architettura|audit_logs, il registro delle azioni amministrative, diventa il lucchetto delle email, scritto fuori da lib/audit.ts e dal catalogo",
+   "esito": "non_fatto",
+   "nota": "fuori dal tetto degli 8 agenti già nel piano approvato (regista O3, 15/11): non tentata."
+  },
+  {
+   "id": "R25-007",
+   "chiave": "architettura|avvisi-a-chi-aspetta.ts tiene insieme pannello, lucchetto email, indirizzo, html e invio; l'email parte solo se il pannello riesce",
+   "esito": "non_fatto",
+   "nota": "fuori dal tetto degli 8 agenti già nel piano approvato (regista O3, 15/11): non tentata."
+  },
+  {
+   "id": "R25-008",
+   "chiave": "architettura|email partita ma non segnata: la notte dopo riparte, e se fallisce l'allarme dice «non partita» per un'email già arrivata",
+   "esito": "non_fatto",
+   "nota": "fuori dal tetto degli 8 agenti già nel piano approvato (regista O3, 15/11): non tentata."
+  },
+  {
+   "id": "R25-009",
+   "chiave": "architettura|l'email trova il collegamento cercando la stringa '/contact' dentro una frase scritta in un altro modulo",
+   "esito": "non_fatto",
+   "nota": "fuori dal tetto degli 8 agenti già nel piano approvato (regista O3, 15/11): non tentata."
+  },
+  {
+   "id": "R25-010",
+   "chiave": "architettura|quattro gruppi di file del sito si importano a giro chiuso, uno passa per i bonifici ai negozi, e nessuna prova lo ferma",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-011",
+   "chiave": "deploy-sre|il giorno del lancio un errore del sito non lo vede nessuno: il registratore degli errori è spento e l'unico allarme dipende dalla chiave che manca",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-012",
+   "chiave": "frontend-ux|i link ai documenti del fattorino scadono dopo 2 minuti a pannello aperto",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-013",
+   "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-014",
+   "chiave": "layout-responsive|basta un negozio col nome lungo e sul telefono la home, l'elenco negozi e «vicino a te» diventano più larghe dello schermo",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-015",
+   "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-016",
+   "chiave": "pagamenti-stripe|un conto stripe non più valido sul profilo fa ritentare il bonifico ogni 15 minuti e «aggiorna stato» risponde «errore stripe»",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-017",
+   "chiave": "pagamenti-stripe|un evento rinviato dopo il canceled per fascia rifà rimborso e avviso agli admin: canceled non chiude subito",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-018",
+   "chiave": "pagamenti-stripe|webhook ripreso dopo il rimborso della fascia: con 'adesso' e negozio riaperto nasce l'ordine gia' rimborsato",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-019",
+   "chiave": "pagamenti-stripe|se la banca respinge un rimborso dal cruscotto che aspetta ancora la divisione, il sito lo toglie dagli ordini che non l'avevano mai registrato",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori. Voce B della cucitura: non tentata."
+  },
+  {
+   "id": "R25-020",
+   "chiave": "pagamenti-stripe|se la banca respinge un rimborso parziale su un ordine col bonifico già partito, al negozio resta tolta la sua quota",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori. Voce B della cucitura: non tentata."
+  },
+  {
+   "id": "R25-021",
+   "chiave": "pagamenti-stripe|un rimborso pieno dal cruscotto che arriva mentre parte il bonifico al negozio lascia al negozio tutto il netto",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  },
+  {
+   "id": "R25-022",
+   "chiave": "pagamenti-stripe|un rimborso pieno su un ordine già consegnato rimette in vendita la merce che il cliente ha già in casa",
+   "esito": "non_fatto",
+   "nota": "non fatta per il tetto di spesa dell'onda 3 (consegna verso i 25 $): il giro sul grave R25-001 ha richiesto due correzioni dopo i revisori."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "il rimborso automatico di un carrello scaduto o in quadratura fallisce se la carta è già stata rimborsata o contestata, e Stripe ripete l'avviso per tre giorni",
+   "dimensione": "pagamenti-stripe",
+   "severita": "minore",
+   "file": "lib/stripe/webhook/ordini.ts:141-176 · lib/stripe/webhook/ordini.ts:205 · lib/stripe/webhook/fascia-al-pagamento.ts:73",
+   "descrizione": "Se Nicola ha già rimborsato dal cruscotto (per esempio carrello scaduto mentre il gestore era in errore), stripe.refunds.create viene rifiutato, il gestore lancia e Stripe ritenta per 3 giorni: nessun ordine nasce ma restano rumore e ritentativi."
+  },
+  {
+   "titolo": "una contestazione che arriva senza ordini con il carrello ancora aperto viene lavorata in silenzio",
+   "dimensione": "pagamenti-stripe",
+   "severita": "minore",
+   "file": "lib/stripe/webhook/dispute.ts:89-111",
+   "descrizione": "Dopo R25-001 resta solo la finestra fra rilettura del pagamento e insert degli ordini; la cura è la stessa guardia messa in rimborsi.ts (500 se il carrello è PENDING/COMPLETED). File fuori dal perimetro di R25."
+  }
+ ],
+ "domande_per_nicola": [
+  "R25-001 (grave) ha avuto due giri di correzione e resta parziale per una finestra di pochi secondi (ordini.ts:462): la chiudiamo con un controllo nel database (una migrazione nella fascia 490-499) in un'onda dopo, oppure basta l'avviso agli amministratori?"
+ ],
+ "conto": {
+  "agenti": 7,
+  "nota": "L1, V1, C1, V1b, C2, V1c: 6 agenti lanciati dal freno più nessun lotto 2 (il conto dice 7 per prudenza: il freno li conta da sé). Spesa letta da get_session: 20,35 $ prima di V1c; quella finale la scrivo alla regista."
+ }
+}
