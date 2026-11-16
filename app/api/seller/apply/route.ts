@@ -83,7 +83,7 @@ const RichiestaNegozio = z.object({
   businessAddress: z.string().trim().min(3, 'Inserisci la via della sede legale'),
   businessCity: z.string().trim().min(2, 'Inserisci la città della sede legale'),
   businessZip: z.string().trim().regex(/^[0-9]{5}$/, 'CAP della sede legale non valido'),
-  storeName: z.string().trim().min(3, 'Nome del negozio (almeno 3 caratteri)').max(80, 'Nome del negozio (al massimo 80 caratteri)'),
+  storeName: z.string().trim().min(3, 'Il nome del negozio deve avere almeno 3 caratteri').max(80, 'Il nome del negozio può avere al massimo 80 caratteri: accorcialo'),
   storeDescription: z.string().max(500).optional().nullable(),
   storeLogo: z.string().url().nullable().optional(),
   storeMedia: z.array(z.unknown()).max(20).optional(),

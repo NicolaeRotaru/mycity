@@ -70,7 +70,8 @@ const SellerSchema = z.object({
   businessZip: z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
 
   // Vetrina pubblica
-  storeName: z.string().min(3, 'Nome del negozio (almeno 3 caratteri)'),
+  // R28-011 — Come la rotta (app/api/seller/apply): senza spazi ai lati, da 3 a 80 caratteri, e l'avviso dice cosa correggere.
+  storeName: z.string().trim().min(3, 'Il nome del negozio deve avere almeno 3 caratteri').max(80, 'Il nome del negozio può avere al massimo 80 caratteri: accorcialo'),
   storeDescription: z.string().max(500, 'Massimo 500 caratteri').optional().or(z.literal('')),
 
   // Pagamenti
