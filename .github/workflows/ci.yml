@@ -510,12 +510,11 @@ jobs:
   # variabile, non un segreto: lì GitHub i segreti non li mostra. Finché la
   # variabile manca il lavoro risulta «saltato», e il cancello di main lo conta
   # come tale. Con la variabile accesa:
-  #  - il contrassegno gira sempre: non chiede nessun segreto;
-  #  - rimborso e bonifico chiedono il segreto STRIPE_TEST_SECRET_KEY (sk_test_…),
-  #    e il bonifico anche la variabile E2E_STRIPE_CONTO_NEGOZIO (un conto
-  #    collegato acct_… di PROVA): se mancano, quelle prove si saltano dicendolo
-  #    e il riepilogo lo scrive. Una chiave che non comincia con sk_test_ non
-  #    arriva mai al sito.
+  #  - le tre prove girano insieme, solo con Stripe di prova pronto: il segreto
+  #    STRIPE_TEST_SECRET_KEY (sk_test_…) e la variabile E2E_STRIPE_CONTO_NEGOZIO
+  #    (un conto collegato acct_… di PROVA). Se ne manca uno, lo spec ha un solo
+  #    salto, e le salta tutte e tre dicendo cosa manca; il riepilogo lo scrive.
+  #    Una chiave che non comincia con sk_test_ non arriva mai al sito.
   # Il segreto del webhook e quello dei lavori a orario sono di questo giro e
   # basta: li conosce solo il sito acceso qui dentro, che le prove firmano.
   e2e-cassa-vera:
@@ -549,11 +548,11 @@ jobs:
             case "$CONTO_PROVA" in acct_*) bonifico=si ;; esac
           fi
           if [ -n "$STRIPE_PROVA" ] && [ "$carta" = no ]; then
-            echo "::warning::STRIPE_TEST_SECRET_KEY non comincia con sk_test_: le prove con la carta NON partono (mai una chiave vera qui dentro)."
+            echo "::warning::STRIPE_TEST_SECRET_KEY non comincia con sk_test_: le tre prove dell'acquisto vero NON partono (mai una chiave vera qui dentro)."
           elif [ "$carta" = no ]; then
-            echo "::warning::Manca il segreto STRIPE_TEST_SECRET_KEY (sk_test_…): rimborso e bonifico si saltano dicendolo."
+            echo "::warning::Manca il segreto STRIPE_TEST_SECRET_KEY (sk_test_…): le tre prove dell'acquisto vero si saltano dicendolo."
           elif [ "$bonifico" = no ]; then
-            echo "::warning::Manca la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_… di prova): il bonifico si salta dicendolo."
+            echo "::warning::Manca la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_… di prova): le tre prove dell'acquisto vero si saltano dicendolo."
           fi
           echo "carta=$carta" >> "$GITHUB_OUTPUT"
           echo "bonifico=$bonifico" >> "$GITHUB_OUTPUT"

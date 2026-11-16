@@ -41,7 +41,7 @@ function fonte(): ts.SourceFile {
   return ts.createSourceFile('12.ts', readFileSync(SPEC, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 
-/** `test(...)` → 'test'; `test.skip(...)` → 'skip'; altrimenti null. */
+/** Una chiamata a `test` → 'test'; a un suo metodo (il salto, il fixme…) → il nome del metodo; altrimenti null. */
 function modoDi(c: ts.CallExpression): string | null {
   const e = c.expression;
   if (ts.isIdentifier(e) && e.text === 'test') return 'test';
@@ -116,6 +116,17 @@ function funzione(nome: string): string {
   return testo;
 }
 
+/** Le chiamate che spengono una prova dentro un corpo: `test.<metodo>` col nome del salto o del fixme. */
+function saltiDentro(corpo: ts.Node | undefined): string[] {
+  const out: string[] = [];
+  const visita = (n: ts.Node) => {
+    if (ts.isCallExpression(n) && ['skip', 'fixme', 'fail'].includes(modoDi(n) ?? '')) out.push(n.getText());
+    ts.forEachChild(n, visita);
+  };
+  if (corpo) visita(corpo);
+  return out;
+}
+
 const PROVE: Array<{ titolo: string; deve: RegExp[] }> = [
   {
     titolo: 'contrassegno: l\'ordine nasce e il negozio lo vede',
@@ -143,8 +154,29 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n
       expect(corpo.replace(/\s/g, ''), `«${p.titolo}» ha il corpo vuoto`).not.toMatch(/^\{\}$|^$/);
       const mancano = p.deve.filter((r) => !r.test(corpo)).map(String);
       expect(mancano, `«${p.titolo}» non fa quello che il titolo promette`).toEqual([]);
+      expect(saltiDentro(d.corpo), `«${p.titolo}» si spegne da sola: l ambiente lo guarda il salto unico, una volta per tutte`).toEqual([]);
     });
   }
+
+  it('lo spec ha un salto solo per la cassa col database, e il suo motivo dice cosa manca', () => {
+    const f = fonte();
+    const salti: string[] = [];
+    const visita = (n: ts.Node) => {
+      if (ts.isCallExpression(n) && modoDi(n) === 'skip') salti.push(n.arguments.map((a) => a.getText(f)).join(', '));
+      ts.forEachChild(n, visita);
+    };
+    visita(f);
+    // Le condizioni dei salti: la prima è delle pagine senza JavaScript, che c'era già; la seconda
+    // è il salto unico. Un salto in più, dentro una delle tre prove o altrove, fa rosso qui.
+    expect(salti, 'i salti dello spec sono cambiati: le tre prove non si spengono una per una').toEqual([
+      'diagnosi.senzaJavascript, diagnosi.motivo',
+      'SENZA_AMBIENTE_DI_PROVA, PERCHE',
+    ]);
+    // Il salto unico guarda tutto l'ambiente (database locale, carta, bonifico), non solo l'interruttore.
+    expect(funzione('COSA_MANCA'), 'il salto unico non guarda l ambiente intero').toMatch(/cosaManca\(\s*\[\s*'database',\s*'carta',\s*'bonifico'\s*\]\s*\)/);
+    expect(funzione('SENZA_AMBIENTE_DI_PROVA')).toMatch(/COSA_MANCA\s*!==\s*null/);
+    expect(funzione('PERCHE'), 'il motivo del salto non dice cosa manca').toMatch(/\$\{COSA_MANCA\}/);
+  });
 
   it('l ordine si legge davvero dal database di prova, e il pagamento con la carta passa dall avviso firmato', () => {
     expect(funzione('leggiOrdine'), 'leggiOrdine non legge la tabella degli ordini').toMatch(/from\('orders'\)/);

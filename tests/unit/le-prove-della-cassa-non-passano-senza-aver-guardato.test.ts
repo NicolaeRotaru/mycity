@@ -27,9 +27,11 @@ import { describe, expect, it } from 'vitest';
  * CI=1 la configurazione non avvia il server, e le tre prove usano solo
  * `request`, che non apre nessun browser.
  *
- * Due controprove: senza l'interruttore le tre prove restano saltate con il
+ * Tre controprove: senza l'interruttore le tre prove restano saltate con il
  * motivo; con un database che non e' locale si saltano dicendolo e non scrivono
- * da nessuna parte (verso un indirizzo vero non si semina mai).
+ * da nessuna parte (verso un indirizzo vero non si semina mai); senza la chiave
+ * Stripe di prova (una sk_live_ non conta) il salto unico le ferma tutte e tre
+ * dicendo cosa manca.
  */
 
 type TestJson = {
@@ -124,6 +126,17 @@ describe('le tre prove dell acquisto vero', () => {
       const prova = s.tests?.[0];
       expect(prova?.status, `«${s.title}» non deve seminare un database che non e' locale`).toBe('skipped');
       expect(motivoDelSalto(prova)).toMatch(/LOCALE/);
+    }
+  }, 60_000);
+
+  it('con l interruttore acceso ma senza Stripe di prova si saltano tutte e tre dicendo cosa manca: mai verdi, mai rosse per un segreto', () => {
+    // Il salto e' uno solo e guarda l'ambiente intero: senza la chiave sk_test_ non si accende
+    // nemmeno il contrassegno, e il lavoro della CI non diventa rosso perche' manca un segreto.
+    const { STRIPE_SECRET_KEY: _senzaChiave, ...resto } = AMBIENTE_FINTO_E_IRRAGGIUNGIBILE;
+    for (const s of giraLeTre({ ...resto, STRIPE_SECRET_KEY: 'sk_live_chiave_vera_mai_qui' })) {
+      const prova = s.tests?.[0];
+      expect(prova?.status, `«${s.title}» senza la chiave Stripe di prova non deve girare`).toBe('skipped');
+      expect(motivoDelSalto(prova), `«${s.title}» saltata senza dire che manca la chiave di prova`).toMatch(/STRIPE_SECRET_KEY sk_test_/);
     }
   }, 60_000);
 });

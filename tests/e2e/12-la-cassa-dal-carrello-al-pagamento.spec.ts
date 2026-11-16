@@ -194,46 +194,21 @@ test.describe('l\'ordine che nasce davvero', () => {
    * chiavi)» legge solo le annotazioni di tipo 'skip', e una fixme
    * risulterebbe «saltata senza dire perche'».
    */
-  const SENZA_AMBIENTE_DI_PROVA = !process.env.E2E_DATI_DI_PROVA;
-  const PERCHE =
-    'serve un database di prova con dentro un negozio approvato, un prodotto e un cliente, ' +
-    'piu\' le chiavi Stripe in modalita\' prova (variabile E2E_DATI_DI_PROVA). ' +
-    'Finche\' manca, in questo giro nessun ordine nasce davvero.';
-
-  test.beforeEach(() => {
-    test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);
-  });
-
-  test('la cassa disegna il modulo con la merce riletta dal database', async ({ page }) => {
-    await seminaIlCarrello(page);
-    await page.goto('/checkout');
-    await expect(page.getByText(CARRELLO_DI_PROVA[0].name)).toBeVisible();
-    await expect(page.getByText(/Indirizzo di consegna/i)).toBeVisible();
-    await expect(page.getByText(/contrassegno|alla consegna/i).first()).toBeVisible();
-    await expect(page.getByText(/Totale/i).first()).toBeVisible();
-  });
 
   /*
-   * 16/11/2026 (R29-001) — LE TRE PROVE DELL'ACQUISTO VERO, CON IL CORPO.
+   * 16/11/2026 (R29-001) — UN SOLO SALTO, QUESTO, E COPRE ANCHE LE TRE PROVE DELL'ACQUISTO VERO.
+   * «Ambiente di prova pronto» vuol dire: l'interruttore E2E_DATI_DI_PROVA acceso, il database
+   * LOCALE di prova e Stripe in modalita' prova pronto. Se manca anche una cosa sola si saltano
+   * tutte, e il motivo dice quale: mai verdi a vuoto, e il lavoro della CI non diventa rosso
+   * perche' manca un segreto. Le prove, dentro, non si spengono piu' una per una.
    *
-   * Erano tre gusci `async () => {}` dichiarati saltati: passavano in tre millesimi senza aprire
-   * niente. Ognuna ora:
-   *  ① si semina da sola, con la chiave di servizio del database di prova, un negozio approvato
-   *    con un prodotto e un cliente con l'email confermata e l'indirizzo salvato (dati finti,
-   *    indirizzi @prova-e2e.mycity.test);
-   *  ② entra dalle rotte vere del sito acceso (E2E_BASE_URL), col gettone della persona, come il
-   *    browser: /api/orders/cod, /api/stripe/checkout, /api/stripe/webhook,
-   *    /api/seller/orders/<id>/reject, /api/cron/release-payouts;
-   *  ③ guarda l'ordine nel database di prova e, per la carta, l'oggetto su Stripe in modalita'
-   *    prova (pagamento, rimborso, trasferimento).
-   *
-   * Cosa serve, e cosa succede se manca (si salta dicendolo, mai verde a vuoto):
-   *  - sempre: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY
+   * Cosa serve:
+   *  - il database: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY
    *    di un database LOCALE di prova (tests/supabase-locale/avvia.sh): verso un altro indirizzo
    *    queste prove non scrivono;
-   *  - per la carta: STRIPE_SECRET_KEY che comincia con sk_test_ e STRIPE_WEBHOOK_SECRET, gli
-   *    stessi che ha il sito acceso;
-   *  - per il bonifico: E2E_STRIPE_CONTO_NEGOZIO (un conto collegato acct_… di PROVA, capace di
+   *  - la carta: STRIPE_SECRET_KEY che comincia con sk_test_ e STRIPE_WEBHOOK_SECRET, gli stessi
+   *    che ha il sito acceso;
+   *  - il bonifico: E2E_STRIPE_CONTO_NEGOZIO (un conto collegato acct_… di PROVA, capace di
    *    ricevere trasferimenti) e CRON_SECRET, lo stesso del sito acceso.
    */
   const AMBIENTE = {
@@ -278,6 +253,47 @@ test.describe('l\'ordine che nasce davvero', () => {
     }
     return mancano.length > 0 ? `manca ${mancano.join('; ')}` : null;
   }
+
+  const ACCESO = Boolean(process.env.E2E_DATI_DI_PROVA);
+  const COSA_MANCA = ACCESO ? cosaManca(['database', 'carta', 'bonifico']) : null;
+  const SENZA_AMBIENTE_DI_PROVA = !ACCESO || COSA_MANCA !== null;
+  const PERCHE = !ACCESO
+    ? 'serve un database di prova con dentro un negozio approvato, un prodotto e un cliente, ' +
+      'piu\' le chiavi Stripe in modalita\' prova (variabile E2E_DATI_DI_PROVA). ' +
+      'Finche\' manca, in questo giro nessun ordine nasce davvero.'
+    : `E2E_DATI_DI_PROVA e' accesa ma l'ambiente di prova non e' pronto: ${COSA_MANCA}. ` +
+      'Finche\' manca, in questo giro nessun ordine nasce davvero.';
+
+  test.beforeEach(() => {
+    test.skip(SENZA_AMBIENTE_DI_PROVA, PERCHE);
+  });
+
+  test('la cassa disegna il modulo con la merce riletta dal database', async ({ page }) => {
+    await seminaIlCarrello(page);
+    await page.goto('/checkout');
+    await expect(page.getByText(CARRELLO_DI_PROVA[0].name)).toBeVisible();
+    await expect(page.getByText(/Indirizzo di consegna/i)).toBeVisible();
+    await expect(page.getByText(/contrassegno|alla consegna/i).first()).toBeVisible();
+    await expect(page.getByText(/Totale/i).first()).toBeVisible();
+  });
+
+  /*
+   * 16/11/2026 (R29-001) — LE TRE PROVE DELL'ACQUISTO VERO, CON IL CORPO.
+   *
+   * Erano tre gusci `async () => {}` dichiarati saltati: passavano in tre millesimi senza aprire
+   * niente. Ognuna ora:
+   *  ① si semina da sola, con la chiave di servizio del database di prova, un negozio approvato
+   *    con un prodotto e un cliente con l'email confermata e l'indirizzo salvato (dati finti,
+   *    indirizzi @prova-e2e.mycity.test);
+   *  ② entra dalle rotte vere del sito acceso (E2E_BASE_URL), col gettone della persona, come il
+   *    browser: /api/orders/cod, /api/stripe/checkout, /api/stripe/webhook,
+   *    /api/seller/orders/<id>/reject, /api/cron/release-payouts;
+   *  ③ guarda l'ordine nel database di prova e, per la carta, l'oggetto su Stripe in modalita'
+   *    prova (pagamento, rimborso, trasferimento).
+   *
+   * Dentro non hanno salti propri: l'ambiente lo guarda il salto unico qui sopra, e se manca
+   * qualcosa si saltano tutte e tre prima di cominciare, dicendo cosa.
+   */
 
   function databaseDiProva(): SupabaseClient {
     return createClient(AMBIENTE.url, AMBIENTE.servizio, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -468,8 +484,6 @@ test.describe('l\'ordine che nasce davvero', () => {
   }
 
   test('contrassegno: l\'ordine nasce e il negozio lo vede', async ({ request }) => {
-    const manca = cosaManca(['database']);
-    test.skip(manca !== null, manca ?? '');
     const b = await preparaLaBottega();
 
     const risposta = await request.post('/api/orders/cod', {
@@ -512,8 +526,6 @@ test.describe('l\'ordine che nasce davvero', () => {
   });
 
   test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async ({ request }) => {
-    const manca = cosaManca(['database', 'carta']);
-    test.skip(manca !== null, manca ?? '');
     const stripe = stripeDiProva();
     const b = await preparaLaBottega();
     const { ordine, pagamento, totaleCents } = await ordinePagatoConLaCarta(request, b, stripe);
@@ -545,8 +557,6 @@ test.describe('l\'ordine che nasce davvero', () => {
   });
 
   test('consegna completata: il bonifico al negozio parte', async ({ request }) => {
-    const manca = cosaManca(['database', 'carta', 'bonifico']);
-    test.skip(manca !== null, manca ?? '');
     const stripe = stripeDiProva();
     const b = await preparaLaBottega(AMBIENTE.contoNegozio);
     const { ordine } = await ordinePagatoConLaCarta(request, b, stripe);
