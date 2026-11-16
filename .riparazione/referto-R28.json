@@ -455,6 +455,8 @@
   ],
   "conto": {
     "agenti": 7,
-    "nota": "onda 4, ultracode spento per regola della regista. Subagenti: lotto 1 (grande), revisori A (solo il grave) e B, lotto 2 (sonnet), revisore C (sonnet), lotto 3 (grande), revisore D. Lotto 4 non partito (30,67 $ a fine lotto 3, sopra la soglia di 30 $). Spesa a fine lavoro intorno ai 37 $."
-  }
+    "nota": "onda 4, ultracode spento per regola della regista. Subagenti: lotto 1 (grande), revisori A (solo il grave) e B, lotto 2 (sonnet), revisore C (sonnet), lotto 3 (grande), revisore D. Lotto 4 non partito (30,67 $ a fine lotto 3, sopra la soglia di 30 $). Spesa a fine lavoro intorno ai 37 $. costo_usd letto con get_session senza id prima della consegna: 37,00 $ (cost_usd 36.997).",
+    "subagenti": 7
+  },
+  "costo_usd": 37.0
 }
