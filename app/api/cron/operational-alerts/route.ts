@@ -208,6 +208,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     .in('role', ['seller', 'rider'])
     .eq('kyc_provider_status', 'PENDING')
     .lt('kyc_provider_checked_at', twoDaysAgo)
+    // Le più vecchie prima: con più di 20 verifiche ferme, senza un ordine le stesse 20 terrebbero
+    // sempre il posto e le altre non avviserebbero mai.
+    .order('kyc_provider_checked_at', { ascending: true })
     .limit(20);
   if (err_kycPending) controlliSaltati.push('verifiche identita in attesa');
 

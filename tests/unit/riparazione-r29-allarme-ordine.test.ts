@@ -422,6 +422,26 @@ describe('R29-019 — la verifica d identita del fattorino ferma da 48 ore avvis
     expect((corpo.details ?? []).filter((d) => d.type === 'KYC_PENDING_TOO_LONG')).toEqual([]);
   });
 
+  it('con più di 20 verifiche ferme avvisano le più vecchie: le stesse 20 non tengono il posto per sempre', async () => {
+    // 20 fattorini fermi da 3 giorni, messi per primi; uno fermo da 10 giorni, messo per ultimo.
+    const recenti = Array.from({ length: 20 }, (_, i) => ({
+      id: `29292929-dddd-4ddd-8ddd-${String(i).padStart(12, '0')}`,
+      role: 'rider',
+      full_name: `Fattorino ${i}`,
+      kyc_provider_status: 'PENDING',
+      kyc_provider_checked_at: oreFa(72),
+    }));
+    db.profiles = [
+      { id: 'admin-1', role: 'admin' },
+      ...recenti,
+      { id: FATTORINO, role: 'rider', full_name: 'Il piu vecchio', kyc_provider_status: 'PENDING', kyc_provider_checked_at: oreFa(240) },
+    ];
+    const { corpo } = await giro();
+    const kyc = (corpo.details ?? []).filter((d) => d.type === 'KYC_PENDING_TOO_LONG').map((d) => d.key);
+    expect(kyc).toHaveLength(20);
+    expect(kyc, 'la verifica ferma da dieci giorni resta fuori dall elenco').toContain(`KYC_PENDING_TOO_LONG|${FATTORINO}`);
+  });
+
   it('un cliente non ha verifiche d identita da sorvegliare', async () => {
     db.profiles = [
       { id: 'admin-1', role: 'admin' },
