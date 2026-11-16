@@ -1,0 +1,281 @@
+{
+  "sessione": "R28",
+  "aggiornato": "2026-11-16 15:10",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R28-001",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
+      "esito": "serve_file_altrui",
+      "commit": "442cc30d99bba86dee7bdffcf97b98a25ea24a9e",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-sos-testo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-sos-testo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 442cc30d^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r28-sos-testo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base i due messaggi (toast) erano già giusti; restava il dialogo «Verrà avviata la chiamata al 112». La guardia vede tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts come prova comune, e alla base quella prova vincola proprio la frase sbagliata. Sul ramo c'è solo la riga del GPS del dialogo («viene mandata a MyCity, se il telefono riesce a darla»), con la prova riparazione-r28-sos-testo (ripresa dalla r16 senza il caso del 112 nel dialogo).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
+          "modifica": "Il caso it('il dialogo di conferma resta al futuro…', … expect(sos).toContain('Verrà avviata la chiamata al')) diventa it('anche il dialogo di conferma non promette la chiamata: dice che CHIAMA lo preme il fattorino', () => { expect(sos).not.toContain('Verrà avviata la chiamata al'); expect(sos).toMatch(/già scritto: la chiamata parte solo quando premi tu CHIAMA/); }) — la modifica scritta nella scheda."
+        },
+        {
+          "file": "components/rider/SOSButton.tsx (mio, ma bloccato dalla prova comune: va insieme alla riga sopra)",
+          "modifica": "Nel dialogo «<span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>» diventa «<span>Si apre il telefono con il <strong>112 (numero unico emergenze)</strong> già scritto: la chiamata parte solo quando premi tu CHIAMA</span>»; il commento «Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto…» diventa il commento R16-001 scritto nella scheda."
+        },
+        {
+          "file": "tests/unit/riparazione-r28-sos-testo.test.tsx",
+          "modifica": "Rimettere il caso 'il dialogo di conferma non promette una chiamata, dice che CHIAMA lo preme il fattorino' (il primo caso della prova r16)."
+        }
+      ],
+      "nota": "Patch dei tre file: r28-001-resto-intero.patch (mandata alla regista). Con la patch intera la prova rimessa dava uscita 0 e le 8 prove del SOS 44/44 verdi.",
+      "verificato_da": "qa revisore A (solo il grave): prova r28 3/3 e prova rimessa uscita 0 rilanciate; guardia verde e classificazione 'condivisa' della prova comune confermata (nomina components/SupportChatModal.tsx e lib/api/responses.ts); 8 prove che nominano SOSButton verdi (43); patch applicata: 44 verdi + tsc verde, e cade senza il dialogo corretto. Difetti minori segnalati: frase GPS senza 'se connesso' (SOSButton.tsx:266), commento 164-165 che chiama ancora giusta la frase del 112, la prova r28 cita un file r16 inesistente."
+    },
+    {
+      "id": "R28-005",
+      "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il difetto c'è sulla base. 69b1cc57 si scarica con git fetch origin refs/heads/claude/magical-hamilton-xouwr8-m13; il cherry-pick si applica pulito ma da solo fa rosse tutte le 33 prove elencate che esistono (195 casi: 400 invece di 200), e la guardia le vede tutte come prove comuni. Nessun commit.",
+      "serve_file_altrui": [
+        {
+          "file": "le 33 prove elencate nella riga della voce in scheda (tests/unit/al-lancio-carta-…, api-stripe-checkout, …, variante-503-dopo-chiave-abbandonata)",
+          "modifica": "deliverySlot valido (una fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0], compatibile con orologio e orari della prova) nel corpo di ogni richiesta di consegna a domicilio a /api/orders/cod e /api/stripe/checkout."
+        },
+        {
+          "file": "lib/ordini/fascia-consegna.ts, app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts (miei, bloccati dalle prove sopra)",
+          "modifica": "Dopo le prove: cherry-pick 69b1cc57 (motivoSenzaFascia, 400 «Scegli quando vuoi ricevere l'ordine.»); la sua prova riparazione-r13-consegna-senza-fascia va rinominata riparazione-r28-…"
+        }
+      ],
+      "nota": "tests/unit/riparazione-r13-riserva-della-cassa.test.ts non esiste sulla base: saltata.",
+      "verificato_da": "qa revisore B: cherry-pick 69b1cc57 senza commit: 33 file / 195 casi rossi (400 «Scegli quando vuoi ricevere l'ordine.»); 4 prove a campione importano file di R29, quindi comuni."
+    },
+    {
+      "id": "R28-010",
+      "chiave": "microcopy|la conferma d'ordine non dice quando arriva né quanto pagare in contanti, e a chi ritira in negozio parla di rider",
+      "esito": "riparato",
+      "commit": "8a4ec811d28c5990e77b237c75de618b95a8187b",
+      "file_toccati": [
+        "lib/stripe/webhook/ordini.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-conferma-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-conferma-carta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8a4ec811^ --file lib/stripe/webhook/ordini.ts --prove tests/unit/riparazione-r28-conferma-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base il modello dell'email e la rotta dei contanti erano già a posto; mancava il webhook della carta, che ora passa deliverySlot (fascia dell'ordine), pickupInStore e paymentMethod 'card'. Una riga sola: ordini.ts deve restare sotto le 600 righe (webhook-diviso-per-mestiere.test.ts:47), ora è a 598.",
+      "verificato_da": "qa revisore B: prova 3/3 e prova rimessa rilanciate (regge, uscita 0); 90 prove che importano il webhook o i modelli email verdi (568 casi, ordini.ts a 598 righe); varianti due negozi con fascia, ritiro con carta su due negozi, consegna senza fascia verdi con prova temporanea poi tolta; base di template e contanti controllata (templates.ts:137-183, cod/route.ts:1727-1735)."
+    },
+    {
+      "id": "R28-013",
+      "chiave": "pagamenti-stripe|il webhook della carta non rifà il controllo della veloce (fattorini online, 8-21) quando arrivano i soldi",
+      "esito": "scelta_di_nicola",
+      "domanda": "Se con la carta arriva il pagamento di una veloce che non si può più fare (dopo le 21 o senza fattorini online), il webhook rimborsa tutto senza creare l'ordine (come per la fascia persa) oppure crea l'ordine spostato alla prima fascia possibile e rende l'euro della veloce (come il freno dei 10 minuti)? (Proposta di partenza del revisore: la prima strada, perché la regola ② di fascia-al-pagamento.ts rifà la regola dei contanti e se dice no rimborsa.)",
+      "nota": "Il difetto c'è: la pagina di Stripe resta pagabile fino a 2 ore e il webhook ricontrolla solo il negozio aperto (motivoFasciaRifiutata), non 8-21 né i fattorini (veloceSiPuo). Due precedenti diversi nel codice, nessuno decide questo caso. Inoltre ordini.ts è a 598 righe su un tetto di 600.",
+      "verificato_da": "qa revisore B: letti webhook, quando-arriva, consegna-veloce, fascia-al-pagamento e veloce-non-confermata; i due precedenti portano a esiti di soldi diversi, la scelta resta di business."
+    },
+    {
+      "id": "R28-021",
+      "chiave": "privacy-legale|un cliente coi termini 2.0 e la cassa già aperta ordina lo stesso: le rotte d'ordine non guardano la versione accettata",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Patch scritta e provata, poi tolta dall'albero: le rotte riusano la regola del portiere (vaChiestaSenzaTrattenere(() => supa, user.id, TETTO_PORTIERE_MS)); 'chiedi' → 403 «I Termini di MyCity sono cambiati: ricarica la pagina e accettali prima di ordinare.», scaduto o rotto → passa come nel portiere. La prova nuova riparazione-r28-termini-in-cassa morde (senza la modifica 4 casi su 8 rossi), ma il codice da solo fa rosse 8 prove comuni (25 casi) i cui finti non hanno righe a verbale.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts (miei, bloccati) + prova nuova tests/unit/riparazione-r28-termini-in-cassa.test.ts",
+          "modifica": "Patch r28-021-intera.patch (mandata alla regista): il controllo subito dopo getServerSupabase/getAdminSupabase."
+        },
+        {
+          "file": "tests/unit/{al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi, il-codice-sconto-a-uso-unico-non-resta-in-ostaggio-del-tentativo-abbandonato, il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso, l-email-dei-contanti-legge-gli-orari-del-negozio, l-email-nuovo-ordine-dalla-rotta-dei-contanti-dice-la-scadenza-vera, minori-s02-coda-della-rotta-dei-contanti, riparazione-r12-la-rotta-dei-contanti-rifiuta-la-fascia, riparazione-r26-la-pulizia-dopo-i-rifiuti}.test.ts",
+          "modifica": "Dopo l'import di vitest: vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));"
+        }
+      ],
+      "nota": "Con tutto applicato: 65 file di prova, 502 casi verdi. Ritocco consigliato dal revisore prima della cucitura: logger.warn sul 'scaduto/rotto' come fa il portiere (middleware.ts:619-621).",
+      "verificato_da": "qa revisore B: patch applicata, 65 file / 502 casi verdi; la prova nuova morde (4/8 rossi senza le rotte); il codice da solo fa rosse le 8 prove comuni (25 casi), tutte importano file di R29; coerente col portiere (middleware.ts:617-621) e con consent_log_read_own. Ritocco minore: aggiungere logger.warn sul 'non lo so' come il portiere."
+    },
+    {
+      "id": "R28-024",
+      "chiave": "privacy-legale|confine senza coordinate chiuso solo a parole: l'ordine non misurato passa senza nessun segno, e ora /shipping lo annuncia",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Patch scritta e provata, poi tolta: segno già esistente, la campanella agli amministratori (allarmeAgliAmministratori). La rotta dei contanti annota i negozi non misurati (negozio senza posizione o indirizzo non trovato) e a ordini nati manda un avviso per ordine «Ordine in contanti con la distanza non misurata» col link /admin/orders/<id>. Nessuna migrazione. Prova nuova riparazione-r28-confine-non-misurato morde (2 casi su 3 rossi senza), ma il codice da solo fa rossa una prova comune che conta le campanelle esatte.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts (mio, bloccato) + prova nuova tests/unit/riparazione-r28-confine-non-misurato.test.ts",
+          "modifica": "Patch r28-024-intera.patch (mandata alla regista)."
+        },
+        {
+          "file": "tests/unit/ordini-contrassegno-due-negozi.test.ts",
+          "modifica": "Riga 344: expect(campanelle.length).toBe(4) diventa expect(campanelle.filter((c) => c.category === 'order').length).toBe(4) (i negozi finti non hanno posizione, quindi partono anche gli avvisi 'system' agli amministratori)."
+        }
+      ],
+      "cosa_resta": "La strada della carta (spenta al lancio): l'ordine nasce nel webhook (ordini.ts a 598 righe su 600), il segno va portato dal pending al webhook.",
+      "nota": "Con tutto applicato: 65 file, 497 casi verdi. Le patch di R28-021 e R28-024 sopra l'una all'altra confliggono solo sugli import di cod/route.ts.",
+      "verificato_da": "qa revisore B: patch applicata, 65 file / 497 casi verdi; la prova nuova morde (2/3); il codice da solo fa rossa solo ordini-contrassegno-due-negozi (comune, importa file di R29); condizione identica a fuoriZonaDiConsegna (zona-di-consegna.ts:43). Nota: nella prova comune sarebbe più stretto contare 4 campanelle 'order' più 2 'system'."
+    },
+    {
+      "id": "R28-002",
+      "chiave": "accessibilita|le foto delle recensioni e l'importazione dei prodotti da file non si aprono da tastiera",
+      "esito": "riparato",
+      "commit": "a44980ac63893c10085686f7e0df2cc0a8c3eb83",
+      "file_toccati": [
+        "components/rider/CashConfirmDialog.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-foto-e-documenti-del-fattorino-da-tastiera.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-foto-e-documenti-del-fattorino-da-tastiera.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a44980ac^ --file components/rider/CashConfirmDialog.tsx --prove tests/unit/riparazione-r28-foto-e-documenti-del-fattorino-da-tastiera.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base PhotoReviewUpload (:197), import CSV (:247), reso (:422) e onboarding (:349-350) avevano già il focus-within; mancava solo il PhotoSlot di CashConfirmDialog (:319): aggiunta la diff della scheda. Prova nuova col contenuto della scheda: il caso dei contanti morde, quello dell'onboarding è già verde sulla base."
+    },
+    {
+      "id": "R28-003",
+      "chiave": "api-backend|la notifica del nuovo ordine fa la fila dietro le promozioni",
+      "esito": "gia_riparato_prima",
+      "prova": "app/api/cron/send-push/route.ts:104-123 rilegge con .or(category.is.null,category.not.in.(promo,group,newsletter)) e mette le urgenti davanti (commit 8af8a855 R26-003, CATEGORIE_CHE_ASPETTANO a :55); prova esistente tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts verde. I commit ba36f97a e c81987f0 della scheda non esistono nel deposito; minori-s03-push.test.ts non toccato."
+    },
+    {
+      "id": "R28-004",
+      "chiave": "api-backend|se il lavoro delle notifiche si ferma, l'allarme arriva dopo due ore, ma le notifiche più vecchie di un'ora sono già perse",
+      "esito": "riparato",
+      "commit": "c36f41e47ed093d6100fd43d8dc6eaf8a9bc61d1",
+      "file_toccati": [
+        "lib/cron-health.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-allarme-push-dentro-la-finestra.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-allarme-push-dentro-la-finestra.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c36f41e4^ --file lib/cron-health.ts --prove tests/unit/riparazione-r28-allarme-push-dentro-la-finestra.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Soglia dell'allarme di send-push da 120 a 45 minuti (finestra di lettura 60, cadenza 5). Prova con orologio finto: fermo da 50 minuti è allarme, da 10 no; soglia < 60 e > cadenza. Le prove sulle soglie restano verdi.",
+      "nota": "45 minuti è una scelta tecnica dentro la finestra di 60: se Nicola ne vuole un'altra basta cambiare il numero."
+    },
+    {
+      "id": "R28-006",
+      "chiave": "deploy-sre|senza le chiavi delle notifiche, il lavoro delle notifiche risulta vivo anche se non manda niente",
+      "esito": "riparato",
+      "commit": "f7efbfe661c5086e3006546b02d0f317a6147339",
+      "file_toccati": [
+        "app/api/cron/send-push/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-push-senza-chiavi-niente-battito.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-push-senza-chiavi-niente-battito.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f7efbfe6^ --file app/api/cron/send-push/route.ts --prove tests/unit/riparazione-r28-push-senza-chiavi-niente-battito.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Senza VAPID la risposta è marcata con segnaGiroNonFatto(..., 'fermo'): withCronAuth (middleware.ts:658, giroNonFatto) non scrive il battito e il semaforo non lo mostra vivo. lib/api/middleware.ts non toccato.",
+      "nota": "segnaGiroNonFatto accetta solo 'fermo' | 'solo_conta' (lib/cron/fermo-dei-lavori.ts:114, non mio): il valore dell'intestazione non è del tutto esatto per «VAPID non configurato»."
+    },
+    {
+      "id": "R28-007",
+      "chiave": "frontend-ux|con «aperti ora» acceso, l'elenco dei negozi non si aggiorna all'orario di chiusura e tiene in lista negozi con scritto «chiuso ora»",
+      "esito": "riparato",
+      "commit": "b55df4ce5e318a6d1b141484ffdacc8c72d40186",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-prodotti-dei-negozi-aperti-si-aggiornano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-prodotti-dei-negozi-aperti-si-aggiornano.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b55df4ce^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r28-prodotti-dei-negozi-aperti-si-aggiornano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "app/stores/page.tsx era già a posto (R23-010: useOraDiPiacenza() a :216, prova riparazione-r23-aperti-ora-si-aggiorna). Applicata a ProductGrid la modifica della scheda: battito = useOraDiPiacenza(!!onlyOpenStores) nelle dipendenze del useMemo filtered. Prova jsdom con timer finti (12:59:30 → +60 s): il prodotto del forno esce."
+    },
+    {
+      "id": "R28-011",
+      "chiave": "microcopy|se il nome del negozio è troppo lungo, l'avviso dice solo «nome del negozio» e non spiega cosa correggere",
+      "esito": "riparato",
+      "commit": "b07350b15eaaf02ef8002962a501ef694519596b",
+      "file_toccati": [
+        "components/SellerApplicationForm.tsx",
+        "app/api/seller/apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b07350b1^ --file components/SellerApplicationForm.tsx,app/api/seller/apply/route.ts --prove tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il modulo fa trim, minimo 3 e massimo 80 come la rotta, con l'avviso «Il nome del negozio può avere al massimo 80 caratteri: accorcialo». La frase della rotta è riscritta senza parentesi, così friendlyError (non toccato) non la riduce a «Nome del negozio». Prova: modulo con 81, 80 caratteri e soli spazi, e friendlyError sulla frase della rotta."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la conferma al cliente scrive «Domani · 9:00–12:00» senza la data: chi la rilegge il giorno dopo capisce il giorno sbagliato",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/email/templates.ts:148-151",
+      "descrizione": "L'email al negozio usa già conLaData; quella al cliente no."
+    },
+    {
+      "titolo": "il webhook degli ordini è a 598 righe su un tetto di 600 e blocca ogni cura futura",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/ordini.ts (tetto in tests/unit/webhook-diviso-per-mestiere.test.ts:47)",
+      "descrizione": "Ogni correzione nel webhook (R28-013, la carta di R28-024) richiede prima di spezzare il file."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 5,
+    "nota": "onda 4, ultracode spento per regola della regista; lotti 1-2 fatti, revisori del lotto 1 fatti (2)"
+  }
+}
