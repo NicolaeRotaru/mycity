@@ -43,7 +43,9 @@ export type CronHeartbeat = { name: string; last_run_at: string | null };
 export const CRON_MAX_STALENESS_MIN: Record<string, number> = {
   'release-payouts': 120, // cadenza 15 min
   'send-emails': 120, // cadenza 10 min
-  'send-push': 120, // cadenza 5 min
+  // R28-004 — Il giro legge solo le notifiche dell'ultima ora (send-push: `sinceIso`): a 120 l'allarme arrivava
+  // quando le più vecchie erano già perse. 45 minuti: nove giri saltati, meno della finestra.
+  'send-push': 45, // cadenza 5 min, finestra di lettura 60 min
   'expire-checkouts': 180, // cadenza 30 min
   'expire-stale-orders': 180, // cadenza 30 min
   'abandoned-carts': 180, // cadenza 1 h
