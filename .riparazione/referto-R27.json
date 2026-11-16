@@ -536,6 +536,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 5,
-    "nota": "5 subagenti su 6: lotto 1 soldi (grande, 7 voci), revisore lotto 1 (grande), lotto 2 cucitura (piccolo, 8 voci), giro di correzione soldi (grande, 4 voci), revisore della correzione (grande). Voci 007, 010, 012, 014, 020, 021, 022 non fatte per il tetto di spesa (limite 30 $ della regista). Spesa letta da get_session prima della consegna: 28,64 $."
-  }
+    "nota": "5 subagenti su 6: lotto 1 soldi (grande, 7 voci), revisore lotto 1 (grande), lotto 2 cucitura (piccolo, 8 voci), giro di correzione soldi (grande, 4 voci), revisore della correzione (grande). Voci 007, 010, 012, 014, 020, 021, 022 non fatte per il tetto di spesa (limite 30 $ della regista). Spesa letta da get_session prima della consegna: 28,64 $.",
+    "subagenti": 5
+  },
+  "costo_usd": 28.64
 }
