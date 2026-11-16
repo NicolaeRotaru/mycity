@@ -12,7 +12,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * nuovo da dire; scaduti in due, il conto nuovo lo dice un avviso solo, con le cifre di fine giro.
  */
 
-vi.mock('@/lib/stripe/payout', () => ({ refundOrder: vi.fn(async () => ({ refundId: 're_1' })) }));
+// 16/11/2026 (R27-009 correzione) — Il finto rifiuta l'importo 0 (o non valido) come il vero
+// (lib/stripe/payout.ts, «importo rimborso non valido»): stessa eccezione, la classe vera.
+const refundOrder = vi.fn(async (a: { orderId: string; amountCents: number }) => {
+  if (!Number.isFinite(a.amountCents) || a.amountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
+  return { refundId: `re_${a.orderId}` };
+});
+vi.mock('@/lib/stripe/payout', async (orig) => ({
+  ...(await orig<object>()),
+  refundOrder: (a: { orderId: string; amountCents: number }) => refundOrder(a),
+}));
 vi.mock('@/lib/stripe/client', async (orig) => ({ ...(await orig<object>()), isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/rimborsi-da-dividere', () => ({ ilCarrelloAspettaLaDivisione: async () => false }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async () => undefined) }));
@@ -28,6 +37,7 @@ let db: ReturnType<typeof finto>;
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 
 import { finto, carrello, tentativoDiCassa } from './carrello-finto';
+import { RimborsoNonRitentabile } from '@/lib/stripe/payout';
 
 const scaduto = (s: number) => `2026-10-20T08:00:0${s}Z`;
 const nb = (t: string) => t.replace(/ /g, ' ');
@@ -41,6 +51,7 @@ const campanelleDelCarrello = () =>
 
 beforeEach(() => {
   spedite.length = 0;
+  refundOrder.mockClear();
 });
 
 describe('R27-009 — il carrello che scade nello stesso giro', () => {
@@ -70,5 +81,47 @@ describe('R27-009 — il carrello che scade nello stesso giro', () => {
     expect(conConto[0]).not.toMatch(/15,00 €/);
     expect(campanelleDelCarrello()).toHaveLength(1);
     expect(campanelleDelCarrello()[0]).toMatch(/alla porta paghi 14,00 €/);
+  });
+});
+
+/**
+ * 16/11/2026 (R27-009 correzione) — CON LA CARTA IL PRIMO ANNULLATO SA PERCHÉ GLI TORNA MENO.
+ *
+ * Pane 15 €, frutta 12 € e carne 11 € con la carta: 18 + 13 + 12 € addebitati. Annullato il pane, la
+ * consegna passa alla frutta e del pane tornano 16 €. Prima di R27-009 l'email del pane lo spiegava
+ * col conto della frutta (15 €, superato un istante dopo); con R27-009 non partiva più niente oltre
+ * «Rimborso emesso 16 €». Adesso il pane riceve la sua riga sola, e il conto nuovo resta in un avviso.
+ */
+describe('R27-009 correzione — il carrello con la carta che scade nello stesso giro', () => {
+  const tutte = () => email().join('\n');
+
+  it('scade tutto: il pane riceve il perché dei 16 € su 18, nessuna cifra superata, nessuna campanella del conto', async () => {
+    const ordini = carrello(['pane', 'frutta', 'carne'], [1500, 1200, 1100], 'card', { creati: [scaduto(0), scaduto(1), scaduto(2)] });
+    db = finto({ orders: ordini });
+    const j = await giro();
+    expect(j).toMatchObject({ canceled: 3, refunded: 3 });
+    expect(refundOrder.mock.calls.map((c) => [c[0].orderId, c[0].amountCents])).toEqual([['pane', 1600], ['frutta', 1300], ['carne', 1400]]);
+    expect(email()).toHaveLength(1);
+    expect(email()[0]).toMatch(/#PANE è annullato: ti tornano 16,00 € sulla carta, cioè 15,00 € di spesa e 1,00 € di consegna/);
+    expect(tutte()).not.toMatch(/#FRUTTA|#CARNE|resta pagato/);
+    expect(campanelleDelCarrello()).toEqual([]);
+  });
+
+  it('scadono pane e frutta, la carne resta: il pane ha il suo perché, il conto della carne lo dice un avviso solo', async () => {
+    const ordini = carrello(['pane', 'frutta', 'carne'], [1500, 1200, 1100], 'card', {
+      creati: [scaduto(0), scaduto(1), new Date().toISOString()],
+    });
+    db = finto({ orders: ordini });
+    const j = await giro();
+    expect(j).toMatchObject({ canceled: 2, refunded: 2 });
+    const delPane = email().filter((t) => /#PANE è annullato/.test(t));
+    expect(delPane).toHaveLength(1);
+    expect(delPane[0]).toMatch(/ti tornano 16,00 € sulla carta, cioè 15,00 € di spesa e 1,00 € di consegna/);
+    expect(delPane[0]).not.toMatch(/#FRUTTA|#CARNE/);
+    const conConto = email().filter((t) => /#CARNE/.test(t));
+    expect(conConto).toHaveLength(1);
+    expect(conConto[0]).toMatch(/#CARNE ora è 3,00 € invece di 1,00 €.*resta pagato, 14,00 €/);
+    expect(tutte()).not.toMatch(/resta pagato, 15,00 €/);
+    expect(campanelleDelCarrello()).toHaveLength(1);
   });
 });

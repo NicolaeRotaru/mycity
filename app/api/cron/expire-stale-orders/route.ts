@@ -108,7 +108,10 @@ type AvvisoDaScrivere = {
   avviso: AvvisoDelCarrello | null;
 };
 
-function avvisiDiFineGiro(lista: AvvisoDaScrivere[], annullati: Set<string>): Array<AvvisoDelCarrello | null> {
+function avvisiDiFineGiro(
+  lista: AvvisoDaScrivere[],
+  annullati: Set<string>,
+): { finali: Array<AvvisoDelCarrello | null>; perche: Array<AvvisoDelCarrello | null> } {
   // Le cifre della conferma: quelle della prima volta che un ordine compare fra i rimasti.
   const conferma = new Map<string, OrdineRimasto>();
   for (const m of lista) for (const r of m.avviso?.rimasti ?? []) if (!conferma.has(r.ordineId)) conferma.set(r.ordineId, r);
@@ -136,7 +139,18 @@ function avvisiDiFineGiro(lista: AvvisoDaScrivere[], annullati: Set<string>): Ar
       rimasti,
     };
   }
-  return finali;
+  // 16/11/2026 (R27-009 correzione) — IL PERCHÉ DEL RIMBORSO PIÙ BASSO NON SI PERDE. Con la carta il
+  // primo annullato riceveva solo «Rimborso emesso 16 €» su un pane da 18: il conto finale lo dice un
+  // altro avviso, o nessuno se il carrello è scaduto tutto. Gli resta la sua riga sola («ti tornano
+  // 16 € sulla carta, cioè 15 € di spesa e 1 € di consegna»), senza i rimasti: le loro cifre sono
+  // superate, e il conto nuovo resta in un avviso solo, con la sua campanella.
+  const perche = lista.map((m, i): AvvisoDelCarrello | null => {
+    const a = m.avviso;
+    if (finali[i] || !a || m.come !== 'carta') return null;
+    const pagatoCents = conferma.get(a.ordineId)?.totalePrimaCents ?? a.pagatoCents;
+    return a.tornaCents < pagatoCents ? { ...a, pagatoCents, negoziRimasti: 0, rimasti: [] } : null;
+  });
+  return { finali, perche };
 }
 
 export const POST = withCronAuth(async (req): Promise<NextResponse> => {
@@ -479,9 +493,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     }
   }
 
-  const finali = avvisiDiFineGiro(daAvvisare, annullatiNelGiro);
+  const { finali, perche } = avvisiDiFineGiro(daAvvisare, annullatiNelGiro);
   for (const [i, m] of daAvvisare.entries()) {
-    const carrello = finali[i] ? { avviso: finali[i] as AvvisoDelCarrello, come: m.come } : null;
+    const avviso = finali[i] ?? perche[i];
+    const carrello = avviso ? { avviso, come: m.come } : null;
     // Sulla carta «Rimborso emesso» l'ha già mandato refundOrder: un'email in più solo col conto del carrello.
     if (!m.carta || carrello) {
       await avvisaIlClienteDellAnnullo(admin, m.perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
