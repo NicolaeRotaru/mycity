@@ -129,21 +129,31 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
    * (lib/database.types.ts) si puo' tornare a 'id, name, non_recedibile'.
    */
   // Ordine misto (torta esclusa + miele): il reso nasce, e la nota dice al negozio cosa non rimborsare.
+  /**
+   * 16/11/2026 (R29-020) — SI DECIDE SUL PRODOTTO COM'ERA QUANDO E' STATO VENDUTO.
+   * Il negozio poteva spuntare «escluso dal recesso» dopo la vendita, e il cliente si vedeva
+   * rifiutare il ripensamento. Ogni riga d'ordine porta la copia scritta dal database alla nascita
+   * (`order_items.non_recedibile`, migrazione 530): quando c'e', vale lei. Il prodotto di adesso si
+   * legge solo per le righe senza copia (righe antiche, o la 530 non ancora applicata: per questo
+   * `*`, come sopra per products).
+   */
   let notaRecesso: string | null = null;
   if (body.reason === MOTIVO_RIPENSAMENTO) {
-    let domandaRighe = supa.from('order_items').select('product_id, product_name').eq('order_id', body.orderId);
+    let domandaRighe = supa.from('order_items').select('*').eq('order_id', body.orderId);
     if (body.orderItemId) domandaRighe = domandaRighe.eq('id', body.orderItemId);
     const { data: righe, error: rErr } = await domandaRighe;
     if (rErr) {
       logger.error(rErr, { context: 'returns-recesso-righe' });
       return ApiErrors.internal('Non riesco a verificare i prodotti dell\'ordine: riprova fra poco.');
     }
-    const righeOrdine = (righe ?? []) as RigaPerIlRecesso[];
+    const righeOrdine = (righe ?? []) as Array<RigaPerIlRecesso & { non_recedibile?: boolean | null }>;
+    const senzaCopia = righeOrdine.filter((r) => typeof r.non_recedibile !== 'boolean');
     const ids = [
-      ...new Set(righeOrdine.map((r) => r.product_id).filter((x): x is string => typeof x === 'string')),
+      ...new Set(senzaCopia.map((r) => r.product_id).filter((x): x is string => typeof x === 'string')),
     ];
+    let prodotti: Array<ProdottoPerIlRecesso & { id?: string }> = [];
     if (ids.length > 0) {
-      const { data: prodotti, error: pErr } = await getAdminSupabase()
+      const { data: letti, error: pErr } = await getAdminSupabase()
         .from('products')
         .select('*')
         .in('id', ids);
@@ -151,8 +161,15 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
         logger.error(pErr, { context: 'returns-recesso-prodotti' });
         return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
       }
-      // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
-      const perRiga = prodottiDelleRighe(righeOrdine, (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>);
+      prodotti = (letti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>;
+    }
+    // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
+    const dalCatalogo = prodottiDelleRighe(senzaCopia, prodotti);
+    let k = 0;
+    const perRiga: ProdottoPerIlRecesso[] = righeOrdine.map((r) =>
+      typeof r.non_recedibile === 'boolean' ? { name: r.product_name ?? null, non_recedibile: r.non_recedibile } : dalCatalogo[k++],
+    );
+    if (perRiga.length > 0) {
       const rifiuto = rifiutoDelRecesso(body.reason, perRiga);
       if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
       notaRecesso = notaDegliEsclusi(body.reason, perRiga);
