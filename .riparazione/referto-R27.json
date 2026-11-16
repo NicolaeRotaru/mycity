@@ -1,114 +1,48 @@
 {
   "sessione": "R27",
-  "aggiornato": "2026-11-16 00:55",
-  "finita": false,
-  "testa": "b27a30524aa61d0d010437f696a954ec8048898c",
+  "aggiornato": "2026-11-16 01:50",
+  "finita": true,
+  "testa": "16bfc1bbf3c9eadde25e5968611563374ef9956c",
   "verifica": {
-    "comando": "npm run verify",
-    "esito": "non_lanciato",
-    "testa": "",
-    "nota": ""
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "rosso",
+    "testa": "16bfc1bbf3c9eadde25e5968611563374ef9956c",
+    "nota": "typecheck e lint verdi; vitest 1584 file verdi, 1 rosso: tests/unit/minori-s10-catalogo-chat.test.ts, caso «con 200 prodotti concede più dei 4096 di prima, ma non oltre quello che arriva in 60 s». È la prova comune di R27-001 (fa vi.mock di lib/api/middleware di R25): chiede un tetto > 4096, ora è 3000. La porta a > 2048 e <= 3200 la regista sull integrazione all unione, come in cc0c5e70 (decisione della regista O3 tre, 16/11). Nessun altro rosso: 10441 prove verdi, 1 saltata."
   },
   "voci": [
     {
-      "id": "R27-016",
-      "chiave": "pagamenti-stripe|carrello carta spostato dal freno: se dopo un negozio rifiuta, la consegna dei rimasti non si ricalcola piu'",
-      "esito": "riparato",
-      "commit": "bf9a3d771184b2338912688486ed37355090bbf2",
+      "id": "R27-001",
+      "chiave": "ai-endpoints|con un fornitore lento la risposta lunga del copilot non arriva mai: dopo due minuti il negozio legge solo «riprova»",
+      "esito": "parziale",
+      "commit": "7606bca8",
       "file_toccati": [
-        "lib/ordini/annulla.ts"
+        "lib/ai/run.ts",
+        "lib/ai/regole-copilot.ts",
+        "app/api/ai/copilot/route.ts",
+        "tests/unit/riparazione-r27-copilot-lento.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r27-freno-della-carta.test.ts"
+        "tests/unit/riparazione-r27-copilot-lento.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r27-freno-della-carta.test.ts --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-copilot-lento.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf9a3d771184b2338912688486ed37355090bbf2^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-freno-della-carta.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7606bca8^ --file lib/ai/run.ts,lib/ai/regole-copilot.ts,app/api/ai/copilot/route.ts --prove tests/unit/riparazione-r27-copilot-lento.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nuova contoDopoIlFrenoDellaCarta: con la fascia nuova e il conto non riconosciuto, il conto si fa sulla consegna senza l'euro della veloce, solo se l'euro è già tornato sulla carta (refunded_amount_cents). Poi si riscrive con l'euro dentro. Caso: pane 15 + frutta 12 con la veloce. Il forno rifiuta: la frutta passa a 3 € di consegna e 3 € al fattorino (15 €), e tornano 16 € invece di 18.",
-      "verificato_da": ""
-    },
-    {
-      "id": "R27-017",
-      "chiave": "pagamenti-stripe|due rifiuti nello stesso istante in un carrello di tre negozi: il terzo resta con 1 € di consegna e 1 € al fattorino",
-      "esito": "riparato",
-      "commit": "98c25c8187169e50f6a2010b098c9827180dd310",
-      "file_toccati": [
-        "lib/ordini/annulla.ts"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Ripreso b51bf9a4 con cherry-pick senza commit. Il conflitto in lib/ai/run.ts c'era perché R21-001 (tempoPerChiamataMs) non è nella base: l'ho risolto lasciando che timeoutMs e senzaRitentativi arrivino alla chiamata solo se passati. Il tetto token del Copilot scende a 3000. La rotta fa un solo tentativo da 80 s. La prova è rinominata da r21 a r27 (2 test verdi).",
+      "cosa_resta": "Manca lo streaming (piano parziale a tempo scaduto), escluso in quest'onda dalla regista: un fornitore sotto i 40 token al secondo dà l'errore chiaro ma nessuna risposta parziale. Serve inoltre la modifica a minori-s10-catalogo-chat, qui sotto.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s10-catalogo-chat.test.ts",
+          "modifica": "Riapplicare cc0c5e70. Nel caso «con 200 prodotti…» (riga 158-159) il tetto dei token del Copilot deve essere > 2048 e <= 3200, al posto di > 4096 e <= 6000. Il file mocka lib/api/middleware (R25), quindi non l'ho toccato."
+        }
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 98c25c8187169e50f6a2010b098c9827180dd310^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il segno di un altro annullo in corso (fattorino a 0 su un ordine ancora vivo) ora conta come ordine già uscito dal giro. La prova fa scrivere il segno a pane e frutta prima che uno dei due legga il carrello. Risultato: tornano 16 + 13 € su 43 e la carne passa a 3 € di consegna e 3 € al fattorino (14 €), come con due rifiuti uno dopo l'altro. Prima tornavano 18 + 13 e la carne restava a 1 e 1.",
-      "nota": "La prova è stata ritoccata dopo, solo nei tipi, nel commit R27-varie b27a3052 (tsc la leggeva sempre nulla).",
-      "verificato_da": ""
-    },
-    {
-      "id": "R27-018",
-      "chiave": "pagamenti-stripe|ordine coperto dal credito e pagato con la carta: al cliente tornano 2 € in più e la frutta resta incassata a 13 €",
-      "esito": "riparato",
-      "commit": "9be4a476412d71f735c264f315d24a539067f0a1",
-      "insieme_a": [
-        "R27-019"
-      ],
-      "file_toccati": [
-        "lib/ordini/annulla.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r27-credito-e-carta.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r27-credito-e-carta.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9be4a476412d71f735c264f315d24a539067f0a1^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-credito-e-carta.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Con la carta, la parte della differenza della consegna che il totale sulla carta di chi se ne va non copre si paga col credito MyCity. Quel credito passa agli ordini che salgono (wallet_applied_cents) e non torna al cliente. La restituzione del credito ne tiene conto (creditoTrattenutoCents), anche nell'email. Caso: pane 18 € tutto a credito, frutta 13 € con la carta, il forno rifiuta. Tornano 16 € di credito invece di 18, e la frutta resta 13 € sulla carta più 2 € di credito (15). Coi contanti non cambia niente (provato). Se il rimborso cade, il credito torna com'era (provato).",
-      "nota": "refundOrder è simulato come nelle altre prove del carrello. Con quello vero il rimborso zero sulla carta è rifiutato: difetto nuovo già presente sulla base, in nuovi_difetti_visti.",
-      "verificato_da": ""
-    },
-    {
-      "id": "R27-019",
-      "chiave": "pagamenti-stripe|se il credito mycity copre quasi tutto l ordine annullato, la differenza della consegna non viene tolta da nessuna parte",
-      "esito": "riparato",
-      "commit": "9be4a476412d71f735c264f315d24a539067f0a1",
-      "insieme_a": [
-        "R27-018"
-      ],
-      "file_toccati": [
-        "lib/ordini/annulla.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r27-credito-e-carta.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r27-credito-e-carta.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9be4a476412d71f735c264f315d24a539067f0a1^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-credito-e-carta.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Stessa correzione di R27-018, nelle stesse righe (verso() e la restituzione del credito). Caso: A pagato 17,50 € di credito e 0,50 € di carta, B 13 € con la carta, A rifiuta. Tornano 16 € di credito invece di 17,50. B è scritto 13,50 € sulla carta, uguale all'addebito, più 1,50 € di credito. lib/ordini/prezzi.ts non toccato: consegnaAnnullato non scende mai sotto zero perché il tetto limita la differenza alla consegna di chi se ne va (lo controlla anche la proprietà V1 esistente), quindi la perdita stava solo in verso().",
-      "verificato_da": ""
+      "verificato_da": "capo squadra R27 (la revisione con subagente è andata ai soldi, come deciso dalla regista): prova rilanciata e prova rimessa rilanciata sul commit della voce, uscita 0, regge.",
+      "nota": "Con 7606bca8 il caso «con 200 prodotti concede più dei 4096 di prima…» di tests/unit/minori-s10-catalogo-chat.test.ts è rosso (chiede > 4096; il tetto ora è 3000). È una prova comune: fa vi.mock di lib/api/middleware di R25, quindi la tocca solo la regista, che la porta a > 2048 e <= 3200 come in cc0c5e70 sull integrazione all unione (decisione della regista O3 tre, 16/11). Il cherry-pick di b51bf9a4 è stato risolto a mano in lib/ai/run.ts perché la voce R21 n. 001 dell onda 2 (tempoPerChiamataMs) non è nella base: se arriva dopo, run.ts va riunito."
     },
     {
       "id": "R27-002",
@@ -134,30 +68,44 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Credito e merce adesso tornano con due funzioni esportate da annulla.ts, usate sia da annullaERimborsa sia dal giro: restituisciIlCreditoDellAnnullo (tre tentativi, credito trattenuto di R27-018) e rimettiAScaffaleDopoLAnnullo. Erano copie nel giro. La prova è sul giro: il credito che cade una volta torna al secondo tentativo; una chiamata della merce che lancia non ferma più credito ed email; dal giro tornano 16 € e non 18. Codice sconto ed email erano già condivisi.",
       "cosa_resta": "Il giro non chiama ancora annullaERimborsa e tiene suo l'ordine dei passi: turno preso prima del rimborso anche con la carta, ordine rimesso in coda se Stripe non risponde, lasciato annullato con avviso se il rimborso è impossibile, totale riletto senza giro, 'carta' anche per gli ordini già rimborsati, campanelle a cliente e negozio, avvisi del carrello a fine giro (R27-009). Per passare da annullaERimborsa servono lì: la presa del turno prima del rimborso con la carta, un esito 'ritentabile' del rimborso, la rilettura del totale e un modo di rimandare gli avvisi. È un rifacimento sui soldi, da fare con le prove dei rimborsi (già nota S03 del 5/11).",
-      "verificato_da": ""
+      "verificato_da": "revisore lotto 1 (modello grande): parziale come dichiarato; prova verde, rimessa con la sola route uscita 0; ritentare il credito è sicuro (wallet_credit idempotente per motivo e ordine). Difetto: il credito si rende con wallet_applied_cents letto a inizio giro (app/api/cron/expire-stale-orders/route.ts:377), vedi R27-018."
     },
     {
-      "id": "R27-009",
-      "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
-      "esito": "riparato",
-      "commit": "7e5cdeb98be99ee8d4419eb14e9b734dee5751e0",
-      "file_toccati": [
-        "app/api/cron/expire-stale-orders/route.ts"
+      "id": "R27-003",
+      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
+      "esito": "serve_file_altrui",
+      "verificato_da": "",
+      "cosa_ho_fatto": "Newsletter: app/api/newsletter/route.ts:52 ha già `if (!NEWSLETTER_ACCESA) return ApiErrors.unavailable(...)`, quindi quel pezzo era già a posto. Freno del copilot: NON applicato. Le 7 prove che importano la rotta (api-ai-copilot, riparazione-r04-copilot-regola, niente-chiamate-a-vuoto-al-filtro, minori-s10-catalogo-chat, il-copilot-dice-cosa-non-e-entrato, riparazione-r04-copilot-cronologia, riparazione-r04-modello-ritirato) nominano tutte lib/api/middleware di R25 in un vi.mock: la regola vieta di prepararle e, senza prepararle, diventerebbero 503 e rosse. Nessun commit, nessuna prova.",
+      "cosa_resta": "Il freno del copilot e le prove da preparare vanno insieme. Il resto è della scheda: 1) rimettere 930e4f9 dopo aver preparato api-ai-reviews-summary; 2) le altre 13 rotte app/api/ai/*; 3) la classifica inviti, scelta di Nicola (nessuna rotta: la pagina app/profile/referral/leaderboard/page.tsx legge la vista dal browser; un freno lato server sarebbe una migrazione `REVOKE SELECT ON public.referral_leaderboard FROM authenticated;`, da ridare alla riaccensione). Il caricamento da file non è stato verificato.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/copilot/route.ts (di R27, ma va insieme alle 7 prove che mockano lib/api/middleware di R25)",
+          "modifica": "Aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e, in testa al gestore POST (dentro withSellerAuth, prima di `env.anthropicKey()`): `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');`. Nello stesso commit, `vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));` nelle 7 prove elencate."
+        },
+        {
+          "file": "tests/unit/api-ai-reviews-summary.test.ts",
+          "modifica": "Accanto agli altri vi.mock, aggiungere `vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));`. Poi rimettere la correzione con `git revert cf976e1d072db3995709333eb67b0203c8070504` (riporta 930e4f9: riga in app/api/ai/reviews-summary/route.ts, prova tests/unit/riparazione-r14-freno-ai-recensioni.test.ts e interruttore acceso nella prova di R14-017)."
+        },
+        {
+          "file": "app/api/ai/{answer-qa,barcode-lookup,catalog-apply,catalog-apply-bulk,catalog-chat,catalog-create,description,diagnose,improve-product,product-chat,seo,variants,voice-product}/route.ts",
+          "modifica": "In ciascuna: `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e, in testa al gestore POST dentro withSellerAuth e prima di tutto il resto, `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa riga di app/api/ai/catalog-batch/start/route.ts:42). Le prove di ciascuna rotta (elenco per rotta nella scheda R27, voce R27-003) vanno prima preparate col vi.mock di AI_NEGOZI_ACCESA: true. catalog-batch/status e catalog-batch/cancel restano senza freno: servono a chiudere un lotto già partito."
+        }
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts"
+      "copre_tutta_la_voce": false
+    },
+    {
+      "id": "R27-004",
+      "chiave": "architettura|una prova sul webhook di stripe controlla l'ordine delle righe cercando una parola, e basta togliere uno spazio per ingannarla",
+      "esito": "serve_file_altrui",
+      "verificato_da": "",
+      "cosa_ho_fatto": "La prova legge la rotta app/api/stripe/webhook/route.ts (di R27), ma legge anche ogni file di lib/stripe/webhook (CARTELLA, readdirSync, riga 46), che sono di R25: per la regola non la tocco.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/webhook-diviso-per-mestiere.test.ts",
+          "modifica": "Applicare `git diff 8b854ced 87694264 -- tests/unit/webhook-diviso-per-mestiere.test.ts` (ramo claude/magical-hamilton-xouwr8-m23), con un solo cambio: nel commento sopra marcatureFuoriPosto, `riparazione-r23-webhook-marca-dopo-il-gestore.test.ts` diventa `riparazione-r23-webhook.test.ts`. Alle righe 55-59 i due indexOf e le loro asserzioni lasciano il posto a `const { smistamento, marcature, primaDelloSmistamento } = marcatureFuoriPosto(readFileSync(ROTTA, 'utf8'));` con le asserzioni smistamento > 0, marcature > 0, primaDelloSmistamento === 0. Si aggiunge il caso «non si inganna togliendo uno spazio (R23-001)» e in fondo la funzione marcatureFuoriPosto del commit 87694264."
+        }
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7e5cdeb98be99ee8d4419eb14e9b734dee5751e0^ --file app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il giro raccoglie email e campanelle del carrello e le scrive a fine giro (avvisiDiFineGiro). Gli annullati del giro escono dai rimasti, e il conto nuovo lo dice solo l'avviso più recente del carrello, con le cifre della conferma come 'prima'. Carrello scaduto tutto (pane 18, frutta 13, carne 12, contanti): tre email senza 'alla porta paghi' e nessuna campanella 'il conto è cambiato'. Scaduti pane e frutta: un avviso solo, 'carne 14,00 € invece di 12,00 €', con la frutta ai 13,00 € della conferma e non ai 15.",
-      "verificato_da": ""
+      "nota": "Chi lo applica dimostra il morso così: copia la rotta in un file temporaneo, togli lo spazio tra le parole che la prova cerca, e verifica che la prova vecchia resta verde mentre la nuova cade."
     },
     {
       "id": "R27-005",
@@ -181,7 +129,364 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "avvisaIlClienteDellAnnullo registra l'email con after() di next/server. Così il Rifiuta, l'Annulla e il giro rispondono senza aspettare la posta (il giro passa dalla stessa funzione, la route non cambia). Fuori da una richiesta after() lancia e l'email si aspetta come prima: per questo le prove esistenti restano verdi. Se la posta rifiuta l'email, oltre al registro parte un avviso agli amministratori, una volta per ordine (unaVoltaPer email-annullo-<id>). Niente avviso quando manca solo l'indirizzo.",
       "cosa_resta": "Ritentare da sola l'email caduta usando la coda che c'è già (email_queue e il giro send-emails), senza tabelle nuove. Serve un modello 'order_canceled' in TEMPLATE_CICLO_DI_VITA e TEMPLATE_DI_SERVIZIO di lib/email/templates.ts, che rifà l'email dai metadata {order_id, motivo, come, righe del carrello, credito tornato}. Sulla posta rifiutata, avvisaIlClienteDellAnnullo scrive una riga in email_queue (user_id, template 'order_canceled', metadata) al posto dell'avviso. File altrui: lib/email/templates.ts, app/api/cron/send-emails/route.ts. after() tiene viva la funzione solo fino al suo maxDuration: il giro da 100 ordini resta legato ai 300 s. La prova esistente tests/unit/minori-s03-ordini-scaduti.test.ts:186 («il giro aspetta l email prima di rispondere») ha un presupposto vecchio ma resta verde; non toccata perché usa file di R25.",
-      "verificato_da": ""
+      "verificato_da": "capo squadra R27 (il tetto dei revisori dà la precedenza ai soldi): prova rilanciata, 3 passate; prova rimessa rilanciata, uscita 0, regge (annulla.ts alla base: rossa sul comportamento)."
+    },
+    {
+      "id": "R27-006",
+      "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+      "esito": "serve_file_altrui",
+      "verificato_da": "",
+      "cosa_ho_fatto": "tests/unit/aiuti/finto-giro-notturno.ts non ha import e non legge nessun file di R27: app/api/cron/process-deletions compare solo in un commento (riga 3). Quindi non è di R27 e 2a5754cf non è ripreso. Nessun commit.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-giro-notturno.ts",
+          "modifica": "Riapplicare il commit 2a5754cf (ramo claude/magical-hamilton-xouwr8-m23, `git show 2a5754cf`): scenario.chiaviUniche (doppione su id con errore 23505 'duplicate key … _pkey'), scenario.indirizzi (auth.admin.getUserById), scenario.guasti (Guasto{tabella, azione select|insert, messaggio, codice, seFiltro, seRiga}, modificabile a notte in corso), FintaQuery.single() e maybeSingle(). Tutto opzionale: le 13 prove che lo usano restano verdi. Il commit porta anche tests/unit/riparazione-r23-finto-clienteavvisi.test.ts."
+        },
+        {
+          "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+          "modifica": "Togliere adminDiProva (:70) e le patch a mano di insert/eq/select/single (rifiutaAvvisiA, rifiutaLetturaDi, registroInviiRotto, registroInviiRifiutaLeRighe, getUserById) usando fintoGiroNotturno({indirizzi, guasti}); spostare in file propri le due prove di rotta e di scansione del sorgente (:560-576)."
+        },
+        {
+          "file": "tests/unit/la-spiegazione-per-email-che-non-parte-si-riprova-la-notte-dopo.test.ts",
+          "modifica": "Sostituire databaseVero()/cliente (:26-75) con `fintoGiroNotturno({chiaviUniche:true, guasti}).admin as unknown as ClienteAvvisi`; `rotte` diventa push/pop su `finto.guasti`."
+        },
+        {
+          "file": "tests/unit/chi-aspetta-la-cancellazione-sa-perche-aspetta.test.ts",
+          "modifica": "Sostituire letturaVuota() (:293) e i clienti inline `inCorsa`/`rotto` (:223-252) con `fintoGiroNotturno({guasti:[{tabella:'notifications',azione:'select',messaggio:…}]}).admin`."
+        }
+      ],
+      "copre_tutta_la_voce": false
+    },
+    {
+      "id": "R27-007",
+      "chiave": "deploy-sre|la cancellazione notturna degli account non ha un tetto per giro",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
+    },
+    {
+      "id": "R27-008",
+      "chiave": "deploy-sre|la prova «migrazione su database pieno» mette ancora i file nell'ordine vecchio",
+      "esito": "serve_file_altrui",
+      "verificato_da": "",
+      "cosa_ho_fatto": "Controllato sulla base: le righe 42 e 50 di migrazione-su-database-pieno.sh hanno ancora `sort -V`, e lo stesso vale per gli altri cinque punti. Nessuno di questi script è mio e nessuno legge un mio file per nome. Nessun commit.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/sql/harness/migrazione-su-database-pieno.sh",
+          "modifica": "Riga 42: `ULTIMA=\"$(ls \"$MIG\"/*.sql | sort -V | tail -1)\"` diventa `ULTIMA=\"$(ls \"$MIG\"/*.sql | LC_ALL=C sort | tail -1)\"`. Riga 50: `for f in $(ls \"$MIG\"/*.sql | sort -V); do` diventa `for f in $(ls \"$MIG\"/*.sql | LC_ALL=C sort); do`."
+        },
+        {
+          "file": "tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh",
+          "modifica": "Riga 54: `sort -V` diventa `LC_ALL=C sort`, come in apply.sh."
+        },
+        {
+          "file": "tests/sql/harness/la-159-non-lascia-la-tabella-scoperta.sh",
+          "modifica": "Riga 61: `sort -V` diventa `LC_ALL=C sort`."
+        },
+        {
+          "file": "tests/sql/harness/la-160-regge-un-ordine-annullato.sh",
+          "modifica": "Riga 45: `sort -V` diventa `LC_ALL=C sort`."
+        },
+        {
+          "file": "tests/sql/harness/lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh",
+          "modifica": "Riga 55 (gira in CI, ci.yml:329): `sort -V` diventa `LC_ALL=C sort`."
+        },
+        {
+          "file": "tests/supabase-locale/avvia.sh",
+          "modifica": "Riga 36: `sort -V` diventa `LC_ALL=C sort`."
+        },
+        {
+          "file": "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts",
+          "modifica": "Righe 35-38: la simulazione del rilascio usa `sort -V`. Stessa sostituzione con `LC_ALL=C sort`. Controllare anche tests/unit/minori-s03-ordine-migrazioni.test.ts, che nomina `sort -V`."
+        }
+      ],
+      "copre_tutta_la_voce": false
+    },
+    {
+      "id": "R27-009",
+      "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+      "esito": "riparato",
+      "commit": "16bfc1bbf3c9eadde25e5968611563374ef9956c",
+      "file_toccati": [
+        "app/api/cron/expire-stale-orders/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 16bfc1bb^ --file app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r27-carrello-scaduto-insieme.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Riparazione 7e5cdeb9: il giro raccoglie email e campanelle del carrello e le scrive a fine giro (avvisiDiFineGiro); il conto nuovo lo dice solo l avviso più recente, con le cifre della conferma come prima. Correzione 16bfc1bb dopo la revisione: con la carta, se torna meno del pagato e l ordine non porta il conto finale, il primo annullato riceve un email con la sua riga sola. Carrello carta pane 18, frutta 13, carne 12 € che scade tutto: rimborsi 16, 13, 14 €; il pane riceve «ti tornano 16,00 € sulla carta, cioè 15,00 € di spesa e 1,00 € di consegna», nessuna cifra superata, nessuna campanella del conto. Scadono pane e frutta: il pane ha il suo perché; un solo avviso dice la carne a 3 € di consegna invece di 1 €, «resta pagato, 14,00 €»; i 15 € superati non compaiono. Contanti come prima.",
+      "verificato_da": "revisore della correzione (modello grande): REGGE. Carta pane 18, frutta 13, carne 12; scadono pane e frutta: rimborsi 16 e 13 €, la carne resta 14 €; il pane ha la sua email del perché senza nominare gli altri; un solo avviso col conto finale e una campanella; nessuna cifra superata; secondo giro fermo. Prima revisione (lotto 1) l aveva data parziale per l email mancante: chiuso da 16bfc1bb.",
+      "nota": "Commit della voce: 7e5cdeb9 (riparazione) e 16bfc1bb (correzione). La parte «cioè X € di spesa e Y € di consegna» esce solo per un ordine senza credito e senza spedizione: il modello lib/email/annullo-nel-carrello.ts non è di R27."
+    },
+    {
+      "id": "R27-010",
+      "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
+    },
+    {
+      "id": "R27-011",
+      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+      "esito": "parziale",
+      "commit": "74bfac3e",
+      "file_toccati": [
+        "components/home/TrendingNow.tsx",
+        "tests/unit/riparazione-r27-prezzo-scontato-in-tendenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-prezzo-scontato-in-tendenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-prezzo-scontato-in-tendenza.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 74bfac3e^ --file components/home/TrendingNow.tsx --prove tests/unit/riparazione-r27-prezzo-scontato-in-tendenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "TrendingNow ora legge i prodotti, applica fetchActiveDiscounts e discountedUnitCents come CartUpsell, e stampa 15,00 invece di 20,00 col 25%. Se lo sconto non si legge, resta il prezzo pieno. StickyAddToCart.tsx non toccato: riceve `price` già scontato da app/product/[id]/page.tsx:503 (`scontoPromo > 0 ? discountedUnitCents(...) : prezzoPieno`), quindi la barra mostra già il prezzo che si paga.",
+      "cosa_resta": "Gli altri caroselli e la scheda prodotto (serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "Riga 39: `queryFn: async (): Promise<Item[]> => { const righe = await leggiSimili(supabase, { productId, categoryId, sellerId }); if (righe.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 })); }` con `import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';`."
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "Riga 72: `queryFn: async (): Promise<Item[]> => { const righe = await leggiVistiDiRecente(supabase, { userId: userId! }); if (righe.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, righe.map((it) => it.product.id)).catch(() => new Map<string, number>()); return righe.map((it) => ({ ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } })); }` più lo stesso import."
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "Righe 35-36: `queryFn: async (): Promise<SponsoredItem[]> => { const righe = await leggiSponsorizzati(supabase, { placement, categorySlug, oggi: new Date().toISOString().slice(0, 10) }); const ids = righe.flatMap((it) => (it.product ? [it.product.id] : [])); if (ids.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>()); return righe.map((it) => (it.product ? { ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } } : it)); }` più l'import."
+        },
+        {
+          "file": "components/products/FrequentlyBoughtTogether.tsx",
+          "modifica": "Riga 47: come SimilarProducts, `const righe = await leggiSpessoCompratiInsieme(supabase, { productId, sellerId }); … return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));` più l'import. Così anche addOne mette nel carrello il prezzo che si paga."
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "Riga 56: `queryFn: async (): Promise<Suggestion[]> => { const righe = await leggiSuggerimentiRicerca(supabase, debounced); const ids = righe.flatMap((s) => (s.kind === 'product' ? [s.id] : [])); if (ids.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>()); return righe.map((s) => (s.kind === 'product' ? { ...s, price: discountedUnitCents(s.price, sconti.get(s.id) ?? 0) / 100 } : s)); }` più l'import."
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "modifica": "Righe 608 e 654 (582-583 e 625 nella scheda): `price: prezzoPieno` diventa `price` (il prezzo unitario già scontato), con un commento: carrello e cassa confrontano il prezzo salvato con quello scontato di oggi, e col pieno scrivono «il prezzo è sceso» o «è cambiato» su un prodotto in promozione appena aggiunto. Nessun doppio sconto: carrello e cassa ripartono dal prezzo del database."
+        },
+        {
+          "file": "tests/unit/minori-s09-scheda-prodotto.test.ts",
+          "modifica": "Righe 91-93: oggi fissa due `price: prezzoPieno,` col motivo «non due volte». Deve fissare due `price,`, o meglio montare la scheda e leggere il prezzo salvato nel carrello. Va cambiata insieme a app/product/[id]/page.tsx."
+        }
+      ],
+      "verificato_da": "capo squadra R27 (la revisione con subagente è andata ai soldi, come deciso dalla regista): prova rilanciata e prova rimessa rilanciata sul commit della voce, uscita 0, regge."
+    },
+    {
+      "id": "R27-012",
+      "chiave": "frontend-ux|il modulo del prodotto non dice che il nome ha al massimo 120 caratteri: il negozio legge solo «il valore inserito non è valido»",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
+    },
+    {
+      "id": "R27-013",
+      "chiave": "immagini-media|se la foto di un prodotto è stata cancellata, la scheda resta un riquadro bianco invece della foto di ripiego",
+      "esito": "riparato",
+      "commit": "957d753a",
+      "file_toccati": [
+        "components/home/HeroStoreCard.tsx",
+        "tests/unit/riparazione-r27-foto-di-ripiego-nella-vetrina-hero.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-foto-di-ripiego-nella-vetrina-hero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-foto-di-ripiego-nella-vetrina-hero.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 957d753a^ --file components/home/HeroStoreCard.tsx --prove tests/unit/riparazione-r27-foto-di-ripiego-nella-vetrina-hero.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ProductCard.tsx:169, CartGroupsList.tsx:43 e TrendingNow.tsx:89 usavano già FotoConRipiego (R24-006, coperti da riparazione-r24-foto-che-non-risponde.test.tsx sull'errore dell'immagine e il ripiego). Restava la miniatura del prodotto in HeroStoreCard, ora FotoConRipiego; la copertina del negozio resta <Image>. La prova nuova è leggera (sorgente di HeroStoreCard); l'onError di FotoConRipiego è nella prova R24.",
+      "serve_file_altrui": [
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "Riga 5: l'import `Image from 'next/image'` diventa `FotoConRipiego from '@/components/ui/FotoConRipiego'`. Righe 202 e 232: `<Image` diventa `<FotoConRipiego` (stessi props). Non resta nessuna <Image> nel file."
+        },
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "Riga 4: import Image sostituito da FotoConRipiego. Riga 81: `<Image` diventa `<FotoConRipiego`."
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "Riga 4: import Image sostituito da FotoConRipiego. Riga 97: `<Image` diventa `<FotoConRipiego`."
+        },
+        {
+          "file": "components/products/FrequentlyBoughtTogether.tsx",
+          "modifica": "Riga 4: import Image sostituito da FotoConRipiego. Riga 84: `<Image` diventa `<FotoConRipiego`."
+        },
+        {
+          "file": "components/cart/CartUpsell.tsx",
+          "modifica": "Riga 4: import Image sostituito da FotoConRipiego. Riga 88: `<Image` diventa `<FotoConRipiego`."
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "Riga 5: import Image sostituito da FotoConRipiego (file di R20). Riga 117: `<Image` diventa `<FotoConRipiego`."
+        },
+        {
+          "file": "tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts",
+          "modifica": "Riga 111: la regex `/<Image[\\s\\S]{0,700}?\\/>/g` diventa `/<(?:Image|FotoConRipiego)[\\s\\S]{0,700}?\\/>/g`, con un commento: le foto spostate su FotoConRipiego non devono uscire dal conto in silenzio (R24-006). Con la regex nuova e le modifiche sopra la prova è verde."
+        }
+      ],
+      "verificato_da": "capo squadra R27 (la revisione con subagente è andata ai soldi, come deciso dalla regista): prova rilanciata e prova rimessa rilanciata sul commit della voce, uscita 0, regge."
+    },
+    {
+      "id": "R27-014",
+      "chiave": "microcopy|se il caricamento di una storia fallisce, il negoziante legge «applica la migration 035»",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
+    },
+    {
+      "id": "R27-015",
+      "chiave": "navigazione-gerarchia|nella scheda prodotto il prezzo è quasi grande quanto il titolo e pesa meno del pulsante «+»",
+      "esito": "gia_riparato_prima",
+      "verificato_da": "",
+      "prova": "components/ProductCard.tsx:270 e :276 hanno il prezzo a `text-lg font-extrabold`; tests/unit/riparazione-r24-prezzo-piu-del-pulsante.test.tsx lo prova: «il «+» è un contorno» (riga 41) e «il prezzo è più grande del titolo, anche scontato» (riga 55).",
+      "cosa_ho_fatto": "Nessun commit: ProductCard è a posto dall'onda 2 (R24). Resta la stessa inversione di gerarchia in CartUpsell, non di R27.",
+      "serve_file_altrui": [
+        {
+          "file": "components/cart/CartUpsell.tsx",
+          "modifica": "Riga 106: `text-sm font-bold text-ink-900` diventa `text-base font-extrabold text-ink-900`. Riga 111: nella className del «+», `bg-primary-600 text-white shadow-sm ... hover:bg-primary-700` diventa `border-2 border-primary-600 bg-transparent text-primary-700 shadow-sm-neutral ... hover:bg-primary-50`; restano h-11 w-11 e l'anello di focus. Prova nello stesso commit: prezzo più grande del nome e «+» senza bg-primary-600 pieno, come riparazione-r24-prezzo-piu-del-pulsante.test.tsx per ProductCard."
+        }
+      ]
+    },
+    {
+      "id": "R27-016",
+      "chiave": "pagamenti-stripe|carrello carta spostato dal freno: se dopo un negozio rifiuta, la consegna dei rimasti non si ricalcola piu'",
+      "esito": "riparato",
+      "commit": "0600e7cbfc814c1ce60407acba17f82b38b18c21",
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-freno-della-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-freno-della-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0600e7cb^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-freno-della-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima riparazione bf9a3d77: nuova contoDopoIlFrenoDellaCarta, col carrello carta spostato dal freno il conto si rifà sulla consegna senza l euro della veloce (pane 15 + frutta 12 veloce, il forno rifiuta: la frutta passa a 3 € di consegna e 3 € al fattorino, tornano 16 € e non 18). Correzione 0600e7cb dopo la revisione: quando sulla carta resta 0 da rendere, annullaERimborsa non chiama refundOrder (quello vero rifiuta 0) e chiude l ordine con prendiIlTurno, lo stesso turno del ramo contanti; poi credito, codice ed email come dopo un rimborso; se il turno non si prende il carrello torna com era. Caso: pane 17 € credito + 2 € carta, 1 € già reso dal freno, il forno rifiuta: esito ok, nessun refundOrder, frutta a 3 + 3 € (15 €). Uguale con 1, 1,50, 2,50 e 3 € di carta; con 4 € torna 1 € sulla carta una volta sola. Le prove usano un refundOrder finto che rifiuta 0 con RimborsoNonRitentabile vera, come quello di lib/stripe/payout.ts.",
+      "verificato_da": "revisore della correzione (modello grande), refundOrder finto che rifiuta 0 con la RimborsoNonRitentabile vera: REGGE. Pane 17 € credito + 2 € carta, 1 € già reso: esito ok senza refundOrder, frutta 3 + 3 € (15 €), tornano 16 € di credito. Variante 4 € di carta: un solo refundOrder di 1 €. Doppio passaggio con riga riletta: GIA_ANNULLATO. Prima revisione (lotto 1) l aveva data parziale per il rimborso da 0: chiuso dalla correzione 0600e7cb.",
+      "nota": "Commit della voce: bf9a3d77 (riparazione) e 0600e7cb (correzione chiesta dal revisore, che chiude anche il rimborso da 0 di R27-018/019). Nella correzione la prova credito-e-carta è stata adattata: rimborsi attesi da [[pane,0]] a [], e il caso «il rimborso cade» diventa «l ordine cambia prima della chiusura» (GIA_ANNULLATO, credito rimesso)."
+    },
+    {
+      "id": "R27-017",
+      "chiave": "pagamenti-stripe|due rifiuti nello stesso istante in un carrello di tre negozi: il terzo resta con 1 € di consegna e 1 € al fattorino",
+      "esito": "riparato",
+      "commit": "98c25c8187169e50f6a2010b098c9827180dd310",
+      "file_toccati": [
+        "lib/ordini/annulla.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 98c25c8187169e50f6a2010b098c9827180dd310^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r27-due-rifiuti-insieme.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il segno di un altro annullo in corso (fattorino a 0 su un ordine ancora vivo) ora conta come ordine già uscito dal giro. La prova fa scrivere il segno a pane e frutta prima che uno dei due legga il carrello. Risultato: tornano 16 + 13 € su 43 e la carne passa a 3 € di consegna e 3 € al fattorino (14 €), come con due rifiuti uno dopo l'altro. Prima tornavano 18 + 13 e la carne restava a 1 e 1.",
+      "nota": "La prova è stata ritoccata dopo, solo nei tipi, nel commit R27-varie b27a3052 (tsc la leggeva sempre nulla).",
+      "verificato_da": "revisore lotto 1 (modello grande): prova rilanciata verde, rimessa uscita 0 regge; concorrenze su carrelli di 2 e 3 negozi (principale + uno, due in più, rimborso che cade a chi ha il segno) tornano alla regola. Caso limite già esistente: se rimetti fallisce il segno resta, admin avvisati."
+    },
+    {
+      "id": "R27-018",
+      "chiave": "pagamenti-stripe|ordine coperto dal credito e pagato con la carta: al cliente tornano 2 € in più e la frutta resta incassata a 13 €",
+      "esito": "riparato",
+      "commit": "da810379daa96517d17626f080dfadf1b0d642b8",
+      "insieme_a": [
+        "R27-019"
+      ],
+      "file_toccati": [
+        "lib/ordini/annulla.ts",
+        "app/api/cron/expire-stale-orders/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-credito-e-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-credito-e-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da810379^ --file lib/ordini/annulla.ts,app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r27-credito-e-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Riparazione 9be4a476 (insieme a R27-019): con la carta, la differenza della consegna che il totale sulla carta di chi se ne va non copre la paga il credito MyCity, che passa agli ordini che salgono (wallet_applied_cents) e non torna al cliente (creditoTrattenutoCents). Correzione da810379 dopo la revisione: quanto spostare parte da total_price - refunded_amount_cents; nel giro degli scaduti, a carrello rifatto e 0 da rendere, niente refundOrder ma chiusura con merce, credito ed email; il credito si rende col valore riletto dopo il giro. Casi col refundOrder severo: pane 18 € tutto credito + frutta 13 € carta, il forno rifiuta → il rifiuto riesce senza rimborso, tornano 16 € di credito, la frutta resta 13 € carta + 2 € credito. Freno: pane 17 € credito + 2 € carta, 1 € già reso → tornano 16 € di credito, frutta 14 € carta + 1 € credito. Scaduti tutti (pane 18 credito, frutta 13 e carne 12 carta): tornano 16 + 2 = 18 € di credito, la carta rende 11 + 14 = 25 €, nessun annullato tiene credito non reso, niente da chiudere a mano.",
+      "nota": "Commit della voce: 9be4a476 (riparazione, con R27-019), 0600e7cb (toglie il rimborso da 0 nell annullo diretto) e da810379 (correzione). Resta come prima, fuori da questa voce: nel giro un ordine carta tutto a credito SENZA carrello rifatto va ancora a refundOrder(0) e «da chiudere a mano» (comportamento scritto nella rotta, su cui conta la prova chi-paga-alla-consegna-sa-che-l-ordine-e-annullato); vedi nuovi_difetti_visti.",
+      "verificato_da": "revisore della correzione (modello grande), refundOrder finto severo: REGGE nel caso chiesto (pane 18 € tutto credito, frutta e carne carta, scadono tutti: 16 + 2 = 18 € di credito, carta 11 + 14 = 25 €, nessun annullato con credito non reso, niente da chiudere a mano, secondo giro fermo) e nella variante pane 1 € credito + 17 € carta. Non regge una variante FUORI dal carrello rifatto, già sulla base: ordine carta tutto a credito che scade senza carrello rifatto → refundOrder(0), da chiudere a mano (route.ts:312-313), in nuovi_difetti_visti. Prima revisione (lotto 1): non reggeva, chiusa dalle correzioni 0600e7cb e da810379."
+    },
+    {
+      "id": "R27-019",
+      "chiave": "pagamenti-stripe|se il credito mycity copre quasi tutto l ordine annullato, la differenza della consegna non viene tolta da nessuna parte",
+      "esito": "riparato",
+      "commit": "da810379daa96517d17626f080dfadf1b0d642b8",
+      "insieme_a": [
+        "R27-018"
+      ],
+      "file_toccati": [
+        "lib/ordini/annulla.ts",
+        "app/api/cron/expire-stale-orders/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r27-credito-e-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r27-credito-e-carta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da810379^ --file lib/ordini/annulla.ts,app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r27-credito-e-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa correzione di R27-018, nelle stesse righe (9be4a476, poi da810379 e 0600e7cb). Caso col refundOrder severo: pane 17,50 € credito + 0,50 € carta, il forno rifiuta: nessun rimborso sulla carta (niente 0,50 € due volte né negativo), tornano 16 € di credito, la frutta resta 13,50 € carta + 1,50 € credito (lordo 15 €). lib/ordini/prezzi.ts non toccato: consegnaAnnullato non scende sotto zero perché il tetto limita la differenza alla consegna di chi se ne va (proprietà V1 esistente).",
+      "verificato_da": "revisore della correzione (modello grande), refundOrder finto severo: REGGE nel caso chiesto (pane 18 € tutto credito, frutta e carne carta, scadono tutti: 16 + 2 = 18 € di credito, carta 11 + 14 = 25 €, nessun annullato con credito non reso, niente da chiudere a mano, secondo giro fermo) e nella variante pane 1 € credito + 17 € carta. Non regge una variante FUORI dal carrello rifatto, già sulla base: ordine carta tutto a credito che scade senza carrello rifatto → refundOrder(0), da chiudere a mano (route.ts:312-313), in nuovi_difetti_visti. Prima revisione (lotto 1): non reggeva, chiusa dalle correzioni 0600e7cb e da810379.",
+      "nota": "Commit della voce: 9be4a476 (insieme a R27-018), 0600e7cb, da810379."
+    },
+    {
+      "id": "R27-020",
+      "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
+    },
+    {
+      "id": "R27-021",
+      "chiave": "performance|nel pannello del negozio ogni link della barra laterale, precaricato, fa ripassare il controllo d'accesso con due chiamate a supabase",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
+    },
+    {
+      "id": "R27-022",
+      "chiave": "performance-percepita|le prime foto della home — copertina del negozio in vetrina e tessere delle categorie — sono tutte «pigre»: il browser le mette in coda dietro al resto",
+      "esito": "non_fatto",
+      "nota": "Non lavorata per il tetto di spesa della sessione (consegna verso i 25 $, limite 30 $ fissato dalla regista O3 tre): la precedenza è andata alle voci di soldi e a quelle della cucitura, come deciso dalla regista. Resta aperta per un onda successiva."
     }
   ],
   "nuovi_difetti_visti": [
@@ -205,11 +510,32 @@
       "severita": "minore",
       "file": "tests/unit/il-ricalcolo-dopo-un-annullo-regge-veloce-rimborso-caduto-e-annulli-insieme.test.ts:57",
       "descrizione": "beforeEach(() => refundOrder.mockClear()) restituisce il mock, e vitest chiama il valore restituito come funzione di pulizia: refundOrder parte una volta in più senza argomenti. Lì non fa danno perché l'implementazione non legge l'argomento; con un'implementazione che lo legge la prova cade per un motivo finto."
+    },
+    {
+      "titolo": "Nel giro degli scaduti un ordine con la carta tutto a credito, senza carrello rifatto, finisce ancora «da chiudere a mano»",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "app/api/cron/expire-stale-orders/route.ts (ramo carta senza carrello rifatto) · lib/stripe/payout.ts:2098",
+      "descrizione": "Il salto di refundOrder(0) vale solo a carrello rifatto. Un ordine carta pagato tutto col credito e senza carrello va a refundOrder(0), che lo rifiuta, e resta da chiudere a mano. Comportamento già sulla base; la prova chi-paga-alla-consegna-sa-che-l-ordine-e-annullato ci conta col suo finto. Oggi dorme: la cassa con la carta non applica credito. Il revisore l ha visto anche così: pane 18 € tutto a credito, frutta e carne rifiutate prima dai negozi, poi il pane scade → refundOrder(0), daChiudereAMano 1, 18 € di credito non resi; e un pane da 13 € tutto a credito che scade da solo → 13 € non resi. isCardPaid (lib/ordini/soldi-sulla-carta.ts:26) non guarda il totale. annullaERimborsa in questi casi chiude con prendiIlTurno e rende il credito: il giro dovrebbe fare lo stesso."
+    },
+    {
+      "titolo": "Un secondo annullo con la riga letta prima del primo rimborsa e rende il credito una seconda volta (col refundOrder finto)",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/ordini/annulla.ts:272",
+      "descrizione": "annullaERimborsa legge il già reso dalla riga che gli passa chi chiama e non lo rilegge. Con la riga vecchia (4 € di carta) il finto riceve di nuovo refundOrder(100) e 15 € di credito una seconda volta. Il refundOrder vero dovrebbe rifiutarlo (quantoSiPuoRestituire dà 0), non provato. Già sulla base."
+    },
+    {
+      "titolo": "L email di annullo dice «ti tornano 0,00 € sulla carta» quando il rimborso è tutto in credito",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/ordini/annulla.ts:318",
+      "descrizione": "Dopo la correzione di R27-016, un ordine carta che si chiude senza rimborso sulla carta manda «Il rimborso torna sulla carta» seguito da «ti tornano 0,00 € sulla carta». Da dire solo il credito che torna."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 1,
-    "nota": "lotto 1 (modello grande, 7 voci)."
+    "agenti": 5,
+    "nota": "5 subagenti su 6: lotto 1 soldi (grande, 7 voci), revisore lotto 1 (grande), lotto 2 cucitura (piccolo, 8 voci), giro di correzione soldi (grande, 4 voci), revisore della correzione (grande). Voci 007, 010, 012, 014, 020, 021, 022 non fatte per il tetto di spesa (limite 30 $ della regista). Spesa letta da get_session prima della consegna: 28,64 $."
   }
 }
