@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Star, Home as HomeIcon, Truck, Store as StoreIcon } from 'lucide-react';
@@ -226,7 +227,7 @@ export default function HeroStoreCard() {
                     return (
                       <div key={p.id} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
                         <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
-                          {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" loader={caricatoreFotoRemote} className="object-cover" />}
+                          {img && <FotoConRipiego src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" loader={caricatoreFotoRemote} className="object-cover" />}
                         </div>
                         <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
                         <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>
