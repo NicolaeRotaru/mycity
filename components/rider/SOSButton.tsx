@@ -263,7 +263,7 @@ export default function SOSButton({ orderId }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>La tua posizione GPS verrà condivisa con MyCity</span>
+                  <span>La tua posizione GPS viene mandata a MyCity, se il telefono riesce a darla</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
