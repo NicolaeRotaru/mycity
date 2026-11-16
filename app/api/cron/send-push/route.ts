@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
-import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
+import { chiamataDelCalendarioFerma, rispostaDelFermo, segnaGiroNonFatto } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import {
   isPushConfigured, iscrizioniPerUtenti, sendPushToUser, type PushDeliveryOptions,
@@ -72,7 +72,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // Se le chiavi VAPID non sono configurate, non tocchiamo le notifiche
   // (così quando verranno configurate, l'arretrato recente verrà comunque inviato).
   if (!isPushConfigured()) {
-    return NextResponse.json({ ok: true, skipped: 'VAPID non configurato', sent: 0 });
+    // R28-006 — Senza chiavi il giro non manda niente: non è un battito. «Giro non avvenuto» (come il fermo),
+    // così withCronAuth non lo scrive e il semaforo non mostra vivo un lavoro che non lavora.
+    return segnaGiroNonFatto(NextResponse.json({ ok: true, skipped: 'VAPID non configurato', sent: 0 }), 'fermo');
   }
 
   // 27/8/2026 (R009) — IL CLIENT AMMINISTRATIVO SI PRENDE DA UN POSTO SOLO.
