@@ -19,9 +19,15 @@ export const runtime = 'nodejs';
  *
  * Per i Venditori con P.IVA, fa anche un controllo VIES sulla partita.
  *
- * Se il provider risponde APPROVED subito (mock), il profilo passa a
- * kyc_provider_status=APPROVED. Se PENDING, resta in attesa del webhook
- * provider che chiamera' /api/kyc/webhook.
+ * Se il provider risponde APPROVED subito (mock, solo fuori produzione), il
+ * profilo passa a kyc_provider_status=APPROVED. Se PENDING, resta in attesa.
+ *
+ * 16/11/2026 (R29-019) — Qui c'era scritto che il PENDING lo avrebbe chiuso il
+ * webhook del fornitore su /api/kyc/webhook: quella rotta NON esiste, e oggi
+ * nessuna parte del sistema chiude da sola questo stato. In produzione, senza
+ * Onfido, il fornitore è la revisione manuale (id «manual_…»): la decisione la
+ * prende una persona, e il sorvegliante (operational-alerts, punto 4) avvisa
+ * l'amministratore dopo 48 ore, per i negozi e per i fattorini.
  */
 // Rate limit: 5 check / ora — costo Onfido ~€1.5 a check, anti-abuse
 export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {

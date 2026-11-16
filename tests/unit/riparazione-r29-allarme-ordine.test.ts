@@ -384,3 +384,50 @@ describe('R29-004 — due giri del sorvegliante partiti insieme suonano una volt
     expect(campanelle()).toHaveLength(1);
   });
 });
+
+/**
+ * R29-019 — Il fattorino che invia la verifica d'identità legge «KYC inviato, verifica in corso», e
+ * col fornitore della revisione manuale lo stato resta PENDING finché una persona non decide:
+ * nessuna parte del sistema lo chiude da sola. Il sorvegliante avvisava solo per i negozi
+ * (`.eq('role', 'seller')`): per il fattorino l'attesa era infinita e nessuno lo sapeva.
+ * Dati finti: nessuna persona vera.
+ */
+describe('R29-019 — la verifica d identita del fattorino ferma da 48 ore avvisa l amministratore', () => {
+  const FATTORINO = '29292929-bbbb-4bbb-8bbb-000000000019';
+  const NEGOZIO = '29292929-cccc-4ccc-8ccc-000000000019';
+  const oreFa = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+
+  it('fattorino in attesa da tre giorni: allarme KYC con il suo nome, come per il negozio', async () => {
+    db.profiles = [
+      { id: 'admin-1', role: 'admin' },
+      { id: FATTORINO, role: 'rider', full_name: 'Fattorino di prova', kyc_provider_status: 'PENDING', kyc_provider_checked_at: oreFa(72) },
+      { id: NEGOZIO, role: 'seller', store_name: 'Bottega di prova', kyc_provider_status: 'PENDING', kyc_provider_checked_at: oreFa(72) },
+    ];
+    const { corpo } = await giro();
+    const kyc = (corpo.details ?? []).filter((d) => d.type === 'KYC_PENDING_TOO_LONG');
+    expect(kyc.map((d) => d.key).sort(), 'la verifica del fattorino ferma da 72 ore non avvisa nessuno').toEqual(
+      [`KYC_PENDING_TOO_LONG|${FATTORINO}`, `KYC_PENDING_TOO_LONG|${NEGOZIO}`].sort(),
+    );
+    expect(kyc.find((d) => d.key.endsWith(FATTORINO))?.detail).toMatch(/^Fattorino Fattorino di prova /);
+    expect(kyc.find((d) => d.key.endsWith(NEGOZIO))?.detail).toMatch(/^Seller Bottega di prova /);
+  });
+
+  it('una verifica inviata da un giorno, o già decisa, non suona', async () => {
+    db.profiles = [
+      { id: 'admin-1', role: 'admin' },
+      { id: FATTORINO, role: 'rider', full_name: 'Fattorino di prova', kyc_provider_status: 'PENDING', kyc_provider_checked_at: oreFa(24) },
+      { id: NEGOZIO, role: 'rider', full_name: 'Altro fattorino', kyc_provider_status: 'APPROVED', kyc_provider_checked_at: oreFa(72) },
+    ];
+    const { corpo } = await giro();
+    expect((corpo.details ?? []).filter((d) => d.type === 'KYC_PENDING_TOO_LONG')).toEqual([]);
+  });
+
+  it('un cliente non ha verifiche d identita da sorvegliare', async () => {
+    db.profiles = [
+      { id: 'admin-1', role: 'admin' },
+      { id: FATTORINO, role: 'buyer', kyc_provider_status: 'PENDING', kyc_provider_checked_at: oreFa(72) },
+    ];
+    const { corpo } = await giro();
+    expect((corpo.details ?? []).filter((d) => d.type === 'KYC_PENDING_TOO_LONG')).toEqual([]);
+  });
+});

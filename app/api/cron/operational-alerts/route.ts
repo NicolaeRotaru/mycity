@@ -195,24 +195,30 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     });
   }
 
-  // 4) Seller con KYC pending da piu' di 48h
+  // 4) Negozi e fattorini con KYC pending da piu' di 48h
+  // R29-019 — Si guardavano solo i negozi (`.eq('role', 'seller')`). La verifica del fattorino parte
+  // da /rider/onboarding (/api/kyc/start-check) e, col fornitore della revisione manuale, resta
+  // PENDING finché una persona non decide: nessuna parte del sistema la chiude da sola (il webhook
+  // del fornitore non esiste). Il fattorino leggeva «verifica in corso» per sempre e nessuno lo
+  // sapeva: adesso dopo 48 ore l'amministratore è avvisato anche per lui.
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
   const { data: kycPending, error: err_kycPending } = await admin
     .from('profiles')
-    .select('id, store_name, kyc_provider_checked_at')
-    .eq('role', 'seller')
+    .select('id, role, store_name, full_name, kyc_provider_checked_at')
+    .in('role', ['seller', 'rider'])
     .eq('kyc_provider_status', 'PENDING')
     .lt('kyc_provider_checked_at', twoDaysAgo)
     .limit(20);
   if (err_kycPending) controlliSaltati.push('verifiche identita in attesa');
 
   for (const p of kycPending ?? []) {
-    const id = (p as { id: string }).id;
+    const r = p as { id: string; role?: string | null; store_name?: string | null; full_name?: string | null };
+    const chi = r.role === 'rider' ? `Fattorino ${r.full_name ?? 'unknown'}` : `Seller ${r.store_name ?? 'unknown'}`;
     alerts.push({
-      key: `KYC_PENDING_TOO_LONG|${id}`,
+      key: `KYC_PENDING_TOO_LONG|${r.id}`,
       type: 'KYC_PENDING_TOO_LONG',
-      detail: `Seller ${(p as { store_name?: string }).store_name ?? 'unknown'} in KYC PENDING da >48h`,
-      url: `/admin/users?id=${id}`,
+      detail: `${chi} in KYC PENDING da >48h`,
+      url: `/admin/users?id=${r.id}`,
     });
   }
 
