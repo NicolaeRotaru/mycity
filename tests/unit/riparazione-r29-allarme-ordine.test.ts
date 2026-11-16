@@ -286,6 +286,8 @@ describe('R29-002 — il sorvegliante avvisa di un ordine non accettato dopo 5 m
     const chiavi = chiaviDelGiro(corpo);
     expect(chiavi).toContain(DA_ACCETTARE);
     expect(chiavi).not.toContain(`ORDER_STUCK_NEW|${ORDINE}`);
+    // Il messaggio dice la fascia: chi legge sa che è un ordine per domani (come chiedeva R14).
+    expect(emailHtml()).toContain('Domani');
   });
 
   it('una volta sola per ordine: i giri dopo non lo ripetono, nemmeno quando l attesa di sei ore scade', async () => {
