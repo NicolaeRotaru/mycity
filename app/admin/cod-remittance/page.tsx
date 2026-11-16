@@ -38,7 +38,7 @@ import { incassoDaDichiarare } from '@/lib/rider/incasso-alla-consegna';
 type Row = ColonneSalvo<
   'orders',
   | 'id' | 'rider_id' | 'delivered_at' | 'total_price' | 'shipping_cost' | 'rider_fee_cents' | 'pickup_in_store'
-  | 'payment_method' | 'delivery_status' | 'cash_confirmed_at',
+  | 'payment_method' | 'delivery_status' | 'cash_confirmed_at' | 'payout_status',
   {
     rider_id: string;
     delivered_at: string;
@@ -69,6 +69,8 @@ type Group = {
   senzaIncasso: Row[];
   /** 15/11/2026 (R26-019) — Gli ordini mostrati: la conferma rilascia solo questi. */
   orderIds: string[];
+  /** 16/11/2026 (R29-011) — Di cui rimborsati per intero: i contanti tornano, il negozio non si paga. */
+  rimborsati: number;
 };
 
 /**
@@ -77,6 +79,31 @@ type Group = {
  * sempre, e i totali sembravano completi).
  */
 const TETTO_RIMESSE = 1000;
+const COLONNE_RIMESSE =
+  'id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, payout_status';
+
+/**
+ * 16/11/2026 (R29-011) — I CONTANTI CHE IL FATTORINO HA IN MANO RESTANO DA CHIEDERE.
+ *
+ * Un rimborso pieno su un ordine in contanti consegnato scrive `payout_status = 'REFUNDED'` (il
+ * negozio non va pagato: lib/stripe/payout.ts) anche se la rimessa di quel giorno non è ancora
+ * confermata. La pagina leggeva solo AWAITING_REMITTANCE: da quel momento i contanti dell'ordine,
+ * che il fattorino ha ancora in tasca, sparivano da quelli da chiedere (la quadratura del giorno,
+ * lib/cassa/quadratura.ts, invece li conta). Adesso un ordine rimborsato resta nel gruppo del suo
+ * fattorino·giorno finché la rimessa di quel giorno non è confermata DOPO l'incasso. La conferma non
+ * lo rende pagabile: la funzione del database rilascia solo gli AWAITING_REMITTANCE, e per lui scrive
+ * soltanto che i contanti sono rientrati (`cod_reconciliations.remitted_at`).
+ */
+type Rimessa = { rider_id: string; for_date: string; remitted_at: string | null };
+
+function rimborsatoConIContantiInMano(o: Row, rimesse: Rimessa[]): boolean {
+  if (o.payout_status !== 'REFUNDED' || !o.rider_id || !o.delivered_at) return false;
+  const giorno = giornoLocale(new Date(o.delivered_at));
+  const incassatoIl = new Date(o.cash_confirmed_at ?? o.delivered_at).getTime();
+  return !rimesse.some(
+    (r) => r.rider_id === o.rider_id && r.for_date === giorno && !!r.remitted_at && new Date(r.remitted_at).getTime() >= incassatoIl,
+  );
+}
 
 /** Da «12,50» (o «12.50») ai centesimi; null se non è un importo. */
 function centesimiDa(testo: string): number | null {
@@ -98,10 +125,10 @@ export default function AdminCodRemittancePage() {
   // Adesso il totale lo conta il database (count exact), come bonifici e prodotti.
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.codRemittances,
-    queryFn: async (): Promise<Row[] & { totale?: number }> => {
+    queryFn: async (): Promise<Row[] & { totale?: number; rimborsati?: Row[] }> => {
       const { data, error, count } = await supabase
         .from('orders')
-        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)', { count: 'exact' })
+        .select(`${COLONNE_RIMESSE}, rider:profiles!orders_rider_id_fkey(full_name)`, { count: 'exact' })
         .eq('payment_method', 'cod')
         .eq('delivery_status', 'DELIVERED')
         .eq('payout_status', 'AWAITING_REMITTANCE')
@@ -111,15 +138,42 @@ export default function AdminCodRemittancePage() {
       // Una lettura caduta non e' «nessuna rimessa»: l'errore deve arrivare alla pagina.
       if (error) throw error;
       const righe = (data ?? []) as unknown as Row[];
-      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
+      // R29-011 — i rimborsati per intero con i contanti ancora in mano al fattorino (vedi sopra).
+      const { data: datiRimborsati, error: errRimborsati } = await supabase
+        .from('orders')
+        .select(`${COLONNE_RIMESSE}, rider:profiles!orders_rider_id_fkey(full_name)`)
+        .eq('payment_method', 'cod')
+        .eq('delivery_status', 'DELIVERED')
+        .eq('payout_status', 'REFUNDED')
+        .not('rider_id', 'is', null)
+        .order('delivered_at', { ascending: false })
+        .limit(TETTO_RIMESSE);
+      if (errRimborsati) throw errRimborsati;
+      const letti = ((datiRimborsati ?? []) as unknown as Row[]).filter((o) => o.payout_status === 'REFUNDED');
+      let rimesse: Rimessa[] = [];
+      if (letti.length > 0) {
+        const { data: datiRimesse, error: errRimesse } = await supabase
+          .from('cod_reconciliations')
+          .select('rider_id, for_date, remitted_at')
+          .in('rider_id', [...new Set(letti.map((o) => o.rider_id))])
+          .in('for_date', [...new Set(letti.map((o) => giornoLocale(new Date(o.delivered_at))))])
+          .not('remitted_at', 'is', null);
+        if (errRimesse) throw errRimesse;
+        rimesse = (datiRimesse ?? []) as Rimessa[];
+      }
+      return Object.assign(righe, {
+        totale: typeof count === 'number' ? count : righe.length,
+        rimborsati: letti.filter((o) => rimborsatoConIContantiInMano(o, rimesse)),
+      });
     },
   });
 
   const totaleRighe = (rows as Row[] & { totale?: number }).totale ?? rows.length;
   const tagliato = Math.max(totaleRighe, rows.length) > TETTO_RIMESSE;
+  const rimborsati = (rows as Row[] & { rimborsati?: Row[] }).rimborsati;
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
-    for (const o of rows.slice(0, TETTO_RIMESSE)) {
+    for (const o of [...rows.slice(0, TETTO_RIMESSE), ...(rimborsati ?? [])]) {
       if (!o.delivered_at || !o.rider_id) continue;
       // 22/8/2026 — era `toISOString()`, cioè il giorno di Greenwich, mentre
       // il fattorino quadra sul giorno di Piacenza. Nelle sere d'estate le
@@ -136,15 +190,17 @@ export default function AdminCodRemittancePage() {
         toRemitCents: 0,
         senzaIncasso: [],
         orderIds: [],
+        rimborsati: 0,
       };
       g.orders += 1;
       g.orderIds.push(o.id);
+      if (o.payout_status === 'REFUNDED') g.rimborsati += 1;
       g.toRemitCents += Math.max(0, cents);
       if (incassoDaDichiarare(o)) g.senzaIncasso.push(o);
       map.set(key, g);
     }
     return Array.from(map.values()).sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [rows]);
+  }, [rows, rimborsati]);
 
   const confirm = useMutation({
     mutationFn: async ({ riderId, date, contatiCents, attesiCents, orderIds, nota: notaInviata }: {
@@ -232,6 +288,11 @@ export default function AdminCodRemittancePage() {
                   <p className="text-xs text-ink-500 mt-0.5">
                     {new Date(g.date).toLocaleDateString('it-IT')} · {g.orders} ordini COD
                   </p>
+                  {g.rimborsati > 0 && (
+                    <p className="text-xs text-ink-500">
+                      di cui {g.rimborsati} rimborsati per intero: i contanti vanno chiesti lo stesso, al negozio non si paga niente
+                    </p>
+                  )}
                   <p className="text-lg font-bold text-ink-900 mt-1">{formatPrice(g.toRemitCents / 100)}</p>
                 </div>
                 {g.date === giornoAlConfine || (giornoAlConfine !== null && g.date < giornoAlConfine) ? (
