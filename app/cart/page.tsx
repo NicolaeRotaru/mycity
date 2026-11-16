@@ -159,6 +159,13 @@ export default function CartPage() {
    * dipendere dalla distanza, carrello e cassa dicono ancora lo stesso numero senza toccare qui.
    */
   const [dovEIlNegozio, setDovEIlNegozio] = useState<Record<string, { lat: number | null; lng: number | null }>>({});
+  /**
+   * 16/11/2026 (R29-007) — Il negoziante col negozio non ancora approvato, nel carrello coi suoi
+   * prodotti, vedeva «Negozio» al posto della sua insegna: la vista pubblica mostra solo i negozi
+   * approvati. Il nome si legge dalla riga di `profiles` che può già leggere (le regole fanno tornare
+   * solo la sua), come in cassa e nella lista condivisa (R19-006).
+   */
+  const [insegnaPropria, setInsegnaPropria] = useState<Record<string, string>>({});
   const [doveConsegniamo, setDoveConsegniamo] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
 
   /**
@@ -342,6 +349,19 @@ export default function CartPage() {
         mappa[`variante::${v.id}`] = v.stock;
       }
       setDisponibilita(mappa);
+      // R29-007 — l'insegna del proprio negozio non ancora approvato (vedi insegnaPropria).
+      const senzaVista = idNegozi.filter((id) => !negoziRes.has(id));
+      if (senzaVista.length > 0) {
+        try {
+          const { data: proprie } = await supabase.from('profiles').select('id, store_name').in('id', senzaVista);
+          if (!vivo) return;
+          const nomi: Record<string, string> = {};
+          for (const r of (proprie ?? []) as Array<{ id: string; store_name: string | null }>) {
+            if (r.store_name) nomi[r.id] = r.store_name;
+          }
+          setInsegnaPropria(nomi);
+        } catch { /* resta «Negozio»: come prima */ }
+      }
     })();
     return () => { vivo = false; };
   }, [chiaviCarrello]);
@@ -484,7 +504,7 @@ export default function CartPage() {
   for (const it of righe) {
     const key = it.sellerId ?? it.storeName ?? '__nostore__';
     if (!groupsByStore.has(key)) {
-      groupsByStore.set(key, { storeName: it.storeName ?? 'Negozio', items: [] });
+      groupsByStore.set(key, { storeName: it.storeName ?? (it.sellerId ? insegnaPropria[it.sellerId] : undefined) ?? 'Negozio', items: [] });
       groupOrder.push(key);
     }
     groupsByStore.get(key)!.items.push(it);
