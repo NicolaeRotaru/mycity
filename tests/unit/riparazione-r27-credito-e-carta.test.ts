@@ -40,6 +40,7 @@ const sendEmail = vi.fn(async (_e: { text: string }) => ({ ok: true }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: (e: { text: string }) => sendEmail(e) }));
 let db: ReturnType<typeof finto>;
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
+vi.mock('@/lib/api/middleware', () => ({ withCronAuth: (h: unknown) => h }));
 
 import { annullaERimborsa } from '@/lib/ordini/annulla';
 import { RimborsoNonRitentabile } from '@/lib/stripe/payout';
@@ -123,5 +124,84 @@ describe('R27-019 — il credito copre quasi tutto l ordine annullato', () => {
     expect(riga('frutta')).toMatchObject({ total_price: 13.5, wallet_applied_cents: 150, gross_total_cents: 1500, delivery_fee_cents: 300 });
     expect(riga('pane')).toMatchObject({ total_price: 0, wallet_applied_cents: 1600, gross_total_cents: 1600 });
     expect(1750 + 50 + 1300 - crediti[0].p_cents).toBe(1500);
+  });
+});
+
+/**
+ * 16/11/2026 (R27-018 correzione) — QUANTO SPOSTARE PARTE DALLA CARTA NON ANCORA RESA.
+ *
+ * Pane 15 € e frutta 12 € con la veloce, carrello spostato dal freno (1 € già reso sulla carta del
+ * pane, la consegna scritta resta 4 €): il pane 19 € pagato in parte col credito. Il forno rifiuta:
+ * il cliente deve pagare 15 € in tutto (la frutta da sola), quindi gli tornano 17 € fra l'euro del
+ * freno, la carta e il credito. Col totale intero al posto del totale meno il già reso, l'euro del
+ * freno contava due volte: tornavano 17 € di credito invece di 16, e MyCity perdeva 1 €.
+ */
+describe('R27-018 correzione — il credito spostato conta la carta già resa', () => {
+  function spostatoDalFreno(cartaCents: number) {
+    const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card', { veloce: true });
+    expect(ordini.map((o) => [o.delivery_fee_cents, o.gross_total_cents])).toEqual([[400, 1900], [100, 1300]]);
+    for (const o of ordini) o.delivery_slot = 'Oggi · 18:00–20:00';
+    Object.assign(ordini[0], {
+      refunded_amount_cents: 100, payment_status: 'PARTIALLY_REFUNDED', wallet_applied_cents: 1900 - cartaCents, total_price: cartaCents / 100,
+    });
+    return ordini;
+  }
+
+  it.each([
+    [200, 0, 1600],
+    [100, 0, 1600],
+    [150, 0, 1600],
+    [250, 0, 1600],
+    [300, 0, 1600],
+    [400, 100, 1500],
+  ])('parte carta del pane %i centesimi: sulla carta tornano %i, di credito %i, e il cliente paga 15 € in tutto', async (cartaCents, cartaResa, creditoReso) => {
+    conIlDatabase(spostatoDalFreno(cartaCents));
+    const esito = await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'Rifiutato dal negozio' });
+    expect(esito.ok).toBe(true);
+    expect(resi()).toEqual(cartaResa > 0 ? [['pane', cartaResa]] : []);
+    expect(crediti).toEqual([{ p_cents: creditoReso, p_ref: 'pane' }]);
+    expect(riga('pane')).toMatchObject({ delivery_status: 'CANCELED' });
+    const frutta = riga('frutta');
+    expect(frutta).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, gross_total_cents: 1500 });
+    expect(Math.round(Number(frutta.total_price) * 100) + Number(frutta.wallet_applied_cents)).toBe(1500);
+    // Sulla carta del pane non resta niente: il suo totale è il già reso.
+    expect(Math.round(Number(riga('pane').total_price) * 100)).toBe(Number(riga('pane').refunded_amount_cents));
+    // Sull'addebito resta la frutta sulla carta: pagato con la carta meno l'euro del freno e il rimborso.
+    expect(cartaCents + 1300 - 100 - cartaResa).toBe(Math.round(Number(frutta.total_price) * 100));
+    // Il cliente: 19 + 13 = 32 € pagati, tornano 1 € del freno, la carta e il credito → 15 €.
+    expect(3200 - 100 - cartaResa - creditoReso).toBe(1500);
+  });
+});
+
+/**
+ * 16/11/2026 (R27-018 correzione) — NEL GIRO DEGLI SCADUTI IL CREDITO SPOSTATO NON SI PERDE.
+ *
+ * Pane 15 € (18 € tutto a credito), frutta 12 € (13 € con la carta), carne 11 € (12 € con la carta).
+ * Nessun negozio conferma e il giro li annulla tutti e tre. Prima il pane, con 0 da rendere sulla
+ * carta, finiva «da chiudere a mano» col credito mai reso; poi la frutta rendeva il credito letto a
+ * inizio giro (0) e i 2 € passati dal pane restavano sulla frutta annullata.
+ */
+describe('R27-018 correzione — il carrello col credito scade tutto nello stesso giro', () => {
+  const scaduto = (s: number) => `2026-10-20T08:00:0${s}Z`;
+
+  it('tornano tutti i 18 € di credito, la carta rende 11 + 14 = 25 €, nessun ordine annullato tiene credito non reso', async () => {
+    const ordini = carrello(['pane', 'frutta', 'carne'], [1500, 1200, 1100], 'card', { creati: [scaduto(0), scaduto(1), scaduto(2)] });
+    expect(ordini.map((o) => o.gross_total_cents)).toEqual([1800, 1300, 1200]);
+    Object.assign(ordini[0], { wallet_applied_cents: 1800, total_price: 0 });
+    conIlDatabase(ordini);
+    const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
+    const j = await (await (POST as unknown as () => Promise<Response>)()).json();
+    expect(j).toMatchObject({ canceled: 3, daChiudereAMano: 0, failed: 0 });
+    expect(resi()).toEqual([['frutta', 1100], ['carne', 1400]]);
+    expect(crediti.reduce((t, c) => t + c.p_cents, 0)).toBe(1800);
+    for (const id of ['pane', 'frutta', 'carne']) {
+      const o = riga(id);
+      expect(o.delivery_status).toBe('CANCELED');
+      const reso = crediti.filter((c) => c.p_ref === id).reduce((t, c) => t + c.p_cents, 0);
+      expect(reso).toBe(Number(o.wallet_applied_cents ?? 0));
+    }
+    expect(crediti).toEqual([{ p_cents: 1600, p_ref: 'pane' }, { p_cents: 200, p_ref: 'frutta' }]);
+    // Il cliente: 18 € di credito e 25 € di carta, tutto tornato.
+    expect(resi().reduce((t, r) => t + Number(r[1]), 0)).toBe(2500);
   });
 });

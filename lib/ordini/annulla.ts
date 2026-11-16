@@ -982,10 +982,15 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
       payment_status: ordine.payment_status ?? null,
       stripe_payment_intent: ordine.stripe_payment_intent ?? null,
     });
+    // 16/11/2026 (R27-018 correzione) — La carta che può cedere è quella non ancora resa: il totale
+    // meno `refunded_amount_cents`. Col totale intero l'euro già reso dal freno contava due volte:
+    // pane 17 € di credito e 2 € di carta, 1 € già reso → tornavano 17 € di credito invece di 16, e
+    // MyCity perdeva 1 €. Il credito che passa ai rimasti esce dall'ordine che se ne va anche nel
+    // totale (`verso`, qui sotto): il suo totale nuovo è il già reso, e sulla carta non resta niente.
     if (pagatoConLaCarta) {
       let resta = Math.min(
         Number(ordine.wallet_applied_cents ?? 0),
-        Math.max(0, -(centesimi(ordine.total_price) + conto.annullato.deltaCents)),
+        Math.max(0, -(centesimi(ordine.total_price) - Number(ordine.refunded_amount_cents ?? 0) + conto.annullato.deltaCents)),
       );
       let spostato = 0;
       for (const riga of conto.rimasti) {
@@ -1004,7 +1009,7 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
         delivery_fee_cents: riga.deliveryFeeCents,
         rider_fee_cents: riga.riderFeeCents,
         gross_total_cents: da.gross_total_cents + riga.deltaCents,
-        total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents - Math.max(0, credito)) / 100,
+        total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents - credito) / 100,
         ...(credito !== 0 ? { wallet_applied_cents: Number(r.wallet_applied_cents ?? 0) + credito } : {}),
       };
     };

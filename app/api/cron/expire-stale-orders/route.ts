@@ -261,28 +261,49 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // 5/11/2026 — Senza il giro rifatto il totale si rilegge adesso: un altro ordine dello stesso
     // carrello scaduto poco prima in questo giro può averlo già cambiato (13 € → 15 €).
     let totaleCents = Math.round(Number(o.total_price) * 100);
-    if (!giro && isCardPaid) {
-      try {
-        const { data: righe, error: errFresco } = await admin.from('orders').select('id, total_price').eq('id', o.id).limit(1);
-        const fresco = ((righe ?? []) as Array<{ id: string; total_price?: unknown }>).find((r) => r.id === o.id);
-        if (errFresco) throw new Error(errFresco.message);
-        if (fresco && fresco.total_price != null && Number.isFinite(Number(fresco.total_price))) {
-          totaleCents = Math.round(Number(fresco.total_price) * 100);
-        }
-      } catch (e) {
-        logger.error('[cron] expire-stale-orders: totale non riletto, si rende quello letto a inizio giro', {
-          id: o.id, message: e instanceof Error ? e.message : String(e),
-        });
+    // 16/11/2026 (R27-018 correzione) — IL CREDITO SI RENDE COM'È SCRITTO ADESSO, DOPO IL GIRO. La
+    // lettura di inizio giro non sa il credito che un altro ordine dello stesso carrello, scaduto poco
+    // prima, ha passato a questo: pane 18 € di credito, frutta 13 € e carne 12 € con la carta, scadono
+    // tutti → 2 € di credito passano dal pane alla frutta, e annullando la frutta non tornavano più.
+    // Riletto dopo il giro, il credito spostato da questo ordine è già fuori: niente da togliere.
+    let creditoCents = Math.max(0, Number(o.wallet_applied_cents ?? 0) - (giro?.creditoTrattenutoCents ?? 0));
+    let giaResoCents = 0;
+    try {
+      const { data: righe, error: errFresco } = await admin
+        .from('orders')
+        .select('id, total_price, wallet_applied_cents, refunded_amount_cents')
+        .eq('id', o.id)
+        .limit(1);
+      const fresco = ((righe ?? []) as Array<{ id: string; total_price?: unknown; wallet_applied_cents?: unknown; refunded_amount_cents?: unknown }>)
+        .find((r) => r.id === o.id);
+      if (errFresco) throw new Error(errFresco.message);
+      if (!giro && isCardPaid && fresco && fresco.total_price != null && Number.isFinite(Number(fresco.total_price))) {
+        totaleCents = Math.round(Number(fresco.total_price) * 100);
       }
+      if (fresco && fresco.wallet_applied_cents != null && Number.isFinite(Number(fresco.wallet_applied_cents))) {
+        creditoCents = Math.max(0, Number(fresco.wallet_applied_cents));
+      }
+      if (fresco && Number.isFinite(Number(fresco.refunded_amount_cents ?? 0))) giaResoCents = Number(fresco.refunded_amount_cents ?? 0);
+    } catch (e) {
+      logger.error('[cron] expire-stale-orders: totale e credito non riletti, si usano quelli letti a inizio giro', {
+        id: o.id, message: e instanceof Error ? e.message : String(e),
+      });
     }
 
+    // 16/11/2026 (R27-018 correzione) — Con la carta che non ha più niente da rendere (il credito
+    // copriva l'ordine e la differenza della consegna è passata ai rimasti) niente rimborso: il
+    // refundOrder vero rifiuta 0, e l'ordine finiva «da chiudere a mano» col credito mai reso. Si
+    // chiude come un contrassegno: merce a scaffale, credito e codice. Col carrello rifatto si rende
+    // il totale nuovo meno il già reso, come in `annullaERimborsa`; senza, tutto resta com'era.
+    const daRendereCents = giro ? giro.totaleCents - (giro.avviso ? giaResoCents : 0) : totaleCents;
+    const rimborsoSullaCarta = isCardPaid && (!giro?.avviso || daRendereCents > 0);
     const nonTornato: string[] = [];
     try {
-      if (isCardPaid) {
+      if (rimborsoSullaCarta) {
         try {
           await refundOrder({
             orderId: o.id,
-            amountCents: giro ? giro.totaleCents : totaleCents,
+            amountCents: daRendereCents,
             reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
             notifyBuyer: true,
             // L'ordine l'ha annullato questo giro, qui sopra, e la merce non
@@ -373,10 +394,9 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       // 15/11/2026 (R27-002) — Con la regola di `annullaERimborsa`: tre tentativi invece di uno, e meno
       // il credito che il carrello rifatto ha passato agli ordini rimasti (R27-018). L'avviso agli
       // amministratori resta quello di qui sotto, uno solo con la merce.
-      const trattenutoCents = giro?.creditoTrattenutoCents ?? 0;
-      const creditoNonTornatoCents = await restituisciIlCreditoDellAnnullo(admin, o, {
+      // 16/11/2026 (R27-018 correzione) — Il credito riletto dopo il giro (`creditoCents`, sopra).
+      const creditoNonTornatoCents = await restituisciIlCreditoDellAnnullo(admin, { ...o, wallet_applied_cents: creditoCents }, {
         motivo: 'order_auto_canceled',
-        trattenutoCents,
         avvisaGliAmministratori: false,
       });
       const creditoTornato = creditoNonTornatoCents === 0;
@@ -413,7 +433,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         category: 'order',
         user_id: o.user_id,
         title: 'Ordine annullato',
-        body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: il negozio non lo ha accettato in tempo.${isCardPaid ? ' Il rimborso è in corso.' : ''}`,
+        body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: il negozio non lo ha accettato in tempo.${rimborsoSullaCarta ? ' Il rimborso è in corso.' : ''}`,
         link: '/orders',
       }, { dove: 'expire-stale-orders', ordine: o.id });
       // 5/11/2026 — Anche il negozio lo sa: l'ordine sparisce dalla sua lista «da fare».
@@ -440,10 +460,11 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       daAvvisare.push({
         ordineId: o.id,
         userId: o.user_id,
-        carta: isCardPaid,
+        // R27-018 correzione — «Rimborso emesso» parte solo col rimborso: senza, l'email di annullo parte sempre.
+        carta: rimborsoSullaCarta,
         come,
         // 5/11/2026 — Se lo storno del credito è fallito l'email non dice «credito restituito».
-        perLEmail: { ...o, wallet_applied_cents: creditoTornato ? Math.max(0, Number(o.wallet_applied_cents ?? 0) - trattenutoCents) : 0 },
+        perLEmail: { ...o, wallet_applied_cents: creditoTornato ? creditoCents : 0 },
         avviso: giro?.avviso ?? null,
       });
       annullatiNelGiro.add(o.id);
