@@ -20,6 +20,8 @@ const db: Record<string, Riga[]> = {};
 const rpc: Array<{ nome: string; args: unknown }> = [];
 let carica: Partial<Stripe.Charge> | string = 'ch_1';
 let creaRimborso: (...a: unknown[]) => Promise<unknown> = async () => ({ id: 're_x' });
+/** I rimborsi che Stripe elenca per il pagamento (`refunds.list`). */
+let rimborsiSuStripe: Array<Record<string, unknown>> = [];
 
 function tabella(nome: string): Riga[] {
   db[nome] ??= [];
@@ -95,7 +97,7 @@ vi.mock('@/lib/stripe/client', async (originale) => ({
   ...((await originale()) as Record<string, unknown>),
   getStripe: () => ({
     paymentIntents: { retrieve: async () => ({ id: 'pi_1', latest_charge: carica }) },
-    refunds: { list: async () => ({ data: [], has_more: false }), create: async (...a: unknown[]) => creaRimborso(...a), update: async (id: string) => ({ id }) },
+    refunds: { list: async () => ({ data: rimborsiSuStripe, has_more: false }), create: async (...a: unknown[]) => creaRimborso(...a), update: async (id: string) => ({ id }) },
   }),
 }));
 
@@ -130,6 +132,7 @@ beforeEach(() => {
   tabella('profiles').push({ id: 'admin-1', role: 'admin' });
   carica = 'ch_1';
   creaRimborso = async () => ({ id: 're_x' });
+  rimborsiSuStripe = [];
 });
 afterEach(() => vi.useRealTimers());
 
@@ -272,30 +275,32 @@ describe('R25-001 · C1 · ordini già nati, carrello scaduto, richiesta di info
     await expect(handleCheckoutCompleted(sessione)).rejects.toThrow('rete giù');
   });
 
-  it('V1-B A nato in un tentativo di prima, il cruscotto rende 30 € prima che B nasca: si ripete, e al ritentativo i bonifici di A e B si fermano', async () => {
+  // C2 — Questi due cambiano di proposito: con A già nato il rimborso non si ripete più (un carrello pagato a metà resta
+  // PENDING per sempre, V1b-1). A si ferma subito, e B, che nasce dopo, nasce col bonifico fermo: Stripe non ripete un 200.
+  it('V1-B A nato in un tentativo di prima, il cruscotto rende 30 € prima che B nasca: A si ferma subito, B nasce col bonifico fermo', async () => {
     const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
     tabella('orders').push(ordineA({}));
-    const r = rimborsoDi50(3000, [{ id: 're_cruscotto', amount: 3000, status: 'succeeded', metadata: {}, created: 1 }]);
-    await expect(handleChargeRefunded(r), 'il rimborso con il carrello aperto usciva 200 e si perdeva').rejects.toThrow(/pc_1/);
+    rimborsiSuStripe = [{ id: 're_cruscotto', amount: 3000, status: 'succeeded', metadata: {}, created: 1 }];
+    await expect(handleChargeRefunded(rimborsoDi50(3000, rimborsiSuStripe)), 'il rimborso con il carrello aperto si perdeva').resolves.toBeUndefined();
+    expect(fermi()).toEqual(['negozio-a']);
     carica = { id: 'ch_1', amount: 5000, amount_refunded: 3000, refunded: false, disputed: false };
     await handleCheckoutCompleted(sessione);
     expect(statoDelCarrello()).toBe('COMPLETED');
-    await handleChargeRefunded(r);
-    expect(fermi().sort(), 'B nato col netto pieno e nessun bonifico fermo').toEqual(['negozio-a', 'negozio-b']);
+    expect(fermi().sort(), 'B nato col netto pieno e il suo bonifico non fermo').toEqual(['negozio-a', 'negozio-b']);
+    expect(tabella('orders').find((o) => o.seller_id === 'negozio-b')).toMatchObject({ payment_status: 'PAID', payout_status: 'HELD' });
     expect(avvisiAgliAdmin().map((n) => n.title)).toContain('⚠️ Rimborso dal cruscotto da dividere fra i negozi');
   });
 
-  it('V1-B2 il sito rende A (20 €), poi il cruscotto 10 € prima che B nasca: al ritentativo B è fermo e il rimborso è da dividere', async () => {
+  it('V1-B2 il sito rende A (20 €), poi il cruscotto 10 € prima che B nasca: A si ferma, B nasce fermo, e il rimborso da dividere è di 10 €', async () => {
     const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
     tabella('orders').push(ordineA({ payment_status: 'REFUNDED', delivery_status: 'CANCELED', payout_status: 'REFUNDED', refunded_amount_cents: 2000, seller_payout_reversed_cents: 1800, stripe_refund_id: 're_sito' }));
-    const r = rimborsoDi50(3000, [
+    rimborsiSuStripe = [
       { id: 're_cruscotto', amount: 1000, status: 'succeeded', metadata: {}, created: 2 },
       { id: 're_sito', amount: 2000, status: 'succeeded', metadata: { order_id: 'ordine-a' }, created: 1 },
-    ]);
-    await expect(handleChargeRefunded(r)).rejects.toThrow(/pc_1/);
+    ];
+    await expect(handleChargeRefunded(rimborsoDi50(3000, rimborsiSuStripe))).resolves.toBeUndefined();
     carica = { id: 'ch_1', amount: 5000, amount_refunded: 3000, refunded: false, disputed: false };
     await handleCheckoutCompleted(sessione);
-    await handleChargeRefunded(r);
     expect(fermi(), 'i 10 € dal cruscotto si perdevano e B nasceva col netto pieno').toContain('negozio-b');
     expect(avvisiAgliAdmin().find((n) => n.title === '⚠️ Rimborso dal cruscotto da dividere fra i negozi')?.body).toMatch(/10,00/);
   });
@@ -328,5 +333,89 @@ describe('R25-001 · C1 · ordini già nati, carrello scaduto, richiesta di info
     carica = { id: 'ch_1', amount: 3000, amount_refunded: 0, refunded: false, disputed: true };
     await handleCheckoutCompleted(sessione);
     expect(avvisiAgliAdmin()[0]?.body).toMatch(/richiesta di informazioni.*deciso a mano se rimborsare il cliente o far nascere l'ordine/);
+  });
+});
+
+// Giro di correzione C2 (revisore V1b): il carrello pagato a metà, il negozio solo rimasto PENDING, la corsa, la contestazione.
+describe('R25-001 · C2 · carrello a metà, corsa fra le letture, carrello scaduto contestato', () => {
+  const ordineA = (extra: Record<string, unknown> = {}) => ({
+    id: 'ordine-a', stripe_session_id: 'cs_1', seller_id: 'negozio-a', user_id: 'cliente-1', payment_status: 'PAID', delivery_status: 'NEW',
+    payout_status: 'HELD', total_price: 20, refunded_amount_cents: 0, seller_payout_cents: 1800, seller_payout_reversed_cents: 0,
+    stripe_payment_intent: 'pi_1', stripe_charge_id: 'ch_1', stripe_refund_id: null, internal_dispute_status: null, stripe_transfer_id: null, ...extra,
+  });
+  const rimborso = (totale: number, rimborsato: number) => ({
+    id: 'ch_1', payment_intent: 'pi_1', amount: totale, amount_refunded: rimborsato, refunded: rimborsato >= totale, disputed: false,
+    metadata: { pending_checkout_id: 'pc_1' }, transfer_group: 'mc_pc_1',
+    refunds: { data: [{ id: 're_cruscotto', amount: rimborsato, status: 'succeeded', metadata: {}, created: 1 }], has_more: false },
+  }) as unknown as Stripe.Charge;
+  const fermi = () => tabella('orders').filter((o) => o.internal_dispute_status === 'RIMBORSO_DA_RIPARTIRE').map((o) => o.seller_id as string);
+  const daDividere = () => avvisiAgliAdmin().find((n) => n.title === '⚠️ Rimborso dal cruscotto da dividere fra i negozi');
+  const fromOrig = finto.from;
+  afterEach(() => { finto.from = fromOrig; });
+
+  it('V1b-1 carrello pagato a metà (B non nasce mai): il cruscotto rende 10 €, A si ferma e lo sa un amministratore, senza ripetere per sempre', async () => {
+    const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
+    tabella('orders').push(ordineA());
+    // B non entra mai (un errore che si ripete uguale): il carrello resta PENDING per sempre, il giro non lo scade.
+    finto.from = ((nome: string) => {
+      const q = fromOrig(nome) as Record<string, (...a: unknown[]) => unknown>;
+      if (nome !== 'orders') return q;
+      return new Proxy(q, { get: (o, k: string) => k === 'insert'
+        ? (r: Riga) => (r.seller_id === 'negozio-b' ? { select: () => ({ single: async () => ({ data: null, error: { code: '23503', message: 'fk' } }) }) } : o.insert(r))
+        : o[k] });
+    }) as typeof finto.from;
+    for (let i = 0; i < 3; i++) await expect(handleCheckoutCompleted(sessione)).rejects.toThrow(/negozio-b/);
+    expect(statoDelCarrello()).toBe('PENDING');
+
+    await expect(handleChargeRefunded(rimborso(5000, 1000)), 'ogni consegna rispondeva 500 e il rimborso non si scriveva mai').resolves.toBeUndefined();
+    expect(fermi()).toEqual(['negozio-a']);
+    // Stripe non dice di quale negozio sono i 10 €: non si scrivono su A da solo, si dividono dal pannello.
+    expect(tabella('orders').find((o) => o.id === 'ordine-a')).toMatchObject({ refunded_amount_cents: 0, payout_status: 'HELD' });
+    expect(daDividere()?.body).toMatch(/10,00/);
+    expect(daDividere()?.body).toMatch(/carrello è ancora aperto: sono nati 1 ordini su 2 negozi/);
+  });
+
+  it('V1b-2 negozio solo, ordine già nato, carrello rimasto PENDING: il rimborso parziale si scrive sull ordine invece di ripetersi', async () => {
+    const sessione = carrello('PENDING', [gruppo('pane-quotidiano', 3000, 'pane')]);
+    tabella('orders').push(ordineA({ seller_id: 'pane-quotidiano', total_price: 30, seller_payout_cents: 2700 }));
+    carica = { id: 'ch_1', amount: 3000, amount_refunded: 0, refunded: false, disputed: true };
+    await handleCheckoutCompleted(sessione);
+    expect(statoDelCarrello()).toBe('PENDING');
+
+    await expect(handleChargeRefunded(rimborso(3000, 1000))).resolves.toBeUndefined();
+    expect(tabella('orders')[0]).toMatchObject({ payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 1000 });
+    expect(fermi()).toEqual([]);
+  });
+
+  it('V1b-3 corsa: B nasce e il carrello diventa COMPLETED mentre si lavora il rimborso: i bonifici di A e di B si fermano tutti e due', async () => {
+    const sessione = carrello('PENDING', [gruppo('negozio-a', 2000, 'a'), gruppo('negozio-b', 3000, 'b')]);
+    tabella('orders').push(ordineA());
+    // Il gestore di B ha letto la carta prima del rimborso: per lui non è rimborsata.
+    carica = { id: 'ch_1', amount: 5000, amount_refunded: 0, refunded: false, disputed: false };
+    let gara: null | (() => Promise<void>) = () => handleCheckoutCompleted(sessione);
+    // B nasce proprio mentre il gestore del rimborso legge il carrello.
+    finto.from = ((nome: string) => {
+      const q = fromOrig(nome) as Record<string, (...a: unknown[]) => unknown>;
+      if (nome !== 'pending_checkouts' || !gara) return q;
+      const g = gara; gara = null;
+      const io: Record<string, unknown> = new Proxy({}, { get: (_o, k: string) => k === 'maybeSingle'
+        ? async () => { await g(); return q.maybeSingle(); }
+        : (...a: unknown[]) => { q[k](...a); return io; } });
+      return io;
+    }) as typeof finto.from;
+
+    await handleChargeRefunded(rimborso(5000, 1000));
+    expect(statoDelCarrello()).toBe('COMPLETED');
+    expect(fermi().sort(), 'il rimborso andava tutto su A e B prendeva il netto pieno').toEqual(['negozio-a', 'negozio-b']);
+    expect(tabella('orders').find((o) => o.id === 'ordine-a')?.refunded_amount_cents).toBe(0);
+  });
+
+  it('carrello scaduto e carta contestata: Stripe rifiuta il rimborso (charge_disputed), un avviso e Stripe smette di ripetere', async () => {
+    const sessione = carrello('EXPIRED', [gruppo('pane-quotidiano', 3000, 'pane')]);
+    creaRimborso = async () => { throw Object.assign(new Error('Charge ch_1 has been disputed.'), { code: 'charge_disputed', type: 'StripeInvalidRequestError' }); };
+    for (let i = 0; i < 3; i++) await expect(handleCheckoutCompleted(sessione), `tentativo ${i + 1}: Stripe ripete per tre giorni`).resolves.toBeUndefined();
+    expect(tabella('orders')).toEqual([]);
+    expect(avvisiAgliAdmin().map((n) => n.title)).toContain('⚠️ Pagamento su carrello scaduto contestato');
+    expect(avvisiAgliAdmin().map((n) => n.title)).not.toContain('⚠️ Pagamento su carrello scaduto');
   });
 });

@@ -25,6 +25,9 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   const admin = getAdminSupabase();
   const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
   if (!pi) return;
+  // R25-001 — IL CARRELLO SI LEGGE PRIMA DEGLI ORDINI: letto dopo, un ordine nato in mezzo (carrello già COMPLETED) faceva sembrare finito un carrello a metà.
+  const carrello = charge.metadata?.pending_checkout_id || /^mc_(.+)$/.exec(charge.transfer_group ?? '')?.[1];
+  const letto = carrello ? await admin.from('pending_checkouts').select('status, groups').eq('id', carrello).maybeSingle() : null;
 
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders, error: errOrdini } = await admin
@@ -44,14 +47,15 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
   if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
   // R25-001 — IL RIMBORSO ARRIVATO PRIMA DELL'ORDINE. Col carrello ancora aperto (o appena completato) l'ordine sta per nascere:
-  // uscire bene perdeva il rimborso, e l'ordine nasceva pagato. Si lancia: Stripe ripete l'avviso e trova gli ordini. Vale anche
-  // con una parte degli ordini già nata e un rimborso parziale: il resto nasceva col netto pieno e il rimborso non si scriveva.
+  // uscire bene perdeva il rimborso, e l'ordine nasceva pagato. Si lancia: Stripe ripete l'avviso e trova gli ordini. Un carrello
+  // senza ordini non resta PENDING per sempre: lo scade il giro di expire-checkouts (2 ore), e lì il ripetere finisce.
   const pieno = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
-  const carrello = charge.metadata?.pending_checkout_id || /^mc_(.+)$/.exec(charge.transfer_group ?? '')?.[1];
-  if (carrello && (!orders?.length || !pieno)) {
-    const { data: c, error: errC } = await admin.from('pending_checkouts').select('status').eq('id', carrello).maybeSingle();
-    if (errC || c?.status === 'PENDING' || (c?.status === 'COMPLETED' && !orders?.length)) throw new Error(`[stripe] rimborso arrivato prima dell'ordine (carrello ${carrello}): si riprova`);
-  }
+  const stato = letto?.data?.status;
+  if (letto && (!orders?.length || !pieno) && (letto.error || (!orders?.length && (stato === 'PENDING' || stato === 'COMPLETED')))) throw new Error(`[stripe] rimborso arrivato prima dell'ordine (carrello ${carrello}): si riprova`);
+  // Con una parte sola degli ordini nata (un carrello pagato a metà resta PENDING per sempre) il parziale non si ripete: non è
+  // di un ordine solo, quindi i bonifici del carrello si fermano e chi amministra lo divide (rimborsi-da-fuori.ts).
+  const gruppi = Array.isArray(letto?.data?.groups) ? (letto?.data?.groups as unknown[]).length : 0;
+  const carrelloAperto = !!orders?.length && orders.length < gruppi ? `Il carrello è ancora aperto: sono nati ${orders.length} ordini su ${gruppi} negozi. Chi nasce dopo nasce col bonifico fermo; se gli altri non nascono, il carrello va guardato a mano.` : undefined;
   if (!orders || orders.length === 0) {
     // 31/10/2026 (178) — Un pagamento senza ordini puo' essere quello di un
     // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un
@@ -85,7 +89,7 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // sull'ordine (se è uno solo) o ferma i bonifici del carrello (se sono di
     // più). L'eco dei nostri rimborsi (`refundOrder`) non tocca niente: lì
     // l'importo è già scritto. Il perché sta in `rimborsi-da-fuori.ts`.
-    await registraRimborsoParzialeDaFuori(charge, orders);
+    await registraRimborsoParzialeDaFuori(charge, orders, carrelloAperto);
     return;
   }
 

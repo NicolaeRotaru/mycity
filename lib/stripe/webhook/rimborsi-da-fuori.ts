@@ -378,11 +378,13 @@ async function rimborsatoDaFuori(
 export async function registraRimborsoParzialeDaFuori(
   charge: Stripe.Charge,
   ordini: OrdineDelRimborso[],
+  /** R25-001 — Gli ordini sono una parte di un carrello di più negozi (anche uno solo, se gli altri non sono nati): il rimborso si divide, e la nota va nell'avviso. */
+  notaDelCarrello?: string,
 ): Promise<void> {
   const rimborsatoSuStripe = charge.amount_refunded ?? 0;
   if (ordini.length === 0) return;
-  if (ordini.length > 1) {
-    await fermaIBonificiDelCarrello(charge, ordini, rimborsatoSuStripe);
+  if (ordini.length > 1 || notaDelCarrello) {
+    await fermaIBonificiDelCarrello(charge, ordini, rimborsatoSuStripe, notaDelCarrello);
     return;
   }
 
@@ -562,6 +564,7 @@ async function fermaIBonificiDelCarrello(
   charge: Stripe.Charge,
   ordini: OrdineDelRimborso[],
   rimborsatoSuStripe: number,
+  notaDelCarrello?: string,
 ): Promise<void> {
   const registrato = ordini.reduce((somma, o) => somma + (o.refunded_amount_cents ?? 0), 0);
   const mancante = rimborsatoSuStripe - registrato;
@@ -583,7 +586,7 @@ async function fermaIBonificiDelCarrello(
       `(${ids.map((i) => i.slice(0, 8)).join(', ')}). Stripe non dice a quale negozio appartiene: i bonifici di questi ordini sono fermi ` +
       'finché il rimborso non viene diviso. Si divide dal pannello, nella pagina Ordini, riquadro «Rimborsi dal cruscotto da dividere»: ' +
       'scrivi la parte di ciascun ordine (anche zero). Il pannello toglie al negozio la sua quota — con uno storno su Stripe ' +
-      'se il suo bonifico è già partito — e poi riapre i bonifici.',
+      'se il suo bonifico è già partito — e poi riapre i bonifici.' + (notaDelCarrello ? ` ${notaDelCarrello}` : ''),
     '/admin/orders',
   );
 }
