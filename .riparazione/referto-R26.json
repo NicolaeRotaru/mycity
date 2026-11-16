@@ -495,6 +495,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "6 subagenti su 8: riparatore e revisore dei lotti 1, 2 e 3 (il lotto 3 sono le voci della cucitura di prova chieste dalla regista, sul modello piccolo). Il resto non partito per il tetto di spesa."
-  }
+    "subagenti": 6,
+    "nota": "6 subagenti su 8: riparatore e revisore dei lotti 1, 2 e 3 (il lotto 3 sono le voci della cucitura di prova chieste dalla regista, sul modello piccolo). Lotti restanti non partiti per il tetto di spesa. costo_usd letto con get_session senza id prima della consegna (20,93 $)."
+  },
+  "costo_usd": 20.93
 }
