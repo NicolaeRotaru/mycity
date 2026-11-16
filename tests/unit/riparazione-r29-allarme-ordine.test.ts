@@ -328,3 +328,59 @@ describe('R29-002 — il sorvegliante gira ogni 5 minuti, così il primo allarme
     expect(campanelle()).toHaveLength(1);
   });
 });
+
+/**
+ * R29-004 — Se due giri del sorvegliante partono nello stesso istante (il calendario e un giro a
+ * mano, o due calendari), l'amministratore riceveva due volte la stessa campanella (e due email):
+ * l'attesa di sei ore era «leggi, poi suona, poi scrivi». Adesso il turno si prende prima di
+ * suonare (codice di R14-011, commit 2e81dd8d), e il finto database qui sopra fa intrecciare i due
+ * giri come una rete vera.
+ */
+describe('R29-004 — due giri del sorvegliante partiti insieme suonano una volta sola', () => {
+  const chiave = DA_ACCETTARE;
+
+  it('due giri nello stesso istante: una campanella e una email, non due', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    await Promise.all([giro(), giro()]);
+    expect(campanelle(), 'l amministratore riceve due volte la stessa campanella').toHaveLength(1);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it('anche quando l attesa di sei ore è appena scaduta: uno solo la rinfresca e suona', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    db.operational_alert_log = [
+      { alert_key: chiave, last_sent_at: minutiFa(7 * 60) },
+      { alert_key: `CAMPANELLA|${chiave}`, last_sent_at: minutiFa(7 * 60) },
+    ];
+    await Promise.all([giro(), giro()]);
+    expect(campanelle()).toHaveLength(1);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it('la campanella rifiutata restituisce il turno: il giro dopo suona', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    rifiuta.notifications = 'rifiutata';
+    const primo = await giro();
+    expect(primo.http).toBe(500);
+    expect(campanelle()).toHaveLength(0);
+    rifiuta.notifications = null;
+    vaiAvanti(5);
+    await giro();
+    expect(campanelle()).toHaveLength(1);
+  });
+
+  it('l email non partita restituisce il turno: il giro dopo la ritenta', async () => {
+    db.orders = [ordineNuovo({ created_at: minutiFa(6) })];
+    vi.mocked(sendEmail).mockImplementation(async () => ({ ok: false, error: 'domain is not verified' }));
+    const primo = await giro();
+    expect(primo.http).toBe(500);
+    expect((db.operational_alert_log ?? []).map((r) => r.alert_key)).not.toContain(chiave);
+    vi.mocked(sendEmail).mockImplementation(async () => ({ ok: true, id: 'finta' }));
+    vaiAvanti(5);
+    const secondo = await giro();
+    expect(secondo.http).toBe(200);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
+    // E la campanella, già suonata al primo giro, non risuona.
+    expect(campanelle()).toHaveLength(1);
+  });
+});
