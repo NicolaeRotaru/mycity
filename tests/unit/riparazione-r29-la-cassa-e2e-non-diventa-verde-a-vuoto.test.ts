@@ -72,6 +72,37 @@ function dichiarazioni(titolo: string): Dichiarazione[] {
   return out;
 }
 
+/**
+ * Il testo di un nodo dello spec senza i commenti: un commento che elenca le parole giuste non fa
+ * nascere nessun ordine. Si tolgono gli intervalli che TypeScript riconosce come commenti davanti a
+ * ogni pezzo del codice (non le stringhe né le espressioni regolari che contengono `//`).
+ */
+function senzaCommenti(n: ts.Node): string {
+  const testo = n.getSourceFile().getFullText();
+  const tagli: Array<[number, number]> = [];
+  const visita = (x: ts.Node) => {
+    if (ts.isJSDoc(x)) return;
+    const figli = x.getChildren();
+    if (figli.length > 0) {
+      figli.forEach(visita);
+      return;
+    }
+    const p = x.getFullStart();
+    for (const r of [...(ts.getLeadingCommentRanges(testo, p) ?? []), ...(ts.getTrailingCommentRanges(testo, p) ?? [])]) {
+      tagli.push([r.pos, r.end]);
+    }
+  };
+  visita(n);
+  let fuori = '';
+  let da = n.getStart();
+  for (const [inizio, fine] of tagli.sort((a, b) => a[0] - b[0])) {
+    if (fine <= da) continue;
+    fuori += testo.slice(da, Math.max(da, inizio));
+    da = fine;
+  }
+  return fuori + testo.slice(da, n.getEnd());
+}
+
 /** Il testo di una funzione dello spec dichiarata per nome (`function x() {}` o `const x = () => {}`). */
 function funzione(nome: string): string {
   const f = fonte();
@@ -108,7 +139,7 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n
       const d = trovate[0];
       expect(d.modo, `«${p.titolo}» è dichiarata «test.${d.modo}»: un guscio saltato alla nascita non fa nascere nessun ordine`).toBe('test');
       expect(d.parametri, `«${p.titolo}» non chiede né request né page: non può guardare niente`).toMatch(/\brequest\b|\bpage\b/);
-      const corpo = d.corpo?.getText() ?? '';
+      const corpo = d.corpo ? senzaCommenti(d.corpo) : '';
       expect(corpo.replace(/\s/g, ''), `«${p.titolo}» ha il corpo vuoto`).not.toMatch(/^\{\}$|^$/);
       const mancano = p.deve.filter((r) => !r.test(corpo)).map(String);
       expect(mancano, `«${p.titolo}» non fa quello che il titolo promette`).toEqual([]);
@@ -130,7 +161,8 @@ describe('R29-001 · ① le tre prove dell acquisto vero hanno un corpo che fa n
     const visita = (n: ts.Node) => {
       if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'expect' && n.arguments[0]) {
         const a = n.arguments[0].getText(f);
-        if (/E2E_DATI_DI_PROVA|SENZA_AMBIENTE_DI_PROVA|process\.env/.test(a)) colpevoli.push(a);
+        // AMBIENTE è la copia di process.env fatta dallo spec: guardarla è guardare la variabile.
+        if (/E2E_DATI_DI_PROVA|SENZA_AMBIENTE_DI_PROVA|process\.env|\bAMBIENTE\b/.test(a)) colpevoli.push(a);
       }
       ts.forEachChild(n, visita);
     };

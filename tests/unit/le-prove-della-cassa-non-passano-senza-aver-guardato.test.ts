@@ -104,7 +104,9 @@ describe('le tre prove dell acquisto vero', () => {
       const prova = s.tests?.[0];
       expect(prova?.status, `«${s.title}» con l'ambiente pronto deve guardare: un guscio passa («expected»), una saltata resta «skipped» (${motivoDelSalto(prova)})`).toBe('unexpected');
       // E cade perche' ha provato a raggiungere il database o il sito di prova, non per altro.
-      expect(erroreDi(prova), `«${s.title}» e' caduta, ma non provando a raggiungere il database o il sito`).toMatch(/fetch failed|ECONNREFUSED|127\.0\.0\.1:9|connect/i);
+      // Solo l'errore di rete conta: l'indirizzo finto (127.0.0.1:9) compare anche nel messaggio di
+      // qualunque asserzione che cade guardando la variabile, e un guscio passerebbe di qui.
+      expect(erroreDi(prova), `«${s.title}» e' caduta, ma non provando a raggiungere il database o il sito`).toMatch(/fetch failed|ECONNREFUSED/i);
     }
   }, 60_000);
 
