@@ -1,27 +1,28 @@
 {
   "sessione": "R28",
-  "aggiornato": "2026-11-16 15:10",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-16 16:10",
+  "finita": true,
+  "testa": "69002b78412dbf049c65294e949669cd0f97cfb4",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "69002b78412dbf049c65294e949669cd0f97cfb4",
+    "nota": "NODE_OPTIONS=--max-old-space-size=6144 (senza, tsc va in out-of-memory). typecheck ok; lint 0 errori, 99 avvisi; vitest 1596 file passati e 1 saltato, 10473 test passati e 1 saltato. Guardia-ramo HEAD verde col piano fe2483e6."
   },
   "voci": [
     {
       "id": "R28-001",
       "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
-      "esito": "serve_file_altrui",
-      "commit": "442cc30d99bba86dee7bdffcf97b98a25ea24a9e",
+      "esito": "parziale",
+      "commit": "0b34310c",
       "file_toccati": [
-        "components/rider/SOSButton.tsx"
+        "components/rider/SOSButton.tsx",
+        "tests/unit/riparazione-r28-sos-testo.test.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r28-sos-testo.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r28-sos-testo.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-sos-testo.test.tsx tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -30,7 +31,7 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 442cc30d^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r28-sos-testo.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Sulla base i due messaggi (toast) erano già giusti; restava il dialogo «Verrà avviata la chiamata al 112». La guardia vede tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts come prova comune, e alla base quella prova vincola proprio la frase sbagliata. Sul ramo c'è solo la riga del GPS del dialogo («viene mandata a MyCity, se il telefono riesce a darla»), con la prova riparazione-r28-sos-testo (ripresa dalla r16 senza il caso del 112 nel dialogo).",
+      "cosa_ho_fatto": "Sulla base i due messaggi (toast) erano già giusti; restava il dialogo «Verrà avviata la chiamata al 112». La guardia vede tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts come prova comune, e alla base quella prova vincola proprio la frase sbagliata. Sul ramo c'è solo la riga del GPS del dialogo («viene mandata a MyCity, se il telefono riesce a darla»), con la prova riparazione-r28-sos-testo (ripresa dalla r16 senza il caso del 112 nel dialogo). Giro di correzione 0b34310c (chiesto dal revisore A): la frase del GPS dice che la posizione arriva a MyCity solo se il telefono riesce a darla ed è connesso; il commento non chiama più giusta «Verra' avviata la chiamata al 112»; la prova cita il percorso vero della prova r16 (tolta con debafe63). Prova rimessa su tutta la voce (--base 442cc30d^) uscita 0; la prova comune resta verde.",
       "serve_file_altrui": [
         {
           "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
@@ -45,8 +46,9 @@
           "modifica": "Rimettere il caso 'il dialogo di conferma non promette una chiamata, dice che CHIAMA lo preme il fattorino' (il primo caso della prova r16)."
         }
       ],
-      "nota": "Patch dei tre file: r28-001-resto-intero.patch (mandata alla regista). Con la patch intera la prova rimessa dava uscita 0 e le 8 prove del SOS 44/44 verdi.",
-      "verificato_da": "qa revisore A (solo il grave): prova r28 3/3 e prova rimessa uscita 0 rilanciate; guardia verde e classificazione 'condivisa' della prova comune confermata (nomina components/SupportChatModal.tsx e lib/api/responses.ts); 8 prove che nominano SOSButton verdi (43); patch applicata: 44 verdi + tsc verde, e cade senza il dialogo corretto. Difetti minori segnalati: frase GPS senza 'se connesso' (SOSButton.tsx:266), commento 164-165 che chiama ancora giusta la frase del 112, la prova r28 cita un file r16 inesistente."
+      "nota": "Patch dei tre file rifatta su 0b34310c: r28-001-resto-intero-dopo-0b34310c.patch (mandata alla regista; con la patch le 8 prove del SOS 44/44 verdi).",
+      "verificato_da": "qa revisore A (solo il grave): prova r28 3/3 e prova rimessa uscita 0 rilanciate; guardia verde e classificazione 'condivisa' della prova comune confermata (nomina components/SupportChatModal.tsx e lib/api/responses.ts); 8 prove che nominano SOSButton verdi (43); patch applicata: 44 verdi + tsc verde, e cade senza il dialogo corretto. Difetti minori segnalati: frase GPS senza 'se connesso' (SOSButton.tsx:266), commento 164-165 che chiama ancora giusta la frase del 112, la prova r28 cita un file r16 inesistente. Giro di correzione 0b34310c guardato dal revisore D: frase del GPS vera (la posizione parte solo con la scrittura dell'SOS, che ha bisogno della rete, e solo se arriva entro ~5,5 s, SOSButton.tsx:83-86, 102-109); prova comune verde; 8 prove del SOS 43/43.",
+      "cosa_resta": "La frase «Verrà avviata la chiamata al 112» del dialogo, vincolata dalla prova comune il-testo-dice-quello-che-succede-davvero: si chiude con la cucitura (serve_file_altrui sotto)."
     },
     {
       "id": "R28-005",
@@ -157,13 +159,15 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a44980ac^ --file components/rider/CashConfirmDialog.tsx --prove tests/unit/riparazione-r28-foto-e-documenti-del-fattorino-da-tastiera.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sulla base PhotoReviewUpload (:197), import CSV (:247), reso (:422) e onboarding (:349-350) avevano già il focus-within; mancava solo il PhotoSlot di CashConfirmDialog (:319): aggiunta la diff della scheda. Prova nuova col contenuto della scheda: il caso dei contanti morde, quello dell'onboarding è già verde sulla base."
+      "cosa_ho_fatto": "Sulla base PhotoReviewUpload (:197), import CSV (:247), reso (:422) e onboarding (:349-350) avevano già il focus-within; mancava solo il PhotoSlot di CashConfirmDialog (:319): aggiunta la diff della scheda. Prova nuova col contenuto della scheda: il caso dei contanti morde, quello dell'onboarding è già verde sulla base.",
+      "verificato_da": "qa revisore C (sonnet): prova e prova rimessa rilanciate (morde, verde); PhotoReviewUpload già col focus-within su d038f105 (git show), import e reso letti sul commit; diff di CashConfirmDialog:319 controllata; prove collegate verdi."
     },
     {
       "id": "R28-003",
       "chiave": "api-backend|la notifica del nuovo ordine fa la fila dietro le promozioni",
       "esito": "gia_riparato_prima",
-      "prova": "app/api/cron/send-push/route.ts:104-123 rilegge con .or(category.is.null,category.not.in.(promo,group,newsletter)) e mette le urgenti davanti (commit 8af8a855 R26-003, CATEGORIE_CHE_ASPETTANO a :55); prova esistente tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts verde. I commit ba36f97a e c81987f0 della scheda non esistono nel deposito; minori-s03-push.test.ts non toccato."
+      "prova": "app/api/cron/send-push/route.ts:104-123 rilegge con .or(category.is.null,category.not.in.(promo,group,newsletter)) e mette le urgenti davanti (commit 8af8a855 R26-003, CATEGORIE_CHE_ASPETTANO a :55); prova esistente tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts verde. I commit ba36f97a e c81987f0 della scheda non esistono nel deposito; minori-s03-push.test.ts non toccato.",
+      "verificato_da": "qa revisore C (sonnet): letta send-push/route.ts:104-123 (rilettura senza CATEGORIE_CHE_ASPETTANO, urgenti davanti); git cat-file: 8af8a855 esiste, ba36f97a e c81987f0 no; prova r26 verde (2 test)."
     },
     {
       "id": "R28-004",
@@ -186,7 +190,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Soglia dell'allarme di send-push da 120 a 45 minuti (finestra di lettura 60, cadenza 5). Prova con orologio finto: fermo da 50 minuti è allarme, da 10 no; soglia < 60 e > cadenza. Le prove sulle soglie restano verdi.",
-      "nota": "45 minuti è una scelta tecnica dentro la finestra di 60: se Nicola ne vuole un'altra basta cambiare il numero."
+      "nota": "45 minuti è una scelta tecnica dentro la finestra di 60: se Nicola ne vuole un'altra basta cambiare il numero.",
+      "verificato_da": "qa revisore C (sonnet): soglia 45 min contro cadenza 5 min (vercel.json:21) e finestra 60: nessun falso allarme; altre soglie invariate; prova, prova rimessa e prove di cron-health verdi."
     },
     {
       "id": "R28-006",
@@ -209,7 +214,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Senza VAPID la risposta è marcata con segnaGiroNonFatto(..., 'fermo'): withCronAuth (middleware.ts:658, giroNonFatto) non scrive il battito e il semaforo non lo mostra vivo. lib/api/middleware.ts non toccato.",
-      "nota": "segnaGiroNonFatto accetta solo 'fermo' | 'solo_conta' (lib/cron/fermo-dei-lavori.ts:114, non mio): il valore dell'intestazione non è del tutto esatto per «VAPID non configurato»."
+      "nota": "segnaGiroNonFatto accetta solo 'fermo' | 'solo_conta' (lib/cron/fermo-dei-lavori.ts:114, non mio): il valore dell'intestazione non è del tutto esatto per «VAPID non configurato».",
+      "verificato_da": "qa revisore C (sonnet): senza chiavi 200 con skipped e giro non fatto, withCronAuth (middleware.ts:658) non scrive il battito; con chiavi il battito si scrive (prova di controllo verde); prova rimessa regge."
     },
     {
       "id": "R28-007",
@@ -231,7 +237,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b55df4ce^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r28-prodotti-dei-negozi-aperti-si-aggiornano.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "app/stores/page.tsx era già a posto (R23-010: useOraDiPiacenza() a :216, prova riparazione-r23-aperti-ora-si-aggiorna). Applicata a ProductGrid la modifica della scheda: battito = useOraDiPiacenza(!!onlyOpenStores) nelle dipendenze del useMemo filtered. Prova jsdom con timer finti (12:59:30 → +60 s): il prodotto del forno esce."
+      "cosa_ho_fatto": "app/stores/page.tsx era già a posto (R23-010: useOraDiPiacenza() a :216, prova riparazione-r23-aperti-ora-si-aggiorna). Applicata a ProductGrid la modifica della scheda: battito = useOraDiPiacenza(!!onlyOpenStores) nelle dipendenze del useMemo filtered. Prova jsdom con timer finti (12:59:30 → +60 s): il prodotto del forno esce.",
+      "verificato_da": "qa revisore C (sonnet): con il filtro spento useOraDiPiacenza esce subito (DeliveryCutoff.tsx:29), nessun timer acceso; cleanup di interval e listener; stores/page.tsx già a posto (:216); prova con timer finti e prova rimessa verdi."
     },
     {
       "id": "R28-011",
@@ -254,7 +261,161 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b07350b1^ --file components/SellerApplicationForm.tsx,app/api/seller/apply/route.ts --prove tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il modulo fa trim, minimo 3 e massimo 80 come la rotta, con l'avviso «Il nome del negozio può avere al massimo 80 caratteri: accorcialo». La frase della rotta è riscritta senza parentesi, così friendlyError (non toccato) non la riduce a «Nome del negozio». Prova: modulo con 81, 80 caratteri e soli spazi, e friendlyError sulla frase della rotta."
+      "cosa_ho_fatto": "Il modulo fa trim, minimo 3 e massimo 80 come la rotta, con l'avviso «Il nome del negozio può avere al massimo 80 caratteri: accorcialo». La frase della rotta è riscritta senza parentesi, così friendlyError (non toccato) non la riduce a «Nome del negozio». Prova: modulo con 81, 80 caratteri e soli spazi, e friendlyError sulla frase della rotta.",
+      "verificato_da": "qa revisore C (sonnet): la rotta cambia solo le due frasi Zod (3-80 e trim già lì); nessun altro chiamante delle frasi vecchie (grep su tutto il deposito); prova e prova rimessa verdi."
+    },
+    {
+      "id": "R28-012",
+      "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Applicati 0a428830 e 16f54763 senza le righe R10 (prova rinominata riparazione-r28-abbonamento-due-schede) più le 3 modifiche ai finti R10 della scheda: 38 test verdi, tsc 0, prova rimessa uscita 0 sulla patch. La guardia vede comuni le tre prove R10 (importano lib/stripe/client.ts di R29): commit tolto, patch salvata.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx",
+          "modifica": "Nel vi.mock('@/lib/supabase/server'), prima di getServerSupabase: async () => ({, aggiungere getAdminSupabase: () => ({ from: () => ({ update: () => ({ eq: () => ({ is: async () => ({ error: null }) }) }) }) }),; nel vi.mock('@/lib/stripe/client'), dentro getStripe: () => ({ e prima di subscriptions: { list: async () => ({ data: [] }) },, aggiungere customers: { list: async () => ({ data: [] }), create: async () => ({ id: 'cus_1' }) },"
+        },
+        {
+          "file": "tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts",
+          "modifica": "Riga 32 getAdminSupabase come sopra; riga 46 customers come sopra."
+        },
+        {
+          "file": "tests/unit/riparazione-r10-abbonamento-doppio.test.ts",
+          "modifica": "Riga 53, dopo webhooks: { constructEvent: () => stato.evento },, aggiungere customers: { list: async () => ({ data: [] }), create: async () => ({ id: 'cus_1' }) },"
+        },
+        {
+          "file": "app/api/seller/subscription/checkout/route.ts, app/api/seller/subscription/portal/route.ts (miei, bloccati dalle prove sopra) + prova nuova tests/unit/riparazione-r28-abbonamento-due-schede.test.ts",
+          "modifica": "Patch r28-012-intera.patch (mandata alla regista; si applica sulla testa)."
+        }
+      ],
+      "verificato_da": "qa revisore D: patch con apply --check, 38/38 in 8 file, tsc 0; rimessa a mano con route.ts alla base: 8 casi su 9 cadono sulle asserzioni."
+    },
+    {
+      "id": "R28-014",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso dal cruscotto che aspetta ancora la divisione, il sito lo toglie dagli ordini che non l'avevano mai registrato",
+      "esito": "riparato",
+      "commit": "eb59bba9",
+      "file_toccati": [
+        "lib/stripe/rimborso-respinto.ts",
+        "lib/stripe/webhook/rimborsi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-rimborso-respinto-da-dividere.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-rimborso-respinto-da-dividere.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base eb59bba9^ --file lib/stripe/rimborso-respinto.ts,lib/stripe/webhook/rimborsi.ts --prove tests/unit/riparazione-r28-rimborso-respinto-da-dividere.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel caso della voce (carrello in pausa di divisione, rimborso dal cruscotto senza etichetta order_id) si toccano solo gli ordini che elencano il refundId in stripe_refund_id; se nessuno lo elenca non si scrive niente e l'avviso agli amministratori dice «Non era ancora scritto su nessun ordine».",
+      "nota": "Piano ristretto al caso della pausa che la voce descrive: così le due prove comuni restano verdi senza toccarle; il piano largo della scheda (ogni rimborso dal cruscotto) le farebbe rosse.",
+      "verificato_da": "qa revisore D: prova 4/4 e prova rimessa uscita 0; letti la divisione e il filtro della pausa; restringere al caso della pausa copre la voce così com'è scritta (fuori dalla pausa i rimborsi dal cruscotto finiscono già nell'elenco). Nota minore: con la divisione fatta a metà l'importo si toglie dagli ordini già scritti fino a quanto risulta rimborsato su ciascuno (rimborso-respinto.ts:259-271)."
+    },
+    {
+      "id": "R28-015",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso parziale su un ordine col bonifico già partito, al negozio resta tolta la sua quota",
+      "esito": "non_fatto",
+      "nota": "La strada piena (bonifico idempotente riaccredito_<refund.id>, commit 00482972) NON regge per il revisore del lotto 3, quindi l'ho tolta col revert 69002b78. Delle tre condizioni della regista mancava la (1): la chiave è per rimborso, non per ordine, quindi nel carrello di due negozi il secondo bonifico è rifiutato da Stripe e il secondo negozio non viene pagato. La (2), Stripe finto, e la (3), rimessa uscita 0, c'erano. In più c'erano due regressioni: seller_payout_reversed_cents tornava a 0 mentre il bonifico vecchio restava stornato, così uno storno pieno successivo veniva rifiutato e il recupero si perdeva (dispute.ts:223, rimborsi.ts:135); e un nuovo reso uguale entro 24 h riusava la chiave reversal_<id>_tot_<n>, con il negozio pagato due volte. La strada sicura (avviso agli amministratori con la cifra, esito parziale) non l'ho fatta: a fine lotto 3 la spesa era 36 $ sul freno dei 40 $ e restava un solo subagente, senza revisore. Proposta per la parte 2: nel ramo TRANSFERRED di valoriDellOrdine (lib/stripe/rimborso-respinto.ts) non toccare seller_payout_reversed_cents e mandare una volta (unaVoltaPer) agli amministratori la cifra min(quotaNegozio, stornato) da ridare a mano al negozio, con l'ordine e il rimborso.",
+      "verificato_da": "qa revisore D: prova 5/5 e rimessa 0 rilanciate; prova usa e getta sul carrello di due negozi (chiave in conflitto, o2 resta con 400 stornati); letti i rami di storno in payout.ts, dispute.ts e rimborsi.ts. Dopo il revert: i due file tornano identici a 4eb17108 (git diff vuoto), guardia verde."
+    },
+    {
+      "id": "R28-016",
+      "chiave": "pagamenti-stripe|una sponsorizzazione o un abbonamento rimborsati o contestati in banca restano attivi",
+      "esito": "parziale",
+      "commit": "0a79d662",
+      "file_toccati": [
+        "lib/stripe/webhook/sponsorizzati.ts",
+        "lib/stripe/webhook/rimborsi.ts",
+        "lib/stripe/webhook/dispute.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r28-sponsorizzazione-rimborsata.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r28-sponsorizzazione-rimborsata.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0a79d662^ --file lib/stripe/webhook/sponsorizzati.ts,lib/stripe/webhook/rimborsi.ts,lib/stripe/webhook/dispute.ts --prove tests/unit/riparazione-r28-sponsorizzazione-rimborsata.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei rami «senza ordini», se il pagamento non è un buono regalo, si ritrova la sessione di cassa (checkout.sessions.list) e si spegne la sponsorizzazione: rimborso pieno → 'ended'; contestazione vera → 'paused' più avviso agli amministratori. Una richiesta di informazioni o un rimborso parziale non la toccano.",
+      "nota": "Rimessa: rimborsi.ts e dispute.ts mordono sul comportamento; sponsorizzati.ts da solo alla base dà 3 perché i due gestori importano la funzione nuova. Con i tre file alla base, a mano: 3 test su 6 cadono sulle asserzioni ('active' invece di 'ended'/'paused').",
+      "cosa_resta": "L'abbonamento (scelta di Nicola, domanda sotto); dopo una contestazione vinta la sponsorizzazione in pausa la riaccende a mano un amministratore (glielo dice l'avviso).",
+      "domanda": "Se il pagamento dell'abbonamento di un negozio è rimborsato o contestato in banca, l'abbonamento si disdice subito su Stripe, si disdice a fine periodo, o resta acceso?",
+      "verificato_da": "qa revisore D: prova 6/6; rimessa rifatta a mano con i tre file alla base: 3 casi su 6 cadono sulle asserzioni ('active' invece di 'ended'/'paused'); checkout.sessions.list({payment_intent, limit:1}) sicuro, la scrittura colpisce solo stripe_session_id (indice unico, migrazione 088). Nota minore: in dispute.ts:111 la funzione torna vero anche per sessioni non di sponsorizzazione (si salta solo una riga di log)."
+    },
+    {
+      "id": "R28-008",
+      "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Applicato d5687bbc con la prova rinominata riparazione-r28-scheda-tag-dei-marchi: senza la riga nel finto database cadono 25 test in 3 prove, con la riga 340 verdi, tsc 0, prova rimessa uscita 0 sulla patch. La guardia vede tests/unit/aiuti/database-coi-permessi.ts come file non mio (non nomina file di R28): commit tolto.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/database-coi-permessi.ts",
+          "modifica": "Riga 64, in COLONNE.products: «'external_source_url'» diventa «'external_source_url', 'tags'»."
+        },
+        {
+          "file": "lib/queries/catalogo.ts (mio, bloccato dalla riga sopra) + prova nuova tests/unit/riparazione-r28-scheda-tag-dei-marchi.test.ts",
+          "modifica": "Patch r28-008-intera.patch (mandata alla regista; si applica sulla testa)."
+        }
+      ],
+      "nota": "Nessuna migrazione e nessun permesso toccato: anon legge già products.tags (la migrazione 425 dà SELECT su tutta la tabella ad anon e authenticated, nessuna migrazione toglie colonne di products).",
+      "verificato_da": "qa revisore D: patch con apply --check, 340/340 in 14 file, tsc 0; con catalogo.ts alla base la prova nuova cade 3/3; anon legge già products.tags (migrazione 425 riga 108, SELECT su tutta la tabella; nessuna migrazione toglie colonne di products)."
+    },
+    {
+      "id": "R28-009",
+      "chiave": "microcopy|nella campanella metà degli avvisi comincia con una faccina e metà no",
+      "esito": "non_fatto",
+      "nota": "rimandato: dati personali senza revisore (regola della regista, onda 4: il tetto di 8 subagenti non lascia un revisore per il lotto 4). La riprende la parte 2."
+    },
+    {
+      "id": "R28-018",
+      "chiave": "privacy-legale|chi rifiuta le statistiche dopo averle accettate si tiene l'identificativo di un anno, e al sì successivo le visite nuove si riattaccano a quelle di prima",
+      "esito": "non_fatto",
+      "nota": "rimandato: dati personali senza revisore (regola della regista, onda 4: il tetto di 8 subagenti non lascia un revisore per il lotto 4). La riprende la parte 2."
+    },
+    {
+      "id": "R28-019",
+      "chiave": "privacy-legale|chi annulla la cancellazione dell'account mentre gira il giro notturno viene cancellato lo stesso",
+      "esito": "non_fatto",
+      "nota": "rimandato: dati personali senza revisore (regola della regista, onda 4: il tetto di 8 subagenti non lascia un revisore per il lotto 4). La riprende la parte 2."
+    },
+    {
+      "id": "R28-020",
+      "chiave": "privacy-legale|chi si disiscrive dalla newsletter e poi si iscrive di nuovo resta segnato come disiscritto anche dopo aver confermato",
+      "esito": "non_fatto",
+      "nota": "rimandato: dati personali senza revisore (regola della regista, onda 4: il tetto di 8 subagenti non lascia un revisore per il lotto 4). La riprende la parte 2."
+    },
+    {
+      "id": "R28-022",
+      "chiave": "privacy-legale|nessun consenso finisce a verbale: termini e scelte sui cookie restano solo nel browser, e nessuno riprova a registrarli",
+      "esito": "non_fatto",
+      "nota": "rimandato: dati personali senza revisore (regola della regista, onda 4: il tetto di 8 subagenti non lascia un revisore per il lotto 4). La riprende la parte 2."
+    },
+    {
+      "id": "R28-017",
+      "chiave": "privacy-legale|«chi siamo» e «lavora con noi» raccontano una flotta di rider, una crescita e quattro posti di lavoro che oggi non esistono",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: a fine lotto 3 la spesa era 30,67 $, sopra la soglia di 30 $ fissata dalla regista per i tre testi sul modello piccolo. La riprende la parte 2."
+    },
+    {
+      "id": "R28-023",
+      "chiave": "privacy-legale|l'informativa privacy non dice che chiediamo la data di nascita, il codice fiscale, il mezzo e la targa al fattorino, e la data di nascita al negozio",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: a fine lotto 3 la spesa era 30,67 $, sopra la soglia di 30 $ fissata dalla regista per i tre testi sul modello piccolo. La riprende la parte 2."
+    },
+    {
+      "id": "R28-025",
+      "chiave": "privacy-legale|le mappe mandano a openstreetmap e a google la zona di casa del cliente, ma l'informativa nomina openstreetmap solo per cercare gli indirizzi",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: a fine lotto 3 la spesa era 30,67 $, sopra la soglia di 30 $ fissata dalla regista per i tre testi sul modello piccolo. La riprende la parte 2."
     }
   ],
   "nuovi_difetti_visti": [
@@ -271,11 +432,29 @@
       "severita": "minore",
       "file": "lib/stripe/webhook/ordini.ts (tetto in tests/unit/webhook-diviso-per-mestiere.test.ts:47)",
       "descrizione": "Ogni correzione nel webhook (R28-013, la carta di R28-024) richiede prima di spezzare il file."
+    },
+    {
+      "titolo": "dopo un riaccredito o una contestazione parziale vinta lo stornato scende sul sito ma su Stripe il bonifico resta stornato: uno storno pieno successivo verrebbe rifiutato",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/payout.ts:820-824 · lib/stripe/webhook/contestazione-parziale-vinta.ts:103",
+      "descrizione": "residuoRecuperabile può superare quello che resta da stornare su stripe_transfer_id; l'ordine finirebbe in REVERSAL_FAILED da sistemare a mano."
+    },
+    {
+      "titolo": "la prova rimessa rifiuta un albero con modifiche non salvate, quindi una voce serve_file_altrui (patch senza commit) si controlla solo a mano",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "cervello/prova-rimessa.mjs (ad-mycity)",
+      "descrizione": "Per R28-012 e R28-008 il revisore ha rifatto a mano il controllo «cade alla base»: uscita 2 sull'albero sporco."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "R28-013: se con la carta arriva il pagamento di una veloce che non si può più fare (dopo le 21 o senza fattorini online), il webhook rimborsa tutto senza creare l'ordine, oppure crea l'ordine spostato alla prima fascia possibile e rende l'euro della veloce?",
+    "R28-016: se il pagamento dell'abbonamento di un negozio è rimborsato o contestato in banca, l'abbonamento si disdice subito su Stripe, si disdice a fine periodo, o resta acceso?",
+    "R28-004: la soglia dell'allarme del lavoro delle notifiche è ora 45 minuti, dentro la finestra di 60: va bene, o ne vuoi un'altra?"
+  ],
   "conto": {
-    "agenti": 5,
-    "nota": "onda 4, ultracode spento per regola della regista; lotti 1-2 fatti, revisori del lotto 1 fatti (2)"
+    "agenti": 7,
+    "nota": "onda 4, ultracode spento per regola della regista. Subagenti: lotto 1 (grande), revisori A (solo il grave) e B, lotto 2 (sonnet), revisore C (sonnet), lotto 3 (grande), revisore D. Lotto 4 non partito (30,67 $ a fine lotto 3, sopra la soglia di 30 $). Spesa a fine lavoro intorno ai 37 $."
   }
 }
