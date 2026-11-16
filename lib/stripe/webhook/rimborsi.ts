@@ -453,7 +453,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   // soldi rientrano va rimesso in coda quello che il rimborso aveva chiuso.
   // 16/10/2026 (riesame del lotto) — serve anche `stripe_refund_id`: dice se questo
   // rimborso respinto è già stato rimesso a posto (lib/stripe/rimborso-respinto.ts).
-  const COLONNE_RIMBORSO_FALLITO = 'id, refunded_amount_cents, gross_total_cents, total_price, payment_status, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_refund_id';
+  const COLONNE_RIMBORSO_FALLITO = 'id, refunded_amount_cents, gross_total_cents, total_price, payment_status, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_refund_id, internal_dispute_status';
 
   // 21/8/2026 — UN CARRELLO DA DUE NEGOZI E' DUE ORDINI CON LO STESSO PAGAMENTO.
   //
@@ -514,11 +514,11 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
 
   const tornatoIndietro = refund.amount ?? 0;
   // Quanto torna su ciascun ordine, cosa si scrive, e quali ordini questo
-  // rimborso respinto l'hanno già visto: il conto sta in
-  // lib/stripe/rimborso-respinto.ts (16/10/2026, riesame del lotto — lo stesso
-  // avviso lavorato due volte toglieva di nuovo l'importo e ridava al negozio
-  // la sua quota una seconda volta).
-  const piano = pianoDelRimborsoRespinto(ordini, refund.id ?? '', tornatoIndietro);
+  // rimborso respinto l'hanno già visto: il conto sta in lib/stripe/rimborso-respinto.ts
+  // (16/10/2026, riesame del lotto). R28-014 — un rimborso dal cruscotto (senza
+  // l'etichetta dell'ordine) su un carrello fermo per la divisione si toglie solo
+  // dagli ordini che l'hanno scritto nel loro elenco: gli altri non l'hanno mai avuto.
+  const piano = pianoDelRimborsoRespinto(ordini, refund.id ?? '', tornatoIndietro, idDaEtichetta ? {} : { pausaDellaDivisione: PAUSA_RIMBORSO_DA_DIVIDERE });
 
   // 16/10/2026 (quinto riesame del lotto) — L'avviso porta la chiave del
   // rimborso: arriva una volta sola anche se lo si chiede a ogni passaggio
@@ -532,7 +532,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   const rimessiInCoda = piano.scritture.filter((p) => p.valori.payout_status === 'HELD').length;
   const fraseDelBonifico =
     piano.scritture.length === 0
-      ? "Questo rimborso respinto era già stato registrato: controlla sull'ordine lo stato del bonifico al negozio."
+      ? (piano.giaFatti.length > 0 ? "Questo rimborso respinto era già stato registrato: controlla sull'ordine lo stato del bonifico al negozio." : "Non era ancora scritto su nessun ordine (aspettava la divisione fra i negozi): gli importi degli ordini restano com'erano.")
       : rimessiInCoda > 0
         ? "Il bonifico al negozio e' stato rimesso in coda."
         : "Il bonifico al negozio non era da rimettere in coda (non era stato chiuso dal rimborso).";

@@ -48,6 +48,8 @@ export type OrdineDelRimborsoRespinto = {
   payout_tentativo?: number | null;
   /** L'elenco dei rimborsi scritti sull'ordine: qui sta anche il segno «respinto». */
   stripe_refund_id?: string | null;
+  /** C'è la pausa del carrello che aspetta la divisione di un rimborso dal cruscotto? (R28-014) */
+  internal_dispute_status?: string | null;
 };
 
 /** Una scrittura sull'ordine, con le condizioni perché passi. */
@@ -185,16 +187,35 @@ function valoriDellOrdine(ordine: OrdineDelRimborsoRespinto, quota: number, segn
  * perdere centesimi: l'ultimo si prende il resto della divisione. Il tetto per
  * riga è quanto quella riga risultava rimborsata: non si toglie più di quello
  * che c'era scritto.
+ *
+ * 16/11/2026 (R28-014) — IL RIMBORSO DAL CRUSCOTTO CHE ASPETTA ANCORA LA DIVISIONE.
+ *
+ * Su un carrello di più negozi il rimborso fatto dal cruscotto non si scrive su
+ * nessun ordine: il webhook ferma i bonifici con la pausa e aspetta che chi
+ * amministra lo divida (lib/stripe/rimborsi-da-dividere.ts). Se in quell'attesa
+ * la banca lo respingeva, qui si divideva l'importo fra tutti gli ordini del
+ * pagamento, in proporzione a quanto risultava rimborsato su ciascuno: si
+ * toglievano soldi da rimborsi diversi, scritti davvero, e al negozio tornava
+ * nel bonifico una quota che nessuno gli aveva tolto. Un caso: 4 € resi dal sito
+ * sul pane, 5 € dal cruscotto ancora da dividere, respinti: il pane risultava
+ * rimborsato 0 € invece di 4. Adesso, con la pausa della divisione su un ordine
+ * del pagamento (`pausaDellaDivisione`, il valore che la segna), si rimettono a
+ * posto solo gli ordini che questo rimborso l'hanno scritto nel loro elenco; se
+ * nessuno lo elenca non si tocca niente.
  */
 export function pianoDelRimborsoRespinto(
   ordini: ReadonlyArray<OrdineDelRimborsoRespinto>,
   refundId: string,
   tornatoIndietroCents: number,
+  { pausaDellaDivisione }: { pausaDellaDivisione?: string } = {},
 ): PianoDelRimborsoRespinto {
   const giaFatti: string[] = [];
   let giaTolto = 0;
   const daFare: OrdineDelRimborsoRespinto[] = [];
+  const aspettaLaDivisione = !!pausaDellaDivisione && !!refundId && ordini.some((o) => o.internal_dispute_status === pausaDellaDivisione);
   for (const o of ordini) {
+    // R28-014 — un ordine che non elenca questo rimborso non l'ha mai registrato: niente da togliere.
+    if (aspettaLaDivisione && !rimborsiGiaScritti(o).has(refundId) && quotaGiaTolta(o, refundId) === null) continue;
     const tolta = quotaGiaTolta(o, refundId);
     if (tolta === null) {
       daFare.push(o);
