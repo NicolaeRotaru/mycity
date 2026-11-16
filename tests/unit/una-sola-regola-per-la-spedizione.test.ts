@@ -24,7 +24,7 @@ const CASA = { lat: 45.0701, lng: 9.7120 };      // ~2,4 km
 
 describe('la spedizione la calcola un posto solo', () => {
   it('27/10/2026 — senza coordinate non parte una tariffa fissa: si paga solo la consegna', () => {
-    const costo = shippingForEuro({
+    const costo = shippingCentsFor({
       subtotal: 10, storeLat: null, storeLng: null,
       deliveryLat: null, deliveryLng: null, pickupInStore: false,
     });
@@ -32,7 +32,7 @@ describe('la spedizione la calcola un posto solo', () => {
   });
 
   it('a 30 euro di spesa la spedizione è zero, come sotto', () => {
-    const costo = shippingForEuro({
+    const costo = shippingCentsFor({
       subtotal: 30, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,
     });
@@ -40,14 +40,14 @@ describe('la spedizione la calcola un posto solo', () => {
   });
 
   it('col ritiro in negozio non si paga consegna', () => {
-    expect(shippingForEuro({
+    expect(shippingCentsFor({
       subtotal: 5, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: true,
     })).toBe(0);
   });
 
   it('con le coordinate note non c’è un prezzo a distanza', () => {
-    const dallaFonteUnica = shippingForEuro({
+    const dallaFonteUnica = shippingCentsFor({
       subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,
     });
@@ -56,7 +56,7 @@ describe('la spedizione la calcola un posto solo', () => {
   });
 
   it('il coupon «spedizione gratis» azzera anche con le coordinate note', () => {
-    expect(shippingForEuro({
+    expect(shippingCentsFor({
       subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false, freeShipping: true,
     })).toBe(0);
@@ -67,7 +67,7 @@ describe('la spedizione la calcola un posto solo', () => {
       subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,
     };
-    expect(shippingCentsFor(opts)).toBe(Math.round(shippingForEuro(opts) * 100));
+    expect(shippingCentsFor(opts)).toBe(Math.round(shippingForEuro() * 100));
   });
 
   it('lo sconto del ritiro è una costante condivisa, non un numero scritto nella pagina', () => {

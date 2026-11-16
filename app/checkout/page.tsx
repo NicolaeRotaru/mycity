@@ -435,9 +435,6 @@ export default function CheckoutPage() {
     );
   }, [orphans]);
 
-  const groupSubtotal = (g: { items: CartItem[] }) =>
-    g.items.reduce((s, it) => s + it.price * it.quantity, 0);
-
   // Check stato auth all'avvio
   const { data: authUser, isPending: controlloAccessoInCorso } = useQuery({
     queryKey: queryKeys.checkout.authUser,
@@ -773,16 +770,8 @@ export default function CheckoutPage() {
    * `shippingForEuro` e' la stessa funzione che usa il server quando crea
    * l'ordine: gli stessi dati danno per forza lo stesso centesimo.
    */
-  const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number =>
-    shippingForEuro({
-      subtotal: groupSubtotal(g),
-      storeLat: g.storeLat,
-      storeLng: g.storeLng,
-      deliveryLat: form.lat,
-      deliveryLng: form.lng,
-      pickupInStore,
-      freeShipping: appliedCoupon?.freeShipping,
-    });
+  // 16/11/2026 (R29-005) — Senza ingressi: la spedizione non dipende più da niente (vedi lib/shipping.ts).
+  const shippingFor = (): number => shippingForEuro();
 
   const applyCoupon = async () => {
     setCouponError(null);
@@ -1149,7 +1138,7 @@ export default function CheckoutPage() {
       const apiGroups = groups.map((g) => ({
         sellerId: g.sellerId,
         items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity, variantId: it.variantId ?? null })),
-        shippingCents: appliedCoupon?.freeShipping ? 0 : Math.round(shippingFor(g) * 100),
+        shippingCents: appliedCoupon?.freeShipping ? 0 : Math.round(shippingFor() * 100),
       }));
 
       const couponDiscountCents = Math.round((appliedCoupon?.discount ?? 0) * 100);

@@ -77,7 +77,7 @@ describe('e la cifra è quella che la cassa addebita davvero', () => {
 
   it('ma la consegna si paga lo stesso, e la vetrina dice quel numero', () => {
     expect(gruppo.deliveryFeeCents, 'se questo va a zero, la gratuità piena è vera').toBeGreaterThan(0);
-    const vetrina = promessaSpedizione(35);
+    const vetrina = promessaSpedizione();
     expect(Math.round(vetrina.costoConsegna * 100)).toBe(gruppo.deliveryFeeCents);
     expect(vetrina.titolo).toContain(formatPrice(gruppo.deliveryFeeCents / 100));
   });
@@ -115,7 +115,7 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     ).toEqual([]);
     // E la forma corta, con la consegna a pagamento, i soldi li nomina davvero.
     if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
-      expect(promessaSpedizione(30).breve).toContain(
+      expect(promessaSpedizione().breve).toContain(
         formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100),
       );
     }

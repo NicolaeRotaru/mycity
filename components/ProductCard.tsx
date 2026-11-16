@@ -130,8 +130,10 @@ const ProductCard = ({
   // negozio è gratis davvero, ma la consegna a domicilio si paga lo stesso su ogni ordine: il badge
   // diceva «Sped. gratis» e taceva quei soldi, che comparivano per la prima volta nel carrello.
   // `promessaSpedizione` scrive l'etichetta corta con dentro tutti e due i numeri.
-  const spedizione = promessaSpedizione(price);
-  const freeShipping = spedizione.sopraSoglia;
+  // 16/11/2026 (R29-005) — Senza il prezzo, che non cambiava la risposta; il distintivo «gratis» si
+  // accende solo se la consegna davvero non si paga.
+  const spedizione = promessaSpedizione();
+  const consegnaSenzaCosto = spedizione.dettaglioConsegna === null;
   // Iniziali del negozio per il mini-logo (modello negozi-first): "Salumeria Verdi" → "SV"
   const initials = (storeName ?? '').trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
@@ -238,14 +240,14 @@ const ProductCard = ({
         </h3>
 
         <div className="mt-auto pt-1">
-          {(freeShipping || (isLowStock && !isOutOfStock)) && (
+          {(consegnaSenzaCosto || (isLowStock && !isOutOfStock)) && (
             <div className="mb-1 flex flex-wrap items-center gap-1">
               {isLowStock && !isOutOfStock && (
                 <Badge variant="lowstocksoft" icon={Flame}>
                   {stock === 1 ? 'Ultimo pezzo' : `Ultimi ${stock}`}
                 </Badge>
               )}
-              {freeShipping && (
+              {consegnaSenzaCosto && (
                 <Badge variant="free" icon={Truck}>
                   {spedizione.breve}
                 </Badge>

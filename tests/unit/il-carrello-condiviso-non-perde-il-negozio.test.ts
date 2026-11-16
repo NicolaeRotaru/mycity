@@ -28,7 +28,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { monta } from './aiuti/monta-componente';
 import { accendi, clicca, attendi } from './aiuti/schermo';
 import { getCart, type CartItem } from '@/lib/cart';
-import { shippingForEuro } from '@/lib/shipping';
+import { shippingCentsFor } from '@/lib/shipping';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 
 const globali = globalThis as Record<string, unknown>;
@@ -75,10 +75,10 @@ function totale(righe: CartItem[], negozioDi: (r: CartItem) => string): number {
     gruppi.get(chiave)!.push(r);
   }
   const spedizione = Array.from(gruppi.values()).reduce(
-    (s, g) => s + shippingForEuro({
+    (s, g) => s + shippingCentsFor({
       subtotal: sottoTotale(g), storeLat: null, storeLng: null,
       deliveryLat: null, deliveryLng: null, pickupInStore: false,
-    }),
+    }) / 100,
     0,
   );
   const consegna = gruppi.size * (PLATFORM_DELIVERY_FEE_CENTS / 100);

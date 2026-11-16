@@ -11,9 +11,15 @@ const PC = { lat: 45.0526, lng: 9.6929 }; // Piacenza centro
 const FAR = { lat: 45.07, lng: 9.72 };
 
 describe('shippingForEuro', () => {
+  // 16/11/2026 (R29-005) — shippingForEuro non ha più ingressi; i casi qui sotto passano gli stessi
+  // ingressi a shippingCentsFor, che li accetta ancora (lib/ordini/prezzi.ts) e deve dire 0 lo stesso.
+  it('non ha ingressi ed è 0', () => {
+    expect(shippingForEuro()).toBe(0);
+  });
+
   it('è 0 per ritiro in negozio (anche sotto soglia)', () => {
     expect(
-      shippingForEuro({
+      shippingCentsFor({
         subtotal: 10,
         storeLat: PC.lat,
         storeLng: PC.lng,
@@ -26,7 +32,7 @@ describe('shippingForEuro', () => {
 
   it('è 0 con coupon free shipping', () => {
     expect(
-      shippingForEuro({
+      shippingCentsFor({
         subtotal: 10,
         storeLat: PC.lat,
         storeLng: PC.lng,
@@ -40,7 +46,7 @@ describe('shippingForEuro', () => {
 
   it('è 0 anche con 30 euro di spesa', () => {
     expect(
-      shippingForEuro({
+      shippingCentsFor({
         subtotal: 30,
         storeLat: PC.lat,
         storeLng: PC.lng,
@@ -56,7 +62,7 @@ describe('shippingForEuro', () => {
   it('con le coordinate note non parte una tariffa a distanza', () => {
     const expected = 0;
     expect(
-      shippingForEuro({
+      shippingCentsFor({
         subtotal: 10,
         storeLat: PC.lat,
         storeLng: PC.lng,
@@ -69,7 +75,7 @@ describe('shippingForEuro', () => {
 
   it('senza coordinate non parte una tariffa fissa', () => {
     expect(
-      shippingForEuro({
+      shippingCentsFor({
         subtotal: 10,
         storeLat: null,
         storeLng: null,
