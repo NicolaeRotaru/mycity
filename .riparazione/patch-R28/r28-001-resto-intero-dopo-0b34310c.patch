@@ -1,0 +1,75 @@
+diff --git a/components/rider/SOSButton.tsx b/components/rider/SOSButton.tsx
+index e2e88875..1c4bd90d 100644
+--- a/components/rider/SOSButton.tsx
++++ b/components/rider/SOSButton.tsx
+@@ -161,9 +161,8 @@ export default function SOSButton({ orderId }: Props) {
+     // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
+     // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
+     //
+-    // Venti righe piu' in basso il dialogo di conferma dice ancora «Verra' avviata la chiamata al
+-    // 112»: anche quella frase promette troppo, perche' la chiamata parte solo quando il fattorino
+-    // preme CHIAMA. Si cambia con la cucitura della regista (R28-001): la vincola una prova comune.
++    // R28-001 (16/11/2026) — Anche il dialogo di conferma prometteva «Verra' avviata la chiamata
++    // al 112»: adesso dice che si apre il telefono col 112 gia' scritto e che CHIAMA lo premi tu.
+     //
+     // R16-009 (13/11/2026) — La posizione l'ha già chiesta il dialogo quando si è aperto (apriDialogo),
+     // con la pagina ancora davanti: qui si usa quella arrivata, senza chiedere niente. Il tastierino
+@@ -260,7 +259,7 @@ export default function SOSButton({ orderId }: Props) {
+               <ul className="space-y-2 text-sm">
+                 <li className="flex items-start gap-2">
+                   <Phone size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
+-                  <span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>
++                  <span>Si apre il telefono con il <strong>112 (numero unico emergenze)</strong> già scritto: la chiamata parte solo quando premi tu CHIAMA</span>
+                 </li>
+                 <li className="flex items-start gap-2">
+                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
+diff --git a/tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts b/tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts
+index eed3eca0..164c6a0c 100644
+--- a/tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts
++++ b/tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts
+@@ -62,9 +62,11 @@ describe('① il SOS non promette una chiamata che nessuno ha fatto partire', ()
+     expect(messaggiToast.some((t) => /NON è stata avvisata/.test(t))).toBe(true);
+   });
+ 
+-  it('il dialogo di conferma resta al futuro, com’era giusto', () => {
+-    // Era già scritto bene venti righe più in basso: il testo esatto stava lì.
+-    expect(sos).toContain('Verrà avviata la chiamata al');
++  it('anche il dialogo di conferma non promette la chiamata: dice che CHIAMA lo preme il fattorino', () => {
++    // R28-001 (16/11/2026) — Qui prima si vincolava «Verrà avviata la chiamata al 112», che era lo
++    // stesso difetto dei messaggi: `tel:` non avvia nessuna chiamata, apre il telefono col numero scritto.
++    expect(sos).not.toContain('Verrà avviata la chiamata al');
++    expect(sos).toMatch(/già scritto: la chiamata parte solo quando premi tu CHIAMA/);
+   });
+ });
+ 
+diff --git a/tests/unit/riparazione-r28-sos-testo.test.tsx b/tests/unit/riparazione-r28-sos-testo.test.tsx
+index e200b85c..4a925a22 100644
+--- a/tests/unit/riparazione-r28-sos-testo.test.tsx
++++ b/tests/unit/riparazione-r28-sos-testo.test.tsx
+@@ -11,8 +11,8 @@
+  * senza) ed è connesso (l'avviso con la posizione viaggia in rete). Qui il pulsante si monta, si apre il dialogo, si conferma, e si legge quello che il
+  * fattorino vede davvero.
+  *
+- * La frase «Verrà avviata la chiamata al 112» del dialogo resta: la vincola una prova comune
+- * (il-testo-dice-quello-che-succede-davvero), che tocca solo la regista. La modifica è nel referto.
++ * Anche il dialogo diceva «Verrà avviata la chiamata al 112»: ora dice che il 112 è già scritto e
++ * che CHIAMA lo preme il fattorino.
+  * Questa prova riprende quella scritta per la stessa voce nell'onda 3 (riparazione-r16-sos-testo.test.tsx,
+  * tolta dal ramo con debafe63: si legge con `git show debafe63^:tests/unit/riparazione-r16-sos-testo.test.tsx`).
+  */
+@@ -87,6 +87,15 @@ describe('R28-001 · il SOS dice quello che fa davvero', () => {
+     expect(testo).toMatch(/posizione GPS arriva a MyCity solo se il telefono riesce a darla ed è connesso/);
+   });
+ 
++  it('il dialogo di conferma non promette una chiamata, dice che CHIAMA lo preme il fattorino', async () => {
++    const dialogo = await apriDialogo();
++    const testo = dialogo.textContent ?? '';
++    expect(testo).not.toMatch(PROMESSA_DI_CHIAMATA);
++    expect(testo).toMatch(/112/);
++    expect(testo).toMatch(/già scritto/);
++    expect(testo).toMatch(/premi tu CHIAMA/);
++  });
++
+   it('dopo la conferma, con l’avviso scritto, il messaggio dice che MyCity è avvisata e che CHIAMA va premuto', async () => {
+     const dialogo = await apriDialogo();
+     await act(async () => { within(dialogo).getByRole('button', { name: /Conferma SOS/ }).click(); });

@@ -1,6 +1,6 @@
 {
   "sessione": "R28",
-  "aggiornato": "2026-11-16 16:10",
+  "aggiornato": "2026-11-16 16:15",
   "finita": true,
   "testa": "69002b78412dbf049c65294e949669cd0f97cfb4",
   "verifica": {
@@ -458,5 +458,16 @@
     "nota": "onda 4, ultracode spento per regola della regista. Subagenti: lotto 1 (grande), revisori A (solo il grave) e B, lotto 2 (sonnet), revisore C (sonnet), lotto 3 (grande), revisore D. Lotto 4 non partito (30,67 $ a fine lotto 3, sopra la soglia di 30 $). Spesa a fine lavoro intorno ai 37 $. costo_usd letto con get_session senza id prima della consegna: 37,00 $ (cost_usd 36.997).",
     "subagenti": 7
   },
-  "costo_usd": 37.0
+  "costo_usd": 37.0,
+  "patch": {
+    "cartella": ".riparazione/patch-R28/",
+    "file": [
+      "r28-001-resto-intero-dopo-0b34310c.patch",
+      "r28-008-intera.patch",
+      "r28-012-intera.patch",
+      "r28-021-intera.patch",
+      "r28-024-intera.patch"
+    ],
+    "nota": "Patch delle voci serve_file_altrui (R28-001 il resto, R28-008, R28-012, R28-021, R28-024), per la cucitura della regista: si applicano tutte con git apply su 69002b78. Non sono codice del ramo e non entrano nell'unione. Messe qui (opzione b della regista) perché il riparatore spinge solo sul suo ramo."
+  }
 }
