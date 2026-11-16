@@ -8,6 +8,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiTendenze, type Tendenza } from '@/lib/queries/fasce-prodotti';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import FotoConRipiego from '@/components/ui/FotoConRipiego';
 
@@ -45,7 +46,14 @@ export default function TrendingNow() {
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu', e la
     // fascia restava vuota per tutti tranne il negoziante e l'amministratore.
-    queryFn: (): Promise<Trending[]> => leggiTendenze(supabase),
+    // 16/11/2026 (R27-011) — Col prezzo di oggi, promozione compresa: la scheda e la cassa
+    // scrivono quello scontato, e la fascia mostrava il prezzo pieno (come CartUpsell).
+    queryFn: async (): Promise<Trending[]> => {
+      const righe = await leggiTendenze(supabase);
+      if (righe.length === 0) return righe;
+      const sconti = await fetchActiveDiscounts(supabase, righe.map((it) => it.product.id)).catch(() => new Map<string, number>());
+      return righe.map((it) => ({ ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } }));
+    },
     refetchInterval: 5 * 60_000, // ogni 5 minuti
   });
 
