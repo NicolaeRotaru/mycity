@@ -462,7 +462,7 @@ export function promessaSpedizione(
     mancano: 0,
     costoConsegna,
     titolo: !siPaga
-      ? 'Consegna a casa gratuita'
+      ? `${VOCE_CONSEGNA} gratuita`
       : conBase
         ? `${VOCE_CONSEGNA} da ${formatPrice(costoConsegna)} per tutto il carrello`
         : `${VOCE_CONSEGNA} senza costo di base: paghi solo gli euro in più, li vedi in cassa`,

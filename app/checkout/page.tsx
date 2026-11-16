@@ -18,7 +18,7 @@ import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
 import { shippingForEuro } from '@/lib/shipping';
-import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
+import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, TETTO_CONTANTI_CENTS, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
@@ -881,7 +881,7 @@ export default function CheckoutPage() {
    * e sotto una «Consegna MyCity»: con le due cifre passate separate, ogni ordine a domicilio
    * leggeva «Spedizione Gratis» e subito sotto 3 € da pagare. Adesso la riga sempre visibile porta
    * la somma, quindi dice «Gratis» solo quando davvero non si paga niente (il ritiro in negozio).
-   * Il riquadro «Consegna a domicilio» legge lo stesso numero.
+   * Il riquadro della consegna (VOCE_CONSEGNA, come la riga del riepilogo) legge lo stesso numero.
    */
   const consegnaDaPagare = grandShipping + platformDeliveryFee;
   // 27/10/2026 — Col codice «Spedizione gratuita», sotto i 30 € per negozio la consegna resta in
@@ -1568,7 +1568,8 @@ export default function CheckoutPage() {
                 {/* Metodo + costo di consegna (invariato). */}
                 <div className="flex items-center justify-between rounded-lg border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
                   <div>
-                    <p className="font-bold text-ink-900">Consegna a domicilio</p>
+                    {/* R29-012 — Il nome della consegna è uno solo, quello del riepilogo, del carrello e di Stripe. */}
+                    <p className="font-bold text-ink-900">{VOCE_CONSEGNA}</p>
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">

@@ -137,12 +137,24 @@ function etichettaDi(colonna: Element): string {
   return colonna.firstElementChild ? testoDiretto(colonna.firstElementChild) : '';
 }
 
-/** Le cifre scritte accanto a «Spedizione», in ogni riepilogo e in ogni riquadro della pagina. */
-function spedizioniMostrate(radice: HTMLElement, cercata: RegExp = /^Spedizione/): string[] {
+/**
+ * Le cifre scritte accanto a «Spedizione», in ogni riepilogo e in ogni riquadro della pagina.
+ * 16/11/2026 (R29-012) — Il riquadro della cassa ha lo stesso nome della riga del riepilogo
+ * (VOCE_CONSEGNA): `dove` li tiene distinti. «riquadro» = solo le righe con la colonna di sinistra
+ * a blocco (titolo + sottotitolo); «riepilogo» = tutte, meno il riquadro della consegna, che si legge
+ * a parte.
+ */
+function spedizioniMostrate(radice: HTMLElement, cercata: RegExp = /^Spedizione/, dove: 'tutte' | 'riepilogo' | 'riquadro' = 'tutte'): string[] {
   const cifre: string[] = [];
-  for (const riga of Array.from(radice.querySelectorAll('div'))) {
+  const righe = Array.from(radice.querySelectorAll('div'));
+  const aBlocco = (riga: Element) => riga.children.length === 2 && !testoDiretto(riga.children[0]);
+  // Il riquadro della consegna: colonna di sinistra a blocco col nome della consegna per titolo.
+  const riquadri = righe.filter((riga) => aBlocco(riga) && /^Consegna MyCity/.test(etichettaDi(riga.children[0])));
+  for (const riga of righe) {
     const figli = Array.from(riga.children);
     if (figli.length !== 2) continue;
+    if (dove === 'riquadro' && !aBlocco(riga)) continue;
+    if (dove === 'riepilogo' && riquadri.some((q) => q.contains(riga))) continue;
     if (!cercata.test(etichettaDi(figli[0]))) continue;
     cifre.push(testoVisibile(figli[1]));
   }
@@ -248,12 +260,13 @@ async function spedizioneAllaCassa(mondo: Mondo, carrello: RigaCarrello[], opzio
   // 27/10/2026 — Si leggono TUTTE le righe del riepilogo che parlano di farsi portare la spesa,
   // non solo «Consegna MyCity». Leggendo quella sola, la prova restava verde mentre la riga
   // «Spedizione» sopra scriveva «Gratis» in verde su un ordine che pagava 3 € di consegna.
-  const cifre = spedizioniMostrate(s.radice, /^(Spedizione|Consegna MyCity)/);
-  // 27/10/2026 (terzo giro) — Il riquadro «Consegna a domicilio», nel passo 2, si legge a parte:
+  const cifre = spedizioniMostrate(s.radice, /^(Spedizione|Consegna MyCity)/, 'riepilogo');
+  // 27/10/2026 (terzo giro) — Il riquadro della consegna, nel passo 2, si legge a parte:
   // sta sempre in vista mentre si sceglie la fascia, ed è la prima cifra della consegna che si vede.
   // Dentro il riquadro anche il titolo e la fascia («In giornata · 15:00–18:00») fanno una coppia:
   // si tiene solo la colonna che dice un prezzo, o che dice «gratis».
-  const riquadro = spedizioniMostrate(s.radice, /^Consegna a domicilio/).filter((c) => /€|gratis|gratuit/i.test(c));
+  // R29-012 — il titolo del riquadro è il nome unico della consegna, come la riga del riepilogo.
+  const riquadro = spedizioniMostrate(s.radice, /^Consegna MyCity/, 'riquadro').filter((c) => /€|gratis|gratuit/i.test(c));
   const testo = testoVisibile(s.radice);
   s.smonta();
   return { cifre, riquadro, testo, letture: [...db.letture], errori: [...errori.values()] };
