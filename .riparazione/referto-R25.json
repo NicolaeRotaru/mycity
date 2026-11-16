@@ -1,6 +1,6 @@
 {
  "sessione": "R25",
- "aggiornato": "2026-11-16 00:35",
+ "aggiornato": "2026-11-16 00:38",
  "finita": true,
  "testa": "97b6d3b514ba84a14a238ee8438161ea98411cb8",
  "verifica": {
@@ -192,7 +192,9 @@
   "R25-001 (grave) ha avuto due giri di correzione e resta parziale per una finestra di pochi secondi (ordini.ts:462): la chiudiamo con un controllo nel database (una migrazione nella fascia 490-499) in un'onda dopo, oppure basta l'avviso agli amministratori?"
  ],
  "conto": {
-  "agenti": 7,
-  "nota": "L1, V1, C1, V1b, C2, V1c: 6 agenti lanciati dal freno più nessun lotto 2 (il conto dice 7 per prudenza: il freno li conta da sé). Spesa letta da get_session: 20,35 $ prima di V1c; quella finale la scrivo alla regista."
- }
+  "agenti": 6,
+  "subagenti": 6,
+  "nota": "6 subagenti aperti, nessuno fermato: L1 (R25-001), V1 (revisore), C1 (correzione), V1b (revisore), C2 (correzione), V1c (revisore). Nessun lotto 2. costo_usd letto da get_session senza id alle 00:37 del 16/11 (22,37 $), prima della consegna."
+ },
+ "costo_usd": 22.37
 }
