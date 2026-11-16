@@ -477,19 +477,149 @@ jobs:
               echo "Senza, l'ordine vero non nasce mai: nessuno ha visto un acquisto arrivare in fondo."
               echo "Il browser però ha guardato lo stesso — vedi il lavoro «Prove nel browser (senza chiavi)», che non dipende da nessun segreto."
             fi
-            # 1/11/2026 — Le tre prove dell'acquisto vero (tests/e2e/12-…):
-            # contrassegno, rimborso, bonifico al negozio. Oggi sono dichiarate
-            # saltate alla nascita, perche' il loro corpo non e' ancora
-            # scritto. Si dice qui, in cima, anche quando il resto e' verde.
+            # 16/11/2026 (R29-001) — Le tre prove dell'acquisto vero (tests/e2e/12-…):
+            # contrassegno, rimborso, bonifico al negozio. Hanno il corpo e girano nel
+            # lavoro «e2e-cassa-vera», che parte solo con la variabile del repository
+            # E2E_DATI_DI_PROVA = 1. Si dice qui, in cima, anche quando il resto e' verde.
             echo ""
-            if [ -z "${E2E_DATI_DI_PROVA:-}" ]; then
+            if [ "${{ vars.E2E_DATI_DI_PROVA }}" != "1" ]; then
               echo "⚠️ **Le tre prove dell'acquisto vero (contrassegno, rimborso, bonifico al negozio): NON girate.**"
               echo ""
-              echo "Manca \`E2E_DATI_DI_PROVA\`, e comunque il loro corpo non e' ancora scritto: in questa CI nessun ordine e' mai nato, nessun rimborso e nessun bonifico sono stati visti."
+              echo "Il lavoro «La cassa vera» parte solo con la variabile del repository \`E2E_DATI_DI_PROVA\` = 1 (e, per la carta, il segreto \`STRIPE_TEST_SECRET_KEY\`): finche' manca, in questa CI nessun ordine nasce, nessun rimborso e nessun bonifico sono visti."
             else
-              echo "⚠️ **Le tre prove dell'acquisto vero: NON girate nemmeno con \`E2E_DATI_DI_PROVA\` acceso.** Il loro corpo non e' ancora scritto: restano saltate col motivo, non diventano verdi."
+              echo "ℹ️ **Le tre prove dell'acquisto vero** girano nel lavoro «La cassa vera»: il suo riepilogo dice quali sono passate e quali si sono saltate, e perche'."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # 16/11/2026 (R29-001) — LE TRE PROVE DELL'ACQUISTO VERO GIRANO DAVVERO.
+  #
+  # tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts: contrassegno
+  # (l'ordine nasce e il negozio lo vede), rifiuto di un ordine pagato (il
+  # rimborso esiste) e bonifico al negozio dopo la consegna. Fino a oggi erano
+  # tre gusci vuoti: passavano in tre millesimi senza aprire niente. Adesso
+  # chiamano le rotte vere e guardano l'ordine nel database di prova.
+  #
+  # Il database di prova e' un Supabase LOCALE avviato dentro il giro
+  # (tests/supabase-locale/avvia.sh): nessuna chiave del database da custodire,
+  # nessun dato vero, e nasce vuoto ogni volta. Le prove si seminano da sole
+  # negozio, prodotto e cliente.
+  #
+  # SI SALTA DA SOLO, MAI ROSSO PER UN SEGRETO CHE MANCA. Il lavoro parte solo
+  # se la variabile del repository E2E_DATI_DI_PROVA vale 1 (Settings → Secrets
+  # and variables → Actions → Variables). Il `if:` sta sul lavoro e legge una
+  # variabile, non un segreto: lì GitHub i segreti non li mostra. Finché la
+  # variabile manca il lavoro risulta «saltato», e il cancello di main lo conta
+  # come tale. Con la variabile accesa:
+  #  - il contrassegno gira sempre: non chiede nessun segreto;
+  #  - rimborso e bonifico chiedono il segreto STRIPE_TEST_SECRET_KEY (sk_test_…),
+  #    e il bonifico anche la variabile E2E_STRIPE_CONTO_NEGOZIO (un conto
+  #    collegato acct_… di PROVA): se mancano, quelle prove si saltano dicendolo
+  #    e il riepilogo lo scrive. Una chiave che non comincia con sk_test_ non
+  #    arriva mai al sito.
+  # Il segreto del webhook e quello dei lavori a orario sono di questo giro e
+  # basta: li conosce solo il sito acceso qui dentro, che le prove firmano.
+  e2e-cassa-vera:
+    name: La cassa vera — l'ordine nasce nel database di prova
+    if: ${{ vars.E2E_DATI_DI_PROVA == '1' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Quali chiavi di prova ci sono
+        id: chiavi
+        env:
+          STRIPE_PROVA: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          CONTO_PROVA: ${{ vars.E2E_STRIPE_CONTO_NEGOZIO }}
+        run: |
+          carta=no
+          bonifico=no
+          case "$STRIPE_PROVA" in sk_test_*) carta=si ;; esac
+          if [ "$carta" = si ]; then
+            case "$CONTO_PROVA" in acct_*) bonifico=si ;; esac
+          fi
+          if [ -n "$STRIPE_PROVA" ] && [ "$carta" = no ]; then
+            echo "::warning::STRIPE_TEST_SECRET_KEY non comincia con sk_test_: le prove con la carta NON partono (mai una chiave vera qui dentro)."
+          elif [ "$carta" = no ]; then
+            echo "::warning::Manca il segreto STRIPE_TEST_SECRET_KEY (sk_test_…): rimborso e bonifico si saltano dicendolo."
+          elif [ "$bonifico" = no ]; then
+            echo "::warning::Manca la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_… di prova): il bonifico si salta dicendolo."
+          fi
+          echo "carta=$carta" >> "$GITHUB_OUTPUT"
+          echo "bonifico=$bonifico" >> "$GITHUB_OUTPUT"
+
+      - name: Avvia un Supabase locale
+        run: bash tests/supabase-locale/avvia.sh
+
+      # Le variabili del Supabase locale le ha scritte avvia.sh in GITHUB_ENV:
+      # il sito si costruisce e si accende contro di lui, mai contro un altro.
+      - name: Build contro il Supabase locale
+        env:
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+        run: npm run build
+
+      - name: Accendi il sito e fai nascere gli ordini
+        env:
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
+          E2E_DATI_DI_PROVA: "1"
+          CRON_SECRET: "ci-e2e-cassa-vera-cron"
+          STRIPE_WEBHOOK_SECRET: "ci-e2e-cassa-vera-firma-del-webhook"
+          STRIPE_SECRET_KEY: ${{ steps.chiavi.outputs.carta == 'si' && secrets.STRIPE_TEST_SECRET_KEY || '' }}
+          E2E_STRIPE_CONTO_NEGOZIO: ${{ steps.chiavi.outputs.bonifico == 'si' && vars.E2E_STRIPE_CONTO_NEGOZIO || '' }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: risultati-cassa-vera.json
+        run: |
+          # Come nel lavoro e2e: si chiude il gruppo intero, non solo npm.
+          set -m
+          npm start &
+          APP_PID=$!
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          set +e
+          npx playwright test tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts \
+            --project=chromium --retries=0 --reporter=list,json \
+            -g "nasce e il negozio|il rimborso esiste|il bonifico al negozio"
+          STATUS=$?
+          kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+          exit $STATUS
+
+      # Il riepilogo dice, prova per prova, se l'acquisto vero e' stato visto:
+      # passata, saltata (e perche'), o caduta. Gira sempre, anche col rosso.
+      - name: Dichiara cosa ha visto la cassa vera
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const righe = ["## La cassa vera: le tre prove dell'"'"'acquisto vero", ""];
+            let rapporto = null;
+            try { rapporto = JSON.parse(fs.readFileSync("risultati-cassa-vera.json", "utf8")); } catch {}
+            if (!rapporto) {
+              righe.push("⚠️ **Le tre prove dell'"'"'acquisto vero: NON girate** (nessun risultato di Playwright: il sito o il Supabase locale non sono partiti).");
+            } else {
+              const visita = (s) => [...(s.specs ?? []), ...(s.suites ?? []).flatMap(visita)];
+              const spec = (rapporto.suites ?? []).flatMap(visita);
+              for (const sp of spec) {
+                const t = (sp.tests ?? [])[0] ?? {};
+                const motivo = (t.annotations ?? []).find((a) => a.type === "skip")?.description ?? "";
+                const segno = t.status === "expected" ? "✅ passata: l'"'"'ordine e'"'"' nato davvero" : t.status === "skipped" ? `⏭️ saltata: ${motivo}` : "❌ caduta";
+                righe.push(`- **${sp.title}** — ${segno}`);
+              }
+              if (spec.length === 0) righe.push("⚠️ Nessuna delle tre prove e'"'"' stata trovata: il filtro non ha preso niente.");
+            }
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join("\n") + "\n");
+          '
 
   # 3/9/2026 — LE PROVE NEL BROWSER NON POSSONO PIU' SPEGNERSI DA SOLE.
   #
@@ -787,6 +917,7 @@ jobs:
       - integration-tests
       - rls-locale
       - e2e-tests
+      - e2e-cassa-vera
       - e2e-senza-chiavi
       - a11y
     if: always()
