@@ -271,13 +271,30 @@ export async function annullaERimborsa(
       const totaleCent = giro ? giro.totaleCents : Math.round(Number(order.total_price) * 100);
       const giaRimborsato = Number(order.refunded_amount_cents ?? 0);
       const residuoCent = Math.max(0, totaleCent - giaRimborsato);
-      const res = await refundOrder({
-        orderId: order.id,
-        amountCents: residuoCent,
-        reason: opts.reason,
-        metadata: opts.metadata,
-        notifyBuyer: true,
-      });
+      // 16/11/2026 (R27-016 correzione) — NIENTE DA RENDERE SULLA CARTA: L'ORDINE SI CHIUDE SENZA RIMBORSO.
+      // Col carrello rifatto la parte pagata con la carta può restare tutta agli ordini rimasti: pane
+      // 15 + frutta 12 con la veloce, il pane pagato 17 € col credito e 2 € con la carta, 1 € già reso
+      // dal freno, il forno rifiuta → sulla carta del pane non resta niente da rendere. `refundOrder`
+      // rifiuta 0 («importo rimborso non valido», lib/stripe/payout.ts): il rifiuto finiva in
+      // RIMBORSO_FALLITO e l'ordine restava vivo. Ora si chiude con lo stesso turno del ramo dei
+      // contanti (`prendiIlTurno`, più sotto), e credito e codice tornano qui sotto come dopo un rimborso.
+      let refundId: string | null = null;
+      if (residuoCent > 0) {
+        const res = await refundOrder({
+          orderId: order.id,
+          amountCents: residuoCent,
+          reason: opts.reason,
+          metadata: opts.metadata,
+          notifyBuyer: true,
+        });
+        refundId = res.refundId;
+      } else {
+        const turno = await prendiIlTurno();
+        if (turno !== true) {
+          if (giro) await giro.rimetti();
+          return turno;
+        }
+      }
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
       // 28/8/2026 — IL CREDITO TORNA ANCHE QUI. Il rimborso sulla carta copre
@@ -292,21 +309,26 @@ export async function annullaERimborsa(
       await restituisciCoupon();
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
-      if (giro?.avviso) {
+      // R27-016 correzione — Senza rimborso «Rimborso emesso» non parte: l'email di annullo parte sempre.
+      if (giro?.avviso || refundId == null) {
         // 5/11/2026 — Sulla carta torna il residuo (totale nuovo meno quanto era gia'
         // stato rimborsato), lo stesso importo di «Rimborso emesso»: l'email del
         // carrello diceva il totale nuovo («ti tornano 16 €» su un rimborso di 11).
-        const avvisoVero = giaRimborsato > 0
+        const avvisoVero = giro?.avviso && giaRimborsato > 0
           ? { ...giro.avviso, tornaCents: residuoCent, spesaCents: null }
-          : giro.avviso;
+          : giro?.avviso ?? null;
         await avvisaLaCampanellaDelCarrello(admin, order.user_id, avvisoVero, 'carta');
-        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato + trattenuto), opts.reason, { avviso: avvisoVero, come: 'carta' }, {
-          annullatoDalCliente: opts.metadata?.source === 'buyer_cancel',
-        });
+        await avvisaIlClienteDellAnnullo(
+          admin,
+          conIlCreditoTornato(creditoNonTornato + trattenuto),
+          opts.reason,
+          avvisoVero ? { avviso: avvisoVero, come: 'carta' } : null,
+          { annullatoDalCliente: opts.metadata?.source === 'buyer_cancel' },
+        );
       }
       return {
         ok: true,
-        refundId: res.refundId,
+        refundId,
         ...(creditoNonTornato > 0 ? { creditoNonTornatoCents: creditoNonTornato } : {}),
       };
     } catch (err) {
@@ -334,39 +356,47 @@ export async function annullaERimborsa(
    * annulla resta chi annullava prima (il cliente solo da NEW, l'amministrazione
    * da qualunque stato non annullato) — quello che cambia è che a passare è
    * uno solo. Il secondo trova zero righe e se ne va senza toccare i soldi.
+   *
+   * 16/11/2026 (R27-016 correzione) — Il turno e la merce a scaffale stanno in `prendiIlTurno`: lo
+   * usa anche il ramo della carta quando sulla carta non resta niente da rendere.
    */
-  const { data: preso, error: updErr } = await admin
-    .from('orders')
-    .update({
-      delivery_status: 'CANCELED',
-      canceled_at: new Date().toISOString(),
-      ...(order.payment_status === 'PENDING' ? { payment_status: 'FAILED' } : {}),
-    })
-    .eq('id', order.id)
-    .neq('delivery_status', 'CANCELED')
-    // 5/11/2026 — Il turno si prende sullo stato che il chiamante ha
-    // controllato, non su «qualunque stato non annullato»: fra il controllo
-    // della rotta e questa scrittura l'ordine puo' essere partito o consegnato.
-    // Se e' cambiato, zero righe e nessun soldo toccato.
-    .eq('delivery_status', order.delivery_status ?? '')
-    .select('id');
-  if (updErr) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message };
-  if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
+  const turno = await prendiIlTurno();
+  if (turno !== true) return turno;
+  async function prendiIlTurno(): Promise<true | EsitoAnnullo> {
+    const { data: preso, error: updErr } = await admin
+      .from('orders')
+      .update({
+        delivery_status: 'CANCELED',
+        canceled_at: new Date().toISOString(),
+        ...(order.payment_status === 'PENDING' ? { payment_status: 'FAILED' } : {}),
+      })
+      .eq('id', order.id)
+      .neq('delivery_status', 'CANCELED')
+      // 5/11/2026 — Il turno si prende sullo stato che il chiamante ha
+      // controllato, non su «qualunque stato non annullato»: fra il controllo
+      // della rotta e questa scrittura l'ordine puo' essere partito o consegnato.
+      // Se e' cambiato, zero righe e nessun soldo toccato.
+      .eq('delivery_status', order.delivery_status ?? '')
+      .select('id');
+    if (updErr) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message };
+    if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
 
-  // 5/11/2026 — La merce che non torna a scaffale non deve passare in silenzio:
-  // l'ordine e' gia' annullato, un secondo annullo non ci riprova.
-  // 15/11/2026 (R27-002) — Lo stesso passo del giro degli ordini scaduti: `rimettiAScaffaleDopoLAnnullo`.
-  if (!(await rimettiAScaffaleDopoLAnnullo(admin, order.id))) {
-    try {
-      await notifyAdmins(
-        '⚠️ Merce non rimessa a scaffale dopo un annullo',
-        `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma i suoi prodotti non sono tornati in magazzino: ` +
-          'le quantità in vendita sono più basse del vero. Vanno sistemate a mano dal pannello prodotti del negozio.',
-        '/admin/orders',
-      );
-    } catch (e) {
-      logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err: e });
+    // 5/11/2026 — La merce che non torna a scaffale non deve passare in silenzio:
+    // l'ordine e' gia' annullato, un secondo annullo non ci riprova.
+    // 15/11/2026 (R27-002) — Lo stesso passo del giro degli ordini scaduti: `rimettiAScaffaleDopoLAnnullo`.
+    if (!(await rimettiAScaffaleDopoLAnnullo(admin, order.id))) {
+      try {
+        await notifyAdmins(
+          '⚠️ Merce non rimessa a scaffale dopo un annullo',
+          `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma i suoi prodotti non sono tornati in magazzino: ` +
+            'le quantità in vendita sono più basse del vero. Vanno sistemate a mano dal pannello prodotti del negozio.',
+          '/admin/orders',
+        );
+      } catch (e) {
+        logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err: e });
+      }
     }
+    return true;
   }
 
   // 30/10/2026 — Coi contanti la consegna dei negozi rimasti si rifà: cambia quanto si paga alla porta.

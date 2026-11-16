@@ -16,11 +16,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * regola e la differenza la pagava MyCity in silenzio.
  */
 
+// 16/11/2026 (R27-016 correzione) — Il finto rifiuta l'importo 0 (o non valido) come il vero
+// (lib/stripe/payout.ts, «importo rimborso non valido»): stessa eccezione, la classe vera.
 const refundOrder = vi.fn(async (a: { orderId: string; amountCents: number }) => {
-  Object.assign(riga(a.orderId), { delivery_status: 'CANCELED' });
+  if (!Number.isFinite(a.amountCents) || a.amountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
+  const r = riga(a.orderId);
+  Object.assign(r, { delivery_status: 'CANCELED', refunded_amount_cents: Number(r.refunded_amount_cents ?? 0) + a.amountCents });
   return { refundId: `re_${a.orderId}` };
 });
-vi.mock('@/lib/stripe/payout', () => ({ refundOrder: (a: { orderId: string; amountCents: number }) => refundOrder(a) }));
+vi.mock('@/lib/stripe/payout', async (orig) => ({
+  ...(await orig<object>()),
+  refundOrder: (a: { orderId: string; amountCents: number }) => refundOrder(a),
+}));
 vi.mock('@/lib/stripe/client', async (orig) => ({ ...(await orig<object>()), isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/rimborsi-da-dividere', () => ({ ilCarrelloAspettaLaDivisione: async () => false }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async () => undefined) }));
@@ -29,6 +36,7 @@ let db: ReturnType<typeof finto>;
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 
 import { annullaERimborsa } from '@/lib/ordini/annulla';
+import { RimborsoNonRitentabile } from '@/lib/stripe/payout';
 import { carrello, finto } from './carrello-finto';
 
 const riga = (id: string) => db.tabelle.orders.find((r) => r.id === id)!;
@@ -76,5 +84,61 @@ describe('R27-016 — carrello con la carta spostato dal freno della veloce', ()
     await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
     expect(refundOrder.mock.calls.map((c) => [c[0].orderId, c[0].amountCents])).toEqual([['pane', 1900]]);
     expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13 });
+  });
+});
+
+/**
+ * 16/11/2026 (R27-016 correzione) — IL PANE PAGATO QUASI TUTTO COL CREDITO.
+ *
+ * Lo stesso carrello, ma il pane (19 €) pagato 17 € col credito MyCity e 2 € con la carta; il freno
+ * ha già reso 1 € sulla carta. Il forno rifiuta: col conto rifatto sulla carta del pane non resta
+ * niente da rendere, e il refundOrder vero rifiuta 0. Prima della correzione il rifiuto finiva in
+ * RIMBORSO_FALLITO, col pane vivo; prima ancora di R27-016 riusciva (1 € sulla carta) ma la frutta
+ * restava a 1 € di consegna. Adesso il rifiuto riesce e la frutta passa a 3 € e 3 €.
+ */
+describe('R27-016 correzione — il pane pagato quasi tutto col credito', () => {
+  function colCredito(cartaCents: number) {
+    const ordini = spostatoDalFreno();
+    ordini[0].wallet_applied_cents = 1900 - cartaCents;
+    ordini[0].total_price = cartaCents / 100;
+    return ordini;
+  }
+
+  it('17 € di credito e 2 € di carta, 1 € già reso: il rifiuto riesce, niente rimborso da 0, la frutta passa a 3 € e 3 €', async () => {
+    const ordini = colCredito(200);
+    db = finto({ orders: ordini });
+    db.rpc = (async () => ({ data: null, error: null })) as typeof db.rpc;
+    const esito = await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
+    expect(esito).toMatchObject({ ok: true, refundId: null });
+    expect(refundOrder).not.toHaveBeenCalled();
+    expect(riga('pane')).toMatchObject({ delivery_status: 'CANCELED', refunded_amount_cents: 100 });
+    expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, gross_total_cents: 1500, delivery_status: 'NEW' });
+  });
+
+  it.each([100, 150, 250, 300])('parte carta del pane %i centesimi, 1 € già reso: il rifiuto riesce e la carta non rende niente', async (cartaCents) => {
+    const ordini = colCredito(cartaCents);
+    db = finto({ orders: ordini });
+    db.rpc = (async () => ({ data: null, error: null })) as typeof db.rpc;
+    const esito = await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
+    expect(esito.ok).toBe(true);
+    expect(refundOrder).not.toHaveBeenCalled();
+    expect(riga('pane')).toMatchObject({ delivery_status: 'CANCELED', refunded_amount_cents: 100 });
+    expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, gross_total_cents: 1500 });
+  });
+
+  it('con 4 € di carta resta 1 € da rendere: torna sulla carta, una volta sola', async () => {
+    const ordini = colCredito(400);
+    db = finto({ orders: ordini });
+    db.rpc = (async () => ({ data: null, error: null })) as typeof db.rpc;
+    const esito = await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
+    expect(esito.ok).toBe(true);
+    expect(refundOrder.mock.calls.map((c) => [c[0].orderId, c[0].amountCents])).toEqual([['pane', 100]]);
+    expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, gross_total_cents: 1500 });
+  });
+
+  it('il finto rifiuta 0 come il vero: stessa eccezione, non ritentabile', async () => {
+    await expect(refundOrder({ orderId: 'pane', amountCents: 0 })).rejects.toMatchObject({
+      name: 'RimborsoNonRitentabile', ritentabile: false, message: 'refundOrder: importo rimborso non valido',
+    });
   });
 });

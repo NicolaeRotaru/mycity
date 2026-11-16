@@ -20,11 +20,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * apre la porta (15 € alla frutta) e il credito torna tutto, come prima.
  */
 
+// 16/11/2026 (R27-016 correzione) — Il finto rifiuta l'importo 0 (o non valido) come il vero
+// (lib/stripe/payout.ts, «importo rimborso non valido»): stessa eccezione, la classe vera. Prima
+// accettava 0, e la prova era verde con un annullo che col refundOrder vero cadeva.
 const refundOrder = vi.fn(async (a: { orderId: string; amountCents: number }) => {
-  Object.assign(riga(a.orderId), { delivery_status: 'CANCELED' });
+  if (!Number.isFinite(a.amountCents) || a.amountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
+  const r = riga(a.orderId);
+  Object.assign(r, { delivery_status: 'CANCELED', refunded_amount_cents: Number(r.refunded_amount_cents ?? 0) + a.amountCents });
   return { refundId: `re_${a.orderId}` };
 });
-vi.mock('@/lib/stripe/payout', () => ({ refundOrder: (a: { orderId: string; amountCents: number }) => refundOrder(a) }));
+vi.mock('@/lib/stripe/payout', async (orig) => ({
+  ...(await orig<object>()),
+  refundOrder: (a: { orderId: string; amountCents: number }) => refundOrder(a),
+}));
 vi.mock('@/lib/stripe/client', async (orig) => ({ ...(await orig<object>()), isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/rimborsi-da-dividere', () => ({ ilCarrelloAspettaLaDivisione: async () => false }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async () => undefined) }));
@@ -34,6 +42,7 @@ let db: ReturnType<typeof finto>;
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 
 import { annullaERimborsa } from '@/lib/ordini/annulla';
+import { RimborsoNonRitentabile } from '@/lib/stripe/payout';
 import { carrello, finto, tentativoDiCassa } from './carrello-finto';
 
 const riga = (id: string) => db.tabelle.orders.find((r) => r.id === id)!;
@@ -67,8 +76,10 @@ describe('R27-018 — pane tutto a credito, frutta con la carta', () => {
   it('il forno rifiuta: tornano 16 € di credito e non 18, la frutta resta 13 € sulla carta più 2 € di credito', async () => {
     conIlDatabase(colCredito('card', 1800));
     const esito = await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'Rifiutato dal negozio' });
-    expect(esito.ok).toBe(true);
-    expect(resi()).toEqual([['pane', 0]]);
+    expect(esito).toMatchObject({ ok: true, refundId: null });
+    // Sulla carta del pane non c'è niente da rendere: nessun rimborso, l'ordine si chiude lo stesso.
+    expect(resi()).toEqual([]);
+    expect(riga('pane')).toMatchObject({ delivery_status: 'CANCELED' });
     expect(crediti).toEqual([{ p_cents: 1600, p_ref: 'pane' }]);
     expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 13, wallet_applied_cents: 200, gross_total_cents: 1500 });
     expect(riga('pane')).toMatchObject({ delivery_fee_cents: 100, total_price: 0, wallet_applied_cents: 1600, gross_total_cents: 1600 });
@@ -78,13 +89,12 @@ describe('R27-018 — pane tutto a credito, frutta con la carta', () => {
     expect(sendEmail.mock.calls.at(-1)?.[0].text).toMatch(/\(16,00\s€\) ti è stato restituito/u);
   });
 
-  it('il rimborso cade: il credito torna com era su tutte e due le righe', async () => {
+  it("l'ordine cambia prima della chiusura: il credito torna com era su tutte e due le righe", async () => {
     conIlDatabase(colCredito('card', 1800));
-    refundOrder.mockImplementationOnce(async () => {
-      throw new Error('Stripe timeout');
-    });
-    const esito = await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'Rifiutato dal negozio' });
-    expect(esito.ok).toBe(false);
+    // Chi annulla aveva letto il pane in un altro stato: il turno non si prende, niente si chiude.
+    const esito = await annullaERimborsa(db as never, { ...riga('pane'), delivery_status: 'ACCEPTED' } as never, { reason: 'Rifiutato dal negozio' });
+    expect(esito).toMatchObject({ ok: false, motivo: 'GIA_ANNULLATO' });
+    expect(resi()).toEqual([]);
     expect(crediti).toEqual([]);
     expect(riga('pane')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 0, wallet_applied_cents: 1800, gross_total_cents: 1800 });
     expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13, wallet_applied_cents: 0, gross_total_cents: 1300 });
@@ -104,8 +114,10 @@ describe('R27-019 — il credito copre quasi tutto l ordine annullato', () => {
   it('pane 17,50 € di credito e 0,50 € di carta: tornano 16 € di credito, la frutta resta 13,50 € sulla carta come l addebito', async () => {
     conIlDatabase(colCredito('card', 1750));
     const esito = await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'Rifiutato dal negozio' });
-    expect(esito.ok).toBe(true);
-    expect(resi()).toEqual([['pane', 0]]);
+    expect(esito).toMatchObject({ ok: true, refundId: null });
+    // Sulla carta del pane non c'è niente da rendere: nessun rimborso, l'ordine si chiude lo stesso.
+    expect(resi()).toEqual([]);
+    expect(riga('pane')).toMatchObject({ delivery_status: 'CANCELED' });
     expect(crediti).toEqual([{ p_cents: 1600, p_ref: 'pane' }]);
     // Sull'addebito restano 0,50 + 13 = 13,50 €: è il totale della frutta sulla carta, più 1,50 € di credito.
     expect(riga('frutta')).toMatchObject({ total_price: 13.5, wallet_applied_cents: 150, gross_total_cents: 1500, delivery_fee_cents: 300 });
