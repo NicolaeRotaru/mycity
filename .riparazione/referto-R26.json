@@ -1,0 +1,502 @@
+{
+  "sessione": "R26",
+  "aggiornato": "2026-11-16 00:20",
+  "finita": true,
+  "testa": "8c6a3b8ad1aa353ad31954f277e3941e3289618b",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=6144 npm run verify",
+    "esito": "verde",
+    "testa": "8c6a3b8ad1aa353ad31954f277e3941e3289618b",
+    "nota": "typecheck, lint (0 errori, 99 avvisi già presenti) e vitest: 1584 file, 10420 prove verdi. Lo SHA è preso con git rev-parse HEAD nello stesso comando."
+  },
+  "voci": [
+    {
+      "id": "R26-001",
+      "chiave": "privacy-legale|le foto dei resi restano pubbliche su internet per sempre, anche dopo che il cliente cancella l'account",
+      "esito": "parziale",
+      "commit": "da2d9cbc715e04de5facbd9bcb07a43d360dc5da",
+      "file_toccati": [
+        "lib/account/cancellazione.ts",
+        "migrations/500_le_foto_dei_resi_in_un_secchio_privato.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-foto-dei-resi.test.ts",
+        "tests/sql/rls/riparazione-r26-foto-dei-resi.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-foto-dei-resi.test.ts --reporter=dot ; PGHOST=/var/run/postgresql bash tests/sql/harness/apply.sh r26_rimessa && psql -X -d r26_rimessa -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r26-foto-dei-resi.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da2d9cbc^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r26-foto-dei-resi.test.ts --json ; PGHOST=/var/run/postgresql timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da2d9cbc^ --file migrations/500_le_foto_dei_resi_in_un_secchio_privato.sql --prove tests/sql/rls/riparazione-r26-foto-dei-resi.test.sql --sql r26_rimessa --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La cancellazione dell'account toglie le foto dei resi dove stanno oggi (products/<utente>/returns/**, discesa in tutte le sottocartelle, solo file veri) e azzera photo_urls sulla riga del reso. La migrazione 500 prepara il secchio privato «returns» con le sue regole: scrive solo il cliente per un suo ordine; leggono il cliente, il negozio dell'ordine e l'amministratore; l'anonimo niente.",
+      "cosa_resta": "Il modulo del reso carica ancora in products, che è pubblico: finché l'account vive la foto si vede da chi ha il link. Il passaggio al secchio privato chiede prima la riga in lib/storage/regole-secchi.ts (serve_file_altrui), poi, tutte insieme e con la 500 applicata: 1) app/orders/[id]/return/page.tsx: secchio 'returns', cartella params.id, accept={attributoAccept('returns')}; photo_urls salva ${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/authenticated/returns/<percorso>, anteprima con createSignedUrl; 2) components/seller/ReturnRequestCard.tsx: createSignedUrl per quei riferimenti; 3) lib/account/cancellazione.ts: 'returns' in SECCHI_CON_FILE_PERSONALI. Non codice per Nicola: applicare la 500; le foto già caricate in products/<cliente>/returns/ vanno spostate o cancellate. Due note del revisore: (a) il commento in migrations/500_le_foto_dei_resi_in_un_secchio_privato.sql:26-27 dice che la cancellazione svuota già la cartella nel secchio 'returns', ma 'returns' entra in SECCHI_CON_FILE_PERSONALI solo col passo 3: va corretto insieme; (b) non verificabile: prima della migrazione 114 il caricamento in products accettava qualunque percorso, quindi foto di resi più vecchie salvate fuori da <cliente>/returns/ restano pubbliche, e photo_urls viene azzerato prima della pulizia dei file, così il riferimento per ritrovarle si perde.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/storage/regole-secchi.ts",
+          "modifica": "In REGOLE, dopo 'cod-proof': returns: { nome: 'returns', tipiAmmessi: TIPI_IMMAGINE, maxByte: DIECI_MIB, cartellaStaffAmmessa: false, pubblico: false, tettoNelDeposito: true } — secchio privato della migrations/500. Senza questa riga caricaImmagine e attributoAccept rifiutano 'returns'."
+        },
+        {
+          "file": "tests/unit/la-regola-di-ogni-magazzino-sta-in-un-posto-solo.test.ts",
+          "modifica": "Insieme alla riga sopra: QUATTRO = ['products','reviews','stories','cod-proof','returns']; in `dove` aggiungere ['returns','500_le_foto_dei_resi_in_un_secchio_privato.sql','returns insert own order']; in SCHERMATE_DEI_MAGAZZINI 'app/orders/[id]/return/page.tsx' passa a 'returns'; nel ciclo della cartella dello staff aggiungere 'returns'."
+        },
+        {
+          "file": "scripts/backup-db.sh",
+          "modifica": "Quando 'returns' entra in SECCHI_CON_FILE_PERSONALI: SECCHI_SVUOTATI_DALL_APP=\"kyc-docs cod-proof reviews returns\" (riparazione-r15-backup-secchio-vuoto.test.ts li vuole uguali)."
+        }
+      ],
+      "verificato_da": "qa (revisore lotto 1, worktree separata): rilanciate la vitest R26 (3/3) e la SQL su r26_rev1 (13 ok); rimessa 0 su cancellazione.ts e 0 sulla migrazione 500; verdi i 28 file che importano cancellazione.ts (206 prove), i 5 sulla regola dei secchi (109) e l'intera suite SQL. Provati cartelle annidate, prefissi simili (<id>x/), paginazione, errore dello storage (ferma la cancellazione, non resta nascosto), photo_urls jsonb che accetta [], regole della 500 contro negozio estraneo, cliente su ordine altrui e anonimo. Parziale confermato: caricare in 'returns' senza la riga in regole-secchi.ts vorrebbe dire aggirare la regola unica."
+    },
+    {
+      "id": "R26-002",
+      "chiave": "accessibilita|le foto delle recensioni e l'importazione dei prodotti da file non si aprono da tastiera",
+      "esito": "parziale",
+      "commit": "8c6a3b8ad1aa353ad31954f277e3941e3289618b",
+      "file_toccati": [
+        "app/rider/onboarding/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-campi-file-da-tastiera.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-campi-file-da-tastiera.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8c6a3b8ad1aa353ad31954f277e3941e3289618b^ --file app/rider/onboarding/page.tsx --prove tests/unit/riparazione-r26-campi-file-da-tastiera.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le tre pagine della voce erano già a posto sulla base (components/PhotoReviewUpload.tsx:194-206, app/seller/products/import/page.tsx:247-249, app/orders/[id]/return/page.tsx:421-433: campo sr-only, riquadro con focus-within, nome accessibile; coperte da riparazione-r18-campi-file-da-tastiera.test.tsx). Applicata la correzione chiesta dal collaudo K07 sulla label dei documenti in app/rider/onboarding/page.tsx; la prova nuova monta la pagina vera.",
+      "cosa_resta": "components/rider/CashConfirmDialog.tsx (non di R26): la label di PhotoSlot non mostra il fuoco.",
+      "serve_file_altrui": [
+        {
+          "file": "components/rider/CashConfirmDialog.tsx",
+          "modifica": "Riga ~319, label di PhotoSlot: className=\"cursor-pointer\" → className=\"block cursor-pointer rounded-lg focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2\". Poi, nella prova del fattorino, il caso del pannello dei contanti: montare components/rider/CashConfirmDialog.tsx con { orderId: 'ordine-1', expectedCents: 6000, aperto: true, onChiudi } e controllare che i 2 input file abbiano la label con focus-within:ring-2 e focus-within:ring-primary-700 (primo caso della prova r18 scritta in scheda)."
+        }
+      ],
+      "verificato_da": "qa (revisore lotto 3): rimessa 0, vitest 1/1; lette le righe delle tre pagine (PhotoReviewUpload.tsx:198-208, import/page.tsx:247-249, return/page.tsx:422-433: sr-only, focus-within, aria-label, nessun «+»); il diff tocca solo la label dei documenti in onboarding; CashConfirmDialog.tsx:332 confermato fuori dai file di R26."
+    },
+    {
+      "id": "R26-003",
+      "chiave": "api-backend|la notifica del nuovo ordine fa la fila dietro le promozioni",
+      "esito": "riparato",
+      "commit": "8af8a8550a3012b153ff9a69df3afce7b30b4f47",
+      "file_toccati": [
+        "app/api/cron/send-push/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts tests/unit/minori-s03-push.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8af8a8550a3012b153ff9a69df3afce7b30b4f47^ --file app/api/cron/send-push/route.ts --prove tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se la prima lettura (le 100 più vecchie) è piena e contiene promo, group o newsletter, il giro fa una seconda lettura delle sole notifiche che non aspettano (category null o fuori da quelle tre) e le mette davanti, tetto 100; se la seconda lettura cade, avviso nel log e si va avanti con la prima. Rifatta dalla descrizione (i commit ba36f97a e c81987f0 non esistono nel deposito): minori-s03-push.test.ts, comune con R25, resta verde senza toccarla, quindi nessun serve_file_altrui.",
+      "verificato_da": "qa (revisore lotto 3, worktree separata): rimessa 0 (rossa alla base, verde con la correzione), vitest 6/6 con minori-s03-push; varianti lette sul diff: nessun doppio invio (gli id urgenti si tolgono dalla prima lettura), tetto 100 mantenuto, filtro category.is.null,category.not.in.(…) corretto, finestra non piena senza notifiche indietro. Nessun difetto."
+    },
+    {
+      "id": "R26-004",
+      "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
+      "esito": "serve_file_altrui",
+      "nota": "Regola della regista (15/11): se più di 10 delle 34 prove sono comuni, niente cherry-pick. Sulla base 33 prove su 34 importano o simulano file di R25 (lib/api/middleware, lib/logger, lib/store-hours, lib/stripe/client, lib/cart, rotte subscription) o di R27 (lib/funzioni-al-lancio); la 34ª, riparazione-r13-riserva-della-cassa.test.ts, sulla base non esiste. Codice non toccato: senza le prove la cura le farebbe diventare rosse.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts",
+          "modifica": "nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout aggiungere deliverySlot con una fascia vera di lib/quando-arriva.ts (es. FASCE_DI_DOMANI[0], compatibile con orologio e orari del negozio finto della prova); poi cherry-pick di 69b1cc57 (vale per tutte le righe sotto)"
+        },
+        {
+          "file": "tests/unit/api-stripe-checkout.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/contanti-la-chiave-si-prende-prima.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/minori-s01-cassa-carta.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/minori-s01-negozio-senza-insegna.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/minori-s01-zona-carta.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/ordini-contrassegno-due-negozi.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/riparazione-r13-riserva-della-cassa.test.ts",
+          "modifica": "idem (prova di R13 dei lotti 1-3, usa anche file di altre sessioni) — sulla base 76d4c4d questo file non esiste."
+        },
+        {
+          "file": "tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "tests/unit/variante-503-dopo-chiave-abbandonata.test.ts",
+          "modifica": "deliverySlot valido (fascia vera di lib/quando-arriva.ts, es. FASCE_DI_DOMANI[0]) nel corpo di ogni richiesta di consegna a domicilio alle rotte /api/orders/cod e /api/stripe/checkout; poi cherry-pick di 69b1cc57"
+        },
+        {
+          "file": "lib/ordini/fascia-consegna.ts, app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts",
+          "modifica": "(file di R26, da fare DOPO le prove sopra) cherry-pick di 69b1cc57: le rotte rifiutano una consegna a domicilio senza fascia valida."
+        }
+      ]
+    },
+    {
+      "id": "R26-005",
+      "chiave": "architettura|il conto del carrello ha una seconda copia che nessuna pagina usa, e la prova «lo schermo fa lo stesso conto del server» controlla proprio quella",
+      "esito": "non_fatto",
+      "nota": "tetto di spesa della sessione (consegna a 25 $): non cominciata"
+    },
+    {
+      "id": "R26-006",
+      "chiave": "architettura|interfacce zombie: shippingforeuro vale sempre 0 ma riceve 7 ingressi; promessaspedizione ha un argomento morto e campi sempre costanti",
+      "esito": "serve_file_altrui",
+      "nota": "Regola della regista (15/11): la firma non si cambia senza i chiamanti altrui. Sulla base components/ProductCard.tsx:133 chiama promessaSpedizione(price), components/FreeShippingProgress.tsx legge sopraSoglia/mancano e app/cart/page.tsx usa promessaSpedizione(), tre file non di R26: togliere l'argomento o i campi rompe il typecheck. Codice non toccato.",
+      "serve_file_altrui": [
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "Riga ~696: shippingForEuro({...}) → shippingForEuro() (o la costante 0 con commento); riga 771: promessaSpedizione() resta."
+        },
+        {
+          "file": "app/cart/page.tsx",
+          "modifica": "Togliere gli eventuali argomenti a shippingForEuro / promessaSpedizione (righe ~74, ~152-160)."
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "modifica": "Riga 540: promessaSpedizione(subtotaleConQuestoProdotto) → promessaSpedizione(); togliere subtotaleConQuestoProdotto se non serve ad altro."
+        },
+        {
+          "file": "components/ProductCard.tsx",
+          "modifica": "Riga 133: promessaSpedizione(price) → promessaSpedizione()."
+        },
+        {
+          "file": "components/FreeShippingProgress.tsx",
+          "modifica": "Riga ~17: smettere di leggere sopraSoglia/mancano (sempre false/0) e di passare argomenti."
+        },
+        {
+          "file": "tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx e tests/unit/in-cassa-…test.ts:154",
+          "modifica": "Chiamare promessaSpedizione() senza argomenti e non aspettarsi più sopraSoglia/mancano."
+        },
+        {
+          "file": "lib/shipping.ts, lib/promesse-pubbliche.ts (R08, dopo i punti sopra)",
+          "modifica": "shippingForEuro(): number senza _opts; promessaSpedizione() senza _sottototale; togliere sopraSoglia e mancano dal tipo e dal risultato."
+        }
+      ]
+    },
+    {
+      "id": "R26-007",
+      "chiave": "deploy-sre|due giri partiti insieme possono ancora mandare due volte il promemoria del carrello alla stessa persona",
+      "esito": "non_fatto",
+      "nota": "non cominciata: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-008",
+      "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+      "esito": "non_fatto",
+      "nota": "non cominciata: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-009",
+      "chiave": "frontend-ux|le rimesse contanti hanno ancora un tetto di 1000 righe senza avviso, mentre bonifici e prodotti adesso lo dicono",
+      "esito": "riparato",
+      "commit": "a824b5d52804d53fe6a52911e3f096ce643700ee",
+      "file_toccati": [
+        "app/admin/cod-remittance/page.tsx",
+        "tests/unit/riparazione-r26-il-tetto-delle-rimesse.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-il-tetto-delle-rimesse.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-il-tetto-delle-rimesse.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a824b5d5^ --file app/admin/cod-remittance/page.tsx --prove tests/unit/riparazione-r26-il-tetto-delle-rimesse.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge con count 'exact' e calcola tagliato = max(conteggio, righe) > 1000, come bonifici e prodotti: «Elenco tagliato» e «almeno» compaiono anche quando il server consegna al massimo 1000 righe.",
+      "verificato_da": "qa (revisore lotto 2): la prova nuova passa, rimessa 0; le prove esistenti sulla pagina passano; con count exact il totale arriva dal database e l'avviso scatta anche con le righe tagliate a 1000 (con count null si torna a righe.length, caso teorico)."
+    },
+    {
+      "id": "R26-010",
+      "chiave": "frontend-ux|sul telefono il riquadro verde della scheda prodotto diventa un muro di testo di 264 caratteri, e dopo il caricamento cresce ancora di una riga",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-011",
+      "chiave": "frontend-ux|il negoziante col negozio non ancora approvato vede «negozio» al posto della sua insegna nella lista condivisa e alla cassa",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/cart/page.tsx",
+          "modifica": "Per i negozi che la vista pubblica non restituisce (idNegozi assenti da negoziRes) leggere supabase.from('profiles').select('id, store_name').in('id', senzaVista) in un try/catch (le regole fanno tornare solo la propria riga), tenerli in uno stato insegnaPropria, e a :487 usare it.storeName ?? insegnaPropria[it.sellerId] ?? 'Negozio'. Stesso schema di app/checkout/page.tsx e app/shared-cart/page.tsx (commit 23cf610b). Prova: aggiungere 'app/cart/page.tsx' al ciclo di tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts, o un montaggio vero del carrello."
+        }
+      ],
+      "nota": "Lista condivisa e cassa già riparate in onda 2 (23cf610b, nella base). Sulla scheda prodotto il difetto non si raggiunge: app/product/[id]/page.tsx:462 mostra «Prodotto non disponibile» per ogni scheda di un negozio non approvato, proprietario compreso, quindi la modifica scritta in scheda per quel file sarebbe codice morto (provata e tolta). Resta solo il carrello, che non è di R26. Se Nicola vuole che il proprietario veda la propria scheda prima dell'approvazione, è una scelta a parte.",
+      "verificato_da": "qa (revisore lotto 3): confermato che app/product/[id]/page.tsx:462 chiama negozioDellaSchedaOperativo (is_approved === true, lib/queries/seller-public-profiles.ts:195) senza eccezione per il proprietario, quindi il difetto lì non si raggiunge. Capo squadra R26: app/cart/page.tsx:487 scrive ancora groupsByStore.set(key, { storeName: it.storeName ?? 'Negozio', … }), il punto del serve_file_altrui."
+    },
+    {
+      "id": "R26-012",
+      "chiave": "frontend-ux|se il servizio degli indirizzi è giù o limitato, il negozio legge «indirizzo non trovato, prova ad essere più specifico»",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-013",
+      "chiave": "frontend-ux|l'annuncio della vetrina scade a mezzanotte nel browser ma all'una nella pagina preparata dal server",
+      "esito": "non_fatto",
+      "nota": "non cominciata: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-014",
+      "chiave": "microcopy|chi spegne le promozioni continua a vederle nella campanella del sito",
+      "esito": "non_fatto",
+      "nota": "non cominciata: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-015",
+      "chiave": "microcopy|la conferma d'ordine non dice quando arriva né quanto pagare in contanti, e a chi ritira in negozio parla di rider",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "Alla chiamata orderConfirmedBuyerTemplate (circa riga 537) aggiungere deliverySlot: <la fascia del pending, delivery.slot già letto più in alto; null se ritiro>, pickupInStore: <ritiro del pending> e paymentMethod: 'card'. Il template li accetta già."
+        }
+      ],
+      "nota": "La parte nei file di R26 c'era già alla base, quindi nessun commit: lib/email/templates.ts:137-183 accetta fascia, ritiro e pagamento e non parla più di rider; app/api/orders/cod/route.ts:1727-1735 li passa ('cod'). Resta solo la conferma dell'ordine pagato con carta, nel file di R25. Il ritiro in contanti non ha un orario perché l'ordine non lo salva (ritiro spento al lancio)."
+    },
+    {
+      "id": "R26-016",
+      "chiave": "microcopy|parole inglesi e da programmatore nell'interfaccia: «rating minimo» nei filtri, «id_front caricato» al fattorino, errori del gps in inglese",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-017",
+      "chiave": "mobile-pwa|i tasti «indietro» del fattorino sono cerchi da 36 pixel, piccoli per un pollice in strada",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-018",
+      "chiave": "navigazione-gerarchia|col pannello dei filtri aperto, il tasto indietro fa uscire dalla ricerca invece di chiudere il pannello",
+      "esito": "non_fatto",
+      "nota": "lotto 4 non partito: tetto di spesa della sessione (consegna a 25 $)"
+    },
+    {
+      "id": "R26-019",
+      "chiave": "pagamenti-stripe|«conferma rimessa» sblocca anche gli incassi registrati dopo che l'amministratore ha aperto la pagina",
+      "esito": "riparato",
+      "commit": "5d27315986decc11b5e9e8726683a95a594b698d",
+      "file_toccati": [
+        "migrations/501_la_rimessa_conferma_solo_gli_ordini_visti.sql",
+        "app/admin/cod-remittance/page.tsx",
+        "app/api/admin/cod-remittance/route.ts",
+        "tests/unit/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.tsx",
+        "tests/sql/rls/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.tsx",
+        "tests/sql/rls/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.tsx --reporter=dot ; PGHOST=/var/run/postgresql bash tests/sql/harness/apply.sh r26_rimessa && psql -X -d r26_rimessa -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d273159^ --file app/admin/cod-remittance/page.tsx,app/api/admin/cod-remittance/route.ts --prove tests/unit/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.tsx --json ; PGHOST=/var/run/postgresql timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d273159^ --file migrations/501_la_rimessa_conferma_solo_gli_ordini_visti.sql --prove tests/sql/rls/riparazione-r26-la-rimessa-conferma-solo-gli-ordini-visti.test.sql --sql r26_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina manda gli orderIds del gruppo che mostrava; la rotta li passa a confirm_cod_remittance(p_rider, p_date, p_order_ids) della migrazione 501 (non applicata), che rilascia solo quegli ordini. Finché la 501 non è applicata la rotta ripiega sulla forma per giorno e scrive un errore nel registro. orderIds resta facoltativo nella rotta perché due prove esistenti comuni con R25 (api-admin-cod-remittance, minori-s05-rimesse) non lo mandano. Per Nicola: applicare la 501.",
+      "verificato_da": "qa (revisore lotto 2): prova TS 4/4 e SQL verdi, rimessa a due giri (TS e SQL) uscita 0; le 5 prove esistenti su pagina e rotta passano (61 test); variante SQL: l'admin passa [A, ordine di un altro rider, ordine di 3 giorni prima, uuid inesistente] e viene rilasciato solo A; anon permission denied; non admin forbidden; 501 SECURITY DEFINER con search_path=public, EXECUTE revocato a PUBLIC e anon. Vale in produzione solo dopo l'applicazione della 501: fino ad allora la rotta ripiega sulla conferma per giorno."
+    },
+    {
+      "id": "R26-020",
+      "chiave": "pagamenti-stripe|se l'addebito del credito risponde con un errore, la cassa lo considera mai avvenuto: l'ordine si paga per intero e il credito, se era già stato tolto, non torna",
+      "esito": "riparato",
+      "commit": "dc61fb5a0961cde80fb9b6225d94c97a7897e03f",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "tests/unit/riparazione-r26-credito-della-cassa.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-credito-della-cassa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-credito-della-cassa.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dc61fb5a^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r26-credito-della-cassa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando wallet_debit risponde con un errore, la rotta rilegge wallet_ledger (user_id, 'order_cod', stesso riferimento): se la riga c'è, quel credito si scala dal totale; se la rilettura fallisce si ferma (annulla gli ordini precedenti, rimette la merce, avvisa gli amministratori, 500) invece di proseguire a credito zero.",
+      "verificato_da": "qa (revisore lotto 2, worktree separata): la prova nuova passa (3/3), rimessa 0; le 48 prove esistenti sulla rotta COD passano (373 test); la rilettura cerca utente, 'order_cod' e il riferimento del tentativo (unico, randomUUID), scala il credito una volta sola, e se la rilettura cade si ferma con 500. Nota: con un errore di rete mentre wallet_debit è ancora in corsa sul server, la rilettura può arrivare prima del commit (route.ts:1322); finestra stretta."
+    },
+    {
+      "id": "R26-021",
+      "chiave": "pagamenti-stripe|la pulizia gira prima di ogni convalida del carrello: un tentativo respinto uccide una cassa ancora buona",
+      "esito": "parziale",
+      "commit": "ff3b9922cf83769aeba63664ac7644bcf0242216",
+      "file_toccati": [
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/riparazione-r26-la-pulizia-dopo-i-rifiuti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r26-la-pulizia-dopo-i-rifiuti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r26-la-pulizia-dopo-i-rifiuti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ff3b9922^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r26-la-pulizia-dopo-i-rifiuti.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "liberaRiserveAbbandonate parte una volta sola, dopo i rifiuti che non dipendono dalle scorte (righe non vendibili, negozi, fascia, veloce, zona, codici spenti); se ha liberato merce, le scorte si rileggono prima del conto. Nel ramo della cassa già aperta la veloce si controlla prima della pulizia.",
+      "verificato_da": "qa (revisore lotto 2): la prova nuova passa e la rimessa regge (uscita 0); le 29 prove esistenti sul checkout passano (259 test); nel percorso principale la pulizia (:612) parte dopo i rifiuti che non dipendono dalle scorte. Smentita in parte: vedi cosa_resta.",
+      "cosa_resta": "app/api/stripe/checkout/route.ts:342: nel ramo della cassa già aperta `await pulisci()` gira prima del riuso; se il riuso finisce con «apri_nuova» la rotta scende nel percorso principale e può ancora respingere dopo la pulizia (prodotti non trovati :418, carrello non vendibile :548, fuori zona :599): stesso meccanismo e stesso danno della voce, non coperto dalla prova. In più, un codice sconto non valido viene respinto dopo la pulizia (:734): oggi irraggiungibile (CODICI_SCONTO_IN_CASSA = false), si riapre accendendo il flag."
+    },
+    {
+      "id": "R26-022",
+      "chiave": "performance|le pagine di prodotto, negozio e categoria non usano la cache che dichiarano, e rileggono due volte la stessa riga a ogni visita",
+      "esito": "non_fatto",
+      "nota": "non cominciata: tetto di spesa della sessione (consegna a 25 $)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "confermare la rimessa di un ordine segna chiusa tutta la giornata del fattorino, anche se un altro incasso dello stesso giorno resta in attesa",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "migrations/127_minori_22_agosto.sql:643-685 (cod_reconciliations.remitted_at) · app/api/cron/operational-alerts/route.ts:521",
+      "descrizione": "confirm_cod_remittance scrive remitted_at sulla riconciliazione del giorno anche quando restano ordini in attesa; il controllo «cassa in sospeso» per chi chiede la cancellazione dell'account non vede più quella giornata. C'era già prima della 501, che ne copia il corpo."
+    }
+  ],
+  "domande_per_nicola": [
+    "Applicare le migrazioni 500 (secchio privato delle foto dei resi) e 501 (la rimessa conferma solo gli ordini visti)? Senza la 501 la conferma della rimessa ripiega sulla forma per giorno; la 500 serve prima di spostare il modulo del reso sul secchio privato.",
+    "Le foto dei resi già caricate in products/<cliente>/returns/ restano pubbliche finché non vengono spostate nel secchio privato o cancellate: spostarle o cancellarle?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "nota": "6 subagenti su 8: riparatore e revisore dei lotti 1, 2 e 3 (il lotto 3 sono le voci della cucitura di prova chieste dalla regista, sul modello piccolo). Lotti restanti non partiti per il tetto di spesa. costo_usd letto con get_session senza id prima della consegna (20,93 $)."
+  },
+  "costo_usd": 20.93
+}

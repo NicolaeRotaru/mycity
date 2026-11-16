@@ -91,6 +91,21 @@ export const CAMPI_KYC_DA_AZZERARE = {
 export const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof', 'reviews'] as const;
 
 /**
+ * Cartelle personali DENTRO un secchio pubblico che tiene anche altro.
+ *
+ * 15/11/2026 (R26-001) — LE FOTO DEI RESI RESTAVANO ONLINE DOPO LA CANCELLAZIONE.
+ * Il modulo del reso le caricava nel secchio di serie, `products`, che è
+ * PUBBLICO: `products/<cliente>/returns/<ordine>/<foto>`. Nella foto del pacco
+ * arrivato rotto c'è spesso l'etichetta con nome e indirizzo. `products` non
+ * era in nessun elenco, quindi dopo «cancella account» la foto restava
+ * raggiungibile da chi aveva l'indirizzo, per sempre. Qui si svuota la sola
+ * cartella dei resi di quella persona, a qualunque profondità.
+ */
+export const CARTELLE_PERSONALI_NEI_SECCHI_PUBBLICI = [
+  { secchio: 'products', cartella: 'returns' },
+] as const;
+
+/**
  * L'ELENCO UNICO delle tabelle che tengono dati personali, e di cosa si azzera
  * in ognuna quando una persona chiede di essere cancellata.
  *
@@ -173,13 +188,17 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
   {
     tabella: 'returns',
     colonna: 'buyer_id',
-    azzera: { notes: null },
+    // 15/11/2026 (R26-001) — Si staccano anche le foto: la riga resta e il
+    // negozio continuava a vederle attaccate al reso ormai anonimo, ed e' proprio
+    // la foto (l'etichetta col nome sul pacco) che rende la persona di nuovo
+    // riconoscibile. I file li toglie `cancellaFilePersonali`.
+    azzera: { notes: null, photo_urls: [] },
     // migrations/122 (#179) ha cambiato apposta questa chiave da CASCADE a
     // ON DELETE SET NULL: «un reso e' una pratica con dei soldi dentro, la
     // riga resta, anonima». Qui era rimasto scritto il contrario. Verificato
     // sullo schema ricostruito dalle migrazioni: returns.buyer_id -> SET NULL.
     sopravvive: true,
-    perche: 'le note scritte a mano dentro una richiesta di reso',
+    perche: 'le note scritte a mano e le foto allegate a una richiesta di reso',
   },
   {
     tabella: 'messages',
@@ -300,26 +319,18 @@ export async function cancellaFilePersonali(
   let rimossi = 0;
   const errori: string[] = [];
 
-  for (const secchio of SECCHI_CON_FILE_PERSONALI) {
+  const cartelle = [
+    ...SECCHI_CON_FILE_PERSONALI.map((secchio) => ({ secchio, cartella: userId })),
+    ...CARTELLE_PERSONALI_NEI_SECCHI_PUBBLICI.map(({ secchio, cartella }) => ({
+      secchio,
+      cartella: `${userId}/${cartella}`,
+    })),
+  ];
+
+  for (const { secchio, cartella } of cartelle) {
     try {
       // Quello che si e' letto si toglie comunque; l'errore resta dichiarato.
-      const elenco = await elencaCartella(admin, secchio, userId);
-      if (elenco.errore) errori.push(`${secchio}: ${elenco.errore}`);
-      if (elenco.voci.length === 0) continue;
-
-      // Un livello di sottocartelle (per esempio cod-proof/<utente>/<ordine>/).
-      const percorsi: string[] = [];
-      for (const voce of elenco.voci) {
-        if (voce.id === null) {
-          // 1/11/2026 — Prima l'errore di questo elenco si buttava via: la
-          // sottocartella restava piena e il conto diceva «rimossi» lo stesso.
-          const dentro = await elencaCartella(admin, secchio, `${userId}/${voce.name}`);
-          if (dentro.errore) errori.push(`${secchio}/${voce.name}: ${dentro.errore}`);
-          for (const f of dentro.voci) percorsi.push(`${userId}/${voce.name}/${f.name}`);
-        } else {
-          percorsi.push(`${userId}/${voce.name}`);
-        }
-      }
+      const percorsi = await fileDellaCartella(admin, secchio, cartella, errori);
 
       for (let i = 0; i < percorsi.length; i += FILE_PER_PAGINA) {
         const gruppo = percorsi.slice(i, i + FILE_PER_PAGINA);
@@ -332,6 +343,36 @@ export async function cancellaFilePersonali(
     }
   }
   return { rimossi, errori };
+}
+
+/**
+ * Tutti i FILE sotto una cartella, a qualunque profondità.
+ *
+ * 15/11/2026 (R26-001) — Prima si scendeva di un livello solo. La foto di un
+ * reso sta più in basso (`<utente>/returns/<ordine>/<foto>`): la cartella
+ * `<ordine>` finiva nell'elenco da togliere come se fosse un file, lo storage
+ * non dava errore, il conto diceva «rimossi: 1» e la foto restava. Adesso si
+ * scende finché ci sono cartelle, e nell'elenco entrano solo file veri.
+ *
+ * 1/11/2026 — L'errore di un elenco non si butta via: se una sottocartella non
+ * si legge, resta piena, e il conto non deve dire «rimossi» lo stesso.
+ */
+async function fileDellaCartella(
+  admin: Admin,
+  secchio: string,
+  cartella: string,
+  errori: string[],
+): Promise<string[]> {
+  const elenco = await elencaCartella(admin, secchio, cartella);
+  if (elenco.errore) errori.push(`${secchio}: ${elenco.errore}`);
+  const percorsi: string[] = [];
+  for (const voce of elenco.voci) {
+    if (!voce.name) continue;
+    const percorso = `${cartella}/${voce.name}`;
+    if (voce.id === null) percorsi.push(...(await fileDellaCartella(admin, secchio, percorso, errori)));
+    else percorsi.push(percorso);
+  }
+  return percorsi;
 }
 
 /** Quante voci chiede ogni pagina dell'elenco dello storage (e quanti file per rimozione). */

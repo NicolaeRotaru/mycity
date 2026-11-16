@@ -67,6 +67,8 @@ type Group = {
    * rimessa li salta, e il negozio non viene pagato finche' l'incasso non c'e'.
    */
   senzaIncasso: Row[];
+  /** 15/11/2026 (R26-019) — Gli ordini mostrati: la conferma rilascia solo questi. */
+  orderIds: string[];
 };
 
 /**
@@ -91,12 +93,15 @@ export default function AdminCodRemittancePage() {
   const [contati, setContati] = useState('');
   const [nota, setNota] = useState('');
 
+  // 15/11/2026 (R26-009) — La riga in più (TETTO + 1) non arrivava mai: il server ne restituisce
+  // al massimo mille (max_rows). L'avviso non scattava e il «totale da rimettere» sembrava completo.
+  // Adesso il totale lo conta il database (count exact), come bonifici e prodotti.
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.codRemittances,
-    queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await supabase
+    queryFn: async (): Promise<Row[] & { totale?: number }> => {
+      const { data, error, count } = await supabase
         .from('orders')
-        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)')
+        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)', { count: 'exact' })
         .eq('payment_method', 'cod')
         .eq('delivery_status', 'DELIVERED')
         .eq('payout_status', 'AWAITING_REMITTANCE')
@@ -105,11 +110,13 @@ export default function AdminCodRemittancePage() {
         .limit(TETTO_RIMESSE + 1);
       // Una lettura caduta non e' «nessuna rimessa»: l'errore deve arrivare alla pagina.
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      const righe = (data ?? []) as unknown as Row[];
+      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
 
-  const tagliato = rows.length > TETTO_RIMESSE;
+  const totaleRighe = (rows as Row[] & { totale?: number }).totale ?? rows.length;
+  const tagliato = Math.max(totaleRighe, rows.length) > TETTO_RIMESSE;
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
     for (const o of rows.slice(0, TETTO_RIMESSE)) {
@@ -128,8 +135,10 @@ export default function AdminCodRemittancePage() {
         orders: 0,
         toRemitCents: 0,
         senzaIncasso: [],
+        orderIds: [],
       };
       g.orders += 1;
+      g.orderIds.push(o.id);
       g.toRemitCents += Math.max(0, cents);
       if (incassoDaDichiarare(o)) g.senzaIncasso.push(o);
       map.set(key, g);
@@ -138,15 +147,15 @@ export default function AdminCodRemittancePage() {
   }, [rows]);
 
   const confirm = useMutation({
-    mutationFn: async ({ riderId, date, contatiCents, attesiCents, nota: notaInviata }: {
-      riderId: string; date: string; contatiCents: number; attesiCents: number; nota?: string;
+    mutationFn: async ({ riderId, date, contatiCents, attesiCents, orderIds, nota: notaInviata }: {
+      riderId: string; date: string; contatiCents: number; attesiCents: number; orderIds: string[]; nota?: string;
     }): Promise<{ rilasciati: number; saltati: number }> => {
       // Cookie-based (niente Bearer): l'RPC confirm_cod_remittance verifica
       // is_admin() leggendo l'auth.uid() dell'admin via getServerSupabase.
       const res = await fetch('/api/admin/cod-remittance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ riderId, date, contatiCents, attesiCents, ...(notaInviata ? { nota: notaInviata } : {}) }),
+        body: JSON.stringify({ riderId, date, contatiCents, attesiCents, orderIds, ...(notaInviata ? { nota: notaInviata } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Errore conferma rimessa');
@@ -248,7 +257,7 @@ export default function AdminCodRemittancePage() {
                         if (!pronto || contatiCents === null) return;
                         confirm.mutate({
                           riderId: g.riderId, date: g.date, contatiCents, attesiCents: g.toRemitCents,
-                          nota: diverso ? nota.trim() : undefined,
+                          orderIds: g.orderIds, nota: diverso ? nota.trim() : undefined,
                         });
                       }}
                     >

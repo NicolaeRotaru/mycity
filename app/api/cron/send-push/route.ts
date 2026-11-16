@@ -88,7 +88,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: pending, error: erroreLettura } = await supa
+  const { data: lette, error: erroreLettura } = await supa
     .from('notifications')
     .select('id, user_id, title, body, link, category')
     .is('pushed_at', null)
@@ -101,7 +101,28 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     return ApiErrors.unavailable('notifiche non leggibili');
   }
 
+  let pending = lette;
   if (!pending?.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });
+
+  // R26-003 — La lettura va dalla più vecchia: se le prime cento sono promozioni, la notifica del nuovo ordine
+  // restava fuori dal giro e aspettava il successivo. Se la finestra è piena e dentro ci sono categorie che
+  // aspettano, si rilegge solo quello che non aspetta (anche senza categoria, che vale «order») e lo si mette davanti.
+  if (pending.length >= 100 && pending.some((n) => CATEGORIE_CHE_ASPETTANO.has((n as { category: string | null }).category ?? ''))) {
+    const { data: urgenti, error: erroreUrgenti } = await supa
+      .from('notifications')
+      .select('id, user_id, title, body, link, category')
+      .is('pushed_at', null)
+      .gte('created_at', sinceIso)
+      .or(`category.is.null,category.not.in.(${[...CATEGORIE_CHE_ASPETTANO].join(',')})`)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (erroreUrgenti) {
+      logger.warn('[cron] notifiche urgenti non rilette', { message: erroreUrgenti.message });
+    } else if (urgenti?.length) {
+      const viste = new Set(urgenti.map((n) => n.id));
+      pending = [...urgenti, ...pending.filter((n) => !viste.has(n.id))].slice(0, 100);
+    }
+  }
 
   /**
    * 22/8/2026 — TRE VIAGGI AL DATABASE PER OGNI SINGOLA NOTIFICA.
