@@ -455,14 +455,14 @@ describe('le altre promesse parlano della stessa consegna', () => {
   });
 
   it('la frase della vetrina non dice «gratis» né «ti mancano», a nessun sottototale', () => {
-    // 16/11/2026 (R29-005) — Il sottototale non è più un argomento e la soglia non è più nel
-    // risultato (niente sopraSoglia, niente mancano): la frase è una sola, per qualunque carrello.
-    const p = promessaSpedizione();
-    expect(p).not.toHaveProperty('sopraSoglia');
-    expect(p).not.toHaveProperty('mancano');
-    expect(p.costoConsegna).toBe(PLATFORM_DELIVERY_FEE_CENTS / 100);
-    expect(`${p.titolo} ${p.breve}`).not.toMatch(/gratis|mancano/i);
-    expect(p.titolo).toContain(TRE_EURO);
+    for (const sottototale of [0, 8, 29.99, 30, 80]) {
+      const p = promessaSpedizione(sottototale);
+      expect(p.sopraSoglia).toBe(false);
+      expect(p.mancano).toBe(0);
+      expect(p.costoConsegna).toBe(PLATFORM_DELIVERY_FEE_CENTS / 100);
+      expect(`${p.titolo} ${p.breve}`).not.toMatch(/gratis|mancano/i);
+      expect(p.titolo).toContain(TRE_EURO);
+    }
   });
 
   // S10 (5/11/2026, scheda 2083) — Qui si collaudava FreeShippingProgress, che

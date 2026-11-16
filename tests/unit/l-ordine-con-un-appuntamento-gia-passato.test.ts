@@ -316,10 +316,7 @@ describe('gli invarianti sul checkout vero', () => {
     // anche l'invio, «il file la chiama» ha smesso di provare che la RIGA la usi.
     // Se ne è accorta una mutazione che prima era rossa ed è tornata verde: è il
     // motivo per cui ogni mutazione si riprova dopo ogni aggiunta, non una volta.
-    // R29-012 — il titolo del riquadro è la costante del nome della consegna.
-    const titolo = checkout.indexOf('>{VOCE_CONSEGNA}</p>');
-    expect(titolo, 'il riquadro della consegna non c è più').toBeGreaterThan(0);
-    const riga = checkout.slice(titolo);
+    const riga = checkout.slice(checkout.indexOf('Consegna a domicilio'));
     expect(riga.slice(0, 400), 'la riga sotto le mattonelle torna un testo fisso')
       .toMatch(/rigaQuandoArriva\(consegna\)/);
   });

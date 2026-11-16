@@ -33,7 +33,6 @@ import { act } from 'react';
 import { formatPrice } from '@/lib/format';
 import { romeNow } from '@/lib/store-hours';
 import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
-import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
 
@@ -143,9 +142,9 @@ async function cassaDopoLAccesso(fuso: string, istanteUtc: string, gruppi: typeo
     adesso: () => tessera('Adesso'),
     domani: () => tessera('Domani'),
     testo: () => testoVisibile(s.radice),
-    /** La cifra del riquadro della consegna (R29-012: titolo VOCE_CONSEGNA), la prima della consegna che si vede. */
+    /** La cifra del riquadro «Consegna a domicilio», la prima della consegna che si vede. */
     consegna: () => {
-      const titolo = [...s.radice.querySelectorAll('p')].find((p) => (p.textContent ?? '').trim() === VOCE_CONSEGNA);
+      const titolo = [...s.radice.querySelectorAll('p')].find((p) => (p.textContent ?? '').trim() === 'Consegna a domicilio');
       return (titolo?.parentElement?.nextElementSibling?.textContent ?? '').trim();
     },
     /** Le righe che la pagina annuncia (role=status), tutte insieme. */
