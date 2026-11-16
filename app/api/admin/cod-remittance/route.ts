@@ -17,6 +17,9 @@ const Body = z.object({
   contatiCents: z.number().int().min(0).max(10_000_000).optional(),
   attesiCents: z.number().int().min(0).max(10_000_000).optional(),
   nota: z.string().trim().max(500).optional(),
+  // 15/11/2026 (R26-019) — gli ordini che la pagina mostrava quando l'admin ha
+  // contato i contanti: la conferma rilascia solo quelli.
+  orderIds: z.array(z.string().uuid()).min(1).max(1000).optional(),
 }).refine(
   (b) => b.contatiCents === undefined || b.attesiCents === undefined || b.contatiCents === b.attesiCents || Boolean(b.nota),
   { message: 'I contanti contati sono diversi dall’atteso: scrivi una nota', path: ['nota'] },
@@ -40,10 +43,35 @@ export const POST = withAdminAuth(async ({ req, user }): Promise<NextResponse> =
   }
 
   const supa = await getServerSupabase();
-  const { data, error } = await supa.rpc('confirm_cod_remittance', {
-    p_rider: body.riderId,
-    p_date: body.date,
-  });
+  /**
+   * 15/11/2026 (R26-019) — SI SBLOCCANO SOLO GLI INCASSI CHE L'ADMIN HA VISTO.
+   *
+   * Con (fattorino, giorno) la funzione rendeva pagabili anche gli ordini
+   * chiusi DOPO che la pagina era stata aperta: contanti che nessuno ha contato.
+   * Con l'elenco degli ordini mostrati (migrazione 501) si rilasciano solo
+   * quelli. Finche' la 501 non e' applicata si ripiega sulla forma vecchia,
+   * scritto forte: i negozi non devono restare senza pagamento nell'attesa.
+   */
+  let { data, error } = body.orderIds
+    ? await supa.rpc('confirm_cod_remittance', {
+        p_rider: body.riderId,
+        p_date: body.date,
+        p_order_ids: body.orderIds,
+      })
+    : await supa.rpc('confirm_cod_remittance', {
+        p_rider: body.riderId,
+        p_date: body.date,
+      });
+  const codice = (error as { code?: unknown } | null)?.code;
+  if (body.orderIds && (codice === 'PGRST202' || codice === '42883')) {
+    logger.error('[admin] conferma rimessa con gli ordini visti non disponibile (migrazione 501 da applicare): uso la forma per giorno', {
+      riderId: body.riderId, giorno: body.date,
+    });
+    ({ data, error } = await supa.rpc('confirm_cod_remittance', {
+      p_rider: body.riderId,
+      p_date: body.date,
+    }));
+  }
   if (error) {
     logger.error('[admin] confirm_cod_remittance fallita', { error: error.message });
     return ApiErrors.internal('Conferma rimessa fallita');
@@ -68,6 +96,7 @@ export const POST = withAdminAuth(async ({ req, user }): Promise<NextResponse> =
       contati_cents: body.contatiCents ?? null,
       attesi_cents: body.attesiCents ?? null,
       nota: body.nota ?? null,
+      ordini_visti: body.orderIds?.length ?? null,
     },
   });
 

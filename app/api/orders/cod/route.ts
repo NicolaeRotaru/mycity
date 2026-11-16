@@ -1306,7 +1306,45 @@ export const POST = withAuthRateLimit(
           p_ref: walletRef,
         });
         if (wErr) {
-          logger.warn('[cod] wallet_debit fallita', { sellerId: g.sellerId, message: wErr.message });
+          /**
+           * 15/11/2026 (R26-020) — UN ERRORE SUL CREDITO NON VUOL DIRE «NON TOLTO».
+           *
+           * Un timeout puo' arrivare DOPO che il saldo e' sceso e la riga
+           * `order_cod` e' nel diario: l'ordine nasceva a credito zero, il
+           * cliente pagava tutto e il credito non tornava (gli storni usano
+           * `walletAppliedCents`, che restava 0). Si rilegge il diario con lo
+           * stesso riferimento: se la riga c'e' quel credito e' speso davvero;
+           * se la rilettura cade non sappiamo niente e ci si ferma.
+           */
+          logger.warn('[cod] wallet_debit fallita: rileggo il diario del credito', {
+            sellerId: g.sellerId, ref: walletRef, message: wErr.message,
+          });
+          const { data: rigaDiario, error: errDiario } = await admin
+            .from('wallet_ledger')
+            .select('delta_cents')
+            .eq('user_id', user.id)
+            .eq('reason', 'order_cod')
+            .eq('ref', walletRef)
+            .maybeSingle();
+          if (errDiario) {
+            await rollbackCreatedCodOrders();
+            const { error: errMerceCredito } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+            if (errMerceCredito) {
+              logger.error('[cod] credito incerto e merce non tornata: va rimessa a mano', {
+                userId: user.id, sellerId: g.sellerId, merce: groupStockItems, message: errMerceCredito.message,
+              });
+            }
+            logger.error('[cod] non so se il credito e stato tolto: mi fermo, serve un controllo a mano', {
+              userId: user.id, ref: walletRef, message: errDiario.message,
+            });
+            await allarmeAgliAmministratori(
+              'Credito MyCity forse tolto senza ordine',
+              `L'addebito del credito (riferimento ${walletRef}) ha risposto con un errore e il diario non si è potuto rileggere: se la riga c'è, il credito va ridato a mano.`,
+            );
+            return esciERilascia(ApiErrors.internal('Non riusciamo a verificare il tuo credito MyCity. Riprova tra poco.'));
+          }
+          const tolto = rigaDiario ? -Number((rigaDiario as { delta_cents: unknown }).delta_cents) : 0;
+          walletAppliedCents = Number.isFinite(tolto) && tolto > 0 ? tolto : 0;
         } else {
           walletAppliedCents = typeof applied === 'number' ? applied : 0;
         }

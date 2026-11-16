@@ -45,6 +45,17 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     .single();
   if (!targetProfile) return ApiErrors.notFound('Utente non trovato.');
 
+  // 13/11/2026 (R14-008) — Un amministratore non si cancella da qui. La pagina
+  // nasconde il bottone per gli amministratori, ma la rotta lo accettava: bastava
+  // una chiamata diretta perche' un amministratore ne cancellasse un altro, il
+  // passo meno reversibile del sito. La regola adesso sta dove non si aggira.
+  // Per cancellarlo davvero prima gli si toglie il ruolo (Modifica → ruolo).
+  if (targetProfile.role === 'admin') {
+    return ApiErrors.forbidden(
+      'Un amministratore non si cancella da qui: prima togligli il ruolo di amministratore.',
+    );
+  }
+
   // #178 — Una pipeline sola, la stessa del cron. Prima questa strada
   // anonimizzava il profilo e basta: la carta d'identita' e il selfie
   // restavano nello storage, le recensioni col nome dentro restavano, e la
@@ -65,6 +76,14 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     // legge `error.message` e mostrava «Operazione non riuscita» al posto del
     // motivo vero della cancellazione fallita.
     return ApiErrors.internal(esito.errore ?? 'Cancellazione non riuscita');
+  }
+
+  // 13/11/2026 (R14-007) — Due cancellazioni dello stesso account partite insieme
+  // (doppio clic, due amministratori): una chiude l'account, l'altra trova
+  // «utente non trovato». Prima la seconda rispondeva con un errore falso; ora
+  // risponde che l'account non c'e' piu', senza una seconda riga nel registro.
+  if (esito.giaCancellato) {
+    return NextResponse.json({ ok: true, giaCancellato: true, deleted: { id: targetId, role: targetProfile.role } });
   }
 
   await writeAudit({
