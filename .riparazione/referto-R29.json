@@ -1,6 +1,6 @@
 {
   "sessione": "R29",
-  "aggiornato": "2026-11-16 16:12",
+  "aggiornato": "2026-11-16 16:15",
   "finita": true,
   "testa": "455c3f93e44e0d92296bb2782d06960518f04e02",
   "verifica": {
@@ -496,6 +496,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "L1, Q1, Q2, Q3 (revisori del lotto 1), L2 (con il giro di correzione del lotto 1), correzione della guardia. Q4, L3 e L4 non lanciati: freno dei 40 $ e scelta della regista."
-  }
+    "nota": "L1, Q1, Q2, Q3 (revisori del lotto 1), L2 (con il giro di correzione del lotto 1), correzione della guardia. Q4, L3 e L4 non lanciati: freno dei 40 $ e scelta della regista.",
+    "subagenti": 6
+  },
+  "costo_usd": 42.95
 }
