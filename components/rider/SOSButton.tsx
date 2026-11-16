@@ -161,8 +161,9 @@ export default function SOSButton({ orderId }: Props) {
     // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
     // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
     //
-    // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
-    // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
+    // Venti righe piu' in basso il dialogo di conferma dice ancora «Verra' avviata la chiamata al
+    // 112»: anche quella frase promette troppo, perche' la chiamata parte solo quando il fattorino
+    // preme CHIAMA. Si cambia con la cucitura della regista (R28-001): la vincola una prova comune.
     //
     // R16-009 (13/11/2026) — La posizione l'ha già chiesta il dialogo quando si è aperto (apriDialogo),
     // con la pagina ancora davanti: qui si usa quella arrivata, senza chiedere niente. Il tastierino
@@ -263,7 +264,7 @@ export default function SOSButton({ orderId }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>La tua posizione GPS viene mandata a MyCity, se il telefono riesce a darla</span>
+                  <span>La tua posizione GPS arriva a MyCity solo se il telefono riesce a darla ed è connesso</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />

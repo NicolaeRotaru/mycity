@@ -7,13 +7,14 @@
  * `window.location.href = 'tel:112'` apre il telefono con il 112 già scritto: la chiamata parte
  * solo se il fattorino preme CHIAMA. I messaggi dopo la conferma lo dicono già. Il dialogo di
  * conferma prometteva anche «La tua posizione GPS verrà condivisa con MyCity», ma la posizione
- * parte solo se il telefono riesce a darla (GPS spento, permesso negato, nessun fix: l'avviso parte
- * senza). Qui il pulsante si monta, si apre il dialogo, si conferma, e si legge quello che il
+ * arriva solo se il telefono riesce a darla (GPS spento, permesso negato, nessun fix: l'avviso parte
+ * senza) ed è connesso (l'avviso con la posizione viaggia in rete). Qui il pulsante si monta, si apre il dialogo, si conferma, e si legge quello che il
  * fattorino vede davvero.
  *
  * La frase «Verrà avviata la chiamata al 112» del dialogo resta: la vincola una prova comune
  * (il-testo-dice-quello-che-succede-davvero), che tocca solo la regista. La modifica è nel referto.
- * Questa prova riprende quella scritta per la stessa voce nell'onda 3 (riparazione-r16-sos-testo).
+ * Questa prova riprende quella scritta per la stessa voce nell'onda 3 (riparazione-r16-sos-testo.test.tsx,
+ * tolta dal ramo con debafe63: si legge con `git show debafe63^:tests/unit/riparazione-r16-sos-testo.test.tsx`).
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, createElement } from 'react';
@@ -79,11 +80,11 @@ async function apriDialogo() {
 }
 
 describe('R28-001 · il SOS dice quello che fa davvero', () => {
-  it('il dialogo di conferma non promette la posizione: la manda se il telefono riesce a darla', async () => {
+  it('il dialogo di conferma non promette la posizione: arriva solo se il telefono la dà ed è connesso', async () => {
     const dialogo = await apriDialogo();
     const testo = dialogo.textContent ?? '';
     expect(testo).not.toMatch(/posizione GPS verrà condivisa/i);
-    expect(testo).toMatch(/posizione GPS viene mandata a MyCity, se il telefono riesce a darla/);
+    expect(testo).toMatch(/posizione GPS arriva a MyCity solo se il telefono riesce a darla ed è connesso/);
   });
 
   it('dopo la conferma, con l’avviso scritto, il messaggio dice che MyCity è avvisata e che CHIAMA va premuto', async () => {
