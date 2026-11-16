@@ -27,6 +27,7 @@ import { scritturaObbligatoria } from './esito';
 import { stornoGiaFattoPerLaContestazione, type StornoDaControllare } from './dispute-storni';
 import { restituisciLeQuoteParziali } from './contestazione-parziale-vinta';
 import { buonoDaRiattivareDopoLaVittoria, richiestaSulBuonoSoloAvviso } from './contestazione-buoni';
+import { spegniLaSponsorizzazioneDelPagamento } from './sponsorizzati';
 import {
   contestazioneDiUnaParte, eUnaRichiestaDiInformazioni, promemoriaOTotale, quotaDelRimborsoSulNetto, stornatoDaQuestaContestazione,
 } from './quanto-restituire';
@@ -106,6 +107,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
         logger.warn('[stripe] buono regalo annullato: il suo pagamento è contestato in banca', { disputeId: dispute.id, paymentIntent: pi, buono });
         return;
       }
+      // R28-016 — o quello di una sponsorizzazione: contestata, va in pausa (sponsorizzati.ts).
+      if (await spegniLaSponsorizzazioneDelPagamento(pi, 'contestata', dispute.id)) return;
     }
     logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
     return;

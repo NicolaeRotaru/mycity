@@ -29,6 +29,7 @@ import { avvisaSeLaPostaNonParte } from './posta-non-partita';
 import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
+import { spegniLaSponsorizzazioneDelPagamento } from './sponsorizzati';
 
 // Il rimborso che la banca del cliente respinge dopo: sta in un file suo, `rimborsi.ts` era al tetto di
 // righe di tests/unit/webhook-diviso-per-mestiere.test.ts. Chi lo importa da qui lo trova come prima.
@@ -77,7 +78,10 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     if (errBuono) throw new Error(`[stripe] buono regalo del rimborso non annullato (${pi}): ${errBuono.message}`);
     if ((buono as { esito?: string } | null)?.esito === 'annullato') {
       logger.warn('[stripe] buono regalo annullato: il suo pagamento è stato rimborsato', { paymentIntent: pi, buono });
+      return;
     }
+    // R28-016 — o quello di una sponsorizzazione: rimborsata per intero, si chiude (sponsorizzati.ts).
+    await spegniLaSponsorizzazioneDelPagamento(pi, 'rimborsata');
     return;
   }
 
