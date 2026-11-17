@@ -12,6 +12,7 @@ import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { conNegozioApprovato } from '@/lib/queries/seller-public-profiles';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 
 type Drop = {
   id: string;
@@ -46,10 +47,16 @@ function useCountdown(targetIso: string) {
   return { h, m, s, done: diff === 0, hydrated: true };
 }
 
+/**
+ * 17/11/2026 — Il drop è di un giorno di Piacenza, non di Greenwich: la pagina admin lo fissa con
+ * `giornoPiacenza`, e qui si leggeva con `toISOString()` (il giorno UTC) e si contava fino alla
+ * mezzanotte dell'orologio del dispositivo. Fra mezzanotte e le 2, ora di Piacenza, la home
+ * cercava il drop di ieri e il conto alla rovescia era finito.
+ */
 function endOfTodayIso() {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return d.toISOString();
+  const [a, m, g] = giornoPiacenza().split('-').map(Number);
+  const domani = new Date(Date.UTC(a, m - 1, g + 1)).toISOString().slice(0, 10);
+  return new Date(inizioGiornoPiacenza(domani).getTime() - 1).toISOString();
 }
 
 /**
@@ -58,7 +65,7 @@ function endOfTodayIso() {
  * → crea habit di tornare ogni sera per vedere il nuovo drop.
  */
 export default function DropOfDay() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = giornoPiacenza();
   const { data: drop, isLoading } = useQuery({
     queryKey: queryKeys.home.dailyDrop(today),
     queryFn: async (): Promise<Drop | null> => {

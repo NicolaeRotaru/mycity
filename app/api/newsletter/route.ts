@@ -141,7 +141,7 @@ export async function POST(request: Request) {
   const base = env.appUrl();
   const link = `${base}/api/newsletter/confirm?token=${encodeURIComponent(token)}`;
 
-  await sendEmail({
+  const esitoInvio = await sendEmail({
     to: email,
     // R24 — La richiesta di conferma l'ha chiesta la persona, e finche' non
     // conferma non e' iscritta a niente: un «annulla l'iscrizione» qui non
@@ -154,7 +154,18 @@ export async function POST(request: Request) {
       <p><a href="${link}">Sì, confermo</a></p>
       <p>Se non sei stato tu, ignora questa email: senza conferma non ti scriveremo.</p>
     `,
-  }).catch(() => { /* l'email è best-effort: l'iscrizione resta in attesa */ });
+  }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : 'errore' }));
+
+  // R03-001 — L'email resta best-effort e la risposta alla persona non cambia (dire che la posta non
+  // parte racconterebbe a un estraneo che l'indirizzo è in corso di iscrizione). Ma un rifiuto di
+  // Resend non passa più in silenzio: resta scritto, senza l'indirizzo, dove si guarda.
+  if (!esitoInvio.ok) {
+    const motivo = 'error' in esitoInvio ? esitoInvio.error : esitoInvio.reason;
+    logger.error('newsletter: la email di conferma non è partita, l\'iscrizione resta in attesa', {
+      motivo,
+      spenta: 'skipped' in esitoInvio,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -128,7 +128,11 @@ function SignUpInner() {
     if (TURNSTILE_SITE_KEY && !captchaToken) {
       // Il messaggio a comparsa dice lo stesso guasto del riquadro sotto il modulo (il motivo arriva
       // da Turnstile: «non ha risposto», «non si è aperto»…), non un altro nome e un'altra causa.
-      toast.error(captchaRotto ? `${captchaRotto} Senza questo controllo l'iscrizione con email non può partire: ricarica la pagina o registrati con Google.` : 'Completa il controllo anti-bot');
+      // 17/11/2026 (R02-009) — A chi ha scelto Rider non si consiglia Google: con Google nasce un
+      // account cliente (vedi sotto, vicino ad AuthAlternatives).
+      toast.error(captchaRotto
+        ? `${captchaRotto} Senza questo controllo l'iscrizione con email non può partire: ${role === 'rider' ? `ricarica la pagina o scrivici a ${indirizzoContatto('info')}.` : 'ricarica la pagina o registrati con Google.'}`
+        : 'Completa il controllo anti-bot');
       return;
     }
     setIsLoading(true);
@@ -321,7 +325,7 @@ function SignUpInner() {
         {captchaRotto && (
           <p role="alert" className="text-center text-sm text-ink-600">
             {captchaRotto} Senza questo controllo l&apos;iscrizione con email non può partire:
-            ricarica la pagina, oppure registrati con Google qui sotto. Se non funziona, scrivici a{' '}
+            {role === 'rider' ? ' ricarica la pagina.' : ' ricarica la pagina, oppure registrati con Google qui sotto.'} Se non funziona, scrivici a{' '}
             <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
           </p>
         )}
@@ -340,7 +344,18 @@ function SignUpInner() {
         </Button>
       </form>
 
-      <AuthAlternatives condizioniDalModulo={acceptTos} />
+      {/* 17/11/2026 (R02-009) — CHI SCEGLIEVA «RIDER» E POI PREMEVA GOOGLE DIVENTAVA CLIENTE.
+          Il pulsante Google non porta il ruolo scelto (signInWithOAuth non ha `data`), quindi il
+          profilo nasceva 'buyer' e la candidatura da fattorino si perdeva senza una strada per
+          rifarla. Con Rider scelto qui Google non si mostra: si passa da email e password, dove
+          handle_new_user crea il fattorino in attesa di approvazione. */}
+      {role === 'rider' ? (
+        <p className="mt-5 text-sm leading-relaxed text-ink-600">
+          Con Google si crea un account cliente: per candidarti come fattorino usa email e password.
+        </p>
+      ) : (
+        <AuthAlternatives condizioniDalModulo={acceptTos} />
+      )}
 
       <p className="mt-6 text-sm text-ink-600">
         Hai già un account?{' '}

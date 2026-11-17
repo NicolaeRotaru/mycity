@@ -68,9 +68,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 5/11/2026 (S05) — Si segnala qualcosa che esiste: prima un codice qualunque
     // (anche di prodotti o negozi inventati) creava la riga e un avviso per ogni
     // amministratore.
-    const TABELLA_DELL_OGGETTO: Record<string, string> = { prodotto: 'products', negozio: 'seller_public_profiles' };
-    const tabellaOggetto = TABELLA_DELL_OGGETTO[corpo.tipo];
-    if (tabellaOggetto) {
+    // R03-003 — Il controllo vale per tutti e quattro i tipi. «recensione» è una sola voce per due
+    // tabelle (le recensioni dei prodotti e quelle dei negozi: il pulsante c'è su tutte e due le
+    // pagine), quindi basta che l'id sia in una delle due. Si legge col client di servizio, lo stesso
+    // già usato per prodotto e negozio: nessuna regola RLS cambia.
+    const TABELLE_DELL_OGGETTO: Record<string, string[]> = {
+      prodotto: ['products'],
+      negozio: ['seller_public_profiles'],
+      recensione: ['reviews', 'store_reviews'],
+      messaggio: ['messages'],
+    };
+    let oggettoEsiste = false;
+    for (const tabellaOggetto of TABELLE_DELL_OGGETTO[corpo.tipo]) {
       const { data: oggetto, error: erroreOggetto } = await admin
         .from(tabellaOggetto)
         .select('id')
@@ -80,8 +89,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         logger.error('[segnalazioni] oggetto non controllato', { message: erroreOggetto.message });
         return ApiErrors.internal('Segnalazione non registrata: riprova');
       }
-      if (!oggetto) return ApiErrors.notFound('Il contenuto segnalato non esiste più.');
+      if (oggetto) { oggettoEsiste = true; break; }
     }
+    if (!oggettoEsiste) return ApiErrors.notFound('Il contenuto segnalato non esiste più.');
 
     const { data, error } = await admin
       .from('segnalazioni')

@@ -12,6 +12,7 @@ import { sizedImage } from '@/lib/image-url';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiSpessoCompratiInsieme, type CompratoInsieme } from '@/lib/queries/fasce-prodotti';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
@@ -44,7 +45,14 @@ export function FrequentlyBoughtTogether({
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles` con `!inner`, e dopo la migrazione 161 la fascia spariva per
     // ogni cliente.
-    queryFn: (): Promise<Item[]> => leggiSpessoCompratiInsieme(supabase, { productId, sellerId }),
+    // Col prezzo di oggi, promozione compresa, come CartUpsell e la cassa: col prezzo pieno il
+    // carrello poi scriveva «il prezzo è cambiato».
+    queryFn: async (): Promise<Item[]> => {
+      const righe = await leggiSpessoCompratiInsieme(supabase, { productId, sellerId });
+      if (righe.length === 0) return righe;
+      const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());
+      return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));
+    },
     staleTime: 60_000,
   });
 

@@ -54,7 +54,13 @@ const COLONNE: Record<string, string[]> = {
 /** Gli agganci: dalla tabella, con quale nome (relazione o vincolo), su quale colonna, verso dove. */
 type Aggancio = { colonna: string; verso: string; inverso?: boolean };
 const AGGANCI: Record<string, Record<string, Aggancio>> = {
-  seller_stories: { profiles: { colonna: 'seller_id', verso: 'profiles' } },
+  seller_stories: {
+    profiles: { colonna: 'seller_id', verso: 'profiles' },
+    // R03-013 — La strada nuova del carosello: la storia agganciata alla vista pubblica dei negozi
+    // (`negozio:seller_public_profiles!inner(id)`). Senza questa riga il finto rispondeva PGRST200 e
+    // le prove passavano solo dal ripiego.
+    seller_public_profiles: { colonna: 'seller_id', verso: 'seller_public_profiles' },
+  },
   daily_drops: { products: { colonna: 'product_id', verso: 'products' } },
   products: { profiles: { colonna: 'seller_id', verso: 'profiles' } },
   marketplace_events: { profiles: { colonna: 'sponsor_seller_id', verso: 'profiles' } },
@@ -75,7 +81,7 @@ class ErroreDb extends Error {
 
 type Voce =
   | { tipo: 'colonna'; nome: string }
-  | { tipo: 'aggancio'; alias: string; relazione: string; figli: Voce[] };
+  | { tipo: 'aggancio'; alias: string; relazione: string; figli: Voce[]; interno: boolean };
 
 function leggiSelect(select: string): Voce[] {
   const pulita = select.replace(/\s+/g, ' ').trim();
@@ -99,8 +105,11 @@ function leggiSelect(select: string): Voce[] {
     const testa = pezzo.slice(0, aperta).trim();
     const dentro = pezzo.slice(aperta + 1, pezzo.lastIndexOf(')'));
     const [alias, resto] = testa.includes(':') ? testa.split(':') : [null, testa];
-    const relazione = resto.split('!')[0].trim();
-    return { tipo: 'aggancio', alias: (alias ?? relazione).trim(), relazione, figli: leggiSelect(dentro) };
+    const [nomeRelazione, ...suggerimenti] = resto.split('!');
+    const relazione = nomeRelazione.trim();
+    // `!inner`: come in PostgREST, la riga senza la riga agganciata (o senza figli) non esce.
+    const interno = suggerimenti.some((x) => x.trim() === 'inner');
+    return { tipo: 'aggancio', alias: (alias ?? relazione).trim(), relazione, figli: leggiSelect(dentro), interno };
   });
 }
 
@@ -169,6 +178,16 @@ export function databaseDellaVetrina(
     if (!colonneDi(tabella).includes(colonna)) {
       throw new ErroreDb({ code: '42703', message: `column ${tabella}.${colonna} does not exist` });
     }
+  };
+
+  /** Per `!inner` (al primo livello): la riga ha la riga agganciata, o almeno un figlio, visibile a chi guarda? */
+  const agganciata = (tabella: string, riga: Riga, v: Extract<Voce, { tipo: 'aggancio' }>): boolean => {
+    const a = AGGANCI[tabella]?.[v.relazione];
+    if (!a) {
+      throw new ErroreDb({ code: 'PGRST200', message: `Could not find a relationship between '${tabella}' and '${v.relazione}'` });
+    }
+    if (a.inverso) return visibili(a.verso).some((r) => r[a.colonna] === riga.id);
+    return visibili(a.verso).some((r) => r.id === riga[a.colonna]);
   };
 
   const proietta = (tabella: string, riga: Riga, voci: Voce[]): Riga => {
@@ -256,6 +275,10 @@ export function databaseDellaVetrina(
         for (const f of this.filtri) {
           controllaColonna(this.tabella, f.colonna);
           righe = righe.filter((r) => confronta(r, f));
+        }
+        // `!inner` scarta le righe PRIMA dell'ordine e del tetto, come fa Postgres.
+        for (const v of voci) {
+          if (v.tipo === 'aggancio' && v.interno) righe = righe.filter((r) => agganciata(this.tabella, r, v));
         }
         for (const o of [...this.ordine].reverse()) {
           righe.sort((a, b) => {

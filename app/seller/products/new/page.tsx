@@ -305,7 +305,9 @@ function NewProductInner() {
           consegnaDelNegozioNonLetta={consegnaNonLetta}
           recessoSegnabile={recessoSegnabile}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
-          onSubmit={(payload, ctx) => create.mutate({ payload, variants: ctx.variants })}
+          // R01-012 — l'invio finisce quando finisce l'inserimento: fino ad allora il modulo
+          // non ne fa partire un altro (l'errore lo dice già `onError` della mutazione).
+          onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
           onDiscard={async () => {
             const ok = await confirmDialog({
               title: 'Eliminare questo prodotto?',

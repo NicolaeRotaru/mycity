@@ -8,6 +8,7 @@ import { normalizeSite } from '@/lib/store-site';
 import type { SectionContext, SectionPromo, SectionReview, StoreContextRow } from './SectionContext';
 import { domandaNegozio } from '@/lib/queries/catalogo';
 import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
+import { conAutoriPubblici } from '@/lib/queries/profili-pubblici';
 
 /**
  * Carica tutto ciò che serve a renderizzare una pagina vetrina (home o custom):
@@ -58,6 +59,10 @@ export function useStorePageData(id: string) {
       // `profiles`: dopo la 161 quella lettura dava zero righe, l'errore si ignorava, e ogni
       // recensione era firmata «Cliente». Torna il nome di battesimo; un guasto va nei registri.
       const authorById = await fetchNomiPubblici(supabase, rows.map((r) => r.user_id));
+      // Chi non ha un nome vero firma col nome pubblico (handle di chi ha acceso il profilo pubblico,
+      // dalla rotta /api/profili-pubblici), come prima della 164; se manca anche quello, «Cliente».
+      const senzaNome = rows.flatMap((r) => (r.user_id && !authorById.has(r.user_id) ? [{ owner_id: r.user_id }] : []));
+      const handleById = new Map((await conAutoriPubblici(senzaNome)).map((a) => [a.owner_id, a.owner?.public_handle ?? null]));
 
       return rows.map((r) => ({
         id: r.id,
@@ -70,7 +75,7 @@ export function useStorePageData(id: string) {
         // photo_urls è text[] nel DB ma il tipo generato dice `string` → cast sicuro.
         photo_urls: Array.isArray(r.photo_urls) ? (r.photo_urls as string[]) : null,
         helpful_count: typeof r.helpful_count === 'number' ? r.helpful_count : 0,
-        author: r.user_id ? (authorById.get(r.user_id) ?? null) : null,
+        author: r.user_id ? (authorById.get(r.user_id) ?? handleById.get(r.user_id) ?? null) : null,
       }));
     },
   });

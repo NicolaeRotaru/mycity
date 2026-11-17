@@ -178,7 +178,7 @@ export default function LavoraConNoiPage() {
 
       <div className="container mx-auto px-6 max-w-5xl">
         {/* Posizioni aperte */}
-        <section id="posizioni" className="py-14 scroll-mt-24">
+        <section id="posizioni" className="py-14 scroll-mt-24 md:scroll-mt-0">
           <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-1.5">
             Posizioni aperte
           </h2>

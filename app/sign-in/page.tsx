@@ -43,6 +43,14 @@ function translateAuthError(msg: string): string {
   const condivisa = traduciErroreAuth(msg);
   if (condivisa) return condivisa;
   const m = String(msg || '').toLowerCase();
+  // R01-004 — «Password dimenticata?» ripremuto entro un minuto: Supabase risponde «For security
+  // purposes, you can only request this after 37 seconds». Si dice coi secondi, con la frase di
+  // /reset-password per la stessa richiesta (lib/auth/errori-nuova-password.ts).
+  const secondi = m.match(/after (\d+) seconds?/)?.[1];
+  if (secondi) {
+    const n = Math.max(1, Number(secondi));
+    return `Hai appena chiesto un link: puoi chiederne un altro fra ${n} ${n === 1 ? 'secondo' : 'secondi'}.`;
+  }
   if (m.includes('rate limit') || m.includes('too many'))
     return 'Troppi tentativi. Riprova fra qualche minuto.';
   if (m.includes('password')) return 'Password non valida';

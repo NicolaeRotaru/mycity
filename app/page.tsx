@@ -37,7 +37,9 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
         Pane, alimentari e prodotti dei negozi: ordini dai commercianti
         della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
         {/* R20-009 — «In giornata» da solo prometteva oltre gli orari: si dice come la cassa. */}
-        Consegna {QUANDO_ARRIVA_SENZA_NEGOZIO}, a negozio aperto.
+        {/* «a negozio aperto» si leggeva come «consegna solo a negozio aperto»: la merce si ritira a
+            negozio aperto ma arriva nella fascia scelta, anche dopo la chiusura (lib/promesse-pubbliche.ts). */}
+        Consegna {QUANDO_ARRIVA_SENZA_NEGOZIO}.
       </>
     ),
     ctaPrimary: 'Inizia a esplorare',

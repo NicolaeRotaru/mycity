@@ -54,7 +54,11 @@ export function safeInternalPath(input: unknown, fallback = '/'): string {
   if (pulito.length > 512) return fallback;
 
   // ② Altri caratteri di controllo: non si indovina cosa ne farebbe il lettore.
-  if (/[\u0000-\u001F\u007F]/.test(pulito)) return fallback;
+  //    Anche i C1 (U+0080–U+009F) e i separatori di riga e paragrafo
+  //    (U+2028–U+2029): sono la classe [[:cntrl:]] con cui il database vincola
+  //    il link delle storie (migrations/403). Prima passavano di qui, la foto si
+  //    caricava e poi il database rifiutava la storia, lasciando la foto orfana.
+  if (/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/.test(pulito)) return fallback;
 
   // Deve iniziare con singolo slash
   if (!pulito.startsWith('/')) return fallback;

@@ -13,6 +13,7 @@ import { senzaCampiEconomici, operazioneAccesa } from '@/lib/ai/catalogBatch';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { cosaMancaDopoLaModifica } from '@/lib/products/prontoPerLaVendita';
+import { tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato';
 
 /**
  * Applica i risultati di un job AI massivo, dopo che il venditore li ha rivisti.
@@ -319,15 +320,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           esiti.push({ productId: r.product_id, esito: 'applicato', ...(notaCategoria ? { motivo: notaCategoria } : {}) });
           // #196 — Il lavoro massivo tocca decine di prodotti in un colpo: senza
           // traccia, se qualcosa esce storto non si sa neanche da dove partire.
-          const prima: Record<string, unknown> = {};
-          for (const campo of Object.keys(update)) prima[campo] = (row as unknown as Record<string, unknown>)[campo];
-          void writeAudit({
-            actorId: user.id,
-            action: 'product.update',
-            targetTable: 'products',
-            targetId: r.product_id,
-            metadata: { origine: `ai-batch:${job.operation}`, campi: Object.keys(update), prima, dopo: update },
+          // 17/11/2026 — La voce la costruisce `tracciaDellaModifica`, come in
+          // catalog-apply e nel modulo del prodotto: solo i campi cambiati, con
+          // `daAi`. Prima qui si scriveva a mano la forma vecchia.
+          const voce = tracciaDellaModifica({
+            prodottoId: r.product_id,
+            attoreId: user.id,
+            origine: `ai-batch:${job.operation}`,
+            prima: row as unknown as Record<string, unknown>,
+            dopo: update,
+            campiDallAi: Object.keys(update),
           });
+          if (voce) void writeAudit(voce);
         }
       }
     }

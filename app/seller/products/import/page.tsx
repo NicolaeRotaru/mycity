@@ -26,6 +26,17 @@ type ParsedRow = {
   errors: string[];
 };
 
+/**
+ * R01-009 — LA QUANTITÀ SCRITTA MALE È UN ERRORE, NON UN NUMERO A CASO.
+ * Con `parseInt(…) || 0` «1.5» diventava 1, «10abc» 10 e «1.000» (mille,
+ * all'italiana) 1, senza dirlo. Ora vale solo un intero non negativo scritto
+ * con le sole cifre; il resto torna `null` e la riga mostra l'errore.
+ */
+function leggiQuantita(grezzo: string): number | null {
+  const s = grezzo.trim();
+  return /^\d+$/.test(s) ? Number(s) : null;
+}
+
 /** Manda le righe alla rotta del server, col gettone della sessione. */
 async function caricaSulServer(righe: unknown[]): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -115,11 +126,12 @@ function CaricamentoDaFile() {
 
     const out: ParsedRow[] = rows.map((cols, idx) => {
       const get = (h: string) => cols[headers.indexOf(h)] ?? '';
+      const quantita = leggiQuantita(get('stock'));
       const row: ParsedRow = {
         name: get('name'),
         description: get('description'),
         price: leggiPrezzo(get('price')),
-        stock: parseInt(get('stock'), 10) || 0,
+        stock: quantita ?? 0,
         category_slug: get('category_slug').toLowerCase(),
         allergeni: headers.includes('allergeni') ? get('allergeni') : '',
         ingredienti: headers.includes('ingredienti') ? get('ingredienti') : '',
@@ -132,6 +144,9 @@ function CaricamentoDaFile() {
       if (row.name.length > 200) row.errors.push('Nome troppo lungo (max 200)');
       if (!Number.isFinite(row.price) || row.price <= 0) row.errors.push('Prezzo non valido');
       if (row.price > 10000) row.errors.push('Prezzo eccessivo (max €10.000)');
+      if (quantita === null) {
+        row.errors.push(`Quantità non valida («${get('stock')}»): scrivi un numero intero senza punti né virgole, per esempio 12`);
+      }
       if (row.stock < 0 || row.stock > 99999) row.errors.push('Stock non valido');
       if (row.category_slug && !categories.has(row.category_slug)) {
         row.errors.push(`Categoria '${row.category_slug}' non esiste`);
