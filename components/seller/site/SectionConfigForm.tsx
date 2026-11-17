@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Trash2, CheckCircle2 } from 'lucide-react';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
-import type { SiteSection } from '@/lib/store-site';
+import { RICHTEXT_MAX, type SiteSection } from '@/lib/store-site';
 import BannerFields from './BannerFields';
 import CollectionFields from './CollectionFields';
 import GalleryFields from './GalleryFields';
@@ -109,6 +109,12 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
     case 'richText': {
       const c = section.config;
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
+      // Niente `maxLength`: il browser tagliava in silenzio il testo oltre i 4.000 caratteri. Il testo
+      // resta intero, il contatore lo conta come lo schema (il testo salvato, dove un a-capo è «<br>»)
+      // e oltre il limite l'errore lo dice prima del salvataggio, che lo rifiuta.
+      const lunghezza = (c.body ?? '').length;
+      const troppoLungo = lunghezza > RICHTEXT_MAX;
+      const n = (x: number) => x.toLocaleString('it-IT');
       return (
         <div className="space-y-3">
           <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
@@ -116,9 +122,9 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
             label="Testo"
             value={htmlInACapo(c.body ?? '')}
             rows={5}
-            maxLength={4000}
             onChange={(e) => set({ body: aCapoInHtml(e.target.value) })}
-            hint="Gli a-capo vengono mantenuti."
+            hint={`Gli a-capo vengono mantenuti (ognuno conta 4 caratteri). ${n(lunghezza)}/${n(RICHTEXT_MAX)} caratteri.`}
+            error={troppoLungo ? `Il testo è troppo lungo: ${n(lunghezza)} caratteri su ${n(RICHTEXT_MAX)}. Accorcialo o dividilo in due blocchi di testo: così non si salva.` : undefined}
           />
         </div>
       );
