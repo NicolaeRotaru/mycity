@@ -502,6 +502,29 @@ export function ordineAnnullatoTemplate(args: {
 }
 
 /**
+ * R31-023 — L'ORDINE ANNULLATO, DETTO PER EMAIL ANCHE AL NEGOZIO.
+ *
+ * Il negozio riceveva l'email «Nuovo ordine», ma quando l'ordine veniva annullato (dal cliente,
+ * dall'amministrazione o dal giro che chiude gli ordini mai accettati) restava solo la campanella,
+ * che si vede riaprendo il sito: chi lavora dall'email poteva preparare un ordine che non c'era più.
+ * `frase` dice perché, con le parole di chi annulla (la stessa della campanella).
+ */
+export function ordineAnnullatoAlNegozioTemplate(args: { orderId: string; frase: string }) {
+  const ordine = numeroOrdine(args.orderId);
+  const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ${ordine} annullato</h1>
+    <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(args.frase)}</p>
+    <p style="margin:24px 0">${btn(orderUrl, 'Vedi l’ordine')}</p>
+  `;
+  return {
+    subject: `Ordine ${ordine} annullato`,
+    html: shell('Ordine annullato', body),
+    text: `Ordine ${ordine} annullato. ${args.frase} Vedi l'ordine: ${orderUrl}`,
+  };
+}
+
+/**
  * R25 — L'EMAIL DICE COME TORNANO DAVVERO I SOLDI.
  *
  * Il modello era uno solo, quello della carta: «il rimborso arriverà sul tuo

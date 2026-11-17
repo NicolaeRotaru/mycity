@@ -3,7 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
+import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 import { scriviCampanella } from '@/lib/ordini/campanella';
 import { idDiOrdineNonValido, percheNonSiAnnulla } from '@/lib/ordini/annullo-del-cliente';
 
@@ -108,6 +108,9 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
         }
       : undefined,
   });
+
+  // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine». Dopo l'annullo riuscito, e non lancia.
+  await avvisaIlNegozioDellAnnullo(admin, order, `Il cliente ha annullato l'ordine #${order.id.slice(0, 6).toUpperCase()}: non va più preparato né consegnato.`);
 
   return NextResponse.json({ ok: true, refundId: esito.refundId }, { status: 200 });
 }

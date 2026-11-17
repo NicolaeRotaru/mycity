@@ -7,7 +7,7 @@ import { contantiIncassati } from '@/lib/rimborsi/regole-del-rimborso';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
-import { ordineAnnullatoTemplate } from '@/lib/email/templates';
+import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate } from '@/lib/email/templates';
 import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
@@ -520,6 +520,54 @@ export async function avvisaIlClienteDellAnnullo(
     return true;
   } catch (e) {
     logger.error('[annullo] email di annullo NON partita', {
+      orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
+    });
+    return false;
+  }
+}
+
+/**
+ * R31-023 — ANCHE IL NEGOZIO RICEVE L'EMAIL DELL'ANNULLO.
+ *
+ * Il negozio sapeva dell'ordine nuovo per email, e dell'annullo solo dalla campanella. Si chiama
+ * DOPO l'annullo riuscito, con la stessa frase della campanella. Non lancia mai: l'annullo è già
+ * scritto, e una posta giù non deve farlo sembrare fallito. Ma non tace: se l'email non parte, lo
+ * scrive nel registro degli errori.
+ */
+export async function avvisaIlNegozioDellAnnullo(
+  admin: SupabaseClient,
+  ordine: { id: string; seller_id?: string | null },
+  frase: string,
+): Promise<boolean> {
+  try {
+    if (!ordine.seller_id) return false;
+    const { data, error } = await admin.auth.admin.getUserById(ordine.seller_id);
+    const email = data?.user?.email;
+    if (error || !email) {
+      logger.error('[annullo] email di annullo al negozio non spedita: indirizzo non letto', {
+        orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
+      });
+      return false;
+    }
+    const t = ordineAnnullatoAlNegozioTemplate({ orderId: ordine.id, frase });
+    const res = await sendEmail({
+      to: email,
+      subject: t.subject,
+      html: t.html,
+      text: t.text,
+      tipo: 'transazionale',
+      tags: [{ name: 'template', value: 'order_canceled_seller' }],
+    });
+    if (!res.ok) {
+      logger.error('[annullo] email di annullo al negozio NON partita', {
+        orderId: ordine.id,
+        motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
+      });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    logger.error('[annullo] email di annullo al negozio NON partita', {
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
     return false;

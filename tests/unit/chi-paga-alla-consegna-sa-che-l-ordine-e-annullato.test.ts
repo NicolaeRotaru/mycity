@@ -137,9 +137,11 @@ describe('il giro notturno fa scadere un ordine in contanti mai accettato', () =
     stato.candidati = [{ ...ordineInContanti, id: 'o1', total_price: 20 }];
     const corpo = await giro();
     expect(corpo).toMatchObject({ ok: true, canceled: 1 });
-    expect(spedite, 'il cliente in contanti non sa che l ordine e scaduto').toHaveLength(1);
-    expect(spedite[0].to).toBe('maria@example.it');
-    expect(String(spedite[0].text)).toMatch(/non devi pagare niente/i);
+    // R31-023 — Parte anche l'email al negozio, alla sua casella: quella della cliente resta una sola.
+    const aMaria = spedite.filter((m) => m.to === 'maria@example.it');
+    expect(aMaria, 'il cliente in contanti non sa che l ordine e scaduto').toHaveLength(1);
+    expect(String(aMaria[0].text)).toMatch(/non devi pagare niente/i);
+    expect(spedite.filter((m) => m.to !== 'maria@example.it').map((m) => m.to)).toEqual(['forno@example.it']);
   });
 
   it('controprova: sulla carta pagata avvisa il rimborso, non una seconda email', async () => {
@@ -148,6 +150,8 @@ describe('il giro notturno fa scadere un ordine in contanti mai accettato', () =
     }];
     await giro();
     expect(refundOrderMock).toHaveBeenCalledWith(expect.objectContaining({ notifyBuyer: true }));
-    expect(spedite).toHaveLength(0);
+    // R31-023 — Alla cliente nessuna seconda email; al negozio parte la sua.
+    expect(spedite.filter((m) => m.to === 'maria@example.it')).toHaveLength(0);
+    expect(spedite.map((m) => m.to)).toEqual(['forno@example.it']);
   });
 });

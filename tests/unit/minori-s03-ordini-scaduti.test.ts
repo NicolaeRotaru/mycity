@@ -8,9 +8,11 @@ vi.mock('@/lib/stripe/payout', () => ({ refundOrder: (a: { orderId: string; amou
 vi.mock('@/lib/stripe/client', async (orig) => ({ ...(await orig<object>()), isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/rimborsi-da-dividere', () => ({ ilCarrelloAspettaLaDivisione: async () => false }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async () => undefined) }));
-const spedite: Array<{ text: string; subject: string }> = [];
+const spedite: Array<{ text: string; subject: string; to?: string }> = [];
+// R31-023 — Anche il negozio (s0) riceve l'email dell'annullo: quelle del cliente sono le altre.
+const alCliente = () => spedite.filter((e) => e.to !== 's0@esempio.it');
 vi.mock('@/lib/email/client', () => ({
-  sendEmail: vi.fn(async (m: { text: string; subject: string }) => {
+  sendEmail: vi.fn(async (m: { text: string; subject: string; to?: string }) => {
     // La posta risponde dopo un po': chi non la aspetta finisce il giro prima che parta.
     await new Promise((r) => setTimeout(r, 30));
     spedite.push(m);
@@ -152,8 +154,8 @@ describe('giro degli ordini scaduti', () => {
     db = finto({ orders: ordini });
     conRpc({ wallet_credit: 'rpc giù' });
     const r = await giro();
-    expect(spedite).toHaveLength(1);
-    expect(spedite[0].text).not.toMatch(/credito MyCity/);
+    expect(alCliente()).toHaveLength(1);
+    expect(alCliente()[0].text).not.toMatch(/credito MyCity/);
     expect(avvisi().some((a) => /credito MyCity speso/.test(a))).toBe(true);
     expect((await r.json()).ripristiniFalliti).toBe(1);
   });
@@ -179,7 +181,8 @@ describe('giro degli ordini scaduti', () => {
     db = finto({ orders: carrello(['pane'], [1500], 'cod', { creati: [scaduto] }) });
     conRpc();
     await giro();
-    expect(spedite).toHaveLength(1);
+    expect(alCliente()).toHaveLength(1);
+    expect(spedite.filter((e) => e.to === 's0@esempio.it')).toHaveLength(1);
   });
 
   it('2227 — carta in un carrello: l email del giro porta le cifre del carrello', async () => {
