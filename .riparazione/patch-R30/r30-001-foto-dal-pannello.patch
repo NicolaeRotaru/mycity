@@ -1,0 +1,186 @@
+diff --git a/app/admin/categories/page.tsx b/app/admin/categories/page.tsx
+index c6773f0b..d654f4cd 100644
+--- a/app/admin/categories/page.tsx
++++ b/app/admin/categories/page.tsx
+@@ -22,6 +22,8 @@ import EmptyState from '@/components/EmptyState';
+ type Cat = {
+   id: string; slug: string; name: string; icon: string | null;
+   parent_id: string | null; sort_order: number | null; featured: boolean | null;
++  /** Migrazione 159: senza, `select('*')` non la porta e il campo resta vuoto. */
++  image_url?: string | null;
+ };
+ 
+ async function authedFetch(method: string, body: unknown) {
+@@ -46,10 +48,14 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
+   const [parentId, setParentId] = useState(cat.parent_id ?? '');
+   const [sortOrder, setSortOrder] = useState(cat.sort_order ?? 0);
+   const [featured, setFeatured] = useState(!!cat.featured);
++  const [imageUrl, setImageUrl] = useState(cat.image_url ?? '');
+ 
+   const save = useMutation({
+     mutationFn: async () => authedFetch('PATCH', {
+       id: cat.id, name, slug, icon, parent_id: parentId || null, sort_order: sortOrder, featured,
++      // Solo se è cambiata: senza la migrazione 159 la colonna non c'è e il salvataggio degli altri
++      // campi deve riuscire lo stesso.
++      ...(imageUrl.trim() !== (cat.image_url ?? '') ? { image_url: imageUrl.trim() } : {}),
+     }),
+     onSuccess: () => { toast.success('Categoria aggiornata'); onDone(); },
+     onError: (e: unknown) => toast.error(friendlyError(e)),
+@@ -74,6 +80,7 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
+         </Select>
+         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
+         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
++        <Input label="Foto della tessera (https://… o /…)" containerClassName="flex-1 min-w-[220px]" value={imageUrl} maxLength={500} placeholder="Vuota = gradiente del marchio" onChange={(e) => setImageUrl(e.target.value)} />
+         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
+         <button type="button" onClick={() => {
+             if (figli > 0) {
+@@ -94,6 +101,7 @@ export default function AdminCategoriesPage() {
+   const [newName, setNewName] = useState('');
+   const [newIcon, setNewIcon] = useState('');
+   const [newParent, setNewParent] = useState('');
++  const [newImage, setNewImage] = useState('');
+ 
+   const { data: cats = [], isLoading, isError, refetch } = useQuery({
+     queryKey: queryKeys.admin.categories,
+@@ -120,9 +128,12 @@ export default function AdminCategoriesPage() {
+   const create = useMutation({
+     mutationFn: async () => {
+       if (!newName.trim()) throw new Error('Inserisci un nome');
+-      await authedFetch('POST', { name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null });
++      await authedFetch('POST', {
++        name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null,
++        ...(newImage.trim() ? { image_url: newImage.trim() } : {}),
++      });
+     },
+-    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); invalidate(); },
++    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate(); },
+     onError: (e: unknown) => toast.error(friendlyError(e)),
+   });
+ 
+@@ -138,6 +149,7 @@ export default function AdminCategoriesPage() {
+       <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-4 flex flex-wrap items-end gap-2">
+         <Input label="Nuova categoria" containerClassName="flex-1 min-w-[160px]" value={newName} maxLength={60} placeholder="Es: Animali" onChange={(e) => setNewName(e.target.value)} />
+         <Input label="Icona" containerClassName="w-20" value={newIcon} maxLength={8} placeholder="Emoji" onChange={(e) => setNewIcon(e.target.value)} />
++        <Input label="Foto (facoltativa)" containerClassName="flex-1 min-w-[200px]" value={newImage} maxLength={500} placeholder="https://… o /…" onChange={(e) => setNewImage(e.target.value)} />
+         <Select label="Genitore" containerClassName="w-44" value={newParent} onChange={(e) => setNewParent(e.target.value)}>
+           <option value="">— Principale —</option>
+           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+diff --git a/app/api/admin/categories/route.ts b/app/api/admin/categories/route.ts
+index 30ade1a9..818f1a70 100644
+--- a/app/api/admin/categories/route.ts
++++ b/app/api/admin/categories/route.ts
+@@ -4,6 +4,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
+ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
+ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+ import { writeAudit } from '@/lib/audit';
++import { fotoDiCategoria, motivoDaSegnalare } from '@/lib/immagine-categoria';
+ 
+ export const runtime = 'nodejs';
+ 
+@@ -21,6 +22,19 @@ const baseFields = {
+   parent_id: z.string().uuid().nullable().optional(),
+   sort_order: z.number().int().min(0).max(9999).optional(),
+   featured: z.boolean().optional(),
++  // La foto della tessera in home (migrazione 159). Vuota = nessuna foto: si salva null. Il messaggio
++  // è quello di fotoDiCategoria, cioè dice esattamente cosa la home accetta e cosa no.
++  image_url: z
++    .string()
++    .trim()
++    .max(500)
++    .nullable()
++    .optional()
++    .superRefine((v, ctx) => {
++      if (!v) return;
++      const motivo = motivoDaSegnalare(fotoDiCategoria({ image_url: v }));
++      if (motivo) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Foto non ammessa: ${motivo}` });
++    }),
+ };
+ 
+ const createSchema = z.object(baseFields);
+@@ -67,11 +81,15 @@ export const POST = withAdminAuth(async ({ req, user }) => {
+     .insert({
+       name: d.name, slug: d.slug, icon: d.icon?.trim() || null,
+       parent_id: d.parent_id ?? null, sort_order: d.sort_order ?? 0, featured: d.featured ?? false,
++      // Solo se è stata mandata: senza la migrazione 159 la colonna non c'è, e una categoria senza
++      // foto si deve poter creare lo stesso.
++      ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}),
+     })
+     .select('id')
+     .single();
+   if (error) {
+     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
++    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
+     return ApiErrors.internal('Impossibile creare la categoria');
+   }
+   await writeAudit({ actorId: user.id, action: 'category.create', targetTable: 'categories', targetId: data.id, metadata: { name: d.name, slug: d.slug } });
+@@ -92,6 +110,7 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
+   if (rest.parent_id !== undefined) patch.parent_id = rest.parent_id;
+   if (rest.sort_order !== undefined) patch.sort_order = rest.sort_order;
+   if (rest.featured !== undefined) patch.featured = rest.featured;
++  if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;
+   if (Object.keys(patch).length === 0) return ApiErrors.invalidRequest('Nessun campo da aggiornare');
+ 
+   const admin = getAdminSupabase();
+@@ -102,6 +121,7 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
+   const { error } = await admin.from('categories').update(patch).eq('id', id);
+   if (error) {
+     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
++    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
+     return ApiErrors.internal('Impossibile aggiornare la categoria');
+   }
+   await writeAudit({ actorId: user.id, action: 'category.update', targetTable: 'categories', targetId: id, metadata: { campi: Object.keys(patch) } });
+diff --git a/lib/immagine-categoria.ts b/lib/immagine-categoria.ts
+index b968d9e1..ce94385e 100644
+--- a/lib/immagine-categoria.ts
++++ b/lib/immagine-categoria.ts
+@@ -51,13 +51,28 @@ export const HOST_FOTO_AMMESSI = ['images.pexels.com', 'placehold.co'] as const;
+  *
+  * Nella CSP il permesso è scritto col host del NOSTRO progetto, non col suffisso
+  * (`https://${supaHost}`, che senza configurazione ricade su `*.supabase.co`).
+- * Qui il confronto è sul suffisso, cioè un filo più largo: l'indirizzo dello
+- * Storage di un ALTRO progetto passerebbe di qui e verrebbe bloccato dal
+- * browser. Non è più il buco di prima, perché in quel caso l'immagine fallisce e
+- * il fallimento finisce nei log invece di sparire.
++ * Il suffisso qui vale solo in quel caso: con l'indirizzo del progetto il confronto
++ * è sul suo host (`storageAmmesso`), così lo Storage di un ALTRO progetto, che il
++ * browser bloccherebbe, si scarta prima.
+  */
+ export const SUFFISSO_HOST_STORAGE = '.supabase.co';
+ 
++/**
++ * Lo Storage ammesso è quello che la CSP mette in `img-src` (middleware.ts, getSupabaseHost): l'host
++ * del NOSTRO progetto quando NEXT_PUBLIC_SUPABASE_URL c'è, il suffisso solo quando manca.
++ */
++function storageAmmesso(host: string): boolean {
++  const nostro = process.env.NEXT_PUBLIC_SUPABASE_URL;
++  if (nostro) {
++    try {
++      return host === new URL(nostro).hostname.toLowerCase();
++    } catch {
++      // Indirizzo del progetto scritto male: la CSP ricade sul suffisso, e qui lo stesso.
++    }
++  }
++  return host.endsWith(SUFFISSO_HOST_STORAGE);
++}
++
+ /**
+  * Perché una tessera resta senza foto.
+  *
+@@ -153,7 +168,7 @@ export function fotoDiCategoria(categoria: CategoriaConFoto | null | undefined):
+ 
+   const host = url.hostname.toLowerCase();
+   const ammesso =
+-    (HOST_FOTO_AMMESSI as readonly string[]).includes(host) || host.endsWith(SUFFISSO_HOST_STORAGE);
++    (HOST_FOTO_AMMESSI as readonly string[]).includes(host) || storageAmmesso(host);
+   if (!ammesso) return { src: null, motivo: 'host-non-ammesso', scartato: indirizzo };
+ 
+   return { src: indirizzo, motivo: null };
+@@ -176,7 +191,7 @@ export function motivoDaSegnalare(esito: FotoDiCategoria): string | null {
+     case 'schema-non-ammesso':
+       return `l'indirizzo della foto non è utilizzabile: serve un indirizzo che comincia per https:// oppure un percorso del sito che comincia per / (scartato: ${esito.scartato ?? ''})`;
+     case 'host-non-ammesso':
+-      return `la foto sta su un sito che il browser bloccherà: ammessi solo ${HOST_FOTO_AMMESSI.join(', ')} e lo Storage ${SUFFISSO_HOST_STORAGE} (scartato: ${esito.scartato ?? ''})`;
++      return `la foto sta su un sito che il browser bloccherà: ammessi solo ${HOST_FOTO_AMMESSI.join(', ')} e lo Storage Supabase del sito (scartato: ${esito.scartato ?? ''})`;
+     default:
+       return null;
+   }
