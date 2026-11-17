@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 17:04",
+  "aggiornato": "2026-11-17 17:05",
   "finita": false,
-  "testa": "e3c2bb62626a38905f8ac63f8779154b7066940b",
+  "testa": "ff8f44dad6d62f4b09eac6d97272aa62a5b770b3",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -88,6 +88,30 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "sonner 1.7.4 (node_modules) non passa closeButtonAriaLabel dal Toaster al singolo avviso e non chiude mai un avviso di tipo loading: il ToastProvider osserva il proprio contenitore e dà a ogni X l'etichetta «Chiudi avviso», nascondendola finché l'avviso è un caricamento (quando diventa esito, stesso id, la X torna e chiude). ProductForm.tsx non serviva toccarlo: i suoi tre toast.loading passano tutti dal provider. Prova col sonner vero.",
       "verificato_da": ""
+    },
+    {
+      "id": "R01-002",
+      "chiave": "accessibilita|il campo file nascosto della fotocamera del negoziante si raggiunge col tab ma non mostra il fuoco",
+      "esito": "riparato",
+      "commit": "ff8f44dad6d62f4b09eac6d97272aa62a5b770b3",
+      "file_toccati": [
+        "components/seller/CameraCapture.tsx",
+        "tests/unit/riparazione-r01-campo-file-della-fotocamera.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-campo-file-della-fotocamera.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-campo-file-della-fotocamera.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ff8f44dad6d62f4b09eac6d97272aa62a5b770b3^ --file components/seller/CameraCapture.tsx --prove tests/unit/riparazione-r01-campo-file-della-fotocamera.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il campo file sr-only del ripiego della fotocamera ha tabIndex={-1}: lo apre già il pulsante visibile «Usa la fotocamera del telefono», che resta nell'ordine del Tab e continua ad aprirlo (provato col montaggio a fotocamera negata).",
+      "verificato_da": ""
     }
   ],
   "nuovi_difetti_visti": [
@@ -95,7 +119,7 @@
       "titolo": "Il riquadro degli avvisi si presenta al lettore di schermo come «Notifications alt+T», in inglese",
       "dimensione": "accessibilita",
       "severita": "minore",
-      "file": "components/providers/ToastProvider.tsx:85",
+      "file": "components/providers/ToastProvider.tsx:90",
       "descrizione": "Il Toaster di sonner usa containerAriaLabel di fabbrica («Notifications»): basta passare containerAriaLabel=\"Avvisi\". Non riparato: fuori dalla voce R01-001, che parla solo della X."
     }
   ],
