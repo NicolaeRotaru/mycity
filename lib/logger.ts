@@ -84,6 +84,21 @@ async function captureServerError(err: unknown, ctx?: Record<string, unknown>): 
   Sentry?.captureException(err, ctx ? { extra: ctx } : undefined);
 }
 
+/**
+ * 17/11/2026 — GLI AVVISI SCRITTI NEL BROWSER NON LI LEGGEVA NESSUNO.
+ *
+ * Nel browser `warn` era solo `console.warn`: finiva nella console di chi
+ * guardava la pagina, e i commenti che li dicevano «nei log» mentivano. Adesso,
+ * lato client, l'avviso va anche al registratore degli errori che `error` usa
+ * già (Sentry), con il livello «warning». Senza DSN non si scarica niente, come
+ * per gli errori.
+ */
+async function captureClientWarning(msg: string, ctx?: Record<string, unknown>): Promise<void> {
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return;
+  const Sentry = await import('@sentry/nextjs').catch(() => null);
+  Sentry?.captureMessage(msg, { level: 'warning', ...(ctx ? { extra: ctx } : {}) });
+}
+
 // Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
   return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
@@ -122,6 +137,7 @@ export const logger = {
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
     console.warn(line('warn', msg, ctx));
+    if (!eServer) void captureClientWarning(msg, toCtx(ctx));
   },
 
   error: (err: unknown, ctx?: LogContext) => {
