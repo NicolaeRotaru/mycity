@@ -295,6 +295,9 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "2 subagenti riparatori (lotti A e B) e 2 smentitori"
-  }
+    "subagenti": 4,
+    "costo_usd": 17.11,
+    "nota": "2 subagenti riparatori (lotti A e B) e 2 smentitori; costo letto con get_session senza id prima della consegna (17,11 $; può non contare l ultimo turno)"
+  },
+  "costo_usd": 17.11
 }
