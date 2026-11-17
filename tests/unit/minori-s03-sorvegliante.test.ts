@@ -87,7 +87,12 @@ describe('il sorvegliante', () => {
     // Nato 65 minuti fa per «Domani 9:00-12:00»: in regola fino a domattina.
     risposta = ordineFermo({ id: 'aaaaaaaa-1', created_at: vecchio(65), delivery_slot: 'Domani 9:00-12:00', profiles: { store_name: 'Forno' } });
     const { corpo } = await giro();
-    expect(corpo.alerts).toBe(0);
+    // R14-003 — Ogni ordine che il negozio non accetta entro 5 minuti avvisa Nicola, una volta sola
+    // («ordine nuovo da accettare»): è l'unico allarme che questo ordine porta. Il «bloccato»
+    // (ORDER_STUCK_NEW) resta escluso fino a domattina.
+    const dettagli = (corpo.details ?? []) as Array<{ type: string; detail: string }>;
+    expect(dettagli.map((d) => d.type)).toEqual(['ORDINE_DA_ACCETTARE']);
+    expect(dettagli.some((d) => /bloccato/i.test(d.detail))).toBe(false);
   });
 
   it('7 — l ordine ormai alla scadenza invece suona', async () => {
