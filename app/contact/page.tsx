@@ -47,9 +47,10 @@ export default function ContactPage() {
   };
 
   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
-  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
-  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
-  // comunque sul server, quindi non si apre nessun buco.
+  // estensione che lo taglia, guasto loro), si dice cosa e' successo e cosa fare.
+  // R02-007 (17/11/2026) — Non si promette piu' «puoi provare lo stesso a inviare»:
+  // senza gettone /api/contact rifiuta il messaggio («Verifica anti-bot fallita»).
+  // Come sull'iscrizione (R24-016) il modulo non parte e la pagina manda all'email.
   const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const honeypotRef = useRef('');
   const startedAtRef = useRef(Date.now());
@@ -64,7 +65,10 @@ export default function ContactPage() {
     if (honeypotRef.current) { toast.success('Messaggio inviato! Ti risponderemo entro 24 ore lavorative.'); return; }
     if (Date.now() - startedAtRef.current < 2000) { toast.success('Messaggio inviato!'); return; }
     // 🟡-2: CAPTCHA come su signup (se configurato).
-    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) { toast.error('Completa la verifica anti-bot'); return; }
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      toast.error(captchaRotto ? `${captchaRotto} Senza questo controllo il messaggio non può partire: ricarica la pagina o scrivici a ${indirizzoContatto('info')}.` : 'Completa la verifica anti-bot');
+      return;
+    }
 
     setSending(true);
     try {
@@ -196,8 +200,9 @@ export default function ContactPage() {
             )}
             {captchaRotto && (
               <p className="text-center text-sm text-ink-600">
-                {captchaRotto} Puoi provare lo stesso a inviare: se non funziona,
-                ricarica la pagina o scrivici a {indirizzoContatto('info')}.
+                {captchaRotto} Senza questo controllo il messaggio non può partire:
+                ricarica la pagina, oppure scrivici a{' '}
+                <a className="underline" href={mailtoContatto('info')}>{indirizzoContatto('info')}</a>.
               </p>
             )}
             {stradaAMano && (
