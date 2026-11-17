@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:19",
+  "aggiornato": "2026-11-17 20:22",
   "finita": false,
-  "testa": "d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab",
+  "testa": "db38a0f0064b758039f6debd9b1fe1ecc660992d",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -126,9 +126,10 @@
       "id": "R01-005",
       "chiave": "navigazione-gerarchia|menu, piede, vetrina e pagina categorie buttano via le categorie piene già note quando una ricarica fallisce",
       "esito": "riparato",
-      "commit": "83bdc3624f9485cb2ee712bda101cf2e7c8a23f5",
+      "commit": "db38a0f0064b758039f6debd9b1fe1ecc660992d",
       "commit_tutti": [
-        "83bdc3624f9485cb2ee712bda101cf2e7c8a23f5"
+        "83bdc3624f9485cb2ee712bda101cf2e7c8a23f5",
+        "db38a0f0064b758039f6debd9b1fe1ecc660992d"
       ],
       "file_toccati": [
         "components/CategoryBar.tsx",
@@ -149,7 +150,7 @@
         "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83bdc3624f9485cb2ee712bda101cf2e7c8a23f5^ --file components/CategoryBar.tsx,components/CategoryShowcase.tsx,app/categorie/page.tsx,components/Footer.tsx --prove tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La domanda comune (lib/queries/categorie-piene.ts) e soloLePiene erano giuste: il difetto stava nei quattro chiamanti, che passavano «piene.isError ? null : piene.data» e così, su una rilettura caduta (react-query tiene data e accende isError), rimettevano le categorie vuote. Ora passano piene.data: solo senza un elenco mai letto si mostrano tutte. La prova monta i quattro componenti col react-query vero: prima lettura riuscita, poi rilettura fallita; alla base tutti e quattro rimettono Abbigliamento (vuota), e c'è la controprova della prima lettura caduta."
+      "cosa_ho_fatto": "La domanda comune (lib/queries/categorie-piene.ts) e soloLePiene erano giuste: il difetto stava nei quattro chiamanti, che passavano «piene.isError ? null : piene.data» e così, su una rilettura caduta (react-query tiene data e accende isError), rimettevano le categorie vuote. Ora passano piene.data: solo senza un elenco mai letto si mostrano tutte. La prova monta i quattro componenti col react-query vero: prima lettura riuscita, poi rilettura fallita; alla base tutti e quattro rimettono Abbigliamento (vuota), e c'è la controprova della prima lettura caduta. Secondo commit: solo il tipo dei figli nel finto di next/link della prova (tsc), rimessa rilanciata alla testa, uscita 0."
     },
     {
       "id": "R01-006",
