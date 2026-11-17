@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:31",
+  "aggiornato": "2026-11-17 18:34",
   "finita": false,
-  "testa": "be37e7a22aed365e3cf4e3d6801c34006d359ae6",
+  "testa": "cb813b984fde5e26ea893f034aceafbf957f4bca",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -57,8 +57,26 @@
     {
       "id": "R03-003",
       "chiave": "microcopy|il titolo della variante a della home dice «a negozio aperto», ma la consegna può arrivare dopo la chiusura",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "cb813b984fde5e26ea893f034aceafbf957f4bca",
+      "file_toccati": [
+        "app/page.tsx",
+        "tests/unit/riparazione-r20-home-variante-a.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-home-consegna-senza-negozio-aperto.test.ts",
+        "tests/unit/riparazione-r20-home-variante-a.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-home-consegna-senza-negozio-aperto.test.ts tests/unit/riparazione-r20-home-variante-a.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cb813b984fde5e26ea893f034aceafbf957f4bca^ --file app/page.tsx --prove tests/unit/riparazione-r03-home-consegna-senza-negozio-aperto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto «, a negozio aperto»: la frase è ora «Consegna {QUANDO_ARRIVA_SENZA_NEGOZIO}.» = «Consegna in giornata, nella fascia oraria che scegli.», la stessa di lib/promesse-pubbliche.ts, senza promesse nuove. La prova rende la home vera sulla variante a e legge il sottotitolo. Modificata (dichiarata) la prova esistente tests/unit/riparazione-r20-home-variante-a.test.ts, che legge app/page.tsx per nome e pretendeva «a negozio aperto»: ora pretende che non ci sia e che la frase dica «fascia oraria che scegli»; l'altra sua asserzione resta intatta."
     },
     {
       "id": "R03-004",
