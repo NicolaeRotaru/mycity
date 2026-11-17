@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 17:00",
+  "aggiornato": "2026-11-17 17:04",
   "finita": false,
-  "testa": "cc46a00405bf597a22a9227fbcc0c0b882ab6bc2",
+  "testa": "e3c2bb62626a38905f8ac63f8779154b7066940b",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -64,9 +64,41 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Le regole comuni sono pianoPatchPerIlModulo (lib/products/aiPatch.ts) e i due campi nuovi di R04-020 sono haVarianti e attributiAttuali: applyPatch del modulo ora li passa (hasVariants e attributes). Con le varianti la disponibilità proposta non si scrive né si dice «aggiornata», e togliere un attributo assente non conta come cambiato.",
       "verificato_da": ""
+    },
+    {
+      "id": "R01-001",
+      "chiave": "accessibilita|la x degli avvisi dice «close toast» in inglese e sui caricamenti non chiude niente",
+      "esito": "riparato",
+      "commit": "e3c2bb62626a38905f8ac63f8779154b7066940b",
+      "file_toccati": [
+        "components/providers/ToastProvider.tsx",
+        "tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e3c2bb62626a38905f8ac63f8779154b7066940b^ --file components/providers/ToastProvider.tsx --prove tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "sonner 1.7.4 (node_modules) non passa closeButtonAriaLabel dal Toaster al singolo avviso e non chiude mai un avviso di tipo loading: il ToastProvider osserva il proprio contenitore e dà a ogni X l'etichetta «Chiudi avviso», nascondendola finché l'avviso è un caricamento (quando diventa esito, stesso id, la X torna e chiude). ProductForm.tsx non serviva toccarlo: i suoi tre toast.loading passano tutti dal provider. Prova col sonner vero.",
+      "verificato_da": ""
     }
   ],
-  "nuovi_difetti_visti": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il riquadro degli avvisi si presenta al lettore di schermo come «Notifications alt+T», in inglese",
+      "dimensione": "accessibilita",
+      "severita": "minore",
+      "file": "components/providers/ToastProvider.tsx:85",
+      "descrizione": "Il Toaster di sonner usa containerAriaLabel di fabbrica («Notifications»): basta passare containerAriaLabel=\"Avvisi\". Non riparato: fuori dalla voce R01-001, che parla solo della X."
+    }
+  ],
   "domande_per_nicola": [],
   "conto": {
     "agenti": 0,
