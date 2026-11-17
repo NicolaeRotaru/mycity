@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:01",
+  "aggiornato": "2026-11-17 18:03",
   "finita": false,
-  "testa": "3245c9edc78f760c77f158d6ff01ba76ed3e7b51",
+  "testa": "69847de49ab221cdef1bedc3c870d4552a0d771b",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -71,8 +71,24 @@
     {
       "id": "R03-008",
       "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "69847de49ab221cdef1bedc3c870d4552a0d771b",
+      "file_toccati": [
+        "app/rider/availability/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-zone-salvate-dopo-l-esito.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-zone-salvate-dopo-l-esito.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 69847de49ab221cdef1bedc3c870d4552a0d771b^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r03-zone-salvate-dopo-l-esito.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "saveZones aspetta l'esito di persist: «Zone salvate» compare solo dopo la scrittura riuscita; se cade resta l'errore di persist e la zona torna com'era (salvo un tocco arrivato dopo), invece di restare scelta come se fosse salvata. Toccato solo saveZones; l'altro salvataggio dello stesso file (save, turni e online) aspetta già l'esito sulla base, quindi niente difetto nuovo da segnalare."
     },
     {
       "id": "R03-009",
