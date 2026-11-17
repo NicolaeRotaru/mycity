@@ -1,0 +1,263 @@
+{
+ "sessione": "R01",
+ "aggiornato": "2026-11-17 22:00",
+ "finita": false,
+ "testa": "",
+ "verifica": {
+  "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+  "esito": "",
+  "testa": "",
+  "nota": ""
+ },
+ "voci": [
+  {
+   "id": "R01-001",
+   "chiave": "ai-endpoints|con un fornitore lento la risposta lunga del copilot non arriva mai: dopo due minuti il negozio legge solo «riprova»",
+   "esito": "gia_riparato_prima",
+   "prova": "Alla base 522cfb01 (commit f734e255 dell'onda di R29): lib/ai/regole-copilot.ts:25 TEMPO_COPILOT_MS = 80_000 e :34 Math.min(3_000, 1024 + 60·prodotti); app/api/ai/copilot/route.ts:241-244 max_tokens: tettoTokenCopilot(...), timeoutMs: TEMPO_COPILOT_MS, senzaRitentativi: true; lib/ai/run.ts:58-63 (timeoutMs, senzaRitentativi) e :443-448 opzioniDellaChiamata → { timeout, maxRetries: 0 }; vercel.json:14 app/api/ai/**/route.ts maxDuration 120; tests/unit/minori-s10-catalogo-chat.test.ts:152-163 chiede già > 2048 e <= 3200. Comando: npx vitest run tests/unit/riparazione-r29-copilot-lento.test.ts tests/unit/minori-s10-catalogo-chat.test.ts --reporter=dot → 11 verdi.",
+   "file_toccati": [],
+   "prova_file": [
+    "tests/unit/riparazione-r29-copilot-lento.test.ts",
+    "tests/unit/minori-s10-catalogo-chat.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r29-copilot-lento.test.ts tests/unit/minori-s10-catalogo-chat.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Controllato che la correzione scritta (un tentativo solo da 80 s, tetto 3000 token, prova comune a > 2048 e <= 3200) è già tutta alla base; i numeri tornano: filtro da 128 token (pochi secondi a 40 token/s) + 80 s < 120 s di maxDuration in vercel.json. Nessun commit.",
+   "nota": "Fuori voce e fuori territorio: il filtro assertSafeText (lib/ai/moderation.ts:78-82) non ha un tempo suo, usa quello del client (60 s, un ritentativo): con un fornitore che non risponde affatto (non lento) filtro + Copilot possono superare i 120 s. Il conto della voce (fornitore lento a 40 token/s) regge."
+  },
+  {
+   "id": "R01-002",
+   "chiave": "api-backend|le notifiche push partono due volte se due giri del cron si sovrappongono: la presa in carico non è atomica",
+   "esito": "non_fatto",
+   "nota": "serve una migrazione: va in un'onda con l'ok migrazioni di Nicola. Tocca anche i permessi di una funzione SQL (claim_pending_push: niente SECURITY DEFINER, EXECUTE tolto a PUBLIC, anon e authenticated e dato a service_role), quindi è anche delicata. La correzione R33-005 (diff intera in lotto2.json) si applica pulita sulla base: i file di partenza della diff hanno blob identici alla base (route.ts ced6bf7f, lib/database.types.ts bd3a4c9f, e le cinque prove 01279396, 6d22b39a, b12a819c, 9bc7c3cf, 03128336). Il numero 571 è libero sulla base (ci sono 541 e 572). Il difetto c'è ancora.",
+   "serve_file_altrui": [
+    {
+     "file": "migrations/571_le_notifiche_push_si_prendono_in_carico_una_volta.sql",
+     "modifica": "[nuova] ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS push_claimed_at timestamptz; CREATE OR REPLACE FUNCTION public.claim_pending_push(p_since timestamptz, p_max int DEFAULT 100) RETURNS TABLE(id, user_id, title, body, link, category), plpgsql, SET search_path = public: sceglie con FOR UPDATE SKIP LOCKED le righe con pushed_at NULL, created_at >= p_since e presa vuota o più vecchia di 10 minuti, ordinate prima ordini e servizio poi promo/group/newsletter, poi created_at; UPDATE push_claimed_at = now() ... RETURNING. REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated; GRANT EXECUTE ... TO service_role; NOTIFY pgrst. Testo esatto: blocco migrations/571 della diff R33-005."
+    },
+    {
+     "file": "app/api/cron/send-push/route.ts",
+     "modifica": "[R01, da applicare insieme] Righe 92-130: la lettura `.from('notifications')...is('pushed_at', null)...limit(100)` e la rilettura R26-003 (109-130) diventano `supa.rpc('claim_pending_push', { p_since: sinceIso, p_max: 100 })`, con pending = Array.isArray(prese) ? prese : []. Dopo il ④ (riga 256): le righe prese e non segnate si rilasciano con update({ push_claimed_at: null }).in('id', daRilasciare). Commento in testa righe 58-60. Testo esatto: hunk route.ts della diff R33-005, che si applica pulito."
+    },
+    {
+     "file": "lib/database.types.ts",
+     "modifica": "[altrui] notifications Row/Insert/Update: + push_claimed_at: string | null (hunk della diff R33-005, si applica pulito)."
+    },
+    {
+     "file": "tests/unit/api-cron-send-push.test.ts",
+     "modifica": "[altrui o comuni] I finti rpc() oggi rispondono {data:true} per ogni funzione: devono rispondere a claim_pending_push con le righe. Hunk di queste prove nella diff R33-005 (si applicano puliti)."
+    },
+    {
+     "file": "tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts",
+     "modifica": "[altrui o comuni] I finti rpc() oggi rispondono {data:true} per ogni funzione: devono rispondere a claim_pending_push con le righe. Hunk di queste prove nella diff R33-005 (si applicano puliti)."
+    },
+    {
+     "file": "tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts",
+     "modifica": "[altrui o comuni] I finti rpc() oggi rispondono {data:true} per ogni funzione: devono rispondere a claim_pending_push con le righe. Hunk di queste prove nella diff R33-005 (si applicano puliti)."
+    },
+    {
+     "file": "tests/unit/minori-s03-push.test.ts",
+     "modifica": "[altrui o comuni] I finti rpc() oggi rispondono {data:true} per ogni funzione: devono rispondere a claim_pending_push con le righe. Hunk di queste prove nella diff R33-005 (si applicano puliti)."
+    },
+    {
+     "file": "tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts",
+     "modifica": "[altrui o comuni] I finti rpc() oggi rispondono {data:true} per ogni funzione: devono rispondere a claim_pending_push con le righe. Hunk di queste prove nella diff R33-005 (si applicano puliti)."
+    },
+    {
+     "file": "tests/unit/riparazione-r01-push-presa.test.ts",
+     "modifica": "[nuove] Sono le prove nuove di R33-005, rinominate per R01. La rimessa va fatta con --sql: senza, la migrazione nuova dà 3."
+    },
+    {
+     "file": "tests/sql/rls/riparazione-r01-push-presa.test.sql",
+     "modifica": "[nuove] Sono le prove nuove di R33-005, rinominate per R01. La rimessa va fatta con --sql: senza, la migrazione nuova dà 3."
+    }
+   ],
+   "controllato_sulla_base": "app/api/cron/send-push/route.ts:92-99 (legge le righe con pushed_at NULL senza prenderle), :109-130 (rilettura R26-003), :256-267 (pushed_at segnato solo a fine giro); vercel.json:21 (ogni 5 minuti); git grep 'claim_pending_push|push_claimed_at' sulla base non trova niente."
+  },
+  {
+   "id": "R01-003",
+   "chiave": "architettura|sei rami iserror scritti a mano invece del presidio lib/vista-query.ts (vistadaquery): il difetto può tornare alla settima pagina"
+  },
+  {
+   "id": "R01-004",
+   "chiave": "architettura|interfacce zombie: shippingforeuro vale sempre 0 ma riceve 7 ingressi; promessaspedizione ha un argomento morto e campi sempre costanti",
+   "esito": "gia_riparato_prima",
+   "prova": "Riparata da R29-005 (16/11). lib/shipping.ts:38 `export function shippingForEuro(): number { return 0; }` non ha più ingressi; lib/promesse-pubbliche.ts:445 `promessaSpedizione(consegnaCents: number = PLATFORM_DELIVERY_FEE_CENTS)` ha solo l'argomento della consegna, che usa; l'interfaccia PromessaSpedizione (:419-436, commento R29-005 a :421) non ha più sopraSoglia né mancano. Chiamanti già senza argomenti: app/checkout/page.tsx:774 `shippingForEuro()` e :858 `promessaSpedizione()`, app/cart/page.tsx:74 `promessaSpedizione().titolo` (il carrello non chiama più shippingForEuro), app/product/[id]/page.tsx:553 e components/ProductCard.tsx:135 `promessaSpedizione()`. FreeShippingProgress non c'è più (git ls-tree vuoto). Lo tiene fermo la prova tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts (shippingForEuro.length 0, la firma esatta, niente sopraSoglia, i chiamanti senza argomenti).",
+   "nota": "Con i soli lib/shipping.ts, lib/promesse-pubbliche.ts, app/checkout/page.tsx e app/cart/page.tsx non resta niente da fare per la voce come è scritta. Resta un pezzo fuori voce: lib/shipping.ts:43 `shippingCentsFor(_opts?: IngressiSpedizione)` accetta ancora gli ingressi e li ignora, perché lib/ordini/prezzi.ts:263 glieli passa. Toglierli vuol dire toccare lib/ordini/prezzi.ts, che è altrui e fa i conti degli importi: è delicata, va con i delicati. Resta anche un commento invecchiato, solo testo: app/cart/page.tsx:155-158 dice ancora che gli ingressi della cassa vanno a shippingForEuro.",
+   "controllato_sulla_base": "lib/shipping.ts:38-45, lib/promesse-pubbliche.ts:419-460, app/checkout/page.tsx:774 e :858, app/cart/page.tsx:74 e :148-161, app/product/[id]/page.tsx:553, components/ProductCard.tsx:135; git grep 'sopraSoglia|shippingForEuro|promessaSpedizione' su lib, components, app e tests."
+  },
+  {
+   "id": "R01-005",
+   "chiave": "deploy-sre|la prova «migrazione su database pieno» mette ancora i file nell'ordine vecchio"
+  },
+  {
+   "id": "R01-006",
+   "chiave": "performance|ogni pagina scarica due caratteri in corsivo che quasi nessuna pagina usa",
+   "esito": "serve_file_altrui",
+   "nota": "La variante (Inter e Fraunces principali solo col dritto, più due istanze del solo corsivo senza preload, più le regole CSS) NON regge con tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts così com'è. Quella prova legge app/layout.tsx, prende i nomi dall'import di next/font/google (riga 3: Inter, Fraunces) e per ogni nome guarda solo la PRIMA chiamata `Nome({` (regex senza 'g', righe 58-60). Pretende: (a) che fra i caratteri ci siano Inter e Fraunces e che le loro opzioni si trovino; (b) che in quella prima chiamata style: [...] contenga sia 'italic' sia 'normal' (righe 109-121); (c) che il corsivo esista nel catalogo di next; (d) che nessuna prima chiamata abbia preload: false (righe 132-141); (e) che almeno un punto del sito chieda il corsivo (className italic o <em>), fra cui app/page.tsx. Con le principali solo 'normal' diventa rossa la (b) («non chiede il corsivo») per tutti e due i caratteri. Mettendo prima le istanze del corsivo diventano rosse la (b) («non chiede più il dritto») e la (d). Tenere 'italic' nella prima istanza lascia il corsivo precaricato, perché next/font precarica i file per sottoinsieme e non per stile (node_modules/next/dist/compiled/@next/font/dist/google/find-font-files-in-css.js:28): così il difetto resta. Una variante tutta in territorio non c'è: la prova comune va cambiata insieme. Le altre prove sono a posto: riparazione-r10-manifest-nel-head.test.tsx:19-21 e riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts:19-21 fingono next/font (ogni chiamata dà {variable, className}), quindi le istanze in più non le rompono, e nessun'altra prova legge le opzioni dei caratteri. Non controllato a occhio: serve un build con la rete verso Google Fonts.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts",
+     "modifica": "[altrui] Hunk della prova nella patch R33-009 (lotto2.json): si applica pulito, la base ha il blob 6dfa85bc come la patch. Righe 51-63: caratteriCaricati() raccoglie TUTTE le istanze di ogni nome (regex con 'g'). Righe 109-121: il caso «chiede anche la variante inclinata» somma gli stili di tutte le istanze dello stesso nome e pretende 'italic' e 'normal' nell'insieme. Righe 132-141: il caso «il dritto resta precaricato» guarda solo le istanze che portano 'normal'."
+    },
+    {
+     "file": "app/layout.tsx",
+     "modifica": "[R01, da applicare insieme] Righe 41-59: nel commento si dice che il corsivo sta in due istanze a parte; inter → style: ['normal']; fraunces → style: ['normal']; dopo la riga 59 si aggiungono `const interCorsivo = Inter({ subsets: ['latin'], variable: '--font-inter-italic', display: 'swap', style: ['italic'], preload: false });` e `const frauncesCorsivo = Fraunces({ subsets: ['latin'], variable: '--font-serif-italic', display: 'swap', weight: ['400', '500', '600', '700', '800'], style: ['italic'], preload: false });`. Riga 216: className={`${inter.variable} ${fraunces.variable} ${interCorsivo.variable} ${frauncesCorsivo.variable}`}. Attenzione: la patch R33-009 parte da layout 5f0938be, la base è fbe24597 (nel frattempo sono arrivati altri import), quindi git apply semplice fallisce sul primo hunk. Si fa con git apply --3way (il blob 5f0938be è nel deposito) oppure a mano su queste righe."
+    },
+    {
+     "file": "app/globals.css",
+     "modifica": "[R01, da applicare insieme] Dopo la riga 236 `h1, h2, h3 { color: var(--text-heading); }` si mettono le regole della patch R33-009 (si applica pulita, blob 52ac781b): `.italic, em, i { font-family: var(--font-inter-italic), var(--font-sans); }` e `:is(h1, h2, h3, .font-serif, .font-serif-display, .font-display) :is(.italic, em, i), :is(h1, h2, h3, .font-serif, .font-serif-display, .font-display):is(.italic, em, i) { font-family: var(--font-serif-italic), var(--font-serif); }`. In più (la patch R33 non lo ha): la riga 506 `.store-richtext blockquote { @apply ... italic ... }` mette solo font-style, senza classe .italic. I blockquote sono ammessi in lib/sanitize-html.ts:12 e si vedono in RichTextSection, CmsBlockRenderer e HomeSectionRenderer: dopo la modifica tornerebbero in corsivo finto. Aggiungere `.store-richtext blockquote` IN TESTA al primo selettore (`.store-richtext blockquote, .italic, em, i {`), così la regex della prova nuova `\\.italic,\\s*em,\\s*i\\s*\\{` combacia ancora."
+    },
+    {
+     "file": "tests/unit/riparazione-r01-caratteri-corsivi-a-richiesta.test.ts",
+     "modifica": "[nuova, R01] È la prova nuova di R33-009 (riparazione-r33-caratteri-corsivi-a-richiesta), rinominata per R01."
+    }
+   ],
+   "controllato_sulla_base": "app/layout.tsx:3 (import), :41-59 (Inter e Fraunces con style ['normal','italic'] e preload di default), :216 (className dell'<html>); app/globals.css:236 e :505-506; tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts:51-63, :109-121, :132-141; next 15.5.29, find-font-files-in-css.js:28."
+  },
+  {
+   "id": "R01-007",
+   "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+   "esito": "serve_file_altrui",
+   "nota": "Il difetto c'è ancora: app/notifications/page.tsx:101-106 legge tutte le notifiche, promozioni comprese. La diff R33-018 (lotto2.json) si applica pulita sulla base: i file di partenza hanno blob identici (page 36f3ac92, useNotificationsCount b857d458, SellerShell dac32fc6, minori-s06 48149841, il-pannello-negozio d838f85b). Una variante tutta in territorio non c'è: filtrare solo la pagina lascia il numero sul campanello (useNotificationsCount in Navbar, AccountShell, AccountSidebar e AdminSidebar, più useNotifUnread del negozio) a contare promozioni che la lista non mostra più. È la regressione per cui un collaudo dell'onda 2 aveva fatto togliere la prima correzione (nota R33-018). notifications.category è NOT NULL DEFAULT 'order' (migrations/115_privacy_radiografia.sql:210), quindi .neq('category','promo') non nasconde righe senza categoria. CONSENSI: sì, tocca un consenso, ma solo in lettura. notif_promos è l'interruttore delle promozioni (spento di default dalla 119, spento dalla disiscrizione 118). La correzione legge la riga di profiles della persona stessa, che il client legge già in app/profile/settings/page.tsx:210, e nasconde le promozioni quando notif_promos non è true. Non scrive consensi, non cambia permessi né RLS, non tratta dati nuovi. Se va con i delicati lo decide la regista.",
+   "serve_file_altrui": [
+    {
+     "file": "app/notifications/page.tsx",
+     "modifica": "[R01, da applicare insieme] Righe 101-106: prima della lettura, `const { data: preferenze, error: errPreferenze } = await supabase.from('profiles').select('notif_promos').eq('id', user.id).maybeSingle(); if (errPreferenze) throw errPreferenze;` poi `let lettura = supabase.from('notifications').select('*').eq('user_id', user.id); if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo');` e `const { data, error } = await lettura.order('created_at', { ascending: false }).limit(quante);`. È l'hunk page della diff R33-018, che si applica pulito."
+    },
+    {
+     "file": "components/hooks/useNotificationsCount.ts",
+     "modifica": "[altrui] Righe 30-37 (queryFn): la stessa lettura di profiles.notif_promos per userId (se cade, throw come per il conteggio), poi `let conta = supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false); if (preferenze?.notif_promos !== true) conta = conta.neq('category', 'promo'); const { count, error } = await conta;`. È l'hunk della diff R33-018, che si applica pulito."
+    },
+    {
+     "file": "components/seller/SellerShell.tsx",
+     "modifica": "[altrui] Il campanello del negozio conta con useNotifUnread (righe 104-124, usato a :228). Variante più piccola di R33: dentro la queryFn di useNotifUnread, la stessa lettura di notif_promos (se cade, return 0 come oggi) e `.neq('category', 'promo')` quando notif_promos !== true. Così non si toccano le prove: minori-s06-menu-del-negozio.test.tsx:24 e il-pannello-negozio-ha-la-voce-messaggi.test.tsx:24 fingono useQuery → {data: 0} e la queryFn non gira. Con la strada di R33 (useNotifUnread sostituito da useNotificationsCount) invece vanno cambiate anche quelle due prove (altrui): i loro finti devono avere useQueryClient e supabase.auth.onAuthStateChange (hunk nella diff R33-018)."
+    },
+    {
+     "file": "tests/unit/riparazione-r01-promo-spente.test.ts",
+     "modifica": "[nuova] È la prova nuova di R33-018, rinominata per R01."
+    }
+   ],
+   "controllato_sulla_base": "app/notifications/page.tsx:86 e :178 (il pulsante guarda il conteggio del campanello), :101-106 (lettura senza filtro); components/hooks/useNotificationsCount.ts:30-37; components/seller/SellerShell.tsx:104-124 e :228. Prove guardate: riparazione-r22-campanello-oltre-le-cinquanta.test.ts:24-47 e :89 (il finto ha già neq, maybeSingle e profiles con notif_promos: true, resta verde), minori-s03-pagina-notifiche.test.ts:9-18, non-lo-so-ancora-non-e-non-c-e.test.ts:153-156 (parti non toccate), il-logo-e-accedi-si-vedono-sulla-testata.test.tsx:46 e le-pillole-e-le-icone-della-testata-si-vedono-da-loggati.test.tsx:40 (fingono il hook)."
+  },
+  {
+   "id": "R01-008",
+   "chiave": "qa-flussi|la frase vecchia sui formati foto resta in friendlyerror",
+   "esito": "riparato",
+   "commit": "ee8327791cc75d83942772ed21c823306efbddee",
+   "file_toccati": [
+    "lib/errors.ts",
+    "tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts",
+    "tests/unit/riparazione-r01-formati-foto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-formati-foto.test.ts",
+    "tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-formati-foto.test.ts tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ee8327791cc75d83942772ed21c823306efbddee^ --file lib/errors.ts --prove tests/unit/riparazione-r01-formati-foto.test.ts,tests/unit/la-foto-rifiutata-lo-dice-in-italiano.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "friendlyError costruisce la frase sul formato rifiutato dai tipi veri della porta (TIPI_IMMAGINE con formatiLeggibili): sette formati invece di «JPG, PNG o WEBP». La prova comune la-foto-rifiutata (ora di R01) segue la frase nuova; prova nuova riparazione-r01-formati-foto; 24 file di prova che usano lib/errors verdi."
+  },
+  {
+   "id": "R01-009",
+   "chiave": "qa-flussi|salvando le taglie, se la scorta cambia a metà il negozio legge «riapri e salva di nuovo», ma le taglie tolte sono già cancellate",
+   "esito": "riparato",
+   "commit": "a902a5f592a0ca13b2f341d152847582fdf494f5",
+   "file_toccati": [
+    "lib/products/persistVariantsServer.ts",
+    "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts",
+    "tests/unit/riparazione-r01-taglie-tolte.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-taglie-tolte.test.ts",
+    "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-taglie-tolte.test.ts tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a902a5f592a0ca13b2f341d152847582fdf494f5^ --file lib/products/persistVariantsServer.ts --prove tests/unit/riparazione-r01-taglie-tolte.test.ts,tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nel ripiego a pezzi (salva_varianti assente, PGRST202) prima gli aggiornamenti condizionati sulla scorta, poi quelli senza condizione, poi cancellazioni e inserimenti: al conflitto la taglia tolta c'è ancora. La prova r08 (ora di R01) segue l'ordine nuovo come scritto; prova nuova riparazione-r01-taglie-tolte; 22 file di prova delle varianti verdi.",
+   "nota": "La strada principale (funzione salva_varianti, migrazione 323) è già atomica e non cambia; nessuna migrazione. Nessun vincolo unique su product_variants, quindi spostare la cancellazione dopo gli aggiornamenti non fa collidere le etichette."
+  },
+  {
+   "id": "R01-010",
+   "chiave": "qa-flussi|basta un solo campo fuori regola e tutta la personalizzazione della vetrina sparisce, e il salvataggio dopo la cancella",
+   "esito": "riparato",
+   "commit": "e8f0070376c0e13e85a3f23ea2bc7847afa8438e",
+   "file_toccati": [
+    "lib/store-customization.ts",
+    "tests/unit/la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts",
+    "tests/unit/store-customization.test.ts",
+    "tests/unit/riparazione-r01-vetrina-un-campo-alla-volta.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-vetrina-un-campo-alla-volta.test.ts",
+    "tests/unit/la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts",
+    "tests/unit/store-customization.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-vetrina-un-campo-alla-volta.test.ts tests/unit/la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts tests/unit/store-customization.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e8f0070376c0e13e85a3f23ea2bc7847afa8438e^ --file lib/store-customization.ts --prove tests/unit/riparazione-r01-vetrina-un-campo-alla-volta.test.ts,tests/unit/la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts,tests/unit/store-customization.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "normalizeCustomization, se lo schema intero non passa, controlla ogni campo (ogni voce di tema, social e annuncio, ogni elemento di badge e prodotti in evidenza) e scarta solo l'invalido; lo schema di salvataggio resta severo. Così ThemePicker e StoreDetailsEditor, che rileggono con normalizeCustomization, non riscrivono più la vetrina vuota. Aggiornate come scritto la-vetrina… ({ tagline: 'x' }) e store-customization.test.ts (badge sconosciuto scartato da solo).",
+   "nota": "ThemePicker.tsx e StoreDetailsEditor.tsx non cambiano: la cura sta tutta nella lettura condivisa."
+  },
+  {
+   "id": "R01-011",
+   "chiave": "qa-flussi|la prima compilazione di monta() pesa sul primo caso di ~85 file di prove"
+  },
+  {
+   "id": "R01-012",
+   "chiave": "qa-flussi|prova con un nome che promette il contrario"
+  },
+  {
+   "id": "R01-013",
+   "chiave": "stati-ui|se la lettura del profilo non riesce, il negoziante approvato legge che il suo account non è da venditore e gli viene proposto di iscriversi di nuovo",
+   "esito": "riparato",
+   "commit": "10fe32bf05d7dd1e5bbd71d1055bdd86ec7bff47",
+   "file_toccati": [
+    "app/admin/layout.tsx",
+    "tests/unit/riparazione-r01-profilo-non-letto-in-amministrazione.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-profilo-non-letto-in-amministrazione.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-profilo-non-letto-in-amministrazione.test.tsx tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 10fe32bf05d7dd1e5bbd71d1055bdd86ec7bff47^ --file app/admin/layout.tsx --prove tests/unit/riparazione-r01-profilo-non-letto-in-amministrazione.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La parte del negozio era già alla base (app/seller/layout.tsx:77-78 profiloNonLetto e wrongRole solo con profilo letto, :96-107 ErrorState con Riprova; components/hooks/useProfile.ts:148-149 isError e refetch; commit 1445c09d; prova riparazione-r19-profilo-non-letto-nel-negozio verde). Ho messo lo stesso schema in app/admin/layout.tsx: col profilo non letto «Non riesco a leggere i dati del tuo account» con Riprova invece di «Accesso riservato» e del rimando a '/'.",
+   "nota": "Non allarga l'accesso: senza profilo letto il cockpit (figli e barra) non si monta, e chi ha un profilo letto non admin resta fuori col rimando a '/'; la prova nuova controlla tutti e tre i casi."
+  }
+ ],
+ "nuovi_difetti_visti": [],
+ "domande_per_nicola": [],
+ "conto": {
+  "agenti": 2,
+  "nota": ""
+ }
+}
