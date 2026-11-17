@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Trash2, CheckCircle2 } from 'lucide-react';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 import { RICHTEXT_MAX, type SiteSection } from '@/lib/store-site';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 import BannerFields from './BannerFields';
 import CollectionFields from './CollectionFields';
 import GalleryFields from './GalleryFields';
@@ -112,7 +113,13 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
       // Niente `maxLength`: il browser tagliava in silenzio il testo oltre i 4.000 caratteri. Il testo
       // resta intero, il contatore lo conta come lo schema (il testo salvato, dove un a-capo è «<br>»)
       // e oltre il limite l'errore lo dice prima del salvataggio, che lo rifiuta.
-      const lunghezza = (c.body ?? '').length;
+      // 17/11/2026 — E lo conta come lo salverà il server: la rotta pulisce il testo (sanitizeRichText:
+      // con un «<» nel testo, «&» diventa «&amp;» e «<» «&lt;») e alla rilettura il limite si
+      // ricontrolla sul testo pulito.
+      // Contato prima della pulizia, un testo da 3.997 caratteri con «&» e «<» passava, ne salvava
+      // 4.003 e alla rilettura la vetrina tornava quella di partenza. Si conta il più lungo dei due.
+      const testo = c.body ?? '';
+      const lunghezza = Math.max(testo.length, sanitizeRichText(testo).length);
       const troppoLungo = lunghezza > RICHTEXT_MAX;
       const n = (x: number) => x.toLocaleString('it-IT');
       return (
@@ -123,7 +130,7 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
             value={htmlInACapo(c.body ?? '')}
             rows={5}
             onChange={(e) => set({ body: aCapoInHtml(e.target.value) })}
-            hint={`Gli a-capo vengono mantenuti (ognuno conta 4 caratteri). ${n(lunghezza)}/${n(RICHTEXT_MAX)} caratteri.`}
+            hint={`Gli a-capo vengono mantenuti. Il testo si conta come viene salvato: un a-capo vale 4 caratteri, e «&», «<» e «>» possono valerne di più. ${n(lunghezza)}/${n(RICHTEXT_MAX)} caratteri.`}
             error={troppoLungo ? `Il testo è troppo lungo: ${n(lunghezza)} caratteri su ${n(RICHTEXT_MAX)}. Accorcialo o dividilo in due blocchi di testo: così non si salva.` : undefined}
           />
         </div>

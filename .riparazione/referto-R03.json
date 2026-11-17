@@ -1,0 +1,370 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-17 21:15",
+  "finita": true,
+  "testa": "fd0639e39dea935025af512c4224d55215b3c5d2",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "b7030c33c4c070d0a3bfd5fd16c39f9653c52e9a",
+    "nota": "typecheck + lint + test: 1696 file di prova verdi, 1 saltato (10848 prove verdi); lanciato su b7030c33, commit del solo referto dopo la testa fd0639e3 (SHA preso con git rev-parse HEAD nello stesso comando)."
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "esito": "parziale",
+      "commit": "959a2a423140d69c2091a436f120e9202a7e27e4",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-categoria-file-cadute.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-categoria-file-cadute.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 959a2a42^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r03-categoria-file-cadute.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Cura dentro la pagina, senza toccare components/ProductGrid.tsx: la pagina guarda nella memoria di react-query (getQueryCache + useSyncExternalStore, senza osservatori: uno con la stessa chiave riscriverebbe le opzioni della domanda della fila) lo stato delle domande delle file del hub, con le stesse chiavi di ProductGrid (12 prodotti, pertinenza). Se ogni fila è caduta o vuota e almeno una è caduta mostra l'ErrorState con «Riprova», anche se il conteggio risponde; il ramo del conteggio resta, ma aspetta che nessuna fila sia in arrivo (chiuso anche l'effetto accanto: il messaggio sotto le file in caricamento). Prova con la pagina vera, le file vere, react-query vero e database finto: file cadute + conteggio 7 → ErrorState e Riprova; Riprova riuscito → messaggio via e prodotti a schermo; file piene → niente errore; conteggio caduto con le file in arrivo → niente messaggio, né dopo. Le 7 prove esistenti che montano o leggono la pagina restano verdi (70 prove), tsc pulito.",
+      "nota": "Le chiavi delle file sono scritte nella pagina come in ProductGrid: se un giorno ProductGrid cambia la chiave delle file del hub, la prova nuova (che monta le file vere) diventa rossa. Con il react-query finto delle prove (senza getQueryCache) la pagina resta al ramo del conteggio, come prima.",
+      "verificato_da": "smentitore B: prova e prova rimessa da 959a2a42 rilanciate (uscita 0); prova esplorativa con pagina, ProductGrid e react-query veri: file cadute molto dopo il primo render → il messaggio compare; file miste → niente errore e prodotti a schermo; griglia piatta invariata. Ma la cura introduce un avviso di React (vedi cosa_resta): nel dubbio, parziale.",
+      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
+      "cosa_resta": "Il caso della voce è chiuso (la categoria madre con le file cadute e il conteggio che risponde mostra l'errore con «Riprova»; prova rimessa uscita 0), ma lo smentitore ha visto che la cura introduce l'avviso di React «Cannot update a component (CategoryPage) while rendering a different component (ProductGrid/ProductCard)», 2 volte anche nella prova ufficiale e con le file miste; con la pagina della base 0 volte. Causa probabile: l'iscrizione a tutta la QueryCache con useSyncExternalStore (app/category/[slug]/page.tsx:137-163, riga 143): le domande create mentre si disegnano i figli avvisano la cache durante il render. Solo in sviluppo; in produzione un ridisegno in più. Cura nel mio file: filtrare gli eventi della cache alle sole chiavi delle file e rimandare la notifica (notifyManager.batchCalls / iscrizione in un effetto), oppure la prop onError di ProductGrid (file non mio, modifica già descritta nell'onda prima). Niente giro di correzione: spesa oltre i 20 $."
+    },
+    {
+      "id": "R03-002",
+      "esito": "riparato",
+      "commit": "7f72739b13c511795e9de5844c37379ba2e3b9be",
+      "file_toccati": [
+        "app/store/[id]/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-titolo-negozio-mancante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-titolo-negozio-mancante.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7f72739b^ --file app/store/[id]/layout.tsx --prove tests/unit/riparazione-r03-titolo-negozio-mancante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il doppione: generateMetadata del guscio dava il titolo «Negozio non trovato · MyCity» e la pagina (app/store/[id]/page.tsx:66) disegna il riquadro «Negozio non trovato»; Next 15 manda i metadati in streaming dentro il corpo, quindi la scritta compariva due volte (come alla 404 e alla pagina su misura del negozio prima delle loro cure). Ora il titolo è «Vetrina non trovata · MyCity», con noindex e senza canonical come prima (resta il formato «non trovat[oa] · MyCity» che pretende tests/unit/minori-s09-scheda-prodotto.test.ts). Prova: generateMetadata vera con la lettura finta, confrontata col titolo del riquadro letto dalla pagina: negozio inesistente, non approvato o non negozio → nessuna ripetizione; negozio vero → il suo nome. Le 8 prove esistenti che leggono o montano il guscio restano verdi (82 prove).",
+      "verificato_da": "smentitore B: prova e prova rimessa da 7f72739b rilanciate (uscita 0); le 8 prove che leggono il guscio o il formato «non trovat[oa] · MyCity» restano verdi (83 prove); nessuna e2e cerca la scritta; noindex e canonical invariati. Regge (la radice «non trovat» resta in entrambi i testi, come formato richiesto dalle prove esistenti).",
+      "chiave": "frontend-ux|la home di un negozio inesistente ripete «negozio non trovato» nel titolo e nella pagina"
+    },
+    {
+      "id": "R03-003",
+      "esito": "scelta_di_nicola",
+      "domanda": "Mentre il guscio di un negozio legge, vuoi tenere lo scheletro del negozio (app/store/loading.tsx, oggi) o toglierlo per preparare il 404 vero, sapendo che il 404 arriva solo quando se ne va anche lo scheletro della radice (app/loading.tsx) e il guscio chiama notFound(), e che intanto torna lo scheletro generico?",
+      "file_toccati": [],
+      "nota": "Codice sulla base: c'è (app/store/loading.tsx disegna ScheletroNegozio sopra app/store/[id]/layout.tsx, che è async e aspetta precaricaNegozio). Misura: oggi nessun file sotto app/store importa next/navigation né chiama notFound() sul server (le due «notFound» di app/store/[id]/[slug] sono un riquadro disegnato nel browser e un oggetto di metadati); e app/loading.tsx della radice avvolge anche il guscio del negozio (un loading.tsx copre tutto quello che sta sotto il suo layout), quindi anche togliendo app/store/loading.tsx la risposta resta 200 in streaming. La cura di R03-002 cambia solo il titolo, non rende naturale un notFound() nel guscio (servirebbe distinguere «non esiste» da «lettura caduta» e cambierebbe la pagina che vede il cliente: la 404 generica al posto del riquadro col «Vedi tutti i negozi»). Quindi togliere app/store/loading.tsx oggi non dà nessun 404 e riporta lo scheletro generico della radice mentre il guscio legge (il salto che la prova proteggeva): resta solo la scelta. Se Nicola sceglie il 404, il lavoro è pronto e tutto nei miei file: cancellare app/store/loading.tsx e capovolgere il caso «il sipario copre anche il guscio, non solo la pagina» di tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts (righe 90-106) in «sotto app/store/ nessun loading.tsx sopra il guscio, che deve poter rispondere 404» (prova esistente toccabile: legge per nome app/store/loading.tsx e app/store/[id]/layout.tsx, miei, e ScheletroNegozio.tsx, HeroSection.tsx e misure-vetrina, che non sono di R01 né di R02); app/loading.tsx resta (protetto da tests/unit/minori-s09-aspetto.test.ts:219-224). Una via che tiene tutte e due le cose (lo scheletro del negozio dentro il guscio, in un Suspense dopo il controllo di esistenza) cambia la forma del guscio e due prove che lo eseguono (il-guscio-della-pagina-legge-il-negozio-sul-server, la-vetrina-del-negozio-parte-gia-piena): non l'ho fatta senza la scelta.",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+      "verificato_da": "smentitore B: confermato che sotto app/store nessun file chiama notFound() sul server e che app/loading.tsx della radice avvolge anche app/store/[id]/layout.tsx."
+    },
+    {
+      "id": "R03-004",
+      "esito": "parziale",
+      "commit": "a505e81be7c5d44070c01453d94411d7e7c862b3",
+      "file_toccati": [
+        "components/seller/site/SectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-testo-lungo-dopo-la-pulizia.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-testo-lungo-dopo-la-pulizia.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a505e81b^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r03-testo-lungo-dopo-la-pulizia.test.tsx --json (lanciata dalla testa fd0639e3, con la prova del secondo commit)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel modulo il contatore e l'errore «troppo lungo» contano il testo come lo salverà il server: il più lungo fra il testo scritto e sanitizeRichText(testo), la stessa pulizia della rotta (con un «<» nel testo «&» diventa «&amp;» e «<» «&lt;»; senza «<» DOMPurify lascia il testo com'è, e il conto lo segue). Il caso della voce (3.980 «a» + « Tom & Jerry < 3 »: 3.997 prima, 4.003 dopo) ora dice «Il testo è troppo lungo: 4003 caratteri su 4000» con il campo segnato non valido; 3.997 lettere senza segni restano dentro; un testo breve con «&» e «<» si conta pulito. Aggiornato il suggerimento sotto il campo. Le 9 prove esistenti che toccano il modulo restano verdi (109 prove), tsc pulito. Due commit: a505e81b (modulo e prova) e fd0639e3 (solo la prova: tolta l'affermazione «lo schema accetta il testo prima della pulizia», che sarebbe diventata rossa con la modifica chiesta su lib/store-site.ts).",
+      "cosa_resta": "Il salvataggio non lo blocca ancora nessuno: SiteEditor.tsx (non mio) controlla con storeSiteSchema, che conta il testo prima della pulizia (lib/store-site.ts:153), e la rotta app/api/seller/site/route.ts:47-52 pulisce dopo senza ricontrollare. Quindi oggi il modulo mostra l'errore, ma un clic su «Salva» manda lo stesso il testo, il server ne salva 4.003 e alla rilettura normalizeSite (lib/store-site.ts:371-376) ripiega sul sito di partenza. Con la modifica qui sotto lo schema rifiuta il testo sia nel browser (SiteEditor mostra il messaggio e non manda) sia nella rotta. Nota dello smentitore: finché lib/store-site.ts non conta il testo pulito, il salvataggio passa (SiteEditor.tsx:98 → rotta app/api/seller/site/route.ts:47-52 → «Sito salvato!» → alla rilettura normalizeSite ripiega sul default) e il messaggio d'errore del modulo promette un blocco che oggi non c'è.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/store-site.ts",
+          "modifica": "Riga 1: dopo `import { z } from 'zod';` aggiungere `import { sanitizeRichText } from './sanitize-html';`. Riga 153, in richTextConfig: `body: z.string().max(RICHTEXT_MAX).default(''),` → `body: z.string().max(RICHTEXT_MAX, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`).refine((b) => sanitizeRichText(b).length <= RICHTEXT_MAX, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri, contati come viene salvato. Accorcialo o dividilo in due blocchi.`).default(''),` (come lib/home-site.ts:178-181). Provata nell'albero e tolta: il testo della voce viene rifiutato con «troppo lungo», un testo con «&» e «<» che pulito sta nei 4.000 passa e si rilegge uguale (sanitize è stabile sul testo già pulito), e le 13 prove che toccano lib/store-site.ts, SiteEditor o la rotta del sito restano verdi."
+        }
+      ],
+      "verificato_da": "smentitore B: prova e prova rimessa (dalla testa fd0639e3, --base a505e81b^) rilanciate (uscita 0); il modulo segna «4003 caratteri su 4000» con aria-invalid sul caso della voce, ma il salvataggio non è bloccato (SiteEditor.tsx:98 valida con lo schema che conta prima della pulizia). Parziale descritto giusto.",
+      "chiave": "frontend-ux|sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
+      "commit_prova": "fd0639e39dea935025af512c4224d55215b3c5d2"
+    },
+    {
+      "id": "R03-005",
+      "esito": "riparato",
+      "commit": "3c0e939def23a1a5421752f43692528b81ca0934",
+      "file_toccati": [
+        "components/SearchBar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-tendina-categorie-ricarica-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-tendina-categorie-ricarica-caduta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3c0e939d^ --file components/SearchBar.tsx --prove tests/unit/riparazione-r03-tendina-categorie-ricarica-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il difetto com'è scritto era già chiuso sulla base (la tendina filtra con domandaCategoriePiene + soloLePiene); restava la variante: una ricarica caduta scartava le piene già note (piene.isError ? null : piene.data) e la tendina tornava a elencare le vuote. Ora soloLePiene(topCats, piene.data ?? null). Prova sul SearchBar vero con react-query vero e database finto: prima lettura ok poi ricarica caduta (stato error con i dati in mano) → solo la categoria piena; prima lettura caduta senza dati → tutte, come prima; lettura ok → solo le piene. Le 6 prove esistenti che montano o leggono il SearchBar restano verdi (82 prove).",
+      "verificato_da": "smentitore B (subagente separato, worktree a fd0639e3): prova e prova rimessa da 3c0e939d rilanciate (uscita 0: verde, rossa alla base, verde); soloLePiene(topCats, piene.data ?? null) tiene le piene già note quando la ricarica cade, e con la prima lettura caduta le mostra tutte come prima. Regge.",
+      "chiave": "navigazione-gerarchia|la tendina della ricerca «sfoglia per categoria» elenca anche le categorie vuote"
+    },
+    {
+      "id": "R03-006",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "(mio file, non cambiato perché le prove sotto non sono mie) Righe 74-76: sostituire `const onlyIds = Array.isArray(body.productIds) ? new Set(body.productIds.filter((s): s is string => typeof s === 'string')) : null;` con `if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Elenco dei prodotti mancante.');` + `const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));` (resta subito dopo il controllo del jobId, prima di leggere e prenotare il lavoro). Riga 98: `(r) => r.product_id && (!onlyIds || onlyIds.has(r.product_id)),` → `(r) => r.product_id && onlyIds.has(r.product_id),`."
+        },
+        {
+          "file": "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
+          "modifica": "Riga 116, in makeReq: `body: JSON.stringify({ jobId: 'job-1' }),` → `body: JSON.stringify({ jobId: 'job-1', productIds: ['p1', 'p2'] }),` (i due risultati di JOB). Non la tocco io: importa __resetRateLimitBuckets da lib/rate-limit.ts, file di R01."
+        },
+        {
+          "file": "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts",
+          "modifica": "Nelle tre chiamate alla rotta del lotto aggiungere l'elenco dopo il jobId: riga 293 `jobId: 'job-1',` → `jobId: 'job-1',` + `productIds: ['focaccia'],`; riga 325 `jobId: 'job-2',` → `jobId: 'job-2',` + `productIds: ['tagliere'],`; riga 353 `jobId: 'job-3',` → `jobId: 'job-3',` + `productIds: ['focaccia'],`. Non la tocco io: mocka lib/rate-limit.ts (R01)."
+        },
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": "Righe 213 e 221 (tutte e due): `richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1' })` → `richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1', productIds: ['p1'] })`. La 221 diventerebbe rossa; la 213 resterebbe verde ma per il motivo sbagliato (400 per l'elenco mancante invece che per la traduzione spenta): con l'elenco torna a provare la traduzione. Non la tocco io: importa __resetRateLimitBuckets da lib/rate-limit.ts (R01)."
+        },
+        {
+          "file": "tests/unit/minori-s10-lotto-applica.test.ts",
+          "modifica": "Riga 102: `const applica = async (corpo: Record<string, unknown> = { jobId: 'l1' }) => {` → `const applica = async (corpo: Record<string, unknown> = { jobId: 'l1', productIds: ((db.lavoro?.results ?? []) as { product_id: string }[]).map((r) => r.product_id) }) => {` (come la pagina: i prodotti dell'anteprima = i risultati del lavoro; il default si calcola a ogni chiamata). Non la tocco io: mocka lib/rate-limit.ts (R01)."
+        },
+        {
+          "file": "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
+          "modifica": "Riga 212: `jobId: 'lavoro-1',` → `jobId: 'lavoro-1',` + `productIds: ['p1', 'p2', 'p3'],`. Non la tocco io: mocka lib/rate-limit.ts (R01)."
+        },
+        {
+          "file": "tests/unit/riparazione-r03-lotto-senza-elenco-dei-prodotti.test.ts",
+          "modifica": "Prova nuova da creare insieme alla rotta (non messa nel ramo: senza la rotta corretta sarebbe rossa). Contenuto esatto: import { describe, it, expect, vi, beforeEach } from 'vitest';\n\n/**\n * LA ROTTA DEL LOTTO SUL CATALOGO, SENZA L'ELENCO DEI PRODOTTI.\n *\n * La pagina del lavoro massivo manda sempre i prodotti dell'anteprima (`productIds`), anche con\n * «Applica a tutti». Ma la rotta, se l'elenco mancava, applicava tutti i risultati del lavoro:\n * una chiamata a mano (o una pagina vecchia rimasta aperta) riscriveva anche i prodotti che il\n * negozio non aveva visto. Qui gira la rotta VERA con un database finto: senza elenco risponde\n * 400, non scrive niente e non prenota il lavoro, che resta «pronto».\n */\n\nconst db = vi.hoisted(() => ({\n  prodotti: [] as Record<string, unknown>[],\n  categorie: [{ id: 'pane', name: 'Pane', slug: 'pane', parent_id: null }] as Record<string, unknown>[],\n  lavoro: null as Record<string, unknown> | null,\n  lavoroApplicato: 0,\n  scritture: [] as { id: unknown; valori: Record<string, unknown> }[],\n}));\n\nvi.mock('@/lib/funzioni-al-lancio', async (originale) => ({\n  ...((await originale()) as Record<string, unknown>),\n  AI_NEGOZI_ACCESA: true,\n}));\nvi.mock('@/lib/api/middleware', () => ({\n  withSellerAuth:\n    (h: (ctx: { user: { id: string }; req: Request }) => unknown) =>\n    (req: Request) =>\n      h({ user: { id: 'negozio-r03-lotto' }, req }),\n}));\nvi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\nvi.mock('@/lib/audit', () => ({ writeAudit: async () => undefined }));\nvi.mock('@/lib/ai/moderation', () => ({ classifyProductPolicy: async () => ({ allowed: true }) }));\nvi.mock('@/lib/supabase/server', async () => {\n  const { fintoCatalogo } = await import('./aiuti/finto-catalogo');\n  return fintoCatalogo(db);\n});\n\nimport { POST } from '@/app/api/ai/catalog-batch/apply/route';\n\nconst prodotto = (id: string) => ({\n  id, seller_id: 'negozio-r03-lotto', name: `Prodotto ${id}`, description: 'Una descrizione abbastanza lunga.',\n  price: 5, compare_at_price: null, unit: 'pezzo', condition: 'nuovo', stock: 3, status: 'available',\n  images: ['https://mycity.test/f.jpg'], tags: [], has_variants: false, category_id: 'pane', attributes: {},\n});\n\nasync function applica(corpo: Record<string, unknown>) {\n  const res = await POST(\n    new Request('http://localhost/api/ai/catalog-batch/apply', {\n      method: 'POST',\n      headers: { 'content-type': 'application/json' },\n      body: JSON.stringify(corpo),\n    }) as never,\n  );\n  return res.status;\n}\n\nbeforeEach(() => {\n  db.prodotti = [prodotto('p1'), prodotto('p2')];\n  db.scritture = [];\n  db.lavoroApplicato = 0;\n  db.lavoro = {\n    id: 'lavoro-1', seller_id: 'negozio-r03-lotto', operation: 'improve', status: 'ready',\n    results: [\n      { product_id: 'p1', patch: { name: 'Prodotto p1 migliorato' } },\n      { product_id: 'p2', patch: { name: 'Prodotto p2 migliorato' } },\n    ],\n  };\n});\n\ndescribe('la rotta del lotto sul catalogo vuole l’elenco dei prodotti', () => {\n  it('solo il lavoro, senza elenco: 400, nessuna scrittura sui prodotti, il lavoro resta «pronto»', async () => {\n    const status = await applica({ jobId: 'lavoro-1' });\n    expect(status, 'senza elenco la rotta applica ancora tutti i risultati').toBe(400);\n    expect(db.scritture, 'senza elenco sono stati riscritti prodotti').toEqual([]);\n    expect(db.lavoroApplicato, 'senza elenco il lavoro è stato prenotato').toBe(0);\n    expect(db.lavoro?.status).toBe('ready');\n  });\n\n  it('elenco che non è una lista: 400 anche lui', async () => {\n    expect(await applica({ jobId: 'lavoro-1', productIds: 'p1' })).toBe(400);\n    expect(db.scritture).toEqual([]);\n    expect(db.lavoroApplicato).toBe(0);\n  });\n\n  it('controprova: con l’elenco si applica solo quello che c’è dentro', async () => {\n    expect(await applica({ jobId: 'lavoro-1', productIds: ['p1'] })).toBe(200);\n    expect(db.scritture.map((s) => s.id)).toEqual(['p1']);\n    expect(db.lavoroApplicato).toBeGreaterThan(0);\n  });\n});\n"
+        }
+      ],
+      "file_toccati": [],
+      "nota": "Chiamanti: l'unico è app/seller/products/ai-batch/page.tsx:439, che manda sempre productIds (job.results.map(r => r.product_id)), anche con «Applica a tutti» (stessa funzione apply): la cura non rompe l'app. Misura con la cura messa a mano e poi tolta: 13 prove rosse in 5 file (le stesse dell'onda 7). Tutti e 5 i file usano lib/rate-limit.ts, che in quest'onda è di R01 (3 lo mockano, 2 importano __resetRateLimitBuckets): per la regola delle prove esistenti non li posso toccare, quindi la rotta resta com'è e chiedo tutto insieme. Ho provato la proposta intera nell'albero (rotta + 5 prove + prova nuova) e l'ho tolta: 9 file, 92 prove verdi; la prova nuova senza la rotta corretta è rossa (2 casi su 3: 200 invece di 400). Gli altri file che chiamano la rotta restano verdi senza cambi: riparazione-r02-traccia-porte-ai-catalogo e riparazione-r18-lotto-applica-quello-che-si-vede mandano già productIds, le-funzioni-spente-le-ferma-la-rotta-anche-a-mano si ferma prima (funzione spenta, 503).",
+      "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "verificato_da": "smentitore B: confermato che le 5 prove usano lib/rate-limit.ts (due importano __resetRateLimitBuckets, tre lo mockano), file di un'altra sessione di quest'onda; l'unico chiamante (app/seller/products/ai-batch/page.tsx:439) manda sempre productIds, anche con «Applica a tutti»."
+    },
+    {
+      "id": "R03-007",
+      "esito": "riparato",
+      "commit": "e66bd7a8eefdf2bbce3b8accd5d67ab0eb594253",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-liste-dopo-elimina-e-visibilita.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-liste-dopo-elimina-e-visibilita.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e66bd7a8^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r03-liste-dopo-elimina-e-visibilita.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nell'onSuccess di deleteList (prima di portare a /lists) e di toggleVisibility la pagina invalida queryKeys.lists.mine, .public e .inVetrina, le tre chiavi da cui legge /lists (la prova le ricava montando /lists). Su errore niente invalidazione e, per l'eliminazione, niente spostamento. La prova monta la pagina della lista con il dialogo di conferma che risponde sì; le 8 prove che toccano la pagina restano verdi.",
+      "verificato_da": "smentitore A: rilanciate prova e prova rimessa (uscita 0); confrontate le chiavi con quelle che /lists legge davvero (app/lists/page.tsx:54,78,96); controllato che la prova clicchi il pulsante giusto e verifichi la scrittura; su errore niente invalidazione. Regge.",
+      "chiave": "qa-flussi|dopo «elimina lista» e dopo il cambio di visibilità /lists può mostrare dati vecchi"
+    },
+    {
+      "id": "R03-008",
+      "esito": "gia_riparato_prima",
+      "prova": "app/lists/[id]/page.tsx:162-169 sulla base 1a7de5b9 (oggi 174-181): l'onSuccess di removeItem, usato da tutti e due i cestini della pagina (righe 355 e 399), invalida queryKeys.lists.mine, .public e .inVetrina; comando: npx vitest run tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx --reporter=dot → verde, 2 prove su 2 (uscita 0)",
+      "nota": "Nella pagina della lista non resta altro che tocchi il conteggio di /lists: le uniche rimozioni passano da removeItem, non c'è «svuota», la nota non cambia il conteggio, e l'eliminazione della lista ora rilegge le stesse chiavi (voce del commit e66bd7a8 di questo lotto). Il secondo percorso, il pulsante della scheda prodotto (components/AddToListButton.tsx), non è un mio file: in quest'onda è la voce di R01 sul pulsante della scheda prodotto.",
+      "chiave": "qa-flussi|dopo aver tolto un prodotto da una lista, il conteggio in /lists resta vecchio fino a 30 secondi",
+      "verificato_da": "smentitore A: confermata l'invalidazione sulla base in onSuccess di removeItem (unica strada dei due cestini); prova esistente verde 2/2; tolte a mano le tre invalidazioni la prova cade (1/2 rossa). Regge."
+    },
+    {
+      "id": "R03-009",
+      "esito": "riparato",
+      "commit": "1b6a971580d8ccba2650f72e360d61871beca2a4",
+      "file_toccati": [
+        "lib/queries/categorie-dei-negozi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-madri-oltre-dieci-livelli.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-madri-oltre-dieci-livelli.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b6a9715^ --file lib/queries/categorie-dei-negozi.ts --prove tests/unit/riparazione-r03-madri-oltre-dieci-livelli.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "conLeMadri risale fino alla radice senza il tetto di 10 passi; la guardia contro i giri è «una categoria già vista non si rivisita» (c'era già, ora basta da sola). Prova: catena di 14 livelli (tutte le 15 categorie), due prodotti sulla stessa catena con la foglia prima (prima la seconda risalita si fermava su quella lasciata a metà), giro a→b→c→a raggiunto da d e categoria madre di sé stessa (si fermano). Le prove vicine (pagina Negozi, 9 file) restano verdi.",
+      "verificato_da": "smentitore A: rilanciate prova e prova rimessa (uscita 0); provati a mano una catena di 50.000 livelli, un giro di 1.000, una madre mancante e una madre vuota. Regge.",
+      "chiave": "qa-flussi|anche il filtro per categoria della pagina dei negozi risale solo dieci livelli di categorie madri"
+    },
+    {
+      "id": "R03-010",
+      "esito": "riparato",
+      "commit": "e551c9609b916371e180108b52622299d22bdb5f",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-finto-rpc-anelli.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-finto-rpc-anelli.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e551c960^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r03-finto-rpc-anelli.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel client finto gli anelli dopo rpc (eq, order, range, select, single, maybeSingle…) arrivano alla risposta del database della prova quando lei li sa fare, come per from: la prova vede la finestra chiesta e le righe tagliate. Una risposta che non li sa fare (la promessa nuda dei database delle prove di oggi) li lascia passare oltre come prima: le 199 prove che caricano il finto restano verdi (200 file, 1344 prove).",
+      "verificato_da": "smentitore A (subagente separato, worktree a e66bd7a8): rilanciate prova e prova rimessa (uscita 0); provate a mano una catena con order sì e range no e la mancanza di gt/lt/abortSignal/returns, che nessuna pagina usa dopo rpc (unico seguito nel sito: .then in StoryViewer). Regge.",
+      "chiave": "qa-flussi|il client supabase finto delle prove non sa concatenare .rpc().order().range()"
+    },
+    {
+      "id": "R03-011",
+      "esito": "riparato",
+      "commit": "01a4cbaa2ba525c59d124889d3f4d675fc800a2e",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs",
+        "tests/unit/riparazione-r04-client-finto-rpc.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-finto-rpc-non-prevista.test.ts",
+        "tests/unit/riparazione-r04-client-finto-rpc.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-finto-rpc-non-prevista.test.ts tests/unit/riparazione-r04-client-finto-rpc.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 01a4cbaa^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r03-finto-rpc-non-prevista.test.ts,tests/unit/riparazione-r04-client-finto-rpc.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una funzione del database che la prova non ha previsto (nessun database della prova con rpc) risponde { data: null, error: { code: 'RPC_NON_PREVISTA', message: '… «nome» …' } } invece di «nessun errore», anche con gli anelli e con single. Misura prima: delle 199 prove che caricano il finto ne cadeva una sola, tests/unit/riparazione-r04-client-finto-rpc.test.ts (prova esistente che importa per nome il finto e nessun file di R01/R02): i suoi due casi senza database affermavano proprio la risposta silenziosa della voce; ora affermano l'errore che nomina la funzione (la catena arriva in fondo come prima). Tutte le altre restano verdi (202 file, 1353 prove).",
+      "verificato_da": "smentitore A: rilanciate le due prove e la prova rimessa (uscita 0); provati a mano il client senza rpc, maybeSingle, __RISPOSTA_SUPABASE__ impostata, una pagina che fa if (error) throw, e una rpc che risponde undefined; il cambio dell'atteso nella prova dell'onda prima giudicato legittimo. Regge. Resta marginale: un database della prova la cui rpc risponde undefined seguita da single/maybeSingle dà ancora {data:null,error:null} (supabase-client.mjs:107-109).",
+      "chiave": "qa-flussi|il finto client supabase condiviso delle prove risponde a rpc() con «nessun errore»: una pagina che salva con una funzione del database sembra riuscita anche se non scrive niente"
+    },
+    {
+      "id": "R03-012",
+      "esito": "riparato",
+      "commit": "34d340906cf5b55d264149402e69f9f959ab19c4",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-finto-rpc-pigro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-finto-rpc-pigro.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 34d34090^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r03-finto-rpc-pigro.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel client finto .rpc(...) annota gli anelli e chiama il database della prova solo al then/await (o all'attesa della riga sola di single/maybeSingle), una volta sola anche se si aspetta due volte; una chiamata mai aspettata non arriva al database della prova. Commit separato da quello degli anelli. Le prove che caricano il finto restano verdi (201 file, 1348 prove). Nota: il builder vero di postgrest-js rifà la richiesta a ogni then; la regola «una volta sola» è quella chiesta dal mandato.",
+      "verificato_da": "smentitore A: rilanciate prova e prova rimessa (uscita 0); provati a mano la rpc che scoppia senza essere aspettata, .single().catch e l'anello aggiunto dopo la prima attesa. Regge; differenza dal client vero (che rifà la richiesta a ogni then) non è un passo indietro e nessuna pagina aspetta due volte la stessa rpc.",
+      "chiave": "qa-flussi|il finto di supabase delle prove fa partire subito la chiamata alla funzione del database, mentre quello vero la manda solo quando qualcuno aspetta la risposta"
+    },
+    {
+      "id": "R03-013",
+      "esito": "riparato",
+      "commit": "1b4eb64f1d6ee71bf452c832a18c4eac1e0c5db4",
+      "file_toccati": [
+        "lib/queries/consegna-veloce-del-negozio.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-consegna-veloce-senza-rete.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-consegna-veloce-senza-rete.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b4eb64f^ --file lib/queries/consegna-veloce-del-negozio.ts --prove tests/unit/riparazione-r03-consegna-veloce-senza-rete.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Offline e senza dato in memoria react-query mette la lettura in pausa (isPaused): l'aggancio rispondeva offre undefined, inLettura false, nonLetta false e il modulo prodotto la prendeva per «non offre». Ora nonLetta = isError o (in pausa e senza dato): le due pagine del prodotto passano già nonLetta al modulo, che mostra l'avviso e non scrive express_enabled se il negoziante non sceglie. Prova con react-query vero e rete spenta (onlineManager): senza rete → non letta; rete tornata → risposta vera; lettura riuscita sì/no, lettura caduta del database e dato in memoria offline → come prima. Nessun file altrui da toccare.",
+      "verificato_da": "smentitore A: rilanciate prova e prova rimessa (uscita 0); provato a mano react-query vero con retry 1 e la rete spenta durante il secondo tentativo, poi riaccesa; dato in cache usato; negozio che non offre risponde no; letti i due chiamanti e ProductForm. Regge.",
+      "chiave": "stati-ui|senza rete il modulo prodotto crede che il negozio non offra la consegna veloce"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "le visualizzazioni e i clic dei prodotti sponsorizzati non arrivano mai al database",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/SponsoredCarousel.tsx:75",
+      "descrizione": "void supabase.rpc('track_sponsored_impression', …) e, alla riga 117, void supabase.rpc('track_sponsored_click', …) non aspettano mai la risposta: nel client vero (postgrest-js) rpc() restituisce un builder pigro che manda la richiesta solo al then/await, quindi le due chiamate non partono. Basta aspettarle (per esempio .then(() => {}, () => {}))."
+    },
+    {
+      "titolo": "dopo aver cambiato titolo o descrizione di una lista, /lists mostra ancora quelli vecchi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:138",
+      "descrizione": "L'onSuccess di updateMeta rilegge solo queryKeys.lists.detail: /lists legge titoli e descrizioni da lists.mine, .public e .inVetrina e li mostra vecchi finché non scadono. La voce di questo lotto nomina solo eliminazione e visibilità, quindi non l'ho toccato: la cura è chiamare anche lì rileggiLeListeDiLists()."
+    },
+    {
+      "titolo": "dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/seller/site/SectionConfigForm.tsx:76",
+      "descrizione": "La rotta salva il testo pulito (sanitizeRichText): se il testo contiene un «<», anche solo un a-capo diventato «<br>», «&» diventa «&amp;» e «<» «&lt;». Dopo il salvataggio SiteEditor rimette nella bozza il sito salvato, e la casella mostra htmlInACapo(body), che riconverte solo i «<br>»: il negoziante vede «Pane &amp; vino». Vecchio, fuori voce: la cura è decodificare le entità in htmlInACapo (e ricodificare in aCapoInHtml) senza cambiare quello che si salva."
+    },
+    {
+      "titolo": "la pagina dei negozi legge le categorie senza range: oltre il tetto di righe di PostgREST si perderebbero delle categorie madri",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/stores/page.tsx:91-94",
+      "descrizione": "Visto dallo smentitore del lotto A: la lettura delle categorie per il filtro non pagina; con più di 1.000 categorie (tetto di Supabase) la risalita delle madri lavorerebbe su un elenco tagliato."
+    },
+    {
+      "titolo": "quando la rete torna, le pagine prodotto del negoziante rimettono il caricamento al posto del modulo e le modifiche non salvate si perdono",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/products/new/page.tsx:127 · app/seller/products/[id]/edit/page.tsx:144",
+      "descrizione": "Visto dallo smentitore del lotto A, già presente sulla base: alla ripresa della rete la lettura della consegna veloce riparte e la pagina mostra il caricamento invece del modulo, che si smonta."
+    },
+    {
+      "titolo": "dopo l'eliminazione di una lista il menu «aggiungi a lista» della scheda prodotto la mostra ancora",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/AddToListButton.tsx (chiave lists.mineMin) · app/lists/[id]/page.tsx",
+      "descrizione": "Visto dallo smentitore del lotto A: lists.mineMin, letto dal pulsante della scheda prodotto, non si rilegge dopo l'eliminazione di una lista."
+    },
+    {
+      "titolo": "altre tendine e vetrine di categorie buttano via le categorie piene già note quando una ricarica cade, e tornano a mostrare anche le vuote",
+      "dimensione": "navigazione-gerarchia",
+      "severita": "minore",
+      "file": "components/Footer.tsx:188 · components/CategoryShowcase.tsx:162 · components/CategoryBar.tsx:141 · app/categorie/page.tsx:48",
+      "descrizione": "Visto dallo smentitore del lotto B: lo stesso schema «piene.isError ? null : piene.data» chiuso in SearchBar resta in questi quattro file (non miei). Cura: piene.data ?? null."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "nota": "2 riparatori (lotto A, lotto B, uno alla volta), 1 smentitore del lotto A (worktree separato a e66bd7a8), 1 smentitore del lotto B (worktree separato a fd0639e3); tutti sul modello della sessione. Costo letto con get_session senza id prima della consegna: 22,75 $ (20,43 $ prima della smentita del lotto B: dopo i 20 $ solo smentita, verify e consegna, nessun giro di correzione).",
+    "subagenti": 4,
+    "costo_usd": 22.75
+  },
+  "costo_usd": 22.75
+}

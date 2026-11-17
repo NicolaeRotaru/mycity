@@ -49,9 +49,16 @@ export type ConsegnaVeloceDelNegozio = {
 };
 
 export function useConsegnaVeloceDelNegozio(): ConsegnaVeloceDelNegozio {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isPaused } = useQuery({
     queryKey: chiaveConsegnaVeloceDelNegozio,
     queryFn: leggiSeIlNegozioOffreLaConsegnaVeloce,
   });
-  return { offre: data, inLettura: isLoading, nonLetta: isError };
+  /**
+   * 17/11/2026 — Senza rete e senza il dato in memoria la lettura resta ferma, «in pausa»: né in
+   * lettura né caduta, e il modulo prodotto la prendeva per «non offre» (e al salvataggio scriveva
+   * quel «no» come una scelta). È una lettura non riuscita: si dice come tale. Quando torna la
+   * rete la lettura riparte da sola e, se riesce, la risposta è quella di sempre.
+   */
+  const fermaSenzaRete = isPaused === true && data === undefined;
+  return { offre: data, inLettura: isLoading, nonLetta: isError || fermaSenzaRete };
 }
