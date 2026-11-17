@@ -135,7 +135,7 @@ describe('S01 / 2144 — il negozio senza insegna si ripesca dal profilo', () =>
     state.sellers = { data: [], error: null };
   });
   const negozio = (extra: Record<string, unknown>) => ({
-    id: S1, store_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng, store_hours: null, role: 'seller', is_approved: true, ...extra,
+    id: S1, store_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng, stripe_payouts_enabled: true, store_hours: null, role: 'seller', is_approved: true, ...extra,
   });
   it('ripescaggio riuscito (negozio approvato): il pagamento si apre', async () => {
     profilo.risposta = { data: [negozio({})], error: null };

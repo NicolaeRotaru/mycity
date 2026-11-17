@@ -40,7 +40,7 @@ const prodotti = [
   { id: PRODOTTO, seller_id: NEGOZIO, name: 'Pane', price: 5, stock: 10, has_variants: false, images: [], status: 'available' },
 ];
 const venditori = [
-  { id: NEGOZIO, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, store_hours: null },
+  { id: NEGOZIO, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, stripe_payouts_enabled: true, store_hours: null },
 ];
 
 // 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA in lib/funzioni-al-lancio.ts) e la rotta

@@ -208,7 +208,7 @@ describe('la rotta della carta rifiuta un indirizzo fuori zona, come quella dei 
     state.products = [
       { id: P1, name: 'Pane', price: 10, images: ['a.jpg'], seller_id: S1, stock: 50, status: 'available' },
     ];
-    state.sellers = [{ id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng }];
+    state.sellers = [{ id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng, stripe_payouts_enabled: true }];
   });
 
   it('i punti stanno dove dicono (se no la prova sotto non misura niente)', () => {
@@ -272,7 +272,7 @@ const PRODOTTI_DI_DUE_NEGOZI = [
 ];
 const GRUPPO_SOTTO_CASA = { sellerId: S_SOTTO_CASA, items: [{ productId: P_SOTTO_CASA, quantity: 1 }], shippingCents: 0 };
 const GRUPPO_DEL_FORNO = { sellerId: S1, items: [{ productId: P1, quantity: 1 }], shippingCents: 0 };
-const IL_FORNO = { id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng };
+const IL_FORNO = { id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng, stripe_payouts_enabled: true };
 /** Il negozio sotto casa sta esattamente dove sta la casa. */
 const sottoCasa = (casa: { lat: number; lng: number }) => ({
   id: S_SOTTO_CASA,
@@ -280,6 +280,7 @@ const sottoCasa = (casa: { lat: number; lng: number }) => ({
   full_name: null,
   store_lat: casa.lat,
   store_lng: casa.lng,
+  stripe_payouts_enabled: true,
 });
 
 describe('con due negozi nel carrello, la carta misura il confine da ognuno dei due', () => {

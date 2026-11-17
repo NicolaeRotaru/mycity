@@ -99,7 +99,7 @@ vi.mock('@/lib/supabase/server', () => {
   const prodotti = [
     { id: PRODOTTO, seller_id: NEGOZIO, name: 'Pane', price: 5, stock: 10, has_variants: false, images: [], status: 'available' },
   ];
-  const venditori = [{ id: NEGOZIO, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, store_hours: null }];
+  const venditori = [{ id: NEGOZIO, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, stripe_payouts_enabled: true, store_hours: null }];
   // Una riga sola, per le rotte dell'abbonamento: il negozio approvato, col suo cliente Stripe e il
   // prodotto da sponsorizzare. Così, alla base, quelle rotte arrivano davvero fino a Stripe.
   const rigaSola = (table: string): unknown =>

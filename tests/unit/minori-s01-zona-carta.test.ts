@@ -213,7 +213,7 @@ describe('S01 / 2077 — fuori zona anche con una spesa sopra i 30 €', () => {
     state.products = [
       { id: P1, name: 'Pane', price: 35, images: ['a.jpg'], seller_id: S1, stock: 50, status: 'available' },
     ];
-    state.sellers = [{ id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng }];
+    state.sellers = [{ id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng, stripe_payouts_enabled: true }];
   });
   for (const fonte of FONTI) {
     it(`35 € di spesa, casa a ${CASA_FUORI_KM} km a nord dalla ${fonte}: la carta non apre il pagamento`, async () => {

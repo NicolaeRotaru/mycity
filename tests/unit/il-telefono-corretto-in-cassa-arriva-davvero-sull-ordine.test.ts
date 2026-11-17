@@ -103,7 +103,7 @@ vi.mock('@/lib/supabase/server', () => {
     return {
       select: () => ({
         in: () => Promise.resolve({
-          data: [{ id: S1, store_name: 'Pane Quotidiano', store_lat: 45, store_lng: 9, store_hours: null }],
+          data: [{ id: S1, store_name: 'Pane Quotidiano', store_lat: 45, store_lng: 9, stripe_payouts_enabled: true, store_hours: null }],
           error: null,
         }),
       }),

@@ -165,7 +165,7 @@ describe('POST /api/stripe/checkout — anti-tampering importi', () => {
     state.products = [
       { id: P1, name: 'Prodotto A', price: 10, images: ['a.jpg'], seller_id: S1, stock: 50, status: 'available' },
     ];
-    state.sellers = [{ id: S1, store_name: 'Negozio A', full_name: null, store_lat: 45, store_lng: 9 }];
+    state.sellers = [{ id: S1, store_name: 'Negozio A', full_name: null, store_lat: 45, store_lng: 9, stripe_payouts_enabled: true }];
     state.coupon = { ok: false, reason: 'no' };
     state.shipping = 500; // 5 € per gruppo, dal calcolo server (mock)
   });
@@ -254,7 +254,7 @@ describe('POST /api/stripe/checkout — rifiuta ordini vuoti (audit 🟠-8)', ()
     state.user = { id: 'buyer-1', email: 'b@x.com', email_confirmed_at: '2020-01-01T00:00:00Z' };
     state.stripeConfigured = true;
     state.products = [{ id: P1, name: 'A', price: 10, images: [], seller_id: S1, stock: 50, status: 'available' }];
-    state.sellers = [{ id: S1, store_name: 'A', full_name: null, store_lat: 45, store_lng: 9 }];
+    state.sellers = [{ id: S1, store_name: 'A', full_name: null, store_lat: 45, store_lng: 9, stripe_payouts_enabled: true }];
   });
 
   it('[🟠-8] groups vuoto → 400, nessuna sessione creata', async () => {

@@ -107,7 +107,7 @@ vi.mock('@/lib/supabase/server', () => {
   const prodotti = () => [
     { id: PRODOTTO, seller_id: NEGOZIO, name: 'Torta', price: 20, stock: db.scorte, has_variants: false, images: [], status: 'available' },
   ];
-  const venditori = [{ id: NEGOZIO, store_name: 'Pane Quotidiano', store_lat: 45.05, store_lng: 9.69, store_hours: null }];
+  const venditori = [{ id: NEGOZIO, store_name: 'Pane Quotidiano', store_lat: 45.05, store_lng: 9.69, stripe_payouts_enabled: true, store_hours: null }];
 
   /** Catena che risponde sempre lo stesso valore, comunque la si concateni. */
   const fisso = (valore: unknown) => {
