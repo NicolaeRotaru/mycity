@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:13",
+  "aggiornato": "2026-11-17 18:16",
   "finita": false,
-  "testa": "a0d6592149ede814d0bb61b86c0d14f1fc92370a",
+  "testa": "ff2d8564fc810af6b059e053e4ff050e71bf4672",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -149,8 +149,26 @@
     {
       "id": "R02-007",
       "chiave": "qa-flussi|la pagina contatti promette ancora «puoi provare lo stesso a inviare» quando l'anti-robot non si carica",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "ff2d8564fc810af6b059e053e4ff050e71bf4672",
+      "file_toccati": [
+        "app/contact/page.tsx",
+        "tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ff2d8564fc810af6b059e053e4ff050e71bf4672^ --file app/contact/page.tsx --prove tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "/api/contact senza gettone risponde «Verifica anti-bot fallita» (lib/captcha.ts: «CAPTCHA mancante»), quindi la promessa era falsa. Allineata all'iscrizione (R24-016): col riquadro rotto la pagina dice «Senza questo controllo il messaggio non può partire: ricarica la pagina, oppure scrivici a <email info, con mailto>», il modulo non parte senza gettone e il messaggio a comparsa dice lo stesso guasto e la stessa strada. La prova monta la pagina vera con il riquadro finto che segnala il guasto: legge la riga e prova a inviare (sulla base: «Puoi provare lo stesso» e fetch chiamato).",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-008",
