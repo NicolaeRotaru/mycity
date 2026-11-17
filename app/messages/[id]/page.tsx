@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, use } from 'react';
+import { useEffect, useRef, useState, use, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -60,6 +60,28 @@ function formatDateSeparator(iso: string): string {
   if (d.toDateString() === today.toDateString()) return 'Oggi';
   if (d.toDateString() === yesterday.toDateString()) return 'Ieri';
   return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/**
+ * R02-001 — Il registro della chat si accende solo a filo caricato, e un giro DOPO che il filo è
+ * a video: il primo caricamento (e quello dopo «Riprova») entrava come aggiunta e il lettore di
+ * schermo leggeva tutto il filo. Sta in un pezzo suo perché il suo stato nasce spento a ogni
+ * comparsa del filo, e accenderlo non ridisegna tutta la pagina.
+ */
+function RegistroDelFilo({ caricato, children }: { caricato: boolean; children: ReactNode }) {
+  const [acceso, setAcceso] = useState(false);
+  useEffect(() => { setAcceso(caricato); }, [caricato]);
+  return (
+    <div
+      role="log"
+      aria-live={caricato && acceso ? 'polite' : 'off'}
+      aria-relevant="additions"
+      aria-label="Messaggi della conversazione"
+      className="flex-1 overflow-y-auto p-4 space-y-2 bg-cream-50"
+    >
+      {children}
+    </div>
+  );
 }
 
 export default function ConversationThreadPage(props: { params: Promise<{ id: string }> }) {
@@ -141,6 +163,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   const {
     data: messages = [],
     isError: messaggiNonLetti,
+    isSuccess: messaggiCaricati,
     refetch: rileggiIMessaggi,
   } = useQuery({
     queryKey: queryKeys.messages.byParam(params.id),
@@ -362,14 +385,9 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
 
         {/* THREAD — 12/11/2026 (R06-003): un registro che si annuncia. I messaggi
             arrivano dal vivo; senza role="log" e aria-live il lettore di schermo
-            restava muto e chi non vede doveva rileggere la pagina per scoprirli. */}
-        <div
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions"
-          aria-label="Messaggi della conversazione"
-          className="flex-1 overflow-y-auto p-4 space-y-2 bg-cream-50"
-        >
+            restava muto e chi non vede doveva rileggere la pagina per scoprirli.
+            R02-001: spento finché il filo non è caricato e a video (vedi RegistroDelFilo). */}
+        <RegistroDelFilo caricato={messaggiCaricati}>
           {messaggiNonLetti ? (
             /* R091 — l'errore batte tutto: una lettura fallita non è una conversazione da
                iniziare. Questo ramo sta PRIMA di quello dello stato vuoto, apposta. */
@@ -416,7 +434,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
             })
           )}
           <div ref={scrollEndRef} />
-        </div>
+        </RegistroDelFilo>
 
         {/* INPUT */}
         <form onSubmit={handleSend} className="border-t bg-white p-3 flex items-center gap-2">
