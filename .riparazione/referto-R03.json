@@ -1,0 +1,115 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-17 19:10",
+  "finita": false,
+  "testa": "e551c9609b916371e180108b52622299d22bdb5f",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": "non ancora lanciato"
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-002",
+      "chiave": "frontend-ux|la home di un negozio inesistente ripete «negozio non trovato» nel titolo e nella pagina",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-003",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-004",
+      "chiave": "frontend-ux|sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-005",
+      "chiave": "navigazione-gerarchia|la tendina della ricerca «sfoglia per categoria» elenca anche le categorie vuote",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-006",
+      "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-007",
+      "chiave": "qa-flussi|dopo «elimina lista» e dopo il cambio di visibilità /lists può mostrare dati vecchi",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-008",
+      "chiave": "qa-flussi|dopo aver tolto un prodotto da una lista, il conteggio in /lists resta vecchio fino a 30 secondi",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-009",
+      "chiave": "qa-flussi|anche il filtro per categoria della pagina dei negozi risale solo dieci livelli di categorie madri",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-010",
+      "esito": "riparato",
+      "commit": "e551c9609b916371e180108b52622299d22bdb5f",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-finto-rpc-anelli.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-finto-rpc-anelli.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e551c960^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r03-finto-rpc-anelli.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel client finto gli anelli dopo rpc (eq, order, range, select, single, maybeSingle…) arrivano alla risposta del database della prova quando lei li sa fare, come per from: la prova vede la finestra chiesta e le righe tagliate. Una risposta che non li sa fare (la promessa nuda dei database delle prove di oggi) li lascia passare oltre come prima: le 199 prove che caricano il finto restano verdi (200 file, 1344 prove).",
+      "verificato_da": "",
+      "chiave": "qa-flussi|il client supabase finto delle prove non sa concatenare .rpc().order().range()"
+    },
+    {
+      "id": "R03-011",
+      "chiave": "qa-flussi|il finto client supabase condiviso delle prove risponde a rpc() con «nessun errore»: una pagina che salva con una funzione del database sembra riuscita anche se non scrive niente",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-012",
+      "chiave": "qa-flussi|il finto di supabase delle prove fa partire subito la chiamata alla funzione del database, mentre quello vero la manda solo quando qualcuno aspetta la risposta",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    },
+    {
+      "id": "R03-013",
+      "chiave": "stati-ui|senza rete il modulo prodotto crede che il negozio non offra la consegna veloce",
+      "esito": "non_fatto",
+      "nota": "in lavorazione"
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
