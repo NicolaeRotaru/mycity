@@ -1,0 +1,179 @@
+{
+  "sessione": "R10",
+  "aggiornato": "2026-11-17 23:30",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R10-006",
+      "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9. La voce riguarda le prove del conto della consegna nel carrello (app/cart/page.tsx), cioè i soldi dei clienti: stasera non si tocca (regola 3)."
+    },
+    {
+      "id": "R10-010",
+      "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+      "esito": "scelta_di_nicola",
+      "domanda": "Quante consegne veloci può avere in mano insieme un solo fattorino? Il conteggio c'è già (contaVelociInCorso, lib/ordini/consegna-veloce.ts:135), manca solo il numero VELOCI_PER_FATTORINO (lib/ordini/consegna-veloce.ts:35, oggi null = nessun tetto)."
+    },
+    {
+      "id": "R10-004",
+      "chiave": "microcopy|il pulsante del negozio dice «pronto per il rider»: in tutto il resto del sito è «fattorino»",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/order-status.ts",
+          "modifica": "riga 45: 'Pronto per il rider' → 'Pronto per il fattorino' (file di R10: non messo nel ramo da solo perché fa diventare rosse 5 prove esistenti, 4 delle quali usano file di altre sessioni; va applicata insieme alle righe sotto, con una prova etichettaPronto(false) === 'Pronto per il fattorino')"
+        },
+        {
+          "file": "tests/unit/la-targhetta-dell-ordine-non-manda-il-cliente-a-ritirarlo.test.ts",
+          "modifica": "riga 26: .toMatch(/rider/i) → .toMatch(/fattorino/i), e il messaggio 'l’etichetta deve dire che passa il fattorino'"
+        },
+        {
+          "file": "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx",
+          "modifica": "riga 108: 'Pronto per il rider' → 'Pronto per il fattorino' (usa lib/promesse-pubbliche, di R08)"
+        },
+        {
+          "file": "tests/unit/minori-s02-varie.test.ts",
+          "modifica": "righe 46 e 48 (e la 52 per coerenza): 'Pronto per il rider' → 'Pronto per il fattorino' (legge app/seller/orders/[id]/page.tsx di R09 e app/globals.css di R02)"
+        },
+        {
+          "file": "tests/unit/minori-s06-centro-venditori.test.ts",
+          "modifica": "riga 29: '\"Pronto per il rider\"' → '\"Pronto per il fattorino\"' (il testo dell'aiuto in app/seller/help/domande.ts:54 segue da solo etichettaPronto)"
+        },
+        {
+          "file": "tests/unit/minori-s06-ordine-del-negozio.test.tsx",
+          "modifica": "riga 105: 'Pronto per il rider' → 'Pronto per il fattorino' (disegna app/seller/orders/[id]/page.tsx di R09)"
+        }
+      ],
+      "prova": "applicata la riga 45 e lanciate le 39 prove che nominano order-status, OrderTimeline, domande, shipping o la pagina ordine del negozio: rosse esattamente queste 5, il resto verde",
+      "nota": "Il difetto c'è ancora sulla base (lib/order-status.ts:45). La stessa etichetta gira nella targhetta, nella timeline, nell'aiuto per i negozi e nella pagina Spedizioni: cambia ovunque, come chiede la voce."
+    },
+    {
+      "id": "R10-003",
+      "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
+      "esito": "parziale",
+      "commit": "6c74b905103fc9d4a451a13c1f485dacf9f04ff6",
+      "file_toccati": [
+        "app/admin/sponsored/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-sponsorizzati-categoria.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-sponsorizzati-categoria.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6c74b905103fc9d4a451a13c1f485dacf9f04ff6^ --file app/admin/sponsored/page.tsx --prove tests/unit/riparazione-r10-sponsorizzati-categoria.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le intestazioni, le posizioni e la percentuale della tabella erano già in italiano sulla base (R09-018). Restava lo slug grezzo della categoria accanto alla posizione («· casa-tessili»): ora la pagina legge il nome dalla tabella categories, e finché non arriva mostra lo slug reso leggibile. Nel database non cambia niente.",
+      "cosa_resta": "I quattro riquadri in cima dicono ancora «Impressions», «CTR medio» e «3.55%» col punto: li scrive lib/admin/vista-delle-campagne.ts, che non è in nessuna sessione (vedi serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/admin/vista-delle-campagne.ts",
+          "modifica": "riga 279: `Impressions${coda}` → `Visualizzazioni${coda}`; riga 285: `${parziale ? 'CTR' : 'CTR medio'}${coda}` → `${parziale ? 'Clic su 100 visualizzazioni' : 'Clic su 100 visualizzazioni (media)'}${coda}`; riga 287: `${numeri.ctr.toFixed(2)}%` → `${numeri.ctr.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`"
+        },
+        {
+          "file": "tests/unit/i-riquadri-degli-sponsorizzati-non-chiamano-totale-un-pezzo.test.ts",
+          "modifica": "righe 90, 100 e 130: le etichette attese 'CTR medio', 'CTR · in pausa' e 'CTR' diventano le nuove; riga 180: not.toContain('CTR medio') → not.toContain('Clic su 100 visualizzazioni (media)')"
+        }
+      ]
+    },
+    {
+      "id": "R10-005",
+      "chiave": "navigazione-gerarchia|su notifiche e messaggi i titoli saltano dal titolo principale al terzo livello",
+      "esito": "riparato",
+      "commit": "b03a4312fa1741a42b1776040b257cafa34dad6e",
+      "file_toccati": [
+        "app/messages/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b03a4312fa1741a42b1776040b257cafa34dad6e^ --file app/messages/page.tsx --prove tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le notifiche erano già a posto sulla base (app/notifications/page.tsx:232 ha l'h2). Nei messaggi le righe restano h3 (la prova comune la-chat-con-l-assistenza-a-video le cerca così); sopra l'elenco c'è ora un h2 per il lettore di schermo, «Le tue conversazioni», così l'ordine è h1 → h2 → h3."
+    },
+    {
+      "id": "R10-012",
+      "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
+      "esito": "riparato",
+      "commit": "bdf98f47671b21189da9d1a7fb79fc9d453e073a",
+      "file_toccati": [
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-notifiche-carica-altre.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-notifiche-carica-altre.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bdf98f47671b21189da9d1a7fb79fc9d453e073a^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r10-notifiche-carica-altre.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Mentre carica, il tasto resta visibile, disattivato, con aria-busy e il testo «Caricamento…». L'ultimo elenco letto è tenuto in un useRef: se «Carica altre» fallisce, le notifiche già lette restano a video e sotto compaiono l'errore e «Riprova»; la pagina intera di errore resta solo quando non c'è niente di già letto. La prova monta la pagina vera e senza la correzione è rossa nei due casi."
+    },
+    {
+      "id": "R10-002",
+      "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
+      "esito": "riparato",
+      "commit": "4f0bd4ad5bfd87e467886a7b504f207ed94436ab",
+      "file_toccati": [
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f0bd4ad5bfd87e467886a7b504f207ed94436ab^ --file components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A tenere larga la home era il pulsante «Diventa venditore» della fascia per i negozi, con whitespace-nowrap: tolto, e aggiunto max-w-full, così va a capo. /about era già a posto sulla base (app/about/page.tsx:74 colonne in auto-fit, riga 110 titolo con break-words, R02-002 e R03-002)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "resta «Rider in arrivo» a video per lo stato ASSIGNED",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/order-status.ts:52",
+      "descrizione": "Lo stato ASSIGNED dice «Rider in arrivo» a clienti e amministrazione, mentre il resto del sito dice «fattorino»; anche la pagina Spedizioni dice «In consegna (con nome del rider)», frase fissata in tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx:109."
+    },
+    {
+      "titolo": "/privacy e /come-funziona possono scorrere di lato col testo al 200%",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/ui/LegalLayout.tsx:41",
+      "descrizione": "Non misurato: l h1 text-3xl di LegalLayout non ha break-words, e app/come-funziona/page.tsx:75 ha la riga icona + h2 senza min-w-0."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": ""
+  }
+}
