@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:11",
+  "aggiornato": "2026-11-17 18:12",
   "finita": false,
-  "testa": "1ae7a9a298ffa30011cfc06271bf21a62587ede9",
+  "testa": "b41d08b6ec8ee839ccd53e7928386bd77aefe0aa",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -51,8 +51,26 @@
     {
       "id": "R02-004",
       "chiave": "microcopy|il dialogo dell sos dice che gli amministratori ricevono l avviso «subito», ma il push parte solo se la scrittura riesce entro 15 secondi",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "b41d08b6ec8ee839ccd53e7928386bd77aefe0aa",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx",
+        "tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b41d08b6ec8ee839ccd53e7928386bd77aefe0aa^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La riga del dialogo sugli amministratori non dice più «ricevono subito»: dice che l'avviso (pannello e, con le notifiche attive, telefono) arriva quando l'SOS arriva a MyCity, che serve la connessione e che con poca rete può arrivare in ritardo o non arrivare. Il «subito» resta solo per il 112. La prova apre il dialogo vero e legge la riga (sulla base: «ricevono subito»).",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-005",
