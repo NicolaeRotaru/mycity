@@ -1,6 +1,6 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 18:24",
+  "aggiornato": "2026-11-17 18:26",
   "finita": false,
   "testa": "79a9057600f3e52cd905b5468915e9c7bb61f640",
   "verifica": {
@@ -238,6 +238,12 @@
       "chiave": "navigazione-gerarchia|la tendina della ricerca «sfoglia per categoria» elenca anche le categorie vuote",
       "esito": "gia_riparato_prima",
       "prova": "components/SearchBar.tsx:76-77 sulla base bc36f481: la tendina filtra le principali con domandaCategoriePiene + soloLePiene (`const catPiene = soloLePiene(topCats, piene.isError ? null : piene.data)`), e alle righe 318-322 disegna catPiene.slice(0, 8), non più topCats. Chiuso dalla cucitura b5918e08 (onda 5, R30-002), antenata della base (`git merge-base --is-ancestor b5918e08 bc36f481` → vero), che ha anche messo nel layout il precarico di ['categories','con-prodotti'] (lib/queries/precarico.ts:86): all'apertura della tendina le piene sono già nella cache. Resta solo il ripiego voluto «se non si sa, tutte», lo stesso di menu e piede."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|fetchpriority in camelcase su react 18.3.1 fa scrivere un avviso a react a ogni disegno delle tessere",
+      "esito": "gia_riparato_prima",
+      "prova": "Sul sito il difetto non c'è: package.json e node_modules hanno react/react-dom 18.3.1, ma il sito ha solo il router app (nessuna cartella pages/) e Next 15.5.29 lo disegna col React che porta con sé, 19.2.0-canary-0bdb9206-20250818 (alias react$ → next/dist/compiled/react in node_modules/next/dist/build/create-compiler-aliases.js:251), che conosce fetchPriority. Comando: `NODE_ENV=development node -e \"const R=require('next/dist/compiled/react'),{renderToString:s}=require('next/dist/compiled/react-dom/server.node');const e=[];console.error=(...a)=>e.push(a[0]);s(R.createElement('img',{src:'x',fetchPriority:'high'}));const n=e.length;s(R.createElement('img',{src:'x',fetchpriority:'high'}));console.log(R.version,'camel:',n,'minuscolo:',e.length-n)\"` → «19.2.0-canary-0bdb9206-20250818 camel: 0 minuscolo: 1». Il minuscolo proposto farebbe scrivere a React 19 «Invalid DOM property `fetchpriority`. Did you mean `fetchPriority`?» e toglierebbe la priorità dal preload che React 19 aggiunge: per questo components/CategoryShowcase.tsx:277 resta com'è. L'avviso «React does not recognize the `fetchPriority` prop» esce solo nelle prove vitest, che montano le tessere con il react 18.3.1 di node_modules."
     }
   ],
   "nuovi_difetti_visti": [
