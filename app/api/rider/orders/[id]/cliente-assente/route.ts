@@ -33,7 +33,10 @@ const IdOrdine = z.string().uuid();
 /** 400 → «4,00 €», come nelle email. */
 const euro = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
 
-async function handler(user: { id: string }, idGrezzo: string): Promise<NextResponse> {
+/** Il profilo che il portiere (lib/api/middleware.ts, authenticate) legge a ogni richiesta. */
+type ProfiloDiChiChiama = { role: string; is_approved: boolean };
+
+async function handler(user: { id: string }, idGrezzo: string, profilo?: ProfiloDiChiChiama): Promise<NextResponse> {
   const id = IdOrdine.safeParse(idGrezzo);
   if (!id.success) return ApiErrors.notFound('Ordine non trovato');
 
@@ -53,6 +56,12 @@ async function handler(user: { id: string }, idGrezzo: string): Promise<NextResp
 
   const order = data as unknown as OrdineDaAnnullare & { rider_id: string | null };
   if (order.rider_id !== user.id) return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
+  // 17/11/2026 (R30-023) — Un fattorino sospeso non annulla più le consegne che aveva in mano: la
+  // chiude l'assistenza. L'ordine si legge col client di servizio, quindi la regola di lettura del
+  // database non lo ferma: il controllo sta qui. Sospendere mette is_approved=false sul profilo.
+  if (profilo && (profilo.role !== 'rider' || profilo.is_approved !== true)) {
+    return ApiErrors.forbidden('Il tuo profilo fattorino è sospeso: questa consegna la chiude l’assistenza.');
+  }
   if (order.delivery_status === 'CANCELED') return ApiErrors.conflict('Ordine già annullato');
   // 5/11/2026 — Anche da «ritirato» (PICKED_UP): il fattorino che va dritto dal cliente senza
   // premere «Sto andando dal cliente» deve poter dire che non c'è nessuno. I contanti a quel punto
@@ -123,5 +132,5 @@ async function handler(user: { id: string }, idGrezzo: string): Promise<NextResp
 // Un fattorino ha poche consegne l'ora: 20 tocchi sono tanti anche con un telefono che ripete.
 export const POST = withAuthRateLimit(
   { name: 'rider-cliente-assente', max: 20, windowMs: 60 * 60_000 },
-  ({ user, params }) => handler(user, String(params.id)),
+  ({ user, profile, params }) => handler(user, String(params.id), profile),
 );
