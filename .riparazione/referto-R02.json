@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:23",
+  "aggiornato": "2026-11-17 18:40",
   "finita": false,
-  "testa": "422b77e368526914d9072fcf98442fbf98ec984b",
+  "testa": "4a5964c9f1348ce64c67939b6011434d0e425393",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -46,7 +46,7 @@
       "id": "R02-003",
       "chiave": "layout-responsive|le righe delle impostazioni (toggle) non hanno min-w-0 sul testo",
       "esito": "riparato",
-      "commit": "a0d6592149ede814d0bb61b86c0d14f1fc92370a",
+      "commit": "4a5964c9f1348ce64c67939b6011434d0e425393",
       "file_toccati": [
         "components/ui/Toggle.tsx",
         "tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx"
@@ -60,10 +60,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a0d6592149ede814d0bb61b86c0d14f1fc92370a^ --file components/ui/Toggle.tsx --prove tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a0d65921^ --file components/ui/Toggle.tsx --prove tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il blocco che contiene titolo e descrizione del Toggle (figlio flex accanto all'interruttore) prende min-w-0, così i testi lunghi vanno a capo invece di spingere fuori l'interruttore (che ha già shrink-0). La prova monta il Toggle vero con testi lunghi e guarda la classe del blocco (sulla base: nessuna classe).",
+      "cosa_ho_fatto": "Due commit. a0d65921: il blocco che contiene titolo e descrizione del Toggle (figlio flex accanto all'interruttore, che ha già shrink-0) prende min-w-0. 4a5964c9 (giro di correzione): lo stesso blocco prende anche break-words, perché il solo min-w-0 non spezzava una parola lunga (un'email): misurato in Chromium headless con una riga di 320px, il titolo restava largo 319px in un blocco di 234px e copriva l'interruttore; con break-words (overflow-wrap: break-word) va a capo dentro il blocco ([overflow-wrap:anywhere] dà lo stesso risultato). La prova monta il Toggle vero con testi lunghi e pretende min-w-0 e break-words sul blocco; la prova rimessa parte da prima di a0d65921, quindi copre tutta la cura.",
       "verificato_da": "da verificare"
     },
     {
