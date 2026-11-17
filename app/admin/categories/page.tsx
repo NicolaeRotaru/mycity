@@ -22,6 +22,8 @@ import EmptyState from '@/components/EmptyState';
 type Cat = {
   id: string; slug: string; name: string; icon: string | null;
   parent_id: string | null; sort_order: number | null; featured: boolean | null;
+  /** Migrazione 159: senza, `select('*')` non la porta e il campo resta vuoto. */
+  image_url?: string | null;
 };
 
 async function authedFetch(method: string, body: unknown) {
@@ -46,10 +48,14 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
   const [parentId, setParentId] = useState(cat.parent_id ?? '');
   const [sortOrder, setSortOrder] = useState(cat.sort_order ?? 0);
   const [featured, setFeatured] = useState(!!cat.featured);
+  const [imageUrl, setImageUrl] = useState(cat.image_url ?? '');
 
   const save = useMutation({
     mutationFn: async () => authedFetch('PATCH', {
       id: cat.id, name, slug, icon, parent_id: parentId || null, sort_order: sortOrder, featured,
+      // Solo se è cambiata: senza la migrazione 159 la colonna non c'è e il salvataggio degli altri
+      // campi deve riuscire lo stesso.
+      ...(imageUrl.trim() !== (cat.image_url ?? '') ? { image_url: imageUrl.trim() } : {}),
     }),
     onSuccess: () => { toast.success('Categoria aggiornata'); onDone(); },
     onError: (e: unknown) => toast.error(friendlyError(e)),
@@ -74,6 +80,7 @@ function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli
         </Select>
         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
+        <Input label="Foto della tessera (https://… o /…)" containerClassName="flex-1 min-w-[220px]" value={imageUrl} maxLength={500} placeholder="Vuota = gradiente del marchio" onChange={(e) => setImageUrl(e.target.value)} />
         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
         <button type="button" onClick={() => {
             if (figli > 0) {
@@ -94,6 +101,7 @@ export default function AdminCategoriesPage() {
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('');
   const [newParent, setNewParent] = useState('');
+  const [newImage, setNewImage] = useState('');
 
   const { data: cats = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.categories,
@@ -120,9 +128,12 @@ export default function AdminCategoriesPage() {
   const create = useMutation({
     mutationFn: async () => {
       if (!newName.trim()) throw new Error('Inserisci un nome');
-      await authedFetch('POST', { name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null });
+      await authedFetch('POST', {
+        name: newName.trim(), slug: slugify(newName), icon: newIcon, parent_id: newParent || null,
+        ...(newImage.trim() ? { image_url: newImage.trim() } : {}),
+      });
     },
-    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); invalidate(); },
+    onSuccess: () => { toast.success('Categoria creata'); setNewName(''); setNewIcon(''); setNewParent(''); setNewImage(''); invalidate(); },
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
@@ -138,6 +149,7 @@ export default function AdminCategoriesPage() {
       <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-4 flex flex-wrap items-end gap-2">
         <Input label="Nuova categoria" containerClassName="flex-1 min-w-[160px]" value={newName} maxLength={60} placeholder="Es: Animali" onChange={(e) => setNewName(e.target.value)} />
         <Input label="Icona" containerClassName="w-20" value={newIcon} maxLength={8} placeholder="Emoji" onChange={(e) => setNewIcon(e.target.value)} />
+        <Input label="Foto (facoltativa)" containerClassName="flex-1 min-w-[200px]" value={newImage} maxLength={500} placeholder="https://… o /…" onChange={(e) => setNewImage(e.target.value)} />
         <Select label="Genitore" containerClassName="w-44" value={newParent} onChange={(e) => setNewParent(e.target.value)}>
           <option value="">— Principale —</option>
           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
