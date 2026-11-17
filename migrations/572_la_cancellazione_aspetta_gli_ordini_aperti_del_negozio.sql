@@ -44,8 +44,13 @@ BEGIN
                         coalesce(o.delivery_status, 'NEW') NOT IN ('DELIVERED', 'CANCELED')
                         AND (o.payment_method = 'cod' OR o.payment_status IN ('PAID', 'PARTIALLY_REFUNDED'))
                     )
-                    -- soldi del negozio ancora da incassare
-                    OR o.payout_status IN ('HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING', 'FAILED', 'AWAITING_REMITTANCE')
+                    -- soldi del negozio ancora da incassare (un ordine annullato non ne ha:
+                    -- un contrassegno annullato resta AWAITING_REMITTANCE e non deve fermare
+                    -- per sempre la cancellazione)
+                    OR (
+                        coalesce(o.delivery_status, 'NEW') <> 'CANCELED'
+                        AND o.payout_status IN ('HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING', 'FAILED', 'AWAITING_REMITTANCE')
+                    )
                 )
           );
 END;

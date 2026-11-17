@@ -56,6 +56,10 @@ INSERT INTO public.orders (
 ('d3300000-0000-0000-0000-0000000000b4', 'd3300000-0000-0000-0000-000000000005', 'd3300000-0000-0000-0000-000000000004',
  30.00, 3000, 'card', 'PAID', 'DELIVERED', now() - interval '20 days', false, 'TRANSFERRED', 2700,
  'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121'),
+-- 4: e un contrassegno annullato, rimasto AWAITING_REMITTANCE come nascono tutti i contrassegni.
+('d3300000-0000-0000-0000-0000000000c4', 'd3300000-0000-0000-0000-000000000005', 'd3300000-0000-0000-0000-000000000004',
+ 30.00, 3000, 'cod', 'FAILED', 'CANCELED', NULL, false, 'AWAITING_REMITTANCE', 2700,
+ 'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121'),
 -- 6: in contanti, consegnato, ma i contanti non sono ancora stati versati dal fattorino.
 ('d3300000-0000-0000-0000-0000000000a6', 'd3300000-0000-0000-0000-000000000005', 'd3300000-0000-0000-0000-000000000006',
  30.00, 3000, 'cod', 'PAID', 'DELIVERED', now() - interval '1 day', false, 'AWAITING_REMITTANCE', 2700,
@@ -80,7 +84,7 @@ INSERT INTO esiti SELECT 'il negozio col bonifico ancora trattenuto aspetta',
   NOT EXISTS (SELECT 1 FROM presi WHERE user_id = 'd3300000-0000-0000-0000-000000000003'), 'preso coi soldi da incassare';
 INSERT INTO esiti SELECT 'il negozio coi contanti non ancora versati aspetta',
   NOT EXISTS (SELECT 1 FROM presi WHERE user_id = 'd3300000-0000-0000-0000-000000000006'), 'preso coi contanti da ricevere';
-INSERT INTO esiti SELECT 'un carrello mai pagato e un bonifico partito non fermano la cancellazione',
+INSERT INTO esiti SELECT 'un carrello mai pagato, un bonifico partito e un contrassegno annullato non fermano la cancellazione',
   EXISTS (SELECT 1 FROM presi WHERE user_id = 'd3300000-0000-0000-0000-000000000004'), 'rinviato senza motivo';
 INSERT INTO esiti SELECT 'gli ordini fatti come cliente non fermano la sua cancellazione',
   EXISTS (SELECT 1 FROM presi WHERE user_id = 'd3300000-0000-0000-0000-000000000005'), 'cliente rinviato';
