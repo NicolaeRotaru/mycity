@@ -32,7 +32,8 @@ describe('il piede (ogni pagina pubblica)', () => {
     const griglia = html.match(/<footer[^>]*>\s*<div class="([^"]+)"/)?.[1] ?? '';
     expect(griglia).toContain('md:grid-cols-5');
     expect(griglia.split(/\s+/)).not.toContain('grid-cols-2');
-    expect(griglia).toContain('grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_2rem)/2)),1fr))]');
+    // R02-005 (onda 9) — Le stesse colonne, mai più larghe della riga (a 280 px col testo al 200%).
+    expect(griglia).toContain('grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]');
   });
 
   it('il blocco del marchio occupa tutta la riga anche quando la colonna è una sola', async () => {

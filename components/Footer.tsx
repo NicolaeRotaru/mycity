@@ -136,8 +136,10 @@ const CATEGORIE_DI_RISERVA: Categoria[] = [
   { slug: 'sport',         name: 'Sport' },
 ];
 
-/** Sotto md: colonne larghe almeno 8rem e al massimo mezza riga (gap-8 = 2rem). Vedi R15-008. */
-const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_2rem)/2)),1fr))]';
+/** Sotto md: colonne larghe almeno 8rem e al massimo mezza riga (gap-8 = 2rem). Vedi R15-008.
+ *  R02-005 (onda 9) — E mai più larghe della riga (min(100%,…)): a 280 px col testo al 200% gli 8rem
+ *  (256 px) più i margini (2 × 32) facevano 320, e ogni pagina pubblica scorreva di lato di 8 px. */
+const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]';
 
 const Footer = () => {
   const chiSiamo = titolare();
