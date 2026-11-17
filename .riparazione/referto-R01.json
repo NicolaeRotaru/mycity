@@ -1,6 +1,6 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 17:10",
+  "aggiornato": "2026-11-17 17:25",
   "finita": false,
   "testa": "b7fa1b600a73d19842decfcf1203a226fcbd8d6c",
   "verifica": {
@@ -38,7 +38,7 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f9e140abdcee95a6f993f19135f1f91a36f70a45^ --file components/seller/ProductForm.tsx,app/seller/products/new/page.tsx --prove tests/unit/riparazione-r01-doppio-clic-pubblica.test.tsx,tests/unit/riparazione-r01-doppio-clic-pubblica-pagina.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nel modulo prodotto una guardia sincrona (useRef) blocca ogni secondo invio dal primo clic fino alla fine dell'invio; la pagina «Nuovo prodotto» passa la promessa dell'inserimento (mutateAsync, errore già detto da onError), così il modulo resta chiuso finché l'insert in products non è finito. Primo giro della rimessa: la pagina non aveva una prova sua (uscita 1), aggiunta nel secondo commit.",
+      "cosa_ho_fatto": "Nel modulo prodotto una guardia sincrona (useRef) blocca ogni secondo invio dal primo clic fino alla fine dell'invio; la pagina «Nuovo prodotto» passa la promessa dell'inserimento (mutateAsync, errore già detto da onError), così il modulo resta chiuso finché l'insert in products non è finito. Primo giro della rimessa: la pagina non aveva una prova sua (uscita 1), aggiunta nel secondo commit. La voce ha due commit: f9e140ab (correzione e prova del modulo) e 69035163 (prova della pagina); la rimessa con base f9e140ab^ li copre tutti e due.",
       "verificato_da": ""
     },
     {
@@ -173,7 +173,7 @@
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 0,
-    "nota": "onda 7: subagenti senza parametro model (modello della sessione), su indicazione della regista"
+    "agenti": 1,
+    "nota": "onda 7: subagenti senza parametro model (modello della sessione), su indicazione della regista. Lotto A: 1 riparatore; rimesse ricontrollate da R01 (6 su 6 uscita 0)."
   }
 }
