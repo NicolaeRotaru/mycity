@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:00",
+  "aggiornato": "2026-11-17 18:02",
   "finita": false,
-  "testa": "19e4067514ae95b594d6c3cd46f0689d657f4ac3",
+  "testa": "ceb88720c4cde59ca418cdb002b4ea509c3d02a1",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -112,8 +112,26 @@
     {
       "id": "R02-010",
       "chiave": "qa-flussi|la data degli eventi in home non usa il fuso di piacenza",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "ceb88720c4cde59ca418cdb002b4ea509c3d02a1",
+      "file_toccati": [
+        "components/home/HomeEvents.tsx",
+        "tests/unit/riparazione-r02-eventi-home-fuso.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-eventi-home-fuso.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-eventi-home-fuso.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ceb88720c4cde59ca418cdb002b4ea509c3d02a1^ --file components/home/HomeEvents.tsx --prove tests/unit/riparazione-r02-eventi-home-fuso.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La data della striscia «Eventi a Piacenza» (riga 48) si formatta con timeZone: FUSO_PIACENZA da lib/tempo-piacenza.ts, come già fanno le promozioni. La prova monta il componente vero con TZ=UTC e orologio finto alle 23:40 di Greenwich: un evento dalle 00:30 del 6 alle 00:15 dell'8 (ora di Piacenza) deve dire «6 nov – 8 nov» (sulla base: «5 nov – 7 nov»).",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-011",
