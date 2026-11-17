@@ -196,6 +196,10 @@ function NewProductInner() {
     return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
   }, [imported, fromId, source, sourceVariants]);
 
+  // Dopo un inserimento riuscito il modulo resta chiuso fino al cambio di pagina: `create.isPending`
+  // torna falso prima che router.push porti via, e un clic in quel momento creava un secondo prodotto.
+  const [creato, setCreato] = useState(false);
+
   const create = useMutation({
     mutationFn: async ({ payload, variants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -234,6 +238,7 @@ function NewProductInner() {
       return { id: data.id as string, sellerId: user.id, status: payload.status };
     },
     onSuccess: ({ id, sellerId, status }) => {
+      setCreato(true);
       clearAutosave(AUTOSAVE_KEY);
       if (status === 'available') trackProductPublished(id, sellerId);
       toast.success(status === 'draft' ? 'Bozza salvata' : 'Prodotto pubblicato!');
@@ -241,6 +246,8 @@ function NewProductInner() {
     },
     onError: (err: unknown) => {
       if (err instanceof TaglieNonSalvate) {
+        // Il prodotto esiste già: anche qui il modulo resta chiuso fino alla pagina della modifica.
+        setCreato(true);
         clearAutosave(AUTOSAVE_KEY);
         toast.error(`Il prodotto è stato creato, ma le taglie no (${friendlyError(err.causa)}). Aggiungile qui dalla modifica.`);
         router.push(`/seller/products/${err.prodottoId}/edit`);
@@ -300,7 +307,7 @@ function NewProductInner() {
           mode="create"
           categories={categories}
           initialValues={initialValues}
-          submitting={create.isPending}
+          submitting={create.isPending || creato}
           sellerOffersExpress={offersExpress}
           consegnaDelNegozioNonLetta={consegnaNonLetta}
           recessoSegnabile={recessoSegnabile}
