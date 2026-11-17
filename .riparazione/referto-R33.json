@@ -1,13 +1,13 @@
 {
   "sessione": "R33",
-  "aggiornato": "2026-11-17 13:05",
+  "aggiornato": "2026-11-17 13:35",
   "finita": true,
-  "testa": "161cbd95d85da6c0852b600bf6e81fd7210986d1",
+  "testa": "4cfe897527dc49366fc0511ee17f30c4b32c6ad5",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "161cbd95d85da6c0852b600bf6e81fd7210986d1",
-    "nota": "typecheck 0, lint 0 errori (99 avvisi), vitest 1610 file / 10559 casi verdi; lanciato con NODE_OPTIONS=--max-old-space-size=6144 (senza, il typecheck va in OOM)."
+    "testa": "4cfe897527dc49366fc0511ee17f30c4b32c6ad5",
+    "nota": "typecheck 0, lint 0 errori (99 avvisi), vitest 1609 file / 10556 casi verdi; con NODE_OPTIONS=--max-old-space-size=6144 (senza, il typecheck va in OOM). guardia-ramo verde."
   },
   "voci": [
     {
@@ -213,26 +213,16 @@
     {
       "id": "R33-022",
       "chiave": "qa-flussi|la promo «oggi, fino a mezzanotte» finisce a mezzanotte del fuso del telefono, non di piacenza",
-      "esito": "riparato",
-      "commit": "c118f9e588c24b99d37d90c4f9dac0ef34671829",
-      "file_toccati": [
-        "components/store-sections/PromotionsSection.tsx",
-        "tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c118f9e5^ --file components/store-sections/PromotionsSection.tsx --prove tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx --json"
-      },
+      "esito": "serve_file_altrui",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "app/seller/promotions/page.tsx usava già FUSO_PIACENZA; mancava la vetrina: «fino al» usa ora toLocaleDateString con timeZone FUSO_PIACENZA. Prova col contenuto scritto nella scheda.",
-      "verificato_da": "nessun revisore subagente (tetto di costo, decisione della regista): prova e prova rimessa del riparatore, suite intera verde nel verify; lo giudica il collaudo dopo."
+      "cosa_ho_fatto": "app/seller/promotions/page.tsx usava già FUSO_PIACENZA; manca solo la vetrina: «fino al» deve usare toLocaleDateString con timeZone FUSO_PIACENZA. La correzione era nel commit c118f9e5 (prova nuova rossa senza, verde con; rimessa uscita 0), ma components/store-sections/PromotionsSection.tsx non è di R33 in quest onda (guardia-ramo): il file e la prova sono rimessi come alla base nel commit 4cfe8975.",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/PromotionsSection.tsx + prova nuova tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx",
+          "modifica": "Da applicare tutta insieme (la prova senza il codice è rossa). Diff esatta dalla base (git apply):\ndiff --git a/components/store-sections/PromotionsSection.tsx b/components/store-sections/PromotionsSection.tsx\nindex 1f199f3f..2ad9d5da 100644\n--- a/components/store-sections/PromotionsSection.tsx\n+++ b/components/store-sections/PromotionsSection.tsx\n@@ -3,6 +3,7 @@\n import { Tag } from 'lucide-react';\n import type { SectionContext } from './SectionContext';\n import { Badge } from '@/components/ui/Badge';\n+import { FUSO_PIACENZA } from '@/lib/tempo-piacenza';\n \n /** Promozioni attive del negozio (badge sconto + scadenza). */\n export default function PromotionsSection({ ctx }: { ctx: SectionContext }) {\n@@ -24,7 +25,7 @@ export default function PromotionsSection({ ctx }: { ctx: SectionContext }) {\n             <Badge variant=\"discount\" className=\"rounded-full\">-{p.discount_percent}%</Badge>\n             <span className=\"font-medium text-ink-800\">{p.title}</span>\n             <span className=\"text-ink-400 text-xs whitespace-nowrap\">\n-              fino al {new Date(p.ends_at).toLocaleDateString('it-IT')}\n+              fino al {new Date(p.ends_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}\n             </span>\n           </span>\n         ))}\ndiff --git a/tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx b/tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx\nnew file mode 100644\nindex 00000000..cecfbc3a\n--- /dev/null\n+++ b/tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx\n@@ -0,0 +1,50 @@\n+/**\n+ * @vitest-environment jsdom\n+ */\n+import { describe, it, expect, afterEach } from 'vitest';\n+import { createElement } from 'react';\n+import { renderToStaticMarkup } from 'react-dom/server';\n+import PromotionsSection from '@/components/store-sections/PromotionsSection';\n+import type { SectionContext } from '@/components/store-sections/SectionContext';\n+\n+/**\n+ * R33-022 — La vetrina del negozio scriveva «fino al» con toLocaleDateString senza fuso: la promo\n+ * «Oggi» del 6/11 finisce alle 23:59:59.999 di Piacenza (22:59:59.999Z), e da un telefono a est di\n+ * Roma si leggeva «fino al 7/11». La data della vetrina è quella di Piacenza, da qualunque fuso la\n+ * si guardi, anche nei giorni del cambio d'ora.\n+ */\n+\n+const fusoDiPrima = process.env.TZ;\n+afterEach(() => { process.env.TZ = fusoDiPrima; });\n+\n+function vetrina(endsAt: string, fuso: string): string {\n+  process.env.TZ = fuso;\n+  const ctx = { promos: [{ id: 'p1', title: 'Oggi', discount_percent: 10, ends_at: endsAt }] } as unknown as SectionContext;\n+  return renderToStaticMarkup(createElement(PromotionsSection, { ctx }));\n+}\n+\n+describe('R33-022 — «fino al» della vetrina è il giorno di Piacenza', () => {\n+  it('la promo «Oggi» del 6/11 (fine 22:59:59.999Z) si legge «fino al 06/11/2026» anche da Tokyo e da Auckland', () => {\n+    for (const fuso of ['Asia/Tokyo', 'Pacific/Auckland', 'America/New_York', 'Europe/Rome']) {\n+      const html = vetrina('2026-11-06T22:59:59.999Z', fuso);\n+      expect(html, fuso).toContain('fino al 06/11/2026');\n+      expect(html, fuso).not.toContain('fino al 07/11/2026');\n+    }\n+  });\n+\n+  it(\"d'estate (fine 21:59:59.999Z del 15/7) e nelle domeniche del cambio d'ora resta il giorno di Piacenza\", () => {\n+    const casi: Array<[string, string]> = [\n+      ['2026-07-15T21:59:59.999Z', 'fino al 15/07/2026'],\n+      ['2026-10-25T22:59:59.999Z', 'fino al 25/10/2026'],\n+      ['2027-03-28T21:59:59.999Z', 'fino al 28/03/2027'],\n+    ];\n+    for (const [fine, atteso] of casi) {\n+      expect(vetrina(fine, 'Asia/Tokyo'), fine).toContain(atteso);\n+    }\n+  });\n+\n+  it(\"controprova: a New York la sera del 6/11 a Piacenza è già il 7 e la vetrina dice 7\", () => {\n+    // 6/11 23:30Z = 7/11 00:30 a Piacenza, 6/11 18:30 a New York.\n+    expect(vetrina('2026-11-06T23:30:00.000Z', 'America/New_York')).toContain('fino al 07/11/2026');\n+  });\n+});\n"
+        }
+      ],
+      "nota": "Prima riparata nel commit c118f9e5, poi rimessa com era su richiesta della regista: la guardia-ramo è verde (file toccati e rimessi, non entrano nell unione)."
     },
     {
       "id": "R33-007",
@@ -388,8 +378,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "5 subagenti su 8: lotti A, B, C (modello grande), lotto D (sonnet), un revisore sui soldi (002, 008, 014). Senza revisore subagente, per il tetto di costo deciso dalla regista: 025, 021, 022 (li giudica il collaudo). R33-014 corretto dal capo squadra dopo il revisore. Costo letto con get_session senza id alle 13:10: usage.cost_usd 35,69 $ (prima del commit finale del referto).",
+    "nota": "5 subagenti su 8: lotti A, B, C (modello grande), lotto D (sonnet), un revisore sui soldi (002, 008, 014). Senza revisore subagente, per il tetto di costo deciso dalla regista: 025, 021, 022 (li giudica il collaudo). R33-014 corretto dal capo squadra dopo il revisore. Costo letto con get_session senza id prima della consegna finale: usage.cost_usd 36,73 $.",
     "subagenti": 5
   },
-  "costo_usd": 35.69
+  "costo_usd": 36.73
 }
