@@ -336,7 +336,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const isGeneric = /prodotto generico/i.test(toolInput.name ?? '');
   const needsVerification =
     !isGeneric &&
-    toolInput.policy_ok !== false &&
+    toolInput.policy_ok === true &&
     typeof toolInput.confidence === 'number' &&
     toolInput.confidence < CONFIDENCE_THRESHOLD;
   // R03-010 — Quanto resta alla rotta: un giro che non ci sta non parte, e si tiene
@@ -428,7 +428,9 @@ Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale most
   }
 
   // Gate policy: blocca i prodotti vietati prima di compilare l'annuncio.
-  if (toolInput.policy_ok === false) {
+  // R03-008 — Passa solo un sì scritto bene, come nel filtro (lib/ai/moderation.ts): un
+  // «"false"» scritto come testo, o un campo mancante, non è un prodotto ammesso.
+  if (toolInput.policy_ok !== true) {
     // 12/11/2026 (R04-012) — L'uscita del modello si controlla prima di usarla:
     // un motivo che non e' testo faceva cadere la rotta con un 500.
     const reason = typeof toolInput.policy_reason === 'string' ? toolInput.policy_reason.trim() : '';
