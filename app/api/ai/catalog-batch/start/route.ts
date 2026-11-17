@@ -1,4 +1,4 @@
-import { controllaTettoSpesaAi, registraSpesaAi } from '@/lib/ai/run';
+import { AiCallError, controllaTettoSpesaAi, mapAiError, registraSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiError } from '@/lib/api/responses';
@@ -221,6 +221,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       return ApiErrors.unavailable(
         'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
       );
+    }
+    // R03-002 — Il tetto di spesa del giorno non e' un guasto: il lavoro non e'
+    // partito e non e' costato niente. Non si segna «fallito» e non si dice
+    // «riprova»: si dice che il budget AI del giorno e' finito.
+    if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
+      await admin
+        .from('catalog_ai_jobs')
+        .update({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' })
+        .eq('id', job.id);
+      return mapAiError(err, 'ai-catalog-batch-start');
     }
     await admin.from('catalog_ai_jobs').update({ status: 'failed' }).eq('id', job.id);
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
