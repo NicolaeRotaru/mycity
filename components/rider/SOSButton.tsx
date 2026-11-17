@@ -275,7 +275,7 @@ export default function SOSButton({ orderId }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Gli amministratori MyCity ricevono subito un avviso nel pannello e, se hanno le notifiche attive, sul telefono, se il tuo telefono è connesso. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
+                  <span>Gli amministratori MyCity ricevono un avviso nel pannello e, se hanno le notifiche attive, sul telefono, quando l&apos;SOS arriva a MyCity: serve che il tuo telefono sia connesso, e con poca rete l&apos;avviso può arrivare in ritardo o non arrivare. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
                 </li>
               </ul>
               <p className="text-xs text-ink-500">
