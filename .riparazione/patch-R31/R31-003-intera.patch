@@ -1,0 +1,750 @@
+diff --git a/app/api/orders/cod/route.ts b/app/api/orders/cod/route.ts
+index 1d2132c4..72f6310c 100644
+--- a/app/api/orders/cod/route.ts
++++ b/app/api/orders/cod/route.ts
+@@ -364,6 +364,11 @@ export const POST = withAuthRateLimit(
+     // falso e non c'e' un punto che possa sfuggire.
+     body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
+ 
++    // 17/11/2026 (R31-003) — Una consegna a domicilio ha sempre un orario: senza fascia l'ordine
++    // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
++    // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
++    if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
++
+     const supa = await getServerSupabase();
+     const admin = getAdminSupabase();
+ 
+diff --git a/app/api/stripe/checkout/route.ts b/app/api/stripe/checkout/route.ts
+index 073b32d8..91d11a2c 100644
+--- a/app/api/stripe/checkout/route.ts
++++ b/app/api/stripe/checkout/route.ts
+@@ -133,6 +133,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
+   // falso e non c'e' un punto che possa sfuggire.
+   body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
+ 
++  // 17/11/2026 (R31-003) — Una consegna a domicilio ha sempre un orario: senza fascia l'ordine
++  // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
++  // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
++  if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
++
+   const supa = await getServerSupabase();
+   const admin = getAdminSupabase();
+   const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
+diff --git a/tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts b/tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts
+index 9489ca67..dd0cafc1 100644
+--- a/tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts
++++ b/tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { readFileSync } from 'node:fs';
+ import { join } from 'node:path';
+ 
+@@ -185,6 +186,7 @@ const corpo = {
+   groups: [{ sellerId: NEGOZIO, items: [{ productId: PRODOTTO, quantity: 1 }], shippingCents: 0 }],
+   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+   pickupInStore: false,
++  deliverySlot: FASCE_DI_DOMANI[0],
+   useCredit: false,
+ };
+ 
+diff --git a/tests/unit/api-stripe-checkout.test.ts b/tests/unit/api-stripe-checkout.test.ts
+index 5f164efc..23a96dff 100644
+--- a/tests/unit/api-stripe-checkout.test.ts
++++ b/tests/unit/api-stripe-checkout.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+ 
+ /**
+@@ -142,6 +143,7 @@ function tamperedBody(overrides: Record<string, unknown> = {}) {
+     couponDiscountCents: 999999,
+     pickupDiscountCents: 999999,
+     pickupInStore: false,
++    deliverySlot: FASCE_DI_DOMANI[0],
+     ...overrides,
+   };
+ }
+diff --git a/tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts b/tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts
+index 8cd5275b..1ef81901 100644
+--- a/tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts
++++ b/tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, beforeEach, vi } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 3/9/2026 — CHI PASSA DALLA CARTA AI CONTANTI SI PORTAVA DIETRO UNA PAGINA DI
+@@ -222,6 +223,7 @@ function richiestaContanti(): never {
+       groups: [{ sellerId: FORNO, items: [{ productId: PANE, quantity: 1 }] }],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts b/tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts
+index a7507c62..132f8f31 100644
+--- a/tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts
++++ b/tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -165,6 +166,7 @@ async function ordina(chiave?: string) {
+       groups: [{ sellerId: NEGOZIO_ID, items: [{ productId: PRODOTTO, quantity: 1 }] }],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts b/tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts
+index 42d525e8..c66ad95f 100644
+--- a/tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts
++++ b/tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 27/8/2026 (R049 · R125 · R136) — DUE INVII, DUE RISERVE, DUE CODICI BRUCIATI.
+@@ -164,6 +165,7 @@ const carrello = {
+   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+   couponCode: 'SCONTO2',
+   pickupInStore: false,
++  deliverySlot: FASCE_DI_DOMANI[0],
+ };
+ 
+ function richiesta(corpo: unknown): never {
+diff --git a/tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts b/tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts
+index 9fc7c721..987e425e 100644
+--- a/tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts
++++ b/tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 27/8/2026 (R133) — CHI SBAGLIAVA UNA VOLTA RESTAVA CHIUSO FUORI UN MINUTO,
+@@ -195,6 +196,7 @@ function richiesta(chiave: string): never {
+       ],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/contanti-la-chiave-si-prende-prima.test.ts b/tests/unit/contanti-la-chiave-si-prende-prima.test.ts
+index 0f2705c3..de3be867 100644
+--- a/tests/unit/contanti-la-chiave-si-prende-prima.test.ts
++++ b/tests/unit/contanti-la-chiave-si-prende-prima.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 22/8/2026 — LA PROVA CHE MANCAVA SUL PERCORSO DEI SOLDI.
+@@ -243,6 +244,7 @@ function richiesta(chiave?: string): never {
+         zip: '29121', phone: '3331234567',
+       },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts b/tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts
+index 5ff7be6b..01829c8d 100644
+--- a/tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts
++++ b/tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { chiaveTentativo } from '@/lib/ordini/tentativo';
+ 
+@@ -159,6 +160,7 @@ async function ordina(chiave: string, gruppi = [AL_FORNO]) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts b/tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts
+index ca41d22f..ae908cbf 100644
+--- a/tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts
++++ b/tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -196,6 +197,7 @@ async function ordina(chiave: string, gruppi = [AL_FORNO]) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts b/tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts
+index 2b80c1d5..c64b5d1b 100644
+--- a/tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts
++++ b/tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 6/9/2026 — LA CASSA IN CONTANTI RISPONDEVA AGLI ERRORI IN DUE FORME DIVERSE.
+@@ -77,6 +78,7 @@ function richiesta(): never {
+       ],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts b/tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts
+index 349903ab..a59e39bc 100644
+--- a/tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts
++++ b/tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+ import { haversineKm } from '@/lib/geo';
+ import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
+@@ -175,6 +176,7 @@ function ordina(groups: unknown[] = [{ sellerId: NEGOZIO_ID, items: [{ productId
+         lng: NEGOZIO.lng,
+       },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts b/tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts
+index c2555dfb..e6dcf07f 100644
+--- a/tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts
++++ b/tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, beforeEach, vi } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
+ 
+ /**
+@@ -225,6 +226,7 @@ function richiestaContanti(): never {
+       groups: [{ sellerId: FORNO, items: [{ productId: PANE, quantity: 1 }] }],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts b/tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts
+index 5be0b5cc..7e2c44e4 100644
+--- a/tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts
++++ b/tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 29/10/2026 — IL CREDITO TOLTO DA UN TENTATIVO FALLITO TORNA, OGNI VOLTA.
+@@ -189,6 +190,7 @@ async function ordina(chiave: string, gruppi: Array<typeof AL_FORNO>) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: true,
+     }),
+   });
+diff --git a/tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts b/tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts
+index 6f73bccc..9c9215a1 100644
+--- a/tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts
++++ b/tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 27/8/2026 (R159) — L'ACQUISTO NON ARRIVAVA QUASI MAI A POSTHOG.
+@@ -199,6 +200,7 @@ function richiesta(cookie: string | null): never {
+       ],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts b/tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts
+index 5b151271..971d4efb 100644
+--- a/tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts
++++ b/tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+ import { haversineKm } from '@/lib/geo';
+ import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
+@@ -196,6 +197,7 @@ function richiesta(): never {
+       couponDiscountCents: 0,
+       pickupDiscountCents: 0,
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+     }),
+   }) as never;
+ }
+diff --git a/tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts b/tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts
+index df4de674..f973f627 100644
+--- a/tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts
++++ b/tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 28/10/2026 — ANCHE LA ROTTA DELLA CARTA SI FERMA SE NON VEDE IL NEGOZIO.
+@@ -116,6 +117,7 @@ function richiesta(): never {
+       couponDiscountCents: 0,
+       pickupDiscountCents: 0,
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+     }),
+   }) as never;
+ }
+diff --git a/tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts b/tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts
+index 4e6845a9..11309f8b 100644
+--- a/tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts
++++ b/tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 8/9/2026 — LA SECONDA CASSA USCIVA DALLA PORTA DI SERVIZIO.
+@@ -166,6 +167,7 @@ const carrello = {
+   groups: [{ sellerId: S1, items: [{ productId: P1, quantity: 1 }], shippingCents: 0 }],
+   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+   pickupInStore: false,
++  deliverySlot: FASCE_DI_DOMANI[0],
+ };
+ 
+ async function paga() {
+diff --git a/tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts b/tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts
+index f512b44f..cc31324d 100644
+--- a/tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts
++++ b/tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { idOrdiniDelTentativo, laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
+@@ -172,6 +173,7 @@ async function ordina(chiave: string, gruppi = [AL_FORNO]) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts b/tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts
+index 4f39e8e8..7cf637c2 100644
+--- a/tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts
++++ b/tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -163,6 +164,7 @@ async function ordina(chiave?: string) {
+       groups: [{ sellerId: NEGOZIO_ID, items: [{ productId: PRODOTTO, quantity: 1 }] }],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts b/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts
+index 83cd921b..16e35551 100644
+--- a/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts
++++ b/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts
+@@ -2,6 +2,7 @@
+  * @vitest-environment jsdom
+  */
+ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { monta, testoVisibile } from './aiuti/monta-componente';
+ import { accendi, attendi, clicca } from './aiuti/schermo';
+ import {
+@@ -380,7 +381,7 @@ async function spedizioneAddebitata(mondo: Mondo, gruppi: Array<{ sellerId: stri
+     new Request('http://localhost/api/orders/cod', {
+       method: 'POST',
+       headers: { 'content-type': 'application/json' },
+-      body: JSON.stringify({ groups: gruppi, delivery: INDIRIZZO_DI_MARIA, pickupInStore: false, useCredit: false }),
++      body: JSON.stringify({ groups: gruppi, delivery: INDIRIZZO_DI_MARIA, pickupInStore: false, deliverySlot: FASCE_DI_DOMANI[0], useCredit: false }),
+     }) as never,
+   );
+   const corpo = await risposta.json();
+diff --git a/tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts b/tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts
+index 7f947f51..1aeac895 100644
+--- a/tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts
++++ b/tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -178,6 +179,7 @@ async function ordina(chiave: string, gruppi = [AL_FORNO]) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts b/tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts
+index 6a4f9338..19dbd772 100644
+--- a/tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts
++++ b/tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 27/8/2026 (R085) — QUATTRO VIAGGI IN FILA MENTRE LA PERSONA GUARDA LA
+@@ -163,6 +164,7 @@ const corpo = {
+   ],
+   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+   pickupInStore: false,
++  deliverySlot: FASCE_DI_DOMANI[0],
+   useCredit: false,
+ };
+ 
+diff --git a/tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts b/tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts
+index c9eb292a..265ef168 100644
+--- a/tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts
++++ b/tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { idOrdiniDelTentativo, laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -167,6 +168,7 @@ async function ordina(chiave: string, gruppi = [AL_FORNO]) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
+diff --git a/tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts b/tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts
+index ecd5bb0a..f718d0aa 100644
+--- a/tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts
++++ b/tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 15/10/2026 (R24) — LA CONFERMA DELL'ORDINE IN CONTANTI USCIVA COME PUBBLICITA'.
+@@ -167,6 +168,7 @@ function richiesta(): never {
+       })),
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts b/tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts
+index 2d704b6c..95c52b83 100644
+--- a/tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts
++++ b/tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 27/8/2026 (R086) — LA POSTA DELL'ORDINE IN CONTANTI PARTIVA UNA ALLA VOLTA.
+@@ -181,6 +182,7 @@ function richiesta(): never {
+       })),
+       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/minori-s01-cassa-carta.test.ts b/tests/unit/minori-s01-cassa-carta.test.ts
+index e9023248..b73f0140 100644
+--- a/tests/unit/minori-s01-cassa-carta.test.ts
++++ b/tests/unit/minori-s01-cassa-carta.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * S01 — 68: se la cassa con carta non riesce a segnare l'id della pagina di
+@@ -177,6 +178,7 @@ const carrello = {
+   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+   couponCode: 'SCONTO2',
+   pickupInStore: false,
++  deliverySlot: FASCE_DI_DOMANI[0],
+ };
+ 
+ function richiesta(corpo: unknown): never {
+diff --git a/tests/unit/minori-s01-negozio-senza-insegna.test.ts b/tests/unit/minori-s01-negozio-senza-insegna.test.ts
+index dad0f00d..82f2e3b9 100644
+--- a/tests/unit/minori-s01-negozio-senza-insegna.test.ts
++++ b/tests/unit/minori-s01-negozio-senza-insegna.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * 28/10/2026 — ANCHE LA ROTTA DELLA CARTA SI FERMA SE NON VEDE IL NEGOZIO.
+@@ -117,6 +118,7 @@ function richiesta(): never {
+       couponDiscountCents: 0,
+       pickupDiscountCents: 0,
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+     }),
+   }) as never;
+ }
+diff --git a/tests/unit/minori-s01-zona-carta.test.ts b/tests/unit/minori-s01-zona-carta.test.ts
+index 06cbe94e..fa249328 100644
+--- a/tests/unit/minori-s01-zona-carta.test.ts
++++ b/tests/unit/minori-s01-zona-carta.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+ import { haversineKm } from '@/lib/geo';
+ import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
+@@ -196,6 +197,7 @@ function richiesta(): never {
+       couponDiscountCents: 0,
+       pickupDiscountCents: 0,
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+     }),
+   }) as never;
+ }
+diff --git a/tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts b/tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts
+index 60f3de04..a3ca913c 100644
+--- a/tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts
++++ b/tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { idOrdiniDelTentativo, laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -188,6 +189,7 @@ async function ordina(chiave: string | null, gruppi = [AL_FORNO]) {
+       groups: gruppi,
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: stato.usaCredito,
+     }),
+   });
+diff --git a/tests/unit/ordini-contrassegno-due-negozi.test.ts b/tests/unit/ordini-contrassegno-due-negozi.test.ts
+index c6d529b6..33c0af8d 100644
+--- a/tests/unit/ordini-contrassegno-due-negozi.test.ts
++++ b/tests/unit/ordini-contrassegno-due-negozi.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * Spesa da due negozi pagata in contanti, e la merce del secondo finisce.
+@@ -201,6 +202,7 @@ function richiesta(chiaveDelCheckout?: string): never {
+         zip: '29121', phone: '3331234567',
+       },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts b/tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts
+index ce7d08aa..f1b95e3b 100644
+--- a/tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts
++++ b/tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * R03-011 — Se il negozio alza un prezzo (o la promozione scade) mentre il cliente è in cassa,
+@@ -172,6 +173,7 @@ async function ordina(extra: Riga = {}) {
+       groups: [AL_FORNO],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+       ...extra,
+     }),
+diff --git a/tests/unit/riparazione-r26-credito-della-cassa.test.ts b/tests/unit/riparazione-r26-credito-della-cassa.test.ts
+index 4cdc81a0..6a295b56 100644
+--- a/tests/unit/riparazione-r26-credito-della-cassa.test.ts
++++ b/tests/unit/riparazione-r26-credito-della-cassa.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ 
+ /**
+  * R26-020 — Se l'addebito del credito risponde con un errore, la cassa in
+@@ -158,6 +159,7 @@ function richiesta(): never {
+         zip: '29121', phone: '3331234567',
+       },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: true,
+     }),
+   }) as never;
+diff --git a/tests/unit/riparazione-r31-consegna-senza-fascia.test.ts b/tests/unit/riparazione-r31-consegna-senza-fascia.test.ts
+new file mode 100644
+index 00000000..224a88f5
+--- /dev/null
++++ b/tests/unit/riparazione-r31-consegna-senza-fascia.test.ts
+@@ -0,0 +1,97 @@
++/**
++ * R31-003 — Le rotte accettavano una consegna a domicilio senza fascia: l'ordine nasceva senza
++ * orario (`delivery_slot` vuoto), mentre la cassa del sito ne manda sempre una. Il bar riceveva
++ * alle 22:30 un ordine a domicilio e non sapeva se portarlo stasera o domattina.
++ *
++ * Si mandano alle due rotte vere (contanti e carta) richieste scritte a mano. Il magazzino è finto
++ * e vuoto: una richiesta che passa la soglia si ferma più avanti per altro, mai «per la fascia».
++ */
++import { describe, expect, it, vi } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
++import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
++
++vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
++  ...((await originale()) as Record<string, unknown>),
++  CARTA_ACCESA: true,
++}));
++vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
++vi.mock('@/lib/api/middleware', async (importOriginal) => {
++  const vero = await importOriginal<typeof import('@/lib/api/middleware')>();
++  return {
++    ...vero,
++    withAuthRateLimit:
++      (_opzioni: unknown, gestore: (ctx: Record<string, unknown>) => unknown) =>
++      (req: Request) =>
++        gestore({
++          user: { id: 'cliente-1', email: 'maria@test.it', email_confirmed_at: '2026-01-01T00:00:00Z' },
++          profile: { id: 'cliente-1', role: 'buyer', is_approved: true },
++          req,
++        }),
++  };
++});
++vi.mock('@/lib/stripe/client', () => ({
++  isStripeConfigured: () => true,
++  createMultiSellerCheckoutSession: vi.fn(),
++  getStripe: () => ({ checkout: { sessions: { retrieve: vi.fn(), expire: vi.fn() } } }),
++}));
++vi.mock('@/lib/geocodifica', () => ({ coordinateDiUnIndirizzo: vi.fn(async () => null) }));
++vi.mock('@/lib/supabase/server', () => {
++  const risposta = { data: [], error: null };
++  const catena: Record<string, unknown> = new Proxy(
++    {},
++    {
++      get(_b, nome) {
++        if (nome === 'then') return (ok: (v: unknown) => unknown) => ok(risposta);
++        return () => catena;
++      },
++    },
++  );
++  const client = { from: () => catena, rpc: () => Promise.resolve(risposta), auth: { getUser: async () => ({ data: { user: null } }) } };
++  return { getServerSupabase: async () => client, getAdminSupabase: () => client };
++});
++
++import { POST as contanti } from '@/app/api/orders/cod/route';
++import { POST as carta } from '@/app/api/stripe/checkout/route';
++
++function richiesta(url: string, extra: Record<string, unknown>): Request {
++  return new Request(url, {
++    method: 'POST',
++    headers: { 'content-type': 'application/json', 'idempotency-key': `r31-003-${Math.random()}` },
++    body: JSON.stringify({
++      groups: [{ sellerId: '22222222-2222-2222-2222-222222222222', items: [{ productId: '11111111-1111-1111-1111-111111111111', quantity: 1 }] }],
++      delivery: { fullName: 'Maria', address: 'Via Calzolai 5', city: 'Piacenza', zip: '29121', phone: '3331111111' },
++      pickupInStore: false,
++      ...extra,
++    }),
++  });
++}
++
++const ROTTE = [
++  ['contanti', contanti, 'https://mycity.test/api/orders/cod'],
++  ['carta', carta, 'https://mycity.test/api/stripe/checkout'],
++] as const;
++
++describe('R31-003 · una consegna a domicilio senza fascia non nasce', () => {
++  for (const [nome, rotta, url] of ROTTE) {
++    it(`${nome}: senza fascia è un 400 che chiede quando ricevere l'ordine`, async () => {
++      for (const extra of [{}, { deliverySlot: null }]) {
++        const res = await (rotta as unknown as (r: Request) => Promise<Response>)(richiesta(url, extra));
++        expect(res.status, JSON.stringify(extra)).toBe(400);
++        expect(JSON.stringify(await res.json())).toContain('quando vuoi ricevere');
++      }
++    });
++
++    it(`${nome}: un «ritiro in negozio» chiesto col ritiro spento diventa consegna, e senza fascia non passa`, async () => {
++      const res = await (rotta as unknown as (r: Request) => Promise<Response>)(richiesta(url, { pickupInStore: true }));
++      const corpo = JSON.stringify(await res.json());
++      // Col ritiro acceso il ritiro resta ritiro, e la fascia non serve.
++      if (RITIRO_IN_NEGOZIO_ATTIVO) expect(corpo).not.toContain('quando vuoi ricevere');
++      else expect(corpo).toContain('quando vuoi ricevere');
++    });
++
++    it(`${nome}: con una fascia vera non si ferma per la fascia`, async () => {
++      const res = await (rotta as unknown as (r: Request) => Promise<Response>)(richiesta(url, { deliverySlot: FASCE_DI_DOMANI[0] }));
++      expect(JSON.stringify(await res.json())).not.toContain('quando vuoi ricevere');
++    });
++  }
++});
+diff --git a/tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts b/tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts
+index 24f96a63..abe5eb2d 100644
+--- a/tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts
++++ b/tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
+ import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+ 
+@@ -183,6 +184,7 @@ function ordinaAMilano(): never {
+       delivery: { fullName: 'Maria Rossi', address: 'Corso Buenos Aires 1', city: 'Milano', zip: '20124', phone: '3331234567' },
+       couponCode: 'PRIMI50',
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   }) as never;
+diff --git a/tests/unit/variante-503-dopo-chiave-abbandonata.test.ts b/tests/unit/variante-503-dopo-chiave-abbandonata.test.ts
+index 3331a6c9..34852988 100644
+--- a/tests/unit/variante-503-dopo-chiave-abbandonata.test.ts
++++ b/tests/unit/variante-503-dopo-chiave-abbandonata.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+ import { logger } from '@/lib/logger';
+ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
+ 
+@@ -156,6 +157,7 @@ async function ordina(chiave?: string) {
+       groups: [{ sellerId: NEGOZIO_ID, items: [{ productId: PRODOTTO, quantity: 1 }] }],
+       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+       pickupInStore: false,
++      deliverySlot: FASCE_DI_DOMANI[0],
+       useCredit: false,
+     }),
+   });
