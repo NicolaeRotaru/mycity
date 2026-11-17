@@ -1,43 +1,28 @@
 {
   "sessione": "R30",
-  "aggiornato": "2026-11-17 12:10",
+  "aggiornato": "2026-11-17 12:30",
   "finita": true,
-  "testa": "b824609507528205d5121dac4d3fe66dbae21dee",
+  "testa": "8efa4e29028a5b19a67ecb0aae69f9d3f8a1a864",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "b824609507528205d5121dac4d3fe66dbae21dee",
-    "nota": "NODE_OPTIONS=--max-old-space-size=8192; typecheck 0, lint 0 errori (99 avvisi già presenti), vitest 1614/1614 file, 10573/10573 casi. SHA preso con git rev-parse HEAD nello stesso comando."
+    "testa": "8efa4e29028a5b19a67ecb0aae69f9d3f8a1a864",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192; typecheck 0, lint 0 errori (99 avvisi già presenti), vitest 1613/1613 file, 10570/10570 casi. SHA preso con git rev-parse HEAD nello stesso comando. guardia-ramo verde sulla stessa testa. Le patch per i file altrui si leggono al commit c8a6e575 (tolte dal risultato in 8efa4e29)."
   },
   "voci": [
     {
       "id": "R30-001",
       "chiave": "immagini-media|le tessere delle categorie in home sono foto d'archivio scritte a mano nel codice",
-      "esito": "parziale",
-      "commit": "56dad3a8",
-      "file_toccati": [
-        "components/CategoryShowcase.tsx",
-        "tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx",
-        "tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r30-foto-di-categoria.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r30-foto-di-categoria.test.tsx",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 56dad3a8^ --file components/CategoryShowcase.tsx --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "(a) L'avviso «foto di categoria scartata» usa ora lo stesso ricordo della foto rotta: una volta per foto per tutta la vita della pagina, anche quando arrivano le piene e al rimontaggio. (b) Tutti e due gli avvisi passano da logger.error(new Error(frase), contesto), il canale che il sito usa già dal browser per arrivare a Sentry (lib/logger.ts → captureError); senza DSN scrive comunque in console. Nelle due prove esistenti di R15 (importano solo CategoryShowcase, che è di R30, e dei finti; nessun file di R31-R33) il finto logger raccoglie anche error con la stessa forma: niente è indebolito.",
-      "cosa_resta": "(c) La foto non si cambia ancora dal pannello admin: serve_file_altrui (patch .riparazione/patch-R30/r30-001-foto-dal-pannello.patch). Se la migrazione 159 sia applicata in produzione lo dice Nicola.",
+      "esito": "serve_file_altrui",
+      "nota": "Il codice di questa voce (avvisi delle foto di categoria in components/CategoryShowcase.tsx) non regge senza adattare due prove comuni di R15, che usano file di altre sessioni: rimesse come alla base (regista, 17/11), con la correzione 6 casi su 8 diventano rossi. Codice, prove adattate e prova nuova sono in patch; nel ramo CategoryShowcase.tsx è uguale alla base. Quello che la patch fa: (a) L'avviso «foto di categoria scartata» usa ora lo stesso ricordo della foto rotta: una volta per foto per tutta la vita della pagina, anche quando arrivano le piene e al rimontaggio. (b) Tutti e due gli avvisi passano da logger.error(new Error(frase), contesto), il canale che il sito usa già dal browser per arrivare a Sentry (lib/logger.ts → captureError); senza DSN scrive comunque in console. Nelle due prove esistenti di R15 (importano solo CategoryShowcase, che è di R30, e dei finti; nessun file di R31-R33) il finto logger raccoglie anche error con la stessa forma: niente è indebolito. Quello che resta oltre la patch: (c) La foto non si cambia ancora dal pannello admin: serve_file_altrui (patch .riparazione/patch-R30/r30-001-foto-dal-pannello.patch (al commit c8a6e575)). Se la migrazione 159 sia applicata in produzione lo dice Nicola.",
       "serve_file_altrui": [
         {
+          "file": "components/CategoryShowcase.tsx + tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx (comune) + tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx (comune) + tests/unit/riparazione-r30-foto-di-categoria.test.tsx (nuova)",
+          "modifica": "Patch .riparazione/patch-R30/r30-001-avvisi-delle-foto-e-prove-r15.patch (al commit c8a6e575) (diff d1eaba80..56dad3a8 dei quattro file), da applicare insieme: si applica pulita sulla testa del ramo. Verificata quando era nel ramo: prova nuova verde, prova rimessa uscita 0, suite intera verde."
+        },
+        {
           "file": "app/api/admin/categories/route.ts",
-          "modifica": "Patch .riparazione/patch-R30/r30-001-foto-dal-pannello.patch. Importare fotoDiCategoria e motivoDaSegnalare da '@/lib/immagine-categoria'. In baseFields aggiungere image_url: z.string().trim().max(500).nullable().optional().superRefine((v, ctx) => { if (!v) return; const motivo = motivoDaSegnalare(fotoDiCategoria({ image_url: v })); if (motivo) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Foto non ammessa: ${motivo}` }); }) (il messaggio è quello di fotoDiCategoria, quindi dice il vero). POST: nell'oggetto dell'insert ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}). PATCH: dopo la riga di featured if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;. In tutti e due gli errori: if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…')."
+          "modifica": "Patch .riparazione/patch-R30/r30-001-foto-dal-pannello.patch (al commit c8a6e575). Importare fotoDiCategoria e motivoDaSegnalare da '@/lib/immagine-categoria'. In baseFields aggiungere image_url: z.string().trim().max(500).nullable().optional().superRefine((v, ctx) => { if (!v) return; const motivo = motivoDaSegnalare(fotoDiCategoria({ image_url: v })); if (motivo) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Foto non ammessa: ${motivo}` }); }) (il messaggio è quello di fotoDiCategoria, quindi dice il vero). POST: nell'oggetto dell'insert ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}). PATCH: dopo la riga di featured if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;. In tutti e due gli errori: if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…')."
         },
         {
           "file": "app/admin/categories/page.tsx",
@@ -47,10 +32,7 @@
           "file": "lib/immagine-categoria.ts",
           "modifica": "Stessa patch. Dopo SUFFISSO_HOST_STORAGE aggiungere storageAmmesso(host): con NEXT_PUBLIC_SUPABASE_URL vale solo host === new URL(quella).hostname.toLowerCase(), altrimenti (o URL scritto male) host.endsWith(SUFFISSO_HOST_STORAGE), come getSupabaseHost in middleware.ts. Alla riga 156 usare storageAmmesso(host). In motivoDaSegnalare il testo 'host-non-ammesso' diventa «…e lo Storage Supabase del sito». Aggiornare il commento delle righe 49-58."
         }
-      ],
-      "domanda": "La migrazione 159 (categories.image_url) è applicata in produzione?",
-      "nota": "Patch provata su d1eaba80 in un worktree: tsc 0, 12 file di prove 133/133. Una foto rotta in home manda un evento a Sentry per ogni visitatore (uno per pagina): conviene un limite per problema dentro Sentry.",
-      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (un solo ricordo per le due frasi, tutte e due da logger.error verso Sentry; nelle due prove r15 il finto logger raccoglie anche error, niente indebolito); rimessa del subagente letta (uscita 0: alla base rossa sul comportamento); prova rilanciata nel verify finale alla testa"
+      ]
     },
     {
       "id": "R30-002",
@@ -63,19 +45,19 @@
       "serve_file_altrui": [
         {
           "file": "lib/queries/precarico.ts",
-          "modifica": "Come nella scheda (import dopo la riga 6, precaricaSito dopo precaricaHome alle righe 67-70). Patch .riparazione/patch-R30/r30-002.patch."
+          "modifica": "Come nella scheda (import dopo la riga 6, precaricaSito dopo precaricaHome alle righe 67-70). Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
         },
         {
           "file": "app/layout.tsx",
-          "modifica": "Come nella scheda (righe 29, 201, 249-261 verificate); nel commento del precarico niente id di altre onde. Patch .riparazione/patch-R30/r30-002.patch."
+          "modifica": "Come nella scheda (righe 29, 201, 249-261 verificate); nel commento del precarico niente id di altre onde. Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
         },
         {
           "file": "components/home-sections/HomeSectionRenderer.tsx",
-          "modifica": "Come nella scheda (righe 24, 67-72, 155-170 verificate), più il file nuovo components/home-sections/ChipDelleCategorie.tsx col contenuto della scheda. Patch .riparazione/patch-R30/r30-002.patch."
+          "modifica": "Come nella scheda (righe 24, 67-72, 155-170 verificate), più il file nuovo components/home-sections/ChipDelleCategorie.tsx col contenuto della scheda. Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
         },
         {
           "file": "components/SearchBar.tsx",
-          "modifica": "Come nella scheda, ma la domanda ['search','zero-categories'] occupa le righe 61-74 (non 61-73); righe 15, 315, 319 giuste. Patch .riparazione/patch-R30/r30-002.patch."
+          "modifica": "Come nella scheda, ma la domanda ['search','zero-categories'] occupa le righe 61-74 (non 61-73); righe 15, 315, 319 giuste. Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
         },
         {
           "file": "lib/site-branding.ts",
@@ -115,7 +97,7 @@
       "serve_file_altrui": [
         {
           "file": "app/api/cron/abandoned-carts/route.ts (ramo troppoVecchio) + tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts (comune) + app/api/account/delete/route.ts (R33) + tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts (nuova)",
-          "modifica": "Patch .riparazione/patch-R30/r30-003-carrelli-chiusi-senza-email.patch. Il ramo troppoVecchio usa chiudiSenzaEmail: la prova ① della comune pretendeva la RPC, ora pretende il segno = last_activity coi filtri. account/delete (righe 162-166) legge last_activity del carrello mai avvisato e lo scrive come segno, condizionato; se il carrello è cambiato nel frattempo ripiega su now(). Provata sulla testa: 22 file 302/302, tsc 0, eslint 0; senza la patch la prova nuova cade 3 su 6."
+          "modifica": "Patch .riparazione/patch-R30/r30-003-carrelli-chiusi-senza-email.patch (al commit c8a6e575). Il ramo troppoVecchio usa chiudiSenzaEmail: la prova ① della comune pretendeva la RPC, ora pretende il segno = last_activity coi filtri. account/delete (righe 162-166) legge last_activity del carrello mai avvisato e lo scrive come segno, condizionato; se il carrello è cambiato nel frattempo ripiega su now(). Provata sulla testa: 22 file 302/302, tsc 0, eslint 0; senza la patch la prova nuova cade 3 su 6."
         }
       ],
       "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (segno = last_activity con UPDATE condizionato; il conto non lo prende per un invio); rimessa del subagente letta (uscita 0: ognuno dei due file alla base fa cadere la prova); prova rilanciata nel verify finale alla testa"
@@ -213,7 +195,7 @@
         },
         {
           "file": "lib/queries/catalogo.ts + tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts",
-          "modifica": "Patch .riparazione/patch-R30/r30-008.patch, da applicare insieme o dopo la riga sopra: tags in COLONNE_SCHEDA_PRODOTTO e in SchedaProdotto, tagDeiMarchiDellaScheda che tiene solo i tag di Km 0 e Artigianale, applicata in leggiRigaDelProdotto, più la prova nuova."
+          "modifica": "Patch .riparazione/patch-R30/r30-008.patch (al commit c8a6e575), da applicare insieme o dopo la riga sopra: tags in COLONNE_SCHEDA_PRODOTTO e in SchedaProdotto, tagDeiMarchiDellaScheda che tiene solo i tag di Km 0 e Artigianale, applicata in leggiRigaDelProdotto, più la prova nuova."
         }
       ],
       "verificato_da": ""
@@ -243,7 +225,7 @@
       "serve_file_altrui": [
         {
           "file": "app/api/health/route.ts",
-          "modifica": "Patch .riparazione/patch-R30/r30-009-salute.patch (porta anche la prova nuova tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts). Importare controllaTrasformazioneFoto da '@/lib/image-url'. Prima del blocco «UN DATABASE LENTO…», se checks.db.ok, in try/catch: admin.from('products').select('images').eq('status','available').not('images','is',null).limit(20); prima immagine che contiene '/storage/v1/object/public/'; controllaTrasformazioneFoto({ fetch, timeoutMs: 2000, urlFoto }). 'degradato' → checks.foto = { ok:false, stato:'degradato', error:'la trasformazione delle foto di Supabase non risponde: le foto del sito non arrivano' }; 'ok' → checks.foto = { ok:true, stato:'ok' }; 'saltato' o errore → niente. Nel calcolo di degradato aggiungere || checks.foto?.ok === false. Stato sempre 200, mai 503."
+          "modifica": "Patch .riparazione/patch-R30/r30-009-salute.patch (al commit c8a6e575) (porta anche la prova nuova tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts). Importare controllaTrasformazioneFoto da '@/lib/image-url'. Prima del blocco «UN DATABASE LENTO…», se checks.db.ok, in try/catch: admin.from('products').select('images').eq('status','available').not('images','is',null).limit(20); prima immagine che contiene '/storage/v1/object/public/'; controllaTrasformazioneFoto({ fetch, timeoutMs: 2000, urlFoto }). 'degradato' → checks.foto = { ok:false, stato:'degradato', error:'la trasformazione delle foto di Supabase non risponde: le foto del sito non arrivano' }; 'ok' → checks.foto = { ok:true, stato:'ok' }; 'saltato' o errore → niente. Nel calcolo di degradato aggiungere || checks.foto?.ok === false. Stato sempre 200, mai 503."
         }
       ],
       "nota": "Patch provata: tsc 0, eslint 0, 18 file di prove sulla salute 146/146; la prova nuova della rotta cade senza la modifica (2 su 3).",
@@ -417,7 +399,7 @@
       "serve_file_altrui": [
         {
           "file": "migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql (nuova) + tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql (nuova) + tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql + tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
-          "modifica": "Patch .riparazione/patch-R30/r30-022-profili-chiusi-ai-visitatori.patch. La 541 è `REVOKE SELECT ON TABLE public.profiles FROM anon;` più un blocco DO che ferma la migrazione se anon ha ancora SELECT, sulla tabella o su una colonna. Nella 19 il controllo ⑨ e nella 34 i controlli ⑦ e ⑧ diventano blocchi DO: verdi con zero righe o con insufficient_privilege, rossi con una riga letta. Sul Postgres locale tutte le prove SQL sono verdi con la 541; senza, 19 e 34 restano verdi. La prova nuova cade 3 su 8 senza la 541; rimessa --sql in un worktree: uscita 0. Girata solo sul Postgres locale, mai applicata al database vero."
+          "modifica": "Patch .riparazione/patch-R30/r30-022-profili-chiusi-ai-visitatori.patch (al commit c8a6e575). La 541 è `REVOKE SELECT ON TABLE public.profiles FROM anon;` più un blocco DO che ferma la migrazione se anon ha ancora SELECT, sulla tabella o su una colonna. Nella 19 il controllo ⑨ e nella 34 i controlli ⑦ e ⑧ diventano blocchi DO: verdi con zero righe o con insufficient_privilege, rossi con una riga letta. Sul Postgres locale tutte le prove SQL sono verdi con la 541; senza, 19 e 34 restano verdi. La prova nuova cade 3 su 8 senza la 541; rimessa --sql in un worktree: uscita 0. Girata solo sul Postgres locale, mai applicata al database vero."
         }
       ],
       "nota": "Prima di applicare la 541 sul sito vero: SELECT has_any_column_privilege('anon','public.profiles','SELECT') deve dare false. La REVOKE sulla tabella toglie anche i SELECT colonna per colonna.",
@@ -451,7 +433,7 @@
       "serve_file_altrui": [
         {
           "file": "app/api/admin/users/[id]/moderate/route.ts + tests/unit/riparazione-r08-moderazione.test.ts (comune) + tests/unit/riparazione-r30-sospensione-rider.test.ts (nuova)",
-          "modifica": "Patch .riparazione/patch-R30/r30-023-sospensione-in-bacheca.patch: la parte sulla rotta di moderazione (alla sospensione di un fattorino le sue consegne ASSIGNED tornano in bacheca), più le 5 righe `update` nel finto `orders` della prova r08, più la prova nuova. Provata sulla testa: 8 file di prove sulla moderazione 68/68, tsc 0; la prova nuova cade 3 su 6 senza la rotta."
+          "modifica": "Patch .riparazione/patch-R30/r30-023-sospensione-in-bacheca.patch (al commit c8a6e575): la parte sulla rotta di moderazione (alla sospensione di un fattorino le sue consegne ASSIGNED tornano in bacheca), più le 5 righe `update` nel finto `orders` della prova r08, più la prova nuova. Provata sulla testa: 8 file di prove sulla moderazione 68/68, tsc 0; la prova nuova cade 3 su 6 senza la rotta."
         }
       ],
       "nota": "I controlli in cash-confirm e cliente-assente leggono il `profile` che il portiere passa già (id, role, is_approved) invece di una lettura nuova di profiles: la lettura scritta nella scheda faceva diventare rossi 45 test in 11 file comuni che mockano lib/supabase/server. withAuthRateLimit passa sempre il profilo (senza profilo risponde 403 prima); il controllo vale quando il profilo c'è.",
@@ -484,7 +466,7 @@
       "serve_file_altrui": [
         {
           "file": "app/admin/users/page.tsx",
-          "modifica": "Patch .riparazione/patch-R30/r30-024-pannello-utenti.patch: clienteSospendibile(p) e «il cliente» in comeSiChiama; in tabella e schede isApproved || clienteSospendibile(p), isSuspended anche per buyer, badge anche se sospeso. Provata sulla testa: tsc 0, eslint 0, 4 file di prove 49/49."
+          "modifica": "Patch .riparazione/patch-R30/r30-024-pannello-utenti.patch (al commit c8a6e575): clienteSospendibile(p) e «il cliente» in comeSiChiama; in tabella e schede isApproved || clienteSospendibile(p), isSuspended anche per buyer, badge anche se sospeso. Provata sulla testa: tsc 0, eslint 0, 4 file di prove 49/49."
         }
       ],
       "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (il portiere legge approval_status solo per i clienti e solo sui metodi che scrivono delle 5 porte; i diritti restano aperti); rimessa del subagente letta (uscita 0: ognuno dei tre file alla base fa cadere la prova); prova rilanciata nel verify finale alla testa"
@@ -550,9 +532,9 @@
   ],
   "conto": {
     "agenti": 2,
-    "nota": "tetto 8 subagenti (onda 5): usati 2, uno per il lotto A e uno per il lotto B. Revisori non lanciati per il tetto di spesa (38 $): verificato_da scritto dal capo con la deroga della regista. Costo letto dalla regista sull'id della sessione. Costo letto con get_session alle 11:14 UTC: 33,95 $.",
+    "nota": "tetto 8 subagenti (onda 5): usati 2, uno per il lotto A e uno per il lotto B. Revisori non lanciati per il tetto di spesa (38 $): verificato_da scritto dal capo con la deroga della regista. Costo letto dalla regista sull'id della sessione. Costo letto con get_session alle 11:23 UTC: 35,14 $.",
     "subagenti": 2,
-    "costo_usd": 33.95
+    "costo_usd": 35.14
   },
-  "costo_usd": 33.95
+  "costo_usd": 35.14
 }
