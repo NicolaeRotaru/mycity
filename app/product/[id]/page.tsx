@@ -582,8 +582,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       return;
     }
     // R02-016 — Il secondo tocco dello stesso gesto (scheda o barra in fondo) non aggiunge un altro
-    // pezzo: addToCart somma alla riga che c'è.
-    if (!frenoAggiunta.current()) return;
+    // pezzo: addToCart somma alla riga che c'è. Il tocco frenato non sparisce in silenzio: lo dice.
+    if (!frenoAggiunta.current()) {
+      toast.info('Già aggiunto: controlla il carrello', { duration: 2000 });
+      return;
+    }
     addToCart({
       id: product.id,
       name: product.name,
