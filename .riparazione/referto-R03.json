@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:10",
+  "aggiornato": "2026-11-17 19:14",
   "finita": false,
-  "testa": "e551c9609b916371e180108b52622299d22bdb5f",
+  "testa": "34d340906cf5b55d264149402e69f9f959ab19c4",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -95,9 +95,26 @@
     },
     {
       "id": "R03-012",
-      "chiave": "qa-flussi|il finto di supabase delle prove fa partire subito la chiamata alla funzione del database, mentre quello vero la manda solo quando qualcuno aspetta la risposta",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "34d340906cf5b55d264149402e69f9f959ab19c4",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-finto-rpc-pigro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-finto-rpc-pigro.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 34d34090^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r03-finto-rpc-pigro.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel client finto .rpc(...) annota gli anelli e chiama il database della prova solo al then/await (o all'attesa della riga sola di single/maybeSingle), una volta sola anche se si aspetta due volte; una chiamata mai aspettata non arriva al database della prova. Commit separato da quello degli anelli. Le prove che caricano il finto restano verdi (201 file, 1348 prove). Nota: il builder vero di postgrest-js rifà la richiesta a ogni then; la regola «una volta sola» è quella chiesta dal mandato.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|il finto di supabase delle prove fa partire subito la chiamata alla funzione del database, mentre quello vero la manda solo quando qualcuno aspetta la risposta"
     },
     {
       "id": "R03-013",
