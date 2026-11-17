@@ -1,0 +1,514 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-17 16:35",
+  "finita": true,
+  "testa": "5e53410467067f5cc208427e816980e524d5a8d0",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "5e53410467067f5cc208427e816980e524d5a8d0",
+    "nota": "npm run verify sulla testa 5e53410467067f5cc208427e816980e524d5a8d0: tipi e lint puliti (0 errori, 99 avvisi), 1643 file di prove passati (1 saltato), 10690 prove passate (1 saltata). Il primo giro è caduto per memoria esaurita di tsc (heap di Node del contenitore), non per il codice: rifatto con NODE_OPTIONS=--max-old-space-size=8192, come C05. In più, su un Postgres 16 locale (solo prove, nessun database vero): tests/sql/harness/apply.sh e run.sh alla testa, tutti i controlli verdi."
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "immagini-media|le tessere delle categorie in home sono foto d'archivio scritte a mano nel codice",
+      "esito": "parziale",
+      "commit": "95d0b987849bfa7f9601a3123cf36878310341b9",
+      "commit_tutti": [
+        "95d0b987849bfa7f9601a3123cf36878310341b9",
+        "10672b58857f3526b7567d9613b1ec81231614ca"
+      ],
+      "file_toccati": [
+        "components/CategoryShowcase.tsx",
+        "tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx",
+        "tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx",
+        "tests/unit/riparazione-r30-foto-di-categoria.test.tsx",
+        "app/admin/categories/page.tsx",
+        "app/api/admin/categories/route.ts",
+        "lib/immagine-categoria.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-foto-di-categoria.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-foto-di-categoria.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_morde",
+        "uscita": 1,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 10672b58857f3526b7567d9613b1ec81231614ca^ --file app/api/admin/categories/route.ts,app/admin/categories/page.tsx,lib/immagine-categoria.ts --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
+      },
+      "rimesse": [
+        {
+          "parte": "10672b58 (la foto dal pannello)",
+          "esito": "non_morde",
+          "uscita": 1,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 10672b58857f3526b7567d9613b1ec81231614ca^ --file app/api/admin/categories/route.ts,app/admin/categories/page.tsx,lib/immagine-categoria.ts --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
+        },
+        {
+          "parte": "95d0b987 (gli avvisi della vetrina)",
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 95d0b987849bfa7f9601a3123cf36878310341b9^ --file components/CategoryShowcase.tsx --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R30-001",
+      "cosa_ho_fatto": "Cucite in onda 5 le due patch di R30-001: 95d0b987 (gli avvisi delle foto scartate o rotte in components/CategoryShowcase.tsx arrivano a Sentry una volta sola; adattate le due prove comuni di R15) e 10672b58 (la foto della tessera si mette dal pannello: campo in app/admin/categories/page.tsx, controllo in app/api/admin/categories/route.ts, storageAmmesso in lib/immagine-categoria.ts). La prima regge (uscita 0).",
+      "cosa_resta": "La parte del pannello (10672b58) non ha una prova che cada senza la correzione: con i tre file alla base la prova resta verde (prova rimessa uscita 1, non morde), e nessuna prova esistente chiama la rotta admin delle categorie. Serve una prova della rotta che accetta una foto del nostro storage e rifiuta quella di un altro host. È un grave: senza quella prova non si chiude."
+    },
+    {
+      "id": "R01-002",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
+      "esito": "riparato",
+      "commit": "f57409c03e521f45f73e5ea2d6eb5211315f5180",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx",
+        "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
+        "tests/unit/riparazione-r28-sos-testo.test.tsx",
+        "tests/unit/riparazione-r31-sos-testo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-sos-testo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-sos-testo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f57409c03e521f45f73e5ea2d6eb5211315f5180^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r31-sos-testo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "voce_onda5": "R31-001",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R31-001 (f57409c0): il pulsante SOS non dice più che l'app sta chiamando il 112; dialogo e avvisi dicono che si apre il telefono col 112 già scritto e che la chiamata parte quando premi CHIAMA. Adattate due prove comuni del testo. Prova nuova verde, prova rimessa regge (uscita 0).",
+      "verificato_da": "qa (subagente revisore, mandato di smentire): rilanciate la prova nuova e le altre 8 che toccano SOSButton (9 file, 46 prove verdi); grep di «stiamo chiamando», «in corso», «abbiamo avvisato» in components/rider, app/rider, lib, messages: restano solo nei commenti; aria-label, role=dialog e il tel:112 sincrono intatti. Regge."
+    },
+    {
+      "id": "R01-003",
+      "chiave": "navigazione-gerarchia|home, piè di pagina e mappa per google mettono in mostra categorie vuote: otto su nove non hanno prodotti",
+      "esito": "parziale",
+      "commit": "b5918e0856d767b5fb2a5b5b7d204ccb7494c3c1",
+      "file_toccati": [
+        "app/layout.tsx",
+        "app/stores/layout.tsx",
+        "components/SearchBar.tsx",
+        "components/home-sections/ChipDelleCategorie.tsx",
+        "components/home-sections/HomeSectionRenderer.tsx",
+        "lib/queries/precarico.ts",
+        "lib/site-branding.ts"
+      ],
+      "prova_file": [
+        "tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx",
+        "tests/unit/la-vetrina-delle-categorie-esce-piena-nell-html-del-server.test.tsx",
+        "tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx tests/unit/la-vetrina-delle-categorie-esce-piena-nell-html-del-server.test.tsx tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_morde",
+        "uscita": 1,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b5918e0856d767b5fb2a5b5b7d204ccb7494c3c1^ --file lib/queries/precarico.ts,app/layout.tsx,components/home-sections/HomeSectionRenderer.tsx,components/home-sections/ChipDelleCategorie.tsx,components/SearchBar.tsx,lib/site-branding.ts,app/stores/layout.tsx --prove tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx,tests/unit/la-vetrina-delle-categorie-esce-piena-nell-html-del-server.test.tsx,tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R30-002",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R30-002 (b5918e08): le categorie piene si precaricano nel layout (lib/queries/precarico.ts, app/layout.tsx), la home le mostra coi chip nuovi (HomeSectionRenderer, ChipDelleCategorie), la ricerca non le ridomanda, e le descrizioni del sito e dei negozi non promettono più alimentari, casa, elettronica. Mappa del sito e noindex delle categorie vuote erano già a posto (lo dice R30).",
+      "cosa_resta": "Nessuna prova cade senza questa patch: con i sei file esistenti alla base le tre prove vicine (piede, home, vetrina nell'HTML del server) restano verdi, e togliendo il file nuovo ChipDelleCategorie cadono per un motivo che il programma non riconosce (prova rimessa uscita 1, non morde). R30-002 non aveva una prova sua. Serve una prova che home e piede, col precarico, mostrino solo le categorie con prodotti. È un grave: senza quella prova non si chiude."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
+      "esito": "parziale",
+      "commit": "31b8ef156eb7b76b7fd66237dc39ceebf3aece77",
+      "file_toccati": [
+        "app/api/account/delete/route.ts",
+        "app/api/cron/abandoned-carts/route.ts",
+        "tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts",
+        "tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts",
+        "tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 31b8ef156eb7b76b7fd66237dc39ceebf3aece77^ --file app/api/cron/abandoned-carts/route.ts,app/api/account/delete/route.ts --prove tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts,tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts --json"
+      },
+      "rimesse": [
+        {
+          "parte": "con la prova nuova e la prova comune",
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 31b8ef156eb7b76b7fd66237dc39ceebf3aece77^ --file app/api/cron/abandoned-carts/route.ts,app/api/account/delete/route.ts --prove tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts,tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts --json"
+        },
+        {
+          "parte": "con la sola prova nuova",
+          "esito": "non_morde",
+          "uscita": 1,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 31b8ef156eb7b76b7fd66237dc39ceebf3aece77^ --file app/api/cron/abandoned-carts/route.ts,app/api/account/delete/route.ts --prove tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts --json"
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R30-003",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R30-003 (31b8ef15): anche i carrelli oltre le 48 ore e quelli dell'account cancellato si chiudono senza contarli come email (app/api/cron/abandoned-carts/route.ts, app/api/account/delete/route.ts), con la prova comune del promemoria adattata e una prova nuova. La parte del riparatore (8785910a28ceb3d82f3782ee425c142db81a4f05) era già nella base. Prova rimessa con le due prove: regge (uscita 0); la rotta del giro la fa cadere solo la prova comune.",
+      "cosa_resta": "I carrelli chiusi prima di questa correzione hanno come segno l'ora del giro e non si distinguono da un invio vero: nel database vero restano contati come promemoria «inviati». Dal codice non si sistema: serve una scelta su quei dati vecchi (lasciarli, o azzerarli con una migrazione che decide Nicola)."
+    },
+    {
+      "id": "R01-005",
+      "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
+      "esito": "riparato",
+      "commit": "f129e197c6f0d1d56e8d73ab61220e68f090284c",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts",
+        "tests/unit/api-stripe-checkout.test.ts",
+        "tests/unit/chi-passa-ai-contanti-non-lascia-un-pagamento-aperto.test.ts",
+        "tests/unit/collaudo-dopo-gia-arrivato-niente-doppione.test.ts",
+        "tests/unit/con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti.test.ts",
+        "tests/unit/contanti-la-chiave-si-libera-se-l-ordine-non-parte.test.ts",
+        "tests/unit/contanti-la-chiave-si-prende-prima.test.ts",
+        "tests/unit/contanti-lo-stesso-carrello-giorni-dopo-e-un-ordine-nuovo.test.ts",
+        "tests/unit/contanti-se-l-annullamento-fallisce-la-chiave-resta.test.ts",
+        "tests/unit/gli-errori-della-cassa-in-contanti-parlano-la-lingua-del-sito.test.ts",
+        "tests/unit/i-contanti-misurano-il-confine-in-ogni-direzione-e-da-ogni-fonte.test.ts",
+        "tests/unit/i-contanti-non-nascono-se-la-carta-resta-pagabile.test.ts",
+        "tests/unit/il-credito-tolto-da-un-tentativo-fallito-torna-ogni-volta.test.ts",
+        "tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts",
+        "tests/unit/la-carta-rifiuta-l-indirizzo-fuori-zona-come-i-contanti.test.ts",
+        "tests/unit/la-carta-si-ferma-se-la-lettura-dei-negozi-torna-corta.test.ts",
+        "tests/unit/la-cassa-gia-aperta-non-si-restituisce-con-un-pagamento-vecchio-vivo.test.ts",
+        "tests/unit/la-cassa-in-contanti-non-perde-e-non-ricicla-la-chiave.test.ts",
+        "tests/unit/la-cassa-in-contanti-si-ferma-quando-non-vede.test.ts",
+        "tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts",
+        "tests/unit/la-cassa-non-dice-fatto-per-un-ordine-senza-articoli.test.ts",
+        "tests/unit/la-cassa-non-fa-la-fila-di-viaggi.test.ts",
+        "tests/unit/la-chiave-dei-contanti-ritrova-solo-i-suoi-ordini.test.ts",
+        "tests/unit/la-conferma-in-contanti-esce-senza-il-tasto-per-smettere.test.ts",
+        "tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts",
+        "tests/unit/minori-s01-cassa-carta.test.ts",
+        "tests/unit/minori-s01-negozio-senza-insegna.test.ts",
+        "tests/unit/minori-s01-zona-carta.test.ts",
+        "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts",
+        "tests/unit/ordini-contrassegno-due-negozi.test.ts",
+        "tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts",
+        "tests/unit/riparazione-r26-credito-della-cassa.test.ts",
+        "tests/unit/riparazione-r31-consegna-senza-fascia.test.ts",
+        "tests/unit/una-consegna-a-milano-non-passa-piu-in-cassa.test.ts",
+        "tests/unit/variante-503-dopo-chiave-abbandonata.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-consegna-senza-fascia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-consegna-senza-fascia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f129e197c6f0d1d56e8d73ab61220e68f090284c^ --file app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r31-consegna-senza-fascia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "voce_onda5": "R31-003",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R31-003 (f129e197): le rotte del contrassegno e della carta rifiutano una consegna a domicilio senza fascia oraria, come fa già la cassa; 34 prove comuni ora mandano una fascia. Prova nuova verde, prova rimessa regge (uscita 0).",
+      "verificato_da": "qa (subagente revisore, mandato di smentire): letto lo schema della fascia (lib/ordini/fascia-consegna.ts:31, solo fasce ammesse) e i controlli in cod/route.ts:372 e stripe/checkout/route.ts:141; cercate altre strade che creano ordini (webhook lib/stripe/webhook/ordini.ts:361 parte dalla sessione già validata, app/api/consegna/veloce non crea ordini). Il ritiro in negozio senza fascia è spento. Regge."
+    },
+    {
+      "id": "R01-006",
+      "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+      "esito": "riparato",
+      "commit": "221cc8405f296d2295aa5bdc58b12271184ede54",
+      "commit_tutti": [
+        "221cc8405f296d2295aa5bdc58b12271184ede54",
+        "1011766f05de2c1d5b51b4574c9a8436935f3a4c"
+      ],
+      "file_toccati": [
+        "lib/queries/catalogo.ts",
+        "tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts",
+        "tests/unit/aiuti/database-coi-permessi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 221cc8405f296d2295aa5bdc58b12271184ede54^ --file lib/queries/catalogo.ts --prove tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "voce_onda5": "R30-008",
+      "cosa_ho_fatto": "Cucite in onda 5 le due parti di R30-008: 221cc840 (lib/queries/catalogo.ts: la scheda legge la colonna tags e tiene solo i marchi Km 0 e Artigianale, più la prova nuova) e 1011766f (la colonna tags nell'aiutante delle prove database-coi-permessi, senza la quale 25 prove esistenti cadevano). Prova rimessa regge (uscita 0).",
+      "verificato_da": "qa (subagente revisore, mandato di smentire): letto lib/queries/catalogo.ts:132-167; seguito il dato fino al disegno: app/product/[id]/page.tsx:539 passa il prodotto coi tag a deriveQualityMarks e components/ui/QualityMarks.tsx li mostra; il filtro lascia passare solo Km 0 e artigianale. Regge."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+      "esito": "parziale",
+      "commit": "4497158c36b76cb6ca822216b73c6dbc0fd7ccb0",
+      "file_toccati": [
+        "app/api/health/route.ts",
+        "tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts",
+        "tests/unit/riparazione-r30-foto-salute.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts tests/unit/riparazione-r30-foto-salute.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4497158c36b76cb6ca822216b73c6dbc0fd7ccb0^ --file app/api/health/route.ts --prove tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R30-009",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R30-009 (4497158c): la rotta di salute (app/api/health/route.ts) prova a trasformare una foto in vendita con controllaTrasformazioneFoto (lib/image-url.ts, già nella base) e dice «degradato» se la trasformazione non risponde. Prova rimessa sulla rotta: regge (uscita 0).",
+      "cosa_resta": "Il controllore dell'onda 5 (C05) l'ha trovata rossa, e lo resta: la rotta prende la prima di 20 foto in vendita senza un ordine (app/api/health/route.ts:347-366) e sizedImage trasforma qualunque host *.supabase.co, non solo il nostro progetto: una foto lenta o di un altro progetto fa risultare tutto il sito «degraded», un falso allarme. Il ramo pubblico di /api/health non mostra il dettaglio. Resta poi la parte che non è codice: l'interruttore della trasformazione su Vercel lo accende Nicola, con un nuovo deploy."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "privacy-legale|un cliente coi termini 2.0 e la cassa già aperta ordina lo stesso: le rotte d'ordine non guardano la versione accettata",
+      "esito": "riparato",
+      "commit": "a74c227f22543cf5ae9cc852df50061292fa7d4d",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/al-lancio-carta-abbonamento-e-codici-sconto-restano-spenti-anche-con-le-chiavi.test.ts",
+        "tests/unit/il-codice-sconto-a-uso-unico-non-resta-in-ostaggio-del-tentativo-abbandonato.test.ts",
+        "tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts",
+        "tests/unit/l-email-dei-contanti-legge-gli-orari-del-negozio.test.ts",
+        "tests/unit/l-email-nuovo-ordine-dalla-rotta-dei-contanti-dice-la-scadenza-vera.test.ts",
+        "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts",
+        "tests/unit/riparazione-r12-la-rotta-dei-contanti-rifiuta-la-fascia.test.ts",
+        "tests/unit/riparazione-r26-la-pulizia-dopo-i-rifiuti.test.ts",
+        "tests/unit/riparazione-r31-termini-in-cassa.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-termini-in-cassa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-termini-in-cassa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a74c227f22543cf5ae9cc852df50061292fa7d4d^ --file app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r31-termini-in-cassa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "voce_onda5": "R31-016",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R31-016 (a74c227f): le rotte del contrassegno e della carta guardano la versione dei termini accettata e fermano l'ordine di chi ha accettato una versione vecchia; 8 prove comuni ora fingono l'accettazione. Prova rimessa regge (uscita 0).",
+      "nota": "Il revisore fa notare un limite voluto: se la lettura della versione fallisce o va oltre il tempo (TETTO_PORTIERE_MS), l'ordine passa con un avviso nel log (cod/route.ts:381, stripe/checkout/route.ts:149), come fa già il portiere di /checkout. Il caso della voce (lettura riuscita, termini vecchi) è chiuso; se la regia vuole il blocco anche a lettura caduta, è una scelta di Nicola.",
+      "verificato_da": "qa (subagente revisore, mandato di smentire): controllo trovato in cod/route.ts:377 e stripe/checkout/route.ts:145, solo queste due rotte creano ordini e il webhook non ne apre di nuovi; provato il caso della lettura in errore: passa con avviso (scelta coerente col portiere di /checkout, vedi nota). Il caso della voce regge."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "privacy-legale|confine senza coordinate chiuso solo a parole: l'ordine non misurato passa senza nessun segno, e ora /shipping lo annuncia",
+      "esito": "parziale",
+      "commit": "24689bef2ca18d04e022779cb0bd98d5d7ff7d9e",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "tests/unit/ordini-contrassegno-due-negozi.test.ts",
+        "tests/unit/riparazione-r31-confine-non-misurato.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-confine-non-misurato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-confine-non-misurato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 24689bef2ca18d04e022779cb0bd98d5d7ff7d9e^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r31-confine-non-misurato.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R31-018",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R31-018 (24689bef): coi contanti, un ordine nato senza la misura del confine (negozio senza posizione o indirizzo non trovato) manda agli amministratori la campanella «distanza non misurata», col perché e il link all'ordine; adattata una prova comune. Prova rimessa regge (uscita 0).",
+      "cosa_resta": "La strada della carta: l'ordine nasce nel webhook (lib/stripe/webhook/ordini.ts, a 598 righe sul tetto di 600) e lì l'ordine non misurato passa ancora senza segno. Va portato il segno dal pagamento in attesa al webhook, con la campanella agli amministratori. Oggi la carta è spenta al lancio."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|quando un ordine viene annullato il negozio non riceve nessuna email, e se lo annulla il sito perché nessuno l'ha accettato non riceve nemmeno la campanella",
+      "esito": "parziale",
+      "commit": "27cf4bfc0a20701f39950dd17c1301f964a39f9f",
+      "file_toccati": [
+        "app/api/admin/orders/[id]/cancel/route.ts",
+        "app/api/cron/expire-stale-orders/route.ts",
+        "app/api/orders/[id]/cancel/route.ts",
+        "lib/email/templates.ts",
+        "lib/ordini/annulla.ts",
+        "tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts",
+        "tests/unit/minori-s01-giro-notturno.test.ts",
+        "tests/unit/minori-s02-annullo-del-cliente.test.ts",
+        "tests/unit/minori-s03-ordini-scaduti.test.ts",
+        "tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27cf4bfc0a20701f39950dd17c1301f964a39f9f^ --file lib/email/templates.ts,lib/ordini/annulla.ts,app/api/cron/expire-stale-orders/route.ts,app/api/orders/[id]/cancel/route.ts,app/api/admin/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R31-023",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R31-023 (27cf4bfc): il negozio riceve l'email di annullo da tre strade (annullo del cliente, dell'amministrazione, giro degli ordini scaduti, che ora gli manda anche la campanella); modello nuovo in lib/email/templates.ts, invio in lib/ordini/annulla.ts; adattate 4 prove comuni. Prova rimessa uscita 3: quattro file su cinque alla base fanno cadere la prova sul comportamento, lib/ordini/annulla.ts solo per la struttura (un nome nuovo).",
+      "cosa_resta": "Il controllore dell'onda 5 (C05) l'ha trovata rossa, e lo resta: c'è un quarto flusso, app/api/rider/orders/[id]/cliente-assente/route.ts:73, che annulla con annullaERimborsa e avvisa il negozio solo con la campanella, senza email: chi lavora dall'email non sa che l'ordine è annullato e che la merce torna col fattorino. In più la rimessa di lib/ordini/annulla.ts la deve decidere il collaudo a mano (uscita 3)."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|la promo «oggi, fino a mezzanotte» finisce a mezzanotte del fuso del telefono, non di piacenza",
+      "esito": "riparato",
+      "commit": "5e53410467067f5cc208427e816980e524d5a8d0",
+      "file_toccati": [
+        "components/store-sections/PromotionsSection.tsx",
+        "tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5e53410467067f5cc208427e816980e524d5a8d0^ --file components/store-sections/PromotionsSection.tsx --prove tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "voce_onda5": "R33-022",
+      "cosa_ho_fatto": "Commit di quest'onda (5e534104): applicata con git apply la diff di R33-022 dal referto di R33. La vetrina del negozio (components/store-sections/PromotionsSection.tsx) scrive «fino al» col giorno di Piacenza (timeZone FUSO_PIACENZA); app/seller/promotions/page.tsx usava già il fuso. Prova nuova rossa senza la diff (3 su 3) e verde con la diff; prova rimessa regge (uscita 0).",
+      "nota": "Il file della scheda è app/seller/promotions/page.tsx; la cura sta nella vetrina, che R33 aveva dato come serve_file_altrui.",
+      "verificato_da": "qa (subagente revisore, mandato di smentire): PromotionsSection.tsx:28 usa timeZone FUSO_PIACENZA; grep di ends_at e toLocaleDateString senza timeZone vicino a promo e promotions: nessun altro posto. Visto solo app/admin/events/page.tsx:211 e :265 (eventi, non promo): messo nei nuovi difetti. Regge."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "rls-database|sul sito vero i visitatori non possono leggere la tabella dei profili, ma nessuna migrazione lo dice",
+      "esito": "riparato",
+      "commit": "d22c86a72b4bd3e1bc62eece5d17327d6c98cbc0",
+      "file_toccati": [
+        "migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql",
+        "tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql",
+        "tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
+        "tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d22c86a72b4bd3e1bc62eece5d17327d6c98cbc0^ --file migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql --prove tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql --sql riparazione_r01_rimessa --json"
+      },
+      "rimesse": [
+        {
+          "parte": "d22c86a7 (la migrazione 541)",
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d22c86a72b4bd3e1bc62eece5d17327d6c98cbc0^ --file migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql --prove tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql --sql riparazione_r01_rimessa --json"
+        },
+        {
+          "parte": "1a1e78f9 (lo script della deriva, del riparatore, già nella base)",
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a1e78f90a55213004a70d3945b8e543cd480b4f^ --file scripts/check-migration-drift.mjs --prove tests/unit/riparazione-r30-deriva-dei-permessi.test.ts --json"
+        }
+      ],
+      "copre_tutta_la_voce": true,
+      "voce_onda5": "R30-022",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R30-022 (d22c86a7): la migrazione nuova 541 dice quello che il sito vero fa già, i visitatori (anon) non leggono la tabella dei profili (REVOKE SELECT, con un controllo finale); prova SQL nuova, adattate le prove comuni 19 e 34. Sul Postgres locale (solo prove): prova rimessa con --sql regge (uscita 0) e la suite SQL intera alla testa è verde. La migrazione non è applicata: lo decide Nicola.",
+      "nota": "K18 dava «non regge» sulla parte già committata dal riparatore (1a1e78f9): lo script della deriva confronta i permessi solo con PERMESSI_ATTESI o PERMESSI_ESPORTA (scripts/check-migration-drift.mjs:515-516), che nessun workflow imposta, quindi in CI non controlla niente. La voce chiede che una migrazione lo dica, e ora la 541 lo dice; il controllo che non parte è nei nuovi difetti.",
+      "verificato_da": "qa (subagente revisore, mandato di smentire): letta la 541 (REVOKE SELECT ON public.profiles FROM anon, authenticated non toccato, controllo finale che cade se anon legge ancora); cercate letture di profiles senza utente: app/u/[handle]/page.tsx:47 usa il client admin, le altre sono di utenti autenticati. Regge. Suite SQL alla testa verde (I06)."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "sicurezza-auth|sospendere un fattorino non gli toglie le consegne in corso: continua a vedere i recapiti, ritirare e consegnare",
+      "esito": "parziale",
+      "commit": "c02bbf46379d09fca7b412b8bf37d171fba672b4",
+      "file_toccati": [
+        "app/api/admin/users/[id]/moderate/route.ts",
+        "tests/unit/riparazione-r08-moderazione.test.ts",
+        "tests/unit/riparazione-r30-sospensione-rider.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-sospensione-rider.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-sospensione-rider.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c02bbf46379d09fca7b412b8bf37d171fba672b4^ --file app/api/admin/users/[id]/moderate/route.ts --prove tests/unit/riparazione-r30-sospensione-rider.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R30-023",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R30-023 (c02bbf46): sospendendo un fattorino, le consegne non ancora ritirate (ASSIGNED) tornano in bacheca e l'avviso dice quante; la migrazione 540 e le rotte del fattorino (già nella base, 465968831c069324de1ce7c8bd05aba16b2c05ee) gli tolgono recapiti, ritiro e consegna. Prova rimessa sulla rotta di moderazione: regge (uscita 0); la prova SQL del sospeso è verde nella suite.",
+      "cosa_resta": "Come ha visto K18: il fattorino sospeso legge ancora le righe d'ordine delle consegne che ha in mano (regola «Riders can view order_items of assigned orders») e le sue rimesse del contrassegno (cod_rider_read su cod_reconciliations), perché quelle regole guardano solo rider_id = auth.uid(). Le consegne con la merce già in mano (PICKED_UP, OUT_FOR_DELIVERY) restano a lui e l'avviso dice di riassegnarle a mano."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "sicurezza-auth|un cliente che abusa del sito non si può sospendere: l'unica strada è cancellargli l'account",
+      "esito": "parziale",
+      "commit": "93dff97f40c08ba727e0d8bbe6f9854ae4563920",
+      "file_toccati": [
+        "app/admin/users/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-cliente-sospeso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-cliente-sospeso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_morde",
+        "uscita": 1,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 93dff97f40c08ba727e0d8bbe6f9854ae4563920^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r30-cliente-sospeso.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "voce_onda5": "R30-024",
+      "cosa_ho_fatto": "Cucita in onda 5 la patch di R30-024 (93dff97f): il pannello utenti (app/admin/users/page.tsx) mostra «Sospendi» / «Riattiva» anche per i clienti. La sospensione sulle rotte del sito era già nella base (54aec469e03aea61836d380445e596348568819b: lib/api/middleware.ts, lib/shopping-access.ts, rotta di moderazione).",
+      "cosa_resta": "Il controllore dell'onda 5 (C05) l'ha trovata rossa, e lo resta: (1) la sospensione ferma le rotte del sito ma non le regole del database sulla chat: messages_insert_self (migrations/026_chat_messaging.sql:71) e conversations_insert_buyer guardano solo auth.uid(), quindi il cliente sospeso scrive ancora ai negozi chiamando il database con la sua sessione; (2) clienteSospeso (lib/shopping-access.ts) guarda solo role='buyer', e un negozio sospeso che compra in modalità acquisto passa; (3) il pulsante del pannello non ha una prova sua: con il file alla base la prova del cliente sospeso resta verde (prova rimessa uscita 1, non morde)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il controllo dei permessi della deriva delle migrazioni non parte mai in CI",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "scripts/check-migration-drift.mjs:515",
+      "descrizione": "Il confronto dei permessi (R30-022) parte solo con PERMESSI_ATTESI o PERMESSI_ESPORTA, e nessun workflow né package.json li imposta: db:check-drift gira in CI senza l'elenco atteso, quindi una deriva dei permessi fra migrazioni e sito vero non si vede. Già notato da K18."
+    },
+    {
+      "titolo": "le date degli eventi nel pannello admin si leggono col fuso del computer, non di Piacenza",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/admin/events/page.tsx:211",
+      "descrizione": "Inizio e fine degli eventi (righe 211 e 265) usano toLocaleString('it-IT') senza timeZone: da un computer fuori dal fuso di Roma l'amministratore legge un'ora o un giorno diversi. Visto dal revisore di R01-011; è un evento, non una promo, quindi fuori dalla voce."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 2,
+    "subagenti": 2,
+    "nota": "Due subagenti revisori (modello più piccolo), in sola lettura: uno su R01-002 (grave, da solo), uno su R01-005, 006, 008, 011, 012. Le prove rimesse le ha fatte il programma, a zero agenti. Il costo non lo dà get_session (nessun campo di costo nella risposta): costo_usd è una stima."
+  },
+  "costo_usd": 3.5
+}
