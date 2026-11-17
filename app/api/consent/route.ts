@@ -136,7 +136,18 @@ export async function POST(request: Request) {
     return r;
   };
 
-  const { error } = await getAdminSupabase().from('consent_log').insert(righe);
+  // 17/11/2026 (R32-015) — Senza la chiave di servizio `getAdminSupabase` lancia: prima la
+  // rotta cadeva con un errore non gestito, e il browser non riprovava mai. Adesso il guasto
+  // si scrive col suo nome, la risposta è un 503, e il browser tiene la scelta da rimandare.
+  let error: { message: string } | null;
+  try {
+    ({ error } = await getAdminSupabase().from('consent_log').insert(righe));
+  } catch (e) {
+    logger.error(new Error('[consent] registro dei consensi non raggiungibile'), {
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return conVidTolto(ApiErrors.unavailable('Registrazione momentaneamente non disponibile'));
+  }
   if (error) {
     logger.error(new Error('[consent] scrittura nel registro fallita'), { message: error.message });
     return conVidTolto(ApiErrors.internal('Registrazione non riuscita'));
