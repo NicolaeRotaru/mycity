@@ -1,6 +1,6 @@
 {
   "sessione": "R10",
-  "aggiornato": "2026-11-17 23:30",
+  "aggiornato": "2026-11-18 00:15",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -86,7 +86,8 @@
           "file": "tests/unit/i-riquadri-degli-sponsorizzati-non-chiamano-totale-un-pezzo.test.ts",
           "modifica": "righe 90, 100 e 130: le etichette attese 'CTR medio', 'CTR · in pausa' e 'CTR' diventano le nuove; riga 180: not.toContain('CTR medio') → not.toContain('Clic su 100 visualizzazioni (media)')"
         }
-      ]
+      ],
+      "verificato_da": "subagente revisore lotto A: prova e prova rimessa rilanciate in un worktree separato (uscita 0), 29 prove vicine verdi; conferma parziale: il resto («Impressions», «CTR medio», «3.55%») sta in lib/admin/vista-delle-campagne.ts:279-287, e oggi le campagne nascono con category_slug null (lib/stripe/webhook/sponsorizzati.ts:136), quindi il nome della categoria si vedrà solo quando una campagna ne avrà una"
     },
     {
       "id": "R10-005",
@@ -153,6 +154,107 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "A tenere larga la home era il pulsante «Diventa venditore» della fascia per i negozi, con whitespace-nowrap: tolto, e aggiunto max-w-full, così va a capo. /about era già a posto sulla base (app/about/page.tsx:74 colonne in auto-fit, riga 110 titolo con break-words, R02-002 e R03-002)."
+    },
+    {
+      "id": "R10-007",
+      "chiave": "qa-flussi|dopo aver cambiato titolo o descrizione di una lista, /lists mostra ancora quelli vecchi",
+      "esito": "riparato",
+      "commit": "6dea92f379d278176497564b820491568db8c0dd",
+      "insieme_a": [
+        "R10-008"
+      ],
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dea92f379d278176497564b820491568db8c0dd^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo il salvataggio di titolo e descrizione, la pagina della lista rilegge anche le tre chiavi da cui legge /lists (mine, public, inVetrina), oltre al dettaglio. La prova monta /lists e la pagina della lista in un QueryClient vero, con staleTime di 30 secondi come sul sito: dopo la rinomina /lists mostra titolo e descrizione nuovi."
+    },
+    {
+      "id": "R10-008",
+      "chiave": "qa-flussi|dopo aver rinominato una lista, la pagina delle liste mostra ancora il titolo vecchio",
+      "esito": "riparato",
+      "commit": "6dea92f379d278176497564b820491568db8c0dd",
+      "insieme_a": [
+        "R10-007"
+      ],
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dea92f379d278176497564b820491568db8c0dd^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa riga e stessa correzione di R10-007: dopo il salvataggio, updateMeta.onSuccess chiama anche rileggiLeListeDiLists()."
+    },
+    {
+      "id": "R10-009",
+      "chiave": "qa-flussi|dopo l'eliminazione di una lista il menu «aggiungi a lista» della scheda prodotto la mostra ancora",
+      "esito": "riparato",
+      "commit": "a9c59da359dd02a8389a8971b30cf7d62ee40f1e",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a9c59da359dd02a8389a8971b30cf7d62ee40f1e^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo l'eliminazione, deleteList rilegge anche la chiave lists.mineMin, quella del menu di AddToListButton (che non serve toccare). La prova monta il pulsante e la pagina in un QueryClient vero con staleTime di 30 secondi: apre il menu, elimina la lista, lo riapre, e la lista non c'è più."
+    },
+    {
+      "id": "R10-011",
+      "chiave": "stati-ui|nel nuovo prodotto dell'amministrazione il modulo resta attivo anche se negozi o categorie non sono arrivati",
+      "esito": "riparato",
+      "commit": "0669b5e4d410719cfda04e4a67038a4f1d0f039e",
+      "file_toccati": [
+        "app/admin/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0669b5e4d410719cfda04e4a67038a4f1d0f039e^ --file app/admin/products/new/page.tsx --prove tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ProductForm sta dentro un <fieldset disabled> finché negozi o categorie stanno caricando o la lettura è fallita (stesso schema di app/admin/daily-drops); un messaggio role=status dice perché il modulo è fermo e rimanda al «Riprova» già presente. La prova controlla che «Pubblica» non mandi niente a /api/admin/products in caricamento o dopo un errore, e che lo mandi quando i dati ci sono."
+    },
+    {
+      "id": "R10-001",
+      "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base f93d246a, app/api/health/route.ts:359 fa `const foto = await controllaTrasformazioneFoto({ fetch, timeoutMs: 2000, urlFoto });`: chiede una foto vera di un prodotto in vendita passando da sizedImage (/render/image) e, se fallisce, mette checks.foto e status 'degraded' (commit 80bdba2d, R30-009). L'interruttore NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE è in lib/image-url.ts:106 (R15-007). Le prove tests/unit/riparazione-r30-foto-salute.test.ts e tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts sono verdi.",
+      "nota": "Resta una parte che non è codice, per Nicola: 1) controllare che il piano Supabase comprenda le Image Transformations; 2) far avvisare il monitor esterno quando /api/health risponde 'degraded' o con checks.foto.ok=false, perché la rotta risponde comunque 200; 3) se il piano scade, mettere NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
     }
   ],
   "nuovi_difetti_visti": [
@@ -169,11 +271,34 @@
       "severita": "minore",
       "file": "components/ui/LegalLayout.tsx:41",
       "descrizione": "Non misurato: l h1 text-3xl di LegalLayout non ha break-words, e app/come-funziona/page.tsx:75 ha la riga icona + h2 senza min-w-0."
+    },
+    {
+      "titolo": "il piè di pagina passa dall h1 all h3 su ogni pagina pubblica senza un h2 nel contenuto",
+      "dimensione": "navigazione-gerarchia",
+      "severita": "minore",
+      "file": "components/Footer.tsx:222",
+      "descrizione": "Le colonne del piè di pagina sono h3 («MyCity» e le altre, righe 222, 248, 264, 287, 320) e il piè non ha nessun h2: su ogni pagina che dopo l h1 non ha un h2 il lettore di schermo sente un salto di livello."
+    },
+    {
+      "titolo": "il menu «Aggiungi a lista» mostra il titolo vecchio dopo una rinomina",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:138",
+      "descrizione": "updateMeta rilegge le chiavi di /lists ma non lists.mineMin: il menu della scheda prodotto mostra il titolo vecchio fino a 30 secondi. Basta una riga."
+    },
+    {
+      "titolo": "una lista creata da /lists non compare subito nel menu «Aggiungi a lista»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/page.tsx:139",
+      "descrizione": "Dopo la creazione si rilegge solo lists.mine, non lists.mineMin."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "Foto (R10-001, non codice): il piano Supabase comprende le Image Transformations? E il monitor esterno avvisa quando /api/health risponde «degraded» o checks.foto.ok=false (la rotta risponde 200 lo stesso)? Se il piano scade: NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
+  ],
   "conto": {
-    "agenti": 1,
+    "agenti": 3,
     "nota": ""
   }
 }
