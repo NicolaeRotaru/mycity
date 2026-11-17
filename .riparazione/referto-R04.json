@@ -1,6 +1,6 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:07",
+  "aggiornato": "2026-11-17 18:09",
   "finita": false,
   "testa": "377ae97e40b2e81f1004a725e6905dd1deef9843",
   "verifica": {
@@ -59,8 +59,13 @@
     {
       "id": "R04-003",
       "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts",
+          "modifica": "Il caso «il sipario copre anche il guscio, non solo la pagina» (righe 92-107) pretende app/store/loading.tsx con <ScheletroNegozio /> finché app/store/[id]/layout.tsx è async e fa await precaricaNegozio: va capovolto (sopra il guscio che deve poter rispondere 404 non ci deve essere nessun loading.tsx, così il notFound() arriva prima che lo streaming parta con 200). Poi si cancella app/store/loading.tsx (file di R04: la cura vera è solo quella cancellazione; provata a mano: senza il file quel caso è l'unico rosso, 7 su 8 verdi). Da sapere: sulla base app/loading.tsx esiste ancora (la prova minori-s09-aspetto, caso 1550, ne legge il testo) e nessun file della rotta app/store chiama notFound() sul server: il 404 vero arriva solo con la voce aperta «le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok»» (registro, riga 876)."
+        }
+      ]
     },
     {
       "id": "R04-004",
