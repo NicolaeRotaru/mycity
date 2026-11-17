@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 23:15",
+  "aggiornato": "2026-11-17 23:55",
   "finita": false,
-  "testa": "ab1dfaf95e60051ea94380aeb479fd3568a06c74",
+  "testa": "276fc3fad8d9eb76fc2c4690e555579e1c062861",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_eseguito",
@@ -10,19 +10,6 @@
     "nota": ""
   },
   "voci": [
-    {
-      "id": "R02-008",
-      "chiave": "qa-flussi|un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
-      "esito": "non_fatto",
-      "nota": "delicata: fuori dall'onda 9. La cura cambia chi può entrare nell'area negozio (app/seller/layout.tsx:39, allowed = (isSeller && isApproved) || isAdmin) o cosa può caricare un admin nel deposito delle foto: sono permessi."
-    },
-    {
-      "id": "R02-011",
-      "chiave": "qa-flussi|la scadenza del recesso non si sposta quando l'ultimo giorno cade di sabato, domenica o in un festivo",
-      "esito": "scelta_di_nicola",
-      "domanda": "Se il quattordicesimo giorno del recesso cade di sabato, domenica o in un festivo, la scadenza si sposta al primo giorno feriale dopo (e con quali festivi: nazionali soltanto, o anche il patrono di Piacenza, Sant'Antonino il 4 luglio)?",
-      "nota": "lib/ordini/termine-del-recesso.ts:21-25 conta 14 giorni di calendario senza spostamento: come si conta una scadenza di legge è una regola da scegliere (regola 3 di stasera)."
-    },
     {
       "id": "R02-001",
       "chiave": "accessibilita-visiva|in fondo alle domande frequenti, chi usa la tastiera non vede quando è sul bottone «contattaci»",
@@ -135,6 +122,104 @@
           "modifica": "righe 56 e 151: aggiungere min-w-0 all'h2; righe 55 e 150: aggiungere gap-2 al div che lo contiene"
         }
       ]
+    },
+    {
+      "id": "R02-006",
+      "chiave": "microcopy|il piede rimette «abbigliamento» dopo la lettura se la categoria è attiva nel database (non verificato)",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "components/Footer.tsx:126-137: la riserva non contiene «Abbigliamento». Footer.tsx:188-195: dopo la lettura l'elenco passa da soloLePiene(madriLette, piene.data), quindi una Abbigliamento senza prodotti viene tolta. lib/queries/precarico.ts:74-89: il server precarica albero e piene, la categoria vuota manca già nel primo HTML. Prove esistenti verdi: tests/unit/le-categorie-vuote-non-si-mostrano-in-home-nel-piede-ne-a-google.test.tsx:104-109 e tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx. Abbigliamento torna solo se ha prodotti di un negozio approvato, o se la lettura delle piene non è mai riuscita (scelta scritta in Footer.tsx:126-127 e lib/queries/categorie-piene.ts:20-21).",
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllati sul codice la riserva, il filtro delle piene e il precarico: il difetto non si riproduce. Nessun commit."
+    },
+    {
+      "id": "R02-007",
+      "chiave": "navigazione-gerarchia|altre tendine e vetrine di categorie buttano via le categorie piene già note quando una ricarica cade, e tornano a mostrare anche le vuote",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "Il commit 83bdc3624f9485cb2ee712bda101cf2e7c8a23f5 (R01-005, già sulla base f93d246a) ha tolto `piene.isError ? null : piene.data` nei quattro punti, che ora usano `piene.data`: components/Footer.tsx:188-192, components/CategoryShowcase.tsx:159-166, components/CategoryBar.tsx:140-144, app/categorie/page.tsx:47-51. La prova di comportamento tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx (react-query vero, rilettura caduta) è verde.",
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Cura già applicata ai quattro punti dalla sessione R01; rilanciata la sua prova: verde. Nessun commit."
+    },
+    {
+      "id": "R02-008",
+      "chiave": "qa-flussi|un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9. La cura cambia chi può entrare nell'area negozio (app/seller/layout.tsx:39, allowed = (isSeller && isApproved) || isAdmin) o cosa può caricare un admin nel deposito delle foto: sono permessi."
+    },
+    {
+      "id": "R02-009",
+      "chiave": "qa-flussi|la pagina dei negozi legge le categorie senza range: oltre il tetto di righe di postgrest si perderebbero delle categorie madri",
+      "esito": "riparato",
+      "commit": "6324bb64c1ff4c7c8dcbd8b4f73460f399870b7e",
+      "file_toccati": [
+        "app/stores/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6324bb64c1ff4c7c8dcbd8b4f73460f399870b7e^ --file app/stores/page.tsx --prove tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le categorie si leggono con l'helper esistente leggiTutteLeRighe (lib/supabase/blocchi), a finestre con .range(), ordinate per nome e per id. La prova monta la pagina con react-query vero su un finto PostgREST che taglia a mille righe, con 1.103 categorie: la madre dopo la millesima compare tra i filtri e trova il suo negozio."
+    },
+    {
+      "id": "R02-010",
+      "chiave": "qa-flussi|nella vetrina del negozio la data delle recensioni è nel fuso del telefono, non di piacenza",
+      "esito": "riparato",
+      "commit": "3b19f233b21caeccc7bd57d9763159a32291a0ea",
+      "file_toccati": [
+        "components/store-sections/ReviewsSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-recensioni-giorno-di-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-recensioni-giorno-di-piacenza.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b19f233b21caeccc7bd57d9763159a32291a0ea^ --file components/store-sections/ReviewsSection.tsx --prove tests/unit/riparazione-r02-recensioni-giorno-di-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La data usa toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA }) con FUSO_PIACENZA da lib/tempo-piacenza (oggi la riga è la 162, non la 109 del registro). La prova gira con TZ=America/New_York su una recensione delle 23:30Z del 16/11: mostra 17/11/2026; senza la correzione 16/11."
+    },
+    {
+      "id": "R02-011",
+      "chiave": "qa-flussi|la scadenza del recesso non si sposta quando l'ultimo giorno cade di sabato, domenica o in un festivo",
+      "esito": "scelta_di_nicola",
+      "domanda": "Se il quattordicesimo giorno del recesso cade di sabato, domenica o in un festivo, la scadenza si sposta al primo giorno feriale dopo (e con quali festivi: nazionali soltanto, o anche il patrono di Piacenza, Sant'Antonino il 4 luglio)?",
+      "nota": "lib/ordini/termine-del-recesso.ts:21-25 conta 14 giorni di calendario senza spostamento: come si conta una scadenza di legge è una regola da scegliere (regola 3 di stasera)."
+    },
+    {
+      "id": "R02-012",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "parziale",
+      "commit": "276fc3fad8d9eb76fc2c4690e555579e1c062861",
+      "file_toccati": [
+        "components/ProductCard.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-scala-del-testo-scheda-prodotto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-scala-del-testo-scheda-prodotto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 276fc3fad8d9eb76fc2c4690e555579e1c062861^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r02-scala-del-testo-scheda-prodotto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "I punti 182/185/188/211 del registro erano già sulla scala da R24-021 (8f70c8d0). Restavano due text-[11px] (nome del negozio e prezzo barrato): portati a text-xs (12 px, per non rimpicciolire il testo; scelta scritta in un commento). Cambiate solo le classi di dimensione, prezzi e importi intatti. app/globals.css non aveva niente da cambiare.",
+      "cosa_resta": "Con `grep -rEo 'text-\\[[0-9.]+(px|rem|em)\\]' app components lib --include=*.ts --include=*.tsx` restano 271 misure a mano in 92 file: 253 in 87 file fuori dai miei file (le più frequenti text-[13px] 87, text-[11px] 69, text-[10px] 35, text-[15px] 17, text-[17px] 16); 18 nei miei file ma fuori da questa voce (app/about 8, app/lavora-con-noi 6, components/MobileTabBar 2, ReviewsSection 1 alla :158, app/returns 1). Per gli 11 px resta da decidere: un gradino da 11 in tailwind.config.ts (file altrui) o la regola «11 → 12» usata qui."
     }
   ],
   "nuovi_difetti_visti": [
@@ -158,13 +243,20 @@
       "severita": "minore",
       "file": "components/Navbar.tsx:338-340",
       "descrizione": "La LocationPill si riduce a larghezza 0."
+    },
+    {
+      "titolo": "Nella pagina dei negozi, se la lettura delle categorie cade, i filtri spariscono senza avviso",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/stores/page.tsx:95",
+      "descrizione": "Dentro fetchStoresData, nel Promise.all, gli errori della lettura delle categorie e di categorie_per_negozio vengono ignorati. C era già prima."
     }
   ],
   "domande_per_nicola": [
     "R02-011: se l'ultimo giorno del recesso cade di sabato, domenica o in un festivo, la scadenza va spostata al primo giorno feriale? Con quali festivi?"
   ],
   "conto": {
-    "agenti": 1,
-    "nota": "lotto A: 1 subagente riparatore"
+    "agenti": 2,
+    "nota": "lotto A e lotto B: 2 subagenti riparatori"
   }
 }
