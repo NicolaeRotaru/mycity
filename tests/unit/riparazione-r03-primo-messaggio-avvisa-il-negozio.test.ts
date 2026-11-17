@@ -18,19 +18,32 @@ const stato = vi.hoisted(() => ({
   messaggi: [] as Array<Record<string, unknown>>,
   notifiche: [] as Array<Record<string, unknown>>,
   esistente: null as null | { id: string },
+  /** Il freno dei messaggi (chat:msg) è pieno: la rotta dei messaggi risponde 429. */
+  frenoMessaggiPieno: false,
+  /** La seconda autenticazione, quella della rotta dei messaggi, cade: risponde 401. */
+  secondaAutenticazioneCaduta: false,
 }));
+const avvertimenti = vi.hoisted(() => vi.fn());
 
 const avviso = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/email/avviso-messaggio-negozio', () => ({ avvisaNegozioMessaggioNuovo: avviso }));
 vi.mock('@/lib/api/middleware', () => ({
   withAuth: (handler: (ctx: { user: { id: string }; req: Request }) => unknown) =>
-    (req: Request) => handler({ user: { id: BUYER }, req }),
+    (req: Request) => {
+      if (stato.secondaAutenticazioneCaduta && new URL(req.url).pathname === '/api/chat/messages') {
+        return new Response(JSON.stringify({ error: 'Non autenticato' }), { status: 401 });
+      }
+      return handler({ user: { id: BUYER }, req });
+    },
 }));
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimitAsync: async () => ({ allowed: true, remaining: 19, retryAfterSec: 0, limit: 20 }),
+  rateLimitAsync: async ({ key }: { key: string }) =>
+    stato.frenoMessaggiPieno && key.startsWith('chat:msg:')
+      ? { allowed: false, remaining: 0, retryAfterSec: 30, limit: 30 }
+      : { allowed: true, remaining: 19, retryAfterSec: 0, limit: 20 },
 }));
 vi.mock('@/lib/logger', () => ({
-  logger: { error: () => undefined, warn: () => undefined, info: () => undefined, debug: () => undefined },
+  logger: { error: () => undefined, warn: avvertimenti, info: () => undefined, debug: () => undefined },
 }));
 vi.mock('@/lib/supabase/server', () => {
   /** Una lettura che accetta filtri a catena e chiude con `maybeSingle`. */
@@ -110,6 +123,9 @@ beforeEach(() => {
   stato.messaggi = [];
   stato.notifiche = [];
   stato.esistente = null;
+  stato.frenoMessaggiPieno = false;
+  stato.secondaAutenticazioneCaduta = false;
+  avvertimenti.mockReset();
   avviso.mockReset();
   avviso.mockResolvedValue({ inviato: true });
 });
@@ -149,5 +165,36 @@ describe('R03-006 — il primo messaggio con l’apertura della conversazione av
     expect(stato.messaggi).toEqual([]);
     expect(stato.notifiche).toEqual([]);
     expect(avviso).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Giro di correzione (casi del revisore): se la rotta dei messaggi dice di no per il suo freno
+ * (429) o per la seconda autenticazione (401), il primo messaggio non deve andare perso con una
+ * riga nel registro e basta. Prima della riparazione in questi casi il messaggio si salvava.
+ */
+describe('R03-006 giro di correzione — la rotta dei messaggi risponde 429 o 401', () => {
+  it('freno dei messaggi pieno (429): il primo messaggio si salva lo stesso, e il registro lo dice', async () => {
+    stato.frenoMessaggiPieno = true;
+    const r = await apri({ sellerId: SELLER, firstMessage: 'Fate consegne la domenica?' });
+    await lasciaGirare();
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ conversationId: CONV });
+    expect(stato.messaggi, 'il primo messaggio è andato perso').toEqual([
+      { conversation_id: CONV, sender_id: BUYER, body: 'Fate consegne la domenica?' },
+    ]);
+    expect(avvertimenti).toHaveBeenCalled();
+  });
+
+  it('seconda autenticazione caduta (401): il primo messaggio si salva lo stesso, e il registro lo dice', async () => {
+    stato.secondaAutenticazioneCaduta = true;
+    const r = await apri({ sellerId: SELLER, firstMessage: 'Avete ancora la torta di mele?' });
+    await lasciaGirare();
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ conversationId: CONV });
+    expect(stato.messaggi, 'il primo messaggio è andato perso').toEqual([
+      { conversation_id: CONV, sender_id: BUYER, body: 'Avete ancora la torta di mele?' },
+    ]);
+    expect(avvertimenti).toHaveBeenCalled();
   });
 });
