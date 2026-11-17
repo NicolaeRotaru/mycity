@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 27/8/2026 (R159) — L'ACQUISTO NON ARRIVAVA QUASI MAI A POSTHOG.
@@ -199,6 +200,7 @@ function richiesta(cookie: string | null): never {
       ],
       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

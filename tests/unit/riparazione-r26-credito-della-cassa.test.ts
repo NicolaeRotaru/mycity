@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * R26-020 — Se l'addebito del credito risponde con un errore, la cassa in
@@ -158,6 +159,7 @@ function richiesta(): never {
         zip: '29121', phone: '3331234567',
       },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: true,
     }),
   }) as never;

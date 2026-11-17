@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 
 /**
@@ -225,6 +226,7 @@ function richiestaContanti(): never {
       groups: [{ sellerId: FORNO, items: [{ productId: PANE, quantity: 1 }] }],
       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

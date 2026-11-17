@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 22/8/2026 — LA PROVA CHE MANCAVA SUL PERCORSO DEI SOLDI.
@@ -243,6 +244,7 @@ function richiesta(chiave?: string): never {
         zip: '29121', phone: '3331234567',
       },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

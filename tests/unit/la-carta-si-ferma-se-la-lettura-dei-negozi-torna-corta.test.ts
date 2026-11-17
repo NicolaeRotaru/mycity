@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 28/10/2026 — ANCHE LA ROTTA DELLA CARTA SI FERMA SE NON VEDE IL NEGOZIO.
@@ -116,6 +117,7 @@ function richiesta(): never {
       couponDiscountCents: 0,
       pickupDiscountCents: 0,
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
     }),
   }) as never;
 }

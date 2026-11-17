@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
 import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
@@ -175,6 +176,7 @@ function ordina(groups: unknown[] = [{ sellerId: NEGOZIO_ID, items: [{ productId
         lng: NEGOZIO.lng,
       },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

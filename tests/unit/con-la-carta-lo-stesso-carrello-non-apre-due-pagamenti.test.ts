@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 27/8/2026 (R049 · R125 · R136) — DUE INVII, DUE RISERVE, DUE CODICI BRUCIATI.
@@ -164,6 +165,7 @@ const carrello = {
   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
   couponCode: 'SCONTO2',
   pickupInStore: false,
+  deliverySlot: FASCE_DI_DOMANI[0],
 };
 
 function richiesta(corpo: unknown): never {

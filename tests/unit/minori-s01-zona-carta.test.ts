@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { haversineKm } from '@/lib/geo';
 import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
@@ -196,6 +197,7 @@ function richiesta(): never {
       couponDiscountCents: 0,
       pickupDiscountCents: 0,
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
     }),
   }) as never;
 }

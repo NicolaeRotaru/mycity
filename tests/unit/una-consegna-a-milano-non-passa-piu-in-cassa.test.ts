@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 
@@ -183,6 +184,7 @@ function ordinaAMilano(): never {
       delivery: { fullName: 'Maria Rossi', address: 'Corso Buenos Aires 1', city: 'Milano', zip: '20124', phone: '3331234567' },
       couponCode: 'PRIMI50',
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

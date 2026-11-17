@@ -133,6 +133,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // falso e non c'e' un punto che possa sfuggire.
   body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
 
+  // 17/11/2026 (R31-003) — Una consegna a domicilio ha sempre un orario: senza fascia l'ordine
+  // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
+  // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
+  if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
+
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();
   const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * R03-011 — Se il negozio alza un prezzo (o la promozione scade) mentre il cliente è in cassa,
@@ -172,6 +173,7 @@ async function ordina(extra: Riga = {}) {
       groups: [AL_FORNO],
       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
       ...extra,
     }),

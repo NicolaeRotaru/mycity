@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 8/9/2026 — LA SECONDA CASSA USCIVA DALLA PORTA DI SERVIZIO.
@@ -166,6 +167,7 @@ const carrello = {
   groups: [{ sellerId: S1, items: [{ productId: P1, quantity: 1 }], shippingCents: 0 }],
   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
   pickupInStore: false,
+  deliverySlot: FASCE_DI_DOMANI[0],
 };
 
 async function paga() {

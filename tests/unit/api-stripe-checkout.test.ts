@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 
 /**
@@ -142,6 +143,7 @@ function tamperedBody(overrides: Record<string, unknown> = {}) {
     couponDiscountCents: 999999,
     pickupDiscountCents: 999999,
     pickupInStore: false,
+    deliverySlot: FASCE_DI_DOMANI[0],
     ...overrides,
   };
 }

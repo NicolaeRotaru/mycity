@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
 import {
@@ -380,7 +381,7 @@ async function spedizioneAddebitata(mondo: Mondo, gruppi: Array<{ sellerId: stri
     new Request('http://localhost/api/orders/cod', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ groups: gruppi, delivery: INDIRIZZO_DI_MARIA, pickupInStore: false, useCredit: false }),
+      body: JSON.stringify({ groups: gruppi, delivery: INDIRIZZO_DI_MARIA, pickupInStore: false, deliverySlot: FASCE_DI_DOMANI[0], useCredit: false }),
     }) as never,
   );
   const corpo = await risposta.json();
