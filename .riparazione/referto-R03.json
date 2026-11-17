@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:42",
+  "aggiornato": "2026-11-17 18:44",
   "finita": false,
-  "testa": "2fe845f3919411efcb470d99bf4c32199688bbd8",
+  "testa": "f25d86ebdc27f6542f557a435dbb96c675fefc54",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -110,7 +110,7 @@
       "id": "R03-006",
       "chiave": "qa-flussi|il primo messaggio mandato insieme all'apertura della conversazione non avvisa il negozio",
       "esito": "riparato",
-      "commit": "e6d7bc0f13d8b8469eb3f8f176964c19d9d5a43f",
+      "commit": "f25d86ebdc27f6542f557a435dbb96c675fefc54",
       "file_toccati": [
         "app/api/chat/conversations/route.ts"
       ],
@@ -126,7 +126,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e6d7bc0f13d8b8469eb3f8f176964c19d9d5a43f^ --file app/api/chat/conversations/route.ts --prove tests/unit/riparazione-r03-primo-messaggio-avvisa-il-negozio.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "L'avviso della chat (avvisaChiRiceve: campanella + email via avvisaNegozioMessaggioNuovo) vive non esportato dentro app/api/chat/messages/route.ts; invece di ricopiarlo, la rotta delle conversazioni manda il firstMessage chiamando il POST esportato di quella rotta (solo import, file non toccato) con le stesse intestazioni: stesso salvataggio, stessa campanella, stessa email. La risposta resta 200 con conversationId (best effort come prima), con un avviso nel registro se l'invio cade."
+      "cosa_ho_fatto": "L'avviso della chat (avvisaChiRiceve: campanella + email via avvisaNegozioMessaggioNuovo) vive non esportato dentro app/api/chat/messages/route.ts; invece di ricopiarlo, la rotta delle conversazioni manda il firstMessage chiamando il POST esportato di quella rotta (solo import, file non toccato) con le stesse intestazioni: stesso salvataggio, stessa campanella, stessa email. La risposta resta 200 con conversationId (best effort come prima), con un avviso nel registro se l'invio cade. Giro di correzione: se il POST interno rispondeva 429 (freno chat:msg pieno) o 401 (seconda autenticazione caduta) il primo messaggio andava perso con un solo logger.warn, mentre prima della riparazione si salvava. Ora in quei due casi si torna all'inserimento diretto di prima (messaggio salvato, avviso al negozio non mandato, logger.warn con l'esito); la risposta di successo resta {conversationId}. Gli altri rifiuti (403 sospeso o permesso, 5xx del database) restano come sulla base: non salvati, solo nel registro, perché un inserimento diretto aggirerebbe la sospensione o cadrebbe uguale. Prova: rotta dei messaggi vera con freno pieno (429) e seconda autenticazione caduta (401). Commit e6d7bc0f e f25d86eb.",
+      "verificato_da": "revisore del lotto 1 (smentita: POST interno che risponde 429 o 401, rotta 200 col solo conversationId e messaggio perso), poi giro di correzione con i casi del revisore nella prova"
     },
     {
       "id": "R03-007",
