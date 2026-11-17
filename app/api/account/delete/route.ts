@@ -159,11 +159,38 @@ async function smettiDiScrivergli(admin: ReturnType<typeof getAdminSupabase>, us
       .is('sent_at', null)
       .is('cancelled_at', null);
     if (erroreCoda) logger.warn('[account-delete] coda email non chiusa', { userId, message: erroreCoda.message });
-    const { error: erroreCarrello } = await admin
+    // R30-003 — Il carrello mai avvisato si chiude col segno «senza email» del giro dei carrelli
+    // (app/api/cron/abandoned-carts): la sua ultima attività, non l'ora di adesso. Con l'ora di
+    // adesso il conto della campagna (lib/carrelli-abbandonati.ts) lo prendeva per un promemoria
+    // spedito. Se il carrello è cambiato fra la lettura e la scrittura, si chiude come prima.
+    // Un carrello per persona (user_id è la chiave): la lista ha al massimo una riga.
+    const { data: carrelli } = await admin
       .from('abandoned_carts')
-      .update({ recovery_email_sent_at: adesso })
+      .select('last_activity')
       .eq('user_id', userId)
       .is('recovery_email_sent_at', null);
+    const ultima = (Array.isArray(carrelli) ? (carrelli[0] as { last_activity?: string | null } | undefined) : undefined)?.last_activity ?? null;
+    let erroreCarrello: { message: string } | null = null;
+    let chiuso = false;
+    if (ultima) {
+      const r = await admin
+        .from('abandoned_carts')
+        .update({ recovery_email_sent_at: ultima })
+        .eq('user_id', userId)
+        .eq('last_activity', ultima)
+        .is('recovery_email_sent_at', null)
+        .select('user_id');
+      erroreCarrello = r.error;
+      chiuso = !r.error && Array.isArray(r.data) && r.data.length > 0;
+    }
+    if (!chiuso) {
+      const { error } = await admin
+        .from('abandoned_carts')
+        .update({ recovery_email_sent_at: adesso })
+        .eq('user_id', userId)
+        .is('recovery_email_sent_at', null);
+      erroreCarrello = error ?? erroreCarrello;
+    }
     if (erroreCarrello) logger.warn('[account-delete] carrello non segnato', { userId, message: erroreCarrello.message });
   } catch (e) {
     logger.warn('[account-delete] pulizia delle email non riuscita', { userId, errore: e instanceof Error ? e.message : 'errore' });

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 27/8/2026 (R133) — CHI SBAGLIAVA UNA VOLTA RESTAVA CHIUSO FUORI UN MINUTO,
@@ -195,6 +196,7 @@ function richiesta(chiave: string): never {
       ],
       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

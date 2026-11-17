@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * S01 — 68: se la cassa con carta non riesce a segnare l'id della pagina di
@@ -177,6 +178,7 @@ const carrello = {
   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
   couponCode: 'SCONTO2',
   pickupInStore: false,
+  deliverySlot: FASCE_DI_DOMANI[0],
 };
 
 function richiesta(corpo: unknown): never {

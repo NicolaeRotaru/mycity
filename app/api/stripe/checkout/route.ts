@@ -9,6 +9,8 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { clientIdGaDalCookie } from '@/lib/analytics/ga-client-id';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
+import { vaChiestaSenzaTrattenere } from '@/lib/auth/accettazione-testi';
+import { TETTO_PORTIERE_MS } from '@/lib/auth/decisione-portiere';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
@@ -133,8 +135,19 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // falso e non c'e' un punto che possa sfuggire.
   body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
 
+  // 17/11/2026 (R31-003) — Una consegna a domicilio ha sempre un orario: senza fascia l'ordine
+  // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
+  // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
+  if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
+
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();
+  // 17/11/2026 (R31-016) — I Termini in vigore anche qui, come nei contanti: stessa regola e stesso dubbio del portiere.
+  const termini = await vaChiestaSenzaTrattenere(() => supa, user.id, TETTO_PORTIERE_MS);
+  if (termini === 'chiedi') {
+    return ApiErrors.forbidden('I Termini di MyCity sono cambiati: ricarica la pagina e accettali prima di ordinare.');
+  }
+  if (termini !== 'lascia-entrare') logger.warn('[carta] Termini accettati non controllati prima del pagamento', { esito: termini });
   const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
   // R163 — ripulita: e' un dato che arriva da fuori e finisce come etichetta
   // in un evento dei conti.

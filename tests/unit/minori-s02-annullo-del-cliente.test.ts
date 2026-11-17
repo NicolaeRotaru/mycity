@@ -19,7 +19,8 @@ const annullaERimborsa = vi.hoisted(() => vi.fn(async () => ({ ok: true, refundI
 
 vi.mock('@/lib/logger', () => ({ logger }));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins }));
-vi.mock('@/lib/ordini/annulla', () => ({ annullaERimborsa, COLONNE_ANNULLO: 'id' }));
+// R31-023 — Dopo l'annullo la rotta manda anche l'email al negozio: qui finta, non lancia.
+vi.mock('@/lib/ordini/annulla', () => ({ annullaERimborsa, COLONNE_ANNULLO: 'id', avvisaIlNegozioDellAnnullo: vi.fn(async () => true) }));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: (t: string) => {

@@ -4,6 +4,7 @@ import { domandaCategorie, domandaNegozio, type ClientDiLettura } from '@/lib/qu
 import { domandaVendutoDa } from '@/lib/queries/venduto-da';
 import { domandaRiepilogoRecensioni, type ClientConFunzioni } from '@/lib/queries/riepilogo-recensioni-negozio';
 import { leggiSchedaPerIlGuscio } from '@/lib/queries/scheda-con-venduto-da';
+import { domandaCategoriePiene } from '@/lib/queries/categorie-piene';
 
 /**
  * IL PRECARICO: i dati che partono DENTRO la pagina, invece di essere chiesti
@@ -67,6 +68,24 @@ function insieme(qc: QueryClient, domande: Domanda[]) {
 /** I dati sopra la piega della home: oggi le categorie. */
 export function precaricaHome(): Promise<DehydratedState> {
   return precarica((supa, qc) => insieme(qc, [domandaCategorie(supa)]));
+}
+
+/** Le categorie che menu, piede e vetrina leggono su OGNI pagina: l'elenco intero e quelle piene. Va consegnato SOPRA il menu (app/layout.tsx): CategoryBar crea queste domande appena si disegna, e una HydrationBoundary che arriva dopo le riempie solo nel browser, non nell'HTML. */
+export function precaricaSito(): Promise<DehydratedState> {
+  return precarica((supa, qc) =>
+    insieme(qc, [
+      {
+        queryKey: ['categories', 'tree'],
+        staleTime: 10 * 60_000,
+        queryFn: async () => {
+          const { data, error } = await supa.from('categories').select('id, slug, name, parent_id, icon').order('name');
+          if (error) throw error;
+          return data ?? [];
+        },
+      },
+      domandaCategoriePiene(supa),
+    ]),
+  );
 }
 
 /**

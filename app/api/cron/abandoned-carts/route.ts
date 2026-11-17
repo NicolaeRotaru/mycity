@@ -60,6 +60,34 @@ function oraDiSilenzio(ora: number): boolean {
   return ora < ORA_PRIMA || ora >= ORA_ULTIMA;
 }
 
+/**
+ * 17/11/2026 (R30-003) — IL CARRELLO CHIUSO SENZA EMAIL NON SI SPACCIA PER UN PROMEMORIA.
+ *
+ * Il segno `recovery_email_sent_at` lo leggeva il conto della campagna (lib/carrelli-abbandonati.ts)
+ * come «email partita», ma qui lo si metteva anche ai carrelli chiusi senza scrivere niente. Ora
+ * il segno di questi è la loro ultima attività (il conto li riconosce: `chiusoSenzaEmail`).
+ * La scrittura vale solo se il carrello è ancora quello letto: se nel frattempo è cambiato
+ * (`last_activity` diversa) non si tocca, e il giro dopo lo rivaluta da capo. Se la lista non
+ * porta l'ultima attività si segna come prima.
+ */
+type CarrelloInLista = { user_id: string; last_activity?: string | null };
+async function chiudiSenzaEmail(
+  supa: ReturnType<typeof getAdminSupabase>,
+  c: CarrelloInLista,
+): Promise<{ error: { message: string } | null }> {
+  if (typeof c.last_activity !== 'string' || !c.last_activity) {
+    const { error } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+    return { error };
+  }
+  const { error } = await supa
+    .from('abandoned_carts')
+    .update({ recovery_email_sent_at: c.last_activity })
+    .eq('user_id', c.user_id)
+    .eq('last_activity', c.last_activity)
+    .is('recovery_email_sent_at', null);
+  return { error };
+}
+
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
@@ -115,7 +143,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   for (const c of candidates) {
     if (troppoVecchio(c.last_activity)) {
       skipped++;
-      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+      // R30-003 — Anche questo si chiude senza scrivere: stesso segno «senza email» del ramo sotto.
+      const { error: errMarca } = await chiudiSenzaEmail(supa, c);
       if (errMarca) logger.error('[abandoned-carts] marcatura fallita (carrello troppo vecchio)', errMarca);
       continue;
     }
@@ -124,7 +153,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     // così il cron non riprova ad ogni giro.
     if (!consensoPerPersona.get(c.user_id)) {
       skipped++;
-      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+      const { error: errMarca } = await chiudiSenzaEmail(supa, c);
       if (errMarca) logger.error('[abandoned-carts] marcatura fallita (senza consenso)', errMarca);
       continue;
     }

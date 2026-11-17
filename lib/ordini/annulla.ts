@@ -7,7 +7,7 @@ import { contantiIncassati } from '@/lib/rimborsi/regole-del-rimborso';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
-import { ordineAnnullatoTemplate } from '@/lib/email/templates';
+import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate } from '@/lib/email/templates';
 import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
@@ -116,7 +116,17 @@ const PAUSA_STORNO_CREDITO_MS = 200;
 export async function annullaERimborsa(
   admin: SupabaseClient,
   order: OrdineDaAnnullare,
-  opts: { reason: string; metadata?: Record<string, string>; motivoCredito?: string },
+  opts: {
+    reason: string;
+    metadata?: Record<string, string>;
+    motivoCredito?: string;
+    /**
+     * R31-022 — Chi annulla sa che la merce non c'è più in negozio (già ritirata dal fattorino, o
+     * consegnata): non si rimette a scaffale. Il «cliente assente» non lo passa: lì la merce torna
+     * col fattorino.
+     */
+    merceNonTorna?: boolean;
+  },
 ): Promise<EsitoAnnullo> {
   // 053 — Un ordine già rimborsato in parte ha stato 'PARTIALLY_REFUNDED':
   // trattarlo come «niente da rimborsare» lasciava indietro il residuo, cioè la
@@ -256,6 +266,9 @@ export async function annullaERimborsa(
   // solo codice e rimetteva in circolo un codice monouso ancora tenuto da un altro ordine del carrello.
   const restituisciCoupon = () => restituisciIlCodiceDellOrdine(admin, order);
 
+  // R31-022 — La merce non c'è più in negozio (lo dice chi annulla): annullare non la rimette in vendita.
+  const merceUscita = opts.merceNonTorna === true;
+
   // Contanti già incassati dal fattorino: la restituzione è un fatto fisico e la
   // decide una persona. Annullare in silenzio lascerebbe il cliente senza merce
   // e senza soldi.
@@ -303,6 +316,7 @@ export async function annullaERimborsa(
         reason: opts.reason,
         metadata: opts.metadata,
         notifyBuyer: true,
+        ...(merceUscita ? { merceNonTorna: true } : {}),
       });
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
@@ -380,22 +394,26 @@ export async function annullaERimborsa(
 
   // 5/11/2026 — La merce che non torna a scaffale non deve passare in silenzio:
   // l'ordine e' gia' annullato, un secondo annullo non ci riprova.
-  try {
-    const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
-    if (errScaffale) throw new Error(errScaffale.message);
-  } catch (err) {
-    logger.error('[annullaERimborsa] merce non rimessa a scaffale dopo l annullo', {
-      orderId: order.id, err: err instanceof Error ? err.message : err,
-    });
+  if (merceUscita) {
+    logger.info('[annullaERimborsa] merce gia uscita dal negozio: non torna a scaffale', { orderId: order.id });
+  } else {
     try {
-      await notifyAdmins(
-        '⚠️ Merce non rimessa a scaffale dopo un annullo',
-        `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma i suoi prodotti non sono tornati in magazzino: ` +
-          'le quantità in vendita sono più basse del vero. Vanno sistemate a mano dal pannello prodotti del negozio.',
-        '/admin/orders',
-      );
-    } catch (e) {
-      logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err: e });
+      const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+      if (errScaffale) throw new Error(errScaffale.message);
+    } catch (err) {
+      logger.error('[annullaERimborsa] merce non rimessa a scaffale dopo l annullo', {
+        orderId: order.id, err: err instanceof Error ? err.message : err,
+      });
+      try {
+        await notifyAdmins(
+          '⚠️ Merce non rimessa a scaffale dopo un annullo',
+          `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma i suoi prodotti non sono tornati in magazzino: ` +
+            'le quantità in vendita sono più basse del vero. Vanno sistemate a mano dal pannello prodotti del negozio.',
+          '/admin/orders',
+        );
+      } catch (e) {
+        logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err: e });
+      }
     }
   }
 
@@ -502,6 +520,54 @@ export async function avvisaIlClienteDellAnnullo(
     return true;
   } catch (e) {
     logger.error('[annullo] email di annullo NON partita', {
+      orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
+    });
+    return false;
+  }
+}
+
+/**
+ * R31-023 — ANCHE IL NEGOZIO RICEVE L'EMAIL DELL'ANNULLO.
+ *
+ * Il negozio sapeva dell'ordine nuovo per email, e dell'annullo solo dalla campanella. Si chiama
+ * DOPO l'annullo riuscito, con la stessa frase della campanella. Non lancia mai: l'annullo è già
+ * scritto, e una posta giù non deve farlo sembrare fallito. Ma non tace: se l'email non parte, lo
+ * scrive nel registro degli errori.
+ */
+export async function avvisaIlNegozioDellAnnullo(
+  admin: SupabaseClient,
+  ordine: { id: string; seller_id?: string | null },
+  frase: string,
+): Promise<boolean> {
+  try {
+    if (!ordine.seller_id) return false;
+    const { data, error } = await admin.auth.admin.getUserById(ordine.seller_id);
+    const email = data?.user?.email;
+    if (error || !email) {
+      logger.error('[annullo] email di annullo al negozio non spedita: indirizzo non letto', {
+        orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
+      });
+      return false;
+    }
+    const t = ordineAnnullatoAlNegozioTemplate({ orderId: ordine.id, frase });
+    const res = await sendEmail({
+      to: email,
+      subject: t.subject,
+      html: t.html,
+      text: t.text,
+      tipo: 'transazionale',
+      tags: [{ name: 'template', value: 'order_canceled_seller' }],
+    });
+    if (!res.ok) {
+      logger.error('[annullo] email di annullo al negozio NON partita', {
+        orderId: ordine.id,
+        motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
+      });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    logger.error('[annullo] email di annullo al negozio NON partita', {
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
     return false;

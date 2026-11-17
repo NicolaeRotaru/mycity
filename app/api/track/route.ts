@@ -147,7 +147,20 @@ export async function POST(request: Request) {
   // server, non solo nel client. Gli eventi 'auth' (login/logout/signup) sono
   // funzionali/di sicurezza e non sono soggetti a consenso.
   const consent = parseConsentCookie(readCookie(request.headers.get('cookie'), CONSENT_COOKIE) ?? undefined);
-  if (category === 'visitor' && !consent.analytics) return noContent();
+  /**
+   * 17/11/2026 (R32-011) — Senza consenso il vecchio `mc_vid` non si leggeva, ma restava lì
+   * per un anno (httpOnly: il browser non lo può togliere) e al sì successivo le visite nuove
+   * si riattaccavano a quelle di prima. Se arriva senza consenso, lo si cancella.
+   */
+  const vidSenzaConsenso = !consent.analytics && !!readCookie(request.headers.get('cookie'), VID_COOKIE);
+  const rispondi = () => {
+    const r = noContent();
+    if (vidSenzaConsenso) {
+      r.cookies.set({ name: VID_COOKIE, value: '', maxAge: 0, path: '/', sameSite: 'lax', httpOnly: true, secure: true });
+    }
+    return r;
+  };
+  if (category === 'visitor' && !consent.analytics) return rispondi();
 
   /**
    * 27/8/2026 (R161) — QUI ARRIVAVA IL PERCORSO INTERO, TAGLIATO SOLO A 500
@@ -213,7 +226,7 @@ export async function POST(request: Request) {
   // accesso: è una riga dettata da chi chiama, che finiva in «Accessi 24h».
   // La disconnessione invece arriva per forza senza sessione (il browser la
   // manda dopo l'uscita), quindi resta accettata.
-  if (eventType === 'login' && !userId) return noContent();
+  if (eventType === 'login' && !userId) return rispondi();
 
   const doppioneDiAccesso =
     eventType === 'login' && !!userId && (await accessoGiaRegistrato(userId, sessionId));
@@ -241,7 +254,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const res = noContent();
+  const res = rispondi();
   if (setCookie && vid) {
     res.cookies.set({
       name: VID_COOKIE,

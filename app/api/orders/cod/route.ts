@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
+import { vaChiestaSenzaTrattenere } from '@/lib/auth/accettazione-testi';
+import { TETTO_PORTIERE_MS } from '@/lib/auth/decisione-portiere';
 import { ApiErrors, apiError, apiSuccess } from '@/lib/api/responses';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
@@ -148,9 +150,9 @@ const GENERAZIONI_DELLA_CHIAVE = 10;
  * al cliente si diceva «ti aiutiamo noi». Adesso parte anche la campanella agli
  * amministratori, con la cifra. Non lancia mai: la risposta al cliente non cambia.
  */
-async function allarmeAgliAmministratori(titolo: string, corpo: string): Promise<void> {
+async function allarmeAgliAmministratori(titolo: string, corpo: string, link = '/admin/orders'): Promise<void> {
   try {
-    await notifyAdmins(titolo, corpo, '/admin/orders');
+    await notifyAdmins(titolo, corpo, link);
   } catch (e) {
     logger.error('[cod] allarme agli amministratori non partito', { titolo, message: e instanceof Error ? e.message : String(e) });
   }
@@ -364,8 +366,21 @@ export const POST = withAuthRateLimit(
     // falso e non c'e' un punto che possa sfuggire.
     body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
 
+    // 17/11/2026 (R31-003) — Una consegna a domicilio ha sempre un orario: senza fascia l'ordine
+    // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
+    // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
+    if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
+
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
+
+    // 17/11/2026 (R31-016) — I Termini in vigore anche qui, non solo nel portiere di /checkout: chi aveva
+    // la cassa già aperta prima del cambio ordinava senza ripassarci. Stessa regola e stesso dubbio del portiere.
+    const termini = await vaChiestaSenzaTrattenere(() => supa, user.id, TETTO_PORTIERE_MS);
+    if (termini === 'chiedi') {
+      return ApiErrors.forbidden('I Termini di MyCity sono cambiati: ricarica la pagina e accettali prima di ordinare.');
+    }
+    if (termini !== 'lascia-entrare') logger.warn('[contanti] Termini accettati non controllati prima dell’ordine', { esito: termini });
 
     /**
      * #172 — Doppio clic, un ordine solo.
@@ -1042,6 +1057,9 @@ export const POST = withAuthRateLimit(
      * geocodificatore non riconosce — non si blocca: `fuoriZonaDiConsegna`
      * risponde «no» e l'ordine passa come prima.
      */
+    // 17/11/2026 (R31-018) — Chi non si può misurare passa ancora, ma non più senza segno: si annota
+    // qui e, a ordini nati, gli amministratori ricevono la campanella per guardare la distanza a mano.
+    const nonMisurati = new Map<string, string>();
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
         const fuori = fuoriZonaDiConsegna({
@@ -1054,6 +1072,8 @@ export const POST = withAuthRateLimit(
           logger.info('[cod] consegna fuori zona: ordine non creato', { sellerId: s.id });
           return esciERilascia(ApiErrors.invalidRequest(motivoFuoriZona(s.store_name)));
         }
+        if (!s.store_lat || !s.store_lng) nonMisurati.set(s.id, 'il negozio non ha la posizione sulla mappa');
+        else if (!coordPerLaMappa?.lat || !coordPerLaMappa?.lng) nonMisurati.set(s.id, 'l’indirizzo non si trova sulla mappa');
       }
     }
 
@@ -1614,20 +1634,23 @@ export const POST = withAuthRateLimit(
      * servirebbe una coda — la stessa che gia' esiste per le email di ciclo di
      * vita.
      */
+    // 17/11/2026 (R31-025) — Per quando va consegnato, con le parole dell'email «Nuovo ordine»: la push
+    // nasce dalla campanella, e il negozio non deve aprire l'email per saperlo.
+    const quandoAlNegozio = body.pickupInStore ? ' — Ritiro in negozio' : body.deliverySlot?.trim() ? ` — Consegna: ${body.deliverySlot.trim()}` : '';
     const campanelle = comunicazioni.flatMap((c) => [
       {
         category: 'order',
         user_id: c.sellerId,
-        title: '🎉 Nuovo ordine!',
+        title: 'Nuovo ordine!',
         // 6/9/2026 — Stessa cifra, stesso ordine: si scrive come la scrive
         // l'email, non a mano all'inglese. Vedi lib/format.ts.
-        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(c.totalCents)} · pagamento alla consegna`,
+        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(c.totalCents)} · pagamento alla consegna${quandoAlNegozio}`,
         link: `/seller/orders/${c.orderId}`,
       },
       {
         category: 'order',
         user_id: user.id,
-        title: '✅ Ordine ricevuto',
+        title: 'Ordine ricevuto',
         body: `Il tuo ordine #${c.orderId.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
         link: `/orders/${c.orderId}`,
       },
@@ -1745,6 +1768,20 @@ export const POST = withAuthRateLimit(
         await alCliente();
       }
     }, 'email del nuovo ordine in contanti');
+
+    // R31-018 — Il segno degli ordini nati senza la misura del confine (vedi il controllo della zona).
+    const daMisurareAMano = comunicazioni.filter((c) => nonMisurati.has(c.sellerId));
+    if (daMisurareAMano.length > 0) {
+      dopoLaRisposta(async () => {
+        for (const c of daMisurareAMano) {
+          await allarmeAgliAmministratori(
+            'Ordine in contanti con la distanza non misurata',
+            `L'ordine ${c.orderId.slice(0, 8)} è passato senza il controllo della distanza dal negozio: ${nonMisurati.get(c.sellerId)}. Guarda a mano se l'indirizzo è dentro il confine.`,
+            `/admin/orders/${c.orderId}`,
+          );
+        }
+      }, 'campanella della distanza non misurata');
+    }
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il

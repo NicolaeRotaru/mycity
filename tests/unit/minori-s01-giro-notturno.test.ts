@@ -35,7 +35,8 @@ function catena(risultato: unknown): unknown {
 
 const auth = {
   admin: {
-    getUserById: async (id: string) => ({ data: { user: { id, email: 'maria@example.it' } }, error: null }),
+    // R31-023 — Ogni persona ha la sua casella: anche il negozio riceve l'email dell'annullo.
+    getUserById: async (id: string) => ({ data: { user: { id, email: id === 's1' ? 'forno@example.it' : 'maria@example.it' } }, error: null }),
   },
 };
 
@@ -93,12 +94,13 @@ describe('1908 — l email del giro notturno dice il credito solo se è tornato 
     stato.creditoCade = true;
     stato.candidati = [{ ...ordineInContanti, id: 'o1', total_price: 8, wallet_applied_cents: 400 }];
     await giro();
-    expect(spedite).toHaveLength(1);
-    expect(String(spedite[0].text)).not.toMatch(/ti è stato restituito/);
+    const aMaria = spedite.filter((m) => m.to === 'maria@example.it');
+    expect(aMaria).toHaveLength(1);
+    expect(String(aMaria[0].text)).not.toMatch(/ti è stato restituito/);
   });
   it('controprova: storno riuscito, la riga del credito c è', async () => {
     stato.candidati = [{ ...ordineInContanti, id: 'o1', total_price: 8, wallet_applied_cents: 400 }];
     await giro();
-    expect(String(spedite[0].text)).toMatch(/ti è stato restituito/);
+    expect(String(spedite.find((m) => m.to === 'maria@example.it')?.text)).toMatch(/ti è stato restituito/);
   });
 });

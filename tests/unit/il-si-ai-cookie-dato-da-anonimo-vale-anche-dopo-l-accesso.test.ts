@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 27/8/2026 (R159) — L'ACQUISTO NON ARRIVAVA QUASI MAI A POSTHOG.
@@ -95,6 +96,7 @@ function tabellaConsensi() {
   };
 }
 
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 // S10 (5/11/2026) — L'invio dal server a PostHog ora rispetta POSTHOG_ACCESO
 // (spento al lancio): qui si prova la strada accesa, come prima.
@@ -199,6 +201,7 @@ function richiesta(cookie: string | null): never {
       ],
       delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: false,
     }),
   }) as never;

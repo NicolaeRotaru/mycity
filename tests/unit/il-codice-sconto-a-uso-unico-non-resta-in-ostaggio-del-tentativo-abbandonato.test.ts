@@ -54,6 +54,7 @@ const db = {
 
 // 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA in lib/funzioni-al-lancio.ts) e la rotta
 // la rifiuta anche con le chiavi. Questa prova misura il percorso della carta: la accende per finta.
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
   ...((await originale()) as Record<string, unknown>),
   CARTA_ACCESA: true,

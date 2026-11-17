@@ -119,6 +119,21 @@ export default function CookiesPage() {
           Annunci personalizzati e remarketing. Attualmente <strong>non installati</strong>;
           la sezione resta a documentare l&apos;eventuale futura attivazione.
         </p>
+
+        {/* 17/11/2026 (R32-024) — I video di YouTube e Vimeo (vetrine, home, pagine informative) non
+            erano nominati. Si caricano solo al tocco (components/store-sections/VideoAlClic.tsx), con
+            referrerPolicy strict-origin-when-cross-origin: al fornitore arriva il sito, non la pagina. */}
+        <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.5 Video di YouTube e Vimeo (solo se tocchi il video)</h3>
+        <p>
+          Alcune vetrine dei negozi, la home e le pagine informative possono mostrare un video di
+          YouTube (Google Ireland Ltd., dal dominio youtube-nocookie.com) o di Vimeo (Vimeo.com, Inc.,
+          con l&apos;opzione «do not track»). Il video non si carica da solo: al suo posto c&apos;è il
+          pulsante «Guarda il video». Solo quando lo tocchi il tuo browser si collega a YouTube o a
+          Vimeo, che ricevono il tuo indirizzo IP e il sito da cui guardi e possono salvare cookie o
+          dati nel browser secondo le proprie regole (
+          <a className="text-primary-700 underline" href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">privacy di Google</a>,{' '}
+          <a className="text-primary-700 underline" href="https://vimeo.com/privacy" target="_blank" rel="noopener noreferrer">privacy di Vimeo</a>).
+        </p>
       </LegalSection>
 
       <LegalSection id="gestione" heading="3. Come gestire le preferenze">
@@ -147,9 +162,11 @@ export default function CookiesPage() {
 
       <LegalSection id="extra-ue" heading="4. Trasferimenti extra-UE">
         <p>
-          Alcuni provider hanno sede negli Stati Uniti (Cloudflare, Google, Stripe Inc.,
-          Anthropic, Resend, PostHog Inc.). I trasferimenti sono coperti dalle Standard Contractual Clauses
-          adottate dalla Commissione Europea con Decisione 2021/914.
+          Alcuni provider hanno sede negli Stati Uniti (Cloudflare, Google, Stripe Inc., Anthropic,
+          Resend, PostHog Inc.). I trasferimenti sono coperti dalle Standard Contractual Clauses
+          adottate dalla Commissione Europea con Decisione 2021/914. YouTube (Google LLC) e Vimeo
+          (Vimeo.com, Inc.), per i video che tocchi, non sono nostri fornitori: sono titolari
+          autonomi negli Stati Uniti e trattano i dati secondo le proprie regole.
         </p>
       </LegalSection>
 

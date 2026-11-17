@@ -53,14 +53,86 @@ export function readConsent(): ConsentState | null {
     // valeva ancora: Google Analytics e gli eventi continuavano a partire finché la persona
     // non rispondeva (e il cookie del server, intanto, era già scaduto). Scaduto = non dato.
     if (typeof parsed.ts !== 'number' || Date.now() - parsed.ts > CONSENT_MAX_AGE_DAYS * 86_400_000) return null;
-    return { ...DEFAULT_STATE, ...parsed, necessary: true };
+    const stato: ConsentState = { ...DEFAULT_STATE, ...parsed, necessary: true };
+    riprovaLaRegistrazione(stato);
+    return stato;
   } catch {
     return null;
   }
 }
 
+/**
+ * 17/11/2026 (R32-015) — LA SCELTA CHE IL SERVER NON HA MESSO A VERBALE SI RIMANDA.
+ *
+ * La registrazione partiva una volta sola, senza guardare la risposta: se il registro
+ * non rispondeva (rete caduta, database fermo, chiave di servizio mancante) la scelta
+ * restava solo nel browser, e nessuno riprovava. Adesso il browser si segna quale scelta
+ * aspetta ancora il «registrata» del server (il suo `ts`) e, alla prima pagina caricata
+ * dopo (il banner legge la scelta a ogni pagina), la rimanda: una volta per pagina,
+ * finché il server non risponde bene. Una scelta scaduta non si rimanda: non vale più.
+ */
+const CONSENT_DA_REGISTRARE = 'mc_consent_da_registrare';
+let registrazioneTentataInQuestaPagina = false;
+
+function registraSulServer(scelta: ConsentState): void {
+  registrazioneTentataInQuestaPagina = true;
+  const quale = String(scelta.ts);
+  try {
+    localStorage.setItem(CONSENT_DA_REGISTRARE, quale);
+  } catch { /* storage pieno o negato: si prova lo stesso */ }
+  void fetch('/api/consent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      // 22/8/2026 — mancava, e il banner la chiede: le categorie mostrate e
+      // quelle registrate devono essere le stesse.
+      functional: scelta.functional,
+      analytics: scelta.analytics,
+      marketing: scelta.marketing,
+      // #69 — La versione va come TESTO. `CONSENT_VERSION` e' un numero, e la
+      // rotta si aspetta una stringa: ogni registrazione veniva respinta con
+      // 400, in silenzio, e il registro dei consensi era vuoto da sempre. Il
+      // giorno in cui il Garante — o un cliente — chiede «dimostrate che vi
+      // aveva detto di si'», non c'e' niente da mostrare. Testo anche perche'
+      // regge versioni come '2.1'.
+      versione: String(CONSENT_VERSION),
+    }),
+    keepalive: true,
+  })
+    .then((res) => {
+      // Fatto (o rifiutato per sempre, un 4xx che non è il freno): non si rimanda più.
+      // Un guasto del server (5xx) o il freno (429) lasciano la scelta in attesa.
+      const definitivo = res.ok || (res.status >= 400 && res.status < 500 && res.status !== 429);
+      if (!definitivo) return;
+      try {
+        if (localStorage.getItem(CONSENT_DA_REGISTRARE) === quale) localStorage.removeItem(CONSENT_DA_REGISTRARE);
+      } catch { /* niente da togliere */ }
+    })
+    .catch(() => { /* la registrazione non deve bloccare la scelta dell'utente: resta in attesa */ });
+}
+
+function riprovaLaRegistrazione(stato: ConsentState): void {
+  if (registrazioneTentataInQuestaPagina) return;
+  let inAttesa: string | null = null;
+  try {
+    inAttesa = localStorage.getItem(CONSENT_DA_REGISTRARE);
+  } catch {
+    return;
+  }
+  if (!inAttesa) return;
+  if (inAttesa !== String(stato.ts)) {
+    // In attesa c'è una scelta che non è più quella salvata: quella salvata è stata
+    // registrata dopo (o non è mai partita). Il segno è vecchio.
+    try { localStorage.removeItem(CONSENT_DA_REGISTRARE); } catch { /* idem */ }
+    return;
+  }
+  registraSulServer(stato);
+}
+
 export function writeConsent(partial: Partial<ConsentState>) {
   if (typeof window === 'undefined') return;
+  // La scelta nuova parte qui sotto: la lettura della vecchia non deve rimandare quella.
+  registrazioneTentataInQuestaPagina = true;
   const next: ConsentState = {
     ...DEFAULT_STATE,
     ...readConsent(),
@@ -90,25 +162,8 @@ export function writeConsent(partial: Partial<ConsentState>) {
 
   // Traccia lato server: prima il consenso viveva solo qui nel browser, quindi
   // svuotando la cronologia spariva e non era dimostrabile a nessuno.
-  void fetch('/api/consent', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      // 22/8/2026 — mancava, e il banner la chiede: le categorie mostrate e
-      // quelle registrate devono essere le stesse.
-      functional: next.functional,
-      analytics: next.analytics,
-      marketing: next.marketing,
-      // #69 — La versione va come TESTO. `CONSENT_VERSION` e' un numero, e la
-      // rotta si aspetta una stringa: ogni registrazione veniva respinta con
-      // 400, in silenzio, e il registro dei consensi era vuoto da sempre. Il
-      // giorno in cui il Garante — o un cliente — chiede «dimostrate che vi
-      // aveva detto di si'», non c'e' niente da mostrare. Testo anche perche'
-      // regge versioni come '2.1'.
-      versione: String(CONSENT_VERSION),
-    }),
-    keepalive: true,
-  }).catch(() => { /* la registrazione non deve bloccare la scelta dell'utente */ });
+  // 17/11/2026 (R32-015) — Se il server non risponde bene, la scelta si rimanda (registraSulServer).
+  registraSulServer(next);
 
   window.dispatchEvent(new CustomEvent('mc:consent-change', { detail: next }));
 }

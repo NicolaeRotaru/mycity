@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -23,6 +24,7 @@ const stato = vi.hoisted(() => ({
   rpc: [] as string[],
 }));
 
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/funzioni-al-lancio', async (originale) => {
   const vero = (await originale()) as Record<string, unknown>;
   return {
@@ -185,6 +187,7 @@ const corpo = {
   groups: [{ sellerId: NEGOZIO, items: [{ productId: PRODOTTO, quantity: 1 }], shippingCents: 0 }],
   delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
   pickupInStore: false,
+  deliverySlot: FASCE_DI_DOMANI[0],
   useCredit: false,
 };
 

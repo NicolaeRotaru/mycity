@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -381,6 +381,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
       }
       await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
+      // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine»: non lancia, l'annullo è già scritto.
+      if (sellerId) {
+        await avvisaIlNegozioDellAnnullo(admin, { id: o.id, seller_id: sellerId }, `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: non è stato accettato in tempo.`);
+      }
 
       canceled++;
     } catch (e) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { FILTRO_PRIMO_INCASSO } from '@/lib/abbonamento-primo-incasso';
 import { ABBONAMENTO_CENTESIMI_MESE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
-import { getServerSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
@@ -78,6 +78,23 @@ export const POST = withAuthRateLimit(
 
     const stripe = getStripe();
 
+    // R33-008 — UN SOLO CLIENTE STRIPE PER NEGOZIO, PRIMA DELLA CASSA.
+    // Senza cliente la cassa partiva con `customer_email` e Stripe creava un cliente nuovo a
+    // ogni sessione: con due schede nascevano due abbonamenti su due clienti diversi, il
+    // webhook salvava il secondo sopra al primo e il portale («Gestisci abbonamento») apriva
+    // solo il secondo. Il primo restava orfano: pagato ogni mese e non disdicibile dal sito.
+    // Adesso il cliente si crea qui, una volta, e si salva sul profilo solo se è ancora vuoto:
+    // se due schede lo creano insieme vince il primo salvato e tutte e due usano quello.
+    let clienteStripe: string | null = profile.stripe_customer_id ?? null;
+    if (!clienteStripe) {
+      try {
+        clienteStripe = await clienteDelNegozio(stripe, user.id, user.email);
+      } catch (err) {
+        // Stripe o il database non rispondono: si prosegue come prima (il caso peggiore resta quello).
+        logger.warn('[subscription] cliente Stripe del negozio non preparato, si prosegue', { sellerId: user.id, err });
+      }
+    }
+
     // Il controllo sopra guarda un campo che viene scritto dal webhook DOPO il
     // pagamento: fra il primo clic e l'arrivo del webhook — o con due schede
     // aperte — restava aperta una finestra in cui nascevano due abbonamenti
@@ -87,15 +104,16 @@ export const POST = withAuthRateLimit(
     // Qui si chiede a Stripe, che è la fonte vera, invece di fidarsi del nostro
     // campo. Se la chiamata non riesce non si blocca il negoziante: si prosegue,
     // perché il caso peggiore resta quello di prima.
-    if (profile.stripe_customer_id) {
+    if (clienteStripe) {
       try {
         const esistenti = await stripe.subscriptions.list({
-          customer: profile.stripe_customer_id,
+          customer: clienteStripe,
           status: 'all',
           limit: 10,
         });
+        // R33-008 — anche «incompleto»: il primo pagamento è partito e aspetta la conferma.
         const attiva = esistenti.data.find((sub) =>
-          ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status),
+          ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'].includes(sub.status),
         );
         if (attiva) {
           logger.warn('[subscription] abbonamento già presente su Stripe', {
@@ -108,20 +126,26 @@ export const POST = withAuthRateLimit(
       } catch (err) {
         logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
       }
+      // R33-008 — Una cassa dell'abbonamento ancora aperta (l'altra scheda): si ridà quella,
+      // non se ne apre una seconda. La chiave qui sotto vale solo dentro la stessa finestra
+      // di 10 minuti: due clic alle 10:09 e alle 10:11 aprivano due casse.
+      try {
+        const aperte = await stripe.checkout.sessions.list({ customer: clienteStripe, status: 'open', limit: 10 });
+        const giaAperta = aperte.data.find((s) => s.metadata?.kind === 'seller_subscription' && !!s.url);
+        if (giaAperta) return NextResponse.json({ url: giaAperta.url }, { status: 200 });
+      } catch (err) {
+        logger.warn('[subscription] casse aperte non lette su Stripe, si prosegue', { err });
+      }
     }
-    // 12/11/2026 (R10-019) — Il controllo qui sopra non vede le casse ancora aperte: con due
-    // schede (o senza `stripe_customer_id`, al primo abbonamento) nascevano due sessioni e due
-    // abbonamenti. La chiave di idempotenza fa rispondere a Stripe con LA STESSA sessione a
-    // tutte le richieste dello stesso negozio nella stessa finestra di 10 minuti.
     const chiaveDellaCassa = `abbonamento-negozio:${user.id}:${Math.floor(Date.now() / FINESTRA_CASSA_MS)}`;
     try {
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
-        // Riusa il Customer esistente se già creato, altrimenti Stripe lo crea
-        // da customer_email e lo recupereremo nel webhook (session.customer).
-        ...(profile.stripe_customer_id
-          ? { customer: profile.stripe_customer_id }
+        // Il cliente del negozio (R33-008); solo se non si è potuto preparare, Stripe lo
+        // crea da customer_email e lo recupereremo nel webhook (session.customer).
+        ...(clienteStripe
+          ? { customer: clienteStripe }
           : { customer_email: user.email }),
         line_items: [
           {
@@ -154,3 +178,39 @@ export const POST = withAuthRateLimit(
     }
   },
 );
+
+/**
+ * R33-008 — Il cliente Stripe del negozio: quello già creato per lui (cercato per email e
+ * `metadata.seller_id`, se un salvataggio precedente è caduto), altrimenti uno nuovo. Si
+ * salva sul profilo SOLO se il campo è ancora vuoto; se un'altra scheda l'ha salvato
+ * prima, si rilegge e si usa il suo.
+ */
+async function clienteDelNegozio(
+  stripe: ReturnType<typeof getStripe>,
+  sellerId: string,
+  email: string,
+): Promise<string> {
+  const trovati = await stripe.customers.list({ email, limit: 10 });
+  const giaFatto = trovati.data.find((c) => c.metadata?.seller_id === sellerId);
+  const cliente = giaFatto ?? (await stripe.customers.create({
+    email,
+    metadata: { kind: 'seller_subscription', seller_id: sellerId },
+  }));
+  const admin = getAdminSupabase();
+  const { data: salvati, error } = await admin
+    .from('profiles')
+    .update({ stripe_customer_id: cliente.id })
+    .eq('id', sellerId)
+    .is('stripe_customer_id', null)
+    .select('stripe_customer_id');
+  if (error) throw new Error(`cliente Stripe non salvato: ${error.message}`);
+  if (salvati && salvati.length > 0) return cliente.id;
+  const { data: riletto, error: erroreRilettura } = await admin
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', sellerId)
+    .single();
+  const vincitore = (riletto as { stripe_customer_id?: string | null } | null)?.stripe_customer_id;
+  if (erroreRilettura || !vincitore) throw new Error('cliente Stripe del negozio non riletto');
+  return vincitore;
+}

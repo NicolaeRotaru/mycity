@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
+import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
@@ -54,10 +54,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // La logica del denaro sta in un posto solo (lib/ordini/annulla.ts), perché
   // era una copia unica dentro questa rotta e il percorso del cliente non
   // l'attraversava mai: chi annullava dal sito non veniva rimborsato.
+  // R31-022 — Ordine già ritirato dal fattorino o consegnato: la merce non è in negozio, e
+  // l'annullo non la rimette in vendita (un pezzo fantasma lo scopre un cliente che ha già pagato).
+  const merceUscita = ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(String(order.delivery_status));
   const esito = await annullaERimborsa(admin, order, {
     reason,
     metadata: { canceled_by: user.id, source: 'admin_cancel' },
     motivoCredito: 'order_admin_canceled',
+    ...(merceUscita ? { merceNonTorna: true } : {}),
   });
 
   if (!esito.ok) {
@@ -96,7 +100,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
     user_id: order.user_id,
-    title: '✕ Ordine annullato',
+    title: 'Ordine annullato',
     body: refundId ? `${reason} · rimborso emesso` : reason,
     link: `/orders/${order.id}`,
   }, { dove: 'admin-cancel', ordine: order.id });
@@ -108,18 +112,21 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     order.seller_id ? { user_id: order.seller_id, link: `/seller/orders/${order.id}` } : null,
     order.rider_id ? { user_id: order.rider_id, link: `/rider/orders/${order.id}` } : null,
   ].filter((x): x is { user_id: string; link: string } => x !== null);
+  const fraseAgliAltri = order.delivery_status === 'DELIVERED'
+    ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
+    : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.';
   for (const a of altri) {
     // 5/11/2026 (unione) — Dalla stessa porta delle altre campanelle (S02): se la scrittura cade, lo dice.
     await scriviCampanella(admin, {
       category: 'order',
       user_id: a.user_id,
-      title: `✕ Ordine ${numero} annullato`,
-      body: order.delivery_status === 'DELIVERED'
-        ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
-        : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.',
+      title: `Ordine ${numero} annullato`,
+      body: fraseAgliAltri,
       link: a.link,
     }, { dove: 'admin/cancel (negozio e fattorino)', ordine: order.id });
   }
+  // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine». Non lancia: l'annullo è già scritto.
+  await avvisaIlNegozioDellAnnullo(admin, order, fraseAgliAltri);
 
   await writeAudit({
     actorId: user.id,

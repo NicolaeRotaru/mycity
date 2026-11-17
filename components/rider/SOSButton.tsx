@@ -161,9 +161,8 @@ export default function SOSButton({ orderId }: Props) {
     // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
     // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
     //
-    // Venti righe piu' in basso il dialogo di conferma dice ancora «Verra' avviata la chiamata al
-    // 112»: anche quella frase promette troppo, perche' la chiamata parte solo quando il fattorino
-    // preme CHIAMA. Si cambia con la cucitura della regista (R28-001): la vincola una prova comune.
+    // R31-001 (17/11/2026) — Anche il dialogo di conferma prometteva «Verra' avviata la chiamata
+    // al 112»: adesso dice che si apre il telefono col 112 gia' scritto e che CHIAMA lo premi tu.
     //
     // R16-009 (13/11/2026) — La posizione l'ha già chiesta il dialogo quando si è aperto (apriDialogo),
     // con la pagina ancora davanti: qui si usa quella arrivata, senza chiedere niente. Il tastierino
@@ -260,7 +259,7 @@ export default function SOSButton({ orderId }: Props) {
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
                   <Phone size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>
+                  <span>Si apre il telefono con il <strong>112 (numero unico emergenze)</strong> già scritto: la chiamata parte solo quando premi tu CHIAMA</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />

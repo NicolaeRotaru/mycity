@@ -33,6 +33,8 @@ let erroreProfili: { message: string } | null = null;
 /** Il segno nel «database»: chi l'ha gia' messo. */
 const segnati = new Set<string>();
 const marcature: string[] = [];
+/** R30-003 — I carrelli chiusi senza email: segno scritto e filtri della scrittura. */
+const chiusi: Array<{ valori: Record<string, unknown>; filtri: unknown[][] }> = [];
 
 function finto() {
   return {
@@ -53,7 +55,19 @@ function finto() {
         in: async () =>
           tabella === 'profiles' && erroreProfili ? { data: null, error: erroreProfili } : { data: profili, error: null },
       }),
-      update: () => ({ eq: async () => ({ error: null }) }),
+      // R30-003 — Il carrello chiuso senza email si scrive con due filtri in più (ultima attività, segno vuoto).
+      update: (valori: Record<string, unknown>) => {
+        const filtri: unknown[][] = [];
+        const q: Record<string, unknown> = {
+          eq: (...a: unknown[]) => (filtri.push(a), q),
+          is: (...a: unknown[]) => (filtri.push(a), q),
+          then: (ok: (v: unknown) => unknown) => {
+            if ('recovery_email_sent_at' in valori && valori.recovery_email_sent_at !== null) chiusi.push({ valori, filtri });
+            return Promise.resolve({ error: null }).then(ok);
+          },
+        };
+        return q;
+      },
     }),
   };
 }
@@ -75,6 +89,7 @@ beforeEach(() => {
   vi.resetModules();
   spedite.length = 0;
   marcature.length = 0;
+  chiusi.length = 0;
   segnati.clear();
   carrelli = [];
   profili = [];
@@ -89,7 +104,9 @@ describe('① un carrello di settimane fa non riceve il promemoria «4 ore»', (
     carrelli = [carrello('u1', 21 * 24)];
     await giroDeiCarrelli();
     expect(spedite, 'e partito un promemoria per un carrello di tre settimane fa').toHaveLength(0);
-    expect(marcature).toContain('u1');
+    // R30-003 — Esce dalla lista col segno «chiuso senza email» (la sua ultima attività), non con l'ora del giro.
+    expect(chiusi.map((x) => x.valori.recovery_email_sent_at)).toEqual([carrelli[0].last_activity]);
+    expect(chiusi[0].filtri).toEqual(expect.arrayContaining([['user_id', 'u1'], ['last_activity', carrelli[0].last_activity]]));
   });
 
   it('controprova: un carrello di cinque ore fa riceve il promemoria', async () => {

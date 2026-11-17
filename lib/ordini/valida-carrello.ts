@@ -158,13 +158,27 @@ export function validaRigaDelCarrello<P extends ProdottoDelCatalogo>(input: {
     };
   }
 
+  /**
+   * 17/11/2026 (R30-010) — UNA RIGA A ZERO EURO NON SI VENDE.
+   *
+   * Il database accetta un prezzo uguale a zero (price >= 0) e il negoziante può scriverlo
+   * anche senza passare dalla porta che lo ferma (lib/products/salvataggio-tracciato.ts):
+   * la cassa lo vendeva, e il negozio consegnava merce gratis se accettava senza guardare.
+   * Si guarda il prezzo che si fa pagare davvero, in centesimi e già scontato: anche un
+   * centesimo col 70% di sconto arriva a zero.
+   */
+  const unitCents = discountedUnitCents(p.price, sconti.get(p.id) ?? 0);
+  if (!Number.isFinite(unitCents) || unitCents <= 0) {
+    return { ok: false, scarto: { motivo: 'PRODOTTO_NON_DISPONIBILE', messaggio: `Prodotto ${p.name} non disponibile.` } };
+  }
+
   return {
     ok: true,
     prodotto: p,
     riga: {
       productId: p.id,
       quantity: riga.quantity,
-      unitCents: discountedUnitCents(p.price, sconti.get(p.id) ?? 0),
+      unitCents,
       variantId,
       variantLabel,
     },

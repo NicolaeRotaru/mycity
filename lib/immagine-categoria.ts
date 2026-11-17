@@ -51,12 +51,27 @@ export const HOST_FOTO_AMMESSI = ['images.pexels.com', 'placehold.co'] as const;
  *
  * Nella CSP il permesso è scritto col host del NOSTRO progetto, non col suffisso
  * (`https://${supaHost}`, che senza configurazione ricade su `*.supabase.co`).
- * Qui il confronto è sul suffisso, cioè un filo più largo: l'indirizzo dello
- * Storage di un ALTRO progetto passerebbe di qui e verrebbe bloccato dal
- * browser. Non è più il buco di prima, perché in quel caso l'immagine fallisce e
- * il fallimento finisce nei log invece di sparire.
+ * Il suffisso qui vale solo in quel caso: con l'indirizzo del progetto il confronto
+ * è sul suo host (`storageAmmesso`), così lo Storage di un ALTRO progetto, che il
+ * browser bloccherebbe, si scarta prima.
  */
 export const SUFFISSO_HOST_STORAGE = '.supabase.co';
+
+/**
+ * Lo Storage ammesso è quello che la CSP mette in `img-src` (middleware.ts, getSupabaseHost): l'host
+ * del NOSTRO progetto quando NEXT_PUBLIC_SUPABASE_URL c'è, il suffisso solo quando manca.
+ */
+function storageAmmesso(host: string): boolean {
+  const nostro = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (nostro) {
+    try {
+      return host === new URL(nostro).hostname.toLowerCase();
+    } catch {
+      // Indirizzo del progetto scritto male: la CSP ricade sul suffisso, e qui lo stesso.
+    }
+  }
+  return host.endsWith(SUFFISSO_HOST_STORAGE);
+}
 
 /**
  * Perché una tessera resta senza foto.
@@ -153,7 +168,7 @@ export function fotoDiCategoria(categoria: CategoriaConFoto | null | undefined):
 
   const host = url.hostname.toLowerCase();
   const ammesso =
-    (HOST_FOTO_AMMESSI as readonly string[]).includes(host) || host.endsWith(SUFFISSO_HOST_STORAGE);
+    (HOST_FOTO_AMMESSI as readonly string[]).includes(host) || storageAmmesso(host);
   if (!ammesso) return { src: null, motivo: 'host-non-ammesso', scartato: indirizzo };
 
   return { src: indirizzo, motivo: null };
@@ -176,7 +191,7 @@ export function motivoDaSegnalare(esito: FotoDiCategoria): string | null {
     case 'schema-non-ammesso':
       return `l'indirizzo della foto non è utilizzabile: serve un indirizzo che comincia per https:// oppure un percorso del sito che comincia per / (scartato: ${esito.scartato ?? ''})`;
     case 'host-non-ammesso':
-      return `la foto sta su un sito che il browser bloccherà: ammessi solo ${HOST_FOTO_AMMESSI.join(', ')} e lo Storage ${SUFFISSO_HOST_STORAGE} (scartato: ${esito.scartato ?? ''})`;
+      return `la foto sta su un sito che il browser bloccherà: ammessi solo ${HOST_FOTO_AMMESSI.join(', ')} e lo Storage Supabase del sito (scartato: ${esito.scartato ?? ''})`;
     default:
       return null;
   }

@@ -299,7 +299,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // `nuovo` distingue gli ordini creati adesso da quelli ripescati perche'
   // gia' esistevano da un tentativo precedente (#164): solo i primi meritano
   // email e campanella.
-  const createdOrderIds: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo: boolean }> = [];
+  const createdOrderIds: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo: boolean; fascia: string | null; ritiro: boolean }> = [];
 
   // Crea N ordini, uno per gruppo
   for (const g of groups) {
@@ -385,7 +385,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
             sellerId: g.sellerId,
             totalCents: g.totalCents,
             itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
-            nuovo: false,
+            nuovo: false, fascia: fasciaDellOrdine, ritiro: pickupInStore, // R31-025: per la campanella
           });
           continue;
         }
@@ -443,7 +443,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       sellerId: g.sellerId,
       totalCents: g.totalCents,
       itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
-      nuovo: true,
+      nuovo: true, fascia: fasciaDellOrdine, ritiro: pickupInStore, // R31-025: per la campanella
     });
   }
 

@@ -61,7 +61,7 @@ const COLONNE: Record<string, string[]> = {
   products: [
     'id', 'name', 'description', 'price', 'images', 'seller_id', 'status', 'created_at', 'category_id',
     'stock', 'attributes', 'unit', 'compare_at_price', 'condition', 'express_enabled', 'has_variants',
-    'external_source_url',
+    'external_source_url', 'tags',
   ],
   categories: ['id', 'slug', 'name', 'parent_id', 'icon'],
   sponsored_active_public: ['id', 'product_id', 'placement', 'start_date', 'end_date', 'category_slug'],

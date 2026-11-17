@@ -4,6 +4,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { writeAudit } from '@/lib/audit';
+import { fotoDiCategoria, motivoDaSegnalare } from '@/lib/immagine-categoria';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,19 @@ const baseFields = {
   parent_id: z.string().uuid().nullable().optional(),
   sort_order: z.number().int().min(0).max(9999).optional(),
   featured: z.boolean().optional(),
+  // La foto della tessera in home (migrazione 159). Vuota = nessuna foto: si salva null. Il messaggio
+  // è quello di fotoDiCategoria, cioè dice esattamente cosa la home accetta e cosa no.
+  image_url: z
+    .string()
+    .trim()
+    .max(500)
+    .nullable()
+    .optional()
+    .superRefine((v, ctx) => {
+      if (!v) return;
+      const motivo = motivoDaSegnalare(fotoDiCategoria({ image_url: v }));
+      if (motivo) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Foto non ammessa: ${motivo}` });
+    }),
 };
 
 const createSchema = z.object(baseFields);
@@ -67,11 +81,15 @@ export const POST = withAdminAuth(async ({ req, user }) => {
     .insert({
       name: d.name, slug: d.slug, icon: d.icon?.trim() || null,
       parent_id: d.parent_id ?? null, sort_order: d.sort_order ?? 0, featured: d.featured ?? false,
+      // Solo se è stata mandata: senza la migrazione 159 la colonna non c'è, e una categoria senza
+      // foto si deve poter creare lo stesso.
+      ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}),
     })
     .select('id')
     .single();
   if (error) {
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
+    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
     return ApiErrors.internal('Impossibile creare la categoria');
   }
   await writeAudit({ actorId: user.id, action: 'category.create', targetTable: 'categories', targetId: data.id, metadata: { name: d.name, slug: d.slug } });
@@ -92,6 +110,7 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
   if (rest.parent_id !== undefined) patch.parent_id = rest.parent_id;
   if (rest.sort_order !== undefined) patch.sort_order = rest.sort_order;
   if (rest.featured !== undefined) patch.featured = rest.featured;
+  if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;
   if (Object.keys(patch).length === 0) return ApiErrors.invalidRequest('Nessun campo da aggiornare');
 
   const admin = getAdminSupabase();
@@ -102,6 +121,7 @@ export const PATCH = withAdminAuth(async ({ req, user }) => {
   const { error } = await admin.from('categories').update(patch).eq('id', id);
   if (error) {
     if (error.code === '23505') return ApiErrors.invalidRequest('Slug già esistente');
+    if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…');
     return ApiErrors.internal('Impossibile aggiornare la categoria');
   }
   await writeAudit({ actorId: user.id, action: 'category.update', targetTable: 'categories', targetId: id, metadata: { campi: Object.keys(patch) } });

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
 
 /**
  * 29/10/2026 — IL CREDITO TOLTO DA UN TENTATIVO FALLITO TORNA, OGNI VOLTA.
@@ -189,6 +190,7 @@ async function ordina(chiave: string, gruppi: Array<typeof AL_FORNO>) {
       groups: gruppi,
       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
       useCredit: true,
     }),
   });

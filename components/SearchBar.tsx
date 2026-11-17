@@ -13,6 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { queryKeys } from '@/lib/queries/keys';
 import { riquadroSuggerimenti } from '@/lib/ricerca/riquadro-suggerimenti';
 import { leggiSuggerimentiRicerca, type Suggerimento } from '@/lib/queries/suggerimenti-ricerca';
+import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
 type Suggestion = Suggerimento;
 
@@ -62,16 +63,18 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     queryKey: ['search', 'zero-categories'],
     enabled: open,
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<{ slug: string; name: string }[]> => {
+    queryFn: async (): Promise<{ id: string; slug: string; name: string }[]> => {
       const { data } = await supabase
         .from('categories')
-        .select('slug, name')
+        .select('id, slug, name')
         .is('parent_id', null)
-        .order('name')
-        .limit(8);
-      return (data ?? []) as { slug: string; name: string }[];
+        .order('name');
+      return (data ?? []) as { id: string; slug: string; name: string }[];
     },
   });
+  // Come menu, piede e vetrina: solo le categorie con qualcosa dentro. Se non si sa, tutte.
+  const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: open });
+  const catPiene = soloLePiene(topCats, piene.isError ? null : piene.data);
 
   useEffect(() => {
     if (!open) return;
@@ -312,11 +315,11 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
               </button>
             ))}
           </div>
-          {topCats.length > 0 && (
+          {catPiene.length > 0 && (
             <>
               <p className="px-1 pb-2 pt-3 text-[11px] font-bold uppercase tracking-wide text-ink-400">Sfoglia per categoria</p>
               <div className="flex flex-wrap gap-2">
-                {topCats.slice(0, 8).map((c) => (
+                {catPiene.slice(0, 8).map((c) => (
                   <Link
                     key={c.slug}
                     href={`/category/${c.slug}`}
