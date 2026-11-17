@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:27",
+  "aggiornato": "2026-11-17 19:28",
   "finita": false,
   "testa": "e66bd7a8eefdf2bbce3b8accd5d67ab0eb594253",
   "verifica": {
@@ -71,9 +71,10 @@
     },
     {
       "id": "R03-008",
-      "chiave": "qa-flussi|dopo aver tolto un prodotto da una lista, il conteggio in /lists resta vecchio fino a 30 secondi",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "gia_riparato_prima",
+      "prova": "app/lists/[id]/page.tsx:162-169 sulla base 1a7de5b9 (oggi 174-181): l'onSuccess di removeItem, usato da tutti e due i cestini della pagina (righe 355 e 399), invalida queryKeys.lists.mine, .public e .inVetrina; comando: npx vitest run tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx --reporter=dot → verde, 2 prove su 2 (uscita 0)",
+      "nota": "Nella pagina della lista non resta altro che tocchi il conteggio di /lists: le uniche rimozioni passano da removeItem, non c'è «svuota», la nota non cambia il conteggio, e l'eliminazione della lista ora rilegge le stesse chiavi (voce del commit e66bd7a8 di questo lotto). Il secondo percorso, il pulsante della scheda prodotto (components/AddToListButton.tsx), non è un mio file: in quest'onda è la voce di R01 sul pulsante della scheda prodotto.",
+      "chiave": "qa-flussi|dopo aver tolto un prodotto da una lista, il conteggio in /lists resta vecchio fino a 30 secondi"
     },
     {
       "id": "R03-009",
