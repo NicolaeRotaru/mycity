@@ -49,6 +49,9 @@ import { queryKeys } from '@/lib/queries/keys';
  * cuore lì, invece di ribaltare quello che si vede. E una scrittura che non risponde non tiene più
  * ferma la fila per sempre: dopo `TEMPO_MASSIMO_SCRITTURA_MS` vale come rifiutata, la fila va avanti
  * e il cuore torna allo stato confermato. La rilettura a fila vuota riporta comunque il database.
+ * Giro di correzione: la scrittura scaduta non si ferma, e se arriva dopo la rilettura cambia il
+ * database sotto il cuore (un «togli» a 12 s: cuore pieno, preferito cancellato). Quando arriva
+ * comunque, riuscita o no, si rilegge l'elenco (a fila vuota; se no lo fa la fine della fila).
  *
  * 🟢 Niente rete: l'unico orologio è il tempo massimo di una scrittura.
  */
@@ -80,11 +83,17 @@ export function versoDaScrivere(mostrato: ReadonlySet<string>, idProdotto: strin
 /** Oltre questo tempo una scrittura senza risposta vale come rifiutata: la fila non resta ferma. */
 const TEMPO_MASSIMO_SCRITTURA_MS = 10_000;
 
-/** La scrittura, o un rifiuto se il server non risponde entro il tempo massimo. */
-function entroIlTempoMassimo(scrittura: Promise<void>): Promise<void> {
+/**
+ * La scrittura, o un rifiuto se il server non risponde entro il tempo massimo. La scrittura scaduta
+ * però non si ferma: quando arriva comunque (riuscita o rifiutata) parte `seArrivaTardi`.
+ */
+function entroIlTempoMassimo(scrittura: Promise<void>, seArrivaTardi: () => void): Promise<void> {
   let sveglia: ReturnType<typeof setTimeout> | undefined;
   const scaduta = new Promise<never>((_, rifiuta) => {
-    sveglia = setTimeout(() => rifiuta(new Error('PREFERITO_SENZA_RISPOSTA')), TEMPO_MASSIMO_SCRITTURA_MS);
+    sveglia = setTimeout(() => {
+      rifiuta(new Error('PREFERITO_SENZA_RISPOSTA'));
+      scrittura.then(seArrivaTardi, seArrivaTardi);
+    }, TEMPO_MASSIMO_SCRITTURA_MS);
   });
   return Promise.race([scrittura, scaduta]).finally(() => clearTimeout(sveglia));
 }
@@ -142,7 +151,14 @@ export function opzioniDelTocco(
       const fila = filaDelProdotto(qc, idProdotto, prima.has(idProdotto));
       const numero = ++fila.ultimo;
       const scrittura = fila.coda
-        .then(() => entroIlTempoMassimo(scrivi(idProdotto, verso)))
+        .then(() =>
+          entroIlTempoMassimo(scrivi(idProdotto, verso), () => {
+            // La scrittura scaduta è arrivata lo stesso, magari dopo la rilettura: il database può
+            // essere cambiato sotto il cuore. A fila vuota si rilegge; con altri tocchi in fila lo fa
+            // la loro fine, che arriva dopo (a metà fila tornerebbe uno stato di passaggio).
+            if (!FILE_DEI_TOCCHI.get(qc)?.has(idProdotto)) void qc.invalidateQueries({ queryKey: CHIAVE_PREFERITI });
+          }),
+        )
         .then(() => {
           fila.confermato = verso === 'aggiungi';
         });
