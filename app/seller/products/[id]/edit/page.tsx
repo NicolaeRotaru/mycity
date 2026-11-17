@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,6 +48,19 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   const { id } = use(props.params);
   const router = useRouter();
   const qc = useQueryClient();
+  /**
+   * 17/11/2026 (R03-019) — QUANDO TORNA LA RETE IL MODULO RESTA DOV'E'.
+   *
+   * Senza rete le letture restano «in pausa» (la consegna del negozio senza
+   * dati, la rilettura del prodotto gia' in memoria) e il modulo si apre lo
+   * stesso. Tornata la rete ripartono, risultano di nuovo «in lettura», e la
+   * pagina rimetteva il caricamento al posto del modulo: smontato, con le
+   * modifiche non salvate. Adesso, aperto una volta, il modulo resta (al
+   * salvataggio la scorta vista la confronta comunque il server). Se si e'
+   * aperto senza sapere la consegna del negozio, per lui resta «non letta»:
+   * non scrive un «no» indovinato sopra un prodotto che la eredita.
+   */
+  const [moduloAperto, setModuloAperto] = useState<{ consegnaNonLetta: boolean } | null>(null);
 
   const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto, fetchStatus: prodottoFetchStatus } = useQuery({
     queryKey: queryKeys.seller.product(id),
@@ -235,9 +248,11 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   // R16-020 — Senza rete la lettura va in pausa (pending + paused, ne' caricamento ne' errore):
   // non e' «Prodotto non trovato». Una query spenta (idle) non e' in pausa e non entra qui.
   const prodottoInPausa = product === undefined && prodottoFetchStatus === 'paused';
-  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura || categorieInLettura) return <LoadingState />;
+  // R03-019 — Aperto una volta, il modulo resta: niente caricamento ne' avvisi al suo posto.
+  const restaAperto = moduloAperto !== null && !!product;
+  if (!restaAperto && (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura || categorieInLettura)) return <LoadingState />;
   // R16-021 — Senza rete la lettura delle categorie e' in pausa (senza dati): stesso avviso, mai il modulo vuoto.
-  if ((categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0) {
+  if (!restaAperto && (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0) {
     return (
       <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
@@ -256,7 +271,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    * taglie: al «Salva» saveProductVariantsServer le cancellava tutte, e negli
    * ordini gia' fatti la riga perdeva la taglia (order_items.variant_id a NULL).
    */
-  if (error || erroreVarianti || prodottoInPausa || !product) {
+  if (!product || (!restaAperto && (error || erroreVarianti || prodottoInPausa))) {
     // R16-020 — Una lettura caduta (rete, errore del database) non è «Prodotto non trovato»:
     // lo dice con parole semplici e offre «Riprova». «Non trovato» solo se la lettura è riuscita.
     const letturaCaduta = error ? !(error instanceof LetturaNegata) : Boolean(erroreVarianti) || prodottoInPausa;
@@ -283,6 +298,8 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       </div>
     );
   }
+
+  if (!moduloAperto) setModuloAperto({ consegnaNonLetta });
 
   const attrs = (product.attributes as Record<string, unknown>) ?? {};
   const legacyStato = typeof attrs.stato === 'string' ? attrs.stato : '';
@@ -338,7 +355,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         productId={id}
         recessoSegnabile={recessoSegnabile}
         sellerOffersExpress={offersExpress}
-        consegnaDelNegozioNonLetta={consegnaNonLetta}
+        consegnaDelNegozioNonLetta={consegnaNonLetta || moduloAperto?.consegnaNonLetta === true}
         onSubmit={(payload, ctx) => update.mutate({
             payload,
             variants: ctx.variants,
