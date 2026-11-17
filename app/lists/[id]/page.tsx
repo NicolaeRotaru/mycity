@@ -207,6 +207,8 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     onSuccess: () => {
       toast.success('Lista eliminata');
       rileggiLeListeDiLists();
+      // R10-009 — e il menu «Aggiungi a lista» della scheda prodotto: prima la mostrava ancora.
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
       router.push('/lists');
     },
     onError: (err: unknown) => toast.error(`Lista non eliminata: ${friendlyError(err)}`),
