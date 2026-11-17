@@ -1,0 +1,176 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-17 23:05",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R03-017",
+      "chiave": "api-backend|«duplica» di un prodotto escluso dal recesso: finché non si sa se la colonna c'è, la copia si salva recedibile senza avviso",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — la voce decide se la copia di un prodotto resta esclusa dal diritto di recesso, cioè se il cliente può restituirlo ed essere rimborsato: tocca i rimborsi dei clienti."
+    },
+    {
+      "id": "R03-013",
+      "chiave": "ai-endpoints|il tetto di spesa ai del giorno si sfora quando più chiamate partono insieme",
+      "esito": "riparato",
+      "commit": "ef3188359d8c51ed964382bc2fd585450196f6f3",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-tetto-fra-copie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-tetto-fra-copie.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base ef3188359d8c51ed964382bc2fd585450196f6f3^ --file lib/ai/run.ts --prove tests/unit/riparazione-r03-tetto-fra-copie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dentro una copia la prenotazione c'era già (R04-017); ora controllaTettoSpesaAi prenota la stima anche su Upstash (INCRBY atomico, finestre di 5 minuti con scadenza 15) prima di leggere lo speso, e la toglie a spesa registrata o a tetto che ferma. Nessuna migrazione; nella rotta del lotto solo l'await sulla liberazione, ora asincrona.",
+      "nota": "Fra copie regge solo con UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN su Vercel (le stesse del freno anti-abuso, segnalate da /api/health); senza, resta la prenotazione per copia."
+    },
+    {
+      "id": "R03-009",
+      "chiave": "ai-endpoints|se l'invio di un lotto ai resta senza risposta, il sito lo rimanda e anthropic ne esegue due, uno pagato e mai visto",
+      "esito": "riparato",
+      "commit": "d5cc38278982a85d5274e4c5a2feb308fd30f829",
+      "file_toccati": [
+        "lib/ai/batch.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-errore-del-fornitore.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-errore-del-fornitore.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base d5cc38278982a85d5274e4c5a2feb308fd30f829^ --file lib/ai/batch.ts --prove tests/unit/riparazione-r03-lotto-errore-del-fornitore.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base c'erano già maxRetries 0 e «da verificare» a connessione caduta (R04-014). Restava il 500/502/504 del fornitore, che può arrivare a lotto già creato: chiudeva la riga come fallita e diceva «Riprova». Ora invioIncerto riconosce anche questi codici: la riga resta aperta, risposta 503 «Non riavviarlo», la stima entra nel conto; il 529 resta un rifiuto vero.",
+      "nota": "Niente ricerca con batches.list: rischierebbe di agganciare il lotto di un altro negozio."
+    },
+    {
+      "id": "R03-003",
+      "chiave": "ai-endpoints|un lotto ai partito e pagato ma non agganciato alla sua riga si chiude come fallito dopo 15 minuti e se ne può pagare un secondo",
+      "esito": "riparato",
+      "commit": "83c59ea12b146183cee1002f512df9cca8df4deb",
+      "insieme_a": [
+        "R03-004"
+      ],
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-non-agganciato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-non-agganciato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83c59ea12b146183cee1002f512df9cca8df4deb^ --file app/api/ai/catalog-batch/start/route.ts,app/api/ai/catalog-batch/status/route.ts --prove tests/unit/riparazione-r03-lotto-non-agganciato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se l'aggancio fallisce due volte la rotta di avvio scrive nella riga «lotto partito ma non agganciato: <id>»; lo stato legge quell'id, aggancia il lotto (processing, batch_id) e lo interroga invece di chiudere a 15 minuti. Finché la riga è aperta un secondo avvio riceve 409.",
+      "nota": "Se il database rifiuta anche la terza scrittura la riga resta senza motivo e vale la regola dei 15 minuti di R04-005 (prova comune riparazione-r04-lavoro-in-invio, non toccata); l'id resta nel log."
+    },
+    {
+      "id": "R03-004",
+      "chiave": "ai-endpoints|un lotto ai partito ma non agganciato resta «in invio» per sempre, e la pagina del negozio non mostra né rotella né pulsante",
+      "esito": "riparato",
+      "commit": "83c59ea12b146183cee1002f512df9cca8df4deb",
+      "insieme_a": [
+        "R03-003"
+      ],
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-non-agganciato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-non-agganciato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83c59ea12b146183cee1002f512df9cca8df4deb^ --file app/api/ai/catalog-batch/start/route.ts,app/api/ai/catalog-batch/status/route.ts --prove tests/unit/riparazione-r03-lotto-non-agganciato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base R04-005 aveva già sistemato la pagina (rotella per «in invio», pulsante per «fallito», chiusura a 15 minuti). Restava il caso esatto della voce, il lotto partito ma non agganciato, che ora si aggancia con lo stesso commit di R03-003. La pagina non è stata toccata."
+    },
+    {
+      "id": "R03-002",
+      "chiave": "ai-endpoints|quando il tetto di spesa ai blocca un lavoro sul catalogo il negoziante legge «riprova» e il lavoro risulta fallito",
+      "esito": "riparato",
+      "commit": "c81e4d0b498d68d522cc31274964e8af013543b5",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-fermato-dal-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-fermato-dal-tetto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base c81e4d0b498d68d522cc31274964e8af013543b5^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r03-lotto-fermato-dal-tetto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel catch della rotta di avvio il blocco del tetto (AiCallError tetto_spesa) non passa più dal ramo dei guasti: risponde 503 «Budget AI giornaliero esaurito. Riprova domani.» via mapAiError e la riga si chiude «canceled» col motivo del tetto, invece di «failed» con un 502 «Riprova»."
+    },
+    {
+      "id": "R03-014",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+      "esito": "serve_file_altrui",
+      "nota": "Il difetto c'è ancora: segnalaRipiego (lib/ai/tettoSpesa.ts:185-231) conta l'ora nella memoria della singola copia; allarmiTettoSpesaAiPerIlCron (tettoSpesa.ts:407, R04-018) ricorda l'inizio del guasto in operational_alert_log ma non ha chiamanti. Il cron degli avvisi è di R07 in quest'onda; in tettoSpesa.ts non serve cambiare niente.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "Dopo l'import da '@/lib/privacy/cancellazioni-in-sospeso' (riga 18) aggiungere: import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa'; poi subito prima di `const incompleto = controlliSaltati.length > 0;` (riga 674 sulla base) aggiungere: alerts.push(...(await allarmiTettoSpesaAiPerIlCron())); La funzione non lancia, legge da sola AI_GLOBAL_DAILY_BUDGET_EUR e AI_COPIE_ATTESE e restituisce righe {key,type,detail,url} già nella forma AlertRow."
+        }
+      ]
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "un lavoro sul catalogo «in invio» incerto promette «tra poco lo vedi partire» per 24 ore, e a riga chiusa dice «puoi avviarne un altro» mentre il motivo dice di chiedere all'assistenza",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "lib/ai/statoLavoroCatalogo.ts:41-47",
+      "descrizione": "testoStatoLavoro non distingue il lavoro incerto: per 24 ore il testo dice che sta per partire, e quando la riga si chiude il testo e il motivo si contraddicono. File non di R03."
+    },
+    {
+      "titolo": "un lavoro «in invio» incerto non si può scartare: il negozio resta bloccato fino a 24 ore",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/seller/products/ai-batch/page.tsx",
+      "descrizione": "«Scarta» c'è solo per lo stato «pronto» (anche /api/ai/catalog-batch/cancel). Con R03-009 il caso capita anche dopo un 500/502/504 del fornitore all'invio."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "subagenti": 1,
+    "nota": "lotto 1 fatto; lotto 2 in partenza"
+  }
+}
