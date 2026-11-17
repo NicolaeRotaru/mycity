@@ -294,20 +294,22 @@ export default function Navbar() {
                     {canPurchase && (
                       <CartButton count={cartCount} />
                     )}
+                    {/* 17/11/2026 (R01-005) — Fra 768 e 1023 px il nome è sr-only e resta l'icona sola:
+                        il title lo dice anche a chi vede, come per «Registrati». */}
                     {isSeller && (
-                      <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/seller/orders" title="Ordini" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Package size={16} strokeWidth={2.2} aria-hidden />
                         <span className="sr-only lg:not-sr-only">Ordini</span>
                       </Link>
                     )}
                     {isRider && (
-                      <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/rider" title="Consegne" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Bike size={16} strokeWidth={2.2} aria-hidden />
                         <span className="sr-only lg:not-sr-only">Consegne</span>
                       </Link>
                     )}
                     {isAdmin && (
-                      <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/admin" title="Admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Shield size={16} strokeWidth={2.2} aria-hidden />
                         <span className="sr-only lg:not-sr-only">Admin</span>
                       </Link>
