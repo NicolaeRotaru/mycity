@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:14",
+  "aggiornato": "2026-11-17 19:19",
   "finita": false,
-  "testa": "34d340906cf5b55d264149402e69f9f959ab19c4",
+  "testa": "01a4cbaa2ba525c59d124889d3f4d675fc800a2e",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -89,9 +89,28 @@
     },
     {
       "id": "R03-011",
-      "chiave": "qa-flussi|il finto client supabase condiviso delle prove risponde a rpc() con «nessun errore»: una pagina che salva con una funzione del database sembra riuscita anche se non scrive niente",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "01a4cbaa2ba525c59d124889d3f4d675fc800a2e",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs",
+        "tests/unit/riparazione-r04-client-finto-rpc.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-finto-rpc-non-prevista.test.ts",
+        "tests/unit/riparazione-r04-client-finto-rpc.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-finto-rpc-non-prevista.test.ts tests/unit/riparazione-r04-client-finto-rpc.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 01a4cbaa^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r03-finto-rpc-non-prevista.test.ts,tests/unit/riparazione-r04-client-finto-rpc.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una funzione del database che la prova non ha previsto (nessun database della prova con rpc) risponde { data: null, error: { code: 'RPC_NON_PREVISTA', message: '… «nome» …' } } invece di «nessun errore», anche con gli anelli e con single. Misura prima: delle 199 prove che caricano il finto ne cadeva una sola, tests/unit/riparazione-r04-client-finto-rpc.test.ts (prova esistente che importa per nome il finto e nessun file di R01/R02): i suoi due casi senza database affermavano proprio la risposta silenziosa della voce; ora affermano l'errore che nomina la funzione (la catena arriva in fondo come prima). Tutte le altre restano verdi (202 file, 1353 prove).",
+      "verificato_da": "",
+      "chiave": "qa-flussi|il finto client supabase condiviso delle prove risponde a rpc() con «nessun errore»: una pagina che salva con una funzione del database sembra riuscita anche se non scrive niente"
     },
     {
       "id": "R03-012",
