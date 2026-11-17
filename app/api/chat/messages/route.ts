@@ -143,7 +143,25 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
       body: testo.length > 140 ? `${testo.slice(0, 139)}…` : testo,
       link,
     });
-    if (errN) logger.error('[chat/messages] campanella non scritta', { conversationId, message: errN.message });
+    if (errN) {
+      logger.error('[chat/messages] campanella non scritta', { conversationId, message: errN.message });
+      return;
+    }
+    // 17/11/2026 — Chi riceve ha la chat aperta e la legge DOPO che qui si è guardato il contatore
+    // e PRIMA che la voce sia scritta: /api/chat/mark-read spegne le voci che trova, non questa,
+    // che arriva dopo. Si riguarda il contatore: se è tornato a 0 la chat è già letta, e la voce
+    // appena scritta si spegne come le altre. Se mark-read arriva dopo, la trova e la spegne lui.
+    const campoNonLetti = scriveIlCliente ? 'seller_unread_count' : 'buyer_unread_count';
+    const { data: dopo } = await admin.from('conversations').select(campoNonLetti).eq('id', conversationId).maybeSingle();
+    if ((dopo as Record<string, unknown> | null)?.[campoNonLetti] === 0) {
+      const { error: errSpegni } = await admin
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', destinatario)
+        .eq('link', link)
+        .eq('is_read', false);
+      if (errSpegni) logger.warn('[chat/messages] voce della chat già letta non spenta', { conversationId, message: errSpegni.message });
+    }
   } catch (e) {
     logger.error('[chat/messages] campanella non scritta', { conversationId, message: e instanceof Error ? e.message : String(e) });
   }
