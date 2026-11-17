@@ -220,7 +220,8 @@ export default function NotificationsPage() {
       {notifications.length === 0 ? (
         <div className="rounded-xl border border-cream-300 bg-white p-12 text-center">
           <Inbox size={48} className="mx-auto mb-3 text-ink-500" aria-hidden />
-          <p className="mb-1 font-semibold text-ink-600">Nessuna notifica</p>
+          {/* R10-005 — Anche vuota, la pagina ha un h2 dopo l'h1: se no il titolo seguente è l'h3 del piede. */}
+          <h2 className="mb-1 font-semibold text-ink-600">Nessuna notifica</h2>
           <p className="text-sm text-ink-400">Quando ci saranno aggiornamenti, li vedrai qui.</p>
         </div>
       ) : (
