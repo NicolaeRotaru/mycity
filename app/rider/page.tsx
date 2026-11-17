@@ -196,36 +196,45 @@ export default function RiderDashboardPage() {
   });
 
   // Preferenze del rider: online/offline e zone preferite (dalla pagina Disponibilità).
-  const { data: pref } = useQuery({
+  // Una lettura caduta (anche getUser() senza rete) non è «sei offline»: l'errore sale, e senza
+  // un dato già letto la scheda dice che non lo sa, con «Riprova».
+  const letturaPref = useQuery({
     queryKey: queryKeys.rider.pref,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { online: false, zones: [] as string[] };
-      const { data } = await supabase
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      if (!user) throw erroreUtente ?? new Error('Non autenticato');
+      const { data, error } = await supabase
         .from('profiles')
         .select('rider_is_online, rider_zones')
         .eq('id', user.id)
         .single();
+      if (error) throw error;
       return { online: !!data?.rider_is_online, zones: (data?.rider_zones as string[] | null) ?? [] };
     },
     staleTime: 30_000,
   });
+  const pref = letturaPref.data;
+  const statoOnlineIgnoto = !pref && letturaPref.isError;
   const online = pref?.online ?? false;
   const zones = pref?.zones ?? [];
 
   // Rating del rider (media + conteggio) per il badge in testata.
-  const { data: rating } = useQuery({
+  // Una lettura caduta non è «nessuna recensione»: l'errore sale e la testata lo dice.
+  const letturaVoto = useQuery({
     queryKey: queryKeys.rider.ratingSummary,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { avg: 0, count: 0 };
-      const { data } = await supabase.from('rider_reviews').select('rating').eq('rider_id', user.id);
+      const { data: { user }, error: erroreUtente } = await supabase.auth.getUser();
+      if (!user) throw erroreUtente ?? new Error('Non autenticato');
+      const { data, error } = await supabase.from('rider_reviews').select('rating').eq('rider_id', user.id);
+      if (error) throw error;
       const rows = (data ?? []) as { rating: number }[];
       if (rows.length === 0) return { avg: 0, count: 0 };
       return { avg: rows.reduce((s, r) => s + Number(r.rating), 0) / rows.length, count: rows.length };
     },
     staleTime: 60_000,
   });
+  const rating = letturaVoto.data;
+  const votoIgnoto = !rating && letturaVoto.isError;
 
   /**
    * 15/10/2026 (R33) — I CONTANTI ANCORA DA DICHIARARE.
@@ -425,6 +434,13 @@ export default function RiderDashboardPage() {
               <Star size={12} className="text-accent-500" fill="currentColor" aria-hidden />
               {rating.avg.toFixed(1).replace('.', ',')} · {rating.count} {rating.count === 1 ? 'recensione' : 'recensioni'}
             </Link>
+          ) : votoIgnoto ? (
+            <p className="text-xs text-ink-500">
+              Non riesco a leggere il tuo voto ·{' '}
+              <button type="button" className="font-semibold text-olive-700 underline" onClick={() => { void letturaVoto.refetch(); }}>
+                Riprova
+              </button>
+            </p>
           ) : (
             <p className="text-xs text-ink-500">Pronto a consegnare</p>
           )}
@@ -433,6 +449,22 @@ export default function RiderDashboardPage() {
 
       {/* Online toggle card — gradiente olive quando online, switch iOS */}
       <div className="px-4 pb-4">
+        {statoOnlineIgnoto ? (
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-secondary-200 bg-secondary-50 px-5 py-[18px] text-ink-900">
+            <div>
+              <p className="font-serif text-[18px] font-extrabold">Non so se sei online</p>
+              <p className="mt-0.5 text-xs text-ink-600">Non riesco a leggere il tuo stato. Riprova fra un momento.</p>
+            </div>
+            <Button
+              variant="secondary"
+              icon={RotateCcw}
+              loading={letturaPref.isFetching}
+              onClick={() => { void letturaPref.refetch(); }}
+            >
+              Riprova
+            </Button>
+          </div>
+        ) : (
         <div
           className={`flex items-center justify-between rounded-2xl px-5 py-[18px] ${
             online
@@ -464,6 +496,7 @@ export default function RiderDashboardPage() {
             />
           </button>
         </div>
+        )}
       </div>
 
       {/* Stat di oggi: 3-up */}
@@ -662,7 +695,7 @@ export default function RiderDashboardPage() {
             </div>
           )}
         </div>
-      ) : (
+      ) : statoOnlineIgnoto ? null : (
         <div className="px-4">
           <div className="rounded-xl border border-cream-300 bg-surface-0 px-5 py-8 text-center">
             <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-olive-50">
