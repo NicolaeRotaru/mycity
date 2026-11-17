@@ -280,6 +280,10 @@ export default function PrivacyPage() {
           <li><strong>PostHog Inc.</strong> (Stati Uniti — SCC) — statistiche di utilizzo e registrazione delle sessioni di navigazione (session replay), attiva solo con il consenso ai cookie analitici. Nel filmato tutto il testo e tutti i campi sono oscurati, e la registrazione è disattivata sulle pagine in cui compaiono dati di altre persone (area del negozio, area del Rider, amministrazione, ordini, pagamento, profilo, messaggi); l&apos;identificativo dell&apos;utente viene collegato dopo l&apos;accesso.</li>
           <li><strong>Functional Software Inc. (Sentry)</strong> (Stati Uniti — SCC) — raccolta degli errori dell&apos;applicazione per la diagnosi dei guasti; può includere indirizzo IP e pagina in cui si è verificato l&apos;errore.</li>
           <li><strong>Google Ireland Ltd.</strong> — misurazione del traffico del sito. È attiva solo se la misurazione è configurata nel sito e solo con il consenso ai cookie analitici: se non è configurata, a Google non arriva nulla.</li>
+          {/* 17/11/2026 (R32-024) — I video incorporati non erano dichiarati. Si caricano solo al tocco
+              (components/store-sections/VideoAlClic.tsx), e al fornitore arriva il sito, non la pagina
+              (referrerPolicy strict-origin-when-cross-origin). */}
+          <li><strong>Google Ireland Ltd. / Google LLC (YouTube)</strong> e <strong>Vimeo.com, Inc.</strong> (Stati Uniti — SCC) — video incorporati nelle vetrine dei negozi, in home e nelle pagine informative. Il video si carica solo quando tocchi «Guarda il video»: da quel momento YouTube o Vimeo ricevono il tuo indirizzo IP e il sito da cui guardi, e trattano i dati secondo le proprie regole.</li>
           {/* #76 — Mancavano i due fornitori che ricevono davvero le foto
               caricate dai negozianti. La funzione «togli lo sfondo» manda
               l'immagine a un servizio esterno: quel servizio riceve un dato che
