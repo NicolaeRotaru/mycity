@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 17:51",
+  "aggiornato": "2026-11-17 17:57",
   "finita": false,
-  "testa": "bc36f48120ec38bf20880c7d68b3171015744681",
+  "testa": "2a7ff37b2e01860fefed24601509d8bb2f26bb44",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -85,8 +85,25 @@
     {
       "id": "R04-013",
       "chiave": "qa-flussi|il client supabase finto delle prove non sa concatenare .rpc().order().range()",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "2a7ff37b2e01860fefed24601509d8bb2f26bb44",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-client-finto-rpc.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-client-finto-rpc.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2a7ff37b2e01860fefed24601509d8bb2f26bb44^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r04-client-finto-rpc.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "rpc del client finto non è più una funzione async che torna una promessa nuda: torna una catena (order, range, eq, … passano oltre; then/single danno la risposta di prima, o quella del database della prova). Rilanciate verdi le 2 prove che nominano il finto e le 57 che lo montano tramite aiuti/compila.mjs.",
+      "verificato_da": ""
     }
   ],
   "nuovi_difetti_visti": [],
