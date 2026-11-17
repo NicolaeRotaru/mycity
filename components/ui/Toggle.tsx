@@ -44,7 +44,7 @@ export function Toggle({
   const idDesc = useId();
   return (
     <div className="flex items-start justify-between gap-4 p-3 border rounded-lg hover:bg-cream-50">
-      <div>
+      <div className="min-w-0">
         <div id={idTitolo} className="font-semibold">{label}</div>
         <div id={idDesc} className="text-xs text-ink-500">{desc}</div>
       </div>
