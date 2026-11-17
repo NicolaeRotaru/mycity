@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 17:08",
+  "aggiornato": "2026-11-17 17:10",
   "finita": false,
-  "testa": "27a8b6d0d3e13bcfe7d62412cfff50aafd333813",
+  "testa": "b7fa1b600a73d19842decfcf1203a226fcbd8d6c",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -135,6 +135,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Al posto di parseInt(…) || 0 la pagina legge la quantità con leggiQuantita (solo cifre, intero non negativo): «1.5», «10abc», «1.000», «-3» danno l'errore di riga «Quantità non valida (…)», «12» e « 7 » passano come numeri. Anche una cella vuota ora è un errore invece di 0. CARICAMENTO_DA_FILE_ACCESO resta false (lib/funzioni-al-lancio.ts non toccato); la prova accende la funzione solo nel suo finto.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R01-004",
+      "chiave": "microcopy|il freno «after n seconds» di supabase non è tradotto per «password dimenticata?»",
+      "esito": "riparato",
+      "commit": "b7fa1b600a73d19842decfcf1203a226fcbd8d6c",
+      "file_toccati": [
+        "app/sign-in/page.tsx",
+        "tests/unit/riparazione-r01-password-dimenticata-freno-dei-secondi.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-password-dimenticata-freno-dei-secondi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-password-dimenticata-freno-dei-secondi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b7fa1b600a73d19842decfcf1203a226fcbd8d6c^ --file app/sign-in/page.tsx --prove tests/unit/riparazione-r01-password-dimenticata-freno-dei-secondi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "translateAuthError (il ripiego della pagina di accesso, sopra traduciErroreAuth di lib/errors.ts) legge «after N seconds» e risponde «Hai appena chiesto un link: puoi chiederne un altro fra N secondi.» (la frase di /reset-password per la stessa richiesta), invece di «Accesso non riuscito. Riprova.». Il tetto orario con lo stesso codice over_email_send_rate_limit («email rate limit exceeded») resta tradotto da traduciErroreAuth come prima. lib/errors.ts non toccato.",
       "verificato_da": ""
     }
   ],
