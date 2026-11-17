@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:19",
+  "aggiornato": "2026-11-17 19:22",
   "finita": false,
-  "testa": "01a4cbaa2ba525c59d124889d3f4d675fc800a2e",
+  "testa": "1b4eb64f1d6ee71bf452c832a18c4eac1e0c5db4",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -137,9 +137,26 @@
     },
     {
       "id": "R03-013",
-      "chiave": "stati-ui|senza rete il modulo prodotto crede che il negozio non offra la consegna veloce",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "1b4eb64f1d6ee71bf452c832a18c4eac1e0c5db4",
+      "file_toccati": [
+        "lib/queries/consegna-veloce-del-negozio.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-consegna-veloce-senza-rete.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-consegna-veloce-senza-rete.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b4eb64f^ --file lib/queries/consegna-veloce-del-negozio.ts --prove tests/unit/riparazione-r03-consegna-veloce-senza-rete.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Offline e senza dato in memoria react-query mette la lettura in pausa (isPaused): l'aggancio rispondeva offre undefined, inLettura false, nonLetta false e il modulo prodotto la prendeva per «non offre». Ora nonLetta = isError o (in pausa e senza dato): le due pagine del prodotto passano già nonLetta al modulo, che mostra l'avviso e non scrive express_enabled se il negoziante non sceglie. Prova con react-query vero e rete spenta (onlineManager): senza rete → non letta; rete tornata → risposta vera; lettura riuscita sì/no, lettura caduta del database e dato in memoria offline → come prima. Nessun file altrui da toccare.",
+      "verificato_da": "",
+      "chiave": "stati-ui|senza rete il modulo prodotto crede che il negozio non offra la consegna veloce"
     }
   ],
   "nuovi_difetti_visti": [],
