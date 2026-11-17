@@ -103,12 +103,12 @@ export function CartUpsell({ items }: Props) {
                   </p>
                 </Link>
                 <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-sm font-bold text-ink-900">{formatPrice(p.price)}</span>
+                  <span className="text-base font-extrabold text-ink-900">{formatPrice(p.price)}</span>
                   <button
                     type="button"
                     onClick={() => handleAdd(p)}
                     aria-label={`Aggiungi ${p.name} al carrello`}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-primary-600 bg-transparent text-primary-700 shadow-sm-neutral transition-all hover:bg-primary-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1"
                   >
                     <Plus size={16} strokeWidth={2.6} aria-hidden />
                   </button>

@@ -37,7 +37,6 @@ import {
   attesaDichiarata,
   identificativoAvviso,
   type ClienteAvvisi,
-  type LetturaAvvisi,
   type RegistroAvvisi,
 } from '@/lib/privacy/avvisi-a-chi-aspetta';
 
@@ -217,42 +216,29 @@ describe('chi aspetta la cancellazione sa perché aspetta', () => {
   });
 
   it('due giri partiti insieme: il secondo sbatte sulla chiave primaria e non duplica', async () => {
-    const scritte: Record<string, unknown>[] = [];
-    // Un database che si comporta come quello vero: la lettura non vede ancora
-    // niente (le due corse partono insieme) ma la scrittura rifiuta il doppione.
-    const inCorsa: ClienteAvvisi = {
-      from: () => ({
-        select: () => ({ eq: () => letturaVuota() }),
-        insert: async (righe: Record<string, unknown>[]) => {
-          const id = String(righe[0].id);
-          if (scritte.some((r) => r.id === id)) {
-            return { data: null, error: { message: 'duplicate key value violates unique constraint' } };
-          }
-          scritte.push(righe[0]);
-          return { data: righe, error: null };
-        },
-      }),
-    };
+    // R02-004 — Il finto unico, con la chiave primaria vera (`chiaviUniche`): le due corse partono
+    // insieme e leggono prima che l'altra abbia scritto; la seconda scrittura rifiuta il doppione.
+    const finto = fintoGiroNotturno({ chiaviUniche: true });
+    const inCorsa = finto.admin as unknown as ClienteAvvisi;
 
     const dovuti = verdettoDelGiro([FATTORINO], ADESSO, RECAPITO).dovuti;
-    const primo = await recapitaAvvisi(inCorsa, dovuti, registro());
-    const secondo = await recapitaAvvisi(inCorsa, dovuti, registro());
+    const [primo, secondo] = await Promise.all([
+      recapitaAvvisi(inCorsa, dovuti, registro()),
+      recapitaAvvisi(inCorsa, dovuti, registro()),
+    ]);
 
-    expect(primo.recapitati).toBe(1);
-    expect(secondo.recapitati).toBe(0);
-    expect(secondo.giaDetti).toBe(1);
+    expect(primo.recapitati + secondo.recapitati).toBe(1);
+    expect(primo.giaDetti + secondo.giaDetti).toBe(1);
     // E soprattutto: il rifiuto del database NON è un guasto da segnalare.
+    expect(primo.falliti).toBe(0);
     expect(secondo.falliti).toBe(0);
-    expect(scritte).toHaveLength(1);
+    expect(finto.righe('notifications')).toHaveLength(1);
   });
 
   it('un avviso che non parte si conta come guasto, e non fa cadere gli altri', async () => {
-    const rotto: ClienteAvvisi = {
-      from: () => ({
-        select: () => ({ eq: () => letturaVuota() }),
-        insert: async () => ({ data: null, error: { message: 'permission denied' } }),
-      }),
-    };
+    const rotto = fintoGiroNotturno({
+      guasti: [{ tabella: 'notifications', azione: 'insert', messaggio: 'permission denied' }],
+    }).admin as unknown as ClienteAvvisi;
     const dovuti = verdettoDelGiro(
       [FATTORINO, { ...FATTORINO, userId: 'rider-2' }],
       ADESSO,
@@ -288,12 +274,3 @@ describe('chi aspetta la cancellazione sa perché aspetta', () => {
     expect(dovuti[0].corpo).toContain('il modulo dei contatti');
   });
 });
-
-/** 27/10/2026 (quarto giro, fase 2) — Una lettura che non trova niente, anche stretta con più `eq`. */
-function letturaVuota(): LetturaAvvisi {
-  const lettura: LetturaAvvisi = {
-    eq: () => lettura,
-    then: (ok, ko) => Promise.resolve({ data: [], error: null }).then(ok, ko),
-  };
-  return lettura;
-}

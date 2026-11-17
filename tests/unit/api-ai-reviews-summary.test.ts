@@ -4,6 +4,9 @@ const FAKE_USER = { id: 'seller-1', email: 's@x.com' };
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth: (h: (ctx: { user: typeof FAKE_USER; req: Request }) => unknown) => (req: Request) => h({ user: FAKE_USER, req }),
 }));
+// R02-002 — Qui si prova il riepilogo con gli strumenti AI accesi: lo spegnimento al lancio,
+// letto dalla rotta, ha la sua prova.
+vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 const runMessageMock = vi.fn();
 vi.mock('@/lib/ai/run', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/ai/run')>();

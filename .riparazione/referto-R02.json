@@ -1,0 +1,317 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-17 21:00",
+  "finita": true,
+  "testa": "92094312a869b6c527c0600b9d907bf66da5f17a",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "92094312a869b6c527c0600b9d907bf66da5f17a",
+    "nota": "1692 file di prove passati (1 saltato già alla base), 10823 casi; eslint 0 errori, 99 avvisi già presenti."
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "chiave": "api-backend|se due giri del sorvegliante partono nello stesso istante, l'amministratore riceve due volte la stessa campanella",
+      "esito": "gia_riparato_prima",
+      "prova": "app/api/cron/operational-alerts/route.ts:786-793 prendiIlTurno sulla chiave CAMPANELLA| prima dell'insert in notifications (suona solo chi ha il turno); :867-874 stesso turno prima dell'email; liberaIlTurno a :811 e :950 se l'invio cade. Arrivato col commit 038ddd6a. La prova tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts ha già le 'tolte' (righe 19-20, 39-42, 80, 86). npx vitest run tests/unit/riparazione-r29-allarme-ordine.test.ts tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts --reporter=dot → 19/19 verdi; il caso dei due giri nello stesso istante a riparazione-r29-allarme-ordine.test.ts:341-374.",
+      "nota": "Niente da rimettere: la base ha già lo stesso codice della correzione scritta e la prova già adattata.",
+      "verificato_da": "smentitore S1 (subagente generico, copia a parte): prove citate verdi (19/19); svuotato prendiIlTurno (route.ts:1028) i due casi «due giri insieme» di riparazione-r29-allarme-ordine.test.ts:341-374 cadono; righe citate giuste."
+    },
+    {
+      "id": "R02-002",
+      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
+      "esito": "parziale",
+      "commit": "5023c7ce922c8a1c5f3595de58e1a46bdd8afbfd",
+      "file_toccati": [
+        "app/api/ai/catalog-create/route.ts",
+        "lib/funzioni-al-lancio.ts",
+        "tests/unit/api-ai-reviews-summary.test.ts",
+        "tests/unit/riparazione-r02-freno-ai-sulla-rotta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-freno-ai-sulla-rotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-freno-ai-sulla-rotta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5023c7ce922c8a1c5f3595de58e1a46bdd8afbfd^ --file app/api/ai/catalog-create/route.ts --prove tests/unit/riparazione-r02-freno-ai-sulla-rotta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Freno AI_NEGOZI_ACCESA in testa al POST di app/api/ai/catalog-create: da spento 503 «non sono ancora attivi» prima del limite, del corpo e del filtro (l'unica delle 13 rotte AI mie dove il freno non fa rossa nessuna prova comune). Preparata tests/unit/api-ai-reviews-summary.test.ts con AI_NEGOZI_ACCESA: true. Commento di lib/funzioni-al-lancio.ts corretto: il caricamento da file non è più un'eccezione. Newsletter e caricamento da file erano già frenati sulla rotta: app/api/newsletter/route.ts:52 (NEWSLETTER_ACCESA), app/api/seller/products/import/route.ts:36 (CARICAMENTO_DA_FILE_ACCESO). Prove vicine: 110 file, 641 casi verdi.",
+      "cosa_resta": "1) Il freno sulle altre 12 rotte mie: answer-qa (POST :48), barcode-lookup :66, catalog-apply :44, catalog-apply-bulk :60, catalog-chat :180, description :47, diagnose :95, improve-product :216, product-chat :164, seo :59, variants :70, voice-product :60. In ognuna, dopo `import { ApiErrors } from '@/lib/api/responses';` aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e come prima riga del POST `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');`. Rimandato perché ogni rotta fa rosse delle prove comuni (39 file in serve_file_altrui) da cambiare nello stesso commit: provato nell'albero, freno sulle 13 rotte + le 39 prove preparate = 56 file, 407 casi verdi, poi rimesso com'era. 2) Copilot e reviews-summary: serve_file_altrui. 3) Classifica inviti: nessuna rotta (app/profile/referral/leaderboard/page.tsx:111 legge la vista dal browser); un freno lato server sarebbe una migrazione `REVOKE SELECT ON public.referral_leaderboard FROM authenticated;` da ridare alla riaccensione: scelta di Nicola, e niente migrazioni in quest'onda. catalog-batch/status e catalog-batch/cancel restano senza freno: servono a chiudere un lotto partito prima dello spegnimento.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/al-primo-messaggio-la-chat-non-propone-quello-che-non-ha-letto.test.ts, tests/unit/al-venditore-arriva-la-risposta-non-il-diario.test.ts, tests/unit/api-ai-answer-qa.test.ts, tests/unit/api-ai-barcode-lookup.test.ts, tests/unit/api-ai-description.test.ts, tests/unit/api-ai-diagnose.test.ts, tests/unit/api-ai-improve-product.test.ts, tests/unit/api-ai-seo.test.ts, tests/unit/api-ai-variants.test.ts, tests/unit/api-ai-voice-product.test.ts, tests/unit/dopo-la-dettatura-il-negoziante-sa-cosa-scrivere-lui.test.ts, tests/unit/i-tagli-valgono-in-tutti-e-due-i-punti.test.ts, tests/unit/il-copilot-applica-tutto-in-una-volta.test.ts, tests/unit/il-copilot-dice-cosa-non-e-entrato.test.ts, tests/unit/il-copilot-non-dice-applicato-se-il-prezzo-non-e-entrato.test.ts, tests/unit/il-freno-sul-prezzo-si-accende-davvero.test.ts, tests/unit/il-prezzo-rifiutato-si-dice-anche-quando-la-chat-si-ferma-per-altro.test.ts, tests/unit/il-testo-di-altri-sta-nel-recinto.test.ts, tests/unit/la-cache-copre-il-pezzo-che-pesa.test.ts, tests/unit/la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto.test.ts, tests/unit/la-chat-mostra-la-proposta-che-il-server-applica.test.ts, tests/unit/la-chat-non-dice-salvate-se-il-prezzo-e-rimasto.test.ts, tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts, tests/unit/le-parole-dell-assistente-non-fanno-da-conferma.test.ts, tests/unit/minori-s10-ai-chat.test.ts, tests/unit/minori-s10-catalogo-chat.test.ts, tests/unit/minori-s10-copilot-applica.test.ts, tests/unit/niente-chiamate-a-vuoto-al-filtro.test.ts, tests/unit/riparazione-r04-chat-caratteristiche.test.ts, tests/unit/riparazione-r04-chat-non-inventa.test.ts, tests/unit/riparazione-r04-chat-turni-assistente.test.ts, tests/unit/riparazione-r04-consegna-nel-prompt.test.ts, tests/unit/riparazione-r04-dettatura-elenchi.test.ts, tests/unit/riparazione-r04-elenchi-con-tetto.test.ts, tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts, tests/unit/riparazione-r22-consegna-nel-prompt.test.ts, tests/unit/un-corpo-troppo-grande-non-e-un-json-rotto.test.ts, tests/unit/una-dichiarazione-che-la-scheda-non-ha-non-si-chiede.test.ts",
+          "modifica": "Prove comuni (usano lib/ai/run.ts o lib/ai/client.ts di R01, o nominano file d'altri). Dopo l'ultimo vi.mock del file aggiungere `vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));` (vi.mock è sollevato, la posizione non conta). Nello stesso commit del freno sulle 12 rotte di cosa_resta 1."
+        },
+        {
+          "file": "tests/unit/il-filtro-e-collegato.test.ts",
+          "modifica": "Nel vi.mock di '@/lib/funzioni-al-lancio' (righe 26-29), dopo `TRADUCI_ACCESO: true,` (riga 28), aggiungere `AI_NEGOZI_ACCESA: true,`. Stesso commit del freno su description, diagnose, improve-product, seo e variants."
+        },
+        {
+          "file": "app/api/ai/copilot/route.ts",
+          "modifica": "Dopo la riga 6 `import { ApiErrors } from '@/lib/api/responses';` aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';`; in testa al POST (riga 96), prima di `if (!env.anthropicKey())`, `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');`. Nello stesso commit il vi.mock AI_NEGOZI_ACCESA: true in tests/unit/api-ai-copilot.test.ts, riparazione-r04-copilot-cronologia.test.ts, riparazione-r04-copilot-regola.test.ts, riparazione-r29-copilot-lento.test.ts (vanno rosse anche il-copilot-dice-cosa-non-e-entrato, minori-s10-catalogo-chat, niente-chiamate-a-vuoto-al-filtro, già nell'elenco sopra)."
+        },
+        {
+          "file": "app/api/ai/reviews-summary/route.ts",
+          "modifica": "Aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` accanto agli altri import; in testa al POST (riga 58), prima di `if (!env.anthropicKey())`, `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');`. tests/unit/api-ai-reviews-summary.test.ts è già pronta (commit 5023c7ce); con questo freno va rossa solo tests/unit/riparazione-r14-codice-storto.test.ts (voce sotto)."
+        },
+        {
+          "file": "tests/unit/riparazione-r14-codice-storto.test.ts",
+          "modifica": "Dopo la riga 48 `vi.mock('@/lib/audit', ...)` aggiungere `vi.mock('@/lib/funzioni-al-lancio', async (o) => ({ ...((await o()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));`. Stesso commit del freno su reviews-summary."
+        },
+        {
+          "file": "tests/unit/riparazione-r02-freno-ai-recensioni.test.ts (nuova)",
+          "modifica": "Il contenuto di `git show 930e4f9:tests/unit/riparazione-r14-freno-ai-recensioni.test.ts`, col solo riferimento d'id nel commento cambiato. Insieme al freno su reviews-summary."
+        }
+      ],
+      "verificato_da": "smentitore S1 (subagente generico, copia a parte): tolto 5023c7ce la prova dello spento cade, con la correzione la controprova da acceso passa; 112 file di prove su interruttori, catalog-create e reviews-summary verdi (656 casi); freno prima riga dentro withSellerAuth; newsletter :52 e seller/products/import :36 davvero frenate; cosa_resta onesto (le 12 rotte e le righe tornano)."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "architettura|la traccia «chi ha cambiato il prezzo» esce in due forme diverse a seconda della porta",
+      "esito": "riparato",
+      "commit": "5b35a2d83bfaee200949dc2edecf91b27a3b900a",
+      "file_toccati": [
+        "app/api/admin/products/route.ts",
+        "lib/products/salvataggio-tracciato.ts",
+        "tests/unit/riparazione-r02-traccia-admin-prodotti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-traccia-admin-prodotti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-traccia-admin-prodotti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5b35a2d83bfaee200949dc2edecf91b27a3b900a^ --file app/api/admin/products/route.ts,lib/products/salvataggio-tracciato.ts --prove tests/unit/riparazione-r02-traccia-admin-prodotti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "PATCH /api/admin/products scriveva { fields: [...] }: ora legge com'era il prodotto e scrive la voce con tracciaDellaModifica, origine 'admin' ({ origine, campi, prima, dopo, daAi } coi soli campi cambiati); tracciaDellaModifica ha l'opzione altreColonne per seller_id ed external_*. catalog-apply-bulk (:251-263) e catalog-batch/apply (:323-334) usavano già tracciaDellaModifica (commit 80c8dc39): era l'unica porta rimasta. Prove vicine: 16 file, 85 casi verdi.",
+      "nota": "Effetto voluto, come il modulo del venditore: un PATCH dell'amministrazione che cambia solo le varianti o niente non scrive più una riga di traccia. Se la lettura prima dell'update fallisce il PATCH risponde 500 (app/api/admin/products/route.ts:213-219), come già con le varianti.",
+      "verificato_da": "smentitore S1 (subagente generico, copia a parte): tolto 5b35a2d8 i 3 casi cadono sul comportamento; 17 prove vicine verdi (89 casi), tipi puliti; altri chiamanti di tracciaDellaModifica invariati (altreColonne facoltativa); forma della voce uguale alle altre porte; guasto della lettura prima → 500 senza scrivere niente."
+    },
+    {
+      "id": "R02-004",
+      "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+      "esito": "parziale",
+      "commit": "e0c38fe9097de00b1adcb4d132646174d4210bad",
+      "commit_ritorno": "a806446a",
+      "file_toccati": [
+        "tests/unit/aiuti/finto-giro-notturno.ts",
+        "tests/unit/la-spiegazione-per-email-che-non-parte-si-riprova-la-notte-dopo.test.ts",
+        "tests/unit/chi-aspetta-la-cancellazione-sa-perche-aspetta.test.ts",
+        "tests/unit/riparazione-r02-finto-clienteavvisi.test.ts",
+        "tests/unit/riparazione-r02-finto-clienteavvisi-single.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-finto-clienteavvisi.test.ts",
+        "tests/unit/riparazione-r02-finto-clienteavvisi-single.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-finto-clienteavvisi.test.ts tests/unit/riparazione-r02-finto-clienteavvisi-single.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e0c38fe9097de00b1adcb4d132646174d4210bad^ --file tests/unit/aiuti/finto-giro-notturno.ts --prove tests/unit/riparazione-r02-finto-clienteavvisi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il finto del giro notturno (tests/unit/aiuti/finto-giro-notturno.ts) torna a dare guasti a richiesta, chiavi uniche (23505), indirizzi (auth.admin.getUserById) e single()/maybeSingle() (dal commit 2a5754cf, tutto opzionale). la-spiegazione-per-email… usa il finto unico al posto della sua copia del ClienteAvvisi (databaseVero); chi-aspetta… al posto di letturaVuota e dei clienti inline (nel caso dei due giri i guasti si controllano giro per giro, 40 asserzioni come prima). Rimessa la prova del finto, rinominata; il caso single() sta in un file suo perché senza la correzione cade per un nome che manca. 18 file che usano il finto, 216 casi verdi.",
+      "cosa_resta": "La prova lunga chi-vuole-cancellarsi… (1035 righe, 48 casi): togliere adminDiProva e le patch a mano usando il finto unico, e spezzarla in rotte / notte / scansione del sorgente. Fatto e provato nel commit e0c38fe9 (48 casi prima = 48 dopo nei tre file, 35 file e 270 casi verdi), poi tolto col commit a806446a perché guardia-ramo vieta che una prova esistente perda asserzioni (165 → 49), anche quando i casi si spostano in file nuovi: lo può fare solo la regista (vedi serve_file_altrui). Resta anche una quinta copia scritta a mano del ClienteAvvisi, non nominata dalla correzione: tests/unit/minori-s08-avvisi.test.ts:40-70 (`database()`, con pannelloRottoPer e turnoRotto), da passare al finto unico (file non mio).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts + tests/unit/aiuti/riparazione-r02-giro-cancellazioni-di-prova.ts (nuovo) + tests/unit/riparazione-r02-la-notte-delle-cancellazioni-avvisa-chi-aspetta.test.ts (nuovo) + tests/unit/riparazione-r02-nessuna-pagina-scrive-a-mano-la-casella-privacy.test.ts (nuovo)",
+          "modifica": "Sul ramo ccr-30918361-coyajm-o8b-m02: `git show e0c38fe9 -- tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts tests/unit/aiuti/riparazione-r02-giro-cancellazioni-di-prova.ts tests/unit/riparazione-r02-la-notte-delle-cancellazioni-avvisa-chi-aspetta.test.ts tests/unit/riparazione-r02-nessuna-pagina-scrive-a-mano-la-casella-privacy.test.ts | git apply`. Toglie adminDiProva (:66-129) e i flag di stato, i guasti diventano GUASTO.* spinti su stato.mondo.guasti; nella prova restano le rotte (264 righe), la notte va nel file nuovo (593 righe), la scansione readdirSync (:562-578) nel suo file, l'impianto comune nell'aiutante. Serve la firma della regista sulla regola «una prova esistente non si svuota» (165 → 49 asserzioni nel file vecchio, 48 casi tutti presenti nei tre file)."
+        }
+      ],
+      "verificato_da": "smentitore S2 (subagente generico, copia a parte): 18 prove col finto verdi (216 casi); le due prove convertite hanno 40 e 31 asserzioni come alla base; rompendo due volte lib/privacy/avvisi-a-chi-aspetta.ts (doppione mai riconosciuto, doppione contato come riuscito) le prove di base e di testa cadono negli stessi casi, compreso «due giri partiti insieme» con Promise.all; tolta la correzione del finto, riparazione-r02-finto-clienteavvisi cade 4 su 4 su AssertionError (il file -single su TypeError, come dichiarato). Rilievo: indirizzi e seRiga del finto li usa solo la prova di R02."
+    },
+    {
+      "id": "R02-005",
+      "chiave": "navigazione-gerarchia|nella scheda prodotto il prezzo è quasi grande quanto il titolo e pesa meno del pulsante «+»",
+      "esito": "riparato",
+      "commit": "74a765ab1e2749d3260338a8218feaa2b3ae756f",
+      "file_toccati": [
+        "components/cart/CartUpsell.tsx",
+        "tests/unit/riparazione-r02-completa-con-prezzo-piu-del-pulsante.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-completa-con-prezzo-piu-del-pulsante.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-completa-con-prezzo-piu-del-pulsante.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 74a765ab1e2749d3260338a8218feaa2b3ae756f^ --file components/cart/CartUpsell.tsx --prove tests/unit/riparazione-r02-completa-con-prezzo-piu-del-pulsante.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ProductCard era già a posto (components/ProductCard.tsx:238 nome text-sm, :272/:278 prezzo text-lg extrabold, :288 «+» a contorno; prova riparazione-r24-prezzo-piu-del-pulsante). Restava il «Completa con» del carrello: in CartUpsell il prezzo passa da text-sm bold a text-base extrabold (16 px contro i 12 del nome) e il «+» diventa a contorno (border-2 border-primary-600 bg-transparent text-primary-700), stessa misura h-11 w-11 e stesso anello di focus. La prova monta il CartUpsell vero. 12 file di prove che lo nominano, 152 casi verdi.",
+      "nota": "Misura (smentitore S2, Inter ExtraBold 16 px): Intl it-IT scrive «1250,00 €», che sta negli 82 px liberi accanto al «+»; da circa «5000,00 €» (85 px) il prezzo esce dal suo spazio e, siccome il «+» ha shrink-0, lo spinge fuori (a «10.000,00 €» circa 7 px del pulsante tagliati dall'overflow-hidden); prima succedeva solo da «10.000 €». Vedi nuovi_difetti_visti.",
+      "verificato_da": "smentitore S2 (subagente generico, copia a parte): 12 prove che nominano CartUpsell verdi (152 casi); tolto il commit cadono i 2 casi della prova R02 e nessuna prova accanto; contrasto «+» primary-700 su bianco 6,67:1, bordo primary-600 4,96:1, anello di focus e h-11 w-11 invariati."
+    },
+    {
+      "id": "R02-006",
+      "chiave": "qa-flussi|quando un ordine viene annullato il negozio non riceve nessuna email, e se lo annulla il sito perché nessuno l'ha accettato non riceve nemmeno la campanella",
+      "esito": "gia_riparato_prima",
+      "prova": "app/api/cron/expire-stale-orders/route.ts:357-368 campanella al negozio (scriviCampanella, link /seller/orders/<id>); :384-387 email al negozio (avvisaIlNegozioDellAnnullo, lib/ordini/annulla.ts:537, template lib/email/templates.ts:512); l'email parte anche da app/api/orders/[id]/cancel/route.ts:113 e app/api/admin/orders/[id]/cancel/route.ts:129. Arrivato con 27cf4bfc. npx vitest run tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts tests/unit/minori-s03-ordini-scaduti.test.ts tests/unit/minori-s01-giro-notturno.test.ts --reporter=dot → 19/19 verdi; campanella al negozio provata a minori-s03-ordini-scaduti.test.ts:171.",
+      "verificato_da": "smentitore S1 (subagente generico, copia a parte): prove citate verdi (19/19); spenti i due if (sellerId) (route.ts:359 campanella, :385 email) cadono minori-s03 e la prova r31 del caso della voce; righe citate giuste."
+    },
+    {
+      "id": "R02-007",
+      "chiave": "qa-flussi|le domande dei clienti sotto i prodotti non arrivano a nessuno, ma al cliente diciamo che riceverà una notifica",
+      "esito": "non_fatto",
+      "nota": "serve una migrazione: va in un'onda con l'ok migrazioni di Nicola. La promessa al cliente è già tolta (components/ProductQA.tsx:95-96 toast «Domanda pubblicata: la risposta del negozio comparirà qui sotto.», e :136-138); manca l'avviso vero al negozio e a chi chiede. Le modifiche esatte sono in modifiche_scritte (colonne verificate sulle migrazioni 001, 008, 027, 055, 115, 215, 364; SQL non passato da nessun Postgres: va provato con --sql rNN_rimessa quando si scrive).",
+      "modifiche_scritte": [
+        {
+          "file": "migrations/590_le_domande_dei_clienti_avvisano_il_negozio.sql (fascia R02 590-599)",
+          "modifica": "-- 590_le_domande_dei_clienti_avvisano_il_negozio.sql\n--\n-- R02-007 — LE DOMANDE SOTTO I PRODOTTI NON ARRIVAVANO A NESSUNO.\n--\n-- Una domanda entra in product_questions (027) e resta li': nessun avviso al\n-- negozio, nessun avviso a chi l'ha fatta quando arriva la risposta. Il testo\n-- sotto il prodotto non promette piu' una notifica (components/ProductQA.tsx:95-96),\n-- ma il negozio la domanda la trova solo se apre la scheda per caso.\n--   ① AFTER INSERT: un avviso al negozio del prodotto (products.seller_id), col\n--      link alla pagina «Domande da rispondere» (/seller/domande);\n--   ② AFTER UPDATE OF answer: alla PRIMA risposta (prima vuota, ora scritta) su\n--      una domanda visibile, un avviso a chi l'ha fatta, col link alla scheda.\n-- Categoria 'system' (115): un avviso di servizio, che vuole_notifica() non spegne.\n-- Un avviso che non si scrive non ferma ne' la domanda ne' la risposta.\n-- Non si applica da sola: la applica Nicola.\n\nCREATE OR REPLACE FUNCTION public.domanda_avvisa_il_negozio()\nRETURNS trigger\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public, pg_temp\nAS $$\nDECLARE\n  v_negozio  uuid;\n  v_prodotto text;\nBEGIN\n  SELECT p.seller_id, p.name INTO v_negozio, v_prodotto\n    FROM public.products p\n   WHERE p.id = NEW.product_id;\n  -- Nessun negozio (seller_id ON DELETE SET NULL, 001) o il negozio che chiede a se stesso: niente avviso.\n  IF v_negozio IS NULL OR v_negozio = NEW.author_id THEN\n    RETURN NEW;\n  END IF;\n  BEGIN\n    INSERT INTO public.notifications (user_id, title, body, link, category)\n    VALUES (\n      v_negozio,\n      'Nuova domanda su ' || coalesce(v_prodotto, 'un tuo prodotto'),\n      left(NEW.question, 140),\n      '/seller/domande',\n      'system'\n    );\n  EXCEPTION WHEN OTHERS THEN\n    RAISE WARNING 'domanda_avvisa_il_negozio: avviso non scritto per la domanda %: %', NEW.id, SQLERRM;\n  END;\n  RETURN NEW;\nEND;\n$$;\n\nCREATE OR REPLACE FUNCTION public.risposta_avvisa_chi_ha_chiesto()\nRETURNS trigger\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public, pg_temp\nAS $$\nDECLARE\n  v_prodotto text;\nBEGIN\n  -- Solo la prima risposta, solo su una domanda che si vede, e non a chi risponde a se stesso.\n  IF NEW.answer IS NULL OR btrim(NEW.answer) = ''\n     OR OLD.answer IS NOT NULL\n     OR NEW.is_public IS NOT TRUE\n     OR NEW.answered_by IS NOT DISTINCT FROM NEW.author_id THEN\n    RETURN NEW;\n  END IF;\n  SELECT p.name INTO v_prodotto FROM public.products p WHERE p.id = NEW.product_id;\n  BEGIN\n    INSERT INTO public.notifications (user_id, title, body, link, category)\n    VALUES (\n      NEW.author_id,\n      'Il negozio ha risposto alla tua domanda',\n      coalesce(v_prodotto || ': ', '') || left(NEW.answer, 140),\n      '/product/' || NEW.product_id,\n      'system'\n    );\n  EXCEPTION WHEN OTHERS THEN\n    RAISE WARNING 'risposta_avvisa_chi_ha_chiesto: avviso non scritto per la domanda %: %', NEW.id, SQLERRM;\n  END;\n  RETURN NEW;\nEND;\n$$;\n\n-- Funzioni dei trigger: nessuno le chiama a mano.\nREVOKE EXECUTE ON FUNCTION public.domanda_avvisa_il_negozio() FROM PUBLIC, anon, authenticated;\nREVOKE EXECUTE ON FUNCTION public.risposta_avvisa_chi_ha_chiesto() FROM PUBLIC, anon, authenticated;\n\nDROP TRIGGER IF EXISTS trg_domanda_avvisa_il_negozio ON public.product_questions;\nCREATE TRIGGER trg_domanda_avvisa_il_negozio\n  AFTER INSERT ON public.product_questions\n  FOR EACH ROW EXECUTE FUNCTION public.domanda_avvisa_il_negozio();\n\nDROP TRIGGER IF EXISTS trg_risposta_avvisa_chi_ha_chiesto ON public.product_questions;\nCREATE TRIGGER trg_risposta_avvisa_chi_ha_chiesto\n  AFTER UPDATE OF answer ON public.product_questions\n  FOR EACH ROW EXECUTE FUNCTION public.risposta_avvisa_chi_ha_chiesto();\n\nNOTIFY pgrst, 'reload schema';\n"
+        },
+        {
+          "file": "tests/sql/rls/riparazione-r02-domande-avvisano-il-negozio.test.sql (nuovo)",
+          "modifica": "domanda di un cliente → 1 avviso al seller del prodotto, link /seller/domande, categoria system; prima risposta del negozio → 1 avviso all'autore, link /product/<id>; seconda modifica della risposta, risposta su una domanda nascosta (is_public=false), domanda del negozio sul suo prodotto → 0 avvisi; un INSERT su notifications che fallisce non ferma la domanda."
+        },
+        {
+          "file": "app/seller/domande/page.tsx (nuova, «Domande da rispondere»)",
+          "modifica": "'use client', ossatura di app/seller/reviews/page.tsx (SellerPageTitle, LoadingState/ErrorState, vistaDaQuery). Query: supabase.from('product_questions').select('id, product_id, question, created_at, products!inner(name, seller_id)').eq('products.seller_id', user.id).is('answer', null).eq('is_public', true).order('created_at', { ascending: true }).limit(100); chiave ['seller','domande'] (o queryKeys.seller.domande in lib/queries/keys.ts:154). Ogni riga: nome del prodotto con link /product/${product_id}, la domanda, e la risposta con lo stesso update di components/ProductQA.tsx:105-108 (answer, answered_at, answered_by), già permesso dalla policy qa_seller_answer (027). /seller è protetto da middleware.ts:69."
+        },
+        {
+          "file": "components/seller/SellerShell.tsx",
+          "modifica": "Il menu sta in SellerShell.tsx:31-57 (non in app/seller/layout.tsx): dopo :48 `{ href: '/messages', icon: MessageCircle, label: 'Messaggi' },` aggiungere `{ href: '/seller/domande', icon: MessageCircleQuestion, label: 'Domande' },` e MessageCircleQuestion nell'import di lucide-react :7-15."
+        }
+      ]
+    },
+    {
+      "id": "R02-008",
+      "chiave": "qa-flussi|ogni visitatore senza account fa una richiesta rifiutata alla vista dei nomi su ogni scheda prodotto e vetrina",
+      "esito": "non_fatto",
+      "nota": "delicata, privacy: va con i delicati. Il difetto c'è ancora sulla base: components/ProductQA.tsx:73 e components/store-sections/useStorePageData.ts:61 chiamano fetchNomiPubblici senza guardare l'account, e lib/queries/seller-public-profiles.ts:257 chiede sempre la vista nomi_pubblici (il rifiuto finisce in logger.warn a :269). La diff scritta sta in correzioni-scritte.json alla chiave della voce."
+    },
+    {
+      "id": "R02-009",
+      "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
+      "esito": "non_fatto",
+      "nota": "Resta spento per indicazione della regista del 17/11 (lib/ritiro-in-negozio.ts:22 `export const RITIRO_IN_NEGOZIO_ATTIVO = false;`, commento :7-21): accenderlo prima che la compensazione del 10% dei ritiri pagati al banco si possa segnare nel bonifico del lunedì lascerebbe quel 10% senza compensazione. Per segnarla servono una migrazione (niente migrazioni in quest'onda) e due file altrui (lib/guadagni/negozio.ts, app/api/cron/release-payouts/route.ts); il bonifico manuale (migrazione 350) non è sulla base. Le modifiche da fare all'accensione, sulle righe di oggi, sono qui sotto.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ritiro-in-negozio.ts (mio, solo all'accensione)",
+          "modifica": ":22 RITIRO_IN_NEGOZIO_ATTIVO = true; commento :7-21 riscritto (resta il controllo che le migrazioni 124 e 179 siano applicate in produzione)."
+        },
+        {
+          "file": "tests/unit/ritiro-in-negozio-messo-da-parte.test.ts + tests/unit/le-promesse-che-il-sito-non-mantiene.test.ts",
+          "modifica": "Insieme all'accensione, girate sull'acceso: ritiro-in-negozio-messo-da-parte :22-24 (toBe(false)) e :105-163; le-promesse-che-il-sito-non-mantiene :62-69. Da rileggere le altre prove sul ritiro (le prime 5 nominano RITIRO_IN_NEGOZIO_ATTIVO, minori-s07-note-dei-conti e una-sola-regola-per-la-spedizione toccano il ritiro ma non l'interruttore): la-guida-del-secondo-giorno-non-promette-il-ritiro-spento, la-targhetta-dell-ordine-non-manda-il-cliente-a-ritirarlo, le-frasi-della-zona-dicono-il-confine-della-cassa, minori-s07-note-dei-conti, minori-s07-spedizioni (lo finge già acceso), riparazione-r31-consegna-senza-fascia, una-sola-regola-per-la-spedizione."
+        },
+        {
+          "file": "components/checkout/PaymentMethodSelector.tsx",
+          "modifica": ":211 `<Badge variant=\"new\">Sconto {pickupDiscountPercent}%</Badge>` (PICKUP_DISCOUNT_PERCENT = 0, lib/constants.ts:87) → «Gratis, nessun costo di consegna»; :214-216 senza «sconto subito»; commento :175-187 aggiornato; tessera dei contanti :165-168: con pickupInStore un testo per chi paga al banco (contanti + ritiro = CASH_IN_STORE, migrations/179_l_interruttore_sull_ordine_non_si_accende_da_fuori.sql:206)."
+        },
+        {
+          "file": "app/admin/delivery/page.tsx",
+          "modifica": ":140-143, da acceso: togliere «Messo da parte: non se n’è ancora parlato coi negozi» (:142) e il valore `− ${PICKUP_DISCOUNT_PERCENT}%` (:143)."
+        },
+        {
+          "file": "lib/guadagni/negozio.ts + app/api/cron/release-payouts/route.ts + migrazione nuova",
+          "modifica": "Compensazione del 10% dei ritiri al banco: negozio.ts calcola già commissioneDovutaCents (:168; commento :171-177, pagatoAlBanco :178-180, filtro alBanco :190, somma :194) ma nessuno la scala; release-payouts legge solo payment_method card (:209, :306) e cod (:350, :416), niente CASH_IN_STORE. Va scalata dal bonifico del lunedì e segnata sull'ordine (colonna + funzione, migrazione nuova). Dipende dal bonifico manuale (migrazione 350)."
+        }
+      ],
+      "verificato_da": "smentitore S2: righe citate ricontrollate sul codice di oggi, giuste (due imprecisioni minori corrette); la migrazione 350 manca davvero."
+    },
+    {
+      "id": "R02-010",
+      "chiave": "qa-flussi|il ritorno dopo l accesso perde ?tab=",
+      "esito": "riparato",
+      "commit": "355b58d5c7a940c8569d2ea53a7dd3ccfd0dc8c6",
+      "file_toccati": [
+        "components/ui/AuthShell.tsx",
+        "app/sign-in/page.tsx",
+        "tests/unit/riparazione-r02-ritorno-con-google.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-ritorno-con-google.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-ritorno-con-google.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 355b58d5c7a940c8569d2ea53a7dd3ccfd0dc8c6^ --file components/ui/AuthShell.tsx,app/sign-in/page.tsx --prove tests/unit/riparazione-r02-ritorno-con-google.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "middleware.ts teneva già la query nel returnTo (ritornoDopoLAccesso :97-100, usato a :445 e :585). AuthAlternatives ora riceve returnTo e lo manda come next a /auth/callback (che lo ripulisce con safeInternalPath); app/sign-in/page.tsx:391 gli passa il returnTo già pulito a :89. La prova monta la pagina vera di accesso, preme Google e controlla next: ?tab= c'è, un ritorno esterno è scartato, la home non aggiunge niente. Prove vicine: 365 file, 2456 casi verdi.",
+      "nota": "Fuori, facoltativo e altrui: app/sign-up/page.tsx:357 monta `<AuthAlternatives condizioniDalModulo={acceptTos} />` senza returnTo; servirebbe `returnTo={safeInternalPath(returnTo, '/')}`, insieme a tests/unit/minori-s10-accessi-alternativi.test.tsx:28 (prova comune che controlla quella riga alla lettera).",
+      "verificato_da": "smentitore S1 (subagente generico, copia a parte): tolto 355b58d5 il caso ?tab=danger cade; ritorni scomodi provati a mano (https://evil, /\\evil, /<TAB>/evil, javascript:, next=//evil annidato): mai un next esterno, query e frammento interi, /auth/callback rimanda a casa."
+    },
+    {
+      "id": "R02-011",
+      "chiave": "qa-flussi|due guardie sulla veloce controllano il testo del sorgente e non il comportamento",
+      "esito": "serve_file_altrui",
+      "nota": "Fatta e provata (commit 0dbe534c, rimessa a 0), poi tolta col commit 9f071f72: guardia-ramo vieta di togliere asserzioni da una prova esistente (25 → 21 e 63 → 60) e la regola non ha deroga per il riparatore. Le prove di comportamento che sostituiscono i due casi sono già sulla base e verdi: tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts:147 e tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts:153.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts + tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts + tests/unit/riparazione-r02-le-guardie-della-veloce-guardano-il-comportamento.test.ts (nuovo)",
+          "modifica": "Sul ramo ccr-30918361-coyajm-o8b-m02: `git show 0dbe534c | git apply`. Toglie in la-consegna-veloce… le righe 134-145 (il caso «la cassa offre «Adesso» solo con il sì del server», controlli sul testo di DeliverySlotPicker e app/checkout/page.tsx; readFileSync resta per :127 e :158) e in l-ordine-con-un-appuntamento… le righe 326-336 (il caso «la fascia si ricontrolla anche AL MOMENTO di ordinare…», regex dentro handleSubmit); aggiunge la guardia leggera che li tiene fuori. Serve la firma della regista sulla regola «una prova esistente non si svuota»."
+        }
+      ],
+      "verificato_da": "smentitore S2 (copia a parte): sulla testa i file di prova sono identici alla base e le prove nuove di questa voce non ci sono; git apply --check di 0dbe534c e 695e6bc9 passa sulla testa; applicate davvero nella copia, le 7 prove coinvolte sono verdi (54 casi), righe citate giuste."
+    },
+    {
+      "id": "R02-012",
+      "chiave": "qa-flussi|una prova col nome del collaudo",
+      "esito": "serve_file_altrui",
+      "nota": "Fatta e provata (commit 695e6bc9, rimessa a 0), poi tolta col commit 92094312: guardia-ramo legge la rinomina come cancellazione di una prova esistente, e quella regola non ha deroga per il riparatore. Il nome scritto nella correzione (i-termini-nominano-…) farebbe anche rosso «prova nuova senza il nome della sessione»: per questo il nome nuovo porta riparazione-r02-. Nessun file del deposito nomina il vecchio percorso; la prova importa solo app/terms/page.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/zz-collaudo-termini-chi.test.tsx",
+          "modifica": "Sul ramo ccr-30918361-coyajm-o8b-m02: `git show 695e6bc9 | git apply` (con --find-renames è un git mv a contenuto invariato) → tests/unit/riparazione-r02-i-termini-nominano-chi-gestisce-il-servizio-anche-senza-le-variabili-del-titolare.test.tsx, più la guardia leggera tests/unit/riparazione-r02-nessuna-prova-col-nome-del-collaudo.test.ts. In alternativa il nome della correzione scritta, tests/unit/i-termini-nominano-chi-gestisce-il-servizio-anche-senza-le-variabili-del-titolare.test.tsx, se la regista firma anche «prova nuova senza nome». Serve la firma della regista su «una prova esistente non si cancella»."
+        }
+      ],
+      "verificato_da": "smentitore S2 (copia a parte): sulla testa i file di prova sono identici alla base e le prove nuove di questa voce non ci sono; git apply --check di 0dbe534c e 695e6bc9 passa sulla testa; applicate davvero nella copia, le 7 prove coinvolte sono verdi (54 casi), righe citate giuste."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nel «Completa con» del carrello un prezzo da 5000 € in su spinge fuori il pulsante «+»",
+      "dimensione": "navigazione-gerarchia",
+      "severita": "minore",
+      "file": "components/cart/CartUpsell.tsx:106",
+      "descrizione": "La scheda è larga w-36; il prezzo (ora text-base extrabold) non ha min-w-0 né truncate e il «+» ha shrink-0: da circa «5000,00 €» il prezzo supera gli 82 px liberi e spinge il pulsante oltre l'overflow-hidden (a «10.000,00 €» circa 7 px tagliati). Prima succedeva da «10.000 €». Cura possibile: min-w-0 truncate sul prezzo (riga :106), oppure il prezzo su una riga sua. In una spesa di quartiere prezzi così sono rari."
+    },
+    {
+      "titolo": "Una quinta copia scritta a mano del finto ClienteAvvisi nelle prove degli avvisi",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "tests/unit/minori-s08-avvisi.test.ts:40",
+      "descrizione": "database() (righe 40-70, con pannelloRottoPer e turnoRotto) riscrive il ClienteAvvisi invece di usare fintoGiroNotturno, che ora sa dare guasti, chiavi uniche e indirizzi."
+    },
+    {
+      "titolo": "Quando il fattorino segna «cliente assente» il negozio riceve solo la campanella, non l'email di annullo",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/rider/orders/[id]/cliente-assente/route.ts:117",
+      "descrizione": "Le altre tre porte di annullo (cron degli ordini scaduti, annullo del cliente, annullo dell'amministrazione) mandano anche l'email al negozio con avvisaIlNegozioDellAnnullo; questa (righe 117-124) scrive solo la campanella."
+    },
+    {
+      "titolo": "Un PATCH dell'amministrazione su un prodotto che non esiste risponde 200 e lascia una traccia con «prima» vuoto",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/admin/products/route.ts:229",
+      "descrizione": "La lettura prima dell'update non trova righe e l'update non tocca niente, ma la risposta è 200 e la voce di audit resta (righe 229-231 e 269-277). C'era già prima della correzione di R02-003 (allora con { fields })."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "subagenti": 4,
+    "costo_usd": 25.8,
+    "nota": "4 subagenti generici: lotto A (ripara), lotto B (sola lettura, patch pronte applicate dal capo), smentitori S1 e S2. Costo letto con get_session prima della consegna."
+  }
+}

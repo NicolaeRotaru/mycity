@@ -246,8 +246,18 @@ export function tracciaDellaModifica(opts: {
   prima: Record<string, unknown>;
   dopo: Record<string, unknown>;
   campiDallAi?: string[];
+  /**
+   * R02-003 — Colonne che non sono del venditore ma che quella porta cambia (l'amministrazione
+   * sposta un prodotto di negozio, ne aggiorna i dati esterni): entrano nella stessa voce, con la
+   * stessa forma, solo se cambiate.
+   */
+  altreColonne?: readonly string[];
 }): VoceDiTraccia | null {
-  const campi = campiCambiati(opts.prima, opts.dopo);
+  const campi: string[] = campiCambiati(opts.prima, opts.dopo);
+  for (const colonna of opts.altreColonne ?? []) {
+    if (!(colonna in opts.dopo) || campi.includes(colonna)) continue;
+    if (!stessoValore(opts.prima[colonna], opts.dopo[colonna])) campi.push(colonna);
+  }
   if (campi.length === 0) return null;
 
   const prima: Record<string, unknown> = {};
@@ -259,7 +269,7 @@ export function tracciaDellaModifica(opts: {
   // Solo i campi che l'assistente ha proposto E che sono davvero cambiati: se
   // il negoziante ha riscritto a mano sopra il suggerimento, quel campo non e'
   // piu' dell'AI.
-  const daAi = (opts.campiDallAi ?? []).filter((c) => (campi as string[]).includes(c));
+  const daAi = (opts.campiDallAi ?? []).filter((c) => campi.includes(c));
 
   return {
     actorId: opts.attoreId,
