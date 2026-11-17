@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 17:59",
+  "aggiornato": "2026-11-17 18:01",
   "finita": false,
-  "testa": "227673ed04efc948f3bf771f06fb9ade1fa6aff3",
+  "testa": "3245c9edc78f760c77f158d6ff01ba76ed3e7b51",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -37,8 +37,24 @@
     {
       "id": "R03-005",
       "chiave": "performance|sulla bacheca del fattorino, se la vista dei negozi resta giù, la pagina la rilegge ogni 5 secondi senza fine",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "3245c9edc78f760c77f158d6ff01ba76ed3e7b51",
+      "file_toccati": [
+        "app/rider/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-bacheca-attesa-crescente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-bacheca-attesa-crescente.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3245c9edc78f760c77f158d6ff01ba76ed3e7b51^ --file app/rider/page.tsx --prove tests/unit/riparazione-r03-bacheca-attesa-crescente.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina conta le letture di fila tornate senza negozi (useRef aggiornato nella queryFn) e refetchInterval raddoppia l'attesa 5, 10, 20, 40 s fino al tetto di 60 s (il valore normale); quando la vista risponde il conto torna a zero e un guasto nuovo riparte da 5 s. Prova con orologio finto sulle attese fra le letture; le 11 prove della bacheca (compresa quella del ritorno rapido del nome) verdi."
     },
     {
       "id": "R03-006",
