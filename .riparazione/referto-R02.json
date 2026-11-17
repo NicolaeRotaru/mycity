@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:12",
+  "aggiornato": "2026-11-17 18:13",
   "finita": false,
-  "testa": "b41d08b6ec8ee839ccd53e7928386bd77aefe0aa",
+  "testa": "a0d6592149ede814d0bb61b86c0d14f1fc92370a",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -45,8 +45,26 @@
     {
       "id": "R02-003",
       "chiave": "layout-responsive|le righe delle impostazioni (toggle) non hanno min-w-0 sul testo",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "a0d6592149ede814d0bb61b86c0d14f1fc92370a",
+      "file_toccati": [
+        "components/ui/Toggle.tsx",
+        "tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a0d6592149ede814d0bb61b86c0d14f1fc92370a^ --file components/ui/Toggle.tsx --prove tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il blocco che contiene titolo e descrizione del Toggle (figlio flex accanto all'interruttore) prende min-w-0, così i testi lunghi vanno a capo invece di spingere fuori l'interruttore (che ha già shrink-0). La prova monta il Toggle vero con testi lunghi e guarda la classe del blocco (sulla base: nessuna classe).",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-004",
