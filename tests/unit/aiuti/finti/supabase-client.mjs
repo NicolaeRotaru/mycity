@@ -58,10 +58,33 @@ const portaAuth = (nome, ripiego) => async (...argomenti) => {
 };
 const NESSUNO = { data: { user: null, session: null }, error: null };
 
+/**
+ * 17/11/2026 — Come nel client vero, la risposta di una funzione del database si concatena
+ * prima dell'attesa: `.rpc(...).order(...).range(...)`. Prima `rpc` era una funzione async e
+ * tornava una promessa nuda: il secondo anello scoppiava, e una pagina che pagina i risultati di
+ * una funzione non si poteva montare. Qui gli anelli passano oltre (come quelli di `from` senza
+ * database della prova) e l'attesa dà la stessa risposta di prima.
+ */
+const catenaDiUnaFunzione = (nome, argomenti) => {
+  let esito;
+  try {
+    esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null };
+  } catch (errore) {
+    esito = Promise.reject(errore);
+  }
+  const c = {};
+  for (const m of ['eq', 'neq', 'in', 'or', 'ilike', 'gte', 'lte', 'order', 'limit', 'range', 'is', 'not', 'contains', 'overlaps', 'filter', 'match', 'select']) {
+    c[m] = () => c;
+  }
+  c.then = (risolvi, rifiuta) => Promise.resolve(esito).then(risolvi, rifiuta);
+  c.single = async () => { const r = await esito; return { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null }; };
+  c.maybeSingle = c.single;
+  return c;
+};
+
 export const supabase = {
   from: (tavola) => (clientDellaProva() ? clientDellaProva().from(tavola) : catena(tavola)),
-  rpc: async (nome, argomenti) =>
-    clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null },
+  rpc: (nome, argomenti) => catenaDiUnaFunzione(nome, argomenti),
   auth: {
     // Chi è collegato lo decide la prova, con `globalThis.__UTENTE__`.
     getUser: async () => ({ data: { user: globalThis.__UTENTE__ ?? null }, error: null }),
