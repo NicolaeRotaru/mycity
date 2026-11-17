@@ -1,8 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { logger } from '@/lib/logger';
-import { POST as inviaMessaggio } from '@/app/api/chat/messages/route';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -94,32 +92,11 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   }
 
   if (firstMessage) {
-    // R03-006 — Il primo messaggio passa dalla rotta dei messaggi normali: stesso salvataggio e
-    // stesso avviso al negozio (campanella ed email), senza ricopiarne le regole. Prima si
-    // inseriva qui direttamente, e il negozio non sapeva di avere un messaggio.
-    const intestazioni = new Headers(req.headers);
-    intestazioni.delete('content-length');
-    intestazioni.set('content-type', 'application/json');
-    const inviato = await inviaMessaggio(
-      new NextRequest(new URL('/api/chat/messages', req.url), {
-        method: 'POST',
-        headers: intestazioni,
-        body: JSON.stringify({ conversationId, body: firstMessage }),
-      }),
-    );
-    if (inviato.status === 429 || inviato.status === 401) {
-      // Giro di correzione: qui ha detto di no il freno dei messaggi o la seconda autenticazione,
-      // non il database, e prima della riparazione il messaggio si salvava. Si salva come prima,
-      // con l'inserimento diretto: senza avviso al negozio, ma non perso.
-      const { error: erroreDiretto } = await supa
-        .from('messages')
-        .insert({ conversation_id: conversationId, sender_id: user.id, body: firstMessage });
-      logger.warn('[chat/conversations] primo messaggio salvato senza avviso al negozio', {
-        conversationId, status: inviato.status, salvato: !erroreDiretto,
-      });
-    } else if (!inviato.ok) {
-      logger.warn('[chat/conversations] primo messaggio non inviato', { conversationId, status: inviato.status });
-    }
+    await supa.from('messages').insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      body: firstMessage,
+    });
   }
 
   return NextResponse.json({ conversationId }, { status: 200 });
