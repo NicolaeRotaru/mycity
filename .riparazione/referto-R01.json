@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:09",
+  "aggiornato": "2026-11-17 20:13",
   "finita": false,
-  "testa": "bbef09573ef0de0369616d3430ee328f4a81e2de",
+  "testa": "6719e031cb839da6ee872897d0b41839efd6674d",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -10,6 +10,34 @@
     "nota": ""
   },
   "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "accessibilita|nella chat, quando i messaggi arrivano dopo l'apertura o dopo «riprova», il lettore di schermo legge tutto il filo",
+      "esito": "riparato",
+      "commit": "6719e031cb839da6ee872897d0b41839efd6674d",
+      "commit_tutti": [
+        "6719e031cb839da6ee872897d0b41839efd6674d"
+      ],
+      "file_toccati": [
+        "app/messages/[id]/page.tsx",
+        "tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx",
+        "tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx",
+        "tests/unit/riparazione-r06-chat-si-annuncia.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx tests/unit/riparazione-r06-chat-si-annuncia.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6719e031cb839da6ee872897d0b41839efd6674d^ --file app/messages/[id]/page.tsx --prove tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il registro della chat (role=log) non si accende più al commit successivo di React (stesso frame del filo appena entrato, come aveva misurato il collaudo) ma al secondo frame dopo il caricamento, con un doppio requestAnimationFrame: il primo frame disegna il filo a registro spento; si rispegne subito se il filo torna a caricarsi o cade. La prova nuova comanda i frame a mano: all'apertura, coi messaggi che arrivano dopo la conversazione e dopo «Riprova» il registro resta «off» dopo tutti gli effetti e nel frame che disegna il filo, «polite» al frame dopo; un messaggio nuovo dal vivo entra a registro acceso. Due prove esistenti che montano la pagina (registro acceso a filo caricato, chat che si annuncia) ora aspettano qualche frame vero di jsdom prima di guardare il registro acceso, senza asserzioni tolte. Non provato con un lettore di schermo vero."
+    },
     {
       "id": "R01-002",
       "chiave": "accessibilita|la pagina promozioni salta ancora dall'h1 all'h3",
