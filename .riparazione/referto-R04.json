@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:26",
+  "aggiornato": "2026-11-17 18:28",
   "finita": false,
-  "testa": "0f92b386b30fed7fbcd030613ac056d641877698",
+  "testa": "234686de7fbf24bc91fb81fefa86133d53519784",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -93,8 +93,25 @@
     {
       "id": "R04-005",
       "chiave": "frontend-ux|eliminando una pagina della vetrina restano i pulsanti delle sezioni che puntavano a lei",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "234686de7fbf24bc91fb81fefa86133d53519784",
+      "file_toccati": [
+        "components/seller/site/PageListEditor.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-elimina-pagina-pulsanti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-elimina-pagina-pulsanti.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 234686de7fbf24bc91fb81fefa86133d53519784^ --file components/seller/site/PageListEditor.tsx --prove tests/unit/riparazione-r04-elimina-pagina-pulsanti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla cancellazione di una pagina, i banner delle altre pagine il cui pulsante (cta, l'unico collegamento di sezione verso una pagina nello schema) la apriva perdono il pulsante, la sezione resta; la conferma nomina quei pulsanti prima, come già faceva per le voci del menu.",
+      "verificato_da": ""
     },
     {
       "id": "R04-006",
