@@ -74,13 +74,12 @@ vi.mock('@/components/ui/LoadingState', async () => {
 });
 vi.mock('@/components/seller/ProductForm', async () => {
   const { createElement: ce, useEffect } = await import('react');
-  return {
-    default: (p: Record<string, unknown>) => {
-      useEffect(() => { stato.montaggi += 1; }, []);
-      stato.moduli.push(p);
-      return ce('p', null, 'MODULO');
-    },
-  };
+  function ModuloFinto(p: Record<string, unknown>) {
+    useEffect(() => { stato.montaggi += 1; }, []);
+    stato.moduli.push(p);
+    return ce('p', null, 'MODULO');
+  }
+  return { default: ModuloFinto };
 });
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
