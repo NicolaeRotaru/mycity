@@ -1,0 +1,98 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-17 17:51",
+  "finita": false,
+  "testa": "bc36f48120ec38bf20880c7d68b3171015744681",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "non_lanciata",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R04-001",
+      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-002",
+      "chiave": "frontend-ux|la scheda di un negozio inesistente ripete «pagina non trovata» nel titolo e nella pagina, come faceva la 404",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-003",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-004",
+      "chiave": "frontend-ux|il drop del giorno in home usa ancora il giorno di greenwich",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-005",
+      "chiave": "frontend-ux|eliminando una pagina della vetrina restano i pulsanti delle sezioni che puntavano a lei",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-006",
+      "chiave": "frontend-ux|sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-007",
+      "chiave": "frontend-ux|la vetrina legge al massimo 20 recensioni mentre la linguetta mostra il totale vero",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-008",
+      "chiave": "frontend-ux|a menu spento, un link lasciato a metà sparisce al salvataggio senza avviso",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-009",
+      "chiave": "navigazione-gerarchia|le pagine di una categoria madre mostrano chip verso sottocategorie vuote",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-010",
+      "chiave": "qa-flussi|il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-011",
+      "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-012",
+      "chiave": "qa-flussi|il conto delle categorie con prodotti si ferma al decimo livello, il modulo prodotto al ventesimo",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    },
+    {
+      "id": "R04-013",
+      "chiave": "qa-flussi|il client supabase finto delle prove non sa concatenare .rpc().order().range()",
+      "esito": "non_fatto",
+      "nota": "non ancora lavorata in questa sessione"
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "subagenti": 0,
+    "nota": ""
+  }
+}
