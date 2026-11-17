@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
