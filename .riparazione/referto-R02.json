@@ -1,6 +1,6 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:43",
+  "aggiornato": "2026-11-17 18:45",
   "finita": false,
   "testa": "aba9fbc03efc17e44bf5b7383be441a180a8a380",
   "verifica": {
@@ -142,6 +142,10 @@
         {
           "file": "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
           "modifica": "riga 212: aggiungere al corpo productIds: ['p1', 'p2', 'p3']"
+        },
+        {
+          "file": "tests/unit/riparazione-r02-lotto-senza-elenco.test.ts (nuovo)",
+          "modifica": "Chiama la rotta vera app/api/ai/catalog-batch/apply col solo jobId (finti presi da minori-s10-lotto-applica) e pretende 400, nessuna scrittura su products e il lavoro ancora «ready», cioè non prenotato; controprova con productIds: 200, due scritture e lavoro «applied».\nProvata in locale: verde con la proposta (78 prove nei 6 file, insieme alle cinque prove modificate), rossa senza la riga di rifiuto (sulla base risponde 200; con la sola riga tolta la rotta cade su productIds undefined). Da committare INSIEME alla rotta cambiata, se no è rossa."
         }
       ],
       "nota": "La cura nella rotta (mia) fa diventare rosse 13 prove in 5 file esistenti che chiamano la rotta col solo jobId. Quei file mettono in vi.mock lib/funzioni-al-lancio.ts (di R01 in quest'onda) e altri file non miei: per la regola delle prove comuni non li tocco. Ho provato in locale rotta + le cinque modifiche qui sopra: 7 file, 87 prove verdi (npx vitest run dei 5 file più le-funzioni-spente-le-ferma-la-rotta-anche-a-mano e riparazione-r18-lotto-applica-quello-che-si-vede). Nessun commit: la rotta da sola romperebbe il verify."
