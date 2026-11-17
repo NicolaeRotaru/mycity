@@ -1,6 +1,6 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:35",
+  "aggiornato": "2026-11-17 18:38",
   "finita": false,
   "testa": "1e7e09a533ae15a66d92d17814ca20ee43361105",
   "verifica": {
@@ -192,8 +192,9 @@
     {
       "id": "R04-010",
       "chiave": "qa-flussi|il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "scelta_di_nicola",
+      "domanda": "Sulla base l'elenco delle notifiche (app/notifications/page.tsx:101-106) e il campanello del sito (components/hooks/useNotificationsCount.ts:32-36) non filtrano più le promozioni spente: il filtro su profiles.notif_promos è stato tolto al collaudo («rompe qualcosa che prima andava», commit 6834fa92 e b04fd2d9, antenati della base), e la preferenza oggi ferma solo le push (app/api/cron/send-push/route.ts:176). Il campanello del negozio (SellerShell.tsx:104-120) conta quindi già le stesse notifiche che l'elenco mostra, e filtrare solo lui farebbe dire al pallino meno non lette di quelle in elenco. Le promozioni spente vanno nascoste anche dentro il sito (elenco e tutti e due i campanelli insieme, file di altri) o restano visibili in app e la preferenza vale solo per le push?",
+      "nota": "Non toccato SellerShell.tsx: non c'è un filtro dell'elenco con cui allinearlo."
     },
     {
       "id": "R04-011",
