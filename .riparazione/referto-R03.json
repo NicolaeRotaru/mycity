@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:27",
+  "aggiornato": "2026-11-17 18:28",
   "finita": false,
-  "testa": "81aa847d77f63ff60d7689188373475ba3c7c84c",
+  "testa": "74e03d267211daa47ebe3092b421215aeae3db3d",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -97,8 +97,25 @@
     {
       "id": "R03-007",
       "chiave": "qa-flussi|due scroll-mt di altre pagine si sommano allo scroll-padding nuovo",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "74e03d267211daa47ebe3092b421215aeae3db3d",
+      "file_toccati": [
+        "app/lavora-con-noi/page.tsx",
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-ancore-senza-doppio-margine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-ancore-senza-doppio-margine.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 74e03d267211daa47ebe3092b421215aeae3db3d^ --file app/lavora-con-noi/page.tsx,app/product/[id]/page.tsx --prove tests/unit/riparazione-r03-ancore-senza-doppio-margine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Controllato che app/globals.css:199-201 abbia html{scroll-padding-top} da md. #posizioni di lavora con noi passa a «scroll-mt-24 md:scroll-mt-0» e #recensioni della scheda prodotto da «md:scroll-mt-[var(--header-height)]» a «md:scroll-mt-0» (sotto md restano scroll-mt-24 e scroll-mt-4), come già LegalLayout; aggiornato il commento accanto. Prova leggera sulle classi, rossa togliendo l'uno o l'altro file."
     },
     {
       "id": "R03-008",
