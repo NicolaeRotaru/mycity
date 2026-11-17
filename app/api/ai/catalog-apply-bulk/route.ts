@@ -17,6 +17,7 @@ import {
   motivoDaCompletare,
 } from '@/lib/products/prontoPerLaVendita';
 import { fraseSulleDichiarazioni } from '@/lib/products/avvisoDellaDettatura';
+import { tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato';
 
 /**
  * Applica in un colpo solo le modifiche che il Catalog Copilot ha proposto.
@@ -247,15 +248,19 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ...(r.nonApplicato ? { nonApplicato: r.nonApplicato } : {}),
       ...(r.rifiutati.length > 0 ? { rifiutati: r.rifiutati } : {}),
     });
-    const prima: Record<string, unknown> = {};
-    for (const campo of Object.keys(r.update)) prima[campo] = (r.row as unknown as Record<string, unknown>)[campo];
-    void writeAudit({
-      actorId: user.id,
-      action: 'product.update',
-      targetTable: 'products',
-      targetId: r.id,
-      metadata: { origine: 'ai-copilot-bulk', campi: Object.keys(r.update), prima, dopo: r.update },
+    // 17/11/2026 — La voce la costruisce `tracciaDellaModifica`, come in
+    // catalog-apply e nel modulo del prodotto: solo i campi cambiati, con `daAi`.
+    // Prima qui si scriveva a mano la forma vecchia (tutte le chiavi mandate e
+    // nessun `daAi`). Tutto quello che passa di qui l'ha proposto l'assistente.
+    const voce = tracciaDellaModifica({
+      prodottoId: r.id,
+      attoreId: user.id,
+      origine: 'ai-copilot-bulk',
+      prima: r.row as unknown as Record<string, unknown>,
+      dopo: r.update,
+      campiDallAi: Object.keys(r.update),
     });
+    if (voce) void writeAudit(voce);
   }
 
   logger.info('catalog-apply-bulk', { sellerId: user.id, chieste: changes.length, applied });

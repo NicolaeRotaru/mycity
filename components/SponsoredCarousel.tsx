@@ -11,6 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiSponsorizzati, type Sponsorizzato } from '@/lib/queries/fasce-prodotti';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 type Props = {
   placement: 'home_top' | 'search_top' | 'category_top';
@@ -32,8 +33,11 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu', e gli
     // annunci pagati sparivano dalla home.
+    // 17/11/2026 — «Oggi» è il giorno di Piacenza, non quello di Greenwich: fra
+    // mezzanotte e l'una (le due d'estate) un annuncio che parte oggi restava
+    // nascosto, e uno scaduto ieri restava in vetrina.
     queryFn: (): Promise<SponsoredItem[]> =>
-      leggiSponsorizzati(supabase, { placement, categorySlug, oggi: new Date().toISOString().slice(0, 10) }),
+      leggiSponsorizzati(supabase, { placement, categorySlug, oggi: giornoPiacenza() }),
   });
 
   /**

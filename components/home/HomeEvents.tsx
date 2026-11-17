@@ -7,6 +7,7 @@ import { CalendarDays, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FUSO_PIACENZA } from '@/lib/tempo-piacenza';
 
 type Ev = {
   id: string;
@@ -44,8 +45,10 @@ export default function HomeEvents() {
 
   if (events.length === 0) return null;
 
+  // La data a Piacenza, non nel fuso del browser o del server: un evento che
+  // parte alle 00:30 del 6 non deve comparire «5».
   const fmt = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : null;
+    iso ? new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', timeZone: FUSO_PIACENZA }) : null;
 
   return (
     <div>

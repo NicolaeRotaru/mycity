@@ -1,128 +1,391 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 17:15",
+  "aggiornato": "2026-11-17 19:05",
   "finita": true,
-  "testa": "3f76cf433a0bf003238053b66521938b4635ad12",
+  "testa": "aba9fbc03efc17e44bf5b7383be441a180a8a380",
   "verifica": {
-    "comando": "npm run verify",
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "verde",
-    "testa": "3f76cf433a0bf003238053b66521938b4635ad12",
-    "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=8192: senza, tsc va fuori memoria (uscita 134) prima di arrivare alle prove. 1644 file di prova passati, 1 saltato; lint 0 errori."
+    "testa": "7254987c21ebaac17af0ea565830e4989c6e7bd0",
+    "nota": "girato su 7254987c, che dopo la testa aba9fbc0 tocca solo il referto: typecheck ok, lint 0 errori (99 avvisi), 1660 file di prova passati, 1 saltato (10734 casi)."
   },
   "voci": [
     {
       "id": "R02-001",
-      "chiave": "accessibilita|nella chat, quando i messaggi arrivano dopo l'apertura o dopo «riprova», il lettore di schermo legge tutto il filo",
+      "chiave": "architettura|le altre due porte dell'ai sul catalogo scrivono ancora la traccia a mano, nella forma vecchia",
       "esito": "riparato",
-      "commit": "210c94477cc0c006f906743334966bd4481b3f8a",
+      "commit": "80c8dc39ac6d951620b6e06dda0263bf0908d548",
       "file_toccati": [
-        "app/messages/[id]/page.tsx"
+        "app/api/ai/catalog-apply-bulk/route.ts",
+        "app/api/ai/catalog-batch/apply/route.ts",
+        "tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx"
+        "tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 210c94477cc0c006f906743334966bd4481b3f8a^ --file app/messages/[id]/page.tsx --prove tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 80c8dc39ac6d951620b6e06dda0263bf0908d548^ --file app/api/ai/catalog-apply-bulk/route.ts,app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il registro aria-live della chat sta in un piccolo componente che parte spento: si accende («polite») solo un giro dopo che il filo è caricato e a video, e si rispegne mentre i messaggi si ricaricano dopo «Riprova». Così il primo caricamento non viene letto come una raffica di aggiunte. Non provato con un lettore di schermo vero.",
-      "verificato_da": "capo squadra R02: letto il diff, rilanciata la prova rimessa (uscita 0) e npm run verify alla testa; nessun revisore indipendente, per il fermo del limite settimanale"
+      "cosa_ho_fatto": "Il Copilot in blocco (catalog-apply-bulk) e il lavoro massivo (catalog-batch/apply) costruiscono la voce product.update con tracciaDellaModifica (lib/products/salvataggio-tracciato.ts), come catalog-apply dopo R10-008: solo i campi cambiati, con daAi. La prova fa girare le due rotte vere col finto catalogo: un campo mandato ma uguale non entra e daAi c'è (sulla base: campi con la descrizione invariata e daAi assente). La voce product.hide della moderazione resta com'era: non è una product.update e l'aiutante non la copre.",
+      "verificato_da": "revisore indipendente G1: rilanciata la prova (0), 14 prove delle due rotte verdi, forma uguale a catalog-apply, nessun campo perso (unico lettore app/admin/audit/page.tsx stampa il JSON intero), nessuna product.update a mano rimasta; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-002",
-      "chiave": "accessibilita|la pagina promozioni salta ancora dall'h1 all'h3",
+      "chiave": "immagini-media|next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
+      "esito": "scelta_di_nicola",
+      "domanda": "Togliamo placehold.co da tutti gli host ammessi (next.config.js:51, la CSP di middleware.ts:313, lib/indirizzo-immagine-ammesso.ts:34, lib/immagine-categoria.ts:47, lib/ai/productContext.ts:50 e le prove che li legano), sapendo che i prodotti in bozza del seed 001 e ogni foto già salvata nel database vero con un indirizzo placehold.co smetterebbero di vedersi?",
+      "nota": "Il codice dice il contrario della voce: placehold.co è ancora ammesso apposta in quattro elenchi tenuti uguali da prove (togliendolo solo da next.config.js diventa rossa tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts:284), e seeds/001_piacenza_stores.sql:130-153 crea prodotti con foto placehold.co. Per sapere se il database vero ha ancora indirizzi placehold.co serve una lettura del database che il riparatore non può fare. Se la risposta è sì, va tolto insieme da tutti i file elencati, che a parte next.config.js non sono di R02. Prima: Non tolto: lib/ usa ancora placehold.co come host ammesso. lib/indirizzo-immagine-ammesso.ts:34 (HOST_IMMAGINI_AMMESSI, il campo «indirizzo immagine» lo accetta; la prova l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts:284 pretende che sia uguale a remotePatterns, quindi togliendolo solo da next.config.js diventa rossa), lib/immagine-categoria.ts:47 (HOST_FOTO_AMMESSI, le foto di categoria da placehold.co sono ammesse), lib/ai/productContext.ts:50 (HOST_ESTERNI_DICHIARATI, foto mandate al modello). In più middleware.ts:313 (img-src della CSP) e seeds/001_piacenza_stores.sql:130-153 (prodotti in bozza con foto placehold.co). Per chiudere la voce va tolto insieme da next.config.js:51 e da questi elenchi (file non miei), aggiornando le prove che li legano."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "layout-responsive|le righe delle impostazioni (toggle) non hanno min-w-0 sul testo",
       "esito": "riparato",
-      "commit": "3f76cf433a0bf003238053b66521938b4635ad12",
+      "commit": "4a5964c9f1348ce64c67939b6011434d0e425393",
       "file_toccati": [
-        "app/promozioni/page.tsx"
+        "components/ui/Toggle.tsx",
+        "tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r02-promozioni-ha-il-suo-h2.test.tsx"
+        "tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-promozioni-ha-il-suo-h2.test.tsx",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f76cf433a0bf003238053b66521938b4635ad12^ --file app/promozioni/page.tsx --prove tests/unit/riparazione-r02-promozioni-ha-il-suo-h2.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a0d65921^ --file components/ui/Toggle.tsx --prove tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Prima della griglia delle schede c’è un h2 «I prodotti in promozione» visibile solo al lettore di schermo, come in ProductGrid (R07-009). L’aspetto non cambia; la prova monta la pagina e controlla l’ordine h1, h2, h3.",
-      "verificato_da": "capo squadra R02: letto il diff, rilanciata la prova rimessa (uscita 0) e npm run verify alla testa; nessun revisore indipendente, per il fermo del limite settimanale"
-    },
-    {
-      "id": "R02-003",
-      "chiave": "accessibilita|la x degli avvisi dice «close toast» in inglese e sui caricamenti non chiude niente",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "cosa_ho_fatto": "Due commit. a0d65921: il blocco che contiene titolo e descrizione del Toggle (figlio flex accanto all'interruttore, che ha già shrink-0) prende min-w-0. 4a5964c9 (giro di correzione): lo stesso blocco prende anche break-words, perché il solo min-w-0 non spezzava una parola lunga (un'email): misurato in Chromium headless con una riga di 320px, il titolo restava largo 319px in un blocco di 234px e copriva l'interruttore; con break-words (overflow-wrap: break-word) va a capo dentro il blocco ([overflow-wrap:anywhere] dà lo stesso risultato). La prova monta il Toggle vero con testi lunghi e pretende min-w-0 e break-words sul blocco; la prova rimessa parte da prima di a0d65921, quindi copre tutta la cura.",
+      "verificato_da": "revisore indipendente G2: con il solo min-w-0 (a0d65921) una parola che non si spezza usciva dal blocco e copriva l'interruttore, quindi parziale; giro di correzione (4a5964c9): aggiunto break-words, misurato con playwright su riga di 320px; capo squadra: prova rimessa da a0d65921^ rilanciata, uscita 0"
     },
     {
       "id": "R02-004",
-      "chiave": "accessibilita|il campo file nascosto della fotocamera del negoziante si raggiunge col tab ma non mostra il fuoco",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "microcopy|il dialogo dell sos dice che gli amministratori ricevono l avviso «subito», ma il push parte solo se la scrittura riesce entro 15 secondi",
+      "esito": "riparato",
+      "commit": "b41d08b6ec8ee839ccd53e7928386bd77aefe0aa",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx",
+        "tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b41d08b6ec8ee839ccd53e7928386bd77aefe0aa^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r02-sos-avviso-admin-testo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La riga del dialogo sugli amministratori non dice più «ricevono subito»: dice che l'avviso (pannello e, con le notifiche attive, telefono) arriva quando l'SOS arriva a MyCity, che serve la connessione e che con poca rete può arrivare in ritardo o non arrivare. Il «subito» resta solo per il 112. La prova apre il dialogo vero e legge la riga (sulla base: «ricevono subito»).",
+      "verificato_da": "revisore indipendente G3: testo vero rispetto al codice (avviso nel pannello dal trigger 037 all'insert, push dalla fetch subito dopo, anche oltre i 15 s); nota di stile: la riga passa da 32 a 49 parole; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-005",
-      "chiave": "architettura|le altre due porte dell'ai sul catalogo scrivono ancora la traccia a mano, nella forma vecchia",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "mobile-pwa|se il primo segnale gps scade prima della conferma, l'sos parte senza posizione anche se la posizione arriva un attimo dopo",
+      "esito": "riparato",
+      "commit": "1ae7a9a298ffa30011cfc06271bf21a62587ede9",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx",
+        "tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1ae7a9a298ffa30011cfc06271bf21a62587ede9^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In avviaLetturaGps l'errore del primo tentativo (timeout o segnale assente) non chiude più l'attesa della posizione mentre il watch è in ascolto: la chiudono il permesso negato (code 1) o il tempo massimo di posizionePronta, e la posizione che il watch porta un attimo dopo finisce nella riga di rider_sos_events. La prova, con GPS e timer finti, fa scadere il primo tentativo prima e dopo la conferma e guarda lat/lng nell'insert (sulla base: null); controlla anche che senza posizione l'avviso parta entro il tempo massimo e che col permesso negato parta subito.",
+      "verificato_da": "revisore indipendente G3: 8 casi propri verdi (GPS muto: invio a 5,5 s senza posizione; code 3 ripetuti; code 1 dopo timeout; smontaggio; annulla e riapri; rete appesa; doppio clic), 10 prove SOS esistenti verdi; nota: con GPS spento a sistema (code 2 ripetuto) l'insert parte a 5,5 s invece che subito, dentro il tetto di 15 s; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-006",
-      "chiave": "architettura|il modulo prodotto non passa i due campi nuovi alle regole comuni delle proposte dell'assistente",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "(file di R02, va applicato INSIEME alle cinque prove qui sotto, se no diventano rosse 13 prove) righe 75-77 (74-76 sulla base, prima dell'import aggiunto da R02-001): al posto di «const onlyIds = Array.isArray(body.productIds) ? new Set(...) : null;» scrivere «if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Elenco dei prodotti mancante.'); const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));»"
+        },
+        {
+          "file": "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
+          "modifica": "riga 116: body JSON.stringify({ jobId: 'job-1', productIds: ['p1', 'p2'] }) al posto di { jobId: 'job-1' }"
+        },
+        {
+          "file": "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts",
+          "modifica": "righe 293, 325, 353: aggiungere al corpo productIds: ['focaccia'] (job-1), productIds: ['tagliere'] (job-2), productIds: ['focaccia'] (job-3)"
+        },
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": "righe 213 e 221: richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1', productIds: ['p1'] }) al posto di { jobId: 'job-1' } (anche la 213, se no il 400 del lavoro translate arriverebbe per l'elenco mancante e non per la traduzione spenta)"
+        },
+        {
+          "file": "tests/unit/minori-s10-lotto-applica.test.ts",
+          "modifica": "riga 102: corpo di default { jobId: 'l1', productIds: ((db.lavoro?.results ?? []) as Array<{ product_id: string }>).map((r) => r.product_id) } al posto di { jobId: 'l1' } («Applica a tutti» manda i prodotti mostrati)"
+        },
+        {
+          "file": "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
+          "modifica": "riga 212: aggiungere al corpo productIds: ['p1', 'p2', 'p3']"
+        },
+        {
+          "file": "tests/unit/riparazione-r02-lotto-senza-elenco.test.ts (nuovo)",
+          "modifica": "Chiama la rotta vera app/api/ai/catalog-batch/apply col solo jobId (finti presi da minori-s10-lotto-applica) e pretende 400, nessuna scrittura su products e il lavoro ancora «ready», cioè non prenotato; controprova con productIds: 200, due scritture e lavoro «applied».\nProvata in locale: verde con la proposta (78 prove nei 6 file, insieme alle cinque prove modificate), rossa senza la riga di rifiuto (sulla base risponde 200; con la sola riga tolta la rotta cade su productIds undefined). Da committare INSIEME alla rotta cambiata, se no è rossa."
+        }
+      ],
+      "nota": "La cura nella rotta (mia) fa diventare rosse 13 prove in 5 file esistenti che chiamano la rotta col solo jobId. Quei file mettono in vi.mock lib/funzioni-al-lancio.ts (di R01 in quest'onda) e altri file non miei: per la regola delle prove comuni non li tocco. Ho provato in locale rotta + le cinque modifiche qui sopra: 7 file, 87 prove verdi (npx vitest run dei 5 file più le-funzioni-spente-le-ferma-la-rotta-anche-a-mano e riparazione-r18-lotto-applica-quello-che-si-vede). Nessun commit: la rotta da sola romperebbe il verify."
     },
     {
       "id": "R02-007",
-      "chiave": "flussi-conversione|sulla scheda prodotto un secondo «aggiungi al carrello» entro un secondo viene ignorato senza dire niente",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|la pagina contatti promette ancora «puoi provare lo stesso a inviare» quando l'anti-robot non si carica",
+      "esito": "riparato",
+      "commit": "ff2d8564fc810af6b059e053e4ff050e71bf4672",
+      "file_toccati": [
+        "app/contact/page.tsx",
+        "tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ff2d8564fc810af6b059e053e4ff050e71bf4672^ --file app/contact/page.tsx --prove tests/unit/riparazione-r02-contatti-anti-robot-rotto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "/api/contact senza gettone risponde «Verifica anti-bot fallita» (lib/captcha.ts: «CAPTCHA mancante»), quindi la promessa era falsa. Allineata all'iscrizione (R24-016): col riquadro rotto la pagina dice «Senza questo controllo il messaggio non può partire: ricarica la pagina, oppure scrivici a <email info, con mailto>», il modulo non parte senza gettone e il messaggio a comparsa dice lo stesso guasto e la stessa strada. La prova monta la pagina vera con il riquadro finto che segnala il guasto: legge la riga e prova a inviare (sulla base: «Puoi provare lo stesso» e fetch chiamato).",
+      "verificato_da": "revisore indipendente G2: ogni combinazione chiave pubblica/segreta e ambiente controllata (lib/captcha.ts:44-81): il blocco nel browser scatta solo con chiave pubblica presente, e lì il server rifiuta comunque senza gettone; unica differenza in sviluppo locale con la coppia di chiavi a metà; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-008",
-      "chiave": "frontend-ux|la scheda di un negozio inesistente ripete «pagina non trovata» nel titolo e nella pagina, come faceva la 404",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|dopo aver tolto un prodotto da una lista, il conteggio in /lists resta vecchio fino a 30 secondi",
+      "esito": "riparato",
+      "commit": "422b77e368526914d9072fcf98442fbf98ec984b",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 422b77e368526914d9072fcf98442fbf98ec984b^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nell'onSuccess di removeItem, oltre a queryKeys.lists.items(id), si invalidano queryKeys.lists.mine, .public e .inVetrina: sono le tre chiavi da cui /lists legge items_count (come fa /lists quando crea una lista, che invalida lists.mine). La prova monta /lists per sapere da quali chiavi legge, poi toglie un prodotto da /lists/[id] e controlla che ognuna sia riletta (sulla base: solo ['lists','items','L1']); se la delete fallisce non si rilegge niente.",
+      "verificato_da": "revisore indipendente G3: le tre chiavi sono quelle da cui /lists legge items_count (app/lists/page.tsx:54, 78, 96), invalidazione solo in onSuccess, 6 prove liste verdi; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-009",
-      "chiave": "frontend-ux|il drop del giorno in home usa ancora il giorno di greenwich",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|chi sceglie «fattorino» nell'iscrizione e poi si registra con google diventa cliente, e non trova una strada per diventare fattorino",
+      "esito": "riparato",
+      "commit": "aba9fbc03efc17e44bf5b7383be441a180a8a380",
+      "file_toccati": [
+        "app/sign-up/page.tsx",
+        "tests/unit/riparazione-r02-iscrizione-fattorino-senza-google.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-iscrizione-fattorino-senza-google.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-iscrizione-fattorino-senza-google.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base aba9fbc03efc17e44bf5b7383be441a180a8a380^ --file app/sign-up/page.tsx --prove tests/unit/riparazione-r02-iscrizione-fattorino-senza-google.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Chiusa toccando solo app/sign-up/page.tsx: con Rider scelto (dal link ?role=rider o dalla mattonella) la pagina non mostra AuthAlternatives, quindi niente pulsante Google, e scrive «Con Google si crea un account cliente: per candidarti come fattorino usa email e password.»; anche il riquadro e il messaggio a comparsa dell'anti-robot rotto, con Rider scelto, non consigliano Google (dicono di ricaricare o scrivere a info). Con Acquirente o col ruolo predefinito tutto resta com'era. Così chi sceglie fattorino passa dall'email, dove handle_new_user lo crea rider in attesa, e non diventa più cliente per sbaglio. La prova monta la pagina vera: con ?role=rider e con la mattonella Rider nessun pulsante Google e la riga c'è, con ?role=buyer o senza ruolo il pulsante c'è, col riquadro rotto e Rider né riquadro né messaggio nominano Google (sulla base: pulsante Google presente e «registrati con Google»). La strada con Google per i fattorini (portare il ruolo da AuthShell alla callback e far nascere il profilo rider in attesa) resta possibile in futuro come scelta di prodotto.",
+      "verificato_da": "revisore indipendente G3: ha mostrato che la voce si chiudeva solo in app/sign-up/page.tsx (era serve_file_altrui); giro di correzione (aba9fbc0) senza un secondo revisore, per il tetto dei subagenti e la consegna: capo squadra ha rilanciato la prova rimessa, uscita 0",
+      "nota": "Prima era serve_file_altrui con tre modifiche (AuthShell: prop ruolo che mette ruolo=rider nel ritorno di Google; auth/callback: update del profilo appena nato a rider in attesa; sign-up: passare il ruolo ad AuthAlternatives): non servono più per chiudere la voce, restano la strada se si vorrà Google anche per i fattorini."
     },
     {
       "id": "R02-010",
-      "chiave": "frontend-ux|eliminando una pagina della vetrina restano i pulsanti delle sezioni che puntavano a lei",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|la data degli eventi in home non usa il fuso di piacenza",
+      "esito": "riparato",
+      "commit": "ceb88720c4cde59ca418cdb002b4ea509c3d02a1",
+      "file_toccati": [
+        "components/home/HomeEvents.tsx",
+        "tests/unit/riparazione-r02-eventi-home-fuso.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-eventi-home-fuso.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-eventi-home-fuso.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ceb88720c4cde59ca418cdb002b4ea509c3d02a1^ --file components/home/HomeEvents.tsx --prove tests/unit/riparazione-r02-eventi-home-fuso.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La data della striscia «Eventi a Piacenza» (riga 48) si formatta con timeZone: FUSO_PIACENZA da lib/tempo-piacenza.ts, come già fanno le promozioni. La prova monta il componente vero con TZ=UTC e orologio finto alle 23:40 di Greenwich: un evento dalle 00:30 del 6 alle 00:15 dell'8 (ora di Piacenza) deve dire «6 nov – 8 nov» (sulla base: «5 nov – 7 nov»).",
+      "verificato_da": "revisore indipendente G2: inizio e fine passano da FUSO_PIACENZA, nessun confronto oggi/domani, prova verde anche con TZ macchina Pacific/Kiritimati e America/Los_Angeles; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-011",
-      "chiave": "frontend-ux|la vetrina legge al massimo 20 recensioni mentre la linguetta mostra il totale vero",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|gli annunci sponsorizzati si accendono e si spengono sul giorno di greenwich, non su quello di piacenza",
+      "esito": "riparato",
+      "commit": "68b9b653abe7704d5fbfc400fa83af62f0c335c8",
+      "file_toccati": [
+        "components/SponsoredCarousel.tsx",
+        "tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 68b9b653abe7704d5fbfc400fa83af62f0c335c8^ --file components/SponsoredCarousel.tsx --prove tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il carosello passa a leggiSponsorizzati oggi = giornoPiacenza() (lib/tempo-piacenza.ts) invece del giorno UTC. La prova monta il carosello vero con TZ=UTC e orologio finto alle 23:30 di Greenwich (inverno e estate) e guarda il giorno che arriva ai filtri start_date <= oggi e end_date >= oggi della vista: deve essere quello di Piacenza (sulla base: il giorno prima).",
+      "verificato_da": "revisore indipendente G2: start_date/end_date sono colonne date (migrations/030:146-147), estremi inclusi coerenti col webhook (lib/stripe/webhook/sponsorizzati.ts:108-110), ora legale coperta, verde anche con TZ Asia/Tokyo; capo squadra: prova rimessa rilanciata, uscita 0"
     },
     {
       "id": "R02-012",
-      "chiave": "immagini-media|next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
-      "esito": "non_fatto",
-      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+      "chiave": "qa-flussi|gli avvisi scritti nel browser non arrivano a nessuno: logger.warn lato client è solo console.warn",
+      "esito": "riparato",
+      "commit": "f8d2a2b73f0123defab58dc159b16b1d805c97ac",
+      "file_toccati": [
+        "lib/logger.ts",
+        "tests/unit/riparazione-r02-avvisi-browser.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-avvisi-browser.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-avvisi-browser.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f8d2a2b73f0123defab58dc159b16b1d805c97ac^ --file lib/logger.ts --prove tests/unit/riparazione-r02-avvisi-browser.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Lato client logger.warn, oltre a console.warn, manda l'avviso a Sentry (lo stesso canale di logger.error) con captureMessage e level 'warning', col contesto già ripulito dai dati personali; senza NEXT_PUBLIC_SENTRY_DSN non scarica niente, come gli errori. Lato server non cambia. La prova (jsdom) controlla che con il DSN l'avviso arrivi a Sentry come warning col contesto oscurato, e che senza DSN non parta niente (sulla base: zero chiamate). Resta fuori dal codice: il DSN di Sentry va impostato su Vercel (NEXT_PUBLIC_SENTRY_DSN), se no anche gli errori del browser restano nella console.",
+      "verificato_da": "revisore indipendente G1: server invariato (guardia eServer), senza DSN esce subito, stesso beforeSend degli errori, nessun avviso client in ciclo, 11 prove del logger verdi; capo squadra: prova rimessa rilanciata, uscita 0"
+    },
+    {
+      "id": "R02-013",
+      "chiave": "qa-flussi|la pagina delle storie accetta caratteri di controllo c1 nel link che poi il database rifiuta, lasciando una foto orfana",
+      "esito": "riparato",
+      "commit": "19e4067514ae95b594d6c3cd46f0689d657f4ac3",
+      "file_toccati": [
+        "lib/safe-redirect.ts",
+        "tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19e4067514ae95b594d6c3cd46f0689d657f4ac3^ --file lib/safe-redirect.ts --prove tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "safeInternalPath rifiuta ora la stessa classe che il CHECK della 403 usa ([[:cntrl:]] di glibc in UTF-8): U+0000–U+001F, U+007F–U+009F e U+2028–U+2029, invece dei soli C0 e DEL. La prova passa ogni carattere di quella classe in mezzo a un link e controlla che nessuno esca accettato dal sito e rifiutato dal CHECK riscritto in JS (sulla base: 34 passavano, U+0080…U+009F e U+2028–U+2029), e che i link buoni passino ancora.",
+      "verificato_da": "revisore indipendente G1: classe confrontata con iswcntrl di glibc 2.39 (0000-001F, 007F-009F, 2028-2029), percorsi buoni (accenti, emoji, CJK, query, %-encoding) passano, 17 prove dei chiamanti verdi; capo squadra: prova rimessa rilanciata, uscita 0"
     }
   ],
-  "nuovi_difetti_visti": [],
-  "domande_per_nicola": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Aggiungere o togliere un prodotto da una lista dalla pagina prodotto lascia vecchio il conteggio in /lists",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/AddToListButton.tsx:96-101",
+      "descrizione": "invalida solo ['lists','items'] e containing, non lists.mine/public/inVetrina; anche «crea e aggiungi» (120-126) non invalida lists.mine. Stesso difetto di R02-008 da un'altra strada."
+    },
+    {
+      "titolo": "Dopo «elimina lista» e dopo il cambio di visibilità /lists può mostrare dati vecchi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:143-146 e 193-196",
+      "descrizione": "elimina va a /lists senza invalidare lists.mine (la lista eliminata resta visibile, aprirla dà «Lista non trovata»); la visibilità non rilegge lists.public. Fuori dalla voce R02-008, che parla solo della rimozione di un prodotto."
+    },
+    {
+      "titolo": "Il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
+      "dimensione": "privacy",
+      "severita": "minore",
+      "file": "lib/logger.ts:69",
+      "descrizione": "toCtx mette una stringa in {detail} senza oscurarla e il messaggio arriva com'è: logger.warn('x', 'mario@x.it') arriva a Sentry in chiaro. Ereditato dal canale degli errori; nessun chiamante client di oggi lo fa."
+    },
+    {
+      "titolo": "Un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/help/page.tsx:56-60",
+      "descrizione": "«Diventa rider» porta a /contact; lavora-con-noi porta ancora a /sign-up?role=rider mentre il reclutamento dal sito è chiuso (decisione del 26/10). Da decidere con Nicola."
+    },
+    {
+      "titolo": "Le date degli eventi nell'amministrazione non usano il fuso di Piacenza",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/admin/events/page.tsx:211 e 265",
+      "descrizione": "toLocaleString senza timeZone."
+    },
+    {
+      "titolo": "La riga «Notifiche push del browser» delle impostazioni non ha min-w-0 sul testo",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/profile/settings/page.tsx:696-706",
+      "descrizione": "stessa struttura del Toggle corretta in R02-003, ma scritta a mano."
+    },
+    {
+      "titolo": "In produzione senza chiave pubblica anti-robot il modulo contatti fallisce senza dire dove scrivere",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/api/contact/route.ts:65",
+      "descrizione": "con la chiave segreta presente e la pubblica assente il server risponde «Verifica anti-bot fallita. Riprova.»: riprovare non serve e non c'è l'email. Preesistente."
+    },
+    {
+      "titolo": "Anche chi sceglie «venditore» nell'iscrizione vede il pulsante Google, che probabilmente crea un cliente",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/sign-up/page.tsx:352",
+      "descrizione": "la correzione di R02-009 nasconde Google solo per il fattorino, come dice la voce; per il venditore non verificato."
+    }
+  ],
+  "domande_per_nicola": [
+    "R02-002: togliamo placehold.co da tutti gli host ammessi, sapendo che i prodotti del seed 001 e ogni foto già salvata con un indirizzo placehold.co smetterebbero di vedersi? (serve una lettura del database vero che il riparatore non fa)",
+    "R02-012: per far arrivare a Sentry avvisi ed errori del browser va impostata NEXT_PUBLIC_SENTRY_DSN su Vercel, se non c'è già."
+  ],
   "conto": {
-    "agenti": 2,
-    "nota": "un subagente sonnet fermato dopo pochi minuti senza commit (la regia O6 ha chiesto opus), un subagente opus per il lotto A fermato dopo 2 voci per il limite settimanale",
-    "subagenti": 2
+    "agenti": 6,
+    "nota": "2 riparatori (lotto A, lotto B), 3 revisori indipendenti in parallelo, 1 giro di correzione; tutti col modello della sessione, come chiesto dalla regista",
+    "subagenti": 6
   },
-  "costo_usd": 5.5
+  "costo_usd": 27.1
 }
