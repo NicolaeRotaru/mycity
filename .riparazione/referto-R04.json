@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 17:57",
+  "aggiornato": "2026-11-17 17:58",
   "finita": false,
-  "testa": "2a7ff37b2e01860fefed24601509d8bb2f26bb44",
+  "testa": "bcecf354e90ea44a87e8f0fa7a94a3fe8e27e7a6",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -79,8 +79,25 @@
     {
       "id": "R04-012",
       "chiave": "qa-flussi|il conto delle categorie con prodotti si ferma al decimo livello, il modulo prodotto al ventesimo",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "bcecf354e90ea44a87e8f0fa7a94a3fe8e27e7a6",
+      "file_toccati": [
+        "lib/queries/categorie-piene.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-categorie-piene-profonde.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-categorie-piene-profonde.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bcecf354e90ea44a87e8f0fa7a94a3fe8e27e7a6^ --file lib/queries/categorie-piene.ts --prove tests/unit/riparazione-r04-categorie-piene-profonde.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "categorieConProdotti risale fino a 20 gradini sopra la categoria del prodotto, come getAttributesForCategory; il 20 del modulo (lib/category-attributes.ts:285) non è esportato, quindi è ripetuto in una costante locale con lo stesso nome e il rimando. La prova confronta i due su una fila di 21 livelli.",
+      "verificato_da": ""
     },
     {
       "id": "R04-013",
