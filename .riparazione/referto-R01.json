@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:34",
+  "aggiornato": "2026-11-17 20:37",
   "finita": false,
-  "testa": "340318af1520de8d65a90db7ea617fe19beccdb3",
+  "testa": "c601c918b224d65d0bffd500b59d7bcdda5bdb55",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -268,6 +268,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Le letture dello stato online e del voto ora fanno salire l'errore (anche getUser senza rete, come già la lettura di oggi nella stessa pagina) invece di rispondere «offline»/«nessun voto». Senza un dato letto, la scheda dice «Non so se sei online» con «Riprova» (niente interruttore né riquadro «Vai online»), e la testata dice «Non riesco a leggere il tuo voto · Riprova» invece di «Pronto a consegnare». La prova monta la pagina col react-query vero: lettura caduta, poi Riprova riuscito. Passano le 11 prove esistenti che montano la pagina (119 casi)."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|un doppio clic su «pubblica prodotto» mette in vendita due o tre prodotti uguali",
+      "esito": "riparato",
+      "commit": "c601c918b224d65d0bffd500b59d7bcdda5bdb55",
+      "commit_tutti": [
+        "c601c918b224d65d0bffd500b59d7bcdda5bdb55"
+      ],
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx tests/unit/riparazione-r01-doppio-clic-pubblica.test.tsx tests/unit/riparazione-r01-doppio-clic-pubblica-pagina.test.tsx tests/unit/minori-s06-duplica-prodotto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c601c918b224d65d0bffd500b59d7bcdda5bdb55^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il doppio clic ravvicinato e il doppio Invio erano già chiusi (prove dell'onda 7, restano verdi). Chiusa la finestra rimasta: la pagina tiene uno stato «creato» messo a vero nell'onSuccess (e quando il prodotto nasce ma le taglie cadono) e passa submitting={create.isPending || creato}, così il modulo resta chiuso fino al cambio di pagina. La prova monta la pagina vera col modulo vero e router.push che non porta via: dopo l'inserimento riuscito altri clic su «Pubblica» e «Salva come bozza» non inseriscono (senza la cura: 3 inserimenti). Passano le 12 prove esistenti della pagina (36 casi)."
     }
   ],
   "nuovi_difetti_visti": [
