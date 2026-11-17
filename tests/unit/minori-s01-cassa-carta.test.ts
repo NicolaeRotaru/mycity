@@ -81,7 +81,7 @@ vi.mock('@/lib/supabase/server', () => {
   const prodotti = [
     { id: P1, seller_id: S1, name: 'Pane', price: 10, stock: 10, has_variants: false, images: [], status: 'available' },
   ];
-  const venditori = [{ id: S1, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, stripe_payouts_enabled: true, store_hours: null }];
+  const venditori = [{ id: S1, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, store_hours: null }];
 
   const letture = (table: string) => ({
     select: () => ({

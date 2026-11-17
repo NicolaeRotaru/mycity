@@ -79,8 +79,8 @@ vi.mock('@/lib/supabase/server', () => {
     { id: P2, seller_id: S2, name: 'Frutta', price: 12, stock: 10, has_variants: false, images: ['b.jpg'], status: 'available' },
   ];
   const venditori = [
-    { id: S1, store_name: 'Forno', full_name: null, store_lat: null, store_lng: null, stripe_payouts_enabled: true, store_hours: null, email: 'a@b.it', role: 'seller', is_approved: true },
-    { id: S2, store_name: 'Frutta', full_name: null, store_lat: null, store_lng: null, stripe_payouts_enabled: true, store_hours: null, email: 'c@d.it', role: 'seller', is_approved: true },
+    { id: S1, store_name: 'Forno', full_name: null, store_lat: null, store_lng: null, store_hours: null, email: 'a@b.it', role: 'seller', is_approved: true },
+    { id: S2, store_name: 'Frutta', full_name: null, store_lat: null, store_lng: null, store_hours: null, email: 'c@d.it', role: 'seller', is_approved: true },
   ];
   const catena = (valore: unknown): Record<string, unknown> => {
     const b: Record<string, unknown> = {};

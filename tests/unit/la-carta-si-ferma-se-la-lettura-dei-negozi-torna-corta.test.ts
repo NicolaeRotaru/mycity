@@ -127,7 +127,7 @@ describe('la carta non apre il pagamento se la lettura dei negozi torna corta', 
     vi.clearAllMocks();
     state.products = [{ id: P1, name: 'Pane', price: 10, images: ['a.jpg'], seller_id: S1, stock: 50, status: 'available' }];
     state.sellers = {
-      data: [{ id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng, stripe_payouts_enabled: true }],
+      data: [{ id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng }],
       error: null,
     };
   });

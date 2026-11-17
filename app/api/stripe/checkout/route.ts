@@ -281,7 +281,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // esattamente queste colonne, ed e' leggibile da chi ha un account.
     supa
       .from('seller_public_profiles')
-      .select('id, store_name, store_lat, store_lng, store_hours, stripe_payouts_enabled')
+      .select('id, store_name, store_lat, store_lng, store_hours')
       .in('id', sellerIds),
     // Lo stesso carrello di questa persona ha gia' un pagamento aperto?
     admin
@@ -469,7 +469,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // e' un negozio approvato non passa.
     const { data: profiliMancanti, error: errProfili } = await admin
       .from('profiles')
-      .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved, stripe_payouts_enabled')
+      .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
       .in('id', negoziMancanti);
     const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
     if (errProfili || recuperati.length !== negoziMancanti.length) {
@@ -490,20 +490,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         store_lat: p.store_lat,
         store_lng: p.store_lng,
         store_hours: p.store_hours,
-        stripe_payouts_enabled: p.stripe_payouts_enabled,
       });
     }
-  }
-
-  // R31-012 — La carta si paga solo ai negozi che hanno finito la verifica Stripe: senza
-  // `stripe_payouts_enabled` il bonifico resterebbe fermo (PENDING_SELLER_ONBOARDING in
-  // lib/stripe/payout.ts) coi soldi del cliente sul conto di MyCity. Nessuna sessione si apre.
-  const nonVerificato = sellers.find((s) => s.stripe_payouts_enabled !== true);
-  if (nonVerificato) {
-    logger.info('[stripe] negozio senza verifica Stripe: pagamento con carta non aperto', { sellerId: nonVerificato.id });
-    return ApiErrors.conflict(
-      `${nonVerificato.store_name ?? 'Un negozio del carrello'} per ora accetta solo il pagamento in contanti alla consegna. Scegli i contanti e riprova.`,
-    );
   }
 
   const sellerNameMap = new Map<string, string>();
