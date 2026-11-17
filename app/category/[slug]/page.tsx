@@ -16,6 +16,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { contaProdottiDellaGriglia } from '@/lib/queries/griglia-prodotti';
+import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
 /**
  * 13/11/2026 (R15-010) — Una categoria senza prodotti diceva «Non abbiamo trovato questo
@@ -82,6 +83,21 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const madre = alberoCategoria?.madre ?? null;
   const subcategories: SubcatRow[] = alberoCategoria?.subcategories ?? [];
   const subsLoading = isLoading;
+
+  /**
+   * 17/11/2026 — I BOTTONI DELLE SOTTOCATEGORIE PORTAVANO ANCHE AL VUOTO.
+   *
+   * La pagina di una categoria madre metteva un bottone per ogni figlia, anche per quelle senza un
+   * prodotto: un clic e si arrivava a «non ci sono ancora prodotti». Home, piede e indice delle
+   * categorie le toglievano già, con la stessa lettura e la stessa chiave: qui si fa lo stesso. Si
+   * aspetta la risposta per non far comparire e poi sparire un bottone; se la lettura fallisce si
+   * mostrano tutte, come prima. Le file dei prodotti restano su tutte le figlie: si nascondono da
+   * sole quando sono vuote.
+   */
+  const piene = useQuery(domandaCategoriePiene(supabase));
+  const sottocategoriePiene: SubcatRow[] = piene.isLoading
+    ? []
+    : soloLePiene(subcategories, piene.isError ? null : piene.data);
 
   /**
    * 17/11/2026 — CON LA LETTURA DEI PRODOTTI CADUTA, LA CATEGORIA MADRE RESTAVA BIANCA.
@@ -344,20 +360,22 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }} />
         {header}
 
-        <section>
-          <h2 className="font-serif text-xl font-bold text-ink-900 mb-3">Sottocategorie</h2>
-          <div className="flex flex-wrap gap-2.5">
-            {subcategories.map((s) => (
-              <Link
-                key={s.id}
-                href={`/category/${s.slug}`}
-                className="bg-white border border-cream-300 rounded-full px-4 py-2 hover:bg-primary-50 hover:border-primary-400 text-sm font-medium transition-colors"
-              >
-                {s.name}
-              </Link>
-            ))}
-          </div>
-        </section>
+        {sottocategoriePiene.length > 0 && (
+          <section>
+            <h2 className="font-serif text-xl font-bold text-ink-900 mb-3">Sottocategorie</h2>
+            <div className="flex flex-wrap gap-2.5">
+              {sottocategoriePiene.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/category/${s.slug}`}
+                  className="bg-white border border-cream-300 rounded-full px-4 py-2 hover:bg-primary-50 hover:border-primary-400 text-sm font-medium transition-colors"
+                >
+                  {s.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="space-y-10">
           {subcategories.map((s) => (
@@ -423,10 +441,10 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
 
       <div className="md:col-span-4">{header}</div>
 
-      {subcategories.length > 0 && (
+      {sottocategoriePiene.length > 0 && (
         <section className="md:col-span-4">
           <div className="flex flex-wrap gap-2.5">
-            {subcategories.map((s) => (
+            {sottocategoriePiene.map((s) => (
               <Link
                 key={s.id}
                 href={`/category/${s.slug}`}
@@ -566,11 +584,11 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           onReset={activeFilters > 0 ? reset : undefined}
           emptySuggestions={
             <div className="mt-6 space-y-6">
-              {subcategories.length > 0 && (
+              {sottocategoriePiene.length > 0 && (
                 <div className="text-center">
                   <p className="mb-2 text-[13px] text-ink-500">{t('didYouMean')}</p>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {subcategories.slice(0, 6).map((s) => (
+                    {sottocategoriePiene.slice(0, 6).map((s) => (
                       <Link
                         key={s.id}
                         href={`/category/${s.slug}`}
