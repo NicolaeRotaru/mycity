@@ -261,7 +261,9 @@ async function runServiceChecks(): Promise<SystemHealth> {
   // 12/11/2026 (R06-023) — Questa e' la pagina PUBBLICA: l'elenco delle variabili
   // mancanti («… Vanno messe PRIMA di ricompilare») e' un messaggio per lo
   // sviluppatore, non per una cliente. Qui resta lo stato; il dettaglio completo
-  // finisce nei log (e nessuna pagina admin lo mostra ancora: referto R06).
+  // finisce nei log, e chi amministra lo legge nella Panoramica admin
+  // (app/admin/page.tsx, riquadro «Configurazione da completare», dati da
+  // /api/admin/configurazione: solo «c'e'/manca» e i nomi, mai i valori).
   const titolare = checkTitolare();
   // Il dettaglio non sparisce: va nei log, dove lo legge chi amministra.
   if (titolare.detail) logger.warn('[salute] dati del titolare incompleti', { dettaglio: titolare.detail });
