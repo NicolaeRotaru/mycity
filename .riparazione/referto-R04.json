@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:22",
+  "aggiornato": "2026-11-17 18:26",
   "finita": false,
-  "testa": "04cc4b9afe900efe616879161e8203dd24acf367",
+  "testa": "0f92b386b30fed7fbcd030613ac056d641877698",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -146,8 +146,32 @@
     {
       "id": "R04-011",
       "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "parziale",
+      "commit": "0f92b386b30fed7fbcd030613ac056d641877698",
+      "file_toccati": [
+        "components/store-sections/useStorePageData.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0f92b386b30fed7fbcd030613ac056d641877698^ --file components/store-sections/useStorePageData.ts --prove tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le prime 20 recensioni della vetrina (useStorePageData) firmano con la prima parola del nome vero (vista nomi_pubblici), se manca con l'handle di chi ha acceso il profilo pubblico (conAutoriPubblici di lib/queries/profili-pubblici.ts, rotta /api/profili-pubblici, chiesto solo per chi non ha il nome), se manca anche quello resta «Cliente». Una rotta caduta lascia i nomi veri e le altre senza nome.",
+      "cosa_resta": "Le recensioni oltre le prime 20, lette con «Mostra altre recensioni» in components/store-sections/ReviewsSection.tsx:43-65 (leggiAltreRecensioni, file non mio, R30-007), usano ancora solo fetchNomiPubblici: chi ha solo il nome pubblico lì appare ancora «Cliente».",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/ReviewsSection.tsx",
+          "modifica": "In leggiAltreRecensioni, dopo «const authorById = await fetchNomiPubblici(supabase, rows.map((r) => r.user_id));» aggiungere «const senzaNome = rows.flatMap((r) => (r.user_id && !authorById.has(r.user_id) ? [{ owner_id: r.user_id }] : [])); const handleById = new Map((await conAutoriPubblici(senzaNome)).map((a) => [a.owner_id, a.owner?.public_handle ?? null]));» con «import { conAutoriPubblici } from '@/lib/queries/profili-pubblici';», e scrivere «author: r.user_id ? (authorById.get(r.user_id) ?? handleById.get(r.user_id) ?? null) : null»: lo stesso ripiego di useStorePageData.ts."
+        }
+      ],
+      "verificato_da": ""
     },
     {
       "id": "R04-012",
