@@ -1,5 +1,5 @@
 'use client';;
-import { use, useCallback, useRef, useState } from "react";
+import { use, useCallback, useRef, useState, useSyncExternalStore } from "react";
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -122,6 +122,47 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   // `contaProdottiDellaGriglia` risponde null quando la lettura fallisce, invece di lanciare.
   const prodottiDelHubCaduti =
     !!idsDelHub && (conteggioHub.isError || (conteggioHub.isSuccess && conteggioHub.data === null));
+
+  /**
+   * 17/11/2026 — E SE CADONO LE FILE MA IL CONTEGGIO RISPONDE?
+   *
+   * Il conteggio qui sopra è un'altra domanda: se lui risponde e le file cadono, la madre restava
+   * bianca lo stesso (una fila caduta si nasconde senza chiamare `onCount`). Qui la pagina guarda
+   * nella memoria di react-query come stanno le domande delle file, senza osservarle: un
+   * osservatore con la stessa chiave riscriverebbe le opzioni della domanda della fila. Le chiavi
+   * sono quelle delle file del hub in `components/ProductGrid.tsx` (12 prodotti, ordine di
+   * pertinenza). Se il client non dà la sua memoria, le due liste restano vuote e decide il
+   * conteggio, come prima.
+   */
+  const memoriaDelleDomande =
+    typeof queryClient.getQueryCache === 'function' ? queryClient.getQueryCache() : null;
+  const iscrivitiAllaMemoria = useCallback(
+    (avvisa: () => void) => memoriaDelleDomande?.subscribe(avvisa) ?? (() => {}),
+    [memoriaDelleDomande],
+  );
+  const statoDelleFileInMemoria = useSyncExternalStore(
+    iscrivitiAllaMemoria,
+    () => {
+      if (!memoriaDelleDomande || !idsDelHub) return '|';
+      const [madreId, ...figlie] = idsDelHub;
+      const file: Array<[string, Record<string, unknown>]> = [
+        ...figlie.map((id): [string, Record<string, unknown>] => [id, { categoryId: id, limit: 12, sort: 'relevance' }]),
+        [madreId, { categoryIds: [madreId], limit: 12, sort: 'relevance' }],
+      ];
+      const cadute: string[] = [];
+      const inArrivo: string[] = [];
+      for (const [fila, filtri] of file) {
+        const stato = memoriaDelleDomande.find({ queryKey: queryKeys.products.grid(filtri), exact: true })?.state.status;
+        if (stato === 'error') cadute.push(fila);
+        else if (stato !== 'success') inArrivo.push(fila);
+      }
+      return `${cadute.join(',')}|${inArrivo.join(',')}`;
+    },
+    () => '|',
+  );
+  const [fileCaduteTesto, fileInArrivoTesto] = statoDelleFileInMemoria.split('|');
+  const fileCadute = new Set(fileCaduteTesto ? fileCaduteTesto.split(',') : []);
+  const fileInArrivo = fileInArrivoTesto ? fileInArrivoTesto.split(',') : [];
 
   // Stato filtri — ESCLUSIVAMENTE le dimensioni già supportate da ProductGrid.
   const [maxPrice, setMaxPrice] = useState<number>(500);
@@ -401,10 +442,15 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           />
         </div>
 
-        {/* 17/11/2026 — Lettura caduta e nessuna fila a schermo: si dice, invece del vuoto. */}
-        {prodottiDelHubCaduti &&
-          !fileDelHub.every((fila) => contiDelleFile[fila] === 0) &&
-          !fileDelHub.some((fila) => (contiDelleFile[fila] ?? 0) > 0) && (
+        {/* 17/11/2026 — Lettura caduta e nessuna fila a schermo: si dice, invece del vuoto.
+            Basta che siano cadute le file (ognuna caduta o vuota, almeno una caduta), anche se il
+            conteggio risponde; e se cade il conteggio mentre le file arrivano, si aspetta. */}
+        {((fileDelHub.every((fila) => fileCadute.has(fila) || contiDelleFile[fila] === 0) &&
+          fileDelHub.some((fila) => fileCadute.has(fila))) ||
+          (prodottiDelHubCaduti &&
+            fileInArrivo.length === 0 &&
+            !fileDelHub.every((fila) => contiDelleFile[fila] === 0) &&
+            !fileDelHub.some((fila) => (contiDelleFile[fila] ?? 0) > 0))) && (
             <ErrorState
               title="Non riesco a caricare i prodotti di questa categoria"
               description="C'è stato un problema di collegamento: i prodotti probabilmente ci sono. Riprova fra un attimo."
