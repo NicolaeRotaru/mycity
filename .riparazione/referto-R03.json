@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:18",
+  "aggiornato": "2026-11-17 18:22",
   "finita": false,
-  "testa": "6c6d25173ed278e52913a719b8d2fd7d929aa7e4",
+  "testa": "5ddf13b7e12f1048c1714feaba0937ef7888e649",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -13,8 +13,24 @@
     {
       "id": "R03-001",
       "chiave": "flussi-conversione|sulla scheda prodotto un secondo «aggiungi al carrello» entro un secondo viene ignorato senza dire niente",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "5ddf13b7e12f1048c1714feaba0937ef7888e649",
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-aggiungi-frenato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-aggiungi-frenato.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5ddf13b7e12f1048c1714feaba0937ef7888e649^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r03-aggiungi-frenato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il freno anti doppio tocco resta (un pezzo solo), ma il tocco scartato in handleAdd ora mostra toast.info «Già aggiunto: controlla il carrello». La prova monta la scheda vera con orologio finto: due clic a 300 ms danno una sola aggiunta e l'avviso; dopo 1,5 s il terzo aggiunge."
     },
     {
       "id": "R03-002",
