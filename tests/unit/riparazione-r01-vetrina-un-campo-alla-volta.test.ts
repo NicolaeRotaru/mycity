@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCustomization, accentHex } from '@/lib/store-customization';
+import { normalizeCustomization, accentHex, announcementActive } from '@/lib/store-customization';
 
 /**
  * 17/11/2026 (R01-010) — Basta un solo campo fuori regola e tutta la personalizzazione della
@@ -49,6 +49,25 @@ describe('R01-010 · si scarta solo il campo invalido', () => {
     const riscritta = { ...letta, theme: { ...letta.theme, accent: '#C0492C' } };
     expect(riscritta.tagline).toBe('Pane fresco');
     expect(riscritta.socials?.facebook).toBe('panequotidiano');
+  });
+
+  it('una scadenza dell\'annuncio fuori regola spegne l\'annuncio, non lo lascia acceso per sempre', () => {
+    const c = normalizeCustomization({
+      tagline: 'Pane fresco',
+      announcement: { enabled: true, text: 'Saldi di novembre', until: '30/11/2026' },
+    });
+    expect(c.tagline).toBe('Pane fresco');
+    expect(c.announcement?.text).toBe('Saldi di novembre');
+    expect(c.announcement?.enabled).toBe(false);
+    expect(c.announcement?.until).toBeUndefined();
+    expect(announcementActive(c, new Date('2027-01-15T12:00:00Z'))).toBe(false);
+  });
+
+  it('un annuncio tutto valido resta acceso con la sua scadenza', () => {
+    const c = normalizeCustomization({ announcement: { enabled: true, text: 'Saldi', until: '2026-11-30' } });
+    expect(c.announcement).toEqual({ enabled: true, text: 'Saldi', until: '2026-11-30' });
+    expect(announcementActive(c, new Date('2026-11-20T12:00:00Z'))).toBe(true);
+    expect(announcementActive(c, new Date('2026-12-15T12:00:00Z'))).toBe(false);
   });
 
   it('un oggetto tutto valido resta com\'era, e uno tutto rotto torna vuoto', () => {

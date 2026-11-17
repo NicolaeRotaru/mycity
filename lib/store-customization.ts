@@ -260,12 +260,17 @@ function salvaQuelloCheVale(raw: Record<string, unknown>): StoreCustomization {
 
   tieni('theme', parteDiOggetto(forma.theme, raw.theme));
   tieni('socials', parteDiOggetto(forma.socials, raw.socials));
-  // L'annuncio ha due campi con un valore di partenza: se il testo non vale, l'annuncio intero non
-  // si mostra, ma resta spento invece di far sparire il resto.
-  const annuncio = parteDiOggetto(forma.announcement, raw.announcement);
-  if (annuncio) {
-    const r = forma.announcement.safeParse(annuncio);
-    if (r.success) tieni('announcement', r.data);
+  // L'annuncio si tiene acceso solo se è valido tutto intero. Se un suo campo non vale (il testo,
+  // la data di scadenza), si tengono i campi buoni ma l'annuncio resta SPENTO: un annuncio senza
+  // la sua scadenza non deve restare in vetrina per sempre. Il resto della vetrina non sparisce.
+  const annuncioIntero = forma.announcement.safeParse(raw.announcement);
+  if (annuncioIntero.success) tieni('announcement', annuncioIntero.data);
+  else {
+    const annuncio = parteDiOggetto(forma.announcement, raw.announcement);
+    if (annuncio) {
+      const r = forma.announcement.safeParse({ ...annuncio, enabled: false });
+      if (r.success) tieni('announcement', r.data);
+    }
   }
 
   if (Array.isArray(raw.featuredProductIds)) {
