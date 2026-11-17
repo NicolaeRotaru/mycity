@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 17:57",
+  "aggiornato": "2026-11-17 18:00",
   "finita": false,
-  "testa": "80c8dc39ac6d951620b6e06dda0263bf0908d548",
+  "testa": "19e4067514ae95b594d6c3cd46f0689d657f4ac3",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -130,8 +130,26 @@
     {
       "id": "R02-013",
       "chiave": "qa-flussi|la pagina delle storie accetta caratteri di controllo c1 nel link che poi il database rifiuta, lasciando una foto orfana",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "19e4067514ae95b594d6c3cd46f0689d657f4ac3",
+      "file_toccati": [
+        "lib/safe-redirect.ts",
+        "tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19e4067514ae95b594d6c3cd46f0689d657f4ac3^ --file lib/safe-redirect.ts --prove tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "safeInternalPath rifiuta ora la stessa classe che il CHECK della 403 usa ([[:cntrl:]] di glibc in UTF-8): U+0000–U+001F, U+007F–U+009F e U+2028–U+2029, invece dei soli C0 e DEL. La prova passa ogni carattere di quella classe in mezzo a un link e controlla che nessuno esca accettato dal sito e rifiutato dal CHECK riscritto in JS (sulla base: 34 passavano, U+0080…U+009F e U+2028–U+2029), e che i link buoni passino ancora.",
+      "verificato_da": "da verificare"
     }
   ],
   "nuovi_difetti_visti": [],
