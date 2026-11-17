@@ -43,8 +43,34 @@
     {
       "id": "R02-006",
       "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "(file di R02, va applicato INSIEME alle cinque prove qui sotto, se no diventano rosse 13 prove) righe 74-76: al posto di «const onlyIds = Array.isArray(body.productIds) ? new Set(...) : null;» scrivere «if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Elenco dei prodotti mancante.'); const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));»"
+        },
+        {
+          "file": "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
+          "modifica": "riga 116: body JSON.stringify({ jobId: 'job-1', productIds: ['p1', 'p2'] }) al posto di { jobId: 'job-1' }"
+        },
+        {
+          "file": "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts",
+          "modifica": "righe 293, 325, 353: aggiungere al corpo productIds: ['focaccia'] (job-1), productIds: ['tagliere'] (job-2), productIds: ['focaccia'] (job-3)"
+        },
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": "righe 213 e 221: richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1', productIds: ['p1'] }) al posto di { jobId: 'job-1' } (anche la 213, se no il 400 del lavoro translate arriverebbe per l'elenco mancante e non per la traduzione spenta)"
+        },
+        {
+          "file": "tests/unit/minori-s10-lotto-applica.test.ts",
+          "modifica": "riga 102: corpo di default { jobId: 'l1', productIds: ((db.lavoro?.results ?? []) as Array<{ product_id: string }>).map((r) => r.product_id) } al posto di { jobId: 'l1' } («Applica a tutti» manda i prodotti mostrati)"
+        },
+        {
+          "file": "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
+          "modifica": "riga 212: aggiungere al corpo productIds: ['p1', 'p2', 'p3']"
+        }
+      ],
+      "nota": "La cura nella rotta (mia) fa diventare rosse 13 prove in 5 file esistenti che chiamano la rotta col solo jobId. Quei file mettono in vi.mock lib/funzioni-al-lancio.ts (di R01 in quest'onda) e altri file non miei: per la regola delle prove comuni non li tocco. Ho provato in locale rotta + le cinque modifiche qui sopra: 7 file, 87 prove verdi (npx vitest run dei 5 file più le-funzioni-spente-le-ferma-la-rotta-anche-a-mano e riparazione-r18-lotto-applica-quello-che-si-vede). Nessun commit: la rotta da sola romperebbe il verify."
     },
     {
       "id": "R02-007",
