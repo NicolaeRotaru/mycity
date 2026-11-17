@@ -45,7 +45,7 @@
         "tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -70,7 +70,7 @@
         "tests/unit/riparazione-r20-home-variante-a.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r03-home-consegna-senza-negozio-aperto.test.ts tests/unit/riparazione-r20-home-variante-a.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -147,7 +147,7 @@
         "tests/unit/riparazione-r03-ancore-senza-doppio-margine.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r03-ancore-senza-doppio-margine.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -239,7 +239,7 @@
         "tests/unit/riparazione-r03-caricamento-cards-annuncia.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r03-caricamento-cards-annuncia.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -330,6 +330,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 5,
-    "nota": "5 subagenti su 6, tutti col modello della sessione: riparatore lotto 1, riparatore lotto 2, revisore lotto 1, revisore lotto 2, giro di correzione di R03-012/008/006. Consegna chiesta dalla regista a 23,55 $."
-  }
+    "nota": "5 subagenti su 6, tutti col modello della sessione: riparatore lotto 1, riparatore lotto 2, revisore lotto 1, revisore lotto 2, giro di correzione di R03-012/008/006. Consegna chiesta dalla regista a 23,55 $. Costo letto con get_session alla consegna: 28,36 $ (sopra il tetto di 28 $, segnalato subito alla regista).",
+    "subagenti": 5
+  },
+  "costo_usd": 28.36
 }
