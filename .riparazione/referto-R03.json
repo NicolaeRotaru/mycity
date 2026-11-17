@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:40",
+  "aggiornato": "2026-11-17 19:45",
   "finita": false,
-  "testa": "3c0e939def23a1a5421752f43692528b81ca0934",
+  "testa": "959a2a423140d69c2091a436f120e9202a7e27e4",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -12,9 +12,27 @@
   "voci": [
     {
       "id": "R03-001",
-      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "959a2a423140d69c2091a436f120e9202a7e27e4",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-categoria-file-cadute.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-categoria-file-cadute.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 959a2a42^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r03-categoria-file-cadute.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Cura dentro la pagina, senza toccare components/ProductGrid.tsx: la pagina guarda nella memoria di react-query (getQueryCache + useSyncExternalStore, senza osservatori: uno con la stessa chiave riscriverebbe le opzioni della domanda della fila) lo stato delle domande delle file del hub, con le stesse chiavi di ProductGrid (12 prodotti, pertinenza). Se ogni fila è caduta o vuota e almeno una è caduta mostra l'ErrorState con «Riprova», anche se il conteggio risponde; il ramo del conteggio resta, ma aspetta che nessuna fila sia in arrivo (chiuso anche l'effetto accanto: il messaggio sotto le file in caricamento). Prova con la pagina vera, le file vere, react-query vero e database finto: file cadute + conteggio 7 → ErrorState e Riprova; Riprova riuscito → messaggio via e prodotti a schermo; file piene → niente errore; conteggio caduto con le file in arrivo → niente messaggio, né dopo. Le 7 prove esistenti che montano o leggono la pagina restano verdi (70 prove), tsc pulito.",
+      "nota": "Le chiavi delle file sono scritte nella pagina come in ProductGrid: se un giorno ProductGrid cambia la chiave delle file del hub, la prova nuova (che monta le file vere) diventa rossa. Con il react-query finto delle prove (senza getQueryCache) la pagina resta al ramo del conteggio, come prima.",
+      "verificato_da": "",
+      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca"
     },
     {
       "id": "R03-002",
