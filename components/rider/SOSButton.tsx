@@ -68,10 +68,18 @@ function avviaLetturaGps(): LetturaGps {
       lettura.ultima = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       resolve(lettura.ultima);
     };
-    try { geo.getCurrentPosition(arrivata, () => resolve(lettura.ultima), opzioni); } catch { resolve(null); }
+    // R02-005 — Il primo tentativo che scade (o non trova il segnale) non chiude l'attesa finche' il
+    // watch e' in ascolto: la posizione che arriva un attimo dopo deve finire nell'avviso. L'attesa la
+    // chiudono il permesso negato (code 1) o il tempo massimo di posizionePronta.
+    let inAscolto = false;
+    const errore = (err?: GeolocationPositionError) => {
+      if (!inAscolto || err?.code === 1) resolve(lettura.ultima);
+    };
+    try { geo.getCurrentPosition(arrivata, errore, opzioni); } catch { resolve(null); }
     try {
       if (typeof geo.watchPosition === 'function') {
-        const id = geo.watchPosition(arrivata, () => undefined, opzioni);
+        const id = geo.watchPosition(arrivata, errore, opzioni);
+        inAscolto = true;
         lettura.ferma = () => { try { geo.clearWatch?.(id); } catch { /* niente da fermare */ } };
       }
     } catch { /* il watch e' un di piu': resta getCurrentPosition */ }
