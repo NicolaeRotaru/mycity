@@ -388,7 +388,7 @@ const SignInForm = () => {
         </Button>
       </form>
 
-      <AuthAlternatives />
+      <AuthAlternatives returnTo={returnTo} />
 
       <p className="mt-6 text-[14px] text-ink-600">
         Non hai un account?{' '}

@@ -108,6 +108,7 @@ export function AuthShell({
  */
 export function AuthAlternatives({
   condizioniDalModulo,
+  returnTo,
 }: {
   /**
    * S10 (5/11/2026) — Nell'iscrizione la spunta dei Termini c'e' gia' nel
@@ -115,6 +116,12 @@ export function AuthAlternatives({
    * Senza (pagina di accesso), resta la spunta di questo riquadro.
    */
   condizioniDalModulo?: boolean;
+  /**
+   * R02-010 — Dove tornare dopo l'accesso con Google (già pulito da `safeInternalPath` nella
+   * pagina), query compresa (?tab=…). Viaggia come `next` verso /auth/callback, che lo ripulisce
+   * e ci rimanda.
+   */
+  returnTo?: string;
 } = {}) {
   const [googleLoading, setGoogleLoading] = useState(false);
   /**
@@ -144,6 +151,7 @@ export function AuthAlternatives({
     try {
       const ritorno = new URL('/auth/callback', window.location.origin);
       ritorno.searchParams.set('versione', VERSIONE_TESTI_LEGALI);
+      if (returnTo && returnTo !== '/') ritorno.searchParams.set('next', returnTo);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: ritorno.toString() },
