@@ -120,13 +120,40 @@ export async function POST(request: Request) {
     user_agent: userAgent,
   }));
 
-  const { error } = await getAdminSupabase().from('consent_log').insert(righe);
+  /**
+   * 17/11/2026 (R32-011) — CHI TOGLIEVA IL SÌ ALLE STATISTICHE SI TENEVA L'IDENTIFICATIVO.
+   *
+   * `mc_vid` dura un anno ed è httpOnly: il browser non lo può cancellare, e la rotta delle
+   * visite smetteva solo di leggerlo. Al sì successivo tornava buono, e le visite nuove si
+   * riattaccavano a quelle di prima. Col no alle statistiche il server lo cancella, anche se
+   * la scrittura nel registro non riesce: la revoca vale comunque (art. 7.3 GDPR).
+   */
+  const togliVid = parsed.data.analytics === false && !!vid;
+  const conVidTolto = <T extends NextResponse>(r: T): T => {
+    if (togliVid) {
+      r.cookies.set({ name: 'mc_vid', value: '', maxAge: 0, path: '/', sameSite: 'lax', httpOnly: true, secure: true });
+    }
+    return r;
+  };
+
+  // 17/11/2026 (R32-015) — Senza la chiave di servizio `getAdminSupabase` lancia: prima la
+  // rotta cadeva con un errore non gestito, e il browser non riprovava mai. Adesso il guasto
+  // si scrive col suo nome, la risposta è un 503, e il browser tiene la scelta da rimandare.
+  let error: { message: string } | null;
+  try {
+    ({ error } = await getAdminSupabase().from('consent_log').insert(righe));
+  } catch (e) {
+    logger.error(new Error('[consent] registro dei consensi non raggiungibile'), {
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return conVidTolto(ApiErrors.unavailable('Registrazione momentaneamente non disponibile'));
+  }
   if (error) {
     logger.error(new Error('[consent] scrittura nel registro fallita'), { message: error.message });
-    return ApiErrors.internal('Registrazione non riuscita');
+    return conVidTolto(ApiErrors.internal('Registrazione non riuscita'));
   }
 
-  const risposta = NextResponse.json({ ok: true });
+  const risposta = conVidTolto(NextResponse.json({ ok: true }));
   if (cidNuovo) {
     // Solo per il registro dei consensi: httpOnly (il browser non lo legge) e
     // durata pari a quella del consenso stesso.

@@ -40,9 +40,13 @@ export async function GET(request: Request) {
   }
 
   const admin = getAdminSupabase();
+  // 17/11/2026 (R32-012) — Chi si era disiscritto e si iscrive di nuovo riparte da una riga con
+  // `unsubscribed_at` scritto (la nuova richiesta non lo tocca: finché non conferma, la
+  // disiscrizione vale). Qui, quando conferma, la data della disiscrizione va tolta: prima
+  // restava, e la riga diceva insieme «attivo» e «disiscritto».
   const { data, error } = await admin
     .from('newsletter_subscribers')
-    .update({ active: true, confirmed_at: new Date().toISOString(), confirm_token: null })
+    .update({ active: true, confirmed_at: new Date().toISOString(), confirm_token: null, unsubscribed_at: null })
     .eq('confirm_token', token)
     .select('id')
     .maybeSingle();

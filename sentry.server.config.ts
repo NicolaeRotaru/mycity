@@ -12,6 +12,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 import { ambienteSentry } from '@/lib/analytics/ambiente';
+import { ripulisciEvento } from '@/lib/analytics/sentry-config';
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
 
@@ -36,7 +37,15 @@ if (DSN) {
       // Drop errori di rate limit (intenzionali, non bug)
       const msg = hint?.originalException?.toString() ?? '';
       if (msg.includes('rate limit') || msg.includes('Too Many Requests')) return null;
-      return event;
+      // 17/11/2026 (R32-025) — La pulizia dei dati personali valeva solo nel browser: qui
+      // l'errore partiva con l'indirizzo intero (ricerca compresa) in `request.url`,
+      // `query_string` e `contexts.nextjs.request_path`. Adesso è la stessa del browser.
+      return ripulisciEvento(event);
+    },
+    // 17/11/2026 (R32-025) — Le misure del server (il 10% delle richieste) portavano
+    // `url.full`, `http.target`, il `referer` e l'IP: stessa pulizia degli errori.
+    beforeSendTransaction(event) {
+      return ripulisciEvento(event);
     },
   });
 }

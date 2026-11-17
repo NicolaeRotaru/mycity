@@ -1,0 +1,344 @@
+{
+  "sessione": "R32",
+  "aggiornato": "2026-11-17 12:58",
+  "finita": true,
+  "testa": "3f6e764fb6f20826cc5350bfd88080f7e4e5a814",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "3f6e764fb6f20826cc5350bfd88080f7e4e5a814",
+    "nota": "typecheck verde, lint 0 errori (99 avvisi), vitest 1610 file / 10550 prove verdi. Lanciato con NODE_OPTIONS=--max-old-space-size=8192 (senza, tsc finisce la memoria)."
+  },
+  "voci": [
+    {
+      "id": "R32-001",
+      "chiave": "privacy-legale|accogliere una segnalazione non toglie il prodotto: resta online, e a chi ha segnalato si scrive che è stato rimosso",
+      "esito": "non_fatto",
+      "nota": "R32-001: nota riservata alla regista."
+    },
+    {
+      "id": "R32-002",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-003",
+      "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-004",
+      "chiave": "architettura|il modulo del prodotto applica le proposte dell'assistente con una seconda copia delle regole del server, e le due copie sono già diverse",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-005",
+      "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-006",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-007",
+      "chiave": "frontend-ux|con «aperti ora» acceso, l'elenco dei negozi non si aggiorna all'orario di chiusura e tiene in lista negozi con scritto «chiuso ora»",
+      "esito": "gia_riparato_prima",
+      "prova": "Già alla base d1eaba80: app/stores/page.tsx:216 useOraDiPiacenza() (R23-010, 9ec7e9a9) e components/ProductGrid.tsx:409 `const battito = useOraDiPiacenza(!!onlyOpenStores)` con `battito` nelle dipendenze a :461 (R28-007, b55df4ce). Comando: npx vitest run tests/unit/riparazione-r23-aperti-ora-si-aggiorna.test.ts tests/unit/riparazione-r28-prodotti-dei-negozi-aperti-si-aggiornano.test.tsx → 2 file, 5 prove verdi."
+    },
+    {
+      "id": "R32-008",
+      "chiave": "frontend-ux|orari passati alla cassa e 409 della rotta contanti: le prove cercano parole nel sorgente, non fanno girare pagina e rotta",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-009",
+      "chiave": "pagamenti-stripe|una contestazione persa su una parte del carrello segna persi anche gli ordini degli altri negozi",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-010",
+      "chiave": "privacy-legale|«chi siamo» e «lavora con noi» raccontano una flotta di rider, una crescita e quattro posti di lavoro che oggi non esistono",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-011",
+      "chiave": "privacy-legale|chi rifiuta le statistiche dopo averle accettate si tiene l'identificativo di un anno, e al sì successivo le visite nuove si riattaccano a quelle di prima",
+      "esito": "parziale",
+      "commit": "376d6cff",
+      "file_toccati": [
+        "app/api/consent/route.ts",
+        "app/api/track/route.ts",
+        "tests/unit/riparazione-r32-statistiche-revocate-senza-identificativo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r32-statistiche-revocate-senza-identificativo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r32-statistiche-revocate-senza-identificativo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 376d6cff^ --file app/api/consent/route.ts,app/api/track/route.ts --prove tests/unit/riparazione-r32-statistiche-revocate-senza-identificativo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "mc_vid (un anno, httpOnly: il browser non lo puo' togliere) adesso lo cancella il server: /api/consent col no alle statistiche (anche se la scrittura nel registro fallisce) e /api/track quando gli arriva senza consenso. La prova fa il giro si', visita, no, si', visita con un barattolo di cookie come il browser: la seconda visita ha un identificativo nuovo.",
+      "nota": "lib/consent.ts non e' cambiato: il no parte da writeConsent con la fetch a /api/consent, che e' dove ora si cancella. Se quella fetch non arriva, il cookie lo toglie /api/track al primo accesso/uscita; il nuovo tentativo della registrazione e' R32-015.",
+      "verificato_da": "revisore lotto 2 (opus): sì→no→sì, no senza cookie o da altra scheda, no col registro giù; resta l'identificativo di PostHog",
+      "cosa_resta": "L'identificativo di PostHog: al no lib/analytics/posthog.tsx:401 fa solo opt_out_capturing, il distinct_id resta 365 giorni in cookie e localStorage e al sì successivo le visite si riattaccano. File non di R32.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/analytics/posthog.tsx",
+          "modifica": "Al no alle statistiche (riga ~401, dove si chiama opt_out_capturing) chiamare anche posthog.reset() prima dell'opt-out, così il distinct_id e i cookie/localStorage di PostHog si azzerano e al sì successivo nasce un identificativo nuovo."
+        }
+      ]
+    },
+    {
+      "id": "R32-012",
+      "chiave": "privacy-legale|chi si disiscrive dalla newsletter e poi si iscrive di nuovo resta segnato come disiscritto anche dopo aver confermato",
+      "esito": "riparato",
+      "commit": "22eb4216",
+      "file_toccati": [
+        "app/api/newsletter/confirm/route.ts",
+        "tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 22eb4216^ --file app/api/newsletter/confirm/route.ts --prove tests/unit/riparazione-r32-newsletter-riscritto-dopo-disiscrizione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La conferma scrive anche unsubscribed_at = null. La richiesta di iscrizione (app/api/newsletter/route.ts) resta com'era apposta: finche' la persona non conferma dalla sua casella la disiscrizione deve valere (chiunque puo' scrivere l'indirizzo di un altro). La prova fa il giro disiscritto -> nuova richiesta -> link dell'email -> conferma, con orologio finto.",
+      "verificato_da": "revisore lotto 2 (opus): regge; link vecchio di conferma e riattivazione chiesta da altri provati"
+    },
+    {
+      "id": "R32-013",
+      "chiave": "privacy-legale|l'esito di una segnalazione non dice né al venditore né a chi ha segnalato come si contesta la decisione",
+      "esito": "gia_riparato_prima",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/minori-s05-segnalazioni.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/minori-s05-segnalazioni.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": null,
+      "copre_tutta_la_voce": true,
+      "prova": "app/api/segnalazioni/esito/comunica.ts:117-118 (email a chi ha segnalato, html e testo), :126 (notifica a chi ha segnalato con l'account) e :138 (notifica al venditore) aggiungono COME_CONTESTARE (lib/admin/segnalazioni-testi.ts:37-40: contestazione gratuita da /contact entro sei mesi, riesame di un'altra persona, giudice, Termini), dal commit 15e23935 del 5/11, gia' nella base; la prova tests/unit/minori-s05-segnalazioni.test.tsx:52-63 lo controlla per il venditore e per l'email ed e' verde.",
+      "cosa_ho_fatto": "Niente da cambiare: il testo su come contestare c'e' in tutti e tre i canali. Rilanciata la prova esistente (verde).",
+      "nota": "Il paragrafo sta in lib/admin/segnalazioni-testi.ts (non mio). Due cose che non decido io: domanda per Nicola sulla risoluzione extragiudiziale e sul riesame da parte di «una persona diversa»; e un ritocco possibile (in nuovi_difetti_visti): nell'email /contact e /terms sono percorsi, non link cliccabili.",
+      "verificato_da": "revisore lotto 2 (opus): vero sulla base (15e23935 antenato di d1eaba80)"
+    },
+    {
+      "id": "R32-014",
+      "chiave": "privacy-legale|chi fa una segnalazione lascia la sua email lì per sempre",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": null,
+      "prova_tipo": null,
+      "prova_eseguita": false,
+      "rimessa": null,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato sulla base: la potatura delle segnalazioni decise (12 mesi dalla decisione, lib/privacy/potature-ritenzione.ts:383-393) e la riga dell'informativa ci sono (R21-007, prova riparazione-r21-segnalazioni-email verde). Restano due buchi: la cancellazione dell'account non tocca la tabella segnalazioni (grep in lib/account/cancellazione.ts: nessuna riga), e le segnalazioni mai decise (ricevuta/in_esame) tengono email e testo senza tetto. Il primo sta in un file non mio; il secondo aspetta il numero di mesi da Nicola, quindi non ho scritto la potatura.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/account/cancellazione.ts",
+          "modifica": "In TABELLE_CON_DATI_PERSONALI aggiungere { tabella: 'segnalazioni', colonna: 'segnalante_id', azzera: { email_contatto: null, dettaglio: '[rimosso]' }, sopravvive: true, perche: 'email e testo di chi ha segnalato un contenuto (dal R32-023 nel testo ci sono anche il nome e la buona fede)' }. segnalante_id e' ON DELETE SET NULL verso auth.users (verificato sul Postgres locale: segnalazioni_segnalante_id_fkey), quindi la riga sopravvive e va ripulita PRIMA di chiudere l'account; la prova comune chi-cancella-l-account-non-resta-col-profilo-svuotato la controlla gia' per ogni voce con sopravvive: true. CORREZIONE DEL REVISORE: non azzerare dettaglio sulle segnalazioni ancora da decidere (stato 'ricevuta' o 'in_esame'), perché l'amministratore perde il testo da esaminare (art. 16 DSA): su quelle azzerare solo email_contatto e togliere dal dettaglio la riga del nome scritta da chi segnala; dettaglio:'[rimosso]' solo sulle decise ('accolta', 'respinta'). Se TABELLE_CON_DATI_PERSONALI non accetta una condizione, la voce va scritta come passo a parte nella stessa funzione. Nota: le segnalazioni fatte senza account con la stessa email non le tocca (segnalante_id NULL)."
+        }
+      ],
+      "cosa_resta": "(1) la modifica a lib/account/cancellazione.ts qui sopra. (2) Il tetto per le segnalazioni mai decise: una voce in lib/privacy/potature-ritenzione.ts (update email_contatto/dettaglio a null con stato in ('ricevuta','in_esame') e created_at piu' vecchio di N mesi) piu' la frase nell'informativa, appena Nicola dice N. (3) Le potature cancellano davvero solo con CANCELLAZIONI_A_ORARIO=accese su Vercel (non codice).",
+      "domanda": "Le segnalazioni mai decise tengono email, nome e testo senza limite: dopo quanti mesi dalla segnalazione li togliamo (dopo non si potra' piu' comunicare l'esito a chi ha segnalato)? E i 12 mesi dalla decisione, venuti dalla ricetta del 24/10, li confermi?",
+      "nota": "Non codice: CANCELLAZIONI_A_ORARIO=accese su Vercel Production perche' la potatura notturna cancelli davvero.",
+      "verificato_da": "revisore lotto 2 (opus): la modifica per lib/account/cancellazione.ts è esatta; meglio non azzerare dettaglio sulle segnalazioni da decidere"
+    },
+    {
+      "id": "R32-015",
+      "chiave": "privacy-legale|nessun consenso finisce a verbale: termini e scelte sui cookie restano solo nel browser, e nessuno riprova a registrarli",
+      "esito": "parziale",
+      "commit": "3586af3d",
+      "file_toccati": [
+        "lib/consent.ts",
+        "app/api/consent/route.ts",
+        "tests/unit/riparazione-r32-consenso-che-si-rimanda.test.ts",
+        "tests/unit/riparazione-r32-registro-consensi-senza-chiave.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r32-consenso-che-si-rimanda.test.ts",
+        "tests/unit/riparazione-r32-registro-consensi-senza-chiave.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r32-consenso-che-si-rimanda.test.ts tests/unit/riparazione-r32-registro-consensi-senza-chiave.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3586af3d^ --file lib/consent.ts,app/api/consent/route.ts --prove tests/unit/riparazione-r32-consenso-che-si-rimanda.test.ts,tests/unit/riparazione-r32-registro-consensi-senza-chiave.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Scelte sui cookie: il browser segna quale scelta (il suo ts) aspetta il «registrata» del server e, se la risposta non e' buona (5xx, 429 o rete caduta), la rimanda alla prima pagina caricata dopo (readConsent, che il banner chiama a ogni pagina), una volta per pagina, finche' il server non la prende; una scelta nuova prende il posto di quella in attesa. /api/consent: se getAdminSupabase lancia (chiave di servizio mancante) scrive l'errore nei log e risponde 503 invece di cadere con un errore non gestito; anche in quel caso il no alle statistiche toglie mc_vid.",
+      "cosa_resta": "(1) Termini: il verbale si riprova gia' al prossimo ingresso (accesso con password e link leggono la versione da user_metadata) e la cassa e l'area del negozio li richiedono se la riga manca (middleware.ts), ma con una sessione aperta da settimane nessuno lo riscrive da solo con la versione gia' accettata: servirebbe un tentativo automatico in middleware.ts o lib/auth/accettazione-testi.ts (non miei), e chi lo fa decide se scriverlo senza ripassare dalla pagina /accetta-condizioni. app/auth/callback/route.ts non e' cambiato. (2) Non codice: senza SUPABASE_SERVICE_ROLE_KEY su Vercel Production (la stessa cura di R01-003 in decisioni.json) nessuna riga entra nel registro, ne' cookie ne' Termini: cosa fa Nicola: Vercel -> progetto mycity -> Settings -> Environment Variables -> SUPABASE_SERVICE_ROLE_KEY per Production, poi un nuovo rilascio. Da li' le scelte rimaste in attesa nei browser arrivano da sole.",
+      "nota": "Sul Postgres locale (r32_test, in una transazione con ROLLBACK) l'insert di functional/analytics/marketing in consent_log come service_role passa: il vincolo sulle categorie (migrazione 127) e i permessi non sono il problema. Nessuna migrazione nuova.",
+      "verificato_da": "revisore lotto 2 (opus): regge con riserve (ts della scelta non inviato, logger.error a ogni pagina senza chiave)"
+    },
+    {
+      "id": "R32-016",
+      "chiave": "privacy-legale|l'informativa non dice quanto teniamo i messaggi dei contatti e della chat, e per l'email con l'iban scrive «finché non la cancelliamo»",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-017",
+      "chiave": "privacy-legale|l'informativa privacy non dice che chiediamo la data di nascita, il codice fiscale, il mezzo e la targa al fattorino, e la data di nascita al negozio",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-018",
+      "chiave": "privacy-legale|l'informativa promette di dare i dati solo al negozio e al rider, ma poi non li elenca fra chi riceve i dati, e mette il database negli stati uniti mentre sta a parigi",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-019",
+      "chiave": "privacy-legale|ai negozi scriviamo «iva inclusa» sulla commissione, mentre la regola decisa sospende quella dicitura finché il commercialista non conferma il regime",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-020",
+      "chiave": "privacy-legale|buco nelle prove (variante): macchina: regge. le due prove della bocciatura vecchia ora passano (cb6/riacc 2/2 e cb6r 2/2), quindi il motivo è chiuso",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-021",
+      "chiave": "privacy-legale|le mappe mandano a openstreetmap e a google la zona di casa del cliente, ma l'informativa nomina openstreetmap solo per cercare gli indirizzi",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-022",
+      "chiave": "privacy-legale|il sito suggerisce di cercare il vino ma non controlla mai i 18 anni: non lo chiede all'iscrizione, non lo segnala sul prodotto e non lo fa verificare alla consegna",
+      "esito": "non_fatto",
+      "nota": "tetto: la sessione ha superato la soglia di 38 $ (40,17 $ alle 12:17) e la regista ha fermato i lotti 3 e 4; la voce non è stata aperta."
+    },
+    {
+      "id": "R32-023",
+      "chiave": "privacy-legale|il modulo di segnalazione non permette di dare il nome di chi segnala né di dichiarare la buona fede",
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Il modulo ha il campo nome (facoltativo) e la casella della buona fede (art. 16.2 c e d DSA, facoltativa). La rotta li scrive nel testo della segnalazione in righe sue («Nome di chi segnala», «Buona fede: dichiarata/non dichiarata») e non insegue piu' le imitazioni: riduce a \\n ogni modo di andare a capo (\\r, VT, FF, NEL, U+2028/2029) e mette «│ » davanti a OGNI riga di chi segnala, cosi' una riga senza segno e' sempre del server; il nome perde a capo e caratteri invisibili. La pagina admin mostra le righe col segno in un riquadro a parte (anche il ritorno a capo sullo schermo resta dentro). Informativa: nome e buona fede fra i dati della segnalazione, cancellati col testo.",
+      "nota": "Tolta con git revert (ff7d7d64) per ordine della regista: il revisore ha trovato una regressione. Il modulo accetta 2000 caratteri (components/Segnala.tsx:172) ma con la marca «│ » e le righe del server il limite vero scende a circa 1880 senza nome e 1660 con nome, e la rotta risponde 400 (app/api/segnalazioni/route.ts:103); in più le segnalazioni già nel database, senza marca, nella pagina admin (app/admin/segnalazioni/page.tsx:78) apparivano tutte come righe del server. Da rifare: limite del modulo calcolato sul testo marcato (o la rotta che conta solo il testo di chi segnala) e le righe vecchie mostrate come testo di chi segnala.",
+      "verificato_da": "revisore lotto 2 (opus): iniezioni con a capo strani e invisibili respinte; riserve sul limite di 2000 caratteri e sulle segnalazioni vecchie nella pagina admin",
+      "commit_tolto": "e1e24d2e",
+      "commit_revert": "ff7d7d64"
+    },
+    {
+      "id": "R32-024",
+      "chiave": "privacy-legale|i video di youtube e vimeo si caricano senza chiedere il consenso, e la cookie policy non li nomina",
+      "esito": "riparato",
+      "commit": "3f6e764fb6f20826cc5350bfd88080f7e4e5a814",
+      "file_toccati": [
+        "app/cookies/page.tsx",
+        "app/privacy/page.tsx",
+        "tests/unit/riparazione-r32-video-youtube-vimeo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r32-video-youtube-vimeo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r32-video-youtube-vimeo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f6e764f^ --file app/cookies/page.tsx,app/privacy/page.tsx --prove tests/unit/riparazione-r32-video-youtube-vimeo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il video si carica gia' solo al tocco (VideoAlClic, unico iframe del sito: la prova lo tiene fermo col clic vero). Applicato il testo della scheda: cookie policy 2.5 «Video di YouTube e Vimeo» e Vimeo/YouTube nella sezione 4; informativa: voce YouTube/Vimeo fra i destinatari. Unica correzione al testo scritto: «la pagina da cui guardi» e' diventato «il sito da cui guardi», perche' l'iframe ha referrerPolicy strict-origin-when-cross-origin e al fornitore arriva solo l'origine (la prova controlla anche questo). Correzione dopo il revisore (3f6e764f): YouTube e Vimeo non più fra i responsabili ex art. 28 con DPA/SCC ma dichiarati titolari autonomi, nell'informativa e fra i trasferimenti extra-UE della cookie policy; la prova lo controlla.",
+      "nota": "La voce dell'informativa sta, come da scheda, nell'elenco intitolato «Responsabili del trattamento ex art. 28 GDPR, vincolati da accordo DPA» e porta «(Stati Uniti — SCC)»: per i video incorporati YouTube e Vimeo trattano «secondo le proprie regole». Domanda per Nicola nel campo domande_per_nicola.",
+      "verificato_da": "revisore lotto 2 (opus): video al tocco in vetrina, home e CMS; la riserva sul testo legale è chiusa da 3f6e764f (prova rossa senza, verde con, rimessa 0)",
+      "commit_prima": "f65470fa"
+    },
+    {
+      "id": "R32-025",
+      "chiave": "privacy-legale|la pulizia dei dati personali verso sentry copre solo gli errori del browser: le misure di velocità e gli errori del server mandano l'indirizzo intero della pagina",
+      "esito": "parziale",
+      "commit": "5c0775ff",
+      "file_toccati": [
+        "lib/analytics/sentry-config.ts",
+        "sentry.server.config.ts",
+        "sentry.edge.config.ts",
+        "tests/unit/riparazione-r32-sentry-senza-indirizzo-intero.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r32-sentry-senza-indirizzo-intero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r32-sentry-senza-indirizzo-intero.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5c0775ff^ --file lib/analytics/sentry-config.ts,sentry.server.config.ts,sentry.edge.config.ts --prove tests/unit/riparazione-r32-sentry-senza-indirizzo-intero.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel browser beforeSendTransaction c'era gia', ma l'SDK 10.78 scrive l'indirizzo intero (ricerca e pezzo dopo il cancelletto) anche nei dati della misura (contexts.trace.data['url.full']), che nessuno puliva: ripulisciEvento ora pulisce anche quelli, contexts.nextjs.request_path e, negli span, url.full/http.target/referer (tolti url.query, frammento e IP). Server ed edge passano errori e misure dalla stessa ripulisciEvento (prima: server senza pulizia, edge senza niente).",
+      "nota": "Non ho aggiunto beforeSendSpan: l'unico span che parte da solo nel browser con le impostazioni di oggi (INP) porta come 'transaction' solo la strada della pagina, senza ricerca. lib/consent.ts non e' cambiato: la riga 8 e' solo un commento sulle categorie. typecheck verde (con NODE_OPTIONS=--max-old-space-size=8192, senza va in OOM).",
+      "verificato_da": "revisore lotto 2 (opus): prova, rimessa e prova temporanea con l'SDK vero; riserva: le intestazioni (cookie) negli attributi della misura server/edge",
+      "cosa_resta": "Le intestazioni HTTP: l'SDK di Sentry 10.78 copia tutte le intestazioni negli attributi della misura server/edge anche con sendDefaultPii false, e la pulizia tocca solo il referer (lib/analytics/sentry-config.ts:151). Così http.request.header.cookie (mc_vid, l'identificativo di un anno, mc_consent e il cookie di PostHog) arriva a Sentry in chiaro. Cura: togliere o oscurare gli attributi http.request.header.* (almeno cookie e authorization) in beforeSendTransaction/beforeSendSpan. Non fatta per il tetto di spesa."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "«Duplica» su un prodotto tolto dall'amministrazione crea una copia che il negoziante può pubblicare",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "app/seller/products/page.tsx:524",
+      "descrizione": "Il link /seller/products/new?from=<id> copia il prodotto tolto in uno nuovo, che nasce pubblicabile."
+    },
+    {
+      "titolo": "nell'email dell'esito di una segnalazione «la pagina /contact» e «/terms» sono percorsi senza indirizzo del sito, non link che si possono toccare",
+      "dimensione": "privacy-legale",
+      "severita": "minore",
+      "file": "lib/admin/segnalazioni-testi.ts:37-40 · app/api/segnalazioni/esito/comunica.ts:117-118",
+      "descrizione": "COME_CONTESTARE e' scritto per il sito (percorsi relativi) ma finisce anche nell'email, fuori dal sito: chi la legge non ha un link per contestare. Basterebbe, nell'email, l'indirizzo intero (env.appUrl() + '/contact') o un <a href>."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    }
+  ],
+  "domande_per_nicola": [
+    "R32-024: YouTube e Vimeo, per i video incorporati, stanno (come da testo scritto nella scheda) nell'elenco «Responsabili ex art. 28, vincolati da accordo DPA» con «SCC»: va bene cosi' o col legale vanno in un paragrafo a parte come titolari autonomi, senza DPA/SCC?",
+    "R32-013: nell'esito di una segnalazione va citata anche la risoluzione extragiudiziale delle controversie (art. 21 DSA), o MyCity rientra fra le micro/piccole imprese esentate (art. 19)? E la frase «la riesamina una persona diversa da chi ha deciso» e' vera oggi?",
+    "R32-014: dopo quanti mesi dalla segnalazione togliamo email, nome e testo delle segnalazioni mai decise? E i 12 mesi dalla decisione (ricetta del 24/10) li confermi?"
+  ],
+  "conto": {
+    "agenti": 4,
+    "nota": "4 subagenti (riparatore e revisore dei lotti 1 e 2; il giro di correzione di R32-001 l'ha fatto lo stesso riparatore). Correzioni finali (revert di R32-023, testo di R32-024) fatte a mano dalla sessione.",
+    "subagenti": 4
+  },
+  "costo_usd": 42.15
+}
