@@ -73,12 +73,28 @@ const catenaDiUnaFunzione = (nome, argomenti) => {
     esito = Promise.reject(errore);
   }
   const c = {};
+  /**
+   * 17/11/2026 — Gli anelli dopo la funzione arrivano al database della prova, come quelli di
+   * `from`: se la sua risposta sa fare `order`, `range`, `eq`… li fa lei, e la prova vede la
+   * finestra chiesta. Prima passavano oltre sempre, e una funzione che taglia e ordina restituiva
+   * tutte le righe. Una risposta che non li sa fare (una promessa nuda, come quella dei database
+   * delle prove di oggi) li lascia passare oltre come prima.
+   */
+  const anello = (m) => (...a) => {
+    if (typeof esito?.[m] === 'function') esito = esito[m](...a);
+    return c;
+  };
   for (const m of ['eq', 'neq', 'in', 'or', 'ilike', 'gte', 'lte', 'order', 'limit', 'range', 'is', 'not', 'contains', 'overlaps', 'filter', 'match', 'select']) {
-    c[m] = () => c;
+    c[m] = anello(m);
   }
   c.then = (risolvi, rifiuta) => Promise.resolve(esito).then(risolvi, rifiuta);
-  c.single = async () => { const r = await esito; return { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null }; };
-  c.maybeSingle = c.single;
+  const unaRiga = (m) => async () => {
+    if (typeof esito?.[m] === 'function') return esito[m]();
+    const r = await esito;
+    return { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null };
+  };
+  c.single = unaRiga('single');
+  c.maybeSingle = unaRiga('maybeSingle');
   return c;
 };
 
