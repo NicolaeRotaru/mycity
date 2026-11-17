@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 17:55",
+  "aggiornato": "2026-11-17 17:56",
   "finita": false,
-  "testa": "bc36f48120ec38bf20880c7d68b3171015744681",
+  "testa": "60f1ee8982073e8653e8c3d97ad738226977acc9",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -79,8 +79,24 @@
     {
       "id": "R03-012",
       "chiave": "qa-flussi|il doppio tocco sul cuore con due salvataggi falliti lascia il cuore pieno e il preferito non salvato, e una richiesta che non risponde blocca la fila del prodotto",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "60f1ee8982073e8653e8c3d97ad738226977acc9",
+      "file_toccati": [
+        "lib/preferiti/tocco-del-cuore.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-cuore-rifiuti-e-silenzio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-cuore-rifiuti-e-silenzio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 60f1ee8982073e8653e8c3d97ad738226977acc9^ --file lib/preferiti/tocco-del-cuore.ts --prove tests/unit/riparazione-r03-cuore-rifiuti-e-silenzio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La fila di ogni prodotto ricorda l'ultimo stato confermato dal server e un rifiuto dell'ultimo tocco rimette il cuore lì invece di ribaltarlo (due rifiuti in fila: cuore vuoto). Ogni scrittura ha un tempo massimo di 10 s: senza risposta vale come rifiutata, la fila va avanti e il cuore torna allo stato confermato. Prove esistenti del cuore (r15 e il-cuore-dei-preferiti) verdi."
     },
     {
       "id": "R03-013",
