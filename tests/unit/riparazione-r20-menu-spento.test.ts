@@ -12,7 +12,8 @@ describe('R20-005 menu spento con link a metà', () => {
   it('con il menu spento un link col nome vuoto non blocca il salvataggio', () => {
     const r = storeSiteSchema.safeParse(sito(false, [bozza, buono]));
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.menu.links.map((l) => l.id)).toEqual(['l2']);
+    // R04 — il link a metà non si scarta più in silenzio: si conserva (prima qui si aspettava ['l2']).
+    if (r.success) expect(r.data.menu.links.map((l) => l.id)).toEqual(['l1', 'l2']);
   });
 
   it('con il menu acceso il link vuoto è ancora rifiutato', () => {

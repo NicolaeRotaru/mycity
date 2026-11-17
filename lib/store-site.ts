@@ -269,31 +269,51 @@ const menuLinkSchema = z.object({
 export type MenuLink = z.infer<typeof menuLinkSchema>;
 
 /**
+ * Un link lasciato a metà nell'editor (nome vuoto, pagina non scelta, indirizzo non finito): la
+ * stessa forma di un link, senza i controlli di completezza.
+ */
+const menuLinkBozzaSchema = z.object({
+  id: idSchema,
+  label: z.string().max(30),
+  target: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('home') }),
+    z.object({ kind: z.literal('page'), pageId: z.string().max(64) }),
+    z.object({ kind: z.literal('external'), url: z.string().max(500) }),
+  ]),
+});
+
+const menuSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    links: z.array(menuLinkSchema).max(MAX_MENU_LINKS).default([]),
+  })
+  .default({ enabled: false, links: [] });
+
+/**
  * Menu spento: i link non si vedono nell'editor, quindi uno lasciato a metà (nome vuoto)
- * non deve bloccare «Salva sito». Si scartano solo i link incompleti, i completi restano.
+ * non deve bloccare «Salva sito». Ma non deve nemmeno sparire in silenzio: si conserva com'è,
+ * e quando il menu si riaccende torna nell'editor e il controllo è quello di sempre (a menu
+ * acceso il salvataggio lo rifiuta e dice quale link completare). I link completi si
+ * controllano come sempre.
  * Vale solo col menu spento in modo esplicito (`enabled: false`, come lo scrive l'editor):
  * se `enabled` manca o il menu è acceso, nessun cambio, il controllo resta com'è.
  */
-function dropIncompleteLinksIfMenuOff(menu: unknown): unknown {
-  if (!menu || typeof menu !== 'object') return menu;
-  const m = menu as { enabled?: unknown; links?: unknown };
-  if (m.enabled !== false || !Array.isArray(m.links)) return menu;
-  return { ...m, links: m.links.filter((l) => menuLinkSchema.safeParse(l).success) };
-}
+const menuSpentoSchema = z.object({
+  enabled: z.literal(false),
+  links: z.array(z.union([menuLinkSchema, menuLinkBozzaSchema])).max(MAX_MENU_LINKS).default([]),
+});
 
 export const storeSiteSchema = z
   .object({
     theme: z.enum(THEME_KEYS).default(DEFAULT_THEME),
     pages: z.array(pageSchema).min(1).max(MAX_PAGES),
-    menu: z.preprocess(
-      dropIncompleteLinksIfMenuOff,
-      z
-        .object({
-          enabled: z.boolean().default(false),
-          links: z.array(menuLinkSchema).max(MAX_MENU_LINKS).default([]),
-        })
-        .default({ enabled: false, links: [] }),
-    ),
+    menu: z.unknown().transform((menu, ctx): z.infer<typeof menuSchema> => {
+      const spento = !!menu && typeof menu === 'object' && (menu as { enabled?: unknown }).enabled === false;
+      const r = (spento ? menuSpentoSchema : menuSchema).safeParse(menu);
+      if (r.success) return r.data;
+      r.error.issues.forEach((issue) => ctx.addIssue(issue));
+      return z.NEVER;
+    }),
   })
   .superRefine((site, ctx) => {
     // Slug unici (collisione = pagine irraggiungibili in routing).
