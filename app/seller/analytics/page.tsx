@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { metricheVenditore, ordineContaNelFatturato } from '@/lib/metriche-venditore';
-import { giornoPiacenza, oraPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
+import { giornoPiacenza, inizioGiornoPiacenza, oraPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Eye, ShoppingCart, Star, Sparkles, Lightbulb, PackageX, type LucideIcon } from 'lucide-react';
@@ -39,7 +39,9 @@ export default function SellerAnalyticsPage() {
     enabled: !!userId,
     queryFn: async () => {
       const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
-      const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
+      // R33-021 — «ultimi 7 giorni» = le stesse sette giornate di Piacenza delle barre del grafico
+      // (da mezzanotte di sei giorni fa), non le ultime 168 ore: cifra e barre contano gli stessi giorni.
+      const since7 = inizioGiornoPiacenza(ultimiGiorniPiacenza(7)[0]).toISOString();
 
       // Prodotti del seller
       const { data: products, error: productsError } = await supabase
