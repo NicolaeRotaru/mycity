@@ -29,7 +29,7 @@ export default function AdminNewProductPage() {
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
 
-  const { data: categories = [], isError: categoriesError, refetch: refetchCategories } = useQuery({
+  const { data: categories = [], isLoading: categoriesLoading, isError: categoriesError, refetch: refetchCategories } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -50,6 +50,10 @@ export default function AdminNewProductPage() {
       return (data ?? []) as SellerOption[];
     },
   });
+
+  // R10-011 — Finché negozi e categorie non sono arrivati (in lettura o caduti) il modulo non si
+  // invia: prima restava attivo e «Pubblica» partiva senza negozio o senza categorie.
+  const datiArrivati = !sellersLoading && !categoriesLoading && !sellersError && !categoriesError;
 
   const sellerOffersExpress = useMemo(
     () => Boolean(sellers.find((s) => s.id === sellerId)?.offers_express),
@@ -171,18 +175,27 @@ export default function AdminNewProductPage() {
         />
       )}
 
-      <ProductForm
-        key={importNonce}
-        mode="create"
-        categories={categories}
-        initialValues={initialValues}
-        submitting={create.isPending}
-        sellerOffersExpress={sellerOffersExpress}
-        // L'invio finisce quando finisce l'inserimento: fino ad allora il modulo non ne fa
-        // partire un altro (l'errore lo dice già `onError` della mutazione). Come il negozio.
-        onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
-        onDiscard={() => router.push('/admin/products')}
-      />
+      {!datiArrivati && (
+        <p id="modulo-in-attesa" role="status" className="text-sm text-ink-600">
+          {sellersError || categoriesError
+            ? 'Senza l\'elenco dei negozi e delle categorie il prodotto non si può salvare: premi «Riprova» qui sopra.'
+            : 'Sto leggendo negozi e categorie: il prodotto si potrà salvare appena arrivano.'}
+        </p>
+      )}
+      <fieldset disabled={!datiArrivati} aria-describedby={datiArrivati ? undefined : 'modulo-in-attesa'} className="min-w-0 disabled:opacity-70">
+        <ProductForm
+          key={importNonce}
+          mode="create"
+          categories={categories}
+          initialValues={initialValues}
+          submitting={create.isPending}
+          sellerOffersExpress={sellerOffersExpress}
+          // L'invio finisce quando finisce l'inserimento: fino ad allora il modulo non ne fa
+          // partire un altro (l'errore lo dice già `onError` della mutazione). Come il negozio.
+          onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
+          onDiscard={() => router.push('/admin/products')}
+        />
+      </fieldset>
     </div>
   );
 }
