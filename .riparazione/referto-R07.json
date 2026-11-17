@@ -1,13 +1,13 @@
 {
   "sessione": "R07",
-  "aggiornato": "2026-11-17",
-  "finita": false,
+  "aggiornato": "2026-11-17 23:45",
+  "finita": true,
   "testa": "c0b2f01f58b426f5bbc3ee2862c961c83d0e1717",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "b593ad576ca759ef399cd9672719ed6025b7b9f1",
+    "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=8192 (senza, tsc finisce la memoria in questa macchina); 1738 file di prova passati, 1 saltato già alla base; b593ad57 aggiunge al codice c0b2f01f solo il referto"
   },
   "voci": [
     {
@@ -30,7 +30,8 @@
         "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b65a6a9^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r07-ritorno-vede-ogni-drop.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nel passo «Torna indietro» (nota_database) la ricerca delle migrazioni che tolgono qualcosa vede anche DROP FUNCTION, DROP VIEW / MATERIALIZED VIEW e ALTER TABLE ... DROP [IF EXISTS] colonna senza COLUMN (anche su due righe), elencati dopo colonne, tabelle e RENAME; DROP DEFAULT/IDENTITY/EXPRESSION, NOT NULL, CONSTRAINT, POLICY e TRIGGER restano fuori. La frase rassicurante tiene il testo di prima e aggiunge le forme nuove. Cambia solo il riepilogo; la prova esegue lo script vero del passo in una cartella con migrazioni finte. La prova esistente riparazione-r01-ritorno-con-database-avanti resta verde senza modifiche."
+      "cosa_ho_fatto": "Nel passo «Torna indietro» (nota_database) la ricerca delle migrazioni che tolgono qualcosa vede anche DROP FUNCTION, DROP VIEW / MATERIALIZED VIEW e ALTER TABLE ... DROP [IF EXISTS] colonna senza COLUMN (anche su due righe), elencati dopo colonne, tabelle e RENAME; DROP DEFAULT/IDENTITY/EXPRESSION, NOT NULL, CONSTRAINT, POLICY e TRIGGER restano fuori. La frase rassicurante tiene il testo di prima e aggiunge le forme nuove. Cambia solo il riepilogo; la prova esegue lo script vero del passo in una cartella con migrazioni finte. La prova esistente riparazione-r01-ritorno-con-database-avanti resta verde senza modifiche.",
+      "verificato_da": "subagente revisore: prova verde 6/6, rimessa uscita 0; passo vero fatto girare con 17 varianti (IF EXISTS, minuscole, MATERIALIZED VIEW, tab, a capo): tutte viste; restano fuori solo DROP e FUNCTION su due righe e «DROP DEFAULT, DROP col» sulla stessa riga, forme che nessuna migrazione del deposito usa; 19 prove del rilascio verdi."
     },
     {
       "id": "R07-002",
@@ -52,7 +53,8 @@
         "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9842603c^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r07-migrazioni-cadute-fra-due-file.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nel riepilogo «migrazioni fermate a metà» l'ultima riga «▶ applico» si chiama «quella che si è rotta» solo se lo script esce con 3 (psql ON_ERROR_STOP su un errore nell'SQL del file, misurato col Postgres locale); con 1 o 2 (un comando -c o la connessione, fra un file e il successivo) dice che è l'ultima cominciata, che può essere già applicata e registrata, e manda a guardare il registro invece di correggere una migrazione sana. Lo script non è toccato, le uscite del passo (fermo, exit) restano quelle. La prova fa girare il passo vero contro un Postgres usa e getta con un psql finto che fa cadere la connessione dopo la registrazione della 001."
+      "cosa_ho_fatto": "Nel riepilogo «migrazioni fermate a metà» l'ultima riga «▶ applico» si chiama «quella che si è rotta» solo se lo script esce con 3 (psql ON_ERROR_STOP su un errore nell'SQL del file, misurato col Postgres locale); con 1 o 2 (un comando -c o la connessione, fra un file e il successivo) dice che è l'ultima cominciata, che può essere già applicata e registrata, e manda a guardare il registro invece di correggere una migrazione sana. Lo script non è toccato, le uscite del passo (fermo, exit) restano quelle. La prova fa girare il passo vero contro un Postgres usa e getta con un psql finto che fa cadere la connessione dopo la registrazione della 001.",
+      "verificato_da": "subagente revisore: prova verde 2/2 (Postgres usa e getta), rimessa uscita 0; exit \"$USCITA\" e fermo= intatti, lo script delle migrazioni non toccato; l'uscita 3 viene da psql -f con ON_ERROR_STOP."
     },
     {
       "id": "R07-003",
@@ -92,7 +94,8 @@
         "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0c1ffcc2^ --file docs/backup-restore.md --prove tests/unit/riparazione-r07-documento-secchio-vuoto.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "In docs/backup-restore.md la frase «Un singolo secchio vuoto resta legittimo» è sostituita dalle regole che applica oggi scripts/backup-db.sh (R15-004): vuoto da sempre va bene; rosso se il database elenca ancora file, o se products/stories avevano file e ora sono vuoti anche nel database; reviews svuotato dall'app verde con avviso; database muto decide la memoria; il file <destinazione>/_memoria-copia/<secchio>.aveva-file si toglie a mano se lo svuotamento è voluto; tutti vuoti resta rosso. Prova leggera sul testo, confrontato con SECCHI_SVUOTATI_DALL_APP e il nome della memoria nello script."
+      "cosa_ho_fatto": "In docs/backup-restore.md la frase «Un singolo secchio vuoto resta legittimo» è sostituita dalle regole che applica oggi scripts/backup-db.sh (R15-004): vuoto da sempre va bene; rosso se il database elenca ancora file, o se products/stories avevano file e ora sono vuoti anche nel database; reviews svuotato dall'app verde con avviso; database muto decide la memoria; il file <destinazione>/_memoria-copia/<secchio>.aveva-file si toglie a mano se lo svuotamento è voluto; tutti vuoti resta rosso. Prova leggera sul testo, confrontato con SECCHI_SVUOTATI_DALL_APP e il nome della memoria nello script.",
+      "verificato_da": "subagente revisore: prova verde 4/4, rimessa uscita 0; docs/backup-restore.md:263-281 confrontato riga per riga con scripts/backup-db.sh:336-480 e 576-590: dice il vero."
     },
     {
       "id": "R07-005",
@@ -109,7 +112,8 @@
       "copre_tutta_la_voce": true,
       "prova": "Sulla base f93d246a la riga iniziale c'è già: migrations/250_battiti_iniziali_dei_lavori_nuovi.sql:21-25 semina 'veloce-non-confermata' (e riquadra-casse, external-price-alerts) in cron_heartbeats con now(), ON CONFLICT DO NOTHING; .github/workflows/deploy-dopo-ci.yml:488 applica le migrazioni mancanti prima di pubblicare, quindi il freno ha il suo battito prima che il sorvegliante lo cerchi. tests/unit/riparazione-r01-battiti-iniziali.test.ts:30-34 fa rossa ogni soglia di CRON_MAX_STALENESS_MIN senza seme in una migrazione (verde sulla base, 3/3 col Postgres locale).",
       "cosa_ho_fatto": "Nessuna modifica. Ho valutato la correzione solo in lib/cron-health.ts: senza una data di nascita nei dati il codice non può sapere quando nasce un lavoro (una data scritta nel codice o l'ora della build allenterebbero il controllo «mai partito» di #242), quindi la finestra misurata dal battito più vecchio resta voluta; la cura è il seme, già presente e tenuto da una prova.",
-      "nota": "Il commento di staleCrons (lib/cron-health.ts:84-87) dice ancora che i cron senza battito sono ignorati: è falso da #242, segnalato fra i nuovi difetti visti."
+      "nota": "Il commento di staleCrons (lib/cron-health.ts:84-87) dice ancora che i cron senza battito sono ignorati: è falso da #242, segnalato fra i nuovi difetti visti.",
+      "verificato_da": "capo squadra R07: prova ricontrollata con git show sulla base f93d246a"
     },
     {
       "id": "R07-006",
@@ -131,14 +135,16 @@
         "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8acb4d95^ --file lib/cron-health.ts --prove tests/unit/riparazione-r07-soglia-sorvegliante.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il commento di lib/cron-health.ts ora dice che operational-alerts gira ogni 5 minuti e SOGLIA_SORVEGLIANTE_MIN passa da 120 a 40 (di nuovo otto giri saltati). La prova, con orologio finto, pretende che un sorvegliante fermo da un'ora esca «fermi» dalle porte di salute e che la soglia non superi otto giri della cadenza letta da vercel.json."
+      "cosa_ho_fatto": "Il commento di lib/cron-health.ts ora dice che operational-alerts gira ogni 5 minuti e SOGLIA_SORVEGLIANTE_MIN passa da 120 a 40 (di nuovo otto giri saltati). La prova, con orologio finto, pretende che un sorvegliante fermo da un'ora esca «fermi» dalle porte di salute e che la soglia non superi otto giri della cadenza letta da vercel.json.",
+      "verificato_da": "subagente revisore: prova verde 4/4, rimessa uscita 0; soglia 40 = 8 giri della cadenza */5 di vercel.json; le 11 prove che leggono lib/cron-health verdi (63 casi)."
     },
     {
       "id": "R07-007",
       "chiave": "deploy-sre|nessuna pagina admin mostra la configurazione mancante (chiave di servizio, dati del titolare)",
       "esito": "gia_riparato_prima",
       "prova": "Sulla base f93d246a app/admin/page.tsx:161-175 legge /api/admin/configurazione e :244-255 mostra il riquadro «Configurazione da completare» (chiave di servizio non configurata, dati del titolare incompleti con i nomi mancanti); app/api/admin/configurazione/route.ts:18-25 è dietro withAdminAuth e restituisce solo c'è/manca e i nomi, mai i valori. Arrivato col commit a3c7915f (R06-023). Comando: git show f93d246a:app/admin/page.tsx | sed -n 244,255p",
-      "cosa_ho_fatto": "Controllato che la pagina admin c'è già; corretto solo il commento sbagliato in lib/health/checks.ts:264 che diceva «nessuna pagina admin lo mostra ancora» (commit c0b2f01f, R07-varie, solo commento)."
+      "cosa_ho_fatto": "Controllato che la pagina admin c'è già; corretto solo il commento sbagliato in lib/health/checks.ts:264 che diceva «nessuna pagina admin lo mostra ancora» (commit c0b2f01f, R07-varie, solo commento).",
+      "verificato_da": "capo squadra R07: prova ricontrollata con git show sulla base f93d246a"
     },
     {
       "id": "R07-008",
@@ -170,7 +176,8 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Quando il secchio «-storico» non esiste e non si crea, il ripiego su <destinazione>/_storico (scripts/backup-db.sh:530) ora scrive anche un ::warning:: e una riga nel riepilogo del lavoro; prima lo diceva solo il registro. Stessa copia, stessa uscita (la prova controlla uscita 0). Prove vicine della copia notturna (17 file, 153 casi) verdi.",
       "cosa_resta": "Lo storico finisce ancora nello stesso secchio della copia e la notte resta verde (con avviso): rifiutare il ripiego o rendere rossa la notte cambia cosa fa la copia → scelta di Nicola.",
-      "domanda": "Se il secchio dello storico non si crea, la copia notturna deve finire rossa (uscita con errore dopo aver copiato) invece di ripiegare in silenzio su una cartella dentro il secchio della copia?"
+      "domanda": "Se il secchio dello storico non si crea, la copia notturna deve finire rossa (uscita con errore dopo aver copiato) invece di ripiegare in silenzio su una cartella dentro il secchio della copia?",
+      "verificato_da": "subagente revisore: prova verde 2/2, rimessa uscita 0; fuori dai commenti solo un ::warning:: su stderr e una riga di riepilogo, copia e uscite identiche; 17 prove della copia verdi (153 casi). Regge come parziale."
     },
     {
       "id": "R07-010",
@@ -200,7 +207,8 @@
       "prova_eseguita": true,
       "copre_tutta_la_voce": true,
       "prova": "Sulla base f93d246a tutte e quattro ordinano già come apply.sh e lo script: la-158:54, la-159:61, la-160:45 e lo-script-non-si-schianta…:55 hanno «for f in $(ls \"$MIG\"/*.sql | LC_ALL=C sort)». Le ha corrette il commit 21af7a55 (R01-005). Il «sort -V» in scripts/applica-migrazioni-mancanti.sh:11 non è un'istruzione d'uso: è la citazione del ciclo vecchio del rilascio, nel paragrafo che racconta perché lo script esiste, e il ciclo vero dello script (riga 230) usa LC_ALL=C sort; l'ho lasciato com'è perché cambiarlo falserebbe la storia raccontata.",
-      "cosa_ho_fatto": "Nessuna modifica: controllato sulla base con git grep."
+      "cosa_ho_fatto": "Nessuna modifica: controllato sulla base con git grep.",
+      "verificato_da": "capo squadra R07: prova ricontrollata con git show sulla base f93d246a"
     },
     {
       "id": "R07-013",
@@ -249,7 +257,9 @@
     "R07-011: senza conferma dal dominio, il ritorno indietro si fa sempre a mano?"
   ],
   "conto": {
-    "agenti": 2,
-    "nota": "lotti 1 e 2 fatti; revisione in corso"
-  }
+    "agenti": 3,
+    "subagenti": 3,
+    "nota": "2 subagenti riparatori (lotti 1 e 2) e 1 revisore, nessuno fermato"
+  },
+  "costo_usd": 12.41
 }
