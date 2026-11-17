@@ -54,10 +54,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // La logica del denaro sta in un posto solo (lib/ordini/annulla.ts), perché
   // era una copia unica dentro questa rotta e il percorso del cliente non
   // l'attraversava mai: chi annullava dal sito non veniva rimborsato.
+  // R31-022 — Ordine già ritirato dal fattorino o consegnato: la merce non è in negozio, e
+  // l'annullo non la rimette in vendita (un pezzo fantasma lo scopre un cliente che ha già pagato).
+  const merceUscita = ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(String(order.delivery_status));
   const esito = await annullaERimborsa(admin, order, {
     reason,
     metadata: { canceled_by: user.id, source: 'admin_cancel' },
     motivoCredito: 'order_admin_canceled',
+    ...(merceUscita ? { merceNonTorna: true } : {}),
   });
 
   if (!esito.ok) {
