@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:09",
+  "aggiornato": "2026-11-17 18:11",
   "finita": false,
-  "testa": "377ae97e40b2e81f1004a725e6905dd1deef9843",
+  "testa": "04cc4b9afe900efe616879161e8203dd24acf367",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -70,8 +70,25 @@
     {
       "id": "R04-004",
       "chiave": "frontend-ux|il drop del giorno in home usa ancora il giorno di greenwich",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "04cc4b9afe900efe616879161e8203dd24acf367",
+      "file_toccati": [
+        "components/home/DropOfDay.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-drop-giorno-di-roma.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-drop-giorno-di-roma.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 04cc4b9afe900efe616879161e8203dd24acf367^ --file components/home/DropOfDay.tsx --prove tests/unit/riparazione-r04-drop-giorno-di-roma.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giorno del drop (chiave e filtro drop_date) viene da giornoPiacenza() di lib/tempo-piacenza.ts, lo stesso aiutante della pagina admin, importato senza modificarlo; il conto alla rovescia arriva alla mezzanotte di Piacenza (inizioGiornoPiacenza del giorno dopo meno 1 ms) invece che a quella del dispositivo. Prova con orologio finto alle 23:30 UTC.",
+      "verificato_da": ""
     },
     {
       "id": "R04-005",
