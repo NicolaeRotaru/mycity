@@ -1,12 +1,22 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
+import { POST as inviaMessaggio } from '@/app/api/chat/messages/route';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
+
+/**
+ * Le risposte della rotta dei messaggi che vengono dal salvataggio stesso: il database ha
+ * rifiutato (403 permesso, che vale anche per un account sospeso), non ha restituito la riga (404),
+ * il messaggio c'era già (409) o si è guastato (500). Lì l'inserimento diretto avrebbe la stessa
+ * risposta, e un 403 non va aggirato. Ogni altro rifiuto arriva PRIMA del salvataggio.
+ */
+const RISPOSTE_DEL_SALVATAGGIO = new Set([403, 404, 409, 500]);
 
 const StartSchema = z.object({
   sellerId: z.string().uuid('Seller non valido'),
@@ -92,11 +102,42 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   }
 
   if (firstMessage) {
-    await supa.from('messages').insert({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      body: firstMessage,
-    });
+    // Il primo messaggio passa dalla rotta dei messaggi normali: stesso salvataggio e stesso avviso
+    // al negozio (campanella ed email, una volta sola), senza ricopiarne le regole. Prima si
+    // inseriva qui direttamente, e il negozio non sapeva di avere un messaggio.
+    let risposta: number | null = null;
+    try {
+      const intestazioni = new Headers(req.headers);
+      intestazioni.delete('content-length');
+      intestazioni.set('content-type', 'application/json');
+      const inviato = await inviaMessaggio(
+        new NextRequest(new URL('/api/chat/messages', req.url), {
+          method: 'POST',
+          headers: intestazioni,
+          body: JSON.stringify({ conversationId, body: firstMessage }),
+        }),
+      );
+      risposta = inviato.status;
+    } catch (e) {
+      logger.warn('[chat/conversations] rotta dei messaggi non raggiunta', {
+        conversationId, message: e instanceof Error ? e.message : String(e),
+      });
+    }
+    // Se la rotta dei messaggi ha detto di no prima di provare a salvare (il suo freno, la seconda
+    // autenticazione caduta o non disponibile, un'eccezione), prima della riparazione il messaggio
+    // si salvava: si salva come prima, con l'inserimento diretto. Senza avviso, ma non perso.
+    if (risposta === null || (risposta >= 300 && !RISPOSTE_DEL_SALVATAGGIO.has(risposta))) {
+      const { error: erroreDiretto } = await supa.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body: firstMessage,
+      });
+      logger.warn('[chat/conversations] primo messaggio salvato senza avviso al negozio', {
+        conversationId, status: risposta, salvato: !erroreDiretto,
+      });
+    } else if (risposta >= 300) {
+      logger.warn('[chat/conversations] primo messaggio non salvato', { conversationId, status: risposta });
+    }
   }
 
   return NextResponse.json({ conversationId }, { status: 200 });
