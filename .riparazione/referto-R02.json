@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 17:55",
+  "aggiornato": "2026-11-17 17:57",
   "finita": false,
-  "testa": "bc36f48120ec38bf20880c7d68b3171015744681",
+  "testa": "80c8dc39ac6d951620b6e06dda0263bf0908d548",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -13,8 +13,27 @@
     {
       "id": "R02-001",
       "chiave": "architettura|le altre due porte dell'ai sul catalogo scrivono ancora la traccia a mano, nella forma vecchia",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "80c8dc39ac6d951620b6e06dda0263bf0908d548",
+      "file_toccati": [
+        "app/api/ai/catalog-apply-bulk/route.ts",
+        "app/api/ai/catalog-batch/apply/route.ts",
+        "tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 80c8dc39ac6d951620b6e06dda0263bf0908d548^ --file app/api/ai/catalog-apply-bulk/route.ts,app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il Copilot in blocco (catalog-apply-bulk) e il lavoro massivo (catalog-batch/apply) costruiscono la voce product.update con tracciaDellaModifica (lib/products/salvataggio-tracciato.ts), come catalog-apply dopo R10-008: solo i campi cambiati, con daAi. La prova fa girare le due rotte vere col finto catalogo: un campo mandato ma uguale non entra e daAi c'è (sulla base: campi con la descrizione invariata e daAi assente). La voce product.hide della moderazione resta com'era: non è una product.update e l'aiutante non la copre.",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-002",
