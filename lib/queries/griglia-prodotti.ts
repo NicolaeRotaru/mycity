@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { attachSellerProfiles, fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import { DIMENSIONE_BLOCCO, inBlocchi, leggiInBlocchi } from '@/lib/supabase/blocchi';
 import { NEW_PRODUCT_DAYS } from '@/lib/constants';
-import { logger } from '@/lib/logger';
 
 /**
  * LA LETTURA CHE STA SOTTO OGNI GRIGLIA DI PRODOTTI DEL SITO.
@@ -345,16 +344,7 @@ export async function leggiProdottiDellaGriglia(
  * diceva «96». Qui il database conta tutti quelli che passano gli stessi filtri della lettura
  * (senza la pertinenza: con un testo si conta per nome). `null` = non lo so: chi chiama ripiega
  * sulle schede caricate invece di scrivere «0».
- *
- * 17/11/2026 (R02-011) — E SOLO QUELLI CHE LA GRIGLIA PUÒ MOSTRARE. La lettura tiene solo i
- * prodotti dei negozi che la vista pubblica restituisce (il filtro su `is_approved` in fondo a
- * `leggiProdottiDellaGriglia`); il conteggio no, e sopra «Novità» il numero poteva superare le
- * schede che si vedono. Qui il prodotto si aggancia con `!inner` alla stessa vista, come le storie
- * in home (R16-019): il database conta solo quelli col negozio in vetrina. Se il servizio dati non
- * conosce l'aggancio (PGRST200/PGRST201) si conta come prima, invece di dire «non lo so».
  */
-const COLONNE_CONTEGGIO_COL_NEGOZIO = 'id, negozio:seller_public_profiles!inner(id)';
-
 export async function contaProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: Omit<DomandaGriglia, 'sort' | 'tetto' | 'finestra'>,
@@ -368,8 +358,8 @@ export async function contaProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
-  const conta = (colonne: string, blocco?: string[]) => {
-    let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
+  const conta = (blocco?: string[]) => {
+    let q = supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'available');
     q = applicaFiltriComuni(q, d, categorie);
     if (termine) q = q.ilike('name', `%${termine}%`);
     if (blocco) q = q.in('id', blocco);
@@ -378,20 +368,11 @@ export async function contaProdottiDellaGriglia(
   // R02-010 — Il taglio sugli id col voto a blocchi anche qui: i blocchi non si sovrappongono
   // (id unici), quindi i conti si sommano.
   const blocchi = d.idsColVoto !== undefined ? inBlocchi([...new Set(d.idsColVoto)]) : [undefined];
-  const contaTutti = async (colonne: string): Promise<{ totale: number | null; codice?: string }> => {
-    let totale = 0;
-    for (const blocco of blocchi) {
-      const { count, error } = await conta(colonne, blocco);
-      if (error) return { totale: null, codice: (error as { code?: string }).code };
-      if (count == null) return { totale: null };
-      totale += count;
-    }
-    return { totale };
-  };
-  const colNegozio = await contaTutti(COLONNE_CONTEGGIO_COL_NEGOZIO);
-  if (colNegozio.codice === 'PGRST200' || colNegozio.codice === 'PGRST201') {
-    logger.warn('[griglia] aggancio alla vista dei negozi non riconosciuto: conteggio senza il filtro sul negozio', { codice: colNegozio.codice });
-    return (await contaTutti('id')).totale;
+  let totale = 0;
+  for (const blocco of blocchi) {
+    const { count, error } = await conta(blocco);
+    if (error || count == null) return null;
+    totale += count;
   }
-  return colNegozio.totale;
+  return totale;
 }
