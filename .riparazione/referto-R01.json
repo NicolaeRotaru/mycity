@@ -1,0 +1,408 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-17 20:58",
+  "finita": true,
+  "testa": "ed557a345390e12262a87ae1a4f0662fde058d24",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "f52905f3fa91890f9157e8fd1584ee827d9f9ee0",
+    "nota": "typecheck, lint e vitest verdi: 1699 file di prova passati e 1 saltato già prima (10852 prove passate, 1 saltata). f52905f3 viene dopo la testa ed557a34 e tocca solo il referto."
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "accessibilita|nella chat, quando i messaggi arrivano dopo l'apertura o dopo «riprova», il lettore di schermo legge tutto il filo",
+      "esito": "riparato",
+      "commit": "6719e031cb839da6ee872897d0b41839efd6674d",
+      "commit_tutti": [
+        "6719e031cb839da6ee872897d0b41839efd6674d"
+      ],
+      "file_toccati": [
+        "app/messages/[id]/page.tsx",
+        "tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx",
+        "tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx",
+        "tests/unit/riparazione-r06-chat-si-annuncia.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx tests/unit/riparazione-r06-chat-si-annuncia.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6719e031cb839da6ee872897d0b41839efd6674d^ --file app/messages/[id]/page.tsx --prove tests/unit/riparazione-r01-chat-registro-acceso-dopo-il-frame.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il registro della chat (role=log) non si accende più al commit successivo di React (stesso frame del filo appena entrato, come aveva misurato il collaudo) ma al secondo frame dopo il caricamento, con un doppio requestAnimationFrame: il primo frame disegna il filo a registro spento; si rispegne subito se il filo torna a caricarsi o cade. La prova nuova comanda i frame a mano: all'apertura, coi messaggi che arrivano dopo la conversazione e dopo «Riprova» il registro resta «off» dopo tutti gli effetti e nel frame che disegna il filo, «polite» al frame dopo; un messaggio nuovo dal vivo entra a registro acceso. Due prove esistenti che montano la pagina (registro acceso a filo caricato, chat che si annuncia) ora aspettano qualche frame vero di jsdom prima di guardare il registro acceso, senza asserzioni tolte. Non provato con un lettore di schermo vero.",
+      "verificato_da": "smentitore S1: rilanciate la prova e la prova rimessa (uscita 0); letti i tre punti dove il filo entra (apertura, arrivo dopo la conversazione, Riprova di conversazione e messaggi) e il percorso dei messaggi dal vivo; diff delle due prove esistenti: solo attese aggiunte, nessuna asserzione tolta; verdi le 11 prove che leggono la pagina della chat. Regge (non provato con un lettore di schermo vero)."
+    },
+    {
+      "id": "R01-002",
+      "chiave": "accessibilita|la pagina promozioni salta ancora dall'h1 all'h3",
+      "esito": "riparato",
+      "commit": "f8758f305df3bd4fd3fcc805ef827f55e622a9bc",
+      "commit_tutti": [
+        "f8758f305df3bd4fd3fcc805ef827f55e622a9bc"
+      ],
+      "file_toccati": [
+        "app/promozioni/page.tsx",
+        "tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base f8758f305df3bd4fd3fcc805ef827f55e622a9bc^ --file app/promozioni/page.tsx --prove tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'h2 nascosto «I prodotti in promozione» sta fuori dalle tre strade della pagina, non solo sopra le schede delle promozioni: con zero promozioni o con la lettura caduta ProductGrid metteva sotto l'h1 l'h3 dello stato vuoto o le schede barrate senza h2. La prova monta la pagina vera nei quattro stati (vuoto, lettura caduta, solo prezzi barrati, promozioni) e controlla h1, h2 e nessun salto; alla base cadono i primi tre.",
+      "verificato_da": "smentitore S1 (subagente diverso dal riparatore, worktree separato a db583e76): rilanciate la prova e la prova rimessa (uscita 0); letti tutti i rami di ProductGrid (errore, filtro in errore, vuoto, griglia) in cerca di un h2 doppio o di un salto; verdi le 6 prove esistenti che leggono promozioni/page. Regge."
+    },
+    {
+      "id": "R01-003",
+      "chiave": "accessibilita|il riquadro degli avvisi si presenta al lettore di schermo come «notifications alt+t», in inglese",
+      "esito": "riparato",
+      "commit": "e773dec05fdc36b68f781b2b0f4e61dff5ff78bc",
+      "commit_tutti": [
+        "e773dec05fdc36b68f781b2b0f4e61dff5ff78bc"
+      ],
+      "file_toccati": [
+        "components/providers/ToastProvider.tsx",
+        "tests/unit/riparazione-r01-riquadro-avvisi-in-italiano.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-riquadro-avvisi-in-italiano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-riquadro-avvisi-in-italiano.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base e773dec05fdc36b68f781b2b0f4e61dff5ff78bc^ --file components/providers/ToastProvider.tsx --prove tests/unit/riparazione-r01-riquadro-avvisi-in-italiano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il Toaster di sonner 1.7.4 riceve containerAriaLabel «Avvisi, scorciatoia»: sonner ci aggiunge da sé la scorciatoia e la regione si presenta come «Avvisi, scorciatoia alt+T» invece di «Notifications alt+T». La prova monta il provider col sonner vero, legge il nome della regione prima e dopo un avviso e controlla che Alt+T porti il fuoco sugli avvisi; alla base cade su «Notifications alt+T».",
+      "verificato_da": "smentitore S1: rilanciate la prova e la prova rimessa (uscita 0); cercati altri Toaster nel deposito (nessuno); letta in sonner 1.7.4 la costruzione dell'etichetta e del tasto alt+T; verdi le 4 prove esistenti che leggono ToastProvider. Regge."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "accessibilita|la x degli avvisi dice «close toast» in inglese e sui caricamenti non chiude niente",
+      "esito": "riparato",
+      "commit": "bbef09573ef0de0369616d3430ee328f4a81e2de",
+      "commit_tutti": [
+        "bbef09573ef0de0369616d3430ee328f4a81e2de"
+      ],
+      "file_toccati": [
+        "components/seller/ProductForm.tsx",
+        "tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base bbef09573ef0de0369616d3430ee328f4a81e2de^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La parte del provider (X «Chiudi avviso», nascosta sui caricamenti) era già nella base con la sua prova (riparazione-r01-la-x-degli-avvisi). Restava il caricamento chiuso con toast(msg, { id }), che in sonner 1.7.4 resta loading senza X e senza scadenza: in ProductForm «Nessuna variante sensata…» e «Codice EAN salvato. Non ho trovato…» usano toast.info sullo stesso id, e la frase neutra dopo un codice EAN che non cambia niente la dice il modulo con toast.info invece di passare da dilloDopoIlPatch. ProductForm è l'unico file con toast.loading: nessun caricamento resta più bloccato. La prova monta il modulo vero (assistente acceso con aiAccesa, al lancio spento), ToastProvider e sonner veri, orologio finto: tre flussi, l'avviso finale ha la X e scade; alla base restano loading.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/dilloDopoIlPatch.ts",
+          "modifica": "riga 17: «else toast(avviso.testo, opzioni);» diventa «else toast.info(avviso.testo, opzioni);» — oggi nessuno le passa l'id di un caricamento (ProductForm non lo fa più per la frase neutra), ma chi lo facesse ritroverebbe il caricamento bloccato; fatto questo, ProductForm può tornare a chiamare dilloDopoIlPatch(esito, testi, { id: tid }) in tutti i casi"
+        }
+      ],
+      "verificato_da": "smentitore S1: rilanciate la prova e la prova rimessa (uscita 0); cercati i toast.loading e i toast(...,{id}) in tutto il deposito (solo ProductForm, tutti chiusi con un tipo); letta la fusione dello stato in sonner; verdi le 47 prove esistenti che leggono ProductForm. Regge."
+    },
+    {
+      "id": "R01-005",
+      "chiave": "navigazione-gerarchia|menu, piede, vetrina e pagina categorie buttano via le categorie piene già note quando una ricarica fallisce",
+      "esito": "riparato",
+      "commit": "db38a0f0064b758039f6debd9b1fe1ecc660992d",
+      "commit_tutti": [
+        "83bdc3624f9485cb2ee712bda101cf2e7c8a23f5",
+        "db38a0f0064b758039f6debd9b1fe1ecc660992d"
+      ],
+      "file_toccati": [
+        "components/CategoryBar.tsx",
+        "components/CategoryShowcase.tsx",
+        "app/categorie/page.tsx",
+        "components/Footer.tsx",
+        "tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83bdc3624f9485cb2ee712bda101cf2e7c8a23f5^ --file components/CategoryBar.tsx,components/CategoryShowcase.tsx,app/categorie/page.tsx,components/Footer.tsx --prove tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La domanda comune (lib/queries/categorie-piene.ts) e soloLePiene erano giuste: il difetto stava nei quattro chiamanti, che passavano «piene.isError ? null : piene.data» e così, su una rilettura caduta (react-query tiene data e accende isError), rimettevano le categorie vuote. Ora passano piene.data: solo senza un elenco mai letto si mostrano tutte. La prova monta i quattro componenti col react-query vero: prima lettura riuscita, poi rilettura fallita; alla base tutti e quattro rimettono Abbigliamento (vuota), e c'è la controprova della prima lettura caduta. Secondo commit: solo il tipo dei figli nel finto di next/link della prova (tsc), rimessa rilanciata alla testa, uscita 0.",
+      "verificato_da": "smentitore S1: rilanciate la prova e la prova rimessa (uscita 0, cade su tutti e quattro i file); cercati gli altri isError e piene nei quattro file; verdi le prove esistenti che leggono CategoryBar, CategoryShowcase, categorie/page e Footer. Regge."
+    },
+    {
+      "id": "R01-006",
+      "chiave": "qa-flussi|le date degli eventi nell'amministrazione non usano il fuso di piacenza",
+      "esito": "riparato",
+      "commit": "d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab",
+      "commit_tutti": [
+        "d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab"
+      ],
+      "file_toccati": [
+        "app/admin/events/page.tsx",
+        "tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab^ --file app/admin/events/page.tsx --prove tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Inizio e fine nella tabella (righe 211-212) e nella scheda del telefono (riga 267) passano da toLocaleString('it-IT') a dataEOraPiacenza di lib/admin/etichette.ts (Europe/Rome), l'aiutante già usato dalle altre pagine dell'amministrazione; i campi datetime-local del modulo erano già nell'ora di Piacenza (campoDataOraPiacenza / istanteDaCampoPiacenza). La prova monta la pagina vera con process.env.TZ a New York e a UTC e orologio finto: un evento delle 00:30 dell'11 a Piacenza deve dire l'11 alle 00:30 (e la fine alle 02:15), alla base dice il 10 alle 18:30 o alle 23:30.",
+      "verificato_da": "smentitore S1: rilanciate la prova e la prova rimessa (uscita 0); cercate nella pagina tutte le date mostrate e i toLocale (non ne resta nessuno); verdi le 4 prove che leggono admin/events/page. Regge."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+          "modifica": "In bancoDiProva, subito dopo la riga 59 `chmodSync(join(finti, 'rclone'), 0o755);`, aggiungere un psql finto eseguibile in `finti` (scripts/backup-db.sh, file_nel_database alle righe 367-380, lo chiama con `-v secchio=<secchio>` e la domanda su storage.objects da stdin quando la copia di un secchio è vuota; oggi su una macchina con /usr/bin/psql la prova interroga localhost:5432 col SUPABASE_DB_URL finto, e con un Postgres locale acceso il conto non dipende più dalla prova):\n  // Il database finto: risponde come un database coerente con l'origine (quanti file ha il secchio), senza rete.\n  writeFileSync(join(finti, 'psql'), [\n    '#!/usr/bin/env bash',\n    'secchio=\"\"; for a in \"$@\"; do case \"$a\" in secchio=*) secchio=\"${a#secchio=}\";; esac; done',\n    'domanda=\"$(cat)\"',\n    '[[ \"$domanda\" == *storage.objects* ]] || { echo \"domanda inattesa\" >&2; exit 3; }',\n    'find \"${STORAGE_SYNC_SOURCE}${secchio}\" -type f 2>/dev/null | wc -l | tr -d \" \"',\n  ].join('\\n') + '\\n');\n  chmodSync(join(finti, 'psql'), 0o755);\nVerificato su una copia temporanea della prova (poi tolta): 5 su 5 verdi, il psql finto viene chiamato per il secchio products vuoto e risponde 0 senza toccare la rete."
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La prova non è fra i miei file e non importa nessuno di essi: non l'ho toccata. Scritta la modifica esatta (psql finto in `finti`, che conta i file del secchio nell'origine finta) e provata su una copia temporanea fuori dal ramo."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "stati-ui|con upstash il freno dell'accesso dice sempre di aspettare la finestra intera, anche quando ne manca meno",
+      "esito": "riparato",
+      "commit": "3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073",
+      "commit_tutti": [
+        "3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073"
+      ],
+      "file_toccati": [
+        "lib/rate-limit.ts",
+        "tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts tests/unit/il-freno-che-si-allarga-lo-dice.test.ts tests/unit/rate-limit.test.ts tests/unit/riparazione-r23-freno-senza-contatore.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073^ --file lib/rate-limit.ts --prove tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il freno condiviso non usa la libreria Ratelimit ma la pipeline REST di Upstash (INCR + EXPIRE NX): ora la stessa pipeline chiede anche PTTL, e l'attesa detta è il tempo che manca davvero alla scadenza della chiave (arrotondato in su, mai sotto 1 s, mai oltre la finestra); se Upstash non dà un numero positivo resta la finestra intera. La prova usa un Upstash finto con orologio finto: bloccato a metà finestra dice 30 s, non 60. Passano anche le 9 prove esistenti che esercitano il freno con Upstash (86 casi).",
+      "verificato_da": "smentitore S2 (subagente diverso dal riparatore, worktree separato a f52905f3): prova e prova rimessa rilanciate (uscita 0); 48 prove esistenti accanto verdi (347/347). Variante su una finestra di 5 minuti bloccata a 4 min 10 s: dice 50 s; PTTL in errore, pipeline a due sole risposte e chiave scaduta ricadono giusti. Regge."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "qa-flussi|aggiungere o togliere un prodotto da una lista dalla pagina prodotto lascia vecchio il conteggio in /lists",
+      "esito": "riparato",
+      "commit": "55307e9165992c45cb06102d47fcbc5d7755950e",
+      "commit_tutti": [
+        "55307e9165992c45cb06102d47fcbc5d7755950e"
+      ],
+      "file_toccati": [
+        "components/AddToListButton.tsx",
+        "tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx tests/unit/minori-s04-aggiungi-a-lista.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 55307e9165992c45cb06102d47fcbc5d7755950e^ --file components/AddToListButton.tsx --prove tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo un'aggiunta o una rimozione (e dopo «crea lista e aggiungi») il pulsante rilegge anche le tre chiavi da cui /lists prende il conteggio: queryKeys.lists.mine, .public e .inVetrina. La prova monta /lists e il pulsante nello stesso QueryClient vero sopra un database finto in memoria: dopo l'aggiunta le tre schede dicono «2 prodotti», dopo la rimozione «1 prodotto» (senza la cura restano «1 prodotto»). Passano le 6 prove esistenti che montano il pulsante.",
+      "verificato_da": "R01 capo squadra (non il riparatore): letto il diff (le tre chiavi rilette sono le stesse che app/lists/page.tsx usa per i conteggi e che app/lists/[id]/page.tsx rilegge dopo una rimozione), rilanciata la prova (1/1) e la prova rimessa (uscita 0, cade sul comportamento), verdi le 22 prove esistenti che nominano AddToListButton. Regge."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "stati-ui|sulla bacheca del fattorino, se la lettura dello stato online cade, la pagina scrive «sei offline» invece di dire che non lo sa; anche il voto ignora l’errore",
+      "esito": "parziale",
+      "commit": "340318af1520de8d65a90db7ea617fe19beccdb3",
+      "commit_tutti": [
+        "340318af1520de8d65a90db7ea617fe19beccdb3"
+      ],
+      "file_toccati": [
+        "app/rider/page.tsx",
+        "tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx tests/unit/riparazione-r20-interruttore-online.test.ts tests/unit/minori-s02-bacheca-del-fattorino.test.ts tests/unit/riparazione-r20-incasso-di-oggi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 340318af1520de8d65a90db7ea617fe19beccdb3^ --file app/rider/page.tsx --prove tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le letture dello stato online e del voto ora fanno salire l'errore (anche getUser senza rete, come già la lettura di oggi nella stessa pagina) invece di rispondere «offline»/«nessun voto». Senza un dato letto, la scheda dice «Non so se sei online» con «Riprova» (niente interruttore né riquadro «Vai online»), e la testata dice «Non riesco a leggere il tuo voto · Riprova» invece di «Pronto a consegnare». La prova monta la pagina col react-query vero: lettura caduta, poi Riprova riuscito. Passano le 11 prove esistenti che montano la pagina (119 casi).",
+      "verificato_da": "smentitore S2 (subagente diverso dal riparatore, worktree separato a f52905f3): prova e prova rimessa rilanciate (uscita 0); 48 prove esistenti accanto verdi (347/347). Due varianti sulla copia della prova con retry 1 come in QueryProvider (rete persa durante il nuovo tentativo; ritardo del nuovo tentativo con rete presente): tutte e due mostrano «Sei offline». Non regge per intero.",
+      "cosa_resta": "La lettura caduta ora dice «Non so se sei online» / «Non riesco a leggere il tuo voto» (commit 340318af, rimessa uscita 0), ma app/rider/page.tsx:217 (statoOnlineIgnoto = !pref && letturaPref.isError) e :237 (votoIgnoto) guardano solo isError: con la regola vera di QueryProvider (retry 1, attesa di 1 s) durante l'attesa del nuovo tentativo, e se la rete cade e il tentativo va in pausa finché la rete non torna, la scheda dice ancora «Sei offline · Vai online per iniziare» con l'interruttore attivo. La prova usa retry:false e non lo vede. Cura: trattare come «non so» anche il tentativo in corso dopo un errore (failureCount > 0 o fetchStatus 'paused' senza dati), come fa R01-013 nella pagina del nuovo prodotto, e provarlo con retry 1. Non fatto: la regista ha chiesto la consegna (spesa oltre 20 $)."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|un doppio clic su «pubblica prodotto» mette in vendita due o tre prodotti uguali",
+      "esito": "riparato",
+      "commit": "c601c918b224d65d0bffd500b59d7bcdda5bdb55",
+      "commit_tutti": [
+        "c601c918b224d65d0bffd500b59d7bcdda5bdb55"
+      ],
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx tests/unit/riparazione-r01-doppio-clic-pubblica.test.tsx tests/unit/riparazione-r01-doppio-clic-pubblica-pagina.test.tsx tests/unit/minori-s06-duplica-prodotto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c601c918b224d65d0bffd500b59d7bcdda5bdb55^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il doppio clic ravvicinato e il doppio Invio erano già chiusi (prove dell'onda 7, restano verdi). Chiusa la finestra rimasta: la pagina tiene uno stato «creato» messo a vero nell'onSuccess (e quando il prodotto nasce ma le taglie cadono) e passa submitting={create.isPending || creato}, così il modulo resta chiuso fino al cambio di pagina. La prova monta la pagina vera col modulo vero e router.push che non porta via: dopo l'inserimento riuscito altri clic su «Pubblica» e «Salva come bozza» non inseriscono (senza la cura: 3 inserimenti). Passano le 12 prove esistenti della pagina (36 casi).",
+      "verificato_da": "smentitore S2 (subagente diverso dal riparatore, worktree separato a f52905f3): prova e prova rimessa rilanciate (uscita 0); 48 prove esistenti accanto verdi (347/347). Variante con pagina e modulo veri: primo inserimento caduto riapre il pulsante e il secondo clic inserisce; dopo il successo un terzo clic non inserisce; il pulsante predefinito (Invio) è spento. Regge."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "stati-ui|«duplica prodotto» senza rete apre il modulo vuoto finché la rete non torna",
+      "esito": "riparato",
+      "commit": "ca004b893db868263307e3671f4ba52e32f6693f",
+      "commit_tutti": [
+        "ca004b893db868263307e3671f4ba52e32f6693f"
+      ],
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "tests/unit/riparazione-r01-duplica-senza-rete.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-duplica-senza-rete.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-duplica-senza-rete.test.tsx tests/unit/minori-s06-duplica-prodotto.test.tsx tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ca004b893db868263307e3671f4ba52e32f6693f^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r01-duplica-senza-rete.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con ?from=ID, se la lettura del prodotto da duplicare cade o resta in pausa senza rete (fetchStatus «paused», che non è isLoading), la pagina non apre il modulo vuoto: mostra «Non riesco a caricare il prodotto da duplicare» con «Riprova», nello stesso schema d'errore già usato per categorie e taglie. La prova usa react-query vero per le letture della copia: lettura caduta poi Riprova riuscito, e senza rete (onlineManager) poi rete tornata; in tutti e due i casi il modulo si apre pieno («… (copia)») solo a lettura riuscita. Passano le 12 prove esistenti della pagina.",
+      "verificato_da": "smentitore S2 (subagente diverso dal riparatore, worktree separato a f52905f3): prova e prova rimessa rilanciate (uscita 0); 48 prove esistenti accanto verdi (347/347). Variante: «Riprova» ancora senza rete, poi rete tornata con lettura caduta, poi «Riprova» riuscito: mai un modulo vuoto a video, alla fine si apre la copia piena. Regge."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
+      "esito": "parziale",
+      "commit": "974093bab48b009e311d280f3ef6e3b955ec5aab",
+      "commit_tutti": [
+        "974093bab48b009e311d280f3ef6e3b955ec5aab"
+      ],
+      "file_toccati": [
+        "app/rider/availability/page.tsx",
+        "tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx tests/unit/minori-s02-pagine-del-fattorino.test.ts tests/unit/riparazione-r03-turni-non-spengono-l-online.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 974093bab48b009e311d280f3ef6e3b955ec5aab^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Ripresa la cura dell'onda 7 (fila delle scritture, «Zone salvate» solo dopo l'esito riuscito dell'ultimo tocco, ritorno all'ultimo elenco confermato se cade) togliendo il difetto bocciato: ogni scrittura ha un tempo massimo di 10 s (come la fila dei preferiti in lib/preferiti/tocco-del-cuore.ts); scaduto, la fila va avanti e il tocco dopo parte, e se era l'ultimo tocco si avvisa il fattorino e lo schermo torna all'elenco confermato. Se la scrittura scaduta arriva lo stesso: riuscita e più nuova della confermata diventa la confermata («Zone salvate» se è l'ultimo tocco); riuscita ma più vecchia di una già confermata, si riscrive in silenzio l'elenco confermato, così il database non resta con quello vecchio e i «salvate» restano uno. La prova (orologio finto) copre esito riuscito, caduto, scrittura appesa seguita da un tocco che parte dopo 10 s e si salva, appesa che arriva tardi dopo la nuova, e ultimo tocco scaduto poi arrivato; è rossa sia sulla base sia sulla versione dell'onda 7. Resta: entro i 10 s di una scrittura appesa, chiudere la pagina perde il tocco in fila.",
+      "verificato_da": "smentitore S2 (subagente diverso dal riparatore, worktree separato a f52905f3): prova e prova rimessa rilanciate (uscita 0); 48 prove esistenti accanto verdi (347/347). Variante con orologio finto: scrittura appesa, tocco dopo 10 s riuscito, terzo tocco in volo, la prima arriva tardi riuscita: la riscrittura dell'elenco confermato parte dopo e lascia il database con l'elenco vecchio mentre lo schermo dice «Zone salvate». Non regge per intero.",
+      "cosa_resta": "«Zone salvate» ora arriva solo dopo l'esito e una scrittura appesa non blocca più la fila (tempo massimo 10 s, commit 974093ba, rimessa uscita 0). Resta il difetto dell'ordine invertito in un caso: app/rider/availability/page.tsx:143 (if (tardi) scriviZone(confermate.elenco, confermate.numero, true)) fissa l'elenco confermato quando la riscrittura entra in fila, poi aspetta dietro un tocco più nuovo già partito e lo sovrascrive: con scrittura 0 appesa, tocco 1 riuscito dopo 10 s, tocco 2 in volo e la 0 che arriva tardi, il database resta [Stazione,Roma] mentre lo schermo mostra tre zone e due «Zone salvate». Cura: la riscrittura deve leggere l'elenco confermato al momento in cui parte (non quando entra in fila), o saltarla se dopo di lei in fila c'è un tocco più nuovo. Resta anche: chiudendo la pagina entro i 10 s di una scrittura appesa il tocco in fila si perde. Non fatto: la regista ha chiesto la consegna (spesa oltre 20 $)."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "qa-flussi|il primo messaggio mandato insieme all'apertura della conversazione non avvisa il negozio",
+      "esito": "riparato",
+      "commit": "ed557a345390e12262a87ae1a4f0662fde058d24",
+      "commit_tutti": [
+        "ed557a345390e12262a87ae1a4f0662fde058d24"
+      ],
+      "file_toccati": [
+        "app/api/chat/conversations/route.ts",
+        "tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts tests/unit/riparazione-r30-cliente-sospeso.test.ts tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts tests/unit/minori-s10-campanella.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed557a345390e12262a87ae1a4f0662fde058d24^ --file app/api/chat/conversations/route.ts --prove tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La campanella vive solo in avvisaChiRiceve, non esportata, di app/api/chat/messages/route.ts (e un route.ts di Next non può esportare altri nomi): ho ripreso la strada dell'onda 7 (il primo messaggio passa dal POST esportato della rotta dei messaggi, che salva e avvisa una volta: campanella + email) ma col ripiego su OGNI rifiuto che arriva prima del salvataggio (401, 429, 503, qualunque altro stato fuori da 403/404/409/500, ed eccezioni): lì il messaggio si salva come sulla base, con l'inserimento diretto, senza avviso. Non si ripiega su 403 (permesso o sospensione: l'inserimento diretto la aggirerebbe) né sui rifiuti del database (404/409/500, che lo stesso inserimento avrebbe uguali). La risposta resta {conversationId} 200. La prova usa la rotta vera e dentro la rotta dei messaggi vera, con database e autenticazione finti: salvato una volta, campanella una, email una; con 503, 401, 429 ed eccezione il messaggio si salva lo stesso, senza avvisi doppi; è rossa sulla base e sulla versione dell'onda 7. Nei casi di ripiego il negozio resta senza avviso: per averlo anche lì servirebbe spostare avvisaChiRiceve in lib/ (file altrui).",
+      "verificato_da": "smentitore S2 (subagente diverso dal riparatore, worktree separato a f52905f3): prova e prova rimessa rilanciate (uscita 0); 48 prove esistenti accanto verdi (347/347). Lettura mirata di middleware.ts (withAuth), chat/messages/route.ts ed errore-database.ts: nessun messaggio doppio, nessun avviso doppio, il ripiego non aggira 403 di permesso o sospensione; il 503 della seconda autenticazione salva il messaggio. Regge."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La ricerca, la pagina di una categoria e i chip della home buttano via le categorie piene già note quando una rilettura fallisce",
+      "dimensione": "navigazione-gerarchia",
+      "severita": "minore",
+      "file": "components/SearchBar.tsx:77 · app/category/[slug]/page.tsx:100 · components/home-sections/ChipDelleCategorie.tsx:27",
+      "descrizione": "Stesso schema della voce sulle categorie piene: «piene.isError ? null : piene.data» scarta l'elenco che react-query tiene dopo una rilettura caduta, e rimette in mostra le categorie (o sottocategorie, o chip) vuote. La cura è la stessa: usare piene.data."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "subagenti": 5,
+    "costo_usd": 25.11,
+    "nota": "5 subagenti su 6, tutti sul modello della sessione: 2 riparatori (lotto 1 con 6 voci, lotto 2 con 8), 1 smentitore per il lotto 1, 1 per sei voci del lotto 2; R01-009 l'ha ricontrollata il capo squadra. Spesa letta con get_session prima della consegna: 25,11 $. Oltre 20 $ niente giri di correzione (regola della regista), quindi R01-008 e R01-012 restano parziali."
+  },
+  "costo_usd": 25.11
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Calendar, MapPin, CheckCircle2, Circle, Plus, Save, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -48,6 +48,9 @@ const SUGGESTED_ZONES = [
   'Farnesiana',
 ];
 
+/** Oltre questo tempo una scrittura delle zone senza risposta non ferma più le successive. */
+const TEMPO_MASSIMO_ZONE_MS = 10_000;
+
 export default function RiderAvailabilityPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +62,10 @@ export default function RiderAvailabilityPage() {
   // non compaiono finché la lettura non riesce.
   const [letturaFallita, setLetturaFallita] = useState(false);
   const [tentativo, setTentativo] = useState(0);
+  // Le zone: l'ultimo elenco che il database ha confermato (col numero del tocco che l'ha scritto)
+  // e la fila delle scritture, una alla volta nell'ordine dei tocchi.
+  const zoneConfermate = useRef<{ elenco: string[]; numero: number }>({ elenco: [], numero: 0 });
+  const filaZone = useRef<{ coda: Promise<void>; ultimo: number }>({ coda: Promise.resolve(), ultimo: 0 });
 
   // Carica la disponibilità persistita dal profilo del rider.
   useEffect(() => {
@@ -82,7 +89,9 @@ export default function RiderAvailabilityPage() {
           online: !!data.rider_is_online,
           schedule: (data.rider_schedule as Availability['schedule'] | null) ?? DEFAULT_SCHEDULE,
         });
-        setZones((data.rider_zones as string[] | null) ?? []);
+        const lette = (data.rider_zones as string[] | null) ?? [];
+        setZones(lette);
+        zoneConfermate.current = { elenco: lette, numero: filaZone.current.ultimo };
       }
       setLoading(false);
     })();
@@ -118,9 +127,56 @@ export default function RiderAvailabilityPage() {
     });
   };
 
+  /**
+   * «Zone salvate» solo dopo l'esito. Le scritture vanno in fila, così arrivano nell'ordine dei
+   * tocchi e conta l'ultimo; se l'ultima cade lo schermo torna all'ultimo elenco confermato.
+   * Una scrittura che non risponde non ferma la fila: dopo TEMPO_MASSIMO_ZONE_MS vale come non
+   * riuscita e il tocco dopo parte. Se arriva lo stesso, tardi: riuscita e più nuova di quella
+   * confermata diventa la confermata (e, se è l'ultimo tocco, «Zone salvate»); riuscita ma più
+   * vecchia, può aver rimesso nel database l'elenco vecchio, e si riscrive quello confermato.
+   */
+  const esitoZone = (elenco: string[], numero: number, ok: boolean, tardi: boolean, riscrittura: boolean) => {
+    const confermate = zoneConfermate.current;
+    const ultimoTocco = numero === filaZone.current.ultimo;
+    if (ok) {
+      if (numero < confermate.numero) {
+        if (tardi) scriviZone(confermate.elenco, confermate.numero, true);
+        return;
+      }
+      zoneConfermate.current = { elenco, numero };
+      if (riscrittura || !ultimoTocco) return;
+      if (tardi) setZones(elenco);
+      toast.success('Zone salvate');
+      return;
+    }
+    if (!tardi && !riscrittura && ultimoTocco) setZones(confermate.elenco);
+  };
+
+  const scriviZone = (elenco: string[], numero: number, riscrittura = false) => {
+    const fila = filaZone.current;
+    const turno = fila.coda.then(() => new Promise<boolean | null>((risolvi) => {
+      let scaduta = false;
+      const sveglia = setTimeout(() => { scaduta = true; risolvi(null); }, TEMPO_MASSIMO_ZONE_MS);
+      void persist({ rider_zones: elenco }).catch(() => false).then((ok) => {
+        if (scaduta) { esitoZone(elenco, numero, ok, true, riscrittura); return; }
+        clearTimeout(sveglia);
+        risolvi(ok);
+      });
+    }));
+    fila.coda = turno.then(() => undefined);
+    void turno.then((ok) => {
+      if (ok !== null) { esitoZone(elenco, numero, ok, false, riscrittura); return; }
+      // Nessuna risposta in tempo: la fila va avanti. Se era l'ultimo tocco si dice, e lo schermo
+      // torna all'ultimo elenco confermato finché la scrittura non arriva.
+      if (riscrittura || numero !== filaZone.current.ultimo) return;
+      toast.error('Le zone non risultano salvate: la rete non risponde. Riprova.');
+      setZones(zoneConfermate.current.elenco);
+    });
+  };
+
   const saveZones = (next: string[]) => {
     setZones(next);
-    void persist({ rider_zones: next });
+    scriviZone(next, ++filaZone.current.ultimo);
   };
 
   const toggleZone = (zone: string) => {

@@ -10,6 +10,7 @@
  * schermo dicesse niente. Ogni bolla dice anche chi l'ha scritta.
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { act } from 'react';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
@@ -35,6 +36,9 @@ describe('R06-003 · la chat col negozio e il lettore di schermo', () => {
     const mod = await monta('app/messages/[id]/page.tsx');
     const s = accendi(mod.default, { params: { id: 'c1' } });
     await attendi();
+    // 17/11/2026 — il registro si accende al secondo frame dopo il caricamento del filo (prima il
+    // filo si disegna a registro spento): si lasciano passare alcuni frame veri di jsdom.
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
 
     const filo = s.radice.querySelector('[role="log"]');
     expect(filo, 'Il filo dei messaggi non e\' un registro: i messaggi nuovi arrivano in silenzio').not.toBeNull();

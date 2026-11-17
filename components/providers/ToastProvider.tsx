@@ -14,6 +14,8 @@ import { Toaster, toast } from 'sonner';
  * LA PROVA: tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx
  */
 const ETICHETTA_CHIUDI_AVVISO = 'Chiudi avviso';
+/** Il nome della regione degli avvisi: sonner ci aggiunge dopo la scorciatoia («alt+T»). */
+const ETICHETTA_RIQUADRO_AVVISI = 'Avvisi, scorciatoia';
 
 function sistemaLeX(radice: HTMLElement) {
   radice.querySelectorAll<HTMLButtonElement>('button[data-close-button]').forEach((x) => {
@@ -84,11 +86,20 @@ const ToastProvider = () => {
    * l'errore prima di finirlo, senza modo di riaprirlo. Ora restano 8 secondi
    * (qui sonner non distingue la durata per tipo) e si chiudono con la X.
    */
+  /*
+   * 17/11/2026 — IL RIQUADRO DEGLI AVVISI SI PRESENTA IN ITALIANO.
+   * sonner chiama la sua regione «Notifications» e ci attacca la scorciatoia che
+   * porta il fuoco sugli avvisi (Alt+T): il lettore di schermo diceva
+   * «Notifications alt+T». `containerAriaLabel` è la parte prima della
+   * scorciatoia, che sonner aggiunge da sé: il nome diventa
+   * «Avvisi, scorciatoia alt+T».
+   */
   return (
     // `contents`: il contenitore serve solo a trovare le X, non disegna niente.
     <div ref={contenitore} className="contents">
       <Toaster
         position="top-right"
+        containerAriaLabel={ETICHETTA_RIQUADRO_AVVISI}
         closeButton
         toastOptions={{
           duration: DURATA_AVVISI_MS,
