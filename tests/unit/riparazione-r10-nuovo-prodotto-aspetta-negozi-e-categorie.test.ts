@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 
 /**
  * R10-011 — Nel nuovo prodotto dell'amministrazione il modulo restava attivo anche quando
@@ -54,6 +54,7 @@ const { default: Pagina } = await import('@/app/admin/products/new/page');
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root;
+let qcAttuale: QueryClient;
 let c: HTMLDivElement;
 const invii: string[] = [];
 const pausa = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -62,6 +63,7 @@ async function monta(negozi: Stato, categorie: Stato) {
   mondo.negozi = negozi;
   mondo.categorie = categorie;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qcAttuale = qc;
   c = document.createElement('div');
   document.body.appendChild(c);
   root = createRoot(c);
@@ -95,6 +97,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   c.remove();
   vi.unstubAllGlobals();
+  onlineManager.setOnline(true);
 });
 
 describe('R10-011 · nuovo prodotto: il modulo aspetta negozi e categorie', () => {
@@ -132,5 +135,32 @@ describe('R10-011 · nuovo prodotto: il modulo aspetta negozi e categorie', () =
     expect(invii, 'il modulo ha inviato senza i negozi').toEqual([]);
     expect(c.textContent).toMatch(/non si può salvare/);
     expect([...c.querySelectorAll('button')].some((b) => /riprova/i.test(b.textContent ?? ''))).toBe(true);
+  });
+  it('senza rete (letture in pausa, senza dati) il modulo resta spento e la pagina dice che aspetta', async () => {
+    onlineManager.setOnline(false);
+    try {
+      await monta('ok', 'ok');
+      const fieldset = c.querySelector('fieldset') as HTMLFieldSetElement;
+      expect(fieldset, 'il modulo non è dentro il fieldset').toBeTruthy();
+      expect(fieldset.disabled, 'senza rete il modulo si è acceso senza negozi né categorie').toBe(true);
+      expect(c.textContent).toMatch(/si potrà salvare/);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('se una rilettura in sottofondo cade con i dati già in mano, il modulo resta acceso e invia', async () => {
+    await monta('ok', 'ok');
+    const fieldset = c.querySelector('fieldset') as HTMLFieldSetElement;
+    expect(fieldset.disabled, 'con i dati arrivati il modulo dovrebbe essere acceso').toBe(false);
+    // A metà compilazione negozi e categorie si rileggono e la rilettura cade.
+    mondo.negozi = 'giu';
+    mondo.categorie = 'giu';
+    await act(async () => { await qcAttuale.refetchQueries(); });
+    for (let i = 0; i < 4; i++) await pausa();
+    expect((c.querySelector('fieldset') as HTMLFieldSetElement).disabled, 'una rilettura caduta ha spento il modulo con i dati in mano').toBe(false);
+    expect(c.textContent).not.toMatch(/non si può salvare/);
+    await scegliEPubblica();
+    expect(invii).toEqual(['/api/admin/products']);
   });
 });
