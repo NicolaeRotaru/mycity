@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:38",
+  "aggiornato": "2026-11-17 20:42",
   "finita": false,
-  "testa": "ca004b893db868263307e3671f4ba52e32f6693f",
+  "testa": "974093bab48b009e311d280f3ef6e3b955ec5aab",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -320,6 +320,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Con ?from=ID, se la lettura del prodotto da duplicare cade o resta in pausa senza rete (fetchStatus «paused», che non è isLoading), la pagina non apre il modulo vuoto: mostra «Non riesco a caricare il prodotto da duplicare» con «Riprova», nello stesso schema d'errore già usato per categorie e taglie. La prova usa react-query vero per le letture della copia: lettura caduta poi Riprova riuscito, e senza rete (onlineManager) poi rete tornata; in tutti e due i casi il modulo si apre pieno («… (copia)») solo a lettura riuscita. Passano le 12 prove esistenti della pagina."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
+      "esito": "riparato",
+      "commit": "974093bab48b009e311d280f3ef6e3b955ec5aab",
+      "commit_tutti": [
+        "974093bab48b009e311d280f3ef6e3b955ec5aab"
+      ],
+      "file_toccati": [
+        "app/rider/availability/page.tsx",
+        "tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx tests/unit/minori-s02-pagine-del-fattorino.test.ts tests/unit/riparazione-r03-turni-non-spengono-l-online.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 974093bab48b009e311d280f3ef6e3b955ec5aab^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r01-zone-salvate-con-tempo-massimo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ripresa la cura dell'onda 7 (fila delle scritture, «Zone salvate» solo dopo l'esito riuscito dell'ultimo tocco, ritorno all'ultimo elenco confermato se cade) togliendo il difetto bocciato: ogni scrittura ha un tempo massimo di 10 s (come la fila dei preferiti in lib/preferiti/tocco-del-cuore.ts); scaduto, la fila va avanti e il tocco dopo parte, e se era l'ultimo tocco si avvisa il fattorino e lo schermo torna all'elenco confermato. Se la scrittura scaduta arriva lo stesso: riuscita e più nuova della confermata diventa la confermata («Zone salvate» se è l'ultimo tocco); riuscita ma più vecchia di una già confermata, si riscrive in silenzio l'elenco confermato, così il database non resta con quello vecchio e i «salvate» restano uno. La prova (orologio finto) copre esito riuscito, caduto, scrittura appesa seguita da un tocco che parte dopo 10 s e si salva, appesa che arriva tardi dopo la nuova, e ultimo tocco scaduto poi arrivato; è rossa sia sulla base sia sulla versione dell'onda 7. Resta: entro i 10 s di una scrittura appesa, chiudere la pagina perde il tocco in fila."
     }
   ],
   "nuovi_difetti_visti": [
