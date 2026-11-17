@@ -11,8 +11,8 @@
  * senza) ed è connesso (l'avviso con la posizione viaggia in rete). Qui il pulsante si monta, si apre il dialogo, si conferma, e si legge quello che il
  * fattorino vede davvero.
  *
- * La frase «Verrà avviata la chiamata al 112» del dialogo resta: la vincola una prova comune
- * (il-testo-dice-quello-che-succede-davvero), che tocca solo la regista. La modifica è nel referto.
+ * Anche il dialogo diceva «Verrà avviata la chiamata al 112»: ora dice che il 112 è già scritto e
+ * che CHIAMA lo preme il fattorino.
  * Questa prova riprende quella scritta per la stessa voce nell'onda 3 (riparazione-r16-sos-testo.test.tsx,
  * tolta dal ramo con debafe63: si legge con `git show debafe63^:tests/unit/riparazione-r16-sos-testo.test.tsx`).
  */
@@ -85,6 +85,15 @@ describe('R28-001 · il SOS dice quello che fa davvero', () => {
     const testo = dialogo.textContent ?? '';
     expect(testo).not.toMatch(/posizione GPS verrà condivisa/i);
     expect(testo).toMatch(/posizione GPS arriva a MyCity solo se il telefono riesce a darla ed è connesso/);
+  });
+
+  it('il dialogo di conferma non promette una chiamata, dice che CHIAMA lo preme il fattorino', async () => {
+    const dialogo = await apriDialogo();
+    const testo = dialogo.textContent ?? '';
+    expect(testo).not.toMatch(PROMESSA_DI_CHIAMATA);
+    expect(testo).toMatch(/112/);
+    expect(testo).toMatch(/già scritto/);
+    expect(testo).toMatch(/premi tu CHIAMA/);
   });
 
   it('dopo la conferma, con l’avviso scritto, il messaggio dice che MyCity è avvisata e che CHIAMA va premuto', async () => {
