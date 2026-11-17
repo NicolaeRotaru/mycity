@@ -24,7 +24,34 @@ const secretsMatch = segretiCombaciano;
  *   = 3 layer obbligatori per endpoint sensibili."
  */
 
-type Profile = { id: string; role: string; is_approved: boolean };
+/**
+ * `approval_status` si legge solo dove serve (R30-024, vedi `rottaChiusaAlClienteSospeso`): per un
+ * cliente e' il segno della sospensione, perche' `is_approved` nasce gia' falso.
+ */
+type Profile = { id: string; role: string; is_approved: boolean; approval_status?: string | null };
+
+/**
+ * 17/11/2026 (R30-024) — LE PORTE CHIUSE A UN CLIENTE SOSPESO.
+ *
+ * Comprare (contanti, carta, buoni regalo) e scrivere ai negozi in chat: sono le strade
+ * con cui un cliente che abusa fa danno (ordini finti in contanti, messaggi molesti).
+ * Restano aperte le altre: cancellare l'account, scaricare i propri dati, annullare un
+ * ordine, recedere o chiedere un reso, scrivere all'assistenza. Sono diritti, e la
+ * sospensione non li toglie. Solo i metodi che scrivono: leggere le proprie chat no.
+ */
+const ROTTE_CHIUSE_AL_CLIENTE_SOSPESO = [
+  '/api/orders/cod',
+  '/api/stripe/checkout',
+  '/api/gift-cards/checkout',
+  '/api/chat/conversations',
+  '/api/chat/messages',
+];
+
+export function rottaChiusaAlClienteSospeso(percorso: string, metodo: string | undefined): boolean {
+  const m = String(metodo ?? 'GET').toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return false;
+  return ROTTE_CHIUSE_AL_CLIENTE_SOSPESO.some((r) => percorso === r || percorso.startsWith(`${r}/`));
+}
 
 /**
  * 22/8/2026 — CHI ENTRA COL GETTONE POI PARLAVA AL DATABASE DA SCONOSCIUTO.
@@ -272,17 +299,33 @@ async function authenticate(req: NextRequest, ctx?: ContestoRotta, opzioni: Opzi
       return { ok: false, response: ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.') };
     }
     profile = (data as Profile | null) ?? null;
+    // 17/11/2026 (R30-024) — Il cliente sospeso: sulle porte chiuse si legge anche il suo stato.
+    // Una lettura a parte, e solo li', perche' le altre rotte non ne hanno bisogno.
+    if (profile?.role === 'buyer' && rottaChiusaAlClienteSospeso(percorsoDi(req), req.method)) {
+      const { data: stato, error: eStato } = await admin
+        .from('profiles')
+        .select('approval_status')
+        .eq('id', user.id)
+        .single();
+      if (eStato && eStato.code !== 'PGRST116') {
+        return { ok: false, response: ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.') };
+      }
+      profile = { ...profile, approval_status: (stato as { approval_status?: string | null } | null)?.approval_status ?? null };
+    }
   } catch {
     return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
   }
   if (!profile) return { ok: false, response: ApiErrors.forbidden('Profilo non trovato') };
+  if (profile.role === 'buyer' && profile.approval_status === 'suspended' && rottaChiusaAlClienteSospeso(percorsoDi(req), req.method)) {
+    return { ok: false, response: ApiErrors.forbidden(purchaseBlockReason(profile.role, profile.approval_status) ?? 'Il tuo account è sospeso.') };
+  }
 
   return { ok: true, user, profile, supaUtente };
 }
 
 /** Blocco acquisto per ruolo (admin, rider, …). Null = può acquistare. */
 export function assertCanPurchase(profile: Profile): NextResponse | null {
-  const reason = purchaseBlockReason(profile.role);
+  const reason = purchaseBlockReason(profile.role, profile.approval_status);
   return reason ? ApiErrors.forbidden(reason) : null;
 }
 

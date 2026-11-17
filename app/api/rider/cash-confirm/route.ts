@@ -81,7 +81,7 @@ const MISMATCH_TOLERANCE_CENTS = 50; // €0,50
  * server-side).
  */
 // Rate limit: 60 conferme / ora per rider (anti-abuse, ma rider attivi ~30/giorno)
-export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, windowMs: 60 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
+export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, windowMs: 60 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
@@ -128,6 +128,13 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     default: break;
   }
   if (!order || !order.rider_id) return ApiErrors.notFound('Ordine non trovato');
+  // 17/11/2026 (R30-023) — Un fattorino sospeso non registra incassi: lo fa l'amministrazione al suo
+  // posto (/api/admin/cod-incasso-dichiarato). L'ordine si legge col client di servizio, quindi la regola
+  // di lettura del database non lo ferma: il controllo sta qui. Ruolo e is_approved li legge il portiere
+  // (lib/api/middleware.ts, authenticate) dal profilo, a ogni richiesta: sospendere mette is_approved=false.
+  if (profile && (profile.role !== 'rider' || profile.is_approved !== true)) {
+    return ApiErrors.forbidden('Il tuo profilo fattorino è sospeso: l’incasso lo registra l’assistenza.');
+  }
 
   // 155 — IL FATTORINO NON LAVORAVA GRATIS PER SBAGLIO: PER COSTRUZIONE.
   //

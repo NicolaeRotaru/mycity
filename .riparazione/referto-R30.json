@@ -1,0 +1,540 @@
+{
+  "sessione": "R30",
+  "aggiornato": "2026-11-17 12:30",
+  "finita": true,
+  "testa": "8efa4e29028a5b19a67ecb0aae69f9d3f8a1a864",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "8efa4e29028a5b19a67ecb0aae69f9d3f8a1a864",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192; typecheck 0, lint 0 errori (99 avvisi già presenti), vitest 1613/1613 file, 10570/10570 casi. SHA preso con git rev-parse HEAD nello stesso comando. guardia-ramo verde sulla stessa testa. Le patch per i file altrui si leggono al commit c8a6e575 (tolte dal risultato in 8efa4e29)."
+  },
+  "voci": [
+    {
+      "id": "R30-001",
+      "chiave": "immagini-media|le tessere delle categorie in home sono foto d'archivio scritte a mano nel codice",
+      "esito": "serve_file_altrui",
+      "nota": "Il codice di questa voce (avvisi delle foto di categoria in components/CategoryShowcase.tsx) non regge senza adattare due prove comuni di R15, che usano file di altre sessioni: rimesse come alla base (regista, 17/11), con la correzione 6 casi su 8 diventano rossi. Codice, prove adattate e prova nuova sono in patch; nel ramo CategoryShowcase.tsx è uguale alla base. Quello che la patch fa: (a) L'avviso «foto di categoria scartata» usa ora lo stesso ricordo della foto rotta: una volta per foto per tutta la vita della pagina, anche quando arrivano le piene e al rimontaggio. (b) Tutti e due gli avvisi passano da logger.error(new Error(frase), contesto), il canale che il sito usa già dal browser per arrivare a Sentry (lib/logger.ts → captureError); senza DSN scrive comunque in console. Nelle due prove esistenti di R15 (importano solo CategoryShowcase, che è di R30, e dei finti; nessun file di R31-R33) il finto logger raccoglie anche error con la stessa forma: niente è indebolito. Quello che resta oltre la patch: (c) La foto non si cambia ancora dal pannello admin: serve_file_altrui (patch .riparazione/patch-R30/r30-001-foto-dal-pannello.patch (al commit c8a6e575)). Se la migrazione 159 sia applicata in produzione lo dice Nicola.",
+      "serve_file_altrui": [
+        {
+          "file": "components/CategoryShowcase.tsx + tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx (comune) + tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx (comune) + tests/unit/riparazione-r30-foto-di-categoria.test.tsx (nuova)",
+          "modifica": "Patch .riparazione/patch-R30/r30-001-avvisi-delle-foto-e-prove-r15.patch (al commit c8a6e575) (diff d1eaba80..56dad3a8 dei quattro file), da applicare insieme: si applica pulita sulla testa del ramo. Verificata quando era nel ramo: prova nuova verde, prova rimessa uscita 0, suite intera verde."
+        },
+        {
+          "file": "app/api/admin/categories/route.ts",
+          "modifica": "Patch .riparazione/patch-R30/r30-001-foto-dal-pannello.patch (al commit c8a6e575). Importare fotoDiCategoria e motivoDaSegnalare da '@/lib/immagine-categoria'. In baseFields aggiungere image_url: z.string().trim().max(500).nullable().optional().superRefine((v, ctx) => { if (!v) return; const motivo = motivoDaSegnalare(fotoDiCategoria({ image_url: v })); if (motivo) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Foto non ammessa: ${motivo}` }); }) (il messaggio è quello di fotoDiCategoria, quindi dice il vero). POST: nell'oggetto dell'insert ...(d.image_url !== undefined ? { image_url: d.image_url || null } : {}). PATCH: dopo la riga di featured if (rest.image_url !== undefined) patch.image_url = rest.image_url || null;. In tutti e due gli errori: if (error.code === '23514') return ApiErrors.invalidRequest('Foto non ammessa dal database: https://… oppure un percorso del sito /…')."
+        },
+        {
+          "file": "app/admin/categories/page.tsx",
+          "modifica": "Stessa patch. Cat: image_url?: string | null. CatRow: stato imageUrl con iniziale cat.image_url ?? ''; nel PATCH ...(imageUrl.trim() !== (cat.image_url ?? '') ? { image_url: imageUrl.trim() } : {}); campo <Input label=\"Foto della tessera (https://… o /…)\" maxLength={500}> dopo «In evidenza». Modulo di creazione: stato newImage, campo «Foto (facoltativa)», mandato solo se non vuoto, azzerato in onSuccess."
+        },
+        {
+          "file": "lib/immagine-categoria.ts",
+          "modifica": "Stessa patch. Dopo SUFFISSO_HOST_STORAGE aggiungere storageAmmesso(host): con NEXT_PUBLIC_SUPABASE_URL vale solo host === new URL(quella).hostname.toLowerCase(), altrimenti (o URL scritto male) host.endsWith(SUFFISSO_HOST_STORAGE), come getSupabaseHost in middleware.ts. Alla riga 156 usare storageAmmesso(host). In motivoDaSegnalare il testo 'host-non-ammesso' diventa «…e lo Storage Supabase del sito». Aggiornare il commento delle righe 49-58."
+        }
+      ]
+    },
+    {
+      "id": "R30-002",
+      "chiave": "navigazione-gerarchia|home, piè di pagina e mappa per google mettono in mostra categorie vuote: otto su nove non hanno prodotti",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei file di R30 non resta niente da chiudere senza rovesciare decisioni già provate: mappa del sito e noindex delle categorie vuote sono già a posto; il piede che nell'HTML del server elenca le 8 di riserva è voluto da tre prove esistenti come ripiego al primo disegno e al guasto (riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva, la-home-e-il-piede-non-tengono-l-abbigliamento, la-vetrina-delle-categorie-esce-piena-nell-html-del-server). La cura è il precarico nel layout. Diff della scheda ricontrollate sulla base: numeri giusti tranne SearchBar (la domanda è alle righe 61-74). ChipDelleCategorie.tsx non creato nel ramo: senza HomeSectionRenderer resterebbe morto; il suo contenuto è nella patch.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/queries/precarico.ts",
+          "modifica": "Come nella scheda (import dopo la riga 6, precaricaSito dopo precaricaHome alle righe 67-70). Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
+        },
+        {
+          "file": "app/layout.tsx",
+          "modifica": "Come nella scheda (righe 29, 201, 249-261 verificate); nel commento del precarico niente id di altre onde. Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
+        },
+        {
+          "file": "components/home-sections/HomeSectionRenderer.tsx",
+          "modifica": "Come nella scheda (righe 24, 67-72, 155-170 verificate), più il file nuovo components/home-sections/ChipDelleCategorie.tsx col contenuto della scheda. Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "Come nella scheda, ma la domanda ['search','zero-categories'] occupa le righe 61-74 (non 61-73); righe 15, 315, 319 giuste. Patch .riparazione/patch-R30/r30-002.patch (al commit c8a6e575)."
+        },
+        {
+          "file": "lib/site-branding.ts",
+          "modifica": "Riga 81, DESCRIZIONE_DEL_SITO: da `Compra online dai negozi di Piacenza: alimentari, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.` a `Compra online dai negozi di Piacenza. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`"
+        },
+        {
+          "file": "app/stores/layout.tsx",
+          "modifica": "Riga 7: da 'Scopri tutti i negozi di Piacenza su MyCity: alimentari, casa, elettronica e altro. Compra online dai commercianti della tua città.' a 'Scopri tutti i negozi di Piacenza su MyCity. Compra online dai commercianti della tua città.'"
+        }
+      ],
+      "nota": "Patch provata in un worktree su d1eaba80: tsc 0, 71 file di prove vicine 688/688. Il precarico nel layout pesa su ogni pagina (~72 righe di categorie, lettura una volta ogni 60 s): lo decide chi cuce.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-003",
+      "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
+      "esito": "parziale",
+      "commit": "8785910a",
+      "file_toccati": [
+        "app/api/cron/abandoned-carts/route.ts",
+        "lib/carrelli-abbandonati.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8785910a^ --file lib/carrelli-abbandonati.ts,app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il commit indicato dalla scheda come lavoro precedente non c'è nel deposito e la base non aveva il segno «chiuso senza email»: l'ho scritto io. Il ramo senza consenso chiude il carrello con recovery_email_sent_at = last_activity, con un UPDATE condizionato a user_id, last_activity e segno vuoto (punto 3, verificato sul Postgres locale col formato di PostgREST). Il conto (contaRendimentoRecupero) non prende per email un segno uguale all'ultima attività; la lettura chiede anche last_activity.",
+      "cosa_resta": "(2) I carrelli chiusi prima di questa modifica hanno l'ora del giro e non si distinguono da un invio vero. Il ramo dei carrelli oltre 48 ore e la cancellazione dell'account sono in patch (una prova comune e un file di R33).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/abandoned-carts/route.ts (ramo troppoVecchio) + tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts (comune) + app/api/account/delete/route.ts (R33) + tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts (nuova)",
+          "modifica": "Patch .riparazione/patch-R30/r30-003-carrelli-chiusi-senza-email.patch (al commit c8a6e575). Il ramo troppoVecchio usa chiudiSenzaEmail: la prova ① della comune pretendeva la RPC, ora pretende il segno = last_activity coi filtri. account/delete (righe 162-166) legge last_activity del carrello mai avvisato e lo scrive come segno, condizionato; se il carrello è cambiato nel frattempo ripiega su now(). Provata sulla testa: 22 file 302/302, tsc 0, eslint 0; senza la patch la prova nuova cade 3 su 6."
+        }
+      ],
+      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (segno = last_activity con UPDATE condizionato; il conto non lo prende per un invio); rimessa del subagente letta (uscita 0: ognuno dei due file alla base fa cadere la prova); prova rilanciata nel verify finale alla testa"
+    },
+    {
+      "id": "R30-004",
+      "chiave": "architettura|sei rami iserror scritti a mano invece del presidio lib/vista-query.ts (vistadaquery): il difetto può tornare alla settima pagina",
+      "esito": "serve_file_altrui",
+      "nota": "app/admin/today/page.tsx (mio) usa già vistaDaQuery alla base; le altre cinque pagine non sono mie. Verificato sulla base: in ognuna 3 rami isLoading/isError scritti a mano e nessun vistaDaQuery.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/cod-remittance/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) (import da '@/lib/vista-query') e i rami vista.mostraScheletro / vista.mostraErrore / vista.mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/payouts/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) (import da '@/lib/vista-query') e i rami vista.mostraScheletro / vista.mostraErrore / vista.mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/support/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) (import da '@/lib/vista-query') e i rami vista.mostraScheletro / vista.mostraErrore / vista.mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/products/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) (import da '@/lib/vista-query') e i rami vista.mostraScheletro / vista.mostraErrore / vista.mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/audit/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) (import da '@/lib/vista-query') e i rami vista.mostraScheletro / vista.mostraErrore / vista.mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        }
+      ]
+    },
+    {
+      "id": "R30-005",
+      "chiave": "architettura|la traccia «chi ha cambiato il prezzo» esce in due forme diverse a seconda della porta",
+      "esito": "serve_file_altrui",
+      "nota": "catalog-apply e salvataggio-tracciato (miei) coincidono già col modulo prodotto alla base; le altre tre porte non sono mie. Righe ricontrollate sulla base d1eaba80.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-apply-bulk/route.ts",
+          "modifica": "Righe 250-258: al posto di prima/for/void writeAudit({... metadata: { origine: 'ai-copilot-bulk', campi, prima, dopo } }) scrivere const voce = tracciaDellaModifica({ prodottoId: r.id, attoreId: user.id, origine: 'ai-copilot-bulk', prima: r.row as unknown as Record<string, unknown>, dopo: r.update, campiDallAi: Object.keys(r.update) }); if (voce) void writeAudit(voce); con import { tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato', come in app/api/ai/catalog-apply/route.ts."
+        },
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "Righe 322-330: la stessa cosa con prodottoId: r.product_id, prima: row, dopo: update, origine: `ai-batch:${job.operation}`, campiDallAi: Object.keys(update)."
+        },
+        {
+          "file": "app/api/admin/products/route.ts",
+          "modifica": "Righe 264-270 (la scheda diceva 225-231; il writeAudit di product.update con metadata { fields: Object.keys(patch) }): leggere la riga prima dell'update coi campi di patch e scrivere const voce = tracciaDellaModifica({ prodottoId: id, attoreId: user.id, origine: 'admin', prima: rigaPrima, dopo: patch }); if (voce) await writeAudit(voce); senza campiDallAi."
+        }
+      ]
+    },
+    {
+      "id": "R30-006",
+      "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato. L'aggiornamento a zod 4 resta una scelta di Nicola (vedi domande)."
+    },
+    {
+      "id": "R30-007",
+      "chiave": "frontend-ux|la vetrina dice «recensioni · 20» ma ne fa leggere solo sei, senza modo di vedere le altre",
+      "esito": "riparato",
+      "commit": "9b4f9271",
+      "file_toccati": [
+        "components/store-sections/ReviewsSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9b4f9271^ --file components/store-sections/ReviewsSection.tsx --prove tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Finite le 20 della vetrina, «Mostra altre recensioni (N)» ne legge altre 20 alla volta fino al conto vero (riepilogoRecensioni.totale), con la stessa lettura di useStorePageData (stesse colonne, created_at decrescente, nomi da fetchNomiPubblici, foto come elenco, doppioni tolti). Senza conto vero non promette di più; una pagina corta ferma; una lettura caduta si dice e si riprova. Prova che monta il componente con 45 recensioni finte. useStorePageData.ts:40 (.limit(20)) può restare: è la prima pagina.",
+      "nota": "ReviewsSection ora importa fetchNomiPubblici da lib/queries/seller-public-profiles.ts (di R33, non toccato): se R33 ne cambia la firma va guardato all'unione.",
+      "verificato_da": "capo R30: prova rilanciata (verde), rimessa del subagente uscita 0, diff letto (offset della pagina = recensioni già lette, doppioni tolti, pagina corta ferma, errore con avviso)"
+    },
+    {
+      "id": "R30-008",
+      "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Presa la patch r28-008-intera da 3e9553a2: si applica pulita su d1eaba80. Applicata solo lib/queries/catalogo.ts, senza la riga dell'aiutante, 25 prove esistenti diventano rosse (il-catalogo-regge-con-i-profili-chiusi, il-guscio-della-pagina-legge-il-negozio-sul-server, la-scheda-prodotto-arriva-dopo-due-viaggi…): niente commit. Con le due modifiche insieme, in un worktree: 21 file di prove 449/449, tsc 0, eslint 0; la prova nuova (riparazione-r30-scheda-tag-dei-marchi) cade 3 su 3 alla base.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/database-coi-permessi.ts",
+          "modifica": "Riga 64, in COLONNE.products: 'external_source_url', diventa 'external_source_url', 'tags', (verificato sulla base)."
+        },
+        {
+          "file": "lib/queries/catalogo.ts + tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts",
+          "modifica": "Patch .riparazione/patch-R30/r30-008.patch (al commit c8a6e575), da applicare insieme o dopo la riga sopra: tags in COLONNE_SCHEDA_PRODOTTO e in SchedaProdotto, tagDeiMarchiDellaScheda che tiene solo i tag di Km 0 e Artigianale, applicata in leggiRigaDelProdotto, più la prova nuova."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-009",
+      "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+      "esito": "parziale",
+      "commit": "80bdba2d",
+      "file_toccati": [
+        "lib/image-url.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-foto-salute.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-foto-salute.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 80bdba2d^ --file lib/image-url.ts --prove tests/unit/riparazione-r30-foto-salute.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuovo aiutante controllaTrasformazioneFoto({ fetch, timeoutMs, urlFoto }) in lib/image-url.ts: chiede sizedImage(urlFoto,'thumb') e risponde 'ok' (2xx), 'degradato' (altra risposta, rete caduta o tempo scaduto, con la richiesta interrotta) o 'saltato' (trasformazioneFotoSpenta() o foto fuori da /render/image/); non lancia mai. Corretto il commento: le NEXT_PUBLIC_* entrano nella build, quindi cambiata la variabile su Vercel serve un nuovo deploy. Prova con fetch finta (6 casi). L'uscita 3 della rimessa è attesa: l'aiutante è un nome nuovo e il comportamento si chiude nella rotta di salute (serve_file_altrui, con la sua prova che cade senza la modifica).",
+      "cosa_resta": "La rotta di salute deve chiamare l'aiutante (serve_file_altrui). L'interruttore su Vercel lo accende Nicola, con un nuovo deploy.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/health/route.ts",
+          "modifica": "Patch .riparazione/patch-R30/r30-009-salute.patch (al commit c8a6e575) (porta anche la prova nuova tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts). Importare controllaTrasformazioneFoto da '@/lib/image-url'. Prima del blocco «UN DATABASE LENTO…», se checks.db.ok, in try/catch: admin.from('products').select('images').eq('status','available').not('images','is',null).limit(20); prima immagine che contiene '/storage/v1/object/public/'; controllaTrasformazioneFoto({ fetch, timeoutMs: 2000, urlFoto }). 'degradato' → checks.foto = { ok:false, stato:'degradato', error:'la trasformazione delle foto di Supabase non risponde: le foto del sito non arrivano' }; 'ok' → checks.foto = { ok:true, stato:'ok' }; 'saltato' o errore → niente. Nel calcolo di degradato aggiungere || checks.foto?.ok === false. Stato sempre 200, mai 503."
+        }
+      ],
+      "nota": "Patch provata: tsc 0, eslint 0, 18 file di prove sulla salute 146/146; la prova nuova della rotta cade senza la modifica (2 su 3).",
+      "verificato_da": "capo R30: prova rilanciata (verde, 6 casi), diff letto (non lancia mai, timeout con abort, saltato a interruttore spento); rimessa 3 attesa perché l'aiutante è un nome nuovo"
+    },
+    {
+      "id": "R30-010",
+      "chiave": "qa-flussi|la modifica in blocco mette in vendita un prodotto a zero euro e dà per salvato un prezzo che non ha salvato",
+      "esito": "riparato",
+      "commit": "414691f2",
+      "file_toccati": [
+        "lib/ordini/valida-carrello.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-carrello-a-zero-euro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-carrello-a-zero-euro.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 414691f2^ --file lib/ordini/valida-carrello.ts --prove tests/unit/riparazione-r30-carrello-a-zero-euro.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina e la porta di scrittura erano già a posto alla base (leggiPrezzo senza ≤0/NaN, conta solo i salvati, salvataggio-tracciato rifiuta price≤0; prova minori-s06-modifica-in-blocco). Mancava la cassa: validaRigaDelCarrello, comune a contanti e carta, scarta la riga se il prezzo da pagare, già scontato e in centesimi, non è maggiore di zero. Copre anche 0,01 € col 70% di sconto. 65 file vicini 498/498.",
+      "nota": "Niente CHECK nel database: con NOT VALID ogni UPDATE di una riga vecchia a 0 € fallirebbe, anche solo per la scorta. La cassa basta a non venderla.",
+      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (scarto della riga se il prezzo da pagare in centesimi, già scontato, non è > 0; stesso valore poi usato nella riga); rimessa del subagente letta (uscita 0); prova rilanciata nel verify finale alla testa"
+    },
+    {
+      "id": "R30-011",
+      "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato. Il numero di veloci per fattorino resta una scelta di Nicola (vedi domande)."
+    },
+    {
+      "id": "R30-012",
+      "chiave": "qa-flussi|col telefono del negozio un po' indietro, un ordine non più ritirabile legge «entro le 12:46» invece di «ritiro non più possibile»",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato."
+    },
+    {
+      "id": "R30-013",
+      "chiave": "qa-flussi|la prova ③ copre solo l'annullo del cliente: un ritorno a «veloce confermata» col rifiuto del negozio passa verde",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato."
+    },
+    {
+      "id": "R30-014",
+      "chiave": "qa-flussi|salvando le taglie, se la scorta cambia a metà il negozio legge «riapri e salva di nuovo», ma le taglie tolte sono già cancellate",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato. La correzione è già scritta in un commit vecchio (revert -n a23283e8 con la prova sulle varianti): chi riprende la voce parte da lì."
+    },
+    {
+      "id": "R30-015",
+      "chiave": "qa-flussi|cercando una parola a metà il sito trova solo una parte dei prodotti, e dentro la vetrina di un negozio può dire «nessun risultato»",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato."
+    },
+    {
+      "id": "R30-016",
+      "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
+      "esito": "serve_file_altrui",
+      "nota": "Per indicazione della regista (17/11) l'interruttore lib/ritiro-in-negozio.ts:22 resta spento: accenderlo prima che il bonifico del lunedì si possa segnare (lavoro su un altro ramo, migrazione non sul database vero) lascerebbe il 10% dei ritiri pagati al banco senza compensazione. Nessun file toccato.",
+      "domanda": "Il ritiro in negozio si accende al lancio solo dopo che il bonifico del lunedì al negozio si può segnare e il 10% dei ritiri al banco si scala: confermi l'ordine?",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ritiro-in-negozio.ts (mio, da toccare solo all'accensione) + tests/unit/ritiro-in-negozio-messo-da-parte.test.ts:22-33 + tests/unit/le-promesse-che-il-sito-non-mantiene.test.ts:65",
+          "modifica": "All'accensione, insieme: RITIRO_IN_NEGOZIO_ATTIVO = true alla riga 22, commento 7-20 riscritto (resta il controllo che le migrazioni 124 e 179 siano applicate in produzione), e le due prove che fissano lo spento girate sull'acceso."
+        },
+        {
+          "file": "components/checkout/PaymentMethodSelector.tsx",
+          "modifica": "Righe 175-205: la tessera del ritiro non promette «Sconto {pickupDiscountPercent}%» (PICKUP_DISCOUNT_PERCENT vale 0, lib/constants.ts:87) ma «Gratis, nessun costo di consegna»; commento 162-173 aggiornato; righe 154-158: un testo per chi ritira e paga al banco (contanti + ritiro è già CASH_IN_STORE, migrations/179:206)."
+        },
+        {
+          "file": "app/admin/delivery/page.tsx",
+          "modifica": "Righe 139-143: togliere «Messo da parte: non se n'è ancora parlato coi negozi» e il «− 0%» da acceso."
+        },
+        {
+          "file": "lib/guadagni/negozio.ts + app/api/cron/release-payouts/route.ts",
+          "modifica": "Compensazione del 10% dei ritiri al banco: scalare commissioneDovutaCents dal bonifico del lunedì e segnarlo sull'ordine (colonna + funzione, migrazione nuova), e trattare CASH_IN_STORE nel rilascio dei pagamenti. Dipende dal lavoro sul bonifico manuale (migrazione 350)."
+        }
+      ]
+    },
+    {
+      "id": "R30-017",
+      "chiave": "qa-flussi|basta un solo campo fuori regola e tutta la personalizzazione della vetrina sparisce, e il salvataggio dopo la cancella",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato. La correzione è già scritta in un commit vecchio (cherry-pick -n 58757a63 con le due prove): chi riprende la voce parte da lì."
+    },
+    {
+      "id": "R30-018",
+      "chiave": "qa-flussi|due guardie sulla veloce controllano il testo del sorgente e non il comportamento",
+      "esito": "serve_file_altrui",
+      "nota": "Le due prove guardano file di R31 (app/checkout/page.tsx, app/cart/page.tsx): sono comuni. Le due prove di comportamento che le sostituiscono sono già nella base (tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts e tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts, verificato).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts",
+          "modifica": "Togliere il caso «la cassa offre «Adesso» solo con il sì del server» (righe 135-145, i controlli sul testo alle 137-144). L'import di readFileSync resta, lo usano gli altri casi."
+        },
+        {
+          "file": "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+          "modifica": "Togliere il caso «la fascia si ricontrolla anche AL MOMENTO di ordinare» (righe 324-333: cerca consegnaScelta(, ora: romeNow().getHours() e if (!siPuoConfermare( nel sorgente)."
+        }
+      ]
+    },
+    {
+      "id": "R30-019",
+      "chiave": "qa-flussi|prova con un nome che promette il contrario",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato."
+    },
+    {
+      "id": "R30-020",
+      "chiave": "qa-flussi|una prova col nome del collaudo",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha chiuso R30 a 38 $ dopo il lotto B (17/11) e la voce non è stata aperta; nessun file toccato."
+    },
+    {
+      "id": "R30-021",
+      "chiave": "qa-flussi|la prima compilazione di monta() pesa sul primo caso di ~85 file di prove",
+      "esito": "parziale",
+      "commit": "b8246095",
+      "file_toccati": [
+        "vitest.config.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-il-primo-caso-ha-tempo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-il-primo-caso-ha-tempo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b8246095^ --file vitest.config.ts --prove tests/unit/riparazione-r30-il-primo-caso-ha-tempo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il tempo di ogni prova unitaria sale da 5 a 15 s (vitest.config.ts), con il perché scritto accanto: il primo caso che monta un componente paga la prima compilazione di react, react-dom e delle icone e sotto il carico della suite intera cadeva a caso. Un caso davvero bloccato si ferma comunque dopo 15 s. La prova legge la configurazione: rossa con 5 s, verde con 15.",
+      "cosa_resta": "Spostare il costo dal primo caso alla raccolta del file con un riscaldamento dentro l'aiutante monta-componente, che non è di nessuna sessione e quindi non è mio.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/monta-componente.ts",
+          "modifica": "Subito PRIMA della riga 32 `const montati = new Map<string, Promise<Record<string, unknown>>>();` inserire (top-level await, il file è già un modulo ESM caricato da vitest; con il tempo ora a 15 s il commento può dire «non nel primo caso»):\n// Scalda i pacchetti che ogni componente montato carica: il costo cade nella raccolta del file, non nel primo caso (che ha 5 s di tempo).\nawait Promise.all([import('react'), import('react-dom/client'), import('react-dom/server'), import('lucide-react'), import('@tanstack/react-query')]);"
+        }
+      ],
+      "verificato_da": "capo R30 (fatta a mano da me, con la deroga della regista): prova rossa con vitest.config.ts alla base e verde con la correzione, rimessa uscita 0, la prova vicina le-prove-unitarie-non-vanno-in-rete verde, eslint 0; prova rilanciata nel verify finale"
+    },
+    {
+      "id": "R30-022",
+      "chiave": "rls-database|sul sito vero i visitatori non possono leggere la tabella dei profili, ma nessuna migrazione lo dice",
+      "esito": "parziale",
+      "commit": "1a1e78f9",
+      "file_toccati": [
+        "scripts/check-migration-drift.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-deriva-dei-permessi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-deriva-dei-permessi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a1e78f9^ --file scripts/check-migration-drift.mjs --prove tests/unit/riparazione-r30-deriva-dei-permessi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il controllo di deriva confronta anche i permessi effettivi di anon e authenticated (tabelle, colonne con ACL, funzioni, schema public). Con PERMESSI_ATTESI=<file> una differenza esce 2; con PERMESSI_ESPORTA=<file> scrive l'elenco. Il database lo dà sempre SUPABASE_DB_URL. La prova lancia lo script vero in una cartella con un `pg` finto, senza database né rete. A mano, solo sul Postgres locale: elenco esportato da un database con la 541, confrontato con uno senza → uscita 2, «+ tabella|profiles|anon|SELECT».",
+      "cosa_resta": "La migrazione 541 non è nel commit: con lei le prove comuni 19 e 34 diventano rosse (permission denied for table profiles). Va in patch, insieme alle due prove adattate.",
+      "serve_file_altrui": [
+        {
+          "file": "migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql (nuova) + tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql (nuova) + tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql + tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
+          "modifica": "Patch .riparazione/patch-R30/r30-022-profili-chiusi-ai-visitatori.patch (al commit c8a6e575). La 541 è `REVOKE SELECT ON TABLE public.profiles FROM anon;` più un blocco DO che ferma la migrazione se anon ha ancora SELECT, sulla tabella o su una colonna. Nella 19 il controllo ⑨ e nella 34 i controlli ⑦ e ⑧ diventano blocchi DO: verdi con zero righe o con insufficient_privilege, rossi con una riga letta. Sul Postgres locale tutte le prove SQL sono verdi con la 541; senza, 19 e 34 restano verdi. La prova nuova cade 3 su 8 senza la 541; rimessa --sql in un worktree: uscita 0. Girata solo sul Postgres locale, mai applicata al database vero."
+        }
+      ],
+      "nota": "Prima di applicare la 541 sul sito vero: SELECT has_any_column_privilege('anon','public.profiles','SELECT') deve dare false. La REVOKE sulla tabella toglie anche i SELECT colonna per colonna.",
+      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (il controllo di deriva legge i permessi solo dal database di SUPABASE_DB_URL, la prova usa un pg finto senza rete; la 541 non è nel ramo); rimessa del subagente letta (uscita 0); prova rilanciata nel verify finale alla testa"
+    },
+    {
+      "id": "R30-023",
+      "chiave": "sicurezza-auth|sospendere un fattorino non gli toglie le consegne in corso: continua a vedere i recapiti, ritirare e consegnare",
+      "esito": "parziale",
+      "commit": "46596883",
+      "file_toccati": [
+        "migrations/540_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql",
+        "app/api/rider/cash-confirm/route.ts",
+        "app/api/rider/orders/[id]/cliente-assente/route.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r30-rider-sospeso.test.sql",
+        "tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r30-rider-sospeso.test.sql; npx vitest run tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46596883^ --file migrations/540_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql --prove tests/sql/rls/riparazione-r30-rider-sospeso.test.sql --sql riparazione_r30_rimessa --json (uscita 0); timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46596883^ --file app/api/rider/cash-confirm/route.ts,app/api/rider/orders/[id]/cliente-assente/route.ts --prove tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Ripreso il lavoro già scritto per questa voce con cherry-pick -n, adattato: la migrazione diventa la 540 (mai applicata) e la prova SQL si chiama riparazione-r30. La 540 mette is_rider_approvato() in verify_pickup_code, verify_delivery_code e nella regola con cui il fattorino legge gli ordini; le due funzioni restano per il resto identiche alla base, con gli stessi permessi (dopo la 420 nessuna migrazione le ridefinisce, la 425 dà solo i GRANT). cash-confirm e cliente-assente rispondono 403 a un profilo che non è un fattorino approvato. Prove SQL verdi con la 540 sul Postgres 16 locale, rosse senza.",
+      "cosa_resta": "Rimettere in bacheca le consegne ASSIGNED al momento della sospensione (rotta di moderazione): con quella parte la prova comune riparazione-r08-moderazione diventa rossa (1 su 17), quindi va in patch insieme alla prova.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/users/[id]/moderate/route.ts + tests/unit/riparazione-r08-moderazione.test.ts (comune) + tests/unit/riparazione-r30-sospensione-rider.test.ts (nuova)",
+          "modifica": "Patch .riparazione/patch-R30/r30-023-sospensione-in-bacheca.patch (al commit c8a6e575): la parte sulla rotta di moderazione (alla sospensione di un fattorino le sue consegne ASSIGNED tornano in bacheca), più le 5 righe `update` nel finto `orders` della prova r08, più la prova nuova. Provata sulla testa: 8 file di prove sulla moderazione 68/68, tsc 0; la prova nuova cade 3 su 6 senza la rotta."
+        }
+      ],
+      "nota": "I controlli in cash-confirm e cliente-assente leggono il `profile` che il portiere passa già (id, role, is_approved) invece di una lettura nuova di profiles: la lettura scritta nella scheda faceva diventare rossi 45 test in 11 file comuni che mockano lib/supabase/server. withAuthRateLimit passa sempre il profilo (senza profilo risponde 403 prima); il controllo vale quando il profilo c'è.",
+      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (migrazione 540 senza DROP di funzioni, solo CREATE OR REPLACE con is_rider_approvato() e la regola di lettura ricreata; 403 nelle due rotte se il profilo non è un fattorino approvato); rimessa del subagente letta (uscita 0 sulle rotte e uscita 0 con --sql sulla 540); prova rilanciata nel verify finale alla testa"
+    },
+    {
+      "id": "R30-024",
+      "chiave": "sicurezza-auth|un cliente che abusa del sito non si può sospendere: l'unica strada è cancellargli l'account",
+      "esito": "parziale",
+      "commit": "54aec469",
+      "file_toccati": [
+        "app/api/admin/users/[id]/moderate/route.ts",
+        "lib/api/middleware.ts",
+        "lib/shopping-access.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-cliente-sospeso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-cliente-sospeso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54aec469^ --file lib/api/middleware.ts,lib/shopping-access.ts,app/api/admin/users/[id]/moderate/route.ts --prove tests/unit/riparazione-r30-cliente-sospeso.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna migrazione: uso approval_status='suspended', lo stesso segno di negozi e fattorini, e il vincolo chk_approvazione_coerente regge. La moderazione sospende e riattiva anche i clienti; un cliente riattivato torna a 'pending', come nasce; approvare o rifiutare un cliente resta 400. Il portiere legge approval_status solo per i clienti e solo sulle porte della cassa e della chat (orders/cod, stripe/checkout, gift-cards/checkout, chat/conversations, chat/messages; solo i metodi che scrivono) e risponde 403 se il cliente è sospeso. assertCanPurchase/purchaseBlockReason rifiutano il cliente sospeso. Restano aperti i diritti: cancellazione, esportazione dei dati, reso, assistenza, annullo. La prova: il sospeso è rifiutato, l'attivo passa. r08 e 323 file vicini verdi.",
+      "cosa_resta": "Il pannello admin non mostra ancora «Sospendi»/«Riattiva» per i clienti (file di R33: patch sotto). La sospensione vale sulle rotte del sito; il resto lo trova la regista nel messaggio finale di R30.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/users/page.tsx",
+          "modifica": "Patch .riparazione/patch-R30/r30-024-pannello-utenti.patch (al commit c8a6e575): clienteSospendibile(p) e «il cliente» in comeSiChiama; in tabella e schede isApproved || clienteSospendibile(p), isSuspended anche per buyer, badge anche se sospeso. Provata sulla testa: tsc 0, eslint 0, 4 file di prove 49/49."
+        }
+      ],
+      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (il portiere legge approval_status solo per i clienti e solo sui metodi che scrivono delle 5 porte; i diritti restano aperti); rimessa del subagente letta (uscita 0: ognuno dei tre file alla base fa cadere la prova); prova rilanciata nel verify finale alla testa"
+    },
+    {
+      "id": "R30-025",
+      "chiave": "stati-ui|nel pannello dei coupon un codice scaduto o esaurito risulta ancora «attivo»",
+      "esito": "riparato",
+      "commit": "53093965",
+      "file_toccati": [
+        "lib/admin/vista-dei-coupon.ts",
+        "app/admin/coupons/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-coupon-scaduti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-coupon-scaduti.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 53093965^ --file lib/admin/vista-dei-coupon.ts,app/admin/coupons/page.tsx --prove tests/unit/riparazione-r30-coupon-scaduti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La vista dà a ogni coupon lo stato che gli darebbe la cassa, nell'ordine di check_coupon: disattivato, poi scaduto (expires_at), poi esaurito (uses_count ≥ max_uses), altrimenti attivo; e la scritta del badge. La pagina mostra il badge e «Scade il / Scaduto il <data>». La prova monta la pagina con l'orologio finto al 17/11/2026.",
+      "verificato_da": "capo R30 (revisori non lanciati per il tetto di spesa, deroga della regista): diff letto (stato nell'ordine di check_coupon: disattivato, scaduto, esaurito, attivo; badge e data in pagina); rimessa del subagente letta (uscita 0: ognuno dei due file alla base fa cadere la prova); prova rilanciata nel verify finale alla testa"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "una sola foto di categoria rotta in home può consumare la quota di Sentry: un evento per ogni visitatore",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "components/CategoryShowcase.tsx (diUnaVolta)",
+      "descrizione": "Il ricordo dell'avviso vale per pagina, non per sito: con la foto rotta ogni visita manda un evento. Serve un limite per problema in Sentry o un campionamento."
+    },
+    {
+      "titolo": "il pannello admin potrebbe salvare foto dello Storage di un altro progetto Supabase, che il browser poi blocca",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "lib/immagine-categoria.ts:156",
+      "descrizione": "fotoDiCategoria accetta qualunque *.supabase.co; la CSP solo l'host del progetto. La stretta è nella patch di R30-001."
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    }
+  ],
+  "domande_per_nicola": [
+    "R30-001: la migrazione 159 (categories.image_url) è applicata in produzione?",
+    "R30-001: va bene che le foto di categoria rotte o scartate arrivino a Sentry (un evento per visitatore), con un limite per problema impostato in Sentry?",
+    "R30-002: finché non c'è il precarico nel layout, nell'HTML del server il piede elenca le 8 categorie di riserva: va bene così?",
+    "R30-022: sul sito vero SELECT has_any_column_privilege('anon','public.profiles','SELECT') dà false? Va controllato prima di applicare la 541 (REVOKE SELECT ON TABLE public.profiles FROM anon).",
+    "R30-024: va bene l'elenco delle porte chiuse al cliente sospeso (cassa, buoni regalo, chat che scrive) lasciando aperti i diritti (cancellazione, dati, reso, assistenza, annullo)? Recensioni e domande ai negozi vanno chiuse anche loro?",
+    "R30-010: in produzione ci sono prodotti a 0 €? Serve a decidere se mettere nel database un CHECK (price > 0) NOT VALID.",
+    "R30-011: quante consegne veloci può avere in mano insieme un fattorino (VELOCI_PER_FATTORINO), e quali fasce lo occupano?",
+    "R30-006: si passa da zod 3 a zod 4? Cambia la forma degli errori di convalida in tutto il sito.",
+    "R30-016: il ritiro in negozio si accende al lancio solo dopo che il bonifico del lunedì al negozio si può segnare e il 10% dei ritiri al banco si scala: confermi l'ordine?"
+  ],
+  "conto": {
+    "agenti": 2,
+    "nota": "tetto 8 subagenti (onda 5): usati 2, uno per il lotto A e uno per il lotto B. Revisori non lanciati per il tetto di spesa (38 $): verificato_da scritto dal capo con la deroga della regista. Costo letto dalla regista sull'id della sessione. Costo letto con get_session alle 11:23 UTC: 35,14 $.",
+    "subagenti": 2,
+    "costo_usd": 35.14
+  },
+  "costo_usd": 35.14
+}

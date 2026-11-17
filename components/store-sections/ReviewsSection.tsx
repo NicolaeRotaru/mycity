@@ -13,9 +13,62 @@ import { useQuery } from '@tanstack/react-query';
 import { useUtente } from '@/components/hooks/useUtente';
 import { riepilogoRecensioni } from './riepilogo-recensioni';
 import { Segnala } from '@/components/Segnala';
+import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
 
 /** Quante recensioni si vedono subito; le altre lette con «Mostra altre recensioni». */
 const RECENSIONI_SUBITO = 6;
+
+/**
+ * 17/11/2026 (R30-007) — LA LINGUETTA DICEVA «RECENSIONI · 45» E SE NE POTEVANO LEGGERE 20.
+ *
+ * La vetrina ne legge al massimo 20 (useStorePageData), mentre il conto è quello vero del database.
+ * Arrivati in fondo alle 20, «Mostra altre recensioni» ne chiede altre 20 alla volta, finché il
+ * conto vero non è raggiunto. La lettura è la stessa della vetrina: stesse colonne, stesso ordine,
+ * nomi dalla vista `nomi_pubblici`, foto come elenco.
+ */
+const RECENSIONI_PER_PAGINA = 20;
+
+type RigaRecensione = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  seller_reply: string | null;
+  user_id: string | null;
+  order_id: string | null;
+  photo_urls: unknown;
+  helpful_count: number | null;
+};
+
+async function leggiAltreRecensioni(storeId: string, da: number): Promise<SectionReview[]> {
+  const { data, error } = await supabase
+    .from('store_reviews')
+    .select('id, rating, comment, created_at, seller_reply, user_id, order_id, photo_urls, helpful_count')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .range(da, da + RECENSIONI_PER_PAGINA - 1);
+  if (error) throw error;
+  const rows = (data ?? []) as RigaRecensione[];
+  const authorById = await fetchNomiPubblici(supabase, rows.map((r) => r.user_id));
+  return rows.map((r) => ({
+    id: r.id,
+    rating: r.rating,
+    comment: r.comment,
+    created_at: r.created_at,
+    seller_reply: r.seller_reply,
+    user_id: r.user_id,
+    order_id: r.order_id,
+    photo_urls: Array.isArray(r.photo_urls) ? (r.photo_urls as string[]) : null,
+    helpful_count: typeof r.helpful_count === 'number' ? r.helpful_count : 0,
+    author: r.user_id ? (authorById.get(r.user_id) ?? null) : null,
+  }));
+}
+
+/** Le prime della vetrina e poi le pagine lette qui, senza doppioni (una recensione nuova sposta le pagine). */
+function senzaDoppioni(prime: SectionReview[], altre: SectionReview[]): SectionReview[] {
+  const viste = new Set<string>();
+  return [...prime, ...altre].filter((r) => (viste.has(r.id) ? false : (viste.add(r.id), true)));
+}
 
 /**
  * Recensione singola arricchita con dati reali (store_reviews + profilo autore):
@@ -184,10 +237,36 @@ function ReviewItem({ r, accent, userId, giaVotata }: { r: SectionReview; accent
 
 /** Recensioni clienti (ultime), con titolo serif, media voti e item arricchiti. */
 export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
-  const { reviews, accent } = ctx;
+  const { accent } = ctx;
+  // R30-007 — Le altre pagine, lette quando si arriva in fondo a quelle della vetrina.
+  const [altre, setAltre] = useState<SectionReview[]>([]);
+  const [finite, setFinite] = useState(false);
+  const [caricoAltre, setCaricoAltre] = useState(false);
+  const reviews = senzaDoppioni(ctx.reviews, altre);
   // 5/11/2026 — Si leggevano 20 recensioni e se ne mostravano 6, senza modo di vedere le altre.
   const [tutte, setTutte] = useState(false);
   const mostrate = tutte ? reviews : reviews.slice(0, RECENSIONI_SUBITO);
+  // Quante restano nel database oltre quelle lette: solo col conto vero, e finché una pagina non torna corta.
+  const totale = ctx.riepilogoRecensioni?.totale;
+  const daLeggere = !finite && typeof totale === 'number' ? Math.max(0, totale - reviews.length) : 0;
+  const nascoste = reviews.length - mostrate.length + daLeggere;
+  const mostraAltre = async () => {
+    if (!tutte) {
+      setTutte(true);
+      if (reviews.length > RECENSIONI_SUBITO) return;
+    }
+    if (daLeggere === 0 || caricoAltre) return;
+    setCaricoAltre(true);
+    try {
+      const pagina = await leggiAltreRecensioni(ctx.storeId, reviews.length);
+      if (pagina.length < RECENSIONI_PER_PAGINA) setFinite(true);
+      setAltre((prima) => [...prima, ...pagina]);
+    } catch {
+      toast.error('Non riusciamo a caricare le altre recensioni. Riprova fra poco.');
+    } finally {
+      setCaricoAltre(false);
+    }
+  };
   const { userId } = useUtente();
   const ids = mostrate.map((r) => r.id);
   const { data: votate } = useQuery({
@@ -253,13 +332,15 @@ export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
           <ReviewItem key={r.id} r={r} accent={accent} userId={userId} giaVotata={votate?.has(r.id) ?? false} />
         ))}
       </ul>
-      {!tutte && reviews.length > RECENSIONI_SUBITO && (
+      {nascoste > 0 && (
         <button
           type="button"
-          onClick={() => setTutte(true)}
-          className="mt-3 text-sm font-semibold text-primary-700 hover:text-primary-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
+          onClick={() => { void mostraAltre(); }}
+          disabled={caricoAltre}
+          aria-busy={caricoAltre}
+          className="mt-3 text-sm font-semibold text-primary-700 hover:text-primary-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded disabled:opacity-60"
         >
-          Mostra altre recensioni ({reviews.length - RECENSIONI_SUBITO})
+          {caricoAltre ? 'Carico le altre recensioni…' : `Mostra altre recensioni (${nascoste})`}
         </button>
       )}
     </div>

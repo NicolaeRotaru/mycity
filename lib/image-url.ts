@@ -93,13 +93,67 @@ function buildPexelsUrl(url: URL, sizePx: number, ritaglia: boolean): string {
  *
  * La trasformazione delle foto di Supabase (`/render/image/`) c'è solo a pagamento. Se una fattura
  * non passa e il progetto torna al piano gratuito, ogni foto risponde 403 e la vetrina resta senza
- * foto. Con `NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1` (variabile di Vercel, si cambia senza
- * toccare il codice) gli indirizzi tornano quelli dell'originale, `/object/public/`, che il piano
- * gratuito serve: foto più pesanti, ma visibili. Vale per `sizedImage` e quindi anche per il
- * caricatore di `lib/image-loader.ts`, che passa da lì.
+ * foto. Con `NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1` gli indirizzi tornano quelli dell'originale,
+ * `/object/public/`, che il piano gratuito serve: foto più pesanti, ma visibili. Vale per
+ * `sizedImage` e quindi anche per il caricatore di `lib/image-loader.ts`, che passa da lì.
+ *
+ * 17/11/2026 (R30-009) — NON BASTA CAMBIARE LA VARIABILE SU VERCEL. Le `NEXT_PUBLIC_*` Next le
+ * scrive DENTRO il pacchetto quando costruisce il sito: cambiata la variabile, serve un nuovo
+ * deploy (Redeploy su Vercel), anche senza toccare il codice. E l'interruttore è a mano: chi se ne
+ * accorge è `controllaTrasformazioneFoto` qui sotto, che la rotta di salute deve chiamare.
  */
 export function trasformazioneFotoSpenta(): boolean {
   return process.env.NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE === '1';
+}
+
+export type EsitoTrasformazioneFoto = 'ok' | 'degradato' | 'saltato';
+
+/**
+ * 17/11/2026 (R30-009) — IL CONTROLLO CHE SE NE ACCORGE.
+ *
+ * Se la trasformazione delle foto di Supabase smette di rispondere (fattura non passata, piano
+ * gratuito: ogni `/render/image/` risponde 403) le foto del sito tornano rotte, e prima nessun
+ * controllo lo vedeva. Qui si chiede una foto vera NELLO STESSO MODO in cui la chiede il sito
+ * (`sizedImage(…, 'thumb')`):
+ *  - risponde 2xx → `ok`;
+ *  - qualunque altra risposta (tipicamente 403), un errore di rete o nessuna risposta entro
+ *    `timeoutMs` → `degradato`: le foto del sito, in quel momento, non arrivano;
+ *  - interruttore spento (`trasformazioneFotoSpenta`) o una foto che non passa dalla trasformazione
+ *    (non è dello Storage, o manca) → `saltato`: non c'è niente da controllare.
+ * Non lancia mai: chi la chiama è un controllo di salute, e un controllo che cade non dice niente.
+ */
+export async function controllaTrasformazioneFoto({
+  fetch: chiedi,
+  timeoutMs,
+  urlFoto,
+}: {
+  fetch: (indirizzo: string, init?: RequestInit) => Promise<Response>;
+  timeoutMs: number;
+  urlFoto: string | null | undefined;
+}): Promise<EsitoTrasformazioneFoto> {
+  if (trasformazioneFotoSpenta()) return 'saltato';
+  const indirizzo = sizedImage(urlFoto, 'thumb');
+  if (!indirizzo.includes('/storage/v1/render/image/')) return 'saltato';
+
+  const freno = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const scaduto = new Promise<'scaduto'>((risolvi) => {
+    timer = setTimeout(() => {
+      freno.abort();
+      risolvi('scaduto');
+    }, timeoutMs);
+  });
+  try {
+    const risposta = await Promise.race([chiedi(indirizzo, { signal: freno.signal, cache: 'no-store' }), scaduto]);
+    if (risposta === 'scaduto') return 'degradato';
+    // La foto non serve: si chiude la lettura, così la connessione non resta appesa.
+    risposta.body?.cancel().catch(() => {});
+    return risposta.ok ? 'ok' : 'degradato';
+  } catch {
+    return 'degradato';
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function buildSupabaseStorageUrl(url: URL, sizePx: number, square: boolean): string {
