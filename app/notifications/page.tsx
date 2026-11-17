@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -85,7 +85,7 @@ export default function NotificationsPage() {
   const [quante, setQuante] = useState(PER_VOLTA);
   const nonLetteDelCampanello = useNotificationsCount();
 
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useQuery({
     queryKey: [...queryKeys.notifications.list, quante],
     // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa.
     placeholderData: keepPreviousData,
@@ -108,6 +108,16 @@ export default function NotificationsPage() {
       return data ?? [];
     },
   });
+
+  // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
+  // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
+  // pagina cancellando le notifiche già a video. Con questo restano, e l'errore sta accanto al tasto.
+  // Un riferimento, non uno stato: tenerlo da parte non deve ridisegnare la pagina.
+  const ultimoLetto = useRef<Notification[] | null>(null);
+  useEffect(() => {
+    if (data && !isPlaceholderData) ultimoLetto.current = data;
+  }, [data, isPlaceholderData]);
+  const ultimoElenco = ultimoLetto.current;
 
   // Segna tutte come lette — su azione esplicita dell'utente (bottone), NON
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
@@ -158,11 +168,12 @@ export default function NotificationsPage() {
     if (serveAccesso) router.push('/sign-in');
   }, [serveAccesso, router]);
 
-  if (isLoading) {
+  if (isLoading && !ultimoElenco) {
     return <LoadingState />;
   }
 
-  if (error && !serveAccesso) {
+  // La pagina intera di errore solo se non c'è niente di già letto da mostrare.
+  if (error && !serveAccesso && !data && !ultimoElenco) {
     return (
       <ErrorState
         title="Non riusciamo a caricare le notifiche"
@@ -174,10 +185,14 @@ export default function NotificationsPage() {
 
   if (serveAccesso) return null;
 
-  const notifications = data ?? [];
+  const notifications = data ?? ultimoElenco ?? [];
   const hasUnread = nonLetteDelCampanello > 0 || notifications.some((n) => !n.is_read);
+  // A video c'è l'elenco di prima mentre arrivano le altre: il tasto resta, fermo, e dice che carica.
+  const caricaAltre = isFetching && (isPlaceholderData || !data);
+  // La lettura è caduta ma l'elenco già letto resta: l'errore si dice qui sotto, con «Riprova».
+  const letturaCaduta = !!error && !caricaAltre;
   // Se ne sono arrivate quante ne ho chieste, ce ne possono essere altre più indietro.
-  const forseAltre = notifications.length >= quante;
+  const forseAltre = caricaAltre || notifications.length >= quante;
 
   return (
     <div className="max-w-3xl">
@@ -263,15 +278,28 @@ export default function NotificationsPage() {
         </ul>
       )}
 
-      {forseAltre && (
+      {letturaCaduta ? (
+        <div role="alert" className="mt-4 flex flex-col items-center gap-2 text-center">
+          <p className="text-sm text-ink-600">Non riusciamo a caricare altre notifiche. Quelle qui sopra restano.</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
+          >
+            Riprova
+          </button>
+        </div>
+      ) : forseAltre && (
         <div className="mt-4 flex justify-center">
           <button
             type="button"
             onClick={() => setQuante((q) => q + PER_VOLTA)}
             disabled={isFetching}
+            aria-busy={caricaAltre}
             className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
           >
-            Carica altre
+            {caricaAltre ? 'Caricamento…' : 'Carica altre'}
           </button>
         </div>
       )}
