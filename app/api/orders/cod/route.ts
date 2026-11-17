@@ -150,9 +150,9 @@ const GENERAZIONI_DELLA_CHIAVE = 10;
  * al cliente si diceva «ti aiutiamo noi». Adesso parte anche la campanella agli
  * amministratori, con la cifra. Non lancia mai: la risposta al cliente non cambia.
  */
-async function allarmeAgliAmministratori(titolo: string, corpo: string): Promise<void> {
+async function allarmeAgliAmministratori(titolo: string, corpo: string, link = '/admin/orders'): Promise<void> {
   try {
-    await notifyAdmins(titolo, corpo, '/admin/orders');
+    await notifyAdmins(titolo, corpo, link);
   } catch (e) {
     logger.error('[cod] allarme agli amministratori non partito', { titolo, message: e instanceof Error ? e.message : String(e) });
   }
@@ -1057,6 +1057,9 @@ export const POST = withAuthRateLimit(
      * geocodificatore non riconosce — non si blocca: `fuoriZonaDiConsegna`
      * risponde «no» e l'ordine passa come prima.
      */
+    // 17/11/2026 (R31-018) — Chi non si può misurare passa ancora, ma non più senza segno: si annota
+    // qui e, a ordini nati, gli amministratori ricevono la campanella per guardare la distanza a mano.
+    const nonMisurati = new Map<string, string>();
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
         const fuori = fuoriZonaDiConsegna({
@@ -1069,6 +1072,8 @@ export const POST = withAuthRateLimit(
           logger.info('[cod] consegna fuori zona: ordine non creato', { sellerId: s.id });
           return esciERilascia(ApiErrors.invalidRequest(motivoFuoriZona(s.store_name)));
         }
+        if (!s.store_lat || !s.store_lng) nonMisurati.set(s.id, 'il negozio non ha la posizione sulla mappa');
+        else if (!coordPerLaMappa?.lat || !coordPerLaMappa?.lng) nonMisurati.set(s.id, 'l’indirizzo non si trova sulla mappa');
       }
     }
 
@@ -1763,6 +1768,20 @@ export const POST = withAuthRateLimit(
         await alCliente();
       }
     }, 'email del nuovo ordine in contanti');
+
+    // R31-018 — Il segno degli ordini nati senza la misura del confine (vedi il controllo della zona).
+    const daMisurareAMano = comunicazioni.filter((c) => nonMisurati.has(c.sellerId));
+    if (daMisurareAMano.length > 0) {
+      dopoLaRisposta(async () => {
+        for (const c of daMisurareAMano) {
+          await allarmeAgliAmministratori(
+            'Ordine in contanti con la distanza non misurata',
+            `L'ordine ${c.orderId.slice(0, 8)} è passato senza il controllo della distanza dal negozio: ${nonMisurati.get(c.sellerId)}. Guarda a mano se l'indirizzo è dentro il confine.`,
+            `/admin/orders/${c.orderId}`,
+          );
+        }
+      }, 'campanella della distanza non misurata');
+    }
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il

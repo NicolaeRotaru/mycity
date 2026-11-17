@@ -342,8 +342,10 @@ describe('ordine in contanti da due negozi', () => {
     // si lascia girare un momento prima di contarle.
     await new Promise((r) => setTimeout(r, 0));
 
-    // Due ordini: due campanelle al venditore + due al cliente.
-    expect(campanelle.length).toBe(4);
+    // Due ordini: due campanelle al venditore + due al cliente. (R31-018: i negozi finti non hanno la
+    // posizione, quindi partono anche gli avvisi «distanza non misurata» agli amministratori, 'system'.)
+    expect(campanelle.filter((c) => c.category === 'order').length).toBe(4);
+    expect(campanelle.filter((c) => c.category !== 'order').every((c) => /distanza non misurata/.test(String(c.title)))).toBe(true);
     // Due email al venditore + due di conferma al cliente.
     expect(postaInviata.length).toBe(4);
     // E i link puntano agli ordini veri, non a pagine cancellate.
