@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:42",
+  "aggiornato": "2026-11-17 20:46",
   "finita": false,
-  "testa": "974093bab48b009e311d280f3ef6e3b955ec5aab",
+  "testa": "ed557a345390e12262a87ae1a4f0662fde058d24",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -346,6 +346,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Ripresa la cura dell'onda 7 (fila delle scritture, «Zone salvate» solo dopo l'esito riuscito dell'ultimo tocco, ritorno all'ultimo elenco confermato se cade) togliendo il difetto bocciato: ogni scrittura ha un tempo massimo di 10 s (come la fila dei preferiti in lib/preferiti/tocco-del-cuore.ts); scaduto, la fila va avanti e il tocco dopo parte, e se era l'ultimo tocco si avvisa il fattorino e lo schermo torna all'elenco confermato. Se la scrittura scaduta arriva lo stesso: riuscita e più nuova della confermata diventa la confermata («Zone salvate» se è l'ultimo tocco); riuscita ma più vecchia di una già confermata, si riscrive in silenzio l'elenco confermato, così il database non resta con quello vecchio e i «salvate» restano uno. La prova (orologio finto) copre esito riuscito, caduto, scrittura appesa seguita da un tocco che parte dopo 10 s e si salva, appesa che arriva tardi dopo la nuova, e ultimo tocco scaduto poi arrivato; è rossa sia sulla base sia sulla versione dell'onda 7. Resta: entro i 10 s di una scrittura appesa, chiudere la pagina perde il tocco in fila."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "qa-flussi|il primo messaggio mandato insieme all'apertura della conversazione non avvisa il negozio",
+      "esito": "riparato",
+      "commit": "ed557a345390e12262a87ae1a4f0662fde058d24",
+      "commit_tutti": [
+        "ed557a345390e12262a87ae1a4f0662fde058d24"
+      ],
+      "file_toccati": [
+        "app/api/chat/conversations/route.ts",
+        "tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts tests/unit/riparazione-r30-cliente-sospeso.test.ts tests/unit/riparazione-r22-email-al-negozio-dalla-chat.test.ts tests/unit/minori-s10-campanella.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ed557a345390e12262a87ae1a4f0662fde058d24^ --file app/api/chat/conversations/route.ts --prove tests/unit/riparazione-r01-primo-messaggio-avvisa-senza-perdersi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La campanella vive solo in avvisaChiRiceve, non esportata, di app/api/chat/messages/route.ts (e un route.ts di Next non può esportare altri nomi): ho ripreso la strada dell'onda 7 (il primo messaggio passa dal POST esportato della rotta dei messaggi, che salva e avvisa una volta: campanella + email) ma col ripiego su OGNI rifiuto che arriva prima del salvataggio (401, 429, 503, qualunque altro stato fuori da 403/404/409/500, ed eccezioni): lì il messaggio si salva come sulla base, con l'inserimento diretto, senza avviso. Non si ripiega su 403 (permesso o sospensione: l'inserimento diretto la aggirerebbe) né sui rifiuti del database (404/409/500, che lo stesso inserimento avrebbe uguali). La risposta resta {conversationId} 200. La prova usa la rotta vera e dentro la rotta dei messaggi vera, con database e autenticazione finti: salvato una volta, campanella una, email una; con 503, 401, 429 ed eccezione il messaggio si salva lo stesso, senza avvisi doppi; è rossa sulla base e sulla versione dell'onda 7. Nei casi di ripiego il negozio resta senza avviso: per averlo anche lì servirebbe spostare avvisaChiRiceve in lib/ (file altrui)."
     }
   ],
   "nuovi_difetti_visti": [
