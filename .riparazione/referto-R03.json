@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:32",
+  "aggiornato": "2026-11-17 19:36",
   "finita": false,
-  "testa": "e66bd7a8eefdf2bbce3b8accd5d67ab0eb594253",
+  "testa": "3c0e939def23a1a5421752f43692528b81ca0934",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -36,9 +36,26 @@
     },
     {
       "id": "R03-005",
-      "chiave": "navigazione-gerarchia|la tendina della ricerca «sfoglia per categoria» elenca anche le categorie vuote",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "3c0e939def23a1a5421752f43692528b81ca0934",
+      "file_toccati": [
+        "components/SearchBar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-tendina-categorie-ricarica-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-tendina-categorie-ricarica-caduta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3c0e939d^ --file components/SearchBar.tsx --prove tests/unit/riparazione-r03-tendina-categorie-ricarica-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il difetto com'è scritto era già chiuso sulla base (la tendina filtra con domandaCategoriePiene + soloLePiene); restava la variante: una ricarica caduta scartava le piene già note (piene.isError ? null : piene.data) e la tendina tornava a elencare le vuote. Ora soloLePiene(topCats, piene.data ?? null). Prova sul SearchBar vero con react-query vero e database finto: prima lettura ok poi ricarica caduta (stato error con i dati in mano) → solo la categoria piena; prima lettura caduta senza dati → tutte, come prima; lettura ok → solo le piene. Le 6 prove esistenti che montano o leggono il SearchBar restano verdi (82 prove).",
+      "verificato_da": "",
+      "chiave": "navigazione-gerarchia|la tendina della ricerca «sfoglia per categoria» elenca anche le categorie vuote"
     },
     {
       "id": "R03-006",
