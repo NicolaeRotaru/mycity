@@ -20,7 +20,11 @@ export default defineConfig({
     exclude: ['tests/e2e/**', 'tests/sql/**', 'node_modules/**'],
     environment: 'node',
     globals: false,
-    testTimeout: 5000,
+    // 17/11/2026 (R30-021) — 15 s, non 5. Il primo caso di un file che monta un componente
+    // paga la prima compilazione di react, react-dom e delle icone: sotto carico (la suite
+    // intera, ~1600 file in parallelo) passava i 5 s e cadeva a caso, in un file diverso
+    // ogni volta. Un caso davvero bloccato si ferma lo stesso, dopo 15 s.
+    testTimeout: 15000,
     // Vale per OGNI prova unitaria: niente rete, e le variabili d'ambiente tornano
     // come le ha trovate. Il perché sta in testa al file.
     setupFiles: ['tests/unit/_setup.ts'],
