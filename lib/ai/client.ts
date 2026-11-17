@@ -183,6 +183,25 @@ export class AiConfigError extends Error {
 let _client: Anthropic | null = null;
 
 /**
+ * R03-010 — Il tempo di UNA chiamata al modello, e i ritentativi dell'SDK.
+ *
+ * Prima: 60 s e un ritentativo. L'SDK ritenta anche dopo un timeout, quindi una
+ * chiamata a un fornitore che non risponde durava 60 + 0,5 + 60 = 120,5 s, e le
+ * rotte app/api/ai/** hanno 120 s (vercel.json): Vercel spegneva la funzione
+ * prima che il negozio leggesse l'errore chiaro di mapAiError (e senza «AI call
+ * failed» nel registro non partiva neanche l'allarme). Le rotte che chiamano
+ * prima il filtro arrivavano oltre i 240 s.
+ *
+ * Adesso un tentativo solo, sempre da 60 s: una risposta lunga che arrivava al
+ * primo tentativo arriva ancora (accorciare il tentativo era la cura tolta il
+ * 15/11, che faceva cadere proprio quelle), e la chiamata resta sotto i 120 s
+ * con il margine per il filtro e per l'errore. Un guasto passeggero non si
+ * ritenta da solo: il negoziante legge l'errore chiaro e riprova lui.
+ */
+export const TEMPO_TENTATIVO_AI_MS = 60_000;
+export const RITENTATIVI_AI = 0;
+
+/**
  * Restituisce il singleton Anthropic. Lancia `AiConfigError`
  * (code = AI_NOT_CONFIGURED) se la chiave non è presente.
  * Server-only: non importare da componenti client.
@@ -205,7 +224,7 @@ export function getAnthropic(): Anthropic {
   // volte: mezz'ora appesa su una singola richiesta, con la connessione del
   // negoziante bloccata e la rotta serverless che paga il tempo. Un minuto è più
   // di quanto serva a qualunque risposta utile.
-  _client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+  _client = new Anthropic({ apiKey, timeout: TEMPO_TENTATIVO_AI_MS, maxRetries: RITENTATIVI_AI });
   return _client;
 }
 
