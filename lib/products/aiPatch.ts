@@ -435,14 +435,26 @@ export function propostaPerLaChat(
       else delete fuori.attributes;
     }
     if (Array.isArray(fuori.attributes_remove)) {
+      // R03-015 — Come il server (`attributiDaTogliere` sugli attributi del
+      // prodotto dopo la proposta): si toglie solo cio' che c'e'. Prima bastava
+      // che la scheda avesse il campo: la proposta mostrava «Rimuovi marca» su
+      // un prodotto senza marca e il server non cambiava niente. Senza gli
+      // attributi attuali (`undefined`, non si sa) resta la regola dei campi.
+      const presenti: Record<string, unknown> | null =
+        attributiAttuali === undefined ? null : { ...(attributiAttuali ?? {}) };
+      if (presenti && fuori.attributes) {
+        for (const k of Object.keys(fuori.attributes as Record<string, string>)) {
+          if (!eCampoDichiarativo(k)) presenti[chiaveCampo(k)] = true;
+        }
+      }
       const daTogliere = (fuori.attributes_remove as unknown[]).filter(
         (k): k is string =>
           typeof k === 'string' &&
           (eCampoDichiarativo(k) ||
-            campi.some((f) => f.key === chiaveCampo(k)) ||
-            // Come il server: si toglie anche un attributo rimasto da una
-            // categoria di prima, se c'e' davvero nel prodotto.
-            (!!attributiAttuali && chiaveCampo(k) in attributiAttuali)),
+            (presenti
+              ? // Anche un attributo rimasto da una categoria di prima, se c'e' davvero.
+                chiaveCampo(k) in presenti
+              : campi.some((f) => f.key === chiaveCampo(k)))),
       );
       if (daTogliere.length > 0) fuori.attributes_remove = daTogliere;
       else delete fuori.attributes_remove;
