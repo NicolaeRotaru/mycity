@@ -384,6 +384,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "2 riparatori (lotto A, lotto B), 3 revisori indipendenti in parallelo, 1 giro di correzione; tutti col modello della sessione, come chiesto dalla regista"
-  }
+    "nota": "2 riparatori (lotto A, lotto B), 3 revisori indipendenti in parallelo, 1 giro di correzione; tutti col modello della sessione, come chiesto dalla regista",
+    "subagenti": 6
+  },
+  "costo_usd": 27.1
 }
