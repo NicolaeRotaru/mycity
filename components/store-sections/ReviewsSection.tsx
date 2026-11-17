@@ -14,6 +14,7 @@ import { useUtente } from '@/components/hooks/useUtente';
 import { riepilogoRecensioni } from './riepilogo-recensioni';
 import { Segnala } from '@/components/Segnala';
 import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
+import { FUSO_PIACENZA } from '@/lib/tempo-piacenza';
 
 /** Quante recensioni si vedono subito; le altre lette con «Mostra altre recensioni». */
 const RECENSIONI_SUBITO = 6;
@@ -159,7 +160,9 @@ function ReviewItem({ r, accent, userId, giaVotata }: { r: SectionReview; accent
               </span>
             )}
           </div>
-          <span className="text-xs text-ink-400">{new Date(r.created_at).toLocaleDateString('it-IT')}</span>
+          {/* R02-010 (onda 9) — Il giorno di Piacenza, non quello del telefono: una recensione delle 0:30
+              a Piacenza, letta da un telefono in un altro fuso, risultava scritta il giorno prima. */}
+          <span className="text-xs text-ink-400">{new Date(r.created_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}</span>
         </div>
       </div>
 
