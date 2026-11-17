@@ -110,23 +110,11 @@ function useNotifUnread(userId: string | null) {
     refetchIntervalInBackground: false,
     queryFn: async () => {
       if (!userId) return 0;
-      // 17/11/2026 (R02-009) — Le promozioni (`category = 'promo'`, migrazione 115) contano solo per
-      // chi le ha accese nelle impostazioni (`profiles.notif_promos`): prima il pallino restava
-      // acceso per promozioni che il negoziante aveva spento. La stessa regola va messa nella lista
-      // di /notifications e nel campanello del sito (useNotificationsCount): vedi il referto R02.
-      const { data: preferenze, error: errPreferenze } = await supabase
-        .from('profiles')
-        .select('notif_promos')
-        .eq('id', userId)
-        .maybeSingle();
-      if (errPreferenze) return 0;
-      let conta = supabase
+      const { count, error } = await supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
-      if (preferenze?.notif_promos !== true) conta = conta.neq('category', 'promo');
-      const { count, error } = await conta;
       if (error) return 0;
       return count ?? 0;
     },
