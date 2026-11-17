@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:05",
+  "aggiornato": "2026-11-17 18:07",
   "finita": false,
-  "testa": "c6fafc1ff409f32e04db278a7ca11023232cef17",
+  "testa": "377ae97e40b2e81f1004a725e6905dd1deef9843",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -36,8 +36,25 @@
     {
       "id": "R04-002",
       "chiave": "frontend-ux|la scheda di un negozio inesistente ripete «pagina non trovata» nel titolo e nella pagina, come faceva la 404",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "377ae97e40b2e81f1004a725e6905dd1deef9843",
+      "file_toccati": [
+        "app/store/[id]/[slug]/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-titolo-pagina-negozio-mancante.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-titolo-pagina-negozio-mancante.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 377ae97e40b2e81f1004a725e6905dd1deef9843^ --file app/store/[id]/[slug]/layout.tsx --prove tests/unit/riparazione-r04-titolo-pagina-negozio-mancante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il titolo dei metadati per la pagina di vetrina mancante diventa «Pagina del negozio non trovata · MyCity»: dice ancora «non trovata» (noindex e canonical nullo invariati, e la forma che la prova minori-s09-scheda-prodotto cerca resta) ma non contiene più l'h1 «Pagina non trovata», come la correzione R15-005 della 404.",
+      "verificato_da": ""
     },
     {
       "id": "R04-003",
@@ -157,7 +174,15 @@
       "verificato_da": ""
     }
   ],
-  "nuovi_difetti_visti": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La home di un negozio inesistente ripete «Negozio non trovato» nel titolo e nella pagina",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/store/[id]/layout.tsx:37",
+      "descrizione": "Stessa forma della voce sulla pagina in più del negozio: generateMetadata risponde «Negozio non trovato · MyCity» e app/store/[id]/page.tsx:66 disegna lo stato vuoto con titolo «Negozio non trovato» (h3 di EmptyState). Con i metadati in streaming nel corpo la scritta compare due volte. Fuori dai file di R04: non toccato."
+    }
+  ],
   "domande_per_nicola": [],
   "conto": {
     "subagenti": 0,
