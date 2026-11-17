@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:28",
+  "aggiornato": "2026-11-17 18:31",
   "finita": false,
-  "testa": "74e03d267211daa47ebe3092b421215aeae3db3d",
+  "testa": "be37e7a22aed365e3cf4e3d6801c34006d359ae6",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -35,8 +35,24 @@
     {
       "id": "R03-002",
       "chiave": "layout-responsive|col testo ingrandito al massimo anche la pagina chi siamo scorre di lato (466px su 360)",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "be37e7a22aed365e3cf4e3d6801c34006d359ae6",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base be37e7a22aed365e3cf4e3d6801c34006d359ae6^ --file app/about/page.tsx --prove tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "break-words hyphens-auto sull'h1 e, al posto di grid-cols-2, le colonne del piede con il gap della griglia (grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_1rem)/2)),1fr))], lg invariato). Misurato con Playwright/Chromium su un render statico con Tailwind compilato e Fraunces vero a 360px e html 200%: prima 410px, dopo 360; a testo normale la griglia resta a due colonne identiche. Prova leggera sulle classi della pagina renderizzata."
     },
     {
       "id": "R03-003",
