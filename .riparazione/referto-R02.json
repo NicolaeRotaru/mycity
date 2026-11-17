@@ -1,6 +1,6 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 17:10",
+  "aggiornato": "2026-11-17 17:15",
   "finita": true,
   "testa": "3f76cf433a0bf003238053b66521938b4635ad12",
   "verifica": {
@@ -121,6 +121,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 2,
-    "nota": "un subagente sonnet fermato dopo pochi minuti senza commit (la regia O6 ha chiesto opus), un subagente opus per il lotto A fermato dopo 2 voci per il limite settimanale"
-  }
+    "nota": "un subagente sonnet fermato dopo pochi minuti senza commit (la regia O6 ha chiesto opus), un subagente opus per il lotto A fermato dopo 2 voci per il limite settimanale",
+    "subagenti": 2
+  },
+  "costo_usd": 5.5
 }
