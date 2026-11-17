@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:37",
+  "aggiornato": "2026-11-17 20:38",
   "finita": false,
-  "testa": "c601c918b224d65d0bffd500b59d7bcdda5bdb55",
+  "testa": "ca004b893db868263307e3671f4ba52e32f6693f",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -294,6 +294,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il doppio clic ravvicinato e il doppio Invio erano già chiusi (prove dell'onda 7, restano verdi). Chiusa la finestra rimasta: la pagina tiene uno stato «creato» messo a vero nell'onSuccess (e quando il prodotto nasce ma le taglie cadono) e passa submitting={create.isPending || creato}, così il modulo resta chiuso fino al cambio di pagina. La prova monta la pagina vera col modulo vero e router.push che non porta via: dopo l'inserimento riuscito altri clic su «Pubblica» e «Salva come bozza» non inseriscono (senza la cura: 3 inserimenti). Passano le 12 prove esistenti della pagina (36 casi)."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "stati-ui|«duplica prodotto» senza rete apre il modulo vuoto finché la rete non torna",
+      "esito": "riparato",
+      "commit": "ca004b893db868263307e3671f4ba52e32f6693f",
+      "commit_tutti": [
+        "ca004b893db868263307e3671f4ba52e32f6693f"
+      ],
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "tests/unit/riparazione-r01-duplica-senza-rete.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-duplica-senza-rete.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-duplica-senza-rete.test.tsx tests/unit/minori-s06-duplica-prodotto.test.tsx tests/unit/riparazione-r01-pubblica-dopo-il-successo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ca004b893db868263307e3671f4ba52e32f6693f^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r01-duplica-senza-rete.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con ?from=ID, se la lettura del prodotto da duplicare cade o resta in pausa senza rete (fetchStatus «paused», che non è isLoading), la pagina non apre il modulo vuoto: mostra «Non riesco a caricare il prodotto da duplicare» con «Riprova», nello stesso schema d'errore già usato per categorie e taglie. La prova usa react-query vero per le letture della copia: lettura caduta poi Riprova riuscito, e senza rete (onlineManager) poi rete tornata; in tutti e due i casi il modulo si apre pieno («… (copia)») solo a lettura riuscita. Passano le 12 prove esistenti della pagina."
     }
   ],
   "nuovi_difetti_visti": [
