@@ -1,0 +1,126 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-17 17:10",
+  "finita": true,
+  "testa": "3f76cf433a0bf003238053b66521938b4635ad12",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "3f76cf433a0bf003238053b66521938b4635ad12",
+    "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=8192: senza, tsc va fuori memoria (uscita 134) prima di arrivare alle prove. 1644 file di prova passati, 1 saltato; lint 0 errori."
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "chiave": "accessibilita|nella chat, quando i messaggi arrivano dopo l'apertura o dopo «riprova», il lettore di schermo legge tutto il filo",
+      "esito": "riparato",
+      "commit": "210c94477cc0c006f906743334966bd4481b3f8a",
+      "file_toccati": [
+        "app/messages/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 210c94477cc0c006f906743334966bd4481b3f8a^ --file app/messages/[id]/page.tsx --prove tests/unit/riparazione-r02-chat-registro-acceso-a-filo-caricato.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il registro aria-live della chat sta in un piccolo componente che parte spento: si accende («polite») solo un giro dopo che il filo è caricato e a video, e si rispegne mentre i messaggi si ricaricano dopo «Riprova». Così il primo caricamento non viene letto come una raffica di aggiunte. Non provato con un lettore di schermo vero.",
+      "verificato_da": "capo squadra R02: letto il diff, rilanciata la prova rimessa (uscita 0) e npm run verify alla testa; nessun revisore indipendente, per il fermo del limite settimanale"
+    },
+    {
+      "id": "R02-002",
+      "chiave": "accessibilita|la pagina promozioni salta ancora dall'h1 all'h3",
+      "esito": "riparato",
+      "commit": "3f76cf433a0bf003238053b66521938b4635ad12",
+      "file_toccati": [
+        "app/promozioni/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-promozioni-ha-il-suo-h2.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-promozioni-ha-il-suo-h2.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f76cf433a0bf003238053b66521938b4635ad12^ --file app/promozioni/page.tsx --prove tests/unit/riparazione-r02-promozioni-ha-il-suo-h2.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima della griglia delle schede c’è un h2 «I prodotti in promozione» visibile solo al lettore di schermo, come in ProductGrid (R07-009). L’aspetto non cambia; la prova monta la pagina e controlla l’ordine h1, h2, h3.",
+      "verificato_da": "capo squadra R02: letto il diff, rilanciata la prova rimessa (uscita 0) e npm run verify alla testa; nessun revisore indipendente, per il fermo del limite settimanale"
+    },
+    {
+      "id": "R02-003",
+      "chiave": "accessibilita|la x degli avvisi dice «close toast» in inglese e sui caricamenti non chiude niente",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-004",
+      "chiave": "accessibilita|il campo file nascosto della fotocamera del negoziante si raggiunge col tab ma non mostra il fuoco",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-005",
+      "chiave": "architettura|le altre due porte dell'ai sul catalogo scrivono ancora la traccia a mano, nella forma vecchia",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-006",
+      "chiave": "architettura|il modulo prodotto non passa i due campi nuovi alle regole comuni delle proposte dell'assistente",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-007",
+      "chiave": "flussi-conversione|sulla scheda prodotto un secondo «aggiungi al carrello» entro un secondo viene ignorato senza dire niente",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-008",
+      "chiave": "frontend-ux|la scheda di un negozio inesistente ripete «pagina non trovata» nel titolo e nella pagina, come faceva la 404",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-009",
+      "chiave": "frontend-ux|il drop del giorno in home usa ancora il giorno di greenwich",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-010",
+      "chiave": "frontend-ux|eliminando una pagina della vetrina restano i pulsanti delle sezioni che puntavano a lei",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-011",
+      "chiave": "frontend-ux|la vetrina legge al massimo 20 recensioni mentre la linguetta mostra il totale vero",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    },
+    {
+      "id": "R02-012",
+      "chiave": "immagini-media|next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (allowed_warning), ordine della regista O5 del 17/11"
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 2,
+    "nota": "un subagente sonnet fermato dopo pochi minuti senza commit (la regia O6 ha chiesto opus), un subagente opus per il lotto A fermato dopo 2 voci per il limite settimanale"
+  }
+}
