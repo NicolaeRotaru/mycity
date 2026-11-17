@@ -232,6 +232,12 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "useVeloceDelNegozio non chiama più fetch da sé: mette il negozio in una coda a livello di modulo, e le schede dello stesso disegno (o dello stesso ritorno sulla pagina) partono con UNA domanda ?negozi=a,b,… (20 per volta, il tetto della rotta). La rotta risponde per il gruppo intero, quindi un sì vale per tutti; su un no si chiede una volta la regola senza negozi (fuori orario o senza fattorini = no per tutti) e solo se quella dice sì si divide il gruppo a metà finché il no trova il suo negozio, così ogni scheda ha la risposta del suo negozio. Prova: 12 schede = 1 domanda, 25 = 2, nessun fattorino = 2, rotta in errore = 1 e «non so» per tutti, uno o due negozi che stanno per chiudere = risposta giusta scheda per scheda. Limite: quando qualche negozio sta per chiudere le domande sono più di una (circa 2 + 2·log2 N), perché la rotta non risponde negozio per negozio.",
       "verificato_da": ""
+    },
+    {
+      "id": "R01-005",
+      "chiave": "navigazione-gerarchia|la tendina della ricerca «sfoglia per categoria» elenca anche le categorie vuote",
+      "esito": "gia_riparato_prima",
+      "prova": "components/SearchBar.tsx:76-77 sulla base bc36f481: la tendina filtra le principali con domandaCategoriePiene + soloLePiene (`const catPiene = soloLePiene(topCats, piene.isError ? null : piene.data)`), e alle righe 318-322 disegna catPiene.slice(0, 8), non più topCats. Chiuso dalla cucitura b5918e08 (onda 5, R30-002), antenata della base (`git merge-base --is-ancestor b5918e08 bc36f481` → vero), che ha anche messo nel layout il precarico di ['categories','con-prodotti'] (lib/queries/precarico.ts:86): all'apertura della tendina le piene sono già nella cache. Resta solo il ripiego voluto «se non si sa, tutte», lo stesso di menu e piede."
     }
   ],
   "nuovi_difetti_visti": [
