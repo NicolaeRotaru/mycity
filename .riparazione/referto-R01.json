@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:17",
+  "aggiornato": "2026-11-17 20:19",
   "finita": false,
-  "testa": "83bdc3624f9485cb2ee712bda101cf2e7c8a23f5",
+  "testa": "d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -150,6 +150,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La domanda comune (lib/queries/categorie-piene.ts) e soloLePiene erano giuste: il difetto stava nei quattro chiamanti, che passavano «piene.isError ? null : piene.data» e così, su una rilettura caduta (react-query tiene data e accende isError), rimettevano le categorie vuote. Ora passano piene.data: solo senza un elenco mai letto si mostrano tutte. La prova monta i quattro componenti col react-query vero: prima lettura riuscita, poi rilettura fallita; alla base tutti e quattro rimettono Abbigliamento (vuota), e c'è la controprova della prima lettura caduta."
+    },
+    {
+      "id": "R01-006",
+      "chiave": "qa-flussi|le date degli eventi nell'amministrazione non usano il fuso di piacenza",
+      "esito": "riparato",
+      "commit": "d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab",
+      "commit_tutti": [
+        "d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab"
+      ],
+      "file_toccati": [
+        "app/admin/events/page.tsx",
+        "tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base d0b9cde66a9aee18bd4e38ab3f2008b111ad1aab^ --file app/admin/events/page.tsx --prove tests/unit/riparazione-r01-eventi-admin-nel-fuso-di-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Inizio e fine nella tabella (righe 211-212) e nella scheda del telefono (riga 267) passano da toLocaleString('it-IT') a dataEOraPiacenza di lib/admin/etichette.ts (Europe/Rome), l'aiutante già usato dalle altre pagine dell'amministrazione; i campi datetime-local del modulo erano già nell'ora di Piacenza (campoDataOraPiacenza / istanteDaCampoPiacenza). La prova monta la pagina vera con process.env.TZ a New York e a UTC e orologio finto: un evento delle 00:30 dell'11 a Piacenza deve dire l'11 alle 00:30 (e la fine alle 02:15), alla base dice il 10 alle 18:30 o alle 23:30."
     }
   ],
   "nuovi_difetti_visti": [
