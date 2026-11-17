@@ -1,6 +1,6 @@
 // lib/ai/batch.ts
 import type Anthropic from '@anthropic-ai/sdk';
-import { APIConnectionError } from '@anthropic-ai/sdk';
+import { APIConnectionError, APIError } from '@anthropic-ai/sdk';
 import { getAnthropic, type ModelId } from '@/lib/ai/client';
 
 /**
@@ -137,6 +137,16 @@ export async function* streamBatchResults<TInput = unknown>(
 /** Il motivo scritto sulla riga di un invio incerto: lo stato lo riconosce da qui. */
 export const INVIO_SENZA_RISPOSTA = 'invio senza risposta: il lotto potrebbe essere partito, da verificare';
 
+/**
+ * 17/11/2026 (R03-009) — Anche un 500, 502 o 504 del fornitore (errore interno,
+ * gateway rotto o scaduto) puo' arrivare DOPO che il lotto e' stato creato:
+ * trattarlo come «fallito» rimetteva il pulsante e il secondo invio pagava un
+ * secondo lotto. Il 529 (sovraccarico) e gli altri dicono invece che la
+ * richiesta non e' stata presa.
+ */
+const STATUS_FORSE_PARTITO: ReadonlySet<number> = new Set([500, 502, 504]);
+
 export function invioIncerto(err: unknown): boolean {
-  return err instanceof APIConnectionError;
+  if (err instanceof APIConnectionError) return true;
+  return err instanceof APIError && typeof err.status === 'number' && STATUS_FORSE_PARTITO.has(err.status);
 }
