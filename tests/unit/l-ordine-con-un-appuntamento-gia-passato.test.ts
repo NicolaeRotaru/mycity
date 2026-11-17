@@ -323,4 +323,15 @@ describe('gli invarianti sul checkout vero', () => {
     expect(riga.slice(0, 400), 'la riga sotto le mattonelle torna un testo fisso')
       .toMatch(/rigaQuandoArriva\(consegna\)/);
   });
+
+  it('la fascia si ricontrolla anche AL MOMENTO di ordinare, non solo mentre si disegna', () => {
+    // Chi apre il checkout alle 19:55 e preme «Ordina» alle 20:05 non ha
+    // ridisegnato niente: il pulsante è ancora acceso da prima. Un vincolo che
+    // dipende dall'orologio va riletto nell'istante in cui conta.
+    const invio = checkout.slice(checkout.indexOf('const handleSubmit'));
+    expect(invio, 'l\'invio non ricontrolla la fascia').toMatch(/consegnaScelta\(/);
+    // 30/10/2026 (ondata 18) — L'ora di Roma, come le rotte che rifiutano: non quella del telefono.
+    expect(invio, 'l\'invio non rilegge l\'ora').toMatch(/ora: romeNow\(\)\.getHours\(\)/);
+    expect(invio, 'l\'invio non frena').toMatch(/if \(!siPuoConfermare\(/);
+  });
 });
