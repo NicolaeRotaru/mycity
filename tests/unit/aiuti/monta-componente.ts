@@ -27,7 +27,8 @@ const RADICE = path.resolve(__dirname, '../../..');
  */
 const CASSETTO = path.join(RADICE, 'tests', 'unit', '.montati', String(process.pid));
 
-
+// Scalda i pacchetti che ogni componente montato carica: il costo cade nella raccolta del file, non nel primo caso.
+await Promise.all([import('react'), import('react-dom/client'), import('react-dom/server'), import('lucide-react'), import('@tanstack/react-query')]);
 
 const montati = new Map<string, Promise<Record<string, unknown>>>();
 

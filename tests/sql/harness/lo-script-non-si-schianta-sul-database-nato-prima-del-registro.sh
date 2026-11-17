@@ -52,7 +52,7 @@ psql -q -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DB;" >/dev/null
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$HERE/00_shim_supabase.sql" >/dev/null
 
 # (a) tutti gli oggetti esistono — come in produzione
-for f in $(ls "$MIG"/*.sql | sort -V); do
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   psql -q -d "$DB" -v ON_ERROR_STOP=1 --single-transaction -f "$f" >/dev/null 2>&1 \
     || { echo "  ! non ho potuto costruire il database di prova su $(basename "$f")"; exit 1; }
 done

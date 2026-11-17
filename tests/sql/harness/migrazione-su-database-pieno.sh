@@ -39,7 +39,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 MIG="$ROOT/migrations"
 
-ULTIMA="$(ls "$MIG"/*.sql | sort -V | tail -1)"
+ULTIMA="$(ls "$MIG"/*.sql | LC_ALL=C sort | tail -1)"
 NOME_ULTIMA="$(basename "$ULTIMA")"
 
 echo "▶ ricostruisco $DB fermandomi prima di $NOME_ULTIMA"
@@ -47,7 +47,7 @@ psql -q -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $DB WITH (FOR
 psql -q -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DB;" >/dev/null
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$HERE/00_shim_supabase.sql" >/dev/null
 
-for f in $(ls "$MIG"/*.sql | sort -V); do
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   [ "$f" = "$ULTIMA" ] && break
   if ! out="$(psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then
     echo "  ✗ $(basename "$f") non si applica nemmeno su un database vuoto"

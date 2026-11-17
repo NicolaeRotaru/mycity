@@ -42,7 +42,7 @@ echo "▶ ricostruisco $DB fermandomi prima della 160"
 pulisci
 psql -q -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DB;" >/dev/null || exit 1
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$HERE/00_shim_supabase.sql" >/dev/null 2>&1
-for f in $(ls "$MIG"/*.sql | sort -V); do
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   [ "$f" = "$LA160" ] && break
   if ! out="$(psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then
     echo "$out" | grep -E "^psql:|ERROR" | head -3 | sed 's/^/      /'

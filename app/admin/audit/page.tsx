@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 // 16/10/2026 — le etichette e le scelte del filtro vengono dall'elenco delle
 // azioni: qui c'era una lista a mano senza 'order.cash_declared'.
 import { etichettaAzioneAudit, opzioniFiltroAudit } from '@/lib/audit-azioni';
@@ -43,7 +44,7 @@ export default function AuditLogPage() {
   // o evento audit dedicato).
   const [filterAction, setFilterAction] = useState<string>('');
 
-  const { data: rows = [], isLoading, isError, refetch } = useQuery({
+  const query = useQuery({
     queryKey: queryKeys.admin.audit(filterAction),
     queryFn: async (): Promise<AuditRow[]> => {
       let q = supabase
@@ -60,6 +61,9 @@ export default function AuditLogPage() {
       return (data ?? []) as unknown as AuditRow[];
     },
   });
+  const { data: rows = [], refetch } = query;
+  // Scheletro, errore e vuoto li decide il presidio comune (lib/vista-query.ts), come nel cruscotto di oggi.
+  const vista = vistaDaQuery(query);
 
   // 12/11/2026 (R12-014) — L'elenco si fermava a 200 righe senza dirlo: con 669
   // voci se ne vedeva un terzo e sembrava tutto. Il totale si conta a parte (solo
@@ -99,11 +103,11 @@ export default function AuditLogPage() {
         </select>
       </div>
 
-      {isLoading ? (
+      {vista.mostraScheletro ? (
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => <div key={i} className="h-16 rounded-xl skeleton" />)}
         </div>
-      ) : isError ? (
+      ) : vista.mostraErrore ? (
         <ErrorState
           variant="compact"
           title="Non riesco a leggere il registro delle azioni"
@@ -111,7 +115,7 @@ export default function AuditLogPage() {
           retry={() => void refetch()}
           supportHref={null}
         />
-      ) : rows.length === 0 ? (
+      ) : vista.mostraVuoto ? (
         <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <Clock size={36} className="mx-auto text-ink-300 mb-3" />
           <p className="text-ink-600 font-medium">Nessuna voce nel log</p>

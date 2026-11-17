@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannello, nettoDopoStorni, settimanaPrima, type GruppoDelPannello, type OrdineNegozio } from '@/lib/guadagni/negozio';
 
 /**
@@ -160,7 +161,7 @@ const fmtGiorno = (g: string) => new Date(`${g}T12:00:00Z`).toLocaleDateString('
 
 export default function AdminPayoutsPage() {
   const settimana = settimanaPrima(new Date());
-  const { data: letti = [], isLoading, isError, refetch } = useQuery({
+  const query = useQuery({
     queryKey: ['admin', 'payouts'],
     refetchInterval: 60_000,
     queryFn: async (): Promise<PayoutOrder[] & { totale?: number }> => {
@@ -202,6 +203,7 @@ export default function AdminPayoutsPage() {
       return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
+  const { data: letti = [], refetch } = query;
 
   const tagliato = Math.max((letti as { totale?: number }).totale ?? 0, letti.length) > TETTO_PAYOUT;
   const orders = useMemo(() => letti.slice(0, TETTO_PAYOUT), [letti]);
@@ -250,10 +252,13 @@ export default function AdminPayoutsPage() {
     return { dueCents: due, holdCents: hold, paidCents: paid };
   }, [orders]);
 
-  if (isLoading) return <LoadingState />;
+  // Scheletro, errore e vuoto li decide il presidio comune (lib/vista-query.ts), come nel cruscotto
+  // di oggi: una lettura ferma senza dato non diventa «nessun payout» con i riquadri a zero.
+  const vista = vistaDaQuery(query, { quanti: groups.length });
+  if (vista.mostraScheletro) return <LoadingState />;
 
   // Lettura caduta: niente riquadri a 0,00 € ne' «nessun payout». Un importo non letto non si mostra.
-  if (isError) {
+  if (vista.mostraErrore) {
     return (
       <div className="space-y-6">
         <AdminPageTitle eyebrow="Trust & Safety" title="Payout venditori" />
@@ -306,7 +311,7 @@ export default function AdminPayoutsPage() {
         </p>
       </div>
 
-      {groups.length === 0 ? (
+      {vista.mostraVuoto ? (
         <div className="rounded-2xl border-2 border-cream-300 bg-white p-12 text-center">
           <CheckCircle2 size={40} strokeWidth={2} className="mx-auto mb-2 text-olive-500" aria-hidden />
           <p className="font-medium text-ink-600">Nessun payout da riconciliare</p>

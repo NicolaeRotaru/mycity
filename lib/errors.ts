@@ -10,6 +10,8 @@
 
 import { trackErrorShown } from './analytics/events';
 import { PASSWORD_RUBATA, PASSWORD_SEMPLICE } from './auth/errori-nuova-password';
+import { TIPI_IMMAGINE } from './storage/regole-secchi';
+import { formatiLeggibili } from './storage/carica-immagine';
 // 13/11/2026 (R24-007) — Importarlo accende anche il traduttore italiano di Zod (z.setErrorMap)
 // dove si carica questo file: è voluto, è la stessa lingua.
 import { FRASI_ZOD } from './zod-i18n';
@@ -331,7 +333,10 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
        */
       if (/mime type|invalid mime type/i.test(e.message)) {
         trackErrorShown('storage_formato', e.message, context?.page);
-        return 'Formato non accettato: usa una foto JPG, PNG o WEBP.';
+        // 17/11/2026 (R01-008) — I formati dalla lista vera della porta (sette, non tre): la stessa
+        // frase di lib/storage/carica-immagine.ts. Chi fotografa con l'iPhone (HEIC) leggeva che la
+        // sua foto non andava bene.
+        return `Formato non accettato: usa una foto ${formatiLeggibili(TIPI_IMMAGINE)}.`;
       }
       if (/exceeded the maximum allowed size|payload too large/i.test(e.message)) {
         trackErrorShown('storage_troppo_pesante', e.message, context?.page);
