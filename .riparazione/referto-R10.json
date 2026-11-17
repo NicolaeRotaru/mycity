@@ -1,13 +1,13 @@
 {
   "sessione": "R10",
-  "aggiornato": "2026-11-18 00:50",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-18 01:35",
+  "finita": true,
+  "testa": "8965d7afca58bf03beb55cc5fbd9768cbbe52ce4",
   "verifica": {
-    "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "8965d7afca58bf03beb55cc5fbd9768cbbe52ce4",
+    "nota": "typecheck, lint e test: 1740 file di prove passati, 1 saltato (10992 prove passate, 1 saltata); lo SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -113,12 +113,13 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b03a4312^ --file app/messages/page.tsx,app/notifications/page.tsx --prove tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Primo commit: un h2 per il lettore di schermo, «Le tue conversazioni», sopra l'elenco dei messaggi. Secondo commit, dopo il revisore: negli stati vuoti «Nessuna conversazione» e «Nessuna notifica» passano da p a h2 con le stesse classi, così dopo l'h1 c'è sempre un h2 prima dell'h3 del piè di pagina. La prova monta le due pagine vuote e legge i titoli in ordine."
+      "cosa_ho_fatto": "Primo commit: un h2 per il lettore di schermo, «Le tue conversazioni», sopra l'elenco dei messaggi. Secondo commit, dopo il revisore: negli stati vuoti «Nessuna conversazione» e «Nessuna notifica» passano da p a h2 con le stesse classi, così dopo l'h1 c'è sempre un h2 prima dell'h3 del piè di pagina. La prova monta le due pagine vuote e legge i titoli in ordine.",
+      "verificato_da": "subagente revisore lotto A, due passate: nella prima ha trovato il salto h1→h3 negli stati vuoti (h3 del piè di pagina); nella seconda conferma l h2 dopo l h1 anche vuote (app/messages/page.tsx:181, app/notifications/page.tsx:224); prova rimessa uscita 0, rossa alla base per ciascuno dei due file"
     },
     {
       "id": "R10-012",
       "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "215b55236bb231c775d8b55cde89ed15513e5236",
       "commit_precedenti": [
         "bdf98f47671b21189da9d1a7fb79fc9d453e073a"
@@ -137,8 +138,10 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bdf98f47^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r10-notifiche-carica-altre.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Primo commit: «Carica altre» resta visibile, disattivato, con «Caricamento…», e l'ultimo elenco letto resta a video con l'errore e «Riprova». Secondo commit, dopo il revisore: l'elenco tenuto vale solo per la sessione che l'ha letto e si svuota quando la sessione cambia; dopo «Segna tutte come lette» riuscito risulta letto; la frase «Non riusciamo a caricare altre notifiche» esce solo quando cade proprio «Carica altre», altrimenti «Non riusciamo ad aggiornare le notifiche». Sette casi col react-query vero, rossi senza la correzione."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo commit: «Carica altre» resta visibile, disattivato, con «Caricamento…», e l'ultimo elenco letto resta a video con l'errore e «Riprova». Secondo commit, dopo il revisore: l'elenco tenuto vale solo per la sessione che l'ha letto e si svuota quando la sessione cambia; dopo «Segna tutte come lette» riuscito risulta letto; la frase «Non riusciamo a caricare altre notifiche» esce solo quando cade proprio «Carica altre», altrimenti «Non riusciamo ad aggiornare le notifiche». Sette casi col react-query vero, rossi senza la correzione.",
+      "cosa_resta": "Dopo «Segna tutte come lette» riuscito, se la rilettura cade e prima non c era stato un «Carica altre», le notifiche restano a video come «Non letta» con il pulsante ancora visibile: react-query tiene i dati vecchi della domanda in errore e `notifications = data ?? ultimoElenco` (app/notifications/page.tsx:206) usa quelli, non l elenco tenuto aggiornato (:151-155). Cura proposta: nel successo della mutazione segnare lette anche le righe in memoria (queryClient.setQueryData sulla chiave delle notifiche). Non fatta per il budget di stasera.",
+      "verificato_da": "subagente revisore lotto A, due passate con react-query vero in una prova usa-e-getta: tasto visibile e disattivato mentre carica, elenco tenuto con l errore del «carica altre», «Riprova» funzionante; cambio di sessione con la rete giù o con la memoria svuotata: pagina d errore, mai l elenco tenuto; frase giusta per la rilettura di sfondo; la scrittura di «segna come lette» resta update is_read filtrata su user_id; resta il caso in cosa_resta"
     },
     {
       "id": "R10-002",
@@ -163,7 +166,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f0bd4ad^ --file components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Primo commit: tolto whitespace-nowrap dal pulsante «Diventa venditore» (più max-w-full). Secondo commit, dopo la misura del revisore: nel riquadro «Perché scegliere MyCity» il testo accanto all'icona ha min-w-0 e break-words. Misura in Chromium a 360 px col testo al 200%: 422 px sulla base, 401 dopo il primo commit, 360 adesso. /about era già a posto sulla base (R02-002, R03-002)."
+      "cosa_ho_fatto": "Primo commit: tolto whitespace-nowrap dal pulsante «Diventa venditore» (più max-w-full). Secondo commit, dopo la misura del revisore: nel riquadro «Perché scegliere MyCity» il testo accanto all'icona ha min-w-0 e break-words. Misura in Chromium a 360 px col testo al 200%: 422 px sulla base, 401 dopo il primo commit, 360 adesso. /about era già a posto sulla base (R02-002, R03-002).",
+      "verificato_da": "subagente revisore lotto A, due passate in worktree separato: misura in Chromium (Inter, CSS compilato dalla repo) della home a 360 px col testo al 200%: 422 px sulla base, 401 dopo il primo commit (smentita), 360 dopo il secondo; rimettendo whitespace-nowrap torna a 422; prova rimessa sull insieme della voce uscita 0; 28 prove vicine verdi"
     },
     {
       "id": "R10-007",
@@ -221,7 +225,10 @@
       "id": "R10-009",
       "chiave": "qa-flussi|dopo l'eliminazione di una lista il menu «aggiungi a lista» della scheda prodotto la mostra ancora",
       "esito": "riparato",
-      "commit": "a9c59da359dd02a8389a8971b30cf7d62ee40f1e",
+      "commit": "2efbfb4da879d56dc83b32ec71e69dafed45139b",
+      "commit_precedenti": [
+        "a9c59da359dd02a8389a8971b30cf7d62ee40f1e"
+      ],
       "file_toccati": [
         "app/lists/[id]/page.tsx"
       ],
@@ -234,16 +241,21 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a9c59da359dd02a8389a8971b30cf7d62ee40f1e^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a9c59da3^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Dopo l'eliminazione, deleteList rilegge anche la chiave lists.mineMin, quella del menu di AddToListButton (che non serve toccare). La prova monta il pulsante e la pagina in un QueryClient vero con staleTime di 30 secondi: apre il menu, elimina la lista, lo riapre, e la lista non c'è più."
+      "cosa_ho_fatto": "Quando la lista viene eliminata, deleteList la toglie subito dai dati in memoria della chiave del menu (lists.mineMin) con setQueryData e poi invalida la chiave: il menu, che legge solo quando è aperto, non la mostra più nemmeno per un attimo. La prova riapre il menu subito dopo l'eliminazione con la rete finta lenta (150 ms).",
+      "verificato_da": "subagente revisore lotto B (prima passata: smentita, la lista eliminata compariva per un attimo col menu enabled: open) e revisore lotto A (seconda passata): con la rete finta a 150 ms, riaperto subito il menu, la lista eliminata non compare mai; unica cancellazione di liste in app/lists/[id]/page.tsx:204; prova rimessa uscita 0; 21 prove vicine verdi"
     },
     {
       "id": "R10-011",
       "chiave": "stati-ui|nel nuovo prodotto dell'amministrazione il modulo resta attivo anche se negozi o categorie non sono arrivati",
       "esito": "riparato",
-      "commit": "0669b5e4d410719cfda04e4a67038a4f1d0f039e",
+      "commit": "8965d7afca58bf03beb55cc5fbd9768cbbe52ce4",
+      "commit_precedenti": [
+        "0669b5e4d410719cfda04e4a67038a4f1d0f039e",
+        "f34035891295d07150c804bc0a11843362f1454b"
+      ],
       "file_toccati": [
         "app/admin/products/new/page.tsx"
       ],
@@ -256,10 +268,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0669b5e4d410719cfda04e4a67038a4f1d0f039e^ --file app/admin/products/new/page.tsx --prove tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0669b5e4^ --file app/admin/products/new/page.tsx --prove tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "ProductForm sta dentro un <fieldset disabled> finché negozi o categorie stanno caricando o la lettura è fallita (stesso schema di app/admin/daily-drops); un messaggio role=status dice perché il modulo è fermo e rimanda al «Riprova» già presente. La prova controlla che «Pubblica» non mandi niente a /api/admin/products in caricamento o dopo un errore, e che lo mandi quando i dati ci sono."
+      "cosa_ho_fatto": "ProductForm sta dentro un <fieldset disabled> che si accende solo quando negozi e categorie sono davvero arrivati (sellersData && categoriesData): senza rete resta spento col messaggio d'attesa, e una rilettura in sottofondo caduta con i dati in mano non lo spegne; l'ErrorState con «Riprova» compare solo quando i dati mancano. Il terzo commit toglie un avviso eslint (exhaustive-deps) leggendo da sellersData.",
+      "verificato_da": "subagente revisore lotto B (prima passata: smentita su isLoading senza rete e isError con i dati in mano) e revisore lotto A (seconda passata): senza rete il modulo resta spento e si accende al ritorno della rete; rilettura caduta con i dati in mano lo lascia acceso; «Riprova» riaccende e «Pubblica» invia; prova rimessa uscita 0"
     },
     {
       "id": "R10-001",
@@ -335,7 +348,7 @@
     },
     {
       "riservato": true,
-      "titolo": "Falla di sicurezza da chiudere (notifiche): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (dati): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "stati-ui",
       "severita": "minore",
       "file": "(nel referto privato)"
@@ -345,7 +358,9 @@
     "Foto (R10-001): il piano Supabase comprende le Image Transformations? Quale rotta interroga il monitor esterno, /api/health (che guarda le foto e dice «degraded» con 200) o /api/health/ready (che non le guarda)? Se il piano scade: NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
   ],
   "conto": {
-    "agenti": 5,
-    "nota": ""
-  }
+    "agenti": 6,
+    "nota": "6 subagenti su 6: lotto A, lotto B, revisore A (ripreso tre volte), revisore B, correzioni di 002/005/012, correzioni di 009/011",
+    "subagenti": 6
+  },
+  "costo_usd": 28.86
 }
