@@ -226,7 +226,9 @@ export default function FaqPage() {
           return (
           // 5/11/2026 (S05) — Un id stabile per sezione: il Centro assistenza porta qui
           // con «/faq#ordini», e senza id il segnalibro apriva la pagina in cima.
-          <section key={section.title} id={section.id} className="scroll-mt-24">
+          // R02-007 — Da md in su la distanza dalla testata la dà già lo scroll-padding di html
+          // (globals.css): sommarci scroll-mt-24 fermava la sezione più in basso. Come LegalLayout.
+          <section key={section.title} id={section.id} className="scroll-mt-24 md:scroll-mt-0">
             <h2 className="text-xl font-bold text-ink-900 mb-4 flex items-center gap-2">
               <Icon size={24} className="text-primary-600 shrink-0" aria-hidden /> {section.title}
             </h2>

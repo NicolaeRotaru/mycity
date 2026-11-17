@@ -1,0 +1,385 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-17 22:15",
+  "finita": true,
+  "testa": "b9a114b3b53c9bec7f5c366f0edc92e77c1ea274",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "974de28e3179794c6d77f47be87cf74c6ced76e4",
+    "nota": "typecheck + lint + test: 1699 file di prova passati, 1 saltato preesistente (10838 test). 974de28e viene dopo l'ultimo commit di codice b9a114b3 e tocca solo il referto."
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "chiave": "flussi-conversione|sulla scheda prodotto un secondo «aggiungi al carrello» entro un secondo viene ignorato senza dire niente",
+      "esito": "riparato",
+      "commit": "90df58408ec0a74c9f063eef0d249b54daa36113",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/riparazione-r02-aggiungi-variante.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-aggiungi-variante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-aggiungi-variante.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 90df58408ec0a74c9f063eef0d249b54daa36113^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-aggiungi-variante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scheda ricorda la scelta dell'ultima aggiunta (variante + quantità, ref sceltaFrenata); quando la scelta cambia, il freno riparte da capo. Così S poi M entro un secondo sono due aggiunte, e anche «+» entro 600 ms aggiunge. Lo stesso tocco ripetuto sulla stessa scelta resta frenato. La prova monta la scheda vera con l'orologio finto; anche la prova r03 resta verde.",
+      "insieme_a": [
+        "R02-005"
+      ],
+      "verificato_da": "smentitore A (subagente diverso dal riparatore): prova e rimessa verdi (uscita 0); prova esplorativa sulla scheda vera con orologio finto: S→M→S entro 1 s dà S=2 e M=1, il tocco ripetuto resta frenato; la barra in fondo usa lo stesso gestore (page.tsx:1580); prodotto senza varianti a posto; 39 file di prove vicine verdi. Regge."
+    },
+    {
+      "id": "R02-005",
+      "chiave": "microcopy|l'avviso «già aggiunto» si ripete a raffica e lo dice anche dopo un cambio di variante entro un secondo",
+      "esito": "riparato",
+      "commit": "47f3beeaa51210a8326bcbb6580ee41265fd5255",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 47f3beeaa51210a8326bcbb6580ee41265fd5255^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunto id fisso 'gia-aggiunto' al toast.info del tocco frenato: quattro tocchi frenati portano lo stesso id e sonner non li impila. Il pezzo «dopo un cambio di variante» lo chiude il commit di R02-001 (90df5840): una variante diversa ora entra nel carrello e non riceve più il «già aggiunto» falso.",
+      "insieme_a": [
+        "R02-001"
+      ],
+      "verificato_da": "smentitore A: prova e rimessa verdi; letto create() di sonner 1.7.4: con un id già presente aggiorna l'avviso invece di impilarlo. Regge."
+    },
+    {
+      "id": "R02-006",
+      "chiave": "qa-flussi|la pagina amministrazione «nuovo prodotto» invia ancora con mutate, senza guardia contro il doppio clic",
+      "esito": "riparato",
+      "commit": "a398408d8c2bb9c900171a1158f7822ee1a561bb",
+      "file_toccati": [
+        "app/admin/products/new/page.tsx",
+        "tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a398408d8c2bb9c900171a1158f7822ee1a561bb^ --file app/admin/products/new/page.tsx --prove tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stesso schema della pagina del negozio: onSubmit restituisce create.mutateAsync(...).catch(() => undefined), così la guardia di ProductForm resta chiusa fino alla fine dell'inserimento. La prova monta la pagina vera dell'amministrazione col modulo vero: un secondo invio mentre la richiesta è in volo dà una sola POST /api/admin/products (sulla base erano 2).",
+      "verificato_da": "smentitore A: prova e rimessa verdi; prova esplorativa con la rotta che risponde 400: errore mostrato, nessun redirect, secondo invio possibile dopo l'errore, nessun rifiuto non gestito; la guardia di ProductForm (891-899) aspetta la promessa. Regge."
+    },
+    {
+      "id": "R02-008",
+      "chiave": "qa-flussi|nell'anteprima dell'import la colonna quantità mostra 0 accanto all'errore «quantità non valida»",
+      "esito": "riparato",
+      "commit": "af15e3a070d0e078d71be522787e3f6eaccdcde7",
+      "file_toccati": [
+        "app/seller/products/import/page.tsx",
+        "tests/unit/riparazione-r02-anteprima-quantita.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-anteprima-quantita.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-anteprima-quantita.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base af15e3a070d0e078d71be522787e3f6eaccdcde7^ --file app/seller/products/import/page.tsx --prove tests/unit/riparazione-r02-anteprima-quantita.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ParsedRow.stock diventa number | null: una quantità scritta male resta null e la cella dell'anteprima mostra «—» accanto all'errore; uno 0 scritto nel file si vede 0. Le righe valide vanno al server come prima (stock ?? 0, mai null per una riga valida).",
+      "verificato_da": "smentitore A: prova e rimessa verdi; controllati i 4 usi di stock nel file (135, 151, 186, 309), 11 prove vicine verdi, tipi dei file toccati senza errori. Regge."
+    },
+    {
+      "id": "R02-004",
+      "chiave": "microcopy|in produzione senza chiave pubblica anti-robot il modulo contatti fallisce senza dire dove scrivere",
+      "esito": "riparato",
+      "commit": "253d81b5aa737377d3fce0d1fc205f62b88f5d6b",
+      "file_toccati": [
+        "app/api/contact/route.ts",
+        "tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 253d81b5aa737377d3fce0d1fc205f62b88f5d6b^ --file app/api/contact/route.ts --prove tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se il controllo anti-robot fallisce senza gettone e manca NEXT_PUBLIC_TURNSTILE_SITE_KEY, la rotta risponde 503 con «…Scrivici a info@…» (indirizzoContatto('info') di lib/contatti-pubblici.ts, lo stesso della pagina Contatti), anche in details.recapito. Il robot vero (chiave pubblica presente e gettone assente o falso) dà ancora 400 «Verifica anti-bot fallita. Riprova.».",
+      "verificato_da": "smentitore A: prova e rimessa verdi; il 503 esce prima di ogni scrittura come il 400, con la chiave pubblica il robot ha ancora 400, in sviluppo senza chiave segreta nulla cambia (lib/captcha.ts:33-40); la pagina contatti disegna il recapito (app/contact/page.tsx:82-83, 208-213); 7 prove vicine verdi. Regge."
+    },
+    {
+      "id": "R02-013",
+      "chiave": "stati-ui|la barra cade se localstorage lancia su ogni chiave",
+      "esito": "gia_riparato_prima",
+      "commit": "dcc6de0b7809bf05ff78b5a45fd27b7c37af05a9",
+      "file_toccati": [
+        "tests/unit/riparazione-r02-barra-senza-memoria.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-barra-senza-memoria.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-barra-senza-memoria.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fc5cea5d^ --file components/LocationPill.tsx --prove tests/unit/riparazione-r02-barra-senza-memoria.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La barra cadeva nell'effetto della pillola della posizione, che leggeva localStorage al montaggio senza try: lo ha chiuso il commit fc5cea5d, già sulla base. Aggiunta solo una prova di guardia: la Navbar montata coi figli veri e localStorage che lancia (ogni metodo, o già il getter) si disegna; con la pillola di fc5cea5d^ la prova cade.",
+      "prova": "components/LocationPill.tsx:85-89 legge localStorage dentro try/catch (commit fc5cea5d, antenato della base); components/Navbar.tsx:59-78 ha ogni accesso a window.localStorage già in try/catch. tests/unit/riparazione-r02-barra-senza-memoria.test.ts è verde sulla base e rosso con components/LocationPill.tsx di fc5cea5d^ (prova-rimessa uscita 0).",
+      "verificato_da": "R02 (capo squadra): fc5cea5d è antenato della base, components/LocationPill.tsx:85-89 legge localStorage dentro try/catch, la prova della barra rilanciata verde (2 test)"
+    },
+    {
+      "id": "R02-010",
+      "chiave": "qa-flussi|il taglio sui prodotti recensiti non usa la lettura a blocchi: sopra circa 216 id dà 414",
+      "esito": "riparato",
+      "commit": "3892d3285efdb8b4ae287567c9b513851a1abd66",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-voti-a-blocchi.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-voti-a-blocchi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3892d3285efdb8b4ae287567c9b513851a1abd66^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r02-voti-a-blocchi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il taglio su idsColVoto non sta più dentro base(): fino a 100 id la domanda resta identica (una, con range/limit), oltre ogni blocco di leggiInBlocchi (lib/supabase/blocchi.ts, DIMENSIONE_BLOCCO) chiede le prime righe fino a fine finestra, le righe si riuniscono, si riordinano come il database (prezzo o data, poi id) e si taglia la finestra; stessa cosa sul ripiego per nome del ramo pertinenza e nel conteggio (somma dei conti per blocco, id deduplicati). Prova con il finto PostgREST che dà 414: con 500 id nessun .in supera 100 id e le righe coincidono con una lettura sola (3 ordinamenti, 2 finestre).",
+      "verificato_da": "smentitore B (subagente diverso dal riparatore): prova e rimessa verdi; l'ordine rifatto in JS coincide col database per ogni ordinamento (price numeric NOT NULL, parità per id decrescente come base()), finestra giusta sulle pagine dopo la prima, conteggio senza doppioni; 200.000 coppie di date nel formato PostgREST ordinate come stringhe senza discordanze; 25 file di prove della griglia verdi. Regge (margine teorico: products.created_at è nullable)."
+    },
+    {
+      "id": "R02-011",
+      "chiave": "qa-flussi|nella pagina novità il numero in alto conta anche prodotti che la griglia non mostra",
+      "esito": "non_fatto",
+      "commit": "779973551c34a8113ae6c73ef66ccd7e629a4dfd",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-novita-conteggio-negozi.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-novita-conteggio-negozi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 779973551c34a8113ae6c73ef66ccd7e629a4dfd^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r02-novita-conteggio-negozi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "L'unica differenza di filtri fra griglia e conteggio (con i soli soloNovita/sort che la pagina Novità passa) era il filtro sui negozi in vetrina fatto dalla lettura in fondo: ora il conteggio aggancia il prodotto con 'negozio:seller_public_profiles!inner(id)' (lo schema già usato dalle storie in home), e se PostgREST risponde PGRST200/PGRST201 conta come prima con un logger.warn. Prova: su dati finti con un negozio fuori vetrina il numero è uguale alle righe della griglia (10, prima 13), più il ripiego. Limite: l'aggancio prodotti→vista non l'ho potuto provare sul servizio dati vero (vietato); se non viene riconosciuto vale il ripiego, cioè il numero di prima.",
+      "verificato_da": "smentitore B: prova e rimessa verdi ma col PostgREST finto; lette le migrazioni su chiavi esterne, chiavi composte e vista 126: aggancio ambiguo (PGRST201), il ripiego scatta sempre. Non regge.",
+      "nota": "La correzione nel commit 77997355 non regge (smentitore B, dallo schema): l'aggancio senza indicazione 'negozio:seller_public_profiles!inner(id)' (lib/queries/griglia-prodotti.ts:356) è ambiguo per PostgREST, perché oltre a products_seller_id_fkey c'è una molti-a-molti prodotti↔profili attraverso recently_viewed (chiave (user_id, product_id), migrations/027_growth_engagement_foundations.sql:205-210). PostgREST risponde PGRST201, il ripiego scatta sempre e il numero resta quello di prima, con una domanda fallita e un logger.warn in più a ogni conteggio. La prova passa solo perché il PostgREST finto accetta l'aggancio. Alla regista: togliere 77997355 all'integrazione (con la sua prova tests/unit/riparazione-r02-novita-conteggio-negozi.test.ts), oppure correggere in 'negozio:seller_public_profiles!products_seller_id_fkey!inner(id)' e provarlo su un PostgREST locale vero (lo smentitore non l'ha potuto avviare). Non corretto qui: spesa sopra i 20 $, niente giri di correzione."
+    },
+    {
+      "id": "R02-012",
+      "chiave": "qa-flussi|se il filtro finale sui negozi approvati scarta righe, «carica altri» si ferma",
+      "esito": "parziale",
+      "commit": "570a1073593813c51bfc5524019a6132b0c4f951",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-carica-altri-dopo-il-filtro.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-carica-altri-dopo-il-filtro.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 570a1073593813c51bfc5524019a6132b0c4f951^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r02-carica-altri-dopo-il-filtro.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "leggiProdottiDellaGriglia ora restituisce PaginaGriglia: le righe tenute, con attaccata la proprietà non enumerabile righeLette = righe lette dal database prima del filtro sui negozi (invisibile a confronti, cicli e JSON). Prova con client finto: pagina piena con una riga scartata (anche sul ramo pertinenza) → con righeLette pagineSuccessiva dice che c'è la pagina dopo; l'ultima pagina vera resta l'ultima.",
+      "cosa_resta": "Chi decide «Carica altri» è ProductGrid (file non mio), che conta ancora la lunghezza dell'ultima pagina in due punti (righe 279 e 723): vanno applicate tutte e due le modifiche qui sotto insieme a questo commit. Limite noto e confermato dallo smentitore: con @tanstack/query-core 5.100.14, dopo una rilettura in cui l'ultima pagina cambia, replaceEqualDeep ricopia l'array e la proprietà non enumerabile si perde; in quel caso si torna alla lunghezza, cioè al comportamento di prima. Non c'è persistenza della cache né preparazione lato server della griglia.",
+      "serve_file_altrui": [
+        {
+          "file": "components/ProductGrid.tsx",
+          "modifica": "riga 279: getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length, righePerPagina) → pagineSuccessiva(ultima.righeLette ?? ultima.length, tutte.length, righePerPagina)"
+        },
+        {
+          "file": "components/ProductGrid.tsx",
+          "modifica": "riga 723: const forseCeNeSonoAltri = cEUnAltraPagina(ultimaPagina.length, righePerPagina) → cEUnAltraPagina(('righeLette' in ultimaPagina ? ultimaPagina.righeLette : undefined) ?? ultimaPagina.length, righePerPagina) (è questa riga a decidere se «Carica altri» compare, a :745; senza di lei la 279 da sola non basta). Il tipo PaginaGriglia arriva da leggiProdottiDellaGriglia; ultimaPagina ha il ripiego [] senza la proprietà."
+        }
+      ],
+      "verificato_da": "smentitore B: prova e rimessa verdi; la riga 279 era giusta ma non bastava: il pulsante dipende da components/ProductGrid.tsx:722-723 (usato a :745), aggiunta al serve_file_altrui; provato in node replaceEqualDeep (pagina uguale tiene la proprietà, pagina cambiata la perde). Parziale."
+    },
+    {
+      "id": "R02-009",
+      "chiave": "qa-flussi|il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
+      "esito": "parziale",
+      "commit": "c32c6e8dfff4f9d7a56e13913980b22db137b536",
+      "file_toccati": [
+        "components/seller/SellerShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-campanello-negozio-promo-spente.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-campanello-negozio-promo-spente.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c32c6e8dfff4f9d7a56e13913980b22db137b536^ --file components/seller/SellerShell.tsx --prove tests/unit/riparazione-r02-campanello-negozio-promo-spente.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "useNotifUnread legge prima profiles.notif_promos (select('notif_promos').eq('id', userId).maybeSingle()) e, se non è true, aggiunge .neq('category', 'promo') al conto: è la categoria delle promozioni della migrazione 115 (vuole_notifica) e la stessa condizione della diff già scritta nell'onda 7 per la stessa campanella. Se la preferenza non si legge risponde 0, come già fa il hook per l'errore del conto. Prova: pannello vero montato, la sua domanda eseguita su un database finto: promozioni spente o assenti 2, accese 3 (prima 3 sempre).",
+      "cosa_resta": "La lista di /notifications e il campanello del sito vanno filtrati allo stesso modo e applicati insieme a questo commit: da solo il pannello negozio conta meno della lista (verificato che su 1a7de5b9 né app/notifications/page.tsx né components/hooks/useNotificationsCount.ts contengono notif_promos o category). In quei due file l'errore della preferenza si lancia, come già fanno con l'errore della lettura.",
+      "serve_file_altrui": [
+        {
+          "file": "app/notifications/page.tsx",
+          "modifica": "righe 101-106: prima della lettura aggiungere const { data: preferenze, error: errPreferenze } = await supabase.from('profiles').select('notif_promos').eq('id', user.id).maybeSingle(); if (errPreferenze) throw errPreferenze; poi sostituire la lettura con let lettura = supabase.from('notifications').select('*').eq('user_id', user.id); if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo'); const { data, error } = await lettura.order('created_at', { ascending: false }).limit(quante);"
+        },
+        {
+          "file": "components/hooks/useNotificationsCount.ts",
+          "modifica": "righe 32-36: prima del conto aggiungere const { data: preferenze, error: errPreferenze } = await supabase.from('profiles').select('notif_promos').eq('id', userId).maybeSingle(); if (errPreferenze) throw errPreferenze; poi let conta = supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false); if (preferenze?.notif_promos !== true) conta = conta.neq('category', 'promo'); const { count, error } = await conta;"
+        }
+      ],
+      "verificato_da": "smentitore B: prova e rimessa verdi; 'promo' è la categoria del trigger del calo di prezzo (migrations/215:699-707); notifications.category è NOT NULL DEFAULT 'order' (115:209-211), quindi .neq non perde righe NULL; notif_promos NOT NULL default false (119:603); le due modifiche per i file altrui sono esatte. Parziale come dichiarato."
+    },
+    {
+      "id": "R02-002",
+      "chiave": "layout-responsive|a 320 px con il testo al 200% la pagina chi siamo scorre ancora di lato di 17 px",
+      "esito": "riparato",
+      "commit": "0e15e4b4bf6b43f25603dc12192dd5405b393f1d",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-chi-siamo-320.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-chi-siamo-320.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0e15e4b4bf6b43f25603dc12192dd5405b393f1d^ --file app/about/page.tsx --prove tests/unit/riparazione-r02-chi-siamo-320.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il titolo «Perché esistiamo» prende break-words hyphens-auto come l'h1 e la sua cella di griglia min-w-0 come le caselle dei numeri; sistemato il titolo restavano 5 px dalle tre schede «I nostri valori» (stessa causa, cella di griglia senza min-w-0), che prendono min-w-0 break-words. Misurato con Playwright (Chromium preinstallato) su next dev con env finte, html{font-size:200%}: prima scrollWidth 337 su 320, dopo 320 (anche con la sillabazione spenta), 360 resta 360, 1280 invariato.",
+      "verificato_da": "smentitore B: prova e rimessa verdi; min-w-0 sul figlio diretto della griglia, break-words hyphens-auto sull'h2, min-w-0 break-words sulle schede dei valori; a larghezze grandi nulla cambia; 8 file di prove vicine verdi. Regge."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "layout-responsive|la riga «notifiche push del browser» delle impostazioni non ha min-w-0 sul testo",
+      "esito": "riparato",
+      "commit": "8263dd2add53f5977e250e186422bc40d7a05c47",
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-riga-push-a-capo.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-riga-push-a-capo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8263dd2add53f5977e250e186422bc40d7a05c47^ --file app/profile/settings/page.tsx --prove tests/unit/riparazione-r02-riga-push-a-capo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il contenitore del testo della riga push prende min-w-0 break-words, lo stesso delle righe di components/ui/Toggle.tsx nella stessa scheda. Prova leggera: pagina vera montata sulla scheda Notifiche, la classe del contenitore è quella degli interruttori.",
+      "verificato_da": "smentitore B: prova e rimessa verdi; min-w-0 break-words è sul figlio flex col testo accanto a PushNotificationOptIn (righe 696-708), stesso schema di Toggle.tsx:47; 16 file di prove vicine verdi. Regge."
+    },
+    {
+      "id": "R02-007",
+      "chiave": "qa-flussi|altre due ancore sommano il loro scroll-mt allo scroll-padding da md in su",
+      "esito": "parziale",
+      "commit": "b9a114b3b53c9bec7f5c366f0edc92e77c1ea274",
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-ancore-faq.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-ancore-faq.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b9a114b3b53c9bec7f5c366f0edc92e77c1ea274^ --file app/faq/page.tsx --prove tests/unit/riparazione-r02-ancore-faq.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "app/faq/page.tsx:229 (riga 231 dopo il commento): le sezioni passano a scroll-mt-24 md:scroll-mt-0, come LegalLayout e /lavora-con-noi. Prova leggera: pagina vera montata, ogni section[id] ha tutte e due le classi.",
+      "cosa_resta": "L'altra ancora della voce, il modulo #bonifici in components/seller/DatiPerIBonifici.tsx, non è mio: da md in su si ferma ancora 6rem più in basso.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/DatiPerIBonifici.tsx",
+          "modifica": "riga 65: scroll-mt-24 → scroll-mt-24 md:scroll-mt-0 (nella className del <form id=\"bonifici\">)"
+        }
+      ],
+      "verificato_da": "smentitore A: prova e rimessa verdi; la classe è coerente con lo scroll-padding di html da md in su (app/globals.css:199-200) e uguale a LegalLayout.tsx:122; confermata l'altra ancora ancora aperta a components/seller/DatiPerIBonifici.tsx:65. Parziale come dichiarato."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il conteggio della griglia non riceve i filtri «aperti ora» e «col voto»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/ProductGrid.tsx:290",
+      "descrizione": "Il conteggio della griglia non passa apertiOra e idsColVoto: oggi non pesa perché la pagina Novità non usa quei filtri, ma una griglia che li usa conterebbe più prodotti di quelli mostrati."
+    },
+    {
+      "titolo": "La lettura dei negozi della griglia non va a blocchi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/queries/seller-public-profiles.ts:155",
+      "descrizione": "leggiDallaVista fa un solo .in('id', unique) senza blocchi: con «In promozione» una pagina arriva a 300 righe e oltre circa 216 negozi diversi può dare 414."
+    },
+    {
+      "titolo": "Chi siamo a 280 px col testo al 200% scorre ancora di lato",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/about/page.tsx",
+      "descrizione": "A 280 px con html al 200% la pagina arriva a 319 px: sotto la larghezza di riferimento WCAG (320), quindi fuori dalla voce."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "nota": "2 riparatori (lotto 1, lotto 2) + 2 smentitori (A: R02-001/004/005/006/007/008; B: R02-002/003/009/010/011/012); R02-013 verificata dal capo squadra. Spesa della sessione alla consegna circa 24 $ (usage.cost_usd 23,74 prima della chiusura).",
+    "subagenti": 4
+  },
+  "costo_usd": 23.74
+}

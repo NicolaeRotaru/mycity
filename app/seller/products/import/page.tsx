@@ -18,7 +18,8 @@ type ParsedRow = {
   name: string;
   description: string;
   price: number;
-  stock: number;
+  /** `null` = quantità scritta male: la riga ha l'errore, e l'anteprima non mostra un numero. */
+  stock: number | null;
   category_slug: string;
   /** Colonne facoltative del file: per un alimento senza, il prodotto nasce bozza. */
   allergeni: string;
@@ -131,7 +132,7 @@ function CaricamentoDaFile() {
         name: get('name'),
         description: get('description'),
         price: leggiPrezzo(get('price')),
-        stock: quantita ?? 0,
+        stock: quantita,
         category_slug: get('category_slug').toLowerCase(),
         allergeni: headers.includes('allergeni') ? get('allergeni') : '',
         ingredienti: headers.includes('ingredienti') ? get('ingredienti') : '',
@@ -147,7 +148,7 @@ function CaricamentoDaFile() {
       if (quantita === null) {
         row.errors.push(`Quantità non valida («${get('stock')}»): scrivi un numero intero senza punti né virgole, per esempio 12`);
       }
-      if (row.stock < 0 || row.stock > 99999) row.errors.push('Stock non valido');
+      if (row.stock !== null && (row.stock < 0 || row.stock > 99999)) row.errors.push('Stock non valido');
       if (row.category_slug && !categories.has(row.category_slug)) {
         row.errors.push(`Categoria '${row.category_slug}' non esiste`);
       }
@@ -182,7 +183,7 @@ function CaricamentoDaFile() {
         // foto si aggiunge dalla scheda.
         // 12/11/2026 (R09-006) — La regola sta in lib/products/righe-dal-file.ts, la stessa che la
         // rotta rifà sul server: qui serve solo a dire subito al negoziante cosa nasce bozza.
-        const riga = { name: r.name, description: r.description, price: r.price, stock: r.stock, category_id: categoryId, attributes };
+        const riga = { name: r.name, description: r.description, price: r.price, stock: r.stock ?? 0, category_id: categoryId, attributes };
         const { status, mancanti } = statoDellaRiga(riga, categoryRows);
         if (status === 'draft') {
           bozze++;
@@ -305,7 +306,7 @@ function CaricamentoDaFile() {
                     <td className="p-2 text-ink-400">{i + 1}</td>
                     <td className="p-2 font-medium text-ink-900 truncate max-w-xs">{r.name || '—'}</td>
                     <td className="p-2">{formatPrice(r.price)}</td>
-                    <td className="p-2">{r.stock}</td>
+                    <td className="p-2">{r.stock ?? '—'}</td>
                     <td className="p-2"><code className="text-[10px] bg-cream-100 px-1 rounded">{r.category_slug}</code></td>
                     <td className="p-2">
                       {r.errors.length === 0 ? (
