@@ -378,6 +378,8 @@
  "domande_per_nicola": [],
  "conto": {
   "agenti": 6,
-  "nota": "6 subagenti su 6: lotto 1 (ripara), lotto 2 (sola lettura), lotto 3 (ripara), due smentite; il giro di correzione di R01-010 l'ha fatto R01 a mano perché il tetto era raggiunto."
- }
+  "nota": "6 subagenti su 6: lotto 1 (ripara), lotto 2 (sola lettura), lotto 3 (ripara), due smentite; il giro di correzione di R01-010 l'ha fatto R01 a mano perché il tetto era raggiunto.",
+  "subagenti": 6
+ },
+ "costo_usd": 21.26
 }
