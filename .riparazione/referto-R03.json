@@ -1,13 +1,13 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 22:45",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-17 23:45",
+  "finita": true,
+  "testa": "b164a55be3181615c3184edc53ffb7e3c773e917",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "e669a8d7623eb9981c052fbede73261d1fda6335",
+    "nota": "typecheck, lint e 1748 file di prova verdi (11071 casi, 1 saltato già sulla base), lanciato con NODE_OPTIONS=--max-old-space-size=6144 (senza, tsc va in OOM). e669a8d7 = b164a55b, l'ultimo commit di codice, più il solo referto."
   },
   "voci": [
     {
@@ -65,7 +65,7 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "In due commit. d5cc3827: un 500/502/504 del fornitore all'invio, che può arrivare a lotto già creato, lascia la riga aperta con INVIO_SENZA_RISPOSTA e risponde 503 «Non riavviarlo» invece di chiudere come fallito e dire «Riprova» (maxRetries 0 e connessione caduta erano già sulla base, R04-014). df5d420d: anche il 524 di Cloudflare e una risposta 2xx col corpo illeggibile (submitBatch aspetta la risposta, poi legge il corpo: solo un errore dopo un 2xx confermato diventa RispostaDelLottoIlleggibile) valgono «forse partito»; 503, 520, 522, 529 e 400 restano rifiuti veri.",
       "nota": "Niente ricerca con batches.list (rischierebbe di agganciare il lotto di un altro negozio). Se fallisce anche la scrittura del motivo INVIO_SENZA_RISPOSTA, la regola dei 15 minuti chiude la riga come fallita (vedi R03-003).",
-      "verificato_da": "subagente revisore lotto 1 sulla prima parte (d5cc3827): errori veri dell'SDK per ogni codice; il buco del 524 trovato da lui è stato chiuso in df5d420d (da rivedere col revisore del lotto 3)."
+      "verificato_da": "subagente revisore lotto 1 sulla prima parte (d5cc3827: errori veri dell'SDK per ogni codice, prova e rimessa rilanciate). La seconda parte (df5d420d, il 524 e il 2xx illeggibile) è non smentita: il revisore del lotto 3 è stato fermato alla consegna prima di rapportare; prova e rimessa (uscita 0) del subagente che ha riparato, e verify verde."
     },
     {
       "id": "R03-003",
@@ -345,7 +345,8 @@
         "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54319c41bc7f55f0c151fce65ff6be7c1ebaddec^ --file lib/products/aiPatch.ts --prove tests/unit/riparazione-r03-chat-togli-solo-cio-che-ce.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "propostaPerLaChat teneva «Rimuovi <caratteristica>» anche se il prodotto non l'aveva, e il server non toglieva niente. Ora, con gli attributi attuali noti, la proposta tiene una rimozione solo se il dato c'è o se la stessa proposta lo scrive, come attributiDaTogliere sul server. La prova passa dalla rotta catalog-chat vera."
+      "cosa_ho_fatto": "propostaPerLaChat teneva «Rimuovi <caratteristica>» anche se il prodotto non l'aveva, e il server non toglieva niente. Ora, con gli attributi attuali noti, la proposta tiene una rimozione solo se il dato c'è o se la stessa proposta lo scrive, come attributiDaTogliere sul server. La prova passa dalla rotta catalog-chat vera.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
     },
     {
       "id": "R03-018",
@@ -368,7 +369,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Restavano due differenze fra pianoPatchPerIlModulo e resolveAiPatch (prezzo pieno barrato taciuto dal modulo; caratteristica scritta e tolta nella stessa proposta). Ora tag, caratteristiche da scrivere e prezzo pieno stanno in un solo posto (tagDelPatch, caratteristicheDaScrivere, prezzoPienoDalPatch) usato da tutte e due; la prova manda 25 casi su due prodotti per le due strade e controlla che scrivano e dicano la stessa cosa.",
-      "nota": "Resta una sola differenza voluta da R04: una chiave vuota il server la toglie dal JSON, il modulo non la conta."
+      "nota": "Resta una sola differenza voluta da R04: una chiave vuota il server la toglie dal JSON, il modulo non la conta.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
     },
     {
       "id": "R03-016",
@@ -397,7 +399,8 @@
         "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7b7dcd779ab489c01264da80b183ac7b0af275eb^ --file app/api/products/[id]/external-refresh/route.ts,app/api/cron/external-price-alerts/route.ts --prove tests/unit/riparazione-r03-prezzi-esterni-404.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Cambiati solo la classificazione e il testo dell'errore: con un AiCallError 404 «Aggiorna ora» risponde 503 «Funzione AI momentaneamente non disponibile.» (le parole di mapAiError) invece di 502 «Aggiornamento non riuscito. Riprova.»; nel refresh in sottofondo e nel giro a orario parte l'allarme sul modello (AI_MODELLO_SMART) e il giro lo scrive nella risposta. Prezzi e scritture non cambiano."
+      "cosa_ho_fatto": "Cambiati solo la classificazione e il testo dell'errore: con un AiCallError 404 «Aggiorna ora» risponde 503 «Funzione AI momentaneamente non disponibile.» (le parole di mapAiError) invece di 502 «Aggiornamento non riuscito. Riprova.»; nel refresh in sottofondo e nel giro a orario parte l'allarme sul modello (AI_MODELLO_SMART) e il giro lo scrive nella risposta. Prezzi e scritture non cambiano.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
     },
     {
       "id": "R03-012",
@@ -420,7 +423,8 @@
         "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ffe94441a90a1bfe309877ea37c4b87ad8dfd77^ --file app/api/ai/catalog-batch/start/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r03-traduzione-lotto-lunga.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Dal modulo la strada era già chiusa sulla base (R04-016: translate/route.ts:106 rifiuta prima di spendere, runMessage rifiuta un'uscita tagliata). Restava il lotto «traduci» del catalogo (catalogBatch.ts:192 taglia a 4000 caratteri senza dirlo): ora la rotta start, con operation translate, lascia fuori le schede oltre i 2500 caratteri fra nome e descrizione (lo stesso tetto del modulo), lo dice in esclusiTroppoLunghi e la pagina lo scrive; se sono tutte lunghe risponde 400 e non parte niente."
+      "cosa_ho_fatto": "Dal modulo la strada era già chiusa sulla base (R04-016: translate/route.ts:106 rifiuta prima di spendere, runMessage rifiuta un'uscita tagliata). Restava il lotto «traduci» del catalogo (catalogBatch.ts:192 taglia a 4000 caratteri senza dirlo): ora la rotta start, con operation translate, lascia fuori le schede oltre i 2500 caratteri fra nome e descrizione (lo stesso tetto del modulo), lo dice in esclusiTroppoLunghi e la pagina lo scrive; se sono tutte lunghe risponde 400 e non parte niente.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
     },
     {
       "id": "R03-019",
@@ -444,7 +448,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "In tutte e due le pagine il modulo, una volta aperto, resta: una lettura che riparte in pausa non rimette il caricamento al suo posto. Se il modulo si è aperto senza la consegna del negozio, per lui resta «non letta» e al salvataggio non scrive un express_enabled=false indovinato; in «Duplica» le taglie in pausa senza dati non aprono il modulo senza taglie. Niente del recesso (R03-017) è stato toccato.",
-      "nota": "Il commit b164a55b (R03-varie) cambia solo il nome del modulo finto nella prova, per il lint; dopo, la prova rimessa è uscita di nuovo 0."
+      "nota": "Il commit b164a55b (R03-varie) cambia solo il nome del modulo finto nella prova, per il lint; dopo, la prova rimessa è uscita di nuovo 0.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
     }
   ],
   "nuovi_difetti_visti": [
@@ -533,10 +538,15 @@
       "descrizione": "Dopo il primo 404 tutti gli altri prodotti del giro prendono lo stesso 404 e vengono segnati 'error': prodotti sani finiscono dietro il freno di sei ore. Fermare il giro al primo 404 cambierebbe più di un messaggio."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "R03-016 e R03-013: impostare UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in produzione? Senza, il freno di sei ore e il tetto di spesa AI reggono solo dentro una copia del sito.",
+    "R03-016: aprire una migrazione per products.external_sync_error_at (ora dell'ultimo errore dell'import), così il freno regge anche senza Upstash?"
+  ],
   "conto": {
-    "agenti": 5,
-    "subagenti": 5,
-    "nota": "lotti 1-3 fatti; revisore lotto 3 in partenza"
-  }
+    "agenti": 6,
+    "subagenti": 6,
+    "costo_usd": 37.35,
+    "nota": "3 che riparano (uno per lotto) e 3 revisori; il revisore del lotto 3 fermato alla consegna. Costo letto dalla regia 2.0 col controllo della spesa delle 23:41 (oltre il tetto di 35 $): la sessione non vede il suo usage.cost_usd."
+  },
+  "costo_usd": 37.35
 }
