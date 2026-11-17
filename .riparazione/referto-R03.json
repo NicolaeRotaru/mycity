@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:48",
+  "aggiornato": "2026-11-17 19:49",
   "finita": false,
   "testa": "7f72739b13c511795e9de5844c37379ba2e3b9be",
   "verifica": {
@@ -59,9 +59,11 @@
     },
     {
       "id": "R03-003",
-      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "scelta_di_nicola",
+      "domanda": "Mentre il guscio di un negozio legge, vuoi tenere lo scheletro del negozio (app/store/loading.tsx, oggi) o toglierlo per preparare il 404 vero, sapendo che il 404 arriva solo quando se ne va anche lo scheletro della radice (app/loading.tsx) e il guscio chiama notFound(), e che intanto torna lo scheletro generico?",
+      "file_toccati": [],
+      "nota": "Codice sulla base: c'è (app/store/loading.tsx disegna ScheletroNegozio sopra app/store/[id]/layout.tsx, che è async e aspetta precaricaNegozio). Misura: oggi nessun file sotto app/store importa next/navigation né chiama notFound() sul server (le due «notFound» di app/store/[id]/[slug] sono un riquadro disegnato nel browser e un oggetto di metadati); e app/loading.tsx della radice avvolge anche il guscio del negozio (un loading.tsx copre tutto quello che sta sotto il suo layout), quindi anche togliendo app/store/loading.tsx la risposta resta 200 in streaming. La cura di R03-002 cambia solo il titolo, non rende naturale un notFound() nel guscio (servirebbe distinguere «non esiste» da «lettura caduta» e cambierebbe la pagina che vede il cliente: la 404 generica al posto del riquadro col «Vedi tutti i negozi»). Quindi togliere app/store/loading.tsx oggi non dà nessun 404 e riporta lo scheletro generico della radice mentre il guscio legge (il salto che la prova proteggeva): resta solo la scelta. Se Nicola sceglie il 404, il lavoro è pronto e tutto nei miei file: cancellare app/store/loading.tsx e capovolgere il caso «il sipario copre anche il guscio, non solo la pagina» di tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts (righe 90-106) in «sotto app/store/ nessun loading.tsx sopra il guscio, che deve poter rispondere 404» (prova esistente toccabile: legge per nome app/store/loading.tsx e app/store/[id]/layout.tsx, miei, e ScheletroNegozio.tsx, HeroSection.tsx e misure-vetrina, che non sono di R01 né di R02); app/loading.tsx resta (protetto da tests/unit/minori-s09-aspetto.test.ts:219-224). Una via che tiene tutte e due le cose (lo scheletro del negozio dentro il guscio, in un Suspense dopo il controllo di esistenza) cambia la forma del guscio e due prove che lo eseguono (il-guscio-della-pagina-legge-il-negozio-sul-server, la-vetrina-del-negozio-parte-gia-piena): non l'ho fatta senza la scelta.",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice"
     },
     {
       "id": "R03-004",
