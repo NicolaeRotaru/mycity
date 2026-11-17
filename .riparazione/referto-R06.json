@@ -11,6 +11,55 @@
   },
   "voci": [
     {
+      "id": "R06-001",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "scelta_di_nicola",
+      "file_toccati": [],
+      "prova_file": [],
+      "copre_tutta_la_voce": false,
+      "domanda": "Le misure a 11px (text-[11px], 71 nel sito, tutte le 15 rimaste nei quattro file della voce) non hanno un gradino nella scala: vanno a 10px (text-2xs), a 12px (text-xs), o si aggiunge un gradino da 11px?",
+      "prova": "grep -rEo 'text-\\[[0-9.]+px\\]' app components | wc -l → 275 sulla base (non più 330). Nei quattro file restano solo text-[11px]: SellerShell 4, rider/earnings 4, search 4, AdminSidebar 3.",
+      "nota": "Nei quattro file le misure con un gradino uguale le aveva già portate sulla scala R24-021 (commit 8f70c8d0; prova tests/unit/riparazione-r24-scala-del-testo.test.ts, verde). Restano solo text-[11px], che non hanno un gradino uguale: cambiarle cambia l'aspetto. Nel resto del sito 52 misure hanno un gradino identico (10px×35→text-2xs, 12px×7→text-xs, 14px×5→text-sm, 18px×2→text-lg, 24px×2→text-2xl, 30px×1→text-3xl) ma stanno in file di altre sessioni; le altre 223 non hanno un gradino uguale (13px 88, 11px 71, 15px 17, 17px 16, 32px 8, 26px 6, 12.5px 5, 22px 4, 34px 3, 13.5px 2, 9px/28px/54px 1). Se Nicola vuole il gradino da 11px, si aggiunge in tailwind.config.ts (mio) più i token in app/globals.css e docs/mockup/tokens/typography.css (non miei)."
+    },
+    {
+      "id": "R06-002",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "esito": "parziale",
+      "commit": "677b393d04c004441f81b6dd175ff16135bb3375",
+      "file_toccati": [
+        "app/search/page.tsx",
+        "tests/unit/riparazione-r06-card-della-ricerca.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-card-della-ricerca.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-card-della-ricerca.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 677b393d04c004441f81b6dd175ff16135bb3375^ --file app/search/page.tsx --prove tests/unit/riparazione-r06-card-della-ricerca.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La primitiva offre già quello che cercano le card a mano (bordo cream bordered/elevated, surface-200 con ombra funnel, raggio lg/xl/2xl: components/ui/Card.tsx:23-24,63), quindi Card.tsx non è cambiato. Nei miei file l'unica card di contenuto convertibile era la colonna dei filtri di app/search/page.tsx: ora è <Card as=\"aside\" variant=\"elevated\" radius=\"2xl\"> con le stesse classi di prima; la prova confronta i due insiemi di classi.",
+      "cosa_resta": "Card è importata in 13 file (prima 12). Restano 156 righe di card a mano (bg-white…border-cream-300|surface-200…rounded-) in 79 file di altre sessioni: rounded-2xl 79, rounded-xl 57, rounded-lg 15. Nei miei file resta app/help/page.tsx:93, che è un <Link> (Card non fa da link).",
+      "serve_file_altrui": [
+        {
+          "file": "le 79 pagine e componenti di app/ e components/ con card a mano, fuori dai file di R06",
+          "modifica": "Sostituire il div 'bg-white border border-cream-300 rounded-{lg|xl|2xl} p-{3|4|6} [shadow-warm]' con <Card variant=\"bordered|elevated\" radius=\"lg|xl|2xl\" padding=\"sm|md|lg\" className=\"<le altre classi>\">, tenendo il raggio di oggi così l'aspetto non cambia; 'bg-white border-surface-200 shadow-card' diventa variant=\"funnel\". Prima il funnel d'acquisto: home, prodotto, carrello, cassa."
+        }
+      ]
+    },
+    {
+      "id": "R06-003",
+      "chiave": "coerenza-brand|il design system di riferimento è incompleto: mancano button, badge e card e un file importa un componente che non esiste",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "copre_tutta_la_voce": true,
+      "prova": "docs/mockup/components/core/ contiene Badge.jsx, Button.jsx, Card.jsx e core.card.html già sulla base (git cat-file -e f93d246a:docs/mockup/components/core/Badge.jsx → ok); docs/mockup/components/commerce/ProductCard.jsx:2 importa '../core/Badge.jsx', che esiste ed esporta Badge (core/Badge.jsx:70); docs/mockup/_ds_manifest.json elenca Badge/Button/Card (sourcePath components/core/*.jsx); dei 47 percorsi del manifest non ne manca nessuno."
+    },
+    {
       "id": "R06-004",
       "chiave": "microcopy|gli errori dei moduli controllati dal server arrivano al cliente in inglese, per esempio «string must contain at most 120 character»",
       "esito": "serve_file_altrui",
@@ -106,6 +155,34 @@
       "file_toccati": [],
       "prova": "app/admin/products/[id]/edit/page.tsx:46 una lettura non riuscita lancia l'errore e non diventa null; :147 «Non riesco a leggere questo prodotto…» e :152-155 bottone «Riprova» (rileggiProdotto); «Prodotto non trovato» solo se la riga manca (commit 5fd4ce74 e 4e48718f, R22-017)",
       "cosa_ho_fatto": "Controllato: errore di lettura e prodotto assente sono già distinti, con Riprova."
+    },
+    {
+      "id": "R06-012",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "commit": "801c438ab17969d8f8561a42b2e10d1311dfc3cf",
+      "file_toccati": [
+        "components/seller/SellerShell.tsx",
+        "components/admin/AdminSidebar.tsx",
+        "app/rider/earnings/page.tsx",
+        "app/search/page.tsx",
+        "components/home/DropOfDay.tsx",
+        "tests/unit/riparazione-r06-etichette-maiuscole.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-etichette-maiuscole.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-etichette-maiuscole.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 801c438ab17969d8f8561a42b2e10d1311dfc3cf^ --file components/seller/SellerShell.tsx,components/admin/AdminSidebar.tsx,app/rider/earnings/page.tsx,app/search/page.tsx,components/home/DropOfDay.tsx --prove tests/unit/riparazione-r06-etichette-maiuscole.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file le 11 etichette maiuscole con spaziatura usano tracking-label (0.04em): tracking-[0.08em]×4 nelle barre venditore/admin, [0.06em] e [0.03em] nei guadagni, tracking-wider×4 nella ricerca e ×1 nel drop. Il valore di tracking-label non è cambiato. La prova legge i cinque file e accetta solo tracking-label sulle righe uppercase.",
+      "cosa_resta": "Righe uppercase nel sito, prima → dopo: wider 42→37, label 17→28, [0.03em] 17→16, [0.06em] 3→2, [0.08em] 5→1; invariate wide 39, [0.05em] 7, [0.04em] 4, widest 3. Fuori token ne restano 66, tutte in file di altre sessioni (wider 37, [0.03em] 16, [0.05em] 7, widest 3, [0.06em] 2, [0.08em] 1 in components/account/AccountSidebar.tsx:143): la cura è la stessa, tracking-label."
     }
   ],
   "nuovi_difetti_visti": [
@@ -115,13 +192,20 @@
       "severita": "minore",
       "file": "app/admin/products/[id]/edit/page.tsx:149-152",
       "descrizione": "Con erroreVarianti il messaggio chiede di ricaricare la pagina, ma il bottone Riprova compare solo con error (lettura del prodotto)."
+    },
+    {
+      "titolo": "la primitiva Card non può fare da link: le card cliccabili restano scritte a mano",
+      "dimensione": "coerenza-brand",
+      "severita": "minore",
+      "file": "components/ui/Card.tsx:56",
+      "descrizione": "La prop `as` accetta solo div/article/section/aside; una card cliccabile (es. app/help/page.tsx:93, un <Link>) non può usare la primitiva."
     }
   ],
   "domande_per_nicola": [
     "Typecheck: `tsc --noEmit` va in esaurimento di memoria con le impostazioni normali; con NODE_OPTIONS=--max-old-space-size=6144 è verde. Serve anche per npm run verify in sessione."
   ],
   "conto": {
-    "agenti": 1,
-    "nota": "lotto 1: 1 subagente riparatore"
+    "agenti": 2,
+    "nota": "lotto 1 e lotto 2: 2 subagenti riparatori"
   }
 }
