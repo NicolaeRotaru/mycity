@@ -117,6 +117,53 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
   // si lancia e Stripe riprova: meglio qualche minuto di ritardo che uno stato inventato.
   const { subscription_status: stato, subscription_renews_at: renewsAt } = await statoDaStripe(subscriptionId);
 
+  // R33-008 — DUE SCHEDE, DUE ABBONAMENTI: IL SECONDO NON LASCIA ORFANO IL PRIMO.
+  // Se il profilo ha già un ALTRO abbonamento ancora in corso su Stripe, scriverci sopra
+  // il nuovo staccava il primo dal sito: pagato ogni mese, e i suoi cambi di stato non
+  // trovavano più il negozio. Adesso il primo resta sul profilo (salvo che sia in ritardo
+  // di pagamento e il nuovo sia pagato: allora resta il nuovo). Niente si annulla da solo:
+  // il negozio riceve l'avviso che c'è un abbonamento in più e lo disdice da «Gestisci
+  // abbonamento» (la cassa usa un solo cliente Stripe per negozio, quindi il portale li
+  // mostra tutti e due); il rimborso del doppione resta una decisione a mano.
+  const { data: giaSalvato, error: erroreLettura } = await admin
+    .from('profiles')
+    .select('stripe_subscription_id')
+    .eq('id', sellerId)
+    .maybeSingle();
+  // Una lettura caduta non vale «nessun abbonamento»: Stripe riprova.
+  if (erroreLettura) throw new Error(`[stripe] abbonamento del negozio non letto: ${erroreLettura.message}`);
+  const precedente = (giaSalvato as { stripe_subscription_id?: string | null } | null)?.stripe_subscription_id ?? null;
+  if (precedente && precedente !== subscriptionId) {
+    let statoPrecedente: 'active' | 'past_due' | 'canceled' | null = null;
+    try {
+      statoPrecedente = (await statoDaStripe(precedente)).subscription_status;
+    } catch (err) {
+      // Stripe non sa dire com'è il precedente: si attiva il nuovo, pagato, e l'admin guarda.
+      logger.error('[stripe] abbonamento precedente non letto: si attiva il nuovo, controlla a mano il precedente', {
+        sellerId, precedente, nuovo: subscriptionId, sessionId: session.id, err,
+      });
+    }
+    if (statoPrecedente !== null && statoPrecedente !== 'canceled') {
+      const tieniIlNuovo = statoPrecedente === 'past_due' && stato === 'active';
+      logger.error('[stripe] abbonamento doppio sullo stesso negozio: niente annullato, il doppione va disdetto e rimborsato a mano', {
+        sellerId, precedente, nuovo: subscriptionId, tenuto: tieniIlNuovo ? subscriptionId : precedente, sessionId: session.id,
+      });
+      if (stato !== 'canceled') {
+        scritturaFacoltativa(
+          await admin.from('notifications').insert({
+            category: 'order',
+            user_id: sellerId,
+            title: '⚠️ Hai due abbonamenti',
+            body: `Risultano due abbonamenti venditore (${PREZZO_ABBONAMENTO_MESE}/mese). Disdici quello in più da «Gestisci abbonamento» e scrivici per il rimborso.`,
+            link: '/seller/dashboard',
+          }),
+          'avviso abbonamento doppio',
+        );
+      }
+      if (!tieniIlNuovo) return;
+    }
+  }
+
   // R81 — Il negozio ha pagato 50 €: se l'attivazione non si scrive, Stripe
   // deve riprovare. Prima il gestore finiva «bene» e l'abbonamento pagato
   // restava spento. Riscrivere gli stessi valori a ogni tentativo è innocuo.
