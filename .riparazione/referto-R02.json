@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:05",
+  "aggiornato": "2026-11-17 18:11",
   "finita": false,
-  "testa": "f8d2a2b73f0123defab58dc159b16b1d805c97ac",
+  "testa": "1ae7a9a298ffa30011cfc06271bf21a62587ede9",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -57,8 +57,26 @@
     {
       "id": "R02-005",
       "chiave": "mobile-pwa|se il primo segnale gps scade prima della conferma, l'sos parte senza posizione anche se la posizione arriva un attimo dopo",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "1ae7a9a298ffa30011cfc06271bf21a62587ede9",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx",
+        "tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1ae7a9a298ffa30011cfc06271bf21a62587ede9^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r02-sos-posizione-dopo-timeout.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In avviaLetturaGps l'errore del primo tentativo (timeout o segnale assente) non chiude più l'attesa della posizione mentre il watch è in ascolto: la chiudono il permesso negato (code 1) o il tempo massimo di posizionePronta, e la posizione che il watch porta un attimo dopo finisce nella riga di rider_sos_events. La prova, con GPS e timer finti, fa scadere il primo tentativo prima e dopo la conferma e guarda lat/lng nell'insert (sulla base: null); controlla anche che senza posizione l'avviso parta entro il tempo massimo e che col permesso negato parta subito.",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-006",
