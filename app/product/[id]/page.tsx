@@ -1272,11 +1272,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       {/* Il margine di scorrimento serve a non finire SOTTO l'intestazione fissa. Ma
           l'intestazione e' `relative md:sticky` (components/Navbar.tsx): sotto md non e'
           fissa, e quei 144px diventavano una fascia di vuoto sopra il titolo per chi
-          toccava «N recensioni» dal telefono. Da md in su torna a servire. */}
+          toccava «N recensioni» dal telefono. Da md in su lo spazio lo dà gia' lo scroll-padding-top
+          di html (app/globals.css): un margine in piu' si sommerebbe e fermerebbe l'ancora troppo in basso. */}
       <section
         id="recensioni"
         ref={setNodoRecensioni}
-        className="mt-12 space-y-6 scroll-mt-4 md:scroll-mt-[var(--header-height)]"
+        className="mt-12 space-y-6 scroll-mt-4 md:scroll-mt-0"
       >
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-serif text-2xl font-bold text-ink-900">
