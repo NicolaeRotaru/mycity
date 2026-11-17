@@ -116,6 +116,17 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
 
   const isOwner = userId && list?.owner_id === userId;
 
+  /**
+   * 17/11/2026 — /lists legge le liste (con visibilità e conteggio) da queste tre chiavi. Dopo
+   * un'eliminazione o un cambio di visibilità riusciti si rileggono: prima /lists poteva mostrare
+   * la lista eliminata, o quella resa privata fra le pubbliche, finché le chiavi non scadevano.
+   */
+  const rileggiLeListeDiLists = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
+    qc.invalidateQueries({ queryKey: queryKeys.lists.public });
+    qc.invalidateQueries({ queryKey: queryKeys.lists.inVetrina });
+  };
+
   const updateMeta = useMutation({
     mutationFn: async () => {
       const { error } = await supabase
@@ -143,6 +154,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     onSuccess: () => {
       toast.success(list?.is_public ? 'Lista resa privata' : 'Lista resa pubblica');
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
+      rileggiLeListeDiLists();
     },
     // 5/11/2026 — Una scrittura caduta si dice: prima non compariva niente, e chi
     // voleva rendere privata la lista la lasciava pubblica credendo di averlo fatto.
@@ -192,6 +204,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     },
     onSuccess: () => {
       toast.success('Lista eliminata');
+      rileggiLeListeDiLists();
       router.push('/lists');
     },
     onError: (err: unknown) => toast.error(`Lista non eliminata: ${friendlyError(err)}`),
