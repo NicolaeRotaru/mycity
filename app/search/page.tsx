@@ -7,6 +7,7 @@ import { Filter, RotateCcw, CircleDot, Star, ArrowDownWideNarrow, X, Tag, Packag
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { Card } from '@/components/ui/Card';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -372,7 +373,7 @@ function SearchInner() {
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
       {/* DESKTOP: colonna filtri */}
-      <aside className="hidden md:block md:col-span-1 bg-white border border-cream-300 rounded-2xl p-4 h-fit md:sticky md:top-[var(--header-height)] shadow-warm">
+      <Card as="aside" variant="elevated" radius="2xl" className="hidden md:block md:col-span-1 h-fit md:sticky md:top-[var(--header-height)]">
         <div className="flex items-center justify-between pb-3 border-b border-cream-100 mb-1">
           <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
             <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
@@ -391,7 +392,7 @@ function SearchInner() {
           )}
         </div>
         {filterControls}
-      </aside>
+      </Card>
 
       {/* MOBILE: bottom-sheet filtri */}
       {filtersOpen && (
