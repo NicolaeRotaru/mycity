@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:22",
+  "aggiornato": "2026-11-17 19:24",
   "finita": false,
-  "testa": "1b4eb64f1d6ee71bf452c832a18c4eac1e0c5db4",
+  "testa": "1b6a971580d8ccba2650f72e360d61871beca2a4",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -60,9 +60,26 @@
     },
     {
       "id": "R03-009",
-      "chiave": "qa-flussi|anche il filtro per categoria della pagina dei negozi risale solo dieci livelli di categorie madri",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "1b6a971580d8ccba2650f72e360d61871beca2a4",
+      "file_toccati": [
+        "lib/queries/categorie-dei-negozi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-madri-oltre-dieci-livelli.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-madri-oltre-dieci-livelli.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b6a9715^ --file lib/queries/categorie-dei-negozi.ts --prove tests/unit/riparazione-r03-madri-oltre-dieci-livelli.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "conLeMadri risale fino alla radice senza il tetto di 10 passi; la guardia contro i giri è «una categoria già vista non si rivisita» (c'era già, ora basta da sola). Prova: catena di 14 livelli (tutte le 15 categorie), due prodotti sulla stessa catena con la foglia prima (prima la seconda risalita si fermava su quella lasciata a metà), giro a→b→c→a raggiunto da d e categoria madre di sé stessa (si fermano). Le prove vicine (pagina Negozi, 9 file) restano verdi.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|anche il filtro per categoria della pagina dei negozi risale solo dieci livelli di categorie madri"
     },
     {
       "id": "R03-010",
