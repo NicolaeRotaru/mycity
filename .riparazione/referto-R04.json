@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:30",
+  "aggiornato": "2026-11-17 18:35",
   "finita": false,
-  "testa": "8d5109714b92c009992db4b2a4f816ae74c05449",
+  "testa": "1e7e09a533ae15a66d92d17814ca20ee43361105",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -145,8 +145,26 @@
     {
       "id": "R04-008",
       "chiave": "frontend-ux|a menu spento, un link lasciato a metà sparisce al salvataggio senza avviso",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "1e7e09a533ae15a66d92d17814ca20ee43361105",
+      "file_toccati": [
+        "lib/store-site.ts",
+        "tests/unit/riparazione-r20-menu-spento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-menu-spento-conserva-link.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-menu-spento-conserva-link.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1e7e09a533ae15a66d92d17814ca20ee43361105^ --file lib/store-site.ts --prove tests/unit/riparazione-r04-menu-spento-conserva-link.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A menu acceso un link a metà resta nell'editor e il salvataggio lo rifiuta dicendo quale completare; a menu spento (esplicito) adesso si conserva com'è invece di essere scartato: il salvataggio non si blocca, il sito pubblico non mostra link, e riacceso il menu vale lo stesso controllo (stesso percorso d'errore menu.links.N). Modificata la prova esistente tests/unit/riparazione-r20-menu-spento.test.ts (importa solo lib/store-site.ts): aspettava lo scarto, ora aspetta che il link resti.",
+      "verificato_da": ""
     },
     {
       "id": "R04-009",
