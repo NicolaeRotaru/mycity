@@ -18,6 +18,7 @@ import {
 } from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
 import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
 import { contaProdottiDellaGriglia, inizioFinestraNovita, leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
@@ -403,6 +404,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     return Math.max(promo, struck);
   };
 
+  // R28-007 — Con «aperti ora» acceso la memoria sotto si rifà al battito del minuto: alla chiusura il
+  // prodotto esce entro il minuto. L'ora che si legge resta quella vera (chiaveDiOggi/isOpenNow senza argomento).
+  const battito = useOraDiPiacenza(!!onlyOpenStores);
   // Filtro client-side: orari aperti, rating minimo, ordinamento per rating
   const filtered = useMemo(() => {
     let arr = prods;
@@ -454,7 +458,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo, prezzoSotto]);
+  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo, prezzoSotto, battito]);
 
   // Notifica il conteggio visibile (post-filtro) al chiamante, per la riga
   // "N prodotti …" renderizzata fuori dalla griglia (SRP / categoria).
