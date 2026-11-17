@@ -1,0 +1,170 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-17 21:00",
+  "finita": false,
+  "testa": "dcc6de0b7809bf05ff78b5a45fd27b7c37af05a9",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "chiave": "flussi-conversione|sulla scheda prodotto un secondo «aggiungi al carrello» entro un secondo viene ignorato senza dire niente",
+      "esito": "riparato",
+      "commit": "90df58408ec0a74c9f063eef0d249b54daa36113",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/riparazione-r02-aggiungi-variante.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-aggiungi-variante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-aggiungi-variante.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 90df58408ec0a74c9f063eef0d249b54daa36113^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-aggiungi-variante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scheda ricorda la scelta dell'ultima aggiunta (variante + quantità, ref sceltaFrenata); quando la scelta cambia, il freno riparte da capo. Così S poi M entro un secondo sono due aggiunte, e anche «+» entro 600 ms aggiunge. Lo stesso tocco ripetuto sulla stessa scelta resta frenato. La prova monta la scheda vera con l'orologio finto; anche la prova r03 resta verde.",
+      "insieme_a": [
+        "R02-005"
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-005",
+      "chiave": "microcopy|l'avviso «già aggiunto» si ripete a raffica e lo dice anche dopo un cambio di variante entro un secondo",
+      "esito": "riparato",
+      "commit": "47f3beeaa51210a8326bcbb6580ee41265fd5255",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 47f3beeaa51210a8326bcbb6580ee41265fd5255^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-avviso-gia-aggiunto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunto id fisso 'gia-aggiunto' al toast.info del tocco frenato: quattro tocchi frenati portano lo stesso id e sonner non li impila. Il pezzo «dopo un cambio di variante» lo chiude il commit di R02-001 (90df5840): una variante diversa ora entra nel carrello e non riceve più il «già aggiunto» falso.",
+      "insieme_a": [
+        "R02-001"
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-006",
+      "chiave": "qa-flussi|la pagina amministrazione «nuovo prodotto» invia ancora con mutate, senza guardia contro il doppio clic",
+      "esito": "riparato",
+      "commit": "a398408d8c2bb9c900171a1158f7822ee1a561bb",
+      "file_toccati": [
+        "app/admin/products/new/page.tsx",
+        "tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a398408d8c2bb9c900171a1158f7822ee1a561bb^ --file app/admin/products/new/page.tsx --prove tests/unit/riparazione-r02-nuovo-prodotto-admin-doppio-invio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stesso schema della pagina del negozio: onSubmit restituisce create.mutateAsync(...).catch(() => undefined), così la guardia di ProductForm resta chiusa fino alla fine dell'inserimento. La prova monta la pagina vera dell'amministrazione col modulo vero: un secondo invio mentre la richiesta è in volo dà una sola POST /api/admin/products (sulla base erano 2).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-008",
+      "chiave": "qa-flussi|nell'anteprima dell'import la colonna quantità mostra 0 accanto all'errore «quantità non valida»",
+      "esito": "riparato",
+      "commit": "af15e3a070d0e078d71be522787e3f6eaccdcde7",
+      "file_toccati": [
+        "app/seller/products/import/page.tsx",
+        "tests/unit/riparazione-r02-anteprima-quantita.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-anteprima-quantita.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-anteprima-quantita.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base af15e3a070d0e078d71be522787e3f6eaccdcde7^ --file app/seller/products/import/page.tsx --prove tests/unit/riparazione-r02-anteprima-quantita.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ParsedRow.stock diventa number | null: una quantità scritta male resta null e la cella dell'anteprima mostra «—» accanto all'errore; uno 0 scritto nel file si vede 0. Le righe valide vanno al server come prima (stock ?? 0, mai null per una riga valida).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-004",
+      "chiave": "microcopy|in produzione senza chiave pubblica anti-robot il modulo contatti fallisce senza dire dove scrivere",
+      "esito": "riparato",
+      "commit": "253d81b5aa737377d3fce0d1fc205f62b88f5d6b",
+      "file_toccati": [
+        "app/api/contact/route.ts",
+        "tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 253d81b5aa737377d3fce0d1fc205f62b88f5d6b^ --file app/api/contact/route.ts --prove tests/unit/riparazione-r02-contatti-chiave-pubblica-assente.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se il controllo anti-robot fallisce senza gettone e manca NEXT_PUBLIC_TURNSTILE_SITE_KEY, la rotta risponde 503 con «…Scrivici a info@…» (indirizzoContatto('info') di lib/contatti-pubblici.ts, lo stesso della pagina Contatti), anche in details.recapito. Il robot vero (chiave pubblica presente e gettone assente o falso) dà ancora 400 «Verifica anti-bot fallita. Riprova.».",
+      "verificato_da": ""
+    },
+    {
+      "id": "R02-013",
+      "chiave": "stati-ui|la barra cade se localstorage lancia su ogni chiave",
+      "esito": "gia_riparato_prima",
+      "commit": "dcc6de0b7809bf05ff78b5a45fd27b7c37af05a9",
+      "file_toccati": [
+        "tests/unit/riparazione-r02-barra-senza-memoria.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-barra-senza-memoria.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-barra-senza-memoria.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fc5cea5d^ --file components/LocationPill.tsx --prove tests/unit/riparazione-r02-barra-senza-memoria.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La barra cadeva nell'effetto della pillola della posizione, che leggeva localStorage al montaggio senza try: lo ha chiuso il commit fc5cea5d, già sulla base. Aggiunta solo una prova di guardia: la Navbar montata coi figli veri e localStorage che lancia (ogni metodo, o già il getter) si disegna; con la pillola di fc5cea5d^ la prova cade.",
+      "prova": "components/LocationPill.tsx:85-89 legge localStorage dentro try/catch (commit fc5cea5d, antenato della base); components/Navbar.tsx:59-78 ha ogni accesso a window.localStorage già in try/catch. tests/unit/riparazione-r02-barra-senza-memoria.test.ts è verde sulla base e rosso con components/LocationPill.tsx di fc5cea5d^ (prova-rimessa uscita 0).",
+      "verificato_da": ""
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": "lotto 1: un subagente riparatore"
+  }
+}
