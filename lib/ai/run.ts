@@ -177,22 +177,104 @@ export function conCacheDelContesto(
  */
 let _inVoloCents = 0;
 
+/**
+ * 17/11/2026 (R03-013) — LE CHIAMATE IN VOLO DI TUTTE LE COPIE.
+ *
+ * La prenotazione di R04-017 (`_inVoloCents`, qui sopra) vale dentro una
+ * copia: due copie che partono nello stesso istante leggono lo stesso «speso»,
+ * non vedono l'una la stima dell'altra e passano tutte e due. Qui la stima si
+ * prenota anche nel contatore condiviso che il sito usa gia' per i freni
+ * (Upstash, come lib/rate-limit.ts), PRIMA di leggere lo speso: l'INCRBY e'
+ * atomico, quindi di due chiamate quella che arriva seconda vede la prima.
+ * La spesa vera si registra prima di togliere la prenotazione.
+ *
+ * Le chiavi sono a finestre di cinque minuti (una chiamata AI dura al massimo
+ * 300 s, vercel.json) e si legge la finestra di prima, quella di adesso e
+ * quella dopo: una prenotazione che una copia spenta non toglie sparisce da
+ * sola in pochi minuti invece di stringere il tetto per tutto il giorno.
+ * Senza Upstash (o se non risponde) si torna alla prenotazione della copia.
+ */
+const FINESTRA_IN_VOLO_MS = 5 * 60_000;
+const VITA_CHIAVE_IN_VOLO_S = 15 * 60;
+
+async function contatoreCondiviso(comandi: Array<Array<string | number>>): Promise<unknown[] | null> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const res = await fetch(`${url}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(comandi.map((c) => c.map(String))),
+      signal: AbortSignal.timeout(500),
+    });
+    if (!res.ok) return null;
+    const dati = (await res.json()) as Array<{ result?: unknown; error?: unknown }>;
+    if (!Array.isArray(dati) || dati.some((d) => d?.error)) return null;
+    return dati.map((d) => d?.result);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prenota `cents` fra le chiamate in volo di tutte le copie. Torna quanto hanno
+ * gia' prenotato le ALTRE chiamate e la funzione che toglie la prenotazione;
+ * `null` se il contatore condiviso non c'e' o non risponde. Non lancia mai.
+ */
+async function prenotaInVoloCondiviso(
+  cents: number,
+  adesso: number = Date.now(),
+): Promise<{ altriCents: number; libera: () => Promise<void> } | null> {
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+  const finestra = Math.floor(adesso / FINESTRA_IN_VOLO_MS);
+  const chiave = (n: number) => `ai:tetto:in-volo:${n}`;
+  const mia = chiave(finestra);
+  const risposta = await contatoreCondiviso([
+    ['INCRBY', mia, cents],
+    ['EXPIRE', mia, VITA_CHIAVE_IN_VOLO_S, 'NX'],
+    ['MGET', chiave(finestra - 1), mia, chiave(finestra + 1)],
+  ]);
+  if (!risposta) return null;
+  const valori = Array.isArray(risposta[2]) ? (risposta[2] as unknown[]) : [];
+  const totale = valori.reduce<number>((somma, v) => somma + Math.max(0, Number(v) || 0), 0);
+  let liberata = false;
+  return {
+    altriCents: Math.max(0, totale - cents),
+    libera: async () => {
+      if (liberata) return;
+      liberata = true;
+      await contatoreCondiviso([
+        ['DECRBY', mia, cents],
+        ['EXPIRE', mia, VITA_CHIAVE_IN_VOLO_S, 'NX'],
+      ]);
+    },
+  };
+}
+
 /** Solo per le prove. */
 export function __inVoloSpesaAiCents(): number {
   return _inVoloCents;
 }
 
-export async function controllaTettoSpesaAi(feature: string, stimaCents: number = 0): Promise<() => void> {
+export async function controllaTettoSpesaAi(feature: string, stimaCents: number = 0): Promise<() => Promise<void>> {
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
-  if (!(limitEur > 0)) return () => undefined; // nessun tetto configurato: niente giro di rete
+  if (!(limitEur > 0)) return async () => undefined; // nessun tetto configurato: niente giro di rete
   const stima = Number.isFinite(stimaCents) && stimaCents > 0 ? Math.ceil(stimaCents) : 0;
+  // R03-013 — Fra copie diverse: la stima si prenota nel contatore condiviso
+  // PRIMA di leggere lo speso (prenotaInVoloCondiviso, qui sopra).
+  const condivisa = await prenotaInVoloCondiviso(stima);
   const letti = await spesaDiOggiCents();
   // R04-017 (revisione) — Una lettura vecchia non abbassa lo speso: vale il
   // piu' alto fra quello letto e l'ultimo totale noto a questa copia.
   const giaSpesiCents = Math.max(letti, ultimaSpesaNotaCents());
+  const conto = statoContoCondiviso();
+  // Le prenotazioni delle altre copie contano solo se il conto e' quello del
+  // sito: con il conto della copia (ripiego) vale la quota della copia.
+  const altriInVoloCents = condivisa && conto.condiviso ? Math.max(_inVoloCents, condivisa.altriCents) : _inVoloCents;
   // Da qui alla prenotazione nessun await: e' quello che rende il controllo
   // e la prenotazione un passo solo dentro questa copia.
-  const spesiCents = giaSpesiCents + _inVoloCents + Math.max(0, stima - 1);
+  const spesiCents = giaSpesiCents + altriInVoloCents + Math.max(0, stima - 1);
   /**
    * 8/9/2026 (lotto gravi, corsia 11) — QUI C'ERA UN CONFRONTO SOLO, E VALEVA
    * DUE COSE OPPOSTE.
@@ -208,7 +290,7 @@ export async function controllaTettoSpesaAi(feature: string, stimaCents: number 
   const decisione = decidiSpesaAi({
     tettoEur: limitEur,
     spesaCents: spesiCents,
-    conto: statoContoCondiviso(),
+    conto,
     copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE),
   });
   if (!decisione.consentito) {
@@ -220,14 +302,16 @@ export async function controllaTettoSpesaAi(feature: string, stimaCents: number 
       motivo: decisione.motivo,
       contoCondiviso: !decisione.ripiegoDurevole,
     });
+    await condivisa?.libera();
     throw AiCallError.perTettoSpesa(feature);
   }
   _inVoloCents += stima;
   let liberata = false;
-  return () => {
+  return async () => {
     if (liberata) return;
     liberata = true;
     _inVoloCents = Math.max(0, _inVoloCents - stima);
+    await condivisa?.libera();
   };
 }
 
@@ -432,7 +516,7 @@ export async function runMessage<TInput = unknown>(
   try {
     return await eseguiMessaggio<TInput>(args);
   } finally {
-    liberaPrenotazione();
+    await liberaPrenotazione();
   }
 }
 

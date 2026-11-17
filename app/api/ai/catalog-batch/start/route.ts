@@ -169,7 +169,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       // deve esserci un istante in cui il lotto non e' contato da nessuna parte.
       await registraSpesaAi(impegnato);
     } finally {
-      liberaPrenotazione?.();
+      await liberaPrenotazione?.();
     }
     /**
      * 27/8/2026 (R143) — SI CONTROLLAVA IL TETTO E NON SI REGISTRAVA NIENTE.
