@@ -171,11 +171,15 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
 
   const scadute = (expired ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
   const userIds: string[] = scadute.map((r) => r.user_id);
+  // R33-014 — Chi ha chiesto la cancellazione da più di 7 giorni ma non è nella lista: un
+  // negozio con un ordine aperto o soldi da incassare (migrazione 572). Non si prende in
+  // carico: si rimanda alla notte dopo e si segnala agli amministratori.
+  const rinviatePerOrdiniAperti = await segnalaLeCancellazioniRinviate(admin, new Set(userIds));
   if (userIds.length === 0) {
     // Le notti senza cancellazioni da fare sono la maggioranza: se il conto
     // delle potature non riuscite non pesa QUI, non pesa quasi mai.
     return NextResponse.json(
-      { processed: 0, message: 'No accounts to process', retentionFallite: potature.fallite },
+      { processed: 0, message: 'No accounts to process', retentionFallite: potature.fallite, rinviatePerOrdiniAperti },
       { status: potature.fallite > 0 ? 500 : 200 },
     );
   }
@@ -313,6 +317,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       // 27/10/2026 (quarto giro, fase 2) — Quante email stanotte non si sono
       // tentate perché il turno l'aveva già preso un altro giro da poco.
       avvisiEmailRimandate: avvisi.emailRimandate,
+      rinviatePerOrdiniAperti,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //
@@ -397,6 +402,47 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
  * è rossa. `nonScritti`: allarme che non si riesce a scrivere, la notte resta
  * rossa perché nessuno lo sa.
  */
+/**
+ * R33-014 — LA CANCELLAZIONE DEL NEGOZIO ASPETTA I SUOI ORDINI APERTI.
+ *
+ * Dalla migrazione 572 `process_expired_deletions` non restituisce il negozio che ha ancora
+ * un ordine aperto (pagato, o in contanti, e non consegnato né annullato) o soldi da
+ * incassare (bonifico trattenuto, in attesa, in corso, fallito, o contanti non ancora
+ * versati): la notte non lo prende in carico e non lo cancella. Qui si trovano quelle
+ * richieste scadute rimaste fuori dalla lista, e gli amministratori ricevono un avviso per
+ * negozio (uno solo, non uno a notte). Una lettura che non riesce non ferma il giro.
+ */
+async function segnalaLeCancellazioniRinviate(admin: Admin, prese: Set<string>): Promise<number> {
+  try {
+    const soglia = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const { data, error } = await admin
+      .from('profiles')
+      .select('id')
+      .lt('deletion_requested_at', soglia)
+      .limit(200);
+    if (error || !Array.isArray(data)) {
+      if (error) logger.warn('[cron-deletions] richieste rinviate non lette', { message: error.message });
+      return 0;
+    }
+    const rinviate = (data as Array<{ id: string }>).filter((r) => r?.id && !prese.has(r.id));
+    for (const r of rinviate) {
+      logger.warn('[cron-deletions] cancellazione rinviata: il negozio ha ordini aperti o soldi da incassare', { userId: r.id });
+      await avvisaAmministratori(
+        admin,
+        'Cancellazione rinviata: ordini o soldi ancora aperti',
+        `L'account ${r.id.slice(0, 8)} ha chiesto la cancellazione da più di 7 giorni, ma come negozio ha ancora ` +
+          'un ordine aperto o soldi da incassare: la notte non la prende in carico e riprova ogni notte. ' +
+          'Chiusi ordini e bonifici, la cancellazione parte da sola.',
+        `cancellazione-rinviata-ordini:${r.id}`,
+      );
+    }
+    return rinviate.length;
+  } catch (e) {
+    logger.warn('[cron-deletions] richieste rinviate non controllate', { e });
+    return 0;
+  }
+}
+
 /** Chi ha annullato la richiesta dopo la lettura della lista: la riga del profilo non la porta più. */
 async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<boolean> {
   try {

@@ -28,9 +28,12 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import {
+  chiaveCampo,
   esitoDelPiano,
   patchAiPerIlForm,
   pianoPatchPerIlModulo,
+  propostaPerIlModulo,
+  separaCampiDichiarativi,
   unisciVociDaControllare,
   type EsitoPatchModulo,
   type VoceDaControllare,
@@ -69,6 +72,55 @@ function prezzoDelCampo(v: unknown): number {
 }
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
+
+/**
+ * R33-025 — «COMPILA CON UNA FOTO» NON SCRIVE SOPRA LA MANO DEL NEGOZIANTE.
+ *
+ * Il pulsante c'e' anche quando il prodotto si modifica. `handleExtracted` scriveva nome e
+ * descrizione senza guardare se erano pieni, e passava ogni attributo letto dall'etichetta,
+ * allergeni e ingredienti compresi, dritto nei campi: il fornaio rifotografava la focaccia per
+ * cambiare la foto e «glutine, sesamo», scritti a mano, diventavano quello che il modello aveva
+ * letto male. Le altre porte dell'assistente (applyPatch) le dichiarazioni le mettono in «Da
+ * controllare»; questa no.
+ *
+ * Qui si decide, senza toccare lo stato del modulo: nome, descrizione e attributi entrano solo nei
+ * campi ancora vuoti; le dichiarazioni (allergeni, ingredienti, … — `separaCampiDichiarativi`) non
+ * entrano mai e diventano righe di «Da controllare», col pulsante «Usa questo valore» se la scheda
+ * ha quel campo. Prezzo (la banda), categoria, condizione e tag restano alle loro regole.
+ */
+function campoVuoto(v: unknown): boolean {
+  return v === undefined || v === null || v === false || (typeof v === 'string' && v.trim() === '');
+}
+
+function pianoDallaFoto(
+  estratto: { name?: string | null; description?: string | null; attributes?: Record<string, unknown> | null },
+  attuali: { name?: string | null; description?: string | null; attributes?: Record<string, unknown> | null },
+  campi: { key: string; type: string }[],
+): { name?: string; description?: string; attributi: Record<string, unknown>; daControllare: VoceDaControllare[] } {
+  const piano: ReturnType<typeof pianoDallaFoto> = { attributi: {}, daControllare: [] };
+  const nome = (estratto.name ?? '').trim();
+  if (nome && campoVuoto(attuali.name)) piano.name = nome;
+  const descrizione = (estratto.description ?? '').trim();
+  if (descrizione && campoVuoto(attuali.description)) piano.description = descrizione;
+  if (estratto.attributes && typeof estratto.attributes === 'object') {
+    const { patch, scartati } = separaCampiDichiarativi({ attributes: estratto.attributes });
+    for (const s of scartati) {
+      if (s.azione !== 'scrivi' || !s.valore) continue;
+      const motivo = `${s.etichetta} letto dalla foto: NON scritto nella scheda, controllalo sull'etichetta (proposta: «${s.valore}»)`;
+      const { valore } = propostaPerIlModulo({ chiave: s.chiave, valore: s.valore, motivo }, campi);
+      piano.daControllare.push(
+        valore === undefined
+          ? { id: `proposta:${s.chiave}`, motivo }
+          : { id: `proposta:${s.chiave}`, motivo, chiave: s.chiave, valore },
+      );
+    }
+    for (const [aiKey, valore] of Object.entries(patch.attributes ?? {})) {
+      if (!campoVuoto(attuali.attributes?.[chiaveCampo(aiKey)])) continue;
+      piano.attributi[aiKey] = valore;
+    }
+  }
+  return piano;
+}
 
 export interface ProductInitialValues {
   name?: string;
@@ -365,8 +417,19 @@ export default function ProductForm({
   };
 
   const handleExtracted = (data: ExtractedProduct) => {
-    if (data.name) setValue('name', data.name, { shouldValidate: true });
-    if (data.description) setValue('description', data.description, { shouldValidate: true });
+    // R33-025 — Nome, descrizione e attributi letti dalla foto entrano solo nei campi vuoti; allergeni,
+    // ingredienti e le altre dichiarazioni vanno in «Da controllare», come dalle altre porte
+    // dell'assistente (`pianoDallaFoto`, qui sopra).
+    const dallaFotoNelModulo = pianoDallaFoto(
+      data,
+      { name: getValues('name'), description: getValues('description'), attributes },
+      data.category_id ? getAttributesForCategory(categories, data.category_id).fields : attrFields,
+    );
+    if (dallaFotoNelModulo.name) setValue('name', dallaFotoNelModulo.name, { shouldValidate: true });
+    if (dallaFotoNelModulo.description) setValue('description', dallaFotoNelModulo.description, { shouldValidate: true });
+    if (dallaFotoNelModulo.daControllare.length > 0) {
+      setDaControllare((prima) => unisciVociDaControllare(prima, dallaFotoNelModulo.daControllare));
+    }
     /**
      * 3/9/2026 — ANCHE IL PREZZO CHE ESCE DALLA FOTO PASSA DALLA BANDA.
      *
@@ -389,12 +452,12 @@ export default function ProductForm({
     for (const motivo of prezzoScartato) toast.warning(motivo);
     segnaCampiDallAi(
       colonneDelPatchAi({
-        name: data.name,
-        description: data.description,
+        name: dallaFotoNelModulo.name,
+        description: dallaFotoNelModulo.description,
         price: dallaFoto.price,
         category_id: data.subcategory_id ?? data.category_id,
         tags: Array.isArray(data.tags) && data.tags.length > 0 ? data.tags : undefined,
-        attributes: data.attributes,
+        attributes: Object.keys(dallaFotoNelModulo.attributi).length > 0 ? dallaFotoNelModulo.attributi : undefined,
       }),
     );
     // Se l'AI ha riconosciuto una sottocategoria figlia, selezionala: resolveTop
@@ -423,7 +486,7 @@ export default function ProductForm({
       }
       if (data.category_id) {
         const { fields } = getAttributesForCategory(categories, data.category_id);
-        for (const [aiKey, rawValue] of Object.entries(data.attributes)) {
+        for (const [aiKey, rawValue] of Object.entries(dallaFotoNelModulo.attributi)) {
           if (aiKey === 'condizione') continue; // ora è campo di primo livello
           const value =
             typeof rawValue === 'string'
