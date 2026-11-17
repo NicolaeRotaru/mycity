@@ -1,0 +1,46 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-17 20:02",
+  "finita": false,
+  "testa": "f8758f305df3bd4fd3fcc805ef827f55e622a9bc",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "da_fare",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R01-002",
+      "chiave": "accessibilita|la pagina promozioni salta ancora dall'h1 all'h3",
+      "esito": "riparato",
+      "commit": "f8758f305df3bd4fd3fcc805ef827f55e622a9bc",
+      "commit_tutti": [
+        "f8758f305df3bd4fd3fcc805ef827f55e622a9bc"
+      ],
+      "file_toccati": [
+        "app/promozioni/page.tsx",
+        "tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base f8758f305df3bd4fd3fcc805ef827f55e622a9bc^ --file app/promozioni/page.tsx --prove tests/unit/riparazione-r01-promozioni-senza-salti-di-titolo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'h2 nascosto «I prodotti in promozione» sta fuori dalle tre strade della pagina, non solo sopra le schede delle promozioni: con zero promozioni o con la lettura caduta ProductGrid metteva sotto l'h1 l'h3 dello stato vuoto o le schede barrate senza h2. La prova monta la pagina vera nei quattro stati (vuoto, lettura caduta, solo prezzi barrati, promozioni) e controlla h1, h2 e nessun salto; alla base cadono i primi tre."
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "subagenti": 0,
+    "nota": ""
+  }
+}
