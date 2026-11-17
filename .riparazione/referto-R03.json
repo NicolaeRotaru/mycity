@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:06",
+  "aggiornato": "2026-11-17 18:09",
   "finita": false,
-  "testa": "e6d7bc0f13d8b8469eb3f8f176964c19d9d5a43f",
+  "testa": "6c6d25173ed278e52913a719b8d2fd7d929aa7e4",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -165,8 +165,25 @@
     {
       "id": "R03-013",
       "chiave": "qa-flussi|il finto condiviso della vetrina non conosce l'aggancio storie → vista dei negozi",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "6c6d25173ed278e52913a719b8d2fd7d929aa7e4",
+      "file_toccati": [
+        "tests/unit/aiuti/database-della-vetrina.ts",
+        "(il file qui sopra è stato assegnato a R03 dalla regista in quest'onda: non è di nessun'altra sessione)"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-vetrina-finta-aggancio-storie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-vetrina-finta-aggancio-storie.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6c6d25173ed278e52913a719b8d2fd7d929aa7e4^ --file tests/unit/aiuti/database-della-vetrina.ts --prove tests/unit/riparazione-r03-vetrina-finta-aggancio-storie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il finto conosce l'aggancio seller_stories → seller_public_profiles (su seller_id) e la regola di !inner al primo livello (righe senza aggancio scartate prima di ordine e tetto, come Postgres), invece di rispondere PGRST200. Così storie-drop-ed-eventi-reggono-con-i-profili-chiusi.test.ts («le storie dei negozi in home», 9 casi) passa ora dalla strada nuova del carosello e non più dal ripiego; le 5 prove che usano il finto restano verdi. File assegnato dalla regista in quest'onda."
     }
   ],
   "nuovi_difetti_visti": [],
