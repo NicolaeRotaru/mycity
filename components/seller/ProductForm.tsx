@@ -564,6 +564,10 @@ export default function ProductForm({
       categorie: categories,
       categoriaAttuale: currentCategoryId,
       modo: mode,
+      // R01-003 — le due regole di R04-020 valgono anche qui: con le varianti la disponibilità
+      // non si scrive, e si «toglie» solo un attributo che nel modulo c'è.
+      haVarianti: hasVariants,
+      attributiAttuali: attributes,
     });
     // R41 — Quello che l'assistente proponeva e non entra nei campi si dice, col
     // valore proposto: una riga nel riquadro «Da controllare» per ogni cosa (il
