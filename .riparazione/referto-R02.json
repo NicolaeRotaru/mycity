@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:02",
+  "aggiornato": "2026-11-17 18:03",
   "finita": false,
-  "testa": "ceb88720c4cde59ca418cdb002b4ea509c3d02a1",
+  "testa": "68b9b653abe7704d5fbfc400fa83af62f0c335c8",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -136,8 +136,26 @@
     {
       "id": "R02-011",
       "chiave": "qa-flussi|gli annunci sponsorizzati si accendono e si spengono sul giorno di greenwich, non su quello di piacenza",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "68b9b653abe7704d5fbfc400fa83af62f0c335c8",
+      "file_toccati": [
+        "components/SponsoredCarousel.tsx",
+        "tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 68b9b653abe7704d5fbfc400fa83af62f0c335c8^ --file components/SponsoredCarousel.tsx --prove tests/unit/riparazione-r02-sponsorizzati-giorno-piacenza.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il carosello passa a leggiSponsorizzati oggi = giornoPiacenza() (lib/tempo-piacenza.ts) invece del giorno UTC. La prova monta il carosello vero con TZ=UTC e orologio finto alle 23:30 di Greenwich (inverno e estate) e guarda il giorno che arriva ai filtri start_date <= oggi e end_date >= oggi della vista: deve essere quello di Piacenza (sulla base: il giorno prima).",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-012",
