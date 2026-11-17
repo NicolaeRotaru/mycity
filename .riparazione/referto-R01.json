@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:26",
+  "aggiornato": "2026-11-17 20:29",
   "finita": false,
-  "testa": "db38a0f0064b758039f6debd9b1fe1ecc660992d",
+  "testa": "3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -190,6 +190,32 @@
       ],
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La prova non è fra i miei file e non importa nessuno di essi: non l'ho toccata. Scritta la modifica esatta (psql finto in `finti`, che conta i file del secchio nell'origine finta) e provata su una copia temporanea fuori dal ramo."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "stati-ui|con upstash il freno dell'accesso dice sempre di aspettare la finestra intera, anche quando ne manca meno",
+      "esito": "riparato",
+      "commit": "3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073",
+      "commit_tutti": [
+        "3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073"
+      ],
+      "file_toccati": [
+        "lib/rate-limit.ts",
+        "tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts tests/unit/il-freno-che-si-allarga-lo-dice.test.ts tests/unit/rate-limit.test.ts tests/unit/riparazione-r23-freno-senza-contatore.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073^ --file lib/rate-limit.ts --prove tests/unit/riparazione-r01-freno-upstash-attesa-vera.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il freno condiviso non usa la libreria Ratelimit ma la pipeline REST di Upstash (INCR + EXPIRE NX): ora la stessa pipeline chiede anche PTTL, e l'attesa detta è il tempo che manca davvero alla scadenza della chiave (arrotondato in su, mai sotto 1 s, mai oltre la finestra); se Upstash non dà un numero positivo resta la finestra intera. La prova usa un Upstash finto con orologio finto: bloccato a metà finestra dice 30 s, non 60. Passano anche le 9 prove esistenti che esercitano il freno con Upstash (86 casi)."
     }
   ],
   "nuovi_difetti_visti": [
