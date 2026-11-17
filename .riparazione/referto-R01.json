@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 23:40",
+  "aggiornato": "2026-11-18 00:10",
   "finita": false,
-  "testa": "d81e9758fa3518ed532513d78a102b87849407ed",
+  "testa": "675c91f9cab17e739bada9e7ac98206882577a35",
   "verifica": {
     "comando": "npm run verify",
     "esito": "",
@@ -31,6 +31,28 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il numero nel pallino ora è aria-hidden e accanto c'è in sr-only «1 messaggio non letto» o «N messaggi non letti»."
+    },
+    {
+      "id": "R01-002",
+      "chiave": "accessibilita|nella pagina del reclamo il bottone resta spento senza dire cosa manca",
+      "esito": "riparato",
+      "commit": "d4b70c7db3e14e1af859d4a5afc3e8714184282c",
+      "file_toccati": [
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-reclamo-dice-cosa-manca.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-reclamo-dice-cosa-manca.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d4b70c7db3e14e1af859d4a5afc3e8714184282c^ --file 'app/orders/[id]/dispute/page.tsx' --prove tests/unit/riparazione-r01-reclamo-dice-cosa-manca.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sotto il bottone spento compare cosa manca (il motivo, i caratteri che mancano ai 20), legato al bottone con aria-describedby e con le stesse condizioni che lo spengono; cosa invia il reclamo non cambia."
     },
     {
       "id": "R01-003",
@@ -120,10 +142,67 @@
       "nota": "delicata: fuori dall'onda 9 — la cura tocca la gestione della sessione (onAuthStateChange su SIGNED_OUT in components/Navbar.tsx, distinguere uscita voluta da scadenza) e middleware.ts, che stasera sono permessi/sessioni."
     },
     {
+      "id": "R01-008",
+      "chiave": "qa-flussi|il rimando all accesso fatto dalla pagina delle impostazioni perde ?tab=",
+      "esito": "gia_riparato_prima",
+      "prova": "app/profile/settings/page.tsx:200-202 (commit 6f880b3c, R19-020): returnTo = encodeURIComponent('/profile/settings' + window.location.search); tests/unit/riparazione-r19-ritorno-con-la-scheda-dalle-impostazioni.test.tsx verde 3/3."
+    },
+    {
       "id": "R01-009",
       "chiave": "qa-flussi|anche chi sceglie «venditore» nell'iscrizione vede il pulsante google, che probabilmente crea un cliente",
       "esito": "non_fatto",
       "nota": "delicata: fuori dall'onda 9 — riguarda chi si iscrive con quale ruolo (il pulsante Google crea un account cliente anche per chi ha scelto «venditore»)."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|le visualizzazioni e i clic dei prodotti sponsorizzati non arrivano mai al database",
+      "esito": "riparato",
+      "commit": "8474cbefb9f30891028b9f1cd8b5d68d70eb4107",
+      "file_toccati": [
+        "components/SponsoredCarousel.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sponsorizzati-contano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sponsorizzati-contano.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8474cbefb9f30891028b9f1cd8b5d68d70eb4107^ --file components/SponsoredCarousel.tsx --prove tests/unit/riparazione-r01-sponsorizzati-contano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "`void supabase.rpc(...)` preparava la richiesta senza spedirla (postgrest manda la fetch solo in then()); ora un aiutante conta() chiama .then(ok, ko). Stesse funzioni e argomenti. Non delicata: visualizzazioni e clic servono solo alle statistiche; l'annuncio è pagato prima a prezzo fisso (lib/stripe/webhook/sponsorizzati.ts:130-141), nessuna migrazione."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|col telefono del negozio un po' indietro, un ordine non più ritirabile legge «entro le 12:46» invece di «ritiro non più possibile»",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/ordini/scadenza-accettazione.ts:297-299 (commit a5d24779, R18-015): rigaScadenzaPerIlNegozio guarda ultimoMomentoDelRitiro === 'impossibile' prima di confrontare con adesso; app/seller/orders/page.tsx:225 e app/seller/orders/[id]/page.tsx:451 usano solo rigaScadenzaPerIlNegozio; tests/unit/riparazione-r18-ritiro-impossibile-col-telefono-indietro.test.ts verde 3/3 con orologio finto."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "stati-ui|con la sessione scaduta il pulsante «apri reclamo» non fa niente, non chiede di rientrare e il testo scritto si perde",
+      "esito": "riparato",
+      "commit": "85f2677b7576b29c7e7e8594699dcba58609579f",
+      "file_toccati": [
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85f2677b7576b29c7e7e8594699dcba58609579f^ --file 'app/orders/[id]/dispute/page.tsx' --prove tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Su 401 da /api/disputes compare l'avviso «La sessione è scaduta: rientra» con link all'accesso che torna alla pagina; motivo e testo restano in sessionStorage e tornano nel modulo, la bozza si cancella a reclamo aperto. Nessun cambio ad autenticazione, permessi o server.",
+      "nota": "Sulla base l'uscita silenziosa `if (!user) return;` era già stata tolta da R03-013 (invio su /api/disputes con 401); restava l'avviso senza modo di rientrare e il testo perso, chiusi qui."
     }
   ],
   "nuovi_difetti_visti": [
@@ -137,7 +216,7 @@
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 1,
-    "nota": "lotto 1: 1 subagente riparatore"
+    "agenti": 2,
+    "nota": "lotto 1 e lotto 2: 2 subagenti riparatori"
   }
 }
