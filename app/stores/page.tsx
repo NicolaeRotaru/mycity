@@ -12,7 +12,7 @@ import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
-import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 type Store = StoreCardData & {
@@ -88,10 +88,17 @@ const fetchStoresData = async () => {
     supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
     // 5/11/2026 — Tutte le categorie, non solo le madri: servono le figlie per sapere di chi
     // sono madri (filtro qui sotto). Le opzioni del filtro restano le sole principali.
-    supabase
-      .from('categories')
-      .select('id, slug, name, parent_id, icon')
-      .order('name'),
+    // R02-009 (onda 9) — A finestre di mille (`leggiTutteLeRighe`), ordinate anche per id: il
+    // servizio dati ne restituisce al massimo mille per domanda, e una madre dopo la millesima per
+    // nome spariva dal filtro (e dalle madri dei negozi) senza nessun errore.
+    leggiTutteLeRighe<Category>((da, a) =>
+      supabase
+        .from('categories')
+        .select('id, slug, name, parent_id, icon')
+        .order('name')
+        .order('id')
+        .range(da, a),
+    ),
     // Le categorie di ogni negozio le dice il database. Prima si deducevano
     // dal mucchio di prodotti scaricati, e siccome quel mucchio era capato a
     // seicento IN TUTTO, i negozi che non pubblicavano da un po' sparivano dal
