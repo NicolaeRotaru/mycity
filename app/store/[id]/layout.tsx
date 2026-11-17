@@ -33,8 +33,11 @@ const fetchStore = (id: string) =>
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
   const store = await fetchStore(params.id);
+  // 17/11/2026 — Il titolo dice «non trovata» con parole sue, diverse dal riquadro della pagina
+  // («Negozio non trovato», in app/store/[id]/page.tsx): Next manda i metadati in streaming dentro il
+  // corpo, e con le stesse parole la scritta compariva due volte, come alla 404 prima della sua cura.
   if (!store || store.role !== 'seller' || !store.is_approved) {
-    return { title: 'Negozio non trovato · MyCity', robots: { index: false }, alternates: { canonical: null } };
+    return { title: 'Vetrina non trovata · MyCity', robots: { index: false }, alternates: { canonical: null } };
   }
   const name = store.store_name ?? 'Negozio';
   // 3/9/2026 — QUI SI PROMETTEVA IL RITIRO IN NEGOZIO, CHE ALLA CASSA NON C'E'.

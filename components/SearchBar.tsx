@@ -73,8 +73,10 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     },
   });
   // Come menu, piede e vetrina: solo le categorie con qualcosa dentro. Se non si sa, tutte.
+  // 17/11/2026 — Una ricarica caduta non butta via le piene già note: react-query le tiene in
+  // `data` anche in stato d'errore, e prima qui `isError` le scartava e tornavano le vuote.
   const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: open });
-  const catPiene = soloLePiene(topCats, piene.isError ? null : piene.data);
+  const catPiene = soloLePiene(topCats, piene.data ?? null);
 
   useEffect(() => {
     if (!open) return;

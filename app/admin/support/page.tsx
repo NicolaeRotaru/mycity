@@ -11,6 +11,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 
 type Message = {
   id: string;
@@ -37,7 +38,7 @@ export default function AdminSupportPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
 
-  const { data: messages = [], isLoading, isError, refetch } = useQuery({
+  const query = useQuery({
     queryKey: queryKeys.admin.support(filter),
     queryFn: async (): Promise<Message[]> => {
       let q = supabase
@@ -51,6 +52,9 @@ export default function AdminSupportPage() {
       return (data ?? []) as Message[];
     },
   });
+  const { data: messages = [], refetch } = query;
+  // Scheletro, errore e vuoto li decide il presidio comune (lib/vista-query.ts), come nel cruscotto di oggi.
+  const vista = vistaDaQuery(query);
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status, adminNotes }: { id: string; status: Message['status']; adminNotes?: string }) => {
@@ -103,9 +107,9 @@ export default function AdminSupportPage() {
         ))}
       </div>
 
-      {isLoading ? (
+      {vista.mostraScheletro ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl skeleton" />)}</div>
-      ) : isError ? (
+      ) : vista.mostraErrore ? (
         <ErrorState
           variant="compact"
           title="Non riesco a leggere i messaggi di assistenza"
@@ -113,7 +117,7 @@ export default function AdminSupportPage() {
           retry={() => void refetch()}
           supportHref={null}
         />
-      ) : messages.length === 0 ? (
+      ) : vista.mostraVuoto ? (
         <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <Inbox size={40} strokeWidth={2} className="mx-auto text-ink-300 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessun messaggio in questo stato</p>

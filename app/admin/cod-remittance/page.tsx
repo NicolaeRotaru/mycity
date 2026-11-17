@@ -11,6 +11,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { contanteDaRimettereCents } from '@/lib/shipping';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
@@ -123,7 +124,7 @@ export default function AdminCodRemittancePage() {
   // 15/11/2026 (R26-009) — La riga in più (TETTO + 1) non arrivava mai: il server ne restituisce
   // al massimo mille (max_rows). L'avviso non scattava e il «totale da rimettere» sembrava completo.
   // Adesso il totale lo conta il database (count exact), come bonifici e prodotti.
-  const { data: rows = [], isLoading, isError, refetch } = useQuery({
+  const query = useQuery({
     queryKey: queryKeys.admin.codRemittances,
     queryFn: async (): Promise<Row[] & { totale?: number; rimborsati?: Row[] }> => {
       const { data, error, count } = await supabase
@@ -167,6 +168,7 @@ export default function AdminCodRemittancePage() {
       });
     },
   });
+  const { data: rows = [], refetch } = query;
 
   const totaleRighe = (rows as Row[] & { totale?: number }).totale ?? rows.length;
   const tagliato = Math.max(totaleRighe, rows.length) > TETTO_RIMESSE;
@@ -240,6 +242,9 @@ export default function AdminCodRemittancePage() {
   const giornoAlConfine = tagliato && rows[TETTO_RIMESSE - 1]?.delivered_at
     ? giornoLocale(new Date(rows[TETTO_RIMESSE - 1].delivered_at)) : null;
   const totalToRemit = groups.reduce((s, g) => s + g.toRemitCents, 0);
+  // Scheletro, errore e vuoto li decide il presidio comune (lib/vista-query.ts), come nel cruscotto
+  // di oggi: una lettura ferma senza dato non diventa «nessuna rimessa».
+  const vista = vistaDaQuery(query, { quanti: groups.length });
 
   return (
     <div className="space-y-6">
@@ -249,9 +254,9 @@ export default function AdminCodRemittancePage() {
         sub="Conferma i contanti ricevuti dai rider per sbloccare il pagamento ai venditori. L'importo da rimettere è il totale incassato meno il compenso di consegna del rider."
       />
 
-      {isLoading ? (
+      {vista.mostraScheletro ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-xl skeleton" />)}</div>
-      ) : isError ? (
+      ) : vista.mostraErrore ? (
         // Senza lettura non si dice «nessuna rimessa» ne' «totale 0,00 €»: sono soldi che nessuno ha contato.
         <ErrorState
           variant="compact"
@@ -260,7 +265,7 @@ export default function AdminCodRemittancePage() {
           retry={() => void refetch()}
           supportHref={null}
         />
-      ) : groups.length === 0 ? (
+      ) : vista.mostraVuoto ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
           <CheckCircle2 size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessuna rimessa COD in attesa</p>

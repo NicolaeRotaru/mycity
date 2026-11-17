@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 import { etichettaStatoProdotto } from '@/lib/admin/etichette';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 
 /**
@@ -49,7 +50,7 @@ export default function AdminProductsPage() {
   // R11-011 — La riga in più (TETTO + 1) non arrivava mai: il server ne restituisce al massimo
   // mille. L'avviso non scattava e si leggeva «1000 di 1000» con 1.233 prodotti veri. Adesso il
   // totale lo conta il database (count exact), e la ricerca va al database quando l'elenco è tagliato.
-  const { data: letti = [], isLoading, isError, refetch } = useQuery({
+  const query = useQuery({
     queryKey: queryKeys.admin.products,
     queryFn: async () => {
       const { data, error, count } = await supabase
@@ -67,6 +68,7 @@ export default function AdminProductsPage() {
       return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
+  const { data: letti = [], refetch } = query;
   const totale = (letti as Row[] & { totale?: number }).totale ?? letti.length;
 
   const remove = useMutation({
@@ -115,10 +117,13 @@ export default function AdminProductsPage() {
     return p.name.toLowerCase().includes(s) || p.seller?.store_name?.toLowerCase().includes(s);
   });
 
-  if (isLoading) return <LoadingState />;
+  // Scheletro ed errore li decide il presidio comune (lib/vista-query.ts), come nel cruscotto di oggi:
+  // una lettura ferma senza dato non diventa «0 di 0».
+  const vista = vistaDaQuery(query);
+  if (vista.mostraScheletro) return <LoadingState />;
 
   // Lettura caduta: «0 di 0» direbbe che il catalogo e' vuoto, e non lo sappiamo.
-  if (isError) {
+  if (vista.mostraErrore) {
     return (
       <div className="space-y-5">
         <AdminPageTitle eyebrow="Catalogo" title="Prodotti" />

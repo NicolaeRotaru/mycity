@@ -158,9 +158,11 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // nessuna tessera). Finché non c'è si mostrano tutte, come prima; quando arriva si filtra.
   const piene = useQuery(domandaCategoriePiene(supabase));
   const isLoading = caricoCategorie;
+  // 17/11/2026 — Una rilettura caduta non butta via le piene già note: react-query tiene `data`
+  // e accende `isError`. Si mostrano tutte solo se le piene non si sono mai sapute.
   const categories = useMemo(
-    () => soloLePiene(tutte, piene.isError ? null : piene.data),
-    [tutte, piene.isError, piene.data],
+    () => soloLePiene(tutte, piene.data),
+    [tutte, piene.data],
   );
 
   // Le tessere che finiscono in home, ognuna con la sua foto già decisa dal

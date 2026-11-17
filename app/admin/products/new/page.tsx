@@ -178,7 +178,9 @@ export default function AdminNewProductPage() {
         initialValues={initialValues}
         submitting={create.isPending}
         sellerOffersExpress={sellerOffersExpress}
-        onSubmit={(payload, ctx) => create.mutate({ payload, variants: ctx.variants })}
+        // L'invio finisce quando finisce l'inserimento: fino ad allora il modulo non ne fa
+        // partire un altro (l'errore lo dice già `onError` della mutazione). Come il negozio.
+        onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
         onDiscard={() => router.push('/admin/products')}
       />
     </div>

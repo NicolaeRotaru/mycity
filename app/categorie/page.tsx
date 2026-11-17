@@ -45,7 +45,10 @@ export default function CategoriePage() {
    * `components/CategoryShowcase.tsx` applica già da giorni.
    */
   const caricando = isLoading || (piene.isLoading && !piene.isError);
-  const visibili = soloLePiene(cats, piene.isError ? null : piene.data);
+  // 17/11/2026 — Se una rilettura delle piene cade, react-query tiene l'elenco già noto in `data`
+  // (con `isError` acceso): si continua a usarlo invece di rimettere le categorie vuote. Senza un
+  // elenco mai letto, `data` è assente e si mostrano tutte, come prima.
+  const visibili = soloLePiene(cats, piene.data);
   const vista = statoDellaVista({ letto: !caricando, caricando, errore: isError || undefined, quanti: visibili.length });
 
   if (vista.mostraScheletro) return <LoadingState />;

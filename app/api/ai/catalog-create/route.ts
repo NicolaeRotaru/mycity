@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { fotoDaHostAmmesso } from '@/lib/ai/productContext';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -70,6 +71,9 @@ const BodySchema = z.object({
 });
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // R02-002 — Spento al lancio (carta #209): il freno vero è la rotta, non la pagina. Prima del
+  // limite, della chiave e del corpo, come catalog-batch/start.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   const rl = await rateLimitAsync({ key: `ai-catalog-create:${user.id}`, max: 30, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 

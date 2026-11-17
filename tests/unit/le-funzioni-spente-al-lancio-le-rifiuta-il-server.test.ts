@@ -136,7 +136,7 @@ describe('Drop del giorno: spento, la home non lo mostra e il pannello non lo sa
     expect(homeEnabledSections(salvata).map((s) => s.id)).toEqual(['h']);
   });
 
-  it('il pannello admin riceve 409 e non scrive nessun drop, anche senza chiave di servizio', async () => {
+  it('il pannello admin riceve 409 e non scrive nessun drop: il gestore si ferma prima di chiedere getAdminSupabase (middleware finto)', async () => {
     const upsert = vi.fn(async () => ({ error: null }));
     let chiesto = false;
     stato.admin = () => {

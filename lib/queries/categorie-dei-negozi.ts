@@ -13,8 +13,11 @@ export function conLeMadri(
   const tutte = new Set<string>();
   for (const id of categorieDelNegozio) {
     let corrente: string | null = id;
-    // Il tetto ai passi tiene fermo il giro se una categoria finisse per essere madre di sé stessa.
-    for (let passi = 0; corrente && !tutte.has(corrente) && passi < 10; passi += 1) {
+    // 17/11/2026 — Si risale fino alla radice, quanti che siano i livelli: prima un tetto di dieci
+    // passi lasciava fuori le madri dall'undicesimo livello in su, e col loro filtro il negozio
+    // spariva. Il giro si ferma lo stesso se una categoria finisse per essere madre di sé stessa
+    // (anche passando da altre): una categoria già vista non si rivisita.
+    while (corrente && !tutte.has(corrente)) {
       tutte.add(corrente);
       corrente = madreDi.get(corrente) ?? null;
     }

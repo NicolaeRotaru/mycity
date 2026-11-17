@@ -13,7 +13,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { campoDataOraPiacenza, istanteDaCampoPiacenza } from '@/lib/admin/etichette';
+import { campoDataOraPiacenza, dataEOraPiacenza, istanteDaCampoPiacenza } from '@/lib/admin/etichette';
 
 /**
  * 5/11/2026 (S05) — Il link del pulsante: un percorso interno («/search?…») o un
@@ -207,8 +207,10 @@ export default function AdminEventsPage() {
             ) : events.map((ev) => (
               <tr key={ev.id} className="hover:bg-cream-50">
                 <td className="px-4 py-3 font-semibold text-ink-900 max-w-xs break-words [overflow-wrap:anywhere]">{ev.title}</td>
-                <td className="px-4 py-3 text-ink-600">{new Date(ev.starts_at).toLocaleString('it-IT')}</td>
-                <td className="px-4 py-3 text-ink-600">{new Date(ev.ends_at).toLocaleString('it-IT')}</td>
+                {/* 17/11/2026 — Inizio e fine nell'ora di Piacenza, come i campi del modulo qui sotto:
+                    `toLocaleString('it-IT')` usava il fuso del computer di chi guarda. */}
+                <td className="px-4 py-3 text-ink-600">{dataEOraPiacenza(ev.starts_at)}</td>
+                <td className="px-4 py-3 text-ink-600">{dataEOraPiacenza(ev.ends_at)}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{STATUS_LABEL[ev.status] ?? ev.status}</span>
                 </td>
@@ -262,7 +264,7 @@ export default function AdminEventsPage() {
               <span className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{STATUS_LABEL[ev.status] ?? ev.status}</span>
             </div>
             <p className="text-xs text-ink-500 mt-1">
-              {new Date(ev.starts_at).toLocaleString('it-IT')} → {new Date(ev.ends_at).toLocaleString('it-IT')}
+              {dataEOraPiacenza(ev.starts_at)} → {dataEOraPiacenza(ev.ends_at)}
             </p>
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cream-100 flex-wrap">
               {ev.status === 'scheduled' && (

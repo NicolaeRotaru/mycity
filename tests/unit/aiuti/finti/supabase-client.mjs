@@ -63,22 +63,74 @@ const NESSUNO = { data: { user: null, session: null }, error: null };
  * prima dell'attesa: `.rpc(...).order(...).range(...)`. Prima `rpc` era una funzione async e
  * tornava una promessa nuda: il secondo anello scoppiava, e una pagina che pagina i risultati di
  * una funzione non si poteva montare. Qui gli anelli passano oltre (come quelli di `from` senza
- * database della prova) e l'attesa dà la stessa risposta di prima.
+ * database della prova) e l'attesa dà la risposta del database della prova.
  */
+/**
+ * 17/11/2026 — Una funzione che la prova non ha previsto (nessun database della prova con `rpc`)
+ * non risponde più «nessun errore». Prima `{ data: null, error: null }`: una pagina che salva con
+ * una funzione del database sembrava riuscita anche se non scriveva niente. Ora risponde con un
+ * errore che dice quale funzione mancava; la risposta la dà la prova con `__CLIENT_SUPABASE__`.
+ */
+const rpcNonPrevista = (nome) => ({
+  data: null,
+  error: {
+    code: 'RPC_NON_PREVISTA',
+    message: `Prova: nessuna risposta prevista per la funzione del database «${nome}» (dalla con globalThis.__CLIENT_SUPABASE__.rpc).`,
+    details: null,
+    hint: null,
+  },
+});
+
 const catenaDiUnaFunzione = (nome, argomenti) => {
-  let esito;
-  try {
-    esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null };
-  } catch (errore) {
-    esito = Promise.reject(errore);
-  }
+  /**
+   * 17/11/2026 — La chiamata al database della prova parte solo quando qualcuno aspetta la
+   * risposta (`then`/`await`, o la riga sola di `single`), come nel client vero, e una volta sola
+   * anche se la si aspetta due volte. Prima partiva subito, a `.rpc(...)`: una funzione chiamata e
+   * mai aspettata, che nel client vero non arriva mai al database, nella prova sembrava arrivata.
+   * Fino ad allora gli anelli si annotano, e alla partenza si fanno nell'ordine.
+   */
+  const anelli = [];
+  let riga = null;
+  let partita;
+  const parti = () => {
+    if (!partita) {
+      try {
+        let esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : rpcNonPrevista(nome);
+        /**
+         * 17/11/2026 — Gli anelli dopo la funzione arrivano al database della prova, come quelli di
+         * `from`: se la sua risposta sa fare `order`, `range`, `eq`… li fa lei, e la prova vede la
+         * finestra chiesta. Prima passavano oltre sempre, e una funzione che taglia e ordina
+         * restituiva tutte le righe. Una risposta che non li sa fare (una promessa nuda, come quella
+         * dei database delle prove di oggi) li lascia passare oltre come prima.
+         */
+        for (const [m, a] of anelli) if (typeof esito?.[m] === 'function') esito = esito[m](...a);
+        const daTagliare = riga !== null && typeof esito?.[riga] !== 'function';
+        if (riga !== null && !daTagliare) esito = esito[riga]();
+        partita = Promise.resolve(esito).then((r) => (daTagliare
+          ? { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null }
+          : r));
+      } catch (errore) {
+        partita = Promise.reject(errore);
+      }
+    }
+    return partita;
+  };
   const c = {};
   for (const m of ['eq', 'neq', 'in', 'or', 'ilike', 'gte', 'lte', 'order', 'limit', 'range', 'is', 'not', 'contains', 'overlaps', 'filter', 'match', 'select']) {
-    c[m] = () => c;
+    c[m] = (...a) => { anelli.push([m, a]); return c; };
   }
-  c.then = (risolvi, rifiuta) => Promise.resolve(esito).then(risolvi, rifiuta);
-  c.single = async () => { const r = await esito; return { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null }; };
-  c.maybeSingle = c.single;
+  c.then = (risolvi, rifiuta) => parti().then(risolvi, rifiuta);
+  // Una riga sola: si aspetta come una promessa, e parte anche lei solo all'attesa.
+  const unaRiga = (m) => () => {
+    riga = m;
+    return {
+      then: (risolvi, rifiuta) => parti().then(risolvi, rifiuta),
+      catch: (rifiuta) => parti().catch(rifiuta),
+      finally: (allaFine) => parti().finally(allaFine),
+    };
+  };
+  c.single = unaRiga('single');
+  c.maybeSingle = unaRiga('maybeSingle');
   return c;
 };
 

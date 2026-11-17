@@ -101,6 +101,13 @@ export default function PromozioniPage() {
         )}
       </CollectionHeader>
 
+      {/* R02-002 — come le altre pagine collezione (R07-009): fra l'h1 della testata e l'h3 di
+          ogni scheda un h2, visibile solo al lettore di schermo.
+          17/11/2026 — Sta fuori dalle tre strade, non solo sopra le schede delle promozioni: con
+          zero promozioni (o con la lettura caduta) la pagina passa a ProductGrid, che sotto l'h1
+          metteva subito l'h3 «Nessuna promozione attiva al momento», o le schede col prezzo
+          barrato senza un h2 sopra. */}
+      <h2 className="sr-only">I prodotti in promozione</h2>
       {isLoading ? (
         <SkeletonGrid count={12} maxColumns={4} />
       ) : items.length === 0 ? (
@@ -113,10 +120,6 @@ export default function PromozioniPage() {
           emptyDescription="Torna a trovarci: i negozi lanciano sconti a tempo di continuo."
         />
       ) : (
-        <>
-        {/* R02-002 — come le altre pagine collezione (R07-009): fra l'h1 della testata e l'h3 di
-            ogni scheda un h2, visibile solo al lettore di schermo. */}
-        <h2 className="sr-only">I prodotti in promozione</h2>
         <div className={classiGriglia(4)}>
           {sorted.map((it, i) => (
             <ProductCard
@@ -136,7 +139,6 @@ export default function PromozioniPage() {
             />
           ))}
         </div>
-        </>
       )}
     </div>
   );

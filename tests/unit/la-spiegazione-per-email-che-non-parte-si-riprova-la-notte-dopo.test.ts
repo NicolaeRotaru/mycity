@@ -15,10 +15,10 @@
  * scritto «tentativo n. 2» e «l'email è partita».
  */
 import { describe, it, expect, vi } from 'vitest';
+import { fintoGiroNotturno } from './aiuti/finto-giro-notturno';
 import {
   recapitaAvvisi,
   type ClienteAvvisi,
-  type LetturaAvvisi,
   type PostaAvvisi,
   type RegistroAvvisi,
 } from '@/lib/privacy/avvisi-a-chi-aspetta';
@@ -45,43 +45,21 @@ const dovuti = () => verdettoDelGiro([FATTORINO], ADESSO, 'privacy@mycity.exampl
 
 const registro = (): RegistroAvvisi => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
-type Riga = Record<string, unknown>;
-
-/** Un database come quello vero: legge quello che ha scritto, e il doppione sbatte sulla chiave primaria. */
+/**
+ * Un database come quello vero: legge quello che ha scritto, e il doppione sbatte sulla chiave primaria.
+ * R02-004 — È il finto unico del giro notturno (`chiaviUniche`), non più una copia scritta qui:
+ * `rotte.add(t)` fa rifiutare a `t` lettura e scrittura, come prima.
+ */
 function databaseVero() {
-  const tabelle: Record<string, Riga[]> = {};
-  const rotte = new Set<string>();
-  const righe = (t: string) => (tabelle[t] ??= []);
-  const cliente: ClienteAvvisi = {
-    from: (t) => ({
-      // Applica TUTTI i filtri: il registro degli invii si legge per tabella e per avviso.
-      select: () => {
-        const filtri: Array<[string, unknown]> = [];
-        const lettura: LetturaAvvisi = {
-          eq: (colonna, valore) => {
-            filtri.push([colonna, valore]);
-            return lettura;
-          },
-          then: (ok, ko) =>
-            Promise.resolve(
-              rotte.has(t)
-                ? { data: null, error: { message: `permission denied for table ${t}` } }
-                : { data: righe(t).filter((r) => filtri.every(([c, v]) => r[c] === v)), error: null },
-            ).then(ok, ko),
-        };
-        return lettura;
-      },
-      insert: async (nuove) => {
-        if (rotte.has(t)) return { data: null, error: { message: `permission denied for table ${t}` } };
-        if (nuove.some((n) => righe(t).some((r) => r.id === n.id))) {
-          return { data: null, error: { message: `duplicate key value violates unique constraint "${t}_pkey"` } };
-        }
-        righe(t).push(...nuove);
-        return { data: nuove, error: null };
-      },
-    }),
+  const finto = fintoGiroNotturno({ chiaviUniche: true });
+  const rotte = {
+    add: (t: string) =>
+      finto.guasti.push(
+        { tabella: t, azione: 'select', messaggio: `permission denied for table ${t}` },
+        { tabella: t, azione: 'insert', messaggio: `permission denied for table ${t}` },
+      ),
   };
-  return { cliente, righe, rotte };
+  return { cliente: finto.admin as unknown as ClienteAvvisi, righe: finto.righe, rotte };
 }
 
 /** La posta: dice sì o no come le si chiede, notte per notte, e tiene il conto. */

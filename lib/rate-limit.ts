@@ -206,7 +206,16 @@ function frenoSenzaContatoreCondiviso(): void {
   });
 }
 
-async function upstashIncr(key: string, ttlSec: number): Promise<number | null> {
+/**
+ * Il conteggio di Upstash e quanto manca, in millisecondi, alla fine della sua finestra.
+ *
+ * Il freno diceva sempre «aspetta la finestra intera» (ttlSec), anche a mezzo minuto dalla
+ * fine: il tempo vero lo sa solo Upstash, che conta da quando la chiave e' nata. PTTL lo
+ * chiede nella stessa pipeline. Se non torna un numero positivo resta la finestra intera.
+ */
+type ConteggioUpstash = { count: number; mancanoMs: number | null };
+
+async function upstashIncr(key: string, ttlSec: number): Promise<ConteggioUpstash | null> {
   if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
   try {
     // Pipeline: INCR + EXPIRE atomici via Upstash batch endpoint
@@ -219,6 +228,7 @@ async function upstashIncr(key: string, ttlSec: number): Promise<number | null> 
       body: JSON.stringify([
         ['INCR', `rl:${key}`],
         ['EXPIRE', `rl:${key}`, String(ttlSec), 'NX'],
+        ['PTTL', `rl:${key}`],
       ]),
       // Timeout breve: rate limit deve essere fast-path
       signal: AbortSignal.timeout(500),
@@ -226,7 +236,8 @@ async function upstashIncr(key: string, ttlSec: number): Promise<number | null> 
     if (!res.ok) return segnalaRipiego(`Upstash ha risposto HTTP ${res.status}`);
     const data: Array<{ result: number | string }> = await res.json();
     const count = Number(data[0]?.result);
-    if (Number.isFinite(count)) return count;
+    const pttl = Number(data[2]?.result);
+    if (Number.isFinite(count)) return { count, mancanoMs: Number.isFinite(pttl) && pttl > 0 ? pttl : null };
     return segnalaRipiego('Upstash ha risposto qualcosa che non e un numero');
   } catch (e) {
     return segnalaRipiego(e instanceof Error ? e.message : 'errore di rete');
@@ -243,13 +254,15 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
   const ttlSec = Math.ceil(opts.windowMs / 1000);
 
   if (UPSTASH_URL && UPSTASH_TOKEN) {
-    const count = await upstashIncr(opts.key, ttlSec);
-    if (count !== null) {
+    const conteggio = await upstashIncr(opts.key, ttlSec);
+    if (conteggio !== null) {
+      const { count, mancanoMs } = conteggio;
       const allowed = count <= opts.max;
+      const attesa = mancanoMs === null ? ttlSec : Math.min(ttlSec, Math.max(1, Math.ceil(mancanoMs / 1000)));
       return {
         allowed,
         remaining: Math.max(0, opts.max - count),
-        retryAfterSec: allowed ? 0 : ttlSec,
+        retryAfterSec: allowed ? 0 : attesa,
         limit: opts.max,
       };
     }

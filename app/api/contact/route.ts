@@ -14,6 +14,7 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 // filtrare due restano indietro senza dirlo a nessuno.
 import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
+import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 // 13/11/2026 (R24-007) — Il traduttore italiano di Zod acceso anche qui, sul server: senza,
 // un campo mancante o del tipo sbagliato tornava al browser in inglese («Required»).
@@ -55,7 +56,13 @@ export async function POST(req: Request) {
   // 🟡-2: verifica CAPTCHA (come signup/signin). Se TURNSTILE_SECRET_KEY non è
   // configurata, verifyTurnstileToken ritorna { ok:true, skipped:true }.
   const cap = await verifyTurnstileToken(captchaToken, ip);
-  if (!cap.ok) return ApiErrors.invalidRequest('Verifica anti-bot fallita. Riprova.');
+  if (!cap.ok) {
+    // Senza la chiave pubblica nel pacchetto del browser la pagina non disegna il riquadro e nessun
+    // gettone può arrivare: non è un robot, è la configurazione a metà. Riprovare non serve: si dice
+    // dove scrivere. Il nome per esteso: è la sola forma che Next sostituisce (vedi lib/captcha.ts).
+    if (!captchaToken && !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) return antiRobotNonConfigurato();
+    return ApiErrors.invalidRequest('Verifica anti-bot fallita. Riprova.');
+  }
 
   // 5/11/2026 — Se il servizio di accesso non risponde, getCurrentUser lancia:
   // prima il modulo cadeva con un 500 muto. Il messaggio si accetta lo stesso,
@@ -147,6 +154,17 @@ function moduloNonArrivato(): NextResponse {
         : 'Non abbiamo ancora una casella email attiva a cui scrivere: è un guasto nostro, non tuo.'),
     'SERVICE_UNAVAILABLE',
     { recapito: recapito.eUnaCasella ? { href: recapito.href, testo: recapito.testo } : null },
+  );
+}
+
+/** Il controllo anti-robot non può funzionare (manca la chiave pubblica): la casella che la pagina Contatti già mostra. */
+function antiRobotNonConfigurato(): NextResponse {
+  const casella = indirizzoContatto('info');
+  return apiError(
+    503,
+    `Il modulo dei contatti non funziona in questo momento e il tuo messaggio non è arrivato: è un guasto nostro, non tuo. Scrivici a ${casella}.`,
+    'SERVICE_UNAVAILABLE',
+    { recapito: { href: mailtoContatto('info'), testo: casella } },
   );
 }
 
