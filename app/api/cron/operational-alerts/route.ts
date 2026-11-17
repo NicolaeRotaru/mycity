@@ -45,10 +45,17 @@ type AlertRow = {
   type: string;
   detail: string;
   url?: string;
+  /**
+   * R33-002 — Un avviso che si ripete al massimo una volta al giorno (ATTESA_DI_UN_GIORNO_ORE), non
+   * ogni sei ore: l'attesa più lunga si legge nella stessa memoria, vedi la lettura dell'attesa qui sotto.
+   */
+  unaVoltaAlGiorno?: boolean;
 };
 
 // Non re-notifichiamo la stessa (tipo+entità) entro questa finestra.
 const COOLDOWN_HOURS = 6;
+// R33-002 — L'attesa degli avvisi `unaVoltaAlGiorno` (il reclamo fermo): un giorno pieno.
+const ATTESA_DI_UN_GIORNO_ORE = 24;
 
 export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
@@ -506,6 +513,38 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   }
 
   /**
+   * 10b) I RECLAMI APERTI DA PIÙ DI UN GIORNO.
+   *
+   * R33-002 — Un reclamo aperto o in esame tiene fermo il bonifico al negozio: il giro dei bonifici
+   * salta l'ordine finché il reclamo non si decide (release-payouts, OPEN_DISPUTE_STATUSES). Alla
+   * nascita l'amministratore riceve un avviso (/api/disputes), uno solo: se si perde fra gli altri,
+   * il reclamo resta lì e il negozio aspetta i suoi soldi senza una scadenza. Dopo 24 ore il
+   * sorvegliante lo ricorda all'amministratore, una volta al giorno per reclamo, finché non è deciso.
+   */
+  const { data: reclamiFermi, error: err_reclamiFermi } = await admin
+    .from('disputes')
+    .select('id, order_id, status, created_at')
+    .in('status', ['open', 'under_review'])
+    .lt('created_at', oneDayAgo)
+    // I più vecchi per primi: sono quelli che il negozio aspetta da più tempo.
+    .order('created_at', { ascending: true })
+    .limit(50);
+  if (err_reclamiFermi) controlliSaltati.push('reclami aperti da più di un giorno');
+
+  for (const d of reclamiFermi ?? []) {
+    const r = d as { id: string; order_id: string; status: string; created_at: string };
+    const ore = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 3_600_000);
+    const daQuanto = ore < 48 ? `${ore} ore` : `${Math.floor(ore / 24)} giorni`;
+    alerts.push({
+      key: `RECLAMO_FERMO|${r.id}`,
+      type: 'RECLAMO_FERMO',
+      detail: `Reclamo #${String(r.id).slice(0, 8)} sull'ordine #${String(r.order_id).slice(0, 8)} ${r.status === 'under_review' ? 'in esame' : 'aperto'} da ${daQuanto}: il bonifico al negozio resta fermo finché non lo decidi.`,
+      url: '/admin/disputes',
+      unaVoltaAlGiorno: true,
+    });
+  }
+
+  /**
    * 11) LE RICHIESTE DI CANCELLAZIONE ACCOUNT CHE NESSUNO HA ESEGUITO.
    *
    * 3/9/2026 — Chi chiede di essere cancellato aspetta sette giorni (il periodo
@@ -676,6 +715,23 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     problemi.push('attesa di sei ore non letta');
   }
   const recentSet = new Set((recent ?? []).map((r: { alert_key: string }) => r.alert_key));
+  // R33-002 — Gli avvisi `unaVoltaAlGiorno` guardano più indietro, nella stessa memoria e per tutti e
+  // due i canali: un invio di dieci ore fa li tiene ancora fermi. Il turno (`prendiIlTurno`) resta
+  // quello di tutti: una chiave più vecchia di un giorno è anche più vecchia di sei ore.
+  const alGiorno = alerts.filter((a) => a.unaVoltaAlGiorno).map((a) => a.key);
+  if (alGiorno.length > 0) {
+    const unGiornoFa = new Date(Date.now() - ATTESA_DI_UN_GIORNO_ORE * 60 * 60_000).toISOString();
+    const { data: delGiorno, error: errGiorno } = await admin
+      .from('operational_alert_log')
+      .select('alert_key')
+      .in('alert_key', [...alGiorno, ...alGiorno.map(chiaveCampanella)])
+      .gte('last_sent_at', unGiornoFa);
+    if (errGiorno) {
+      logger.error('[operational-alerts] attesa di un giorno non letta: si avvisa lo stesso', { motivo: errGiorno.message });
+      problemi.push('attesa di un giorno non letta');
+    }
+    for (const r of (delGiorno ?? []) as Array<{ alert_key: string }>) recentSet.add(r.alert_key);
+  }
   const fresh = alerts.filter((a) => !recentSet.has(a.key));
   // La campanella ha la sua memoria: vedi `chiaveCampanella` in fondo al file.
   // 5/11/2026 — Si guarda su TUTTI gli allarmi, non solo su quelli freschi per l'email: se l'email
