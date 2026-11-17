@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:24",
+  "aggiornato": "2026-11-17 18:26",
   "finita": false,
   "testa": "2eb57568d9596ff49c3c62a8931d694627a6116e",
   "verifica": {
@@ -47,8 +47,8 @@
     {
       "id": "R03-004",
       "chiave": "navigazione-gerarchia|la vetrina della home non può filtrare le categorie vuote nell'html del server col precarico della sola home",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "gia_riparato_prima",
+      "prova": "app/layout.tsx:213 e :262 — sulla base il layout carica precaricaSito() e lo consegna con <HydrationBoundary state={precarico}> SOPRA <Navbar /> (quindi prima di CategoryBar); lib/queries/precarico.ts:86 mette domandaCategoriePiene (chiave ['categories','con-prodotti']) in quel precarico (commit b5918e08 del 17/11, già nella base). Controllato con un render sul server usa-e-getta (non lasciato nel ramo): CategoryBar vera + vetrina che legge le piene; col solo precarico dentro la pagina la vetrina dice «non so», col precarico sopra il menu vede le piene nell'HTML del server. Nessuna modifica a CategoryBar né a app/page.tsx."
     },
     {
       "id": "R03-005",
