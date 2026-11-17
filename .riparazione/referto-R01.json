@@ -1,6 +1,6 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 18:26",
+  "aggiornato": "2026-11-17 18:27",
   "finita": false,
   "testa": "79a9057600f3e52cd905b5468915e9c7bb61f640",
   "verifica": {
@@ -250,6 +250,13 @@
       "chiave": "qa-flussi|l'avviso «foto di categoria scartata» si ripete a ogni ricalcolo delle tessere e a ogni rimontaggio",
       "esito": "gia_riparato_prima",
       "prova": "components/CategoryShowcase.tsx:95-104 sulla base bc36f481: l'avviso passa da diLaFotoScartata, che usa il ricordo a livello di modulo `fotoGiaDette` (chiave «scartata|slug|indirizzo»), lo stesso della foto rotta: una volta sola per foto, anche al ricalcolo delle tessere e al rimontaggio. Chiuso dalla cucitura 95d0b987 (onda 5, R30-001a), antenata della base. Comando: `npx vitest run tests/unit/riparazione-r30-foto-di-categoria.test.tsx --reporter=dot` → 3/3 verdi, fra cui «non si ridice quando arrivano le piene, né tornando in home» (rerender con le piene e rimontaggio → un solo avviso)."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|il precarico proposto nel layout pesa su ogni pagina (costo dichiarato, da far decidere a chi lo applica)",
+      "esito": "scelta_di_nicola",
+      "domanda": "Il precarico delle categorie è già nel layout (app/layout.tsx:36, 213, 262, dalla cucitura b5918e08) e vale per ogni pagina: lo teniamo così (costo: una lettura in cache per 60 secondi che scorre fino a 5.000 prodotti in vendita, a cache scaduta in attesa prima della pagina, più l'elenco delle categorie dentro l'HTML di ogni pagina), oppure lo togliamo e accettiamo che nell'HTML del server menu, piede e vetrina mostrino anche le categorie vuote finché il browser non le filtra?",
+      "nota": "Non ho toccato niente. Spostarlo solo sulla home non basta: menu e piede, che lo leggono, stanno su ogni pagina (e app/page.tsx non è un mio file)."
     }
   ],
   "nuovi_difetti_visti": [
