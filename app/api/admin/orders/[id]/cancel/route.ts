@@ -96,7 +96,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
     user_id: order.user_id,
-    title: '✕ Ordine annullato',
+    title: 'Ordine annullato',
     body: refundId ? `${reason} · rimborso emesso` : reason,
     link: `/orders/${order.id}`,
   }, { dove: 'admin-cancel', ordine: order.id });
@@ -113,7 +113,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     await scriviCampanella(admin, {
       category: 'order',
       user_id: a.user_id,
-      title: `✕ Ordine ${numero} annullato`,
+      title: `Ordine ${numero} annullato`,
       body: order.delivery_status === 'DELIVERED'
         ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
         : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.',

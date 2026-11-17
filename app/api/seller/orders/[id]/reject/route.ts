@@ -126,7 +126,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     {
       category: 'order',
       user_id: order.user_id,
-      title: '❌ Ordine rifiutato dal negozio',
+      title: 'Ordine rifiutato dal negozio',
       body: pezzi.join(' '),
       link: `/orders/${order.id}`,
     },
@@ -134,7 +134,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       ? [{
           category: 'order',
           user_id: order.rider_id,
-          title: '❌ Ordine annullato',
+          title: 'Ordine annullato',
           body: `L'ordine #${order.id.slice(0, 6)} è stato annullato.`,
           link: '/rider',
         }]

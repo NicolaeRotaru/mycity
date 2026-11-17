@@ -310,7 +310,7 @@ export async function suonaLaCampanellaAiNegozi(
       // tipo di avviso: senza, gli interruttori non spegnevano niente.
       category: 'order',
       user_id: created.sellerId,
-      title: '📦 Nuovo ordine ricevuto',
+      title: 'Nuovo ordine ricevuto',
       // 6/9/2026 — LA CIFRA QUI SI SCRIVEVA A MANO, E CONTRADDICEVA L'EMAIL.
       body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(created.totalCents)} · ${created.itemsCount} articoli`,
       link: `/seller/orders/${created.orderId}`,

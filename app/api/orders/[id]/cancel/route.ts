@@ -84,7 +84,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     {
       category: 'order',
       user_id: order.user_id,
-      title: '✕ Ordine annullato',
+      title: 'Ordine annullato',
       body: esito.refundId ? 'Ordine annullato · rimborso emesso' : 'Ordine annullato',
       link: `/orders/${order.id}`,
     },
@@ -92,7 +92,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
       ? [{
           category: 'order',
           user_id: order.seller_id,
-          title: '❌ Ordine annullato dal cliente',
+          title: 'Ordine annullato dal cliente',
           body: `Il cliente ha annullato l'ordine #${order.id.slice(0, 6)}.`,
           link: `/seller/orders/${order.id}`,
         }]
@@ -102,7 +102,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     ordine: order.id,
     ripiego: order.seller_id
       ? {
-          titolo: '❌ Ordine annullato dal cliente (avviso al negozio non scritto)',
+          titolo: 'Ordine annullato dal cliente (avviso al negozio non scritto)',
           corpo: `Il cliente ha annullato l'ordine #${order.id.slice(0, 6)}, ma l'avviso al negozio non è partito: avvisalo tu.`,
           link: `/admin/orders`,
         }
