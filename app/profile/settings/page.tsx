@@ -694,7 +694,9 @@ export default function SettingsPage() {
                   onChange={(v) => updatePref('email_marketing', v)}
                 />
                 <div className="mt-3 flex items-start justify-between gap-4 p-3 border rounded-lg">
-                  <div>
+                  {/* R02-003 — Come le righe degli interruttori (components/ui/Toggle.tsx): senza
+                      min-w-0 il testo non va a capo e spinge il pulsante delle push fuori dalla riga. */}
+                  <div className="min-w-0 break-words">
                     <div className="font-semibold flex items-center gap-2">
                       <Smartphone size={18} className="text-ink-500" aria-hidden />
                       Notifiche push del browser
