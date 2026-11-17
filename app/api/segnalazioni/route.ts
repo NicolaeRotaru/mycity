@@ -35,52 +35,7 @@ const Corpo = z.object({
   ]),
   dettaglio: z.string().max(2000).optional(),
   emailContatto: z.string().email().max(320).optional(),
-  // 17/11/2026 (R32-023) — Nome e dichiarazione di buona fede, tutti e due facoltativi.
-  nomeSegnalante: z.string().trim().max(120).optional(),
-  buonaFede: z.boolean().optional(),
 });
-
-/**
- * 17/11/2026 (R32-023) — IL MODULO NON PERMETTEVA DI DARE IL NOME NÉ DI DICHIARARE LA BUONA FEDE.
- *
- * Il regolamento europeo sui servizi digitali (art. 16.2, lettere c e d) chiede che il canale
- * permetta di dare il nome di chi segnala e di dichiarare che quanto scrive è, in buona fede,
- * esatto e completo. Non chiede di rifiutare chi non li dà: restano facoltativi.
- *
- * Viaggiano dentro il testo della segnalazione (la colonna `dettaglio`, che la pagina admin mostra
- * e che la potatura toglie dopo i mesi dichiarati), in righe scritte da noi. Un primo tentativo
- * (13/11) cercava di neutralizzare le righe di chi segnala che imitavano le nostre, e il collaudo
- * l'ha aggirato con caratteri invisibili e lineette simili. Adesso non si insegue nessuna forma:
- * OGNI riga scritta da chi segnala comincia con «│ », messo da noi, dopo aver ridotto a «\n» ogni
- * modo di andare a capo. Una riga che non comincia con «│ » l'ha scritta il server, sempre.
- */
-const LIMITE_DEL_TESTO = 2000; // il vincolo della colonna `dettaglio` (migrazione 126)
-const SEGNO_DI_CHI_SEGNALA = '│ ';
-/** Tutti i modi di andare a capo che un browser può mostrare come una riga nuova. */
-const A_CAPO = /\r\n|[\n\r\u000b\u000c\u0085\u2028\u2029]/g;
-/** Le stesse parole della casella del modulo (components/Segnala.tsx). */
-const DICHIARAZIONE_DI_BUONA_FEDE =
-  'Dichiaro in buona fede che le informazioni e le accuse contenute in questa segnalazione sono esatte e complete.';
-
-function testoDellaSegnalazione(c: z.infer<typeof Corpo>): string | null {
-  const testo = c.dettaglio?.trim() ?? '';
-  // Il nome sta su una riga nostra: niente a capo e niente caratteri invisibili.
-  const nome = (c.nomeSegnalante ?? '')
-    .replace(A_CAPO, ' ')
-    .replace(/[\p{Cc}\p{Cf}]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!testo && !nome && !c.buonaFede) return null;
-  const righe = [
-    `Nome di chi segnala: ${nome ? `«${nome}»` : 'non indicato'}`,
-    `Buona fede: ${c.buonaFede ? `dichiarata («${DICHIARAZIONE_DI_BUONA_FEDE}»)` : 'non dichiarata'}`,
-  ];
-  if (testo) {
-    righe.push('Testo di chi segnala (ogni sua riga comincia con «│»):');
-    for (const riga of testo.replace(A_CAPO, '\n').split('\n')) righe.push(`${SEGNO_DI_CHI_SEGNALA}${riga}`);
-  }
-  return righe.join('\n');
-}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   {
@@ -97,11 +52,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       corpo = Corpo.parse(await jsonRichiesta(req, TETTO_JSON));
     } catch (e) {
       return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
-    }
-
-    const dettaglio = testoDellaSegnalazione(corpo);
-    if (dettaglio && dettaglio.length > LIMITE_DEL_TESTO) {
-      return ApiErrors.invalidRequest('Il testo della segnalazione è troppo lungo: accorcialo un po’.');
     }
 
     // Chi è loggato viene riconosciuto, ma non è obbligatorio.
@@ -139,7 +89,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         tipo: corpo.tipo,
         oggetto_id: corpo.oggettoId,
         motivo: corpo.motivo,
-        dettaglio,
+        dettaglio: corpo.dettaglio ?? null,
         segnalante_id: autoreId,
         email_contatto: corpo.emailContatto ?? null,
       })

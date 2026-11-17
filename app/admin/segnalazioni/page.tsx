@@ -64,39 +64,6 @@ function dove(s: Pick<Segnalazione, 'tipo' | 'oggetto_id'>): string | null {
   return null;
 }
 
-/**
- * 17/11/2026 (R32-023) — Il testo di una segnalazione porta righe scritte dal server (nome di chi
- * segnala, buona fede) e righe scritte da chi segnala, che cominciano tutte con «│ » (lo mette la
- * rotta POST /api/segnalazioni). Qui le seconde stanno in un riquadro a parte: anche quando una riga
- * lunga va a capo sullo schermo resta dentro il riquadro, e non può sembrare una riga del server.
- */
-const SEGNO_DI_CHI_SEGNALA = '│ ';
-
-function TestoDellaSegnalazione({ testo }: { testo: string }) {
-  const gruppi: Array<{ diChiSegnala: boolean; righe: string[] }> = [];
-  for (const riga of testo.split('\n')) {
-    const diChiSegnala = riga.startsWith(SEGNO_DI_CHI_SEGNALA);
-    const ultimo = gruppi[gruppi.length - 1];
-    const pulita = diChiSegnala ? riga.slice(SEGNO_DI_CHI_SEGNALA.length) : riga;
-    if (ultimo && ultimo.diChiSegnala === diChiSegnala) ultimo.righe.push(pulita);
-    else gruppi.push({ diChiSegnala, righe: [pulita] });
-  }
-  const paragrafo = 'whitespace-pre-line break-words [overflow-wrap:anywhere] text-ink-700';
-  return (
-    <div className="mt-2 space-y-1">
-      {gruppi.map((g, i) =>
-        g.diChiSegnala ? (
-          <blockquote key={i} className="border-l-4 border-cream-300 pl-3" aria-label="Scritto da chi segnala">
-            <p className={paragrafo}>{g.righe.join('\n')}</p>
-          </blockquote>
-        ) : (
-          <p key={i} className={paragrafo}>{g.righe.join('\n')}</p>
-        ),
-      )}
-    </div>
-  );
-}
-
 function SchedaSegnalazione({ s }: { s: Segnalazione }) {
   const qc = useQueryClient();
   const [decisione, setDecisione] = useState<Decisione>(s.stato === 'ricevuta' ? 'in_esame' : (s.stato as Decisione));
@@ -203,7 +170,7 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
         </span>
       </div>
       {/* R02-021 — Un link lungo incollato da chi segnala usciva dalla scheda e allargava la pagina sul telefono. */}
-      {s.dettaglio && <TestoDellaSegnalazione testo={s.dettaglio} />}
+      {s.dettaglio && <p className="mt-2 whitespace-pre-line break-words [overflow-wrap:anywhere] text-ink-700">{s.dettaglio}</p>}
       <p className="mt-1 text-xs text-ink-500">
         Chi ha segnalato: {s.segnalante_id ? 'utente registrato' : 'senza account'}
         {s.email_contatto ? ` · ${s.email_contatto}` : ''}
