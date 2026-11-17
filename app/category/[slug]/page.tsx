@@ -4,7 +4,7 @@ import { use, useCallback, useRef, useState } from "react";
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trackCategoryViewed } from '@/lib/analytics/events';
 import { Filter, RotateCcw, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -15,6 +15,8 @@ import CollectionHeader from '@/components/CollectionHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
+import { contaProdottiDellaGriglia } from '@/lib/queries/griglia-prodotti';
+import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
 
 /**
  * 13/11/2026 (R15-010) — Una categoria senza prodotti diceva «Non abbiamo trovato questo
@@ -81,6 +83,45 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const madre = alberoCategoria?.madre ?? null;
   const subcategories: SubcatRow[] = alberoCategoria?.subcategories ?? [];
   const subsLoading = isLoading;
+
+  /**
+   * 17/11/2026 — I BOTTONI DELLE SOTTOCATEGORIE PORTAVANO ANCHE AL VUOTO.
+   *
+   * La pagina di una categoria madre metteva un bottone per ogni figlia, anche per quelle senza un
+   * prodotto: un clic e si arrivava a «non ci sono ancora prodotti». Home, piede e indice delle
+   * categorie le toglievano già, con la stessa lettura e la stessa chiave: qui si fa lo stesso. Si
+   * aspetta la risposta per non far comparire e poi sparire un bottone; se la lettura fallisce si
+   * mostrano tutte, come prima. Le file dei prodotti restano su tutte le figlie: si nascondono da
+   * sole quando sono vuote.
+   */
+  const piene = useQuery(domandaCategoriePiene(supabase));
+  const sottocategoriePiene: SubcatRow[] = piene.isLoading
+    ? []
+    : soloLePiene(subcategories, piene.isError ? null : piene.data);
+
+  /**
+   * 17/11/2026 — CON LA LETTURA DEI PRODOTTI CADUTA, LA CATEGORIA MADRE RESTAVA BIANCA.
+   *
+   * Nella pagina di una categoria madre ogni fila di prodotti (una per sottocategoria, più «Altri
+   * prodotti») si nasconde da sola quando la sua lettura va in errore, e non lo dice a nessuno:
+   * sotto i bottoni delle sottocategorie restava il vuoto, senza un «riprova». Qui si chiede al
+   * database quanti prodotti ha l'albero (una domanda sola, senza righe): se non risponde, la
+   * pagina lo dice invece di restare bianca.
+   */
+  const queryClient = useQueryClient();
+  const idsDelHub =
+    category && category.parent_id === null && subcategories.length > 0
+      ? [category.id, ...subcategories.map((s) => s.id)]
+      : null;
+  const conteggioHub = useQuery({
+    queryKey: queryKeys.products.grid({ conteggio: true, categoryIds: idsDelHub }),
+    enabled: !!idsDelHub,
+    staleTime: 60_000,
+    queryFn: () => contaProdottiDellaGriglia(supabase, { categoryIds: idsDelHub ?? [] }),
+  });
+  // `contaProdottiDellaGriglia` risponde null quando la lettura fallisce, invece di lanciare.
+  const prodottiDelHubCaduti =
+    !!idsDelHub && (conteggioHub.isError || (conteggioHub.isSuccess && conteggioHub.data === null));
 
   // Stato filtri — ESCLUSIVAMENTE le dimensioni già supportate da ProductGrid.
   const [maxPrice, setMaxPrice] = useState<number>(500);
@@ -313,25 +354,28 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   // Hub: rail per ogni sottocategoria. Mantiene il comportamento storico, ma con
   // header serif + breadcrumb e una riga "Sottocategorie".
   if (isHub) {
+    const fileDelHub = [...subcategories.map((s) => s.id), category.id];
     return (
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-8">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }} />
         {header}
 
-        <section>
-          <h2 className="font-serif text-xl font-bold text-ink-900 mb-3">Sottocategorie</h2>
-          <div className="flex flex-wrap gap-2.5">
-            {subcategories.map((s) => (
-              <Link
-                key={s.id}
-                href={`/category/${s.slug}`}
-                className="bg-white border border-cream-300 rounded-full px-4 py-2 hover:bg-primary-50 hover:border-primary-400 text-sm font-medium transition-colors"
-              >
-                {s.name}
-              </Link>
-            ))}
-          </div>
-        </section>
+        {sottocategoriePiene.length > 0 && (
+          <section>
+            <h2 className="font-serif text-xl font-bold text-ink-900 mb-3">Sottocategorie</h2>
+            <div className="flex flex-wrap gap-2.5">
+              {sottocategoriePiene.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/category/${s.slug}`}
+                  className="bg-white border border-cream-300 rounded-full px-4 py-2 hover:bg-primary-50 hover:border-primary-400 text-sm font-medium transition-colors"
+                >
+                  {s.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="space-y-10">
           {subcategories.map((s) => (
@@ -357,7 +401,20 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           />
         </div>
 
-        {[...subcategories.map((s) => s.id), category.id].every((fila) => contiDelleFile[fila] === 0) && (
+        {/* 17/11/2026 — Lettura caduta e nessuna fila a schermo: si dice, invece del vuoto. */}
+        {prodottiDelHubCaduti &&
+          !fileDelHub.every((fila) => contiDelleFile[fila] === 0) &&
+          !fileDelHub.some((fila) => (contiDelleFile[fila] ?? 0) > 0) && (
+            <ErrorState
+              title="Non riesco a caricare i prodotti di questa categoria"
+              description="C'è stato un problema di collegamento: i prodotti probabilmente ci sono. Riprova fra un attimo."
+              onRetry={() => queryClient.invalidateQueries({ queryKey: queryKeys.products.all })}
+              backHref="/categorie"
+              backLabel="Vedi tutte le categorie"
+            />
+          )}
+
+        {fileDelHub.every((fila) => contiDelleFile[fila] === 0) && (
             <div className="rounded-2xl border border-cream-300 bg-white px-4 py-12 text-center">
               <p className="font-serif text-lg font-bold text-ink-900">{t('noResultsGeneric')}</p>
               <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">{CATEGORIA_ANCORA_VUOTA}</p>
@@ -384,10 +441,10 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
 
       <div className="md:col-span-4">{header}</div>
 
-      {subcategories.length > 0 && (
+      {sottocategoriePiene.length > 0 && (
         <section className="md:col-span-4">
           <div className="flex flex-wrap gap-2.5">
-            {subcategories.map((s) => (
+            {sottocategoriePiene.map((s) => (
               <Link
                 key={s.id}
                 href={`/category/${s.slug}`}
@@ -527,11 +584,11 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           onReset={activeFilters > 0 ? reset : undefined}
           emptySuggestions={
             <div className="mt-6 space-y-6">
-              {subcategories.length > 0 && (
+              {sottocategoriePiene.length > 0 && (
                 <div className="text-center">
                   <p className="mb-2 text-[13px] text-ink-500">{t('didYouMean')}</p>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {subcategories.slice(0, 6).map((s) => (
+                    {sottocategoriePiene.slice(0, 6).map((s) => (
                       <Link
                         key={s.id}
                         href={`/category/${s.slug}`}

@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, Trash2, Plus, Home, FileText } from 'lucide-react';
-import { newPage, MAX_PAGES, type StoreSite, type SitePage } from '@/lib/store-site';
+import { newPage, MAX_PAGES, type StoreSite, type SitePage, type SiteSection } from '@/lib/store-site';
 
 /**
  * Lista delle pagine del sito (schermata panoramica): seleziona una pagina per
@@ -45,13 +45,23 @@ export default function PageListEditor({
     if (id === homeId) return;
     // Le voci del menu che aprono questa pagina spariscono con lei: il negozio lo sa prima.
     const voci = site.menu.links.filter((l) => l.target.kind === 'page' && l.target.pageId === id);
-    const avviso = voci.length
+    // Anche i pulsanti delle sezioni (banner) delle altre pagine che la aprono: senza di lei porterebbero a niente.
+    const apreLei = (s: SiteSection) => s.type === 'banner' && s.config.cta?.target.kind === 'page' && s.config.cta.target.pageId === id;
+    const pulsanti = pages.flatMap((p) => (p.id === id ? [] : p.sections.filter(apreLei)));
+    let avviso = voci.length
       ? `Eliminare questa pagina e le sue sezioni?\n\nSparirà anche ${voci.length === 1 ? 'la voce' : 'le voci'} del menu che la ${voci.length === 1 ? 'apre' : 'aprono'}: ${voci.map((l) => `«${l.label || 'senza nome'}»`).join(', ')}.`
       : 'Eliminare questa pagina e le sue sezioni?';
+    if (pulsanti.length) {
+      avviso += `\n\nSparirà anche ${pulsanti.length === 1 ? 'il pulsante' : 'i pulsanti'} delle sezioni che la ${pulsanti.length === 1 ? 'apre' : 'aprono'}: ${pulsanti.map((s) => `«${s.type === 'banner' ? s.config.cta?.label : ''}»`).join(', ')}.`;
+    }
     if (!window.confirm(avviso)) return;
     onChange({
       ...site,
-      pages: pages.filter((p) => p.id !== id),
+      pages: pages
+        .filter((p) => p.id !== id)
+        .map((p) => (p.sections.some(apreLei)
+          ? { ...p, sections: p.sections.map((s) => (s.type === 'banner' && apreLei(s) ? { ...s, config: { ...s.config, cta: undefined } } : s)) }
+          : p)),
       menu: voci.length ? { ...site.menu, links: site.menu.links.filter((l) => !voci.includes(l)) } : site.menu,
     });
   };

@@ -1,0 +1,318 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-17 18:58",
+  "finita": true,
+  "testa": "1e7e09a533ae15a66d92d17814ca20ee43361105",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "2b9e7dbe46e2e607c511268b3ae9899f3fbab0a6",
+    "nota": "typecheck pulito, lint 0 errori (99 avvisi già sulla base), vitest 1659 file passati e 1 saltato (10737 prove); 446 s. 2b9e7dbe viene dopo la testa 1e7e09a5 e tocca solo il referto. Un primo lancio era stato fermato dal limite di 10 minuti della shell mentre giravano gli smentitori."
+  },
+  "voci": [
+    {
+      "id": "R04-001",
+      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
+      "esito": "parziale",
+      "commit": "c1b6f93ee62a900b37ddd6a6d1bad1faf414e57d",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-categoria-lettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-categoria-lettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c1b6f93ee62a900b37ddd6a6d1bad1faf414e57d^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r04-categoria-lettura-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nella categoria madre (hub) le file di ProductGrid si nascondono da sole in errore senza avvisare la pagina: la pagina ora chiede il conteggio dell'albero (contaProdottiDellaGriglia, una domanda head) e, se non risponde e nessuna fila è a schermo, mostra ErrorState con «Riprova» (rilegge tutte le domande dei prodotti) e il ritorno alle categorie. Il ramo a griglia piatta mostrava già l'errore di ProductGrid.",
+      "verificato_da": "smentitore A: prova e prova rimessa rilanciate (uscita 0), ma la prova fa cadere tutte le letture insieme. Una prova esplorativa con le file cadute e il conteggio che risponde 7 lascia la pagina bianca: smentita, quindi parziale. R04 ha rifatto anche la rimessa: uscita 0.",
+      "cosa_resta": "La pagina mostra ErrorState solo quando cade anche la domanda di conteggio. Se cadono le file di components/ProductGrid.tsx (che leggono anche seller_public_profiles, lib/queries/griglia-prodotti.ts:266) e il conteggio risponde, la categoria madre resta bianca sotto i bottoni delle sottocategorie: lo smentitore l'ha provato. Serve un segnale diretto dalla fila, che non è un file di R04. Effetto accanto: se il conteggio cade mentre le file caricano, il messaggio d'errore compare sotto le file in caricamento (page.tsx:405-415) e sparisce se poi arrivano piene.",
+      "serve_file_altrui": [
+        {
+          "file": "components/ProductGrid.tsx",
+          "modifica": "Aggiungere una prop opzionale onError(): chiamarla quando la lettura di una fila cade (oggi alle righe 474-476 con l'errore onCount non viene chiamato, e alle 587-588 la fila si nasconde senza dirlo). Poi app/category/[slug]/page.tsx (di R04) la legge e mostra ErrorState quando tutte le file sono cadute, al posto del segnale indiretto del conteggio."
+        }
+      ]
+    },
+    {
+      "id": "R04-002",
+      "chiave": "frontend-ux|la scheda di un negozio inesistente ripete «pagina non trovata» nel titolo e nella pagina, come faceva la 404",
+      "esito": "riparato",
+      "commit": "377ae97e40b2e81f1004a725e6905dd1deef9843",
+      "file_toccati": [
+        "app/store/[id]/[slug]/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-titolo-pagina-negozio-mancante.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-titolo-pagina-negozio-mancante.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 377ae97e40b2e81f1004a725e6905dd1deef9843^ --file app/store/[id]/[slug]/layout.tsx --prove tests/unit/riparazione-r04-titolo-pagina-negozio-mancante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il titolo dei metadati per la pagina di vetrina mancante diventa «Pagina del negozio non trovata · MyCity»: dice ancora «non trovata» (noindex e canonical nullo invariati, e la forma che la prova minori-s09-scheda-prodotto cerca resta) ma non contiene più l'h1 «Pagina non trovata», come la correzione R15-005 della 404.",
+      "verificato_da": "smentitore B (copia separata a fc287d58): prova verde 3/3, prova rimessa rifatta uscita 0; verdi le 6 prove che leggono la rotta app/store/[id]/[slug] (44/44); il titolo «Pagina del negozio non trovata · MyCity» non contiene l'h1 «Pagina non trovata» e rispetta ancora la regex di minori-s09-scheda-prodotto. Resta lieve: il titolo contiene ancora «non trovata», imposto da tests/unit/minori-s09-scheda-prodotto.test.ts:49. R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-003",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts",
+          "modifica": "Il caso «il sipario copre anche il guscio, non solo la pagina» (righe 90-106) pretende app/store/loading.tsx con <ScheletroNegozio /> finché app/store/[id]/layout.tsx è async e fa await precaricaNegozio: va capovolto (sopra il guscio che deve poter rispondere 404 non ci deve essere nessun loading.tsx, così il notFound() arriva prima che lo streaming parta con 200). Poi si cancella app/store/loading.tsx (file di R04: la cura vera è solo quella cancellazione; provata a mano: senza il file quel caso è l'unico rosso, 7 su 8 verdi). Da sapere: sulla base app/loading.tsx esiste ancora (la prova minori-s09-aspetto, caso 1550, ne legge il testo) e nessun file della rotta app/store chiama notFound() sul server: il 404 vero arriva solo con la voce aperta «le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok»» (registro, riga 876). Precisazioni dello smentitore B: la prova capovolta deve guardare solo sotto app/store/ (app/loading.tsx esiste ancora ed è protetto da tests/unit/minori-s09-aspetto.test.ts:219-224); togliendo app/store/loading.tsx, mentre il guscio legge il negozio torna lo scheletro generico del sito, cioè il salto che quel caso proteggeva: è una scelta da fare insieme alla voce della riga 876."
+        }
+      ],
+      "verificato_da": "smentitore B: tutta la suite unitaria senza app/store/loading.tsx (1656 file, 10724 casi) dà un solo rosso, «il sipario copre anche il guscio»; la prova legge per nome ScheletroNegozio.tsx, HeroSection.tsx e i file di app/store/**, non di R04; nei soli file di R04 non c è cura (un app/store/layout.tsx non riceve [id], middleware.ts e app/store/[id]/layout.tsx non sono di R04). Esito confermato."
+    },
+    {
+      "id": "R04-004",
+      "chiave": "frontend-ux|il drop del giorno in home usa ancora il giorno di greenwich",
+      "esito": "riparato",
+      "commit": "04cc4b9afe900efe616879161e8203dd24acf367",
+      "file_toccati": [
+        "components/home/DropOfDay.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-drop-giorno-di-roma.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-drop-giorno-di-roma.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 04cc4b9afe900efe616879161e8203dd24acf367^ --file components/home/DropOfDay.tsx --prove tests/unit/riparazione-r04-drop-giorno-di-roma.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giorno del drop (chiave e filtro drop_date) viene da giornoPiacenza() di lib/tempo-piacenza.ts, lo stesso aiutante della pagina admin, importato senza modificarlo; il conto alla rovescia arriva alla mezzanotte di Piacenza (inizioGiornoPiacenza del giorno dopo meno 1 ms) invece che a quella del dispositivo. Prova con orologio finto alle 23:30 UTC.",
+      "verificato_da": "smentitore B: prova verde con TZ=UTC, Europe/Rome, Asia/Tokyo, America/Los_Angeles, Pacific/Kiritimati; prova rimessa uscita 0; 14 istanti intorno al cambio d'ora (25/10 e 29/03), a capodanno e a fine febbraio, 14/14 verdi con la correzione e rossi sulla base in UTC; verdi le 11 prove che leggono DropOfDay (138/138). Il caso del conto alla rovescia fa da guardia solo con un fuso diverso da Roma (CI in UTC), quello della chiave del giorno con ogni fuso. R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-005",
+      "chiave": "frontend-ux|eliminando una pagina della vetrina restano i pulsanti delle sezioni che puntavano a lei",
+      "esito": "riparato",
+      "commit": "234686de7fbf24bc91fb81fefa86133d53519784",
+      "file_toccati": [
+        "components/seller/site/PageListEditor.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-elimina-pagina-pulsanti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-elimina-pagina-pulsanti.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 234686de7fbf24bc91fb81fefa86133d53519784^ --file components/seller/site/PageListEditor.tsx --prove tests/unit/riparazione-r04-elimina-pagina-pulsanti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla cancellazione di una pagina, i banner delle altre pagine il cui pulsante (cta, l'unico collegamento di sezione verso una pagina nello schema) la apriva perdono il pulsante, la sezione resta; la conferma nomina quei pulsanti prima, come già faceva per le voci del menu.",
+      "verificato_da": "smentitore C (copia separata a 2b9e7dbe): prova verde (3) e prova rimessa rifatta uscita 0; nello schema l'unico collegamento di sezione verso una pagina è la cta del banner (ctaTargetSchema, lib/store-site.ts:131-164), e PageListEditor è l'unica strada per eliminare una pagina; verde la prova vicina r20-elimina-pagina-menu. R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-006",
+      "chiave": "frontend-ux|sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
+      "esito": "parziale",
+      "commit": "8d5109714b92c009992db4b2a4f816ae74c05449",
+      "file_toccati": [
+        "components/seller/site/SectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-testo-lungo-vetrina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-testo-lungo-vetrina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8d5109714b92c009992db4b2a4f816ae74c05449^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r04-testo-lungo-vetrina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Tolto maxLength={4000} dal campo Testo della sezione richText (il browser tagliava in silenzio): il testo resta intero, il suggerimento mostra il contatore N/4.000 contato come lo schema (il testo salvato, ogni a-capo è «<br>» e conta 4, lo dice il campo) e oltre RICHTEXT_MAX l'errore dice di accorciarlo, prima che il salvataggio lo rifiuti. Come il gemello dell'amministrazione (R10-014).",
+      "verificato_da": "smentitore C: prova verde (4), prova rimessa uscita 0, 8 prove vicine verdi (105 test); una prova esplorativa mostra un testo che il contatore accetta e che, dopo la sanitizzazione, fa ripiegare la vetrina sul default: smentita, quindi parziale. R04 ha rifatto anche la rimessa: uscita 0.",
+      "cosa_resta": "Il taglio silenzioso del campo (maxLength) non c'è più e il contatore avvisa, ma contatore (SectionConfigForm.tsx:115) e schema (lib/store-site.ts:153, z.string().max(RICHTEXT_MAX)) contano il testo PRIMA della sanitizzazione, e la rotta app/api/seller/site/route.ts:47-52 sanitizza dopo il controllo senza ricontrollare. Un testo vicino al limite con & o < (per esempio 3.980 «a» + « Tom & Jerry < 3 »: 3.997 per il contatore, 4.003 dopo sanitizeRichText) si salva, e alla rilettura normalizeSite (lib/store-site.ts:371-376) ripiega sul sito di default: spariscono blocco, pagine, menu e tema. È il caso della cura «come in R10-014». La cura sta nei file di R04: in lib/store-site.ts:153 fare come lib/home-site.ts:178-181 (lunghezzaDelTesto più un tetto sull'HTML sanitizzato) e contare così anche nel contatore. Non fatta per la consegna anticipata chiesta dalla regista. Il difetto c'era già sulla base."
+    },
+    {
+      "id": "R04-007",
+      "chiave": "frontend-ux|la vetrina legge al massimo 20 recensioni mentre la linguetta mostra il totale vero",
+      "esito": "gia_riparato_prima",
+      "prova": "components/store-sections/ReviewsSection.tsx:43-49 e :250-268 sulla base (commit 9b4f9271 R30-007, antenato della base): useStorePageData.ts:40 legge ancora le prime 20, ma «Mostra altre recensioni» ne chiede altre 20 alla volta con .range() finché non arriva al totale vero di store_review_stats, lo stesso della linguetta (SectionRenderer.tsx:117). Lo dimostra tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx («con 45 nel database si arriva a leggerle tutte e 45»), verde: npx vitest run --reporter=dot tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx → 0 (3 passate).",
+      "verificato_da": "smentitore C: sulla base ReviewsSection.tsx legge a pagine fino al totale vero (:43-49, :251-271, pulsante :335-343), 9b4f9271 è antenato della base, linguetta e pulsante usano lo stesso totale (SectionRenderer.tsx:117), la prova r30 c'era già ed è verde (3). Esito confermato."
+    },
+    {
+      "id": "R04-008",
+      "chiave": "frontend-ux|a menu spento, un link lasciato a metà sparisce al salvataggio senza avviso",
+      "esito": "riparato",
+      "commit": "1e7e09a533ae15a66d92d17814ca20ee43361105",
+      "file_toccati": [
+        "lib/store-site.ts",
+        "tests/unit/riparazione-r20-menu-spento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-menu-spento-conserva-link.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-menu-spento-conserva-link.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1e7e09a533ae15a66d92d17814ca20ee43361105^ --file lib/store-site.ts --prove tests/unit/riparazione-r04-menu-spento-conserva-link.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A menu acceso un link a metà resta nell'editor e il salvataggio lo rifiuta dicendo quale completare; a menu spento (esplicito) adesso si conserva com'è invece di essere scartato: il salvataggio non si blocca, il sito pubblico non mostra link, e riacceso il menu vale lo stesso controllo (stesso percorso d'errore menu.links.N). Modificata la prova esistente tests/unit/riparazione-r20-menu-spento.test.ts (importa solo lib/store-site.ts): aspettava lo scarto, ora aspetta che il link resti.",
+      "verificato_da": "smentitore C: prova rimessa uscita 0; schema vecchio e nuovo confrontati su 71 casi a menu acceso o senza «enabled»: nessuna differenza negli esiti né nei percorsi d'errore; a menu spento resolveMenu dà [] e StoreNav è l'unico lettore pubblico, quindi un link a metà non arriva al sito; 10 prove su store-site verdi, tsc pulito. La modifica di tests/unit/riparazione-r20-menu-spento.test.ts è legittima (importa solo @/lib/store-site), segue il comportamento chiesto dalla voce ed è stretta quanto prima. Minori rimasti: a menu spento un indirizzo oltre 500 caratteri ora blocca il salvataggio con un messaggio Zod in inglese (MenuEditor.tsx:76 senza maxLength); il tipo a lib/store-site.ts:310 dichiara completi anche i link bozza. R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-009",
+      "chiave": "navigazione-gerarchia|le pagine di una categoria madre mostrano chip verso sottocategorie vuote",
+      "esito": "riparato",
+      "commit": "c6fafc1ff409f32e04db278a7ca11023232cef17",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-chip-sottocategorie-piene.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-chip-sottocategorie-piene.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6fafc1ff409f32e04db278a7ca11023232cef17^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r04-chip-sottocategorie-piene.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge le categorie piene (domandaCategoriePiene, stessa chiave di home, piede e indice) e filtra con soloLePiene i bottoni delle sottocategorie: nel ramo madre (hub), nel ramo a griglia di una sottocategoria con figlie e nei «forse cercavi» dello stato vuoto. Mentre la lettura carica non mostra bottoni; se cade li mostra tutti come prima. Le file dei prodotti restano su tutte le figlie (si nascondono da sole se vuote).",
+      "verificato_da": "smentitore A: prova e prova rimessa rilanciate (uscita 0); i bottoni verso le figlie vuote spariscono in tutti e tre i punti (page.tsx:363, :444, :587), con la lettura caduta compaiono tutti come prima; suite e tsc verdi. Note: mentre le file caricano la loro intestazione porta ancora alla figlia vuota (page.tsx:381), e la sezione Sottocategorie compare solo a lettura finita. R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-010",
+      "chiave": "qa-flussi|il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
+      "esito": "serve_file_altrui",
+      "nota": "Esito corretto dallo smentitore: la regola è già decisa dalla campagna (il collaudo K05 ha tolto R22-013 come «rompe_altro» proprio perché SellerShell.tsx:105-122 contava ancora le promozioni; la voce del sito sulla campanella che mostra le promozioni a chi le ha spente è ancora aperta, in pronte/C-parziali-file-altrui.txt:32). SellerShell.tsx è di R04: la sua parte della stessa diff va applicata insieme alle due sopra, perché da sola farebbe divergere il campanello del negozio dall'elenco. Non fatta per la consegna anticipata.",
+      "serve_file_altrui": [
+        {
+          "file": "app/notifications/page.tsx",
+          "modifica": "Rimettere il filtro sulle notifiche di promozione per chi ha profiles.notif_promos spento (righe 101-106), come nella diff già scritta per la voce R33-018 del referto R33 di questa campagna (lista, useNotificationsCount e SellerShell insieme, più le 2 prove comuni): lo smentitore C l'ha applicata a prova sulla testa di R04 ed entra pulita, verdi le sue prove (3 file, 10 test)."
+        },
+        {
+          "file": "components/hooks/useNotificationsCount.ts",
+          "modifica": "Stesso filtro sul conto del campanello del sito (righe 32-36), dalla stessa diff di R33-018, così lista e campanello contano le stesse notifiche."
+        }
+      ],
+      "verificato_da": "smentitore C: i fatti del riparatore sono veri (sulla base elenco e due campanelli non filtrano; 6834fa92 e b04fd2d9 sono antenati), la conclusione no: esito cambiato da scelta_di_nicola a serve_file_altrui."
+    },
+    {
+      "id": "R04-011",
+      "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+      "esito": "parziale",
+      "commit": "0f92b386b30fed7fbcd030613ac056d641877698",
+      "file_toccati": [
+        "components/store-sections/useStorePageData.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0f92b386b30fed7fbcd030613ac056d641877698^ --file components/store-sections/useStorePageData.ts --prove tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le prime 20 recensioni della vetrina (useStorePageData) firmano con la prima parola del nome vero (vista nomi_pubblici), se manca con l'handle di chi ha acceso il profilo pubblico (conAutoriPubblici di lib/queries/profili-pubblici.ts, rotta /api/profili-pubblici, chiesto solo per chi non ha il nome), se manca anche quello resta «Cliente». Una rotta caduta lascia i nomi veri e le altre senza nome.",
+      "cosa_resta": "Le recensioni oltre le prime 20, lette con «Mostra altre recensioni» in components/store-sections/ReviewsSection.tsx:43-65 (leggiAltreRecensioni, file non mio, R30-007), usano ancora solo fetchNomiPubblici: chi ha solo il nome pubblico lì appare ancora «Cliente».",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/ReviewsSection.tsx",
+          "modifica": "In leggiAltreRecensioni, dopo «const authorById = await fetchNomiPubblici(supabase, rows.map((r) => r.user_id));» aggiungere «const senzaNome = rows.flatMap((r) => (r.user_id && !authorById.has(r.user_id) ? [{ owner_id: r.user_id }] : [])); const handleById = new Map((await conAutoriPubblici(senzaNome)).map((a) => [a.owner_id, a.owner?.public_handle ?? null]));» con «import { conAutoriPubblici } from '@/lib/queries/profili-pubblici';», e scrivere «author: r.user_id ? (authorById.get(r.user_id) ?? handleById.get(r.user_id) ?? null) : null»: lo stesso ripiego di useStorePageData.ts."
+        }
+      ],
+      "verificato_da": "smentitore C: prova verde (3), prova rimessa uscita 0, 9 prove su useStorePageData verdi; la privacy tiene (l'handle arriva solo da leggiHandlePubblici con public_profile_enabled = true, lib/queries/profili-pubblici.ts:53-58); «cosa_resta» e «serve_file_altrui» esatti (leggiAltreRecensioni in ReviewsSection.tsx:43-65 usa solo fetchNomiPubblici). Esito parziale confermato. R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-012",
+      "chiave": "qa-flussi|il conto delle categorie con prodotti si ferma al decimo livello, il modulo prodotto al ventesimo",
+      "esito": "riparato",
+      "commit": "bcecf354e90ea44a87e8f0fa7a94a3fe8e27e7a6",
+      "file_toccati": [
+        "lib/queries/categorie-piene.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-categorie-piene-profonde.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-categorie-piene-profonde.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bcecf354e90ea44a87e8f0fa7a94a3fe8e27e7a6^ --file lib/queries/categorie-piene.ts --prove tests/unit/riparazione-r04-categorie-piene-profonde.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "categorieConProdotti risale fino a 20 gradini sopra la categoria del prodotto, come getAttributesForCategory; il 20 del modulo (lib/category-attributes.ts:285) non è esportato, quindi è ripetuto in una costante locale con lo stesso nome e il rimando. La prova confronta i due su una fila di 21 livelli.",
+      "verificato_da": "smentitore A: prova e prova rimessa rilanciate (uscita 0); con «< 20» la fila di 21 livelli va in rosso, quindi l'errore di uno è colto; prove vicine verdi. Resto marginale: con alberi di almeno 22 livelli il risultato dipende dall'ordine dei prodotti (categorie-piene.ts:52). R04 ha rifatto anche la rimessa: uscita 0."
+    },
+    {
+      "id": "R04-013",
+      "chiave": "qa-flussi|il client supabase finto delle prove non sa concatenare .rpc().order().range()",
+      "esito": "riparato",
+      "commit": "2a7ff37b2e01860fefed24601509d8bb2f26bb44",
+      "file_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-client-finto-rpc.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-client-finto-rpc.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2a7ff37b2e01860fefed24601509d8bb2f26bb44^ --file tests/unit/aiuti/finti/supabase-client.mjs --prove tests/unit/riparazione-r04-client-finto-rpc.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "rpc del client finto non è più una funzione async che torna una promessa nuda: torna una catena (order, range, eq, … passano oltre; then/single danno la risposta di prima, o quella del database della prova). Rilanciate verdi le 2 prove che nominano il finto e le 57 che lo montano tramite aiuti/compila.mjs.",
+      "verificato_da": "smentitore A (copia separata a fc287d58): prova e prova rimessa rilanciate (uscita 0), suite intera verde (1655 file, 10723 prove), provati a mano errore del db finto, rpc che lancia, .single() e il .then di StoryViewer: per chi usava già il finto non cambia niente. Resta minore: gli anelli dopo rpc (.order, .range) non arrivano al database della prova (supabase-client.mjs:77), quindi una prova non può controllare quale finestra si chiede. R04 ha rifatto anche la rimessa: uscita 0."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La home di un negozio inesistente ripete «Negozio non trovato» nel titolo e nella pagina",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/store/[id]/layout.tsx:37",
+      "descrizione": "Stessa forma della voce sulla pagina in più del negozio: generateMetadata risponde «Negozio non trovato · MyCity» e app/store/[id]/page.tsx:66 disegna lo stato vuoto con titolo «Negozio non trovato» (h3 di EmptyState). Con i metadati in streaming nel corpo la scritta compare due volte. Fuori dai file di R04: non toccato."
+    },
+    {
+      "titolo": "anche il filtro per categoria della pagina dei negozi risale solo dieci livelli di categorie madri",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/queries/categorie-dei-negozi.ts:17",
+      "descrizione": "conLeMadri, usata dal filtro per categoria di app/stores/page.tsx, si ferma con passi < 10, mentre il modulo prodotto e adesso categorie-piene arrivano a 20 livelli: un negozio con prodotti in una categoria più profonda di dieci livelli non compare filtrando per la radice. Visto dallo smentitore A di R04, fuori dai file di R04."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "subagenti": 5,
+    "nota": "2 riparatori (lotto 1 e lotto 2) + 3 smentitori, ognuno in un worktree separato, tutti senza il parametro model. Le 10 prove rimesse delle voci con commit le ho rifatte io: tutte a uscita 0."
+  },
+  "costo_usd": 30.43
+}

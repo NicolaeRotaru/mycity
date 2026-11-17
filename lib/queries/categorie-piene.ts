@@ -31,6 +31,14 @@ export const CHIAVE_CATEGORIE_PIENE = ['categories', 'con-prodotti'] as const;
 const PRODOTTI_LETTI_PER_LE_CATEGORIE = 5000;
 const RIGHE_PER_PAGINA = 1000;
 
+/**
+ * 17/11/2026 — Quanti gradini sopra la sua categoria si risale al massimo: 20, come il modulo
+ * prodotto (`PROFONDITA_MASSIMA_CATEGORIE` in `lib/category-attributes.ts`, che non la esporta).
+ * Prima qui il tetto era 10: in un albero più profondo il prodotto si poteva pubblicare, ma le
+ * categorie sopra il decimo livello restavano «vuote» e sparivano dalla home e dal piede.
+ */
+const PROFONDITA_MASSIMA_CATEGORIE = 20;
+
 /** Le categorie che hanno un prodotto: la sua e tutte quelle sopra di lei. */
 export function categorieConProdotti(
   categorie: ReadonlyArray<{ id: string; parent_id?: string | null }>,
@@ -41,7 +49,7 @@ export function categorieConProdotti(
   for (const p of prodotti) {
     let id = p.category_id ?? null;
     // Il tetto ai passi tiene fermo il giro se una categoria finisse per essere madre di sé stessa.
-    for (let passi = 0; id && !piene.has(id) && passi < 10; passi += 1) {
+    for (let passi = 0; id && !piene.has(id) && passi <= PROFONDITA_MASSIMA_CATEGORIE; passi += 1) {
       piene.add(id);
       id = madreDi.get(id) ?? null;
     }
