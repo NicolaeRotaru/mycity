@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 17:56",
+  "aggiornato": "2026-11-17 17:59",
   "finita": false,
-  "testa": "60f1ee8982073e8653e8c3d97ad738226977acc9",
+  "testa": "227673ed04efc948f3bf771f06fb9ade1fa6aff3",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -61,8 +61,24 @@
     {
       "id": "R03-009",
       "chiave": "qa-flussi|quando la presa di un ordine torna vuota o con un motivo sconosciuto, il fattorino legge «non più disponibile»",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "227673ed04efc948f3bf771f06fb9ade1fa6aff3",
+      "file_toccati": [
+        "app/rider/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-presa-ordine-motivo-vero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-presa-ordine-motivo-vero.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 227673ed04efc948f3bf771f06fb9ade1fa6aff3^ --file app/rider/page.tsx --prove tests/unit/riparazione-r03-presa-ordine-motivo-vero.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Ordine già preso da un altro rider» esce solo col motivo GIA_PRESO (l'unico che prendi_ordine, migrazione 270, usa per l'ordine non più libero); risposta nulla, storta, ok senza id o motivo sconosciuto danno «Non siamo riusciti a prendere l'ordine. Riprova.». NON_FATTORINO e DOCUMENTI_SCADUTI invariati; le 10 prove esistenti della bacheca verdi."
     },
     {
       "id": "R03-010",
