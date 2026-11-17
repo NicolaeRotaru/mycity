@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:29",
+  "aggiornato": "2026-11-17 20:31",
   "finita": false,
-  "testa": "3bd5a2bc92b7cbdf86ba3adf006803d0bfb31073",
+  "testa": "55307e9165992c45cb06102d47fcbc5d7755950e",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -216,6 +216,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il freno condiviso non usa la libreria Ratelimit ma la pipeline REST di Upstash (INCR + EXPIRE NX): ora la stessa pipeline chiede anche PTTL, e l'attesa detta è il tempo che manca davvero alla scadenza della chiave (arrotondato in su, mai sotto 1 s, mai oltre la finestra); se Upstash non dà un numero positivo resta la finestra intera. La prova usa un Upstash finto con orologio finto: bloccato a metà finestra dice 30 s, non 60. Passano anche le 9 prove esistenti che esercitano il freno con Upstash (86 casi)."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "qa-flussi|aggiungere o togliere un prodotto da una lista dalla pagina prodotto lascia vecchio il conteggio in /lists",
+      "esito": "riparato",
+      "commit": "55307e9165992c45cb06102d47fcbc5d7755950e",
+      "commit_tutti": [
+        "55307e9165992c45cb06102d47fcbc5d7755950e"
+      ],
+      "file_toccati": [
+        "components/AddToListButton.tsx",
+        "tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx tests/unit/minori-s04-aggiungi-a-lista.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 55307e9165992c45cb06102d47fcbc5d7755950e^ --file components/AddToListButton.tsx --prove tests/unit/riparazione-r01-lista-conteggio-dalla-pagina-prodotto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo un'aggiunta o una rimozione (e dopo «crea lista e aggiungi») il pulsante rilegge anche le tre chiavi da cui /lists prende il conteggio: queryKeys.lists.mine, .public e .inVetrina. La prova monta /lists e il pulsante nello stesso QueryClient vero sopra un database finto in memoria: dopo l'aggiunta le tre schede dicono «2 prodotti», dopo la rimozione «1 prodotto» (senza la cura restano «1 prodotto»). Passano le 6 prove esistenti che montano il pulsante."
     }
   ],
   "nuovi_difetti_visti": [
