@@ -287,9 +287,15 @@ export async function provaAMandare(
  * il giro intero. Ma un negozio che non riceve la campanella è un ordine che
  * nessuno prepara, quindi il guasto deve restare scritto dove si guarda.
  */
+/** R31-025 — Per quando, nella campanella al negozio: «Consegna: <fascia>» come nell'email, o il ritiro. */
+function quandoAlNegozio(o: { fascia?: string | null; ritiro?: boolean }): string {
+  if (o.ritiro) return ' — Ritiro in negozio';
+  return o.fascia?.trim() ? ` — Consegna: ${o.fascia.trim()}` : '';
+}
+
 export async function suonaLaCampanellaAiNegozi(
   admin: ReturnType<typeof getAdminSupabase>,
-  ordini: { orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo?: boolean }[],
+  ordini: { orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo?: boolean; fascia?: string | null; ritiro?: boolean }[],
   pendingCheckoutId: string,
 ): Promise<Set<string>> {
   /**
@@ -312,7 +318,9 @@ export async function suonaLaCampanellaAiNegozi(
       user_id: created.sellerId,
       title: 'Nuovo ordine ricevuto',
       // 6/9/2026 — LA CIFRA QUI SI SCRIVEVA A MANO, E CONTRADDICEVA L'EMAIL.
-      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(created.totalCents)} · ${created.itemsCount} articoli`,
+      // 17/11/2026 (R31-025) — E per quando va consegnato, con le parole dell'email «Nuovo ordine»: la
+      // push nasce da questa riga, e il negozio non deve aprire l'email per saperlo.
+      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(created.totalCents)} · ${created.itemsCount} articoli${quandoAlNegozio(created)}`,
       link: `/seller/orders/${created.orderId}`,
     }]);
     if ((error as { code?: string } | null)?.code === '23505') continue;

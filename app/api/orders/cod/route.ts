@@ -1614,6 +1614,9 @@ export const POST = withAuthRateLimit(
      * servirebbe una coda — la stessa che gia' esiste per le email di ciclo di
      * vita.
      */
+    // 17/11/2026 (R31-025) — Per quando va consegnato, con le parole dell'email «Nuovo ordine»: la push
+    // nasce dalla campanella, e il negozio non deve aprire l'email per saperlo.
+    const quandoAlNegozio = body.pickupInStore ? ' — Ritiro in negozio' : body.deliverySlot?.trim() ? ` — Consegna: ${body.deliverySlot.trim()}` : '';
     const campanelle = comunicazioni.flatMap((c) => [
       {
         category: 'order',
@@ -1621,7 +1624,7 @@ export const POST = withAuthRateLimit(
         title: 'Nuovo ordine!',
         // 6/9/2026 — Stessa cifra, stesso ordine: si scrive come la scrive
         // l'email, non a mano all'inglese. Vedi lib/format.ts.
-        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(c.totalCents)} · pagamento alla consegna`,
+        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(c.totalCents)} · pagamento alla consegna${quandoAlNegozio}`,
         link: `/seller/orders/${c.orderId}`,
       },
       {
