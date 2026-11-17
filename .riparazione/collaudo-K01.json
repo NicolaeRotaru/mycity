@@ -1,0 +1,234 @@
+{
+  "collaudatore": "K01",
+  "riparatori": [
+    "R01"
+  ],
+  "aggiornato": "2026-11-17 16:10",
+  "finita": true,
+  "testa_collaudata": "d312818b373415e9b831f99eb1fd96a29b1a5194",
+  "testa_codice": "5e53410467067f5cc208427e816980e524d5a8d0",
+  "base": "70064c9da552c034a463452b60935f7a57bb469a",
+  "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "immagini-media|le tessere delle categorie in home sono foto d'archivio scritte a mano nel codice",
+      "verdetto": "parziale",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 1,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-001b --base 10672b58857f3526b7567d9613b1ec81231614ca^ --file app/api/admin/categories/route.ts,app/admin/categories/page.tsx,lib/immagine-categoria.ts --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
+      },
+      "rimesse": [
+        {
+          "parte": "95d0b987 (avvisi della vetrina a Sentry)",
+          "uscita": 0,
+          "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-001a --base 95d0b987849bfa7f9601a3123cf36878310341b9^ --file components/CategoryShowcase.tsx --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
+        },
+        {
+          "parte": "10672b58 (la foto dal pannello)",
+          "uscita": 1,
+          "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-001b --base 10672b58857f3526b7567d9613b1ec81231614ca^ --file app/api/admin/categories/route.ts,app/admin/categories/page.tsx,lib/immagine-categoria.ts --prove tests/unit/riparazione-r30-foto-di-categoria.test.tsx --json"
+        }
+      ],
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Parziale confermato. La parte degli avvisi (95d0b987, components/CategoryShowcase.tsx) morde: uscita 0. La parte del pannello (10672b58: rotta admin delle categorie, pagina, lib/immagine-categoria.ts) non ha una prova che cada: con i tre file alla base la prova resta verde (uscita 1). Le foto Pexels scritte nel codice non ci sono più già alla base 70064c9d (niente IMG_MAP, la foto è il dato categories.image_url): resta da provare che il pannello accetti solo il nostro storage e rifiuti un altro host. Grave: resta aperta."
+    },
+    {
+      "id": "R01-002",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
+      "verdetto": "regge",
+      "giudizio": "pieno",
+      "lenti": [
+        "chiude_tutta",
+        "nata_rotta"
+      ],
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-002 --base f57409c03e521f45f73e5ea2d6eb5211315f5180^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r31-sos-testo.test.tsx --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Prova rimessa uscita 0: SOSButton.tsx alla base fa cadere la prova sul comportamento, e alla testa è verde. Revisore con le due lenti: cercato in tutto il deposito (app, components, lib, messages, public, docs, migrations) «chiamando», «contattando», «soccors», «avvisat», «emergenz», «112», tel:; nessun testo promette più una chiamata automatica. Il dialogo dice il vero: tel:112 parte subito e da solo (riga 174), la chiamata parte solo con CHIAMA, l'avviso al pannello arriva dal trigger su rider_sos_events, gli errori di rete dicono «NON è stata avvisata». Aria e role del dialogo intatti; le due prove adattate non sono indebolite. Due limiti piccoli, non da bocciatura: il messaggio di riuscita (riga 193) arriva dopo l'attesa della rete, quando il fattorino può aver già premuto CHIAMA; la regex della prova nuova non copre «contattando» e «soccorsi»."
+    },
+    {
+      "id": "R01-003",
+      "chiave": "navigazione-gerarchia|home, piè di pagina e mappa per google mettono in mostra categorie vuote: otto su nove non hanno prodotti",
+      "verdetto": "non_regge",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 1,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-003 --base b5918e0856d767b5fb2a5b5b7d204ccb7494c3c1^ --file lib/queries/precarico.ts,app/layout.tsx,components/home-sections/HomeSectionRenderer.tsx,components/home-sections/ChipDelleCategorie.tsx,components/SearchBar.tsx,lib/site-branding.ts,app/stores/layout.tsx --prove tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx,tests/unit/la-vetrina-delle-categorie-esce-piena-nell-html-del-server.test.tsx,tests/unit/riparazione-r15-il-piede-che-sa-le-piene-non-ripiega-sulla-riserva.test.tsx --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Il «parziale» del referto è smentito verso il peggio. Prova rimessa uscita 1: con ognuno dei sei file esistenti alla base le tre prove restano verdi; togliendo il file nuovo ChipDelleCategorie cadono per un motivo che il programma non riconosce. Nessuna prova dimostra la parte nuova (il precarico delle categorie piene nell'HTML del server). Il filtro delle piene in vetrina, piede e mappa del sito c'era già alla base (lato browser, lib/queries/categorie-piene.ts). Grave: resta aperta finché una prova non mostra che home e piede, col precarico, escono dal server solo con le categorie che hanno prodotti."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
+      "verdetto": "parziale",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-004 --base 31b8ef156eb7b76b7fd66237dc39ceebf3aece77^ --file app/api/cron/abandoned-carts/route.ts,app/api/account/delete/route.ts --prove tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts,tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Parziale confermato. Prova rimessa uscita 0, con la prova nuova e quella comune insieme. La parte fatta c'è: chiudiSenzaEmail (app/api/cron/abandoned-carts/route.ts:74-90) e l'eliminazione dell'account (app/api/account/delete/route.ts:166-192) segnano i carrelli chiusi senza email, e lib/carrelli-abbandonati.ts:109 li riconosce. Restano i carrelli segnati prima della correzione, contati come «inviati» (serve una scelta di Nicola sui dati vecchi). Il revisore vede altri due casi ancora segnati con l'ora del giro: il ramo rpc mark_abandoned_cart_email_sent senza last_activity (route.ts:78-80), e il carrello che cambia fra lettura e scrittura nell'eliminazione dell'account (delete/route.ts:187-191)."
+    },
+    {
+      "id": "R01-005",
+      "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
+      "verdetto": "regge",
+      "giudizio": "pieno",
+      "lenti": [
+        "chiude_tutta",
+        "nata_rotta"
+      ],
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-005 --base f129e197c6f0d1d56e8d73ab61220e68f090284c^ --file app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r31-consegna-senza-fascia.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Prova rimessa uscita 0: ognuna delle due rotte alla base fa cadere la prova sul comportamento; verde alla testa con le 34 prove comuni adattate. Due revisori, uno per lente. chiude_tutta: le rotte rifiutano la consegna senza fascia (cod/route.ts:372, stripe/checkout/route.ts:141); stringa vuota o formato sbagliato li ferma campoFasciaConsegna (lib/ordini/fascia-consegna.ts:31, sette fasce ammesse); fascia passata o di negozio chiuso la ferma motivoFasciaRifiutata; la fascia arriva in orders.delivery_slot (cod:1427); solo la rotta cod e il webhook creano ordini. nata_rotta: la cassa vera manda deliverySlot con lo stesso nome e formato (app/checkout/page.tsx:645, 1036, 1166) e blocca il pulsante senza fascia valida; il messaggio è in italiano; le 34 prove adattate aggiungono solo la fascia, nessuna asserzione tolta. Limite stretto, non da bocciatura: il webhook (lib/stripe/webhook/ordini.ts:285) non rifiuta una fascia nulla, cosa possibile solo per un pagamento aperto prima della correzione e pagato dopo (sessione Stripe di circa 31 minuti; carta spenta al lancio)."
+    },
+    {
+      "id": "R01-006",
+      "chiave": "frontend-ux|i marchi «km 0» e «artigianale» non compaiono mai sulla scheda, perché la scheda non legge i tag",
+      "verdetto": "regge",
+      "giudizio": "pieno",
+      "lenti": [
+        "chiude_tutta",
+        "nata_rotta"
+      ],
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-006 --base 221cc8405f296d2295aa5bdc58b12271184ede54^ --file lib/queries/catalogo.ts --prove tests/unit/riparazione-r30-scheda-tag-dei-marchi.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Prova rimessa uscita 0 su 221cc840 (catalogo.ts alla base: rossa sul comportamento); verde alla testa insieme alle prove che usano l'aiutante database-coi-permessi (1011766f). Revisore con le due lenti: la colonna products.tags esiste (text[], migrations/071:15); il modulo prodotto e l'import salvano i tag in minuscolo (ProductForm.tsx:747, externalSync.ts:214) e deriveQualityMarks confronta in minuscolo (qualityMarks.ts:112), quindi «km 0», «km0», «artigianale» si accendono; il dato arriva al disegno (catalogo.ts:79 e :167, app/product/[id]/page.tsx:539 e :876). Nessun'altra query usa quella lista di colonne. Limite piccolo: un tag «km-0» o «chilometro zero» non accende il marchio."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+      "verdetto": "parziale",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-007 --base 4497158c36b76cb6ca822216b73c6dbc0fd7ccb0^ --file app/api/health/route.ts --prove tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Ricontrollata apposta (rossa per C05 come R30-009). Parziale confermato. Prova rimessa uscita 0 sulla rotta di salute. Il controllo della foto c'è e dice «degraded» con codice 200 (app/api/health/route.ts:347-366 e :392). Restano i falsi allarmi: la foto è la prima di 20 senza ordine (route.ts:349-357), e sizedImage trasforma qualunque host *.supabase.co (lib/image-url.ts:220), non solo il nostro progetto. Il controllo non è legato a /api/health/ready, e l'interruttore della trasformazione su Vercel resta a Nicola."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "privacy-legale|un cliente coi termini 2.0 e la cassa già aperta ordina lo stesso: le rotte d'ordine non guardano la versione accettata",
+      "verdetto": "regge",
+      "giudizio": "pieno",
+      "lenti": [
+        "chiude_tutta",
+        "nata_rotta"
+      ],
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-008 --base a74c227f22543cf5ae9cc852df50061292fa7d4d^ --file app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r31-termini-in-cassa.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Prova rimessa uscita 0: ognuna delle due rotte alla base fa cadere la prova sul comportamento; verde alla testa. Due revisori, uno per lente. nata_rotta: regge; stessa regola del portiere di /checkout (vaChiestaSenzaTrattenere, lib/auth/accettazione-testi.ts), chi ha la versione in vigore passa, chi ha una versione vecchia o nessuna riga è fermato; il controllo sta prima della chiave anti-doppione; la prova nuova copre versione vecchia, nessuna riga, versione giusta e verbale rotto su tutte e due le rotte. chiude_tutta: il caso della voce (cassa aperta, termini vecchi, lettura riuscita) è chiuso su contanti e carta. Limiti che lascio scritti per la regia, non da bocciatura: (1) una sessione Stripe aperta PRIMA del cambio dei termini si può ancora pagare nei suoi circa 31 minuti, perché il webhook non ricontrolla (lib/stripe/webhook/ordini.ts, carta spenta al lancio); (2) se la lettura del profilo torna un errore (non un'eccezione), vaChiestaLAccettazione (accettazione-testi.ts:143-147) lo tratta come «profilo assente» e lascia passare SENZA l'avviso nel log che il referto promette: l'avviso c'è solo per «scaduto» o «rotto»; (3) la cassa dice «ricarica la pagina» ma non porta da sola ad /accetta-condizioni. Il «passa nel dubbio» è la scelta già dichiarata nel referto: se si vuole il blocco anche a lettura caduta, la decide Nicola."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "privacy-legale|confine senza coordinate chiuso solo a parole: l'ordine non misurato passa senza nessun segno, e ora /shipping lo annuncia",
+      "verdetto": "parziale",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-009 --base 24689bef2ca18d04e022779cb0bd98d5d7ff7d9e^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r31-confine-non-misurato.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Parziale confermato. Prova rimessa uscita 0. La campanella agli amministratori per l'ordine in contanti non misurato c'è (app/api/orders/cod/route.ts:1060-1077 e :1772-1784). La strada della carta passa ancora senza segno: app/api/stripe/checkout/route.ts:603-615 non annota niente e lib/stripe/webhook/ordini.ts non guarda le coordinate. Il testo di /shipping (app/shipping/page.tsx:137-142) dice il vero; app/admin/delivery/page.tsx:134 («la distanza va guardata a mano») vale solo per i contanti."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|quando un ordine viene annullato il negozio non riceve nessuna email, e se lo annulla il sito perché nessuno l'ha accettato non riceve nemmeno la campanella",
+      "verdetto": "parziale",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 3,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-010 --base 27cf4bfc0a20701f39950dd17c1301f964a39f9f^ --file lib/email/templates.ts,lib/ordini/annulla.ts,app/api/cron/expire-stale-orders/route.ts,app/api/orders/[id]/cancel/route.ts,app/api/admin/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts --json",
+        "a_mano": {
+          "comando": "cd /home/user/wt-010 && (corpo di avvisaIlNegozioDellAnnullo in lib/ordini/annulla.ts sostituito da «return false», nome esportato lasciato) && npx vitest run --reporter=dot tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts && git checkout HEAD -- lib/ordini/annulla.ts",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        }
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Ricontrollata apposta (rossa per C05 come R31-023). Parziale confermato, con più buchi di quelli che dice il referto. Prova rimessa uscita 3: quattro file su cinque alla base fanno cadere la prova sul comportamento, lib/ordini/annulla.ts solo per la struttura. Allora ho rimesso a mano il difetto (la funzione nuova c'è ma non spedisce): 3 prove su 5 cadono sul comportamento («il negozio non sa per email…»), e con la correzione tornano verdi. La parte fatta regge: email al negozio dall'annullo del cliente, dell'amministrazione e del giro degli ordini scaduti (con la campanella). Annullano ancora senza email al negozio: il cliente assente (app/api/rider/orders/[id]/cliente-assente/route.ts, solo campanella), il rimborso che arriva da Stripe (lib/stripe/webhook/rimborsi.ts:204, avvisa solo amministratori e cliente) e la contestazione persa (lib/stripe/webhook/dispute.ts:519, avvisa solo gli amministratori)."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|la promo «oggi, fino a mezzanotte» finisce a mezzanotte del fuso del telefono, non di piacenza",
+      "verdetto": "regge",
+      "giudizio": "pieno",
+      "lenti": [
+        "chiude_tutta",
+        "nata_rotta"
+      ],
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-011 --base 5e53410467067f5cc208427e816980e524d5a8d0^ --file components/store-sections/PromotionsSection.tsx --prove tests/unit/riparazione-r33-vetrina-promo-fino-al-di-piacenza.test.tsx --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Prova rimessa uscita 0: PromotionsSection.tsx alla base fa cadere la prova sul comportamento (3 su 3), verde alla testa. Revisore con le due lenti: l'ora di fine salvata era già la mezzanotte di Piacenza alla base (endDateFor('today'), app/seller/promotions/page.tsx:41-52, anche nei giorni del cambio d'ora); il salvataggio è un insert diretto con ends_at (page.tsx:136-142) e il database spegne la promo con ends_at >= now(), quindi prezzo e filtri scadono all'ora giusta. Mancava solo la scritta «fino al» della vetrina, ora col fuso di Piacenza (PromotionsSection.tsx:28). Nessun altro posto mostra la fine della promo. Limite teorico: una promo che finisce alle 00:00 esatte direbbe il giorno dopo, ma la creazione di oggi la chiude alle 23:59:59.999."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "rls-database|sul sito vero i visitatori non possono leggere la tabella dei profili, ma nessuna migrazione lo dice",
+      "verdetto": "regge",
+      "giudizio": "pieno",
+      "lenti": [
+        "chiude_tutta",
+        "nata_rotta"
+      ],
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-012 --base d22c86a72b4bd3e1bc62eece5d17327d6c98cbc0^ --file migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql --prove tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql --sql k01_r01_012_rimessa --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Prova rimessa con --sql uscita 0: togliendo la migrazione 541 il database di prova ricostruito fa cadere la prova sul comportamento; con la 541 è verde. Alla testa: database ricostruito da zero (209 migrazioni, 0 fallite), prove SQL nuova, 19 e 34 verdi, anon senza SELECT su profiles e authenticated sì, la 541 riapplicata senza errore. Due revisori, uno per lente. chiude_tutta: la REVOKE sulla tabella toglie anche i permessi di colonna, il controllo finale guarda has_table_privilege e has_any_column_privilege (compresi i permessi a PUBLIC); dopo la 541 c'è solo la 572, che non ridà niente; le viste pubbliche e le funzioni SECURITY DEFINER aperte ad anon sono quelle del catalogo. nata_rotta: le pagine pubbliche leggono seller_public_profiles; app/shared-cart/page.tsx:152 legge profiles da anonimo ma ingoia il rifiuto e scrive «Negozio», come già in produzione; le prove 19 e 34 accettano ora «zero righe o lettura negata», mentre la prova nuova pretende il rifiuto netto. Fuori voce: l'impalcatura 00_shim_supabase.sql dà ancora ALL ad anon sulle altre tabelle (righe 133 e 157-162), quindi per quelle il database di prova resta diverso dal sito vero."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "sicurezza-auth|sospendere un fattorino non gli toglie le consegne in corso: continua a vedere i recapiti, ritirare e consegnare",
+      "verdetto": "parziale",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 0,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-013 --base c02bbf46379d09fca7b412b8bf37d171fba672b4^ --file app/api/admin/users/[id]/moderate/route.ts --prove tests/unit/riparazione-r30-sospensione-rider.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Parziale confermato. Prova rimessa uscita 0 sulla rotta di moderazione (le consegne ASSIGNED tornano in bacheca). Resta il fattorino sospeso che legge ancora le righe d'ordine delle consegne in mano e le sue rimesse del contrassegno: le regole «Riders can view order_items of assigned orders» (migrations/011_orders_delivery.sql:138) e cod_rider_read (migrations/024_blockers_money_kyc_returns_cash.sql:140) guardano solo il fattorino, e nessuna migrazione dopo le cambia. Le consegne con la merce già in mano restano a lui, da riassegnare a mano."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "sicurezza-auth|un cliente che abusa del sito non si può sospendere: l'unica strada è cancellargli l'account",
+      "verdetto": "non_regge",
+      "giudizio": "nessuno",
+      "rimessa": {
+        "uscita": 1,
+        "comando": "cd /home/ad-mycity && timeout 540 node cervello/prova-rimessa.mjs --repo /home/user/wt-014 --base 93dff97f40c08ba727e0d8bbe6f9854ae4563920^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r30-cliente-sospeso.test.ts --json"
+      },
+      "prova_alla_testa": "verde alla testa 5e53410467067f5cc208427e816980e524d5a8d0 (vitest, 66 file, 426 prove)",
+      "nota": "Ricontrollata apposta (rossa per C05 come R30-024). Il «parziale» del referto è smentito verso il peggio. Prova rimessa uscita 1: con app/admin/users/page.tsx alla base la prova del cliente sospeso resta verde, quindi il pulsante «Sospendi» per i clienti non ha una prova. In più restano: la chat (messages_insert_self e conversations_insert_buyer, migrations/026_chat_messaging.sql:37 e :72, mai cambiate dopo per la sospensione) lascia scrivere ai negozi il cliente sospeso che chiama il database con la sua sessione; clienteSospeso (lib/shopping-access.ts:86-87) guarda solo role = 'buyer', e un negozio sospeso che compra passa."
+    }
+  ],
+  "campione": {
+    "R01": {
+      "accettato": true,
+      "nota": "lotto di 14 voci: niente campione, tutte le 6 riparate col giudizio pieno"
+    }
+  },
+  "come": {
+    "prove_rimesse": "Rilanciate tutte da K01 con la copia fissata di cervello/prova-rimessa.mjs (ad-mycity 92abc45f), una copia di lavoro per voce allo SHA esatto del commit della voce (git worktree add --detach), base = commit^. Voce SQL R01-012 con --sql k01_r01_012_rimessa su un Postgres 16 locale (solo prove).",
+    "prove_alla_testa": "Alla testa del codice 5e53410467067f5cc208427e816980e524d5a8d0: vitest su tutte le prove delle voci e su quelle toccate dai commit (66 file, 426 prove, tutte verdi); database di prova k01_testa_test ricostruito da zero (209 migrazioni applicate, 0 fallite), prove SQL riparazione-r30-profili-chiusi-ai-visitatori, 19 e 34 verdi; la 541 si riapplica due volte senza errore; anon senza SELECT su profiles, authenticated sì.",
+    "giudizio": "Quattro subagenti revisori in sola lettura, col mandato di smentire: uno su R01-002 (grave, da solo); due su R01-005, R01-008, R01-012 (soldi, legale, permessi), uno per lente; uno su R01-006 e R01-011 con le due lenti, più una riga di conferma sui parziali R01-004, 007, 009, 010. I parziali gravi R01-001 e R01-003 e i parziali R01-013 e R01-014 li ha guardati K01. Nessun database vero, nessuno strumento Supabase, Vercel o Stripe.",
+    "cosa_non_ho_fatto": "Il verify completo non l'ho rifatto: verifica.testa del referto è la testa del codice (5e534104), come vuole il LEGGIMI."
+  }
+}
