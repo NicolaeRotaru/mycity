@@ -1,6 +1,6 @@
 {
   "sessione": "R06",
-  "aggiornato": "2026-11-17 23:15",
+  "aggiornato": "2026-11-17 23:20",
   "finita": true,
   "testa": "677b393d04c004441f81b6dd175ff16135bb3375",
   "verifica": {
@@ -241,6 +241,8 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "2 subagenti riparatori (lotti 1-2) e 2 smentitori"
-  }
+    "subagenti": 4,
+    "nota": "2 subagenti riparatori (lotti 1-2) e 2 smentitori; nessuno fermato"
+  },
+  "costo_usd": 13.16
 }
