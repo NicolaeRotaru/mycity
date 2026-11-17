@@ -75,6 +75,15 @@ export default function AddToListButton({ productId }: { productId: string }) {
     },
   });
 
+  // /lists legge il conteggio «N prodotti» da queste tre chiavi (le mie, le pubbliche, quelle in
+  // vetrina): dopo un'aggiunta o una rimozione si rileggono, invece di restare vecchie fino a quando
+  // scadono.
+  const rileggiConteggiDiLists = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
+    qc.invalidateQueries({ queryKey: queryKeys.lists.public });
+    qc.invalidateQueries({ queryKey: queryKeys.lists.inVetrina });
+  };
+
   const toggle = useMutation({
     mutationFn: async (listId: string) => {
       const inIt = inLists.includes(listId);
@@ -98,6 +107,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
       toast.success(added ? 'Aggiunto alla lista' : 'Rimosso dalla lista');
       qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
       qc.invalidateQueries({ queryKey: [...queryKeys.lists.all, 'items'] });
+      rileggiConteggiDiLists();
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -123,6 +133,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
       setNewListTitle('');
       qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
       qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
+      rileggiConteggiDiLists();
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
