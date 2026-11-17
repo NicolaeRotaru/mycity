@@ -200,6 +200,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       logger.error('catalog-batch start: batch avviato ma non agganciato', {
         sellerId: user.id, jobId: job.id, batchId: handle.id,
       });
+      // R03-003 — Il lotto e' partito ed e' pagato: la riga lo dice nel motivo,
+      // con il suo id. Lo stato (status/route.ts) lo aggancia da li' invece di
+      // chiudere la riga come fallita dopo 15 minuti e lasciarne pagare un altro.
+      await admin.from('catalog_ai_jobs').update({ error: `lotto partito ma non agganciato: ${handle.id}` }).eq('id', job.id);
       return NextResponse.json({ jobId: job.id, total: products.length, status: 'submitting' });
     }
 
