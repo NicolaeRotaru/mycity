@@ -48,9 +48,10 @@ export default function RiderEarningsPage() {
     const conf = PERIODS.find((p) => p.key === period)!;
     if (conf.days === null) return orders;
     if (conf.days === 0) {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      return orders.filter((o) => o.delivered_at && new Date(o.delivered_at) >= startOfToday);
+      // R06-008 — «Oggi» è il giorno di Piacenza, come il grafico qui sotto: tagliato alla mezzanotte
+      // del telefono, su un telefono con un altro fuso la giornata cominciava all'ora sbagliata.
+      const oggi = giornoPiacenza();
+      return orders.filter((o) => o.delivered_at && giornoPiacenza(o.delivered_at) === oggi);
     }
     const cutoff = Date.now() - conf.days * 86400000;
     return orders.filter((o) => o.delivered_at && new Date(o.delivered_at).getTime() >= cutoff);
