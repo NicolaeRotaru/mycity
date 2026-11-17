@@ -230,7 +230,8 @@ describe('chi aspetta la cancellazione sa perché aspetta', () => {
     expect(primo.recapitati + secondo.recapitati).toBe(1);
     expect(primo.giaDetti + secondo.giaDetti).toBe(1);
     // E soprattutto: il rifiuto del database NON è un guasto da segnalare.
-    expect(primo.falliti + secondo.falliti).toBe(0);
+    expect(primo.falliti).toBe(0);
+    expect(secondo.falliti).toBe(0);
     expect(finto.righe('notifications')).toHaveLength(1);
   });
 
