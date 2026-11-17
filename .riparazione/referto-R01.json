@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 18:18",
+  "aggiornato": "2026-11-17 18:24",
   "finita": false,
-  "testa": "7a09dcc542a2d178a6ef4948955d3ef6d0e4e41d",
+  "testa": "79a9057600f3e52cd905b5468915e9c7bb61f640",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -207,6 +207,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La corsa era fra il controllo del contatore (riga 94: vale 1, quindi «da avvisare») e l'insert della voce: se in mezzo la chat aperta chiamava /api/chat/mark-read, questa spegneva le voci esistenti ma non quella scritta subito dopo. Ora, scritta la voce, la rotta rilegge il contatore di chi riceve e, se è tornato a 0, spegne le voci non lette di quella chat come fa mark-read. La prova fa girare le due rotte vere sullo stesso finto, con la lettura proprio in mezzo, nei due versi (cliente→negozio e negozio→cliente), e controlla che senza lettura la voce resti accesa.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R01-006",
+      "chiave": "performance|l'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
+      "esito": "riparato",
+      "commit": "79a9057600f3e52cd905b5468915e9c7bb61f640",
+      "file_toccati": [
+        "components/ui/DeliveryCutoff.tsx",
+        "tests/unit/riparazione-r01-veloce-una-domanda-per-lista.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-veloce-una-domanda-per-lista.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-veloce-una-domanda-per-lista.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 79a9057600f3e52cd905b5468915e9c7bb61f640^ --file components/ui/DeliveryCutoff.tsx --prove tests/unit/riparazione-r01-veloce-una-domanda-per-lista.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "useVeloceDelNegozio non chiama più fetch da sé: mette il negozio in una coda a livello di modulo, e le schede dello stesso disegno (o dello stesso ritorno sulla pagina) partono con UNA domanda ?negozi=a,b,… (20 per volta, il tetto della rotta). La rotta risponde per il gruppo intero, quindi un sì vale per tutti; su un no si chiede una volta la regola senza negozi (fuori orario o senza fattorini = no per tutti) e solo se quella dice sì si divide il gruppo a metà finché il no trova il suo negozio, così ogni scheda ha la risposta del suo negozio. Prova: 12 schede = 1 domanda, 25 = 2, nessun fattorino = 2, rotta in errore = 1 e «non so» per tutti, uno o due negozi che stanno per chiudere = risposta giusta scheda per scheda. Limite: quando qualche negozio sta per chiudere le domande sono più di una (circa 2 + 2·log2 N), perché la rotta non risponde negozio per negozio.",
       "verificato_da": ""
     }
   ],
