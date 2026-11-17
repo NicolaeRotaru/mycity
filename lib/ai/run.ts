@@ -50,6 +50,17 @@ export type RunMessageArgs = {
    * bene. Chi non dice niente ottiene il comportamento sicuro.
    */
   seTagliata?: 'rifiuta' | 'accetta';
+  /**
+   * R29-003 (da R21-002) — Tempo di UN tentativo, per chi sa di chiedere una risposta lunga.
+   * Assente = il tempo del client (60 s, lib/ai/client.ts). Chi lo alza deve fare il conto con il
+   * tempo della rotta (vedi lib/ai/regole-copilot.ts).
+   */
+  timeoutMs?: number;
+  /**
+   * R29-003 (da R21-002) — Nessun ritentativo: una chiamata lunga che scade non ha più il tempo
+   * per rifarsi, e ogni tentativo è una generazione intera da pagare.
+   */
+  senzaRitentativi?: boolean;
 };
 
 export type RunMessageResult<TInput = unknown> = {
@@ -425,6 +436,18 @@ export async function runMessage<TInput = unknown>(
   }
 }
 
+/**
+ * R29-003 — Le opzioni di UNA chiamata: il tempo e i ritentativi dichiarati da chi chiama. Senza
+ * niente di dichiarato restano quelli del client, come prima.
+ */
+function opzioniDellaChiamata(args: Pick<RunMessageArgs, 'timeoutMs' | 'senzaRitentativi'>): { timeout?: number; maxRetries?: number } | undefined {
+  if (args.timeoutMs === undefined && !args.senzaRitentativi) return undefined;
+  return {
+    ...(args.timeoutMs !== undefined ? { timeout: args.timeoutMs } : {}),
+    ...(args.senzaRitentativi ? { maxRetries: 0 } : {}),
+  };
+}
+
 async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessageResult<TInput>> {
   const client = getAnthropic(); // può lanciare AiConfigError (gestito a monte)
   // Dal 30/11/2026 un modello ritirato ancora in uso si vede nei log d.errore.
@@ -439,7 +462,7 @@ async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessage
       messages: args.messages,
       ...(args.tools ? { tools: withToolCache(args.tools) } : {}),
       ...(args.tool_choice ? { tool_choice: args.tool_choice } : {}),
-    });
+    }, opzioniDellaChiamata(args));
   } catch (err) {
     throw new AiCallError(args.feature, extractStatus(err), err, extractRetryAfter(err));
   }

@@ -55,8 +55,9 @@ export async function POST(req: NextRequest) {
     logger.error(firma.errore, { context: 'stripe-webhook-signature' });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
-  if (firma.esito === 'fuori-posto') {
-    logger.warn('[stripe] avviso da un conto di negozio non previsto: ignorato', { type: firma.evento.type, account: firma.evento.account });
+  if (firma.esito === 'fuori-posto' || firma.esito === 'di-prova') {
+    // R29-013 — anche un avviso di prova arrivato al sito vero (chiave live) non tocca niente: 200, Stripe non lo ritenta.
+    logger.warn(firma.esito === 'di-prova' ? '[stripe] avviso di prova sul sito vero: ignorato' : '[stripe] avviso da un conto di negozio non previsto: ignorato', { type: firma.evento.type, account: firma.evento.account });
     return NextResponse.json({ received: true, ignorato: true }, { status: 200 });
   }
   const event = firma.evento;

@@ -418,14 +418,9 @@ export const RIQUADRO_LO_SAPEVI = riquadroLoSapevi();
  * confronta il numero che dice con quello che la cassa addebita davvero.
  */
 export interface PromessaSpedizione {
-  /**
-   * Sempre `false` dal 27/10/2026: la soglia della spedizione gratis non esiste più. Resta nel tipo
-   * perché la scheda prodotto e la card di catalogo lo leggono ancora per decidere se mostrare la
-   * pastiglia verde «gratis»: con `false` non la mostrano più.
-   */
-  sopraSoglia: boolean;
-  /** Sempre zero dal 27/10/2026: non c'è più una soglia da raggiungere. */
-  mancano: number;
+  // 16/11/2026 (R29-005) — Tolti `sopraSoglia` (sempre false) e `mancano` (sempre zero) dal
+  // 27/10/2026: la soglia della spedizione gratis non esiste più. La pastiglia «gratis» della scheda
+  // e della card guarda `dettaglioConsegna === null`, cioè la consegna che davvero non si paga.
   /**
    * La base della consegna, in euro, una volta sola per tutto il carrello (gli euro in più per i
    * negozi in più, la spesa piccola e la veloce li aggiunge la cassa). Zero = niente di base.
@@ -444,13 +439,10 @@ export interface PromessaSpedizione {
  * solo la consegna (dal 29/10 una sola per tutto il carrello). Le frasi «Spedizione gratis · 3,00 € di consegna» e «Ti
  * mancano X € alla spedizione gratis» promettevano un traguardo che la cassa non dà più.
  *
- * Il primo argomento (il sottototale) non cambia più la risposta: resta perché la scheda prodotto
- * e la card di catalogo lo passano ancora, e si toglie quando si toccano quei file.
+ * 16/11/2026 (R29-005) — Il sottototale non c'è più fra gli argomenti: non cambiava la risposta.
+ * L'unico argomento è la consegna in centesimi (di base quella della piattaforma).
  */
-export function promessaSpedizione(
-  _sottototale: number = 0,
-  consegnaCents: number = PLATFORM_DELIVERY_FEE_CENTS,
-): PromessaSpedizione {
+export function promessaSpedizione(consegnaCents: number = PLATFORM_DELIVERY_FEE_CENTS): PromessaSpedizione {
   const costoConsegna = Math.max(0, consegnaCents) / 100;
   // 5/11/2026 — «Si paga?» si decide come la FAQ e il riquadro di Spedizioni (`siPagaConLaBase`):
   // con la base a zero e gli euro in più accesi, 8 € di pane pagano 1 €, e la scheda prodotto non
@@ -458,11 +450,9 @@ export function promessaSpedizione(
   const siPaga = siPagaConLaBase(consegnaCents);
   const conBase = costoConsegna > 0;
   return {
-    sopraSoglia: false,
-    mancano: 0,
     costoConsegna,
     titolo: !siPaga
-      ? 'Consegna a casa gratuita'
+      ? `${VOCE_CONSEGNA} gratuita`
       : conBase
         ? `${VOCE_CONSEGNA} da ${formatPrice(costoConsegna)} per tutto il carrello`
         : `${VOCE_CONSEGNA} senza costo di base: paghi solo gli euro in più, li vedi in cassa`,

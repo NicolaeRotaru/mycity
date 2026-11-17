@@ -1,0 +1,503 @@
+{
+  "sessione": "R29",
+  "aggiornato": "2026-11-16 16:15",
+  "finita": true,
+  "testa": "455c3f93e44e0d92296bb2782d06960518f04e02",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "rosso",
+    "testa": "455c3f93e44e0d92296bb2782d06960518f04e02",
+    "nota": "Rosso SOLO sulle prove comuni rimesse alla base su richiesta della regista (le loro modifiche sono nei serve_file_altrui di R29-002, 003, 004, 005, 012). typecheck: 6 errori, tutti in tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx (2), il-carrello-condiviso-non-perde-il-negozio.test.ts (1), in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts (3), per le firme di R29-005. lint: 0 errori (99 avvisi). vitest lanciato a parte sulla stessa testa: 19 rossi su 10502, in 9 file: al-lancio, in-cassa, la-vetrina (R29-005), l-allarme-che-non-parte (R29-004), minori-s03 (R29-002), minori-s10 (R29-003), l-ordine-con-un-appuntamento, la-cassa-mostra-la-spedizione, la-veloce-resta-scelta (R29-012). Tutto il resto verde. Applicati i diff dei serve_file_altrui, verify dovrebbe tornare verde."
+  },
+  "voci": [
+    {
+      "id": "R29-001",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "esito": "parziale",
+      "commit": "455c3f93",
+      "file_toccati": [
+        "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts",
+        ".github/workflows/ci.yml",
+        "tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts",
+        "tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts",
+        "tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9e492350^ --file tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts,.github/workflows/ci.yml --prove tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts,tests/unit/riparazione-r29-la-cassa-e2e-non-diventa-verde-a-vuoto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Scritti i corpi veri delle tre prove: ognuna semina negozio approvato, prodotto e cliente (dati finti) nel database locale di prova, entra dalle rotte vere col gettone della persona e legge l'ordine. Contrassegno: POST /api/orders/cod dal carrello seminato, ordine NEW con totale = merce + consegna, righe, campanella del negozio. Rifiuto: pagamento Stripe di prova (pm_card_visa) + avviso checkout.session.completed firmato al webhook, ordine PAID, rifiuto del negozio, rimborso registrato sull'ordine (stripe_refund_id, refunded_amount_cents, REFUNDED) e riletto su Stripe. Bonifico: ordine pagato e consegnato, giro release-payouts, TRANSFERRED con stripe_transfer_id e trasferimento riletto su Stripe. Girano solo con E2E_DATI_DI_PROVA e l'ambiente pronto (database locale; chiavi sk_test_ per la carta), nessuna asserzione sulla variabile. CI: nuovo lavoro e2e-cassa-vera con if: vars.E2E_DATI_DI_PROVA == '1', Supabase locale, mai rosso per un segreto mancante, nel cancello di main. Guardie rafforzate: con un ambiente finto e irraggiungibile le tre prove devono CADERE provando a raggiungerlo (un guscio passa, una saltata resta skipped); la guardia statica pretende rotte, lettura dell'ordine e il lavoro della CI. Giro di correzione (qa, commit 0b6f9d52): le guardie si lasciavano superare da una prova «a guscio» (corpo ridotto a cosaManca + skip, un commento con le parole richieste, expect(AMBIENTE.url).toMatch(/:54321$/)). Ora la guardia che fa girare le tre prove accetta solo l'errore di rete (/fetch failed|ECONNREFUSED/i: l'indirizzo finto 127.0.0.1:9 compariva nel messaggio di qualunque asserzione caduta); la guardia statica toglie i commenti dal corpo prima delle regex (intervalli di commento riconosciuti da TypeScript, non stringhe né regex) e conta AMBIENTE (copia di process.env) fra gli argomenti di expect vietati. Controllato su una copia temporanea (poi cancellata) col guscio nel contrassegno: le guardie vecchie restavano verdi (14/14), le nuove cadono tutte e tre (esecuzione, parole del corpo, argomento di expect); sullo spec vero restano verdi. Prova rimessa sulla voce intera (9e492350^). Giro L3 (commit 455c3f93): tolti i tre salti per prova; resta il solo salto del beforeEach che c'era alla base (stessa riga), ora appeso a «ambiente di prova pronto»: interruttore E2E_DATI_DI_PROVA, database locale, Stripe di prova (sk_test_, firma del webhook, conto acct_) e CRON_SECRET; il motivo dice cosa manca. CI: gli avvisi del passo delle chiavi dicono che senza Stripe di prova si saltano tutte e tre (il lavoro resta verde). Guardie rafforzate: la guardia statica pretende che lo spec abbia solo i due salti (pagine senza JavaScript, che c'era gia', e il salto unico), nessun salto o fixme dentro le tre prove, e che il salto guardi database, carta e bonifico; quella che fa girare le prove aggiunge il caso con la chiave sk_live_ al posto della sk_test_: tutte e tre saltate dicendo STRIPE_SECRET_KEY sk_test_. Tolto dal commento della guardia il testo con la forma del salto.",
+      "cosa_resta": "la CI lo fa girare davvero quando Nicola mette i segreti di test. I corpi non hanno mai girato contro un ambiente vero (qui non c'è Supabase locale né Stripe di prova): al primo giro può servire un ritocco (regole del database sull'ordine consegnato, inserimento del prodotto). Con il salto unico il contrassegno non gira più da solo senza Stripe di prova: le tre prove (e «la cassa disegna il modulo») girano solo con l'ambiente intero.",
+      "nota": "Per accendere il lavoro e2e-cassa-vera (nomi, mai valori): variabile del repository E2E_DATI_DI_PROVA = 1 (accende il lavoro); segreto STRIPE_TEST_SECRET_KEY (chiave Stripe che comincia con sk_test_) e variabile E2E_STRIPE_CONTO_NEGOZIO (conto collegato acct_ di PROVA che riceve trasferimenti): servono tutti e due perché le tre prove girino, se ne manca uno si saltano tutte e tre dicendolo. Nessun segreto Supabase: il lavoro usa il Supabase locale di tests/supabase-locale/avvia.sh. STRIPE_WEBHOOK_SECRET e CRON_SECRET sono valori del solo giro scritti nel workflow (il sito acceso lì e le prove li condividono). Il testo del riepilogo del lavoro e2e-tests ora rimanda al lavoro nuovo. eccezione chiesta: salto condizionale dello spec e2e, voluto dalla voce (è la riga del beforeEach che c'era già alla base, invariata: la guardia del ramo oggi non la segna).",
+      "verificato_da": "qa (revisore interno Q1, sola lettura): guardie 14/14 e rimessa regge; cancello CI simulato con la cassa saltata/caduta (if: always(), skipped non blocca); tre prove girate senza Stripe; trovata una variante a guscio che passava le due guardie -> corretta nel giro di correzione; difetto del revisore corretto nel giro di correzione (lotto 2)"
+    },
+    {
+      "id": "R29-002",
+      "chiave": "qa-flussi|nicola non viene avvisato quando arriva un ordine: il primo allarme per un ordine non accettato parte dopo un'ora, non dopo 5 minuti",
+      "esito": "riparato",
+      "commit": "b6620258",
+      "file_toccati": [
+        "app/api/cron/operational-alerts/route.ts",
+        "vercel.json",
+        "tests/unit/riparazione-r29-allarme-ordine.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-allarme-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-allarme-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4fd7d59d^ --file app/api/cron/operational-alerts/route.ts,vercel.json --prove tests/unit/riparazione-r29-allarme-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Riapplicato il codice di R14-003 (git cherry-pick -n 240530aa, senza la prova riparazione-r14 che non è mia): ogni ordine ancora NEW dopo 5 minuti porta l'allarme ORDINE_DA_ACCETTARE (campanella ed email), una volta per ordine. vercel.json: il sorvegliante gira */5 invece di */15, così il primo allarme arriva fra 5 e 10 minuti. Prova nuova con orologio finto e cadenza letta da vercel.json; minori-s03 scheda 7 aggiornata come la modifica scritta (la prova importa la rotta). Giro di correzione (qa): la prova dell'ordine della sera per domani controlla anche che il messaggio dell'allarme mostri la fascia («Domani»), come chiedeva la prova di R14 (commit b6620258). Prova rimessa sulla voce intera (4fd7d59d^).",
+      "nota": "tests/unit/minori-s03-sorvegliante.test.ts toccata perché importa app/api/cron/operational-alerts/route.ts (riga 60): rafforzata, non indebolita. Il commento in lib/cron-health.ts:115 dice ancora «ogni 15 minuti» (file non mio, solo commento). Prova rimessa rifatta con la sola prova riparazione-r29 (regge, uscita 0). tests/unit/minori-s03-sorvegliante.test.ts è tornato come alla base in 80be8d82: la sua modifica la applica la regista; finché non lo fa è rosso sul ramo, perché si aspetta il comportamento di prima.",
+      "verificato_da": "qa (revisore interno Q2, mandato di smentire, sola lettura): 26/26 verdi, rimessa regge; codice identico a 240530aa; varianti su 4 fusi con orologio finto (soglia 4:59/5:00/5:01, ordine della sera per domani, 96 giri = 1 allarme, stati chiusi senza allarme); 19 prove vicine 231/231; difetto del revisore corretto nel giro di correzione (lotto 2)",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s03-sorvegliante.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/minori-s03-sorvegliante.test.ts b/tests/unit/minori-s03-sorvegliante.test.ts\nindex a69b960e..7f4e3bc3 100644\n--- a/tests/unit/minori-s03-sorvegliante.test.ts\n+++ b/tests/unit/minori-s03-sorvegliante.test.ts\n@@ -87,7 +87,12 @@ describe('il sorvegliante', () => {\n     // Nato 65 minuti fa per «Domani 9:00-12:00»: in regola fino a domattina.\n     risposta = ordineFermo({ id: 'aaaaaaaa-1', created_at: vecchio(65), delivery_slot: 'Domani 9:00-12:00', profiles: { store_name: 'Forno' } });\n     const { corpo } = await giro();\n-    expect(corpo.alerts).toBe(0);\n+    // R14-003 — Ogni ordine che il negozio non accetta entro 5 minuti avvisa Nicola, una volta sola\n+    // («ordine nuovo da accettare»): è l'unico allarme che questo ordine porta. Il «bloccato»\n+    // (ORDER_STUCK_NEW) resta escluso fino a domattina.\n+    const dettagli = (corpo.details ?? []) as Array<{ type: string; detail: string }>;\n+    expect(dettagli.map((d) => d.type)).toEqual(['ORDINE_DA_ACCETTARE']);\n+    expect(dettagli.some((d) => /bloccato/i.test(d.detail))).toBe(false);\n   });\n \n   it('7 — l ordine ormai alla scadenza invece suona', async () => {\n"
+        }
+      ]
+    },
+    {
+      "id": "R29-003",
+      "chiave": "ai-endpoints|con un fornitore lento la risposta lunga del copilot non arriva mai: dopo due minuti il negozio legge solo «riprova»",
+      "esito": "parziale",
+      "commit": "f734e255",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "lib/ai/regole-copilot.ts",
+        "app/api/ai/copilot/route.ts",
+        "tests/unit/riparazione-r29-copilot-lento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-copilot-lento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-copilot-lento.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f734e255^ --file lib/ai/run.ts,lib/ai/regole-copilot.ts,app/api/ai/copilot/route.ts --prove tests/unit/riparazione-r29-copilot-lento.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "b51bf9a4 e cc0c5e70 sono antenati della base ma tolti da 8d06fa7e (revert); b51bf9a4 dipendeva da tempoPerChiamataMs di R21-001, tolto anche lui (30c48c54), quindi la sostanza è riapplicata a mano: runMessage accetta timeoutMs e senzaRitentativi (opzioni per chiamata solo se dichiarate, gli altri restano col client 60 s / 1 ritentativo), TEMPO_COPILOT_MS = 80 s, tettoTokenCopilot al massimo 3000, il Copilot fa un tentativo solo da 80 s. Prova nuova (dalla prova di b51bf9a4, adattata) e minori-s10 come cc0c5e70 (tetto > 2048 e <= 3200; la prova importa la rotta del Copilot).",
+      "cosa_resta": "Lo streaming (la risposta a pezzi, con un piano parziale a tempo scaduto), escluso in quest'onda dalla regista: un fornitore più lento di 40 token al secondo dà l'errore chiaro senza risposta parziale. Il filtro sull'istruzione (lib/ai/moderation.ts, file non mio) resta coi 60 s × 2 del client: con un fornitore appeso, non lento, può ancora mangiarsi il tempo della rotta.; il filtro dell'istruzione in lib/ai/moderation.ts (non mio) usa ancora 60 s x 2: vedi serve_file_altrui",
+      "nota": "lib/ai/client.ts e vercel.json (maxDuration 120) non toccati: non serviva. Prova rimessa rifatta con la sola prova riparazione-r29 (regge, uscita 0). tests/unit/minori-s10-catalogo-chat.test.ts è tornato come alla base in 80be8d82: la sua modifica la applica la regista; finché non lo fa è rosso sul ramo, perché si aspetta il comportamento di prima.",
+      "verificato_da": "qa (revisore interno Q3): stessa corsa verde; con f734e255^ cadono 4 test (regge); letti vercel.json, run.ts, client.ts, moderation.ts, copilot/route.ts: parziale",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s10-catalogo-chat.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/minori-s10-catalogo-chat.test.ts b/tests/unit/minori-s10-catalogo-chat.test.ts\nindex 34edbd2d..1fb88312 100644\n--- a/tests/unit/minori-s10-catalogo-chat.test.ts\n+++ b/tests/unit/minori-s10-catalogo-chat.test.ts\n@@ -150,13 +150,16 @@ describe('oltre i 100 prodotti la chat lo sa (610)', () => {\n });\n \n describe('il Copilot ha token per tutto il catalogo (250)', () => {\n-  it('con 200 prodotti concede più dei 4096 di prima, ma non oltre quello che arriva in 60 s', async () => {\n+  // R21-002 (riapplicata da R29-003) — Il tetto sale con il catalogo, ma non oltre quello che un\n+  // fornitore lento (40 token al secondo) scrive in un tentativo da 80 s: 3200. I 6000 di prima non\n+  // stavano in nessun tempo.\n+  it('con 200 prodotti concede più dei 2048 di una chat, ma non oltre quello che arriva in un tentativo', async () => {\n     db.catalogo = Array.from({ length: 200 }, (_, i) => prodotto(i + 1));\n     db.totale = 200;\n     await copilot(richiesta('/api/ai/copilot', { instruction: 'aggiungi il tag pane a tutto' }));\n     const tetto = runMessageMock.mock.calls[0][0].max_tokens;\n-    expect(tetto).toBeGreaterThan(4096);\n-    expect(tetto).toBeLessThanOrEqual(6000);\n+    expect(tetto).toBeGreaterThan(2048);\n+    expect(tetto).toBeLessThanOrEqual(3200);\n   });\n });\n \n"
+        },
+        {
+          "file": "lib/ai/moderation.ts",
+          "modifica": "Riga ~79 (e ~118 se è il percorso usato dal Copilot): la chiamata del filtro dell'istruzione passa a runMessage le opzioni { timeoutMs: 15_000, senzaRitentativi: true }. Oggi usa il client di default (60 s con 1 ritentativo, lib/ai/client.ts:~208): con un fornitore appeso arriva da sola a ~120 s, e i 120 s della rotta (vercel.json, app/api/ai/**) si sforano anche col tentativo unico da 80 s del Copilot."
+        }
+      ]
+    },
+    {
+      "id": "R29-004",
+      "chiave": "api-backend|se due giri del sorvegliante partono nello stesso istante, l'amministratore riceve due volte la stessa campanella",
+      "esito": "riparato",
+      "commit": "038ddd6a",
+      "file_toccati": [
+        "app/api/cron/operational-alerts/route.ts",
+        "tests/unit/riparazione-r29-allarme-ordine.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-allarme-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-allarme-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 038ddd6a^ --file app/api/cron/operational-alerts/route.ts --prove tests/unit/riparazione-r29-allarme-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "git cherry-pick -n 2e81dd8d (codice e prova di R14-011), nessun conflitto con R29-002 nello stesso file: campanella ed email prendono il turno sulla chiave primaria di operational_alert_log prima di suonare (rinfresco condizionato delle scadute, inserimento delle nuove col doppione 23505 rifiutato), suona solo chi lo vince, e se l'invio fallisce il turno si restituisce. La prova del race (due giri con Promise.all su un finto database che intreccia le risposte) e quelle del turno restituito sono nel describe R29-004 di riparazione-r29-allarme-ordine.",
+      "nota": "tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts toccata perché importa la rotta (riga 58): i tre punti della modifica scritta (tolte, push sulle chiavi cancellate, attesaScritta), nessun indebolimento: conta quello che resta scritto a fine giro. Prova rimessa rifatta con la sola prova riparazione-r29 (regge, uscita 0). tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts è tornato come alla base in 80be8d82: la sua modifica la applica la regista; finché non lo fa è rosso sul ramo, perché si aspetta il comportamento di prima.",
+      "verificato_da": "qa (revisore interno Q3): rilanciati 5 file vitest 41/41 verdi; con 038ddd6a^ in copia cadono i 2 test «due giri» (rimessa regge); letto il turno prendi/libera in route.ts: regge",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts b/tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts\nindex 5b57bca5..3b9225e2 100644\n--- a/tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts\n+++ b/tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts\n@@ -16,6 +16,8 @@ import type { NextRequest } from 'next/server';\n \n let esitoInvio: Record<string, unknown> = { ok: true, id: 'finta' };\n const scritte: Array<{ tabella: string; metodo: string; righe: unknown }> = [];\n+/** R14-011 — Le chiavi tolte da operational_alert_log: il turno preso prima dell'invio e restituito. */\n+const tolte: string[] = [];\n \n function tabella(nome: string): unknown {\n   const chiamate: Array<{ m: string; a: unknown[] }> = [];\n@@ -35,6 +37,9 @@ function tabella(nome: string): unknown {\n       return (...a: unknown[]) => {\n         chiamate.push({ m: String(k), a });\n         if (k === 'insert' || k === 'upsert') scritte.push({ tabella: nome, metodo: String(k), righe: a[0] });\n+        if (nome === 'operational_alert_log' && k === 'in' && chiamate.some((x) => x.m === 'delete')) {\n+          tolte.push(...(a[1] as string[]));\n+        }\n         return c;\n       };\n     },\n@@ -67,14 +72,18 @@ async function faiUnGiro() {\n // 31/10/2026 — l'attesa che conta qui e' quella dell'EMAIL. La campanella ha\n // una memoria sua (`CAMPANELLA|<chiave>`, stessa tabella) che si scrive anche\n // quando la posta non parte: e' cio' che le impedisce di suonare ogni 15 minuti.\n+// R14-011 — Il giro prende il turno PRIMA dell'invio (scrive la chiave) e, se\n+// l'email non parte, lo restituisce (la toglie): conta quello che resta scritto\n+// alla fine del giro.\n const attesaScritta = () => scritte.some((s) => s.tabella === 'operational_alert_log'\n   && ([] as Array<{ alert_key: string }>).concat(s.righe as never)\n-    .some((r) => !String(r.alert_key).startsWith('CAMPANELLA|')));\n+    .some((r) => !String(r.alert_key).startsWith('CAMPANELLA|') && !tolte.includes(String(r.alert_key))));\n \n describe('il sorvegliante legge l esito della email d allarme', () => {\n   const salvato = { ...process.env };\n   beforeEach(() => {\n     scritte.length = 0;\n+    tolte.length = 0;\n     esitoInvio = { ok: true, id: 'finta' };\n     process.env.SUPPORT_EMAIL = 'nicola@mycity.test';\n     process.env.NEXT_PUBLIC_APP_URL = 'https://mycity.test';\n"
+        }
+      ]
+    },
+    {
+      "id": "R29-005",
+      "chiave": "architettura|interfacce zombie: shippingforeuro vale sempre 0 ma riceve 7 ingressi; promessaspedizione ha un argomento morto e campi sempre costanti",
+      "esito": "riparato",
+      "commit": "4420402b",
+      "file_toccati": [
+        "lib/shipping.ts",
+        "lib/promesse-pubbliche.ts",
+        "app/checkout/page.tsx",
+        "app/product/[id]/page.tsx",
+        "components/ProductCard.tsx",
+        "tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts",
+        "tests/unit/shipping.test.ts",
+        "tests/unit/una-sola-regola-per-la-spedizione.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4420402b^ --file \"lib/shipping.ts,lib/promesse-pubbliche.ts,app/checkout/page.tsx,app/product/[id]/page.tsx,components/ProductCard.tsx\" --prove tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Modifiche scritte di R26-006: shippingForEuro(): number senza ingressi (shippingCentsFor accetta ancora gli ingressi, opzionali e ignorati, perché lib/ordini/prezzi.ts, non mio, glieli passa); promessaSpedizione(consegnaCents = PLATFORM_DELIVERY_FEE_CENTS) senza _sottototale, e sopraSoglia/mancano tolti da tipo e risultato. Cassa: shippingFor() → shippingForEuro() (tolto groupSubtotal rimasto senza uso). Scheda prodotto: promessaSpedizione() e tolti subtotaleConQuestoProdotto, lo stato carrelloAttuale e il suo ascolto di cart:updated, che servivano solo a quello. Scheda prodotto e card: la pastiglia «gratis» si accende con spedizione.dettaglioConsegna === null (consegna che davvero non si paga), al posto di sopraSoglia sempre false: con la consegna da 3 € resta spenta come prima. Il carrello chiamava già promessaSpedizione() e FreeShippingProgress non esiste più (tolto prima). Prove aggiornate, perché importano lib/shipping.ts o lib/promesse-pubbliche.ts: al-lancio-si-paga-solo-la-consegna (niente sopraSoglia/mancano nel risultato), in-cassa-…:154-159 e la-vetrina-…:80,118 (il primo argomento ora è la consegna: le chiamate col sottototale sarebbero diventate centesimi di consegna), shipping, una-sola-regola-per-la-spedizione e il-carrello-condiviso-non-perde-il-negozio (gli stessi casi passati a shippingCentsFor, che deve dire 0). Nessuna cifra cambia; tsc verde.",
+      "nota": "Resta un solo chiamante che passa i sette ingressi: lib/ordini/prezzi.ts:263 → shippingCentsFor({...}) (file non mio, fuori dai file della voce). Quando lo tocca chi lo possiede: shippingCentsFor() senza argomenti, e poi togliere IngressiSpedizione e il parametro opzionale da lib/shipping.ts. Prova rimessa rifatta con la sola prova riparazione-r29 (regge, uscita 0). tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx, tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts, tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts, tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts sono tornati come alla base in 80be8d82: la sua modifica la applica la regista; finché non lo fa è rosso sul ramo, perché si aspetta il comportamento di prima.",
+      "verificato_da": "revisore interno tolto per il tetto: collaudo con revisori sui soldi",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx b/tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx\nindex bcb4f056..dd7d3d61 100644\n--- a/tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx\n+++ b/tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx\n@@ -455,14 +455,14 @@ describe('le altre promesse parlano della stessa consegna', () => {\n   });\n \n   it('la frase della vetrina non dice «gratis» né «ti mancano», a nessun sottototale', () => {\n-    for (const sottototale of [0, 8, 29.99, 30, 80]) {\n-      const p = promessaSpedizione(sottototale);\n-      expect(p.sopraSoglia).toBe(false);\n-      expect(p.mancano).toBe(0);\n-      expect(p.costoConsegna).toBe(PLATFORM_DELIVERY_FEE_CENTS / 100);\n-      expect(`${p.titolo} ${p.breve}`).not.toMatch(/gratis|mancano/i);\n-      expect(p.titolo).toContain(TRE_EURO);\n-    }\n+    // 16/11/2026 (R29-005) — Il sottototale non è più un argomento e la soglia non è più nel\n+    // risultato (niente sopraSoglia, niente mancano): la frase è una sola, per qualunque carrello.\n+    const p = promessaSpedizione();\n+    expect(p).not.toHaveProperty('sopraSoglia');\n+    expect(p).not.toHaveProperty('mancano');\n+    expect(p.costoConsegna).toBe(PLATFORM_DELIVERY_FEE_CENTS / 100);\n+    expect(`${p.titolo} ${p.breve}`).not.toMatch(/gratis|mancano/i);\n+    expect(p.titolo).toContain(TRE_EURO);\n   });\n \n   // S10 (5/11/2026, scheda 2083) — Qui si collaudava FreeShippingProgress, che\n"
+        },
+        {
+          "file": "tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts b/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts\nindex 162d97d3..053478c3 100644\n--- a/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts\n+++ b/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts\n@@ -28,7 +28,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';\n import { monta } from './aiuti/monta-componente';\n import { accendi, clicca, attendi } from './aiuti/schermo';\n import { getCart, type CartItem } from '@/lib/cart';\n-import { shippingForEuro } from '@/lib/shipping';\n+import { shippingCentsFor } from '@/lib/shipping';\n import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';\n \n const globali = globalThis as Record<string, unknown>;\n@@ -75,10 +75,10 @@ function totale(righe: CartItem[], negozioDi: (r: CartItem) => string): number {\n     gruppi.get(chiave)!.push(r);\n   }\n   const spedizione = Array.from(gruppi.values()).reduce(\n-    (s, g) => s + shippingForEuro({\n+    (s, g) => s + shippingCentsFor({\n       subtotal: sottoTotale(g), storeLat: null, storeLng: null,\n       deliveryLat: null, deliveryLng: null, pickupInStore: false,\n-    }),\n+    }) / 100,\n     0,\n   );\n   const consegna = gruppi.size * (PLATFORM_DELIVERY_FEE_CENTS / 100);\n"
+        },
+        {
+          "file": "tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts b/tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts\nindex b705533d..aa399ae0 100644\n--- a/tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts\n+++ b/tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts\n@@ -151,11 +151,11 @@ describe('la spedizione gratuita, in cassa, la dice chi la decide', () => {\n   it('e quella frase nasce dalla cifra che la cassa addebita davvero', async () => {\n     const { promessaSpedizione } = await import('@/lib/promesse-pubbliche');\n     // Con la consegna a pagamento la riga si vede.\n-    expect(promessaSpedizione(50, 300).dettaglioConsegna).toMatch(/3[.,]00/);\n+    expect(promessaSpedizione(300).dettaglioConsegna).toMatch(/3[.,]00/);\n     // 5/11/2026 (S07, scheda 2307) — Con la base a zero ma gli euro in più accesi la consegna NON è\n     // gratis (8 € di pane pagano 1 €): la riga resta, senza «0,00 €». Sparisce solo quando non si\n     // paga niente di niente (lo prova minori-s07-promesse.test.ts con tutte le cifre a zero).\n-    expect(promessaSpedizione(50, 0).dettaglioConsegna).not.toBeNull();\n-    expect(promessaSpedizione(50, 0).dettaglioConsegna).not.toMatch(/(^|[^\\d])0,00/);\n+    expect(promessaSpedizione(0).dettaglioConsegna).not.toBeNull();\n+    expect(promessaSpedizione(0).dettaglioConsegna).not.toMatch(/(^|[^\\d])0,00/);\n   });\n });\n"
+        },
+        {
+          "file": "tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts b/tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts\nindex 75e5d479..fd0752cb 100644\n--- a/tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts\n+++ b/tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts\n@@ -77,7 +77,7 @@ describe('e la cifra è quella che la cassa addebita davvero', () => {\n \n   it('ma la consegna si paga lo stesso, e la vetrina dice quel numero', () => {\n     expect(gruppo.deliveryFeeCents, 'se questo va a zero, la gratuità piena è vera').toBeGreaterThan(0);\n-    const vetrina = promessaSpedizione(35);\n+    const vetrina = promessaSpedizione();\n     expect(Math.round(vetrina.costoConsegna * 100)).toBe(gruppo.deliveryFeeCents);\n     expect(vetrina.titolo).toContain(formatPrice(gruppo.deliveryFeeCents / 100));\n   });\n@@ -115,7 +115,7 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {\n     ).toEqual([]);\n     // E la forma corta, con la consegna a pagamento, i soldi li nomina davvero.\n     if (PLATFORM_DELIVERY_FEE_CENTS > 0) {\n-      expect(promessaSpedizione(30).breve).toContain(\n+      expect(promessaSpedizione().breve).toContain(\n         formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100),\n       );\n     }\n"
+        }
+      ]
+    },
+    {
+      "id": "R29-006",
+      "chiave": "frontend-ux|le domande frequenti dicono di inserire il codice sconto alla cassa, ma alla cassa il campo non c'è",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-007",
+      "chiave": "frontend-ux|il negoziante col negozio non ancora approvato vede «negozio» al posto della sua insegna nella lista condivisa e alla cassa",
+      "esito": "riparato",
+      "commit": "2c9f8412",
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2c9f8412^ --file app/cart/page.tsx --prove tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Cassa e lista condivisa erano già a posto sulla base (R19-006, commit 23cf610b antenato della base: app/checkout/page.tsx:279 e app/shared-cart/page.tsx:148 leggono profiles per i negozi assenti dalla vista). Applicata la modifica scritta di R26-011 al carrello: per i negozi che fetchSellerPublicMap non restituisce, lettura di profiles (id, store_name) in try/catch dopo le scorte, stato insegnaPropria, e il gruppo usa it.storeName ?? insegnaPropria[sellerId] ?? 'Negozio'. Prova: 'app/cart/page.tsx' aggiunto al ciclo di tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts (legge i file per nome) più un caso sul ripiego del gruppo. Le 20 prove che leggono o montano il carrello restano verdi.",
+      "nota": "tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts toccata perché legge per nome app/cart/page.tsx, app/checkout/page.tsx e app/shared-cart/page.tsx (miei): rafforzata.",
+      "verificato_da": "revisore interno tolto per il tetto: collaudo con revisori sui soldi"
+    },
+    {
+      "id": "R29-008",
+      "chiave": "immagini-media|se la foto di un prodotto è stata cancellata, la scheda resta un riquadro bianco invece della foto di ripiego",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-009",
+      "chiave": "microcopy|il riquadro newsletter della home, se riacceso, promette «una volta a settimana, ogni venerdì», ma nessun invio esiste e le impostazioni la chiamano «mensile»",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-010",
+      "chiave": "navigazione-gerarchia|nella scheda prodotto il prezzo è quasi grande quanto il titolo e pesa meno del pulsante «+»",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-011",
+      "chiave": "pagamenti-stripe|un ordine in contanti rimborsato tutto prima della rimessa sparisce dai contanti da chiedere al fattorino",
+      "esito": "riparato",
+      "commit": "fca65a61",
+      "file_toccati": [
+        "app/admin/cod-remittance/page.tsx",
+        "tests/unit/riparazione-r29-contanti-del-rimborsato.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-contanti-del-rimborsato.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-contanti-del-rimborsato.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fca65a61^ --file app/admin/cod-remittance/page.tsx --prove tests/unit/riparazione-r29-contanti-del-rimborsato.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Seconda strada del registro: la pagina delle rimesse legge, oltre agli AWAITING_REMITTANCE, gli ordini in contanti consegnati con payout_status REFUNDED (rimborso pieno) e li tiene nel gruppo fattorino·giorno finché cod_reconciliations non ha una rimessa di quel fattorino per quel giorno confermata dopo l'incasso (remitted_at >= cash_confirmed_at). La cifra da chiedere li comprende, il gruppo dice «di cui N rimborsati per intero: al negozio non si paga niente». La conferma passa anche i loro id, ma confirm_cod_remittance rilascia solo gli AWAITING_REMITTANCE, quindi il negozio di un ordine rimborsato non diventa pagabile; la conferma scrive remitted_at e l'ordine esce dall'elenco. payout.ts (lo stato REFUNDED del negozio) resta com'è: tenere AWAITING_REMITTANCE avrebbe portato l'ordine rimborsato a HELD e cambiato flussi coperti da molte prove. quadratura.ts già li contava. Prova con la pagina montata e un finto database che risponde secondo la domanda: 23 € rimborsati + 13 € in attesa → 30,00 € da chiedere; rimessa confermata dopo l'incasso → 10,00 €; confermata prima dell'incasso → ancora da chiedere.",
+      "nota": "L'allarme «rimessa mai confermata» (app/api/cron/operational-alerts/route.ts:276-292) guarda ancora solo AWAITING_REMITTANCE: un rimborsato con i contanti in mano compare nella pagina ma non fa suonare l'allarme delle 48 ore (citato nella descrizione del registro, non nel titolo). La lettura dei rimborsati ha il tetto di 1000 righe più recenti.",
+      "verificato_da": "revisore interno tolto per il tetto: collaudo con revisori sui soldi"
+    },
+    {
+      "id": "R29-012",
+      "chiave": "pagamenti-stripe|la consegna da 3 € ha ancora altri nomi: «costo di consegna» su stripe, «consegna a domicilio» in cassa, «consegna a casa» in home",
+      "esito": "riparato",
+      "commit": "36e83099",
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/riparazione-r29-un-nome-per-la-consegna.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-un-nome-per-la-consegna.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-un-nome-per-la-consegna.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 36e83099^ --file app/checkout/page.tsx,lib/promesse-pubbliche.ts --prove tests/unit/riparazione-r29-un-nome-per-la-consegna.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il nome ufficiale c'è già: VOCE_CONSEGNA = 'Consegna MyCity' (lib/promesse-pubbliche.ts), usato da riepilogo della cassa, carrello, pagina dell'ordine e voce delivery_fee di Stripe. Il riquadro della cassa («Consegna a domicilio») ora mostra {VOCE_CONSEGNA}, e il titolo della consegna gratuita in promessaSpedizione («Consegna a casa gratuita») diventa `${VOCE_CONSEGNA} gratuita`. Su Stripe «Costo di consegna» era già stato tolto (e98de7db, ora `${VOCE_CONSEGNA} — negozio`), e la «Consegna a casa» di lib/constants.ts era già sparita con VALUE_PROPS (f2f59ad6): lì niente da fare. Prova leggera sui tre file. Tre prove esistenti che montano o leggono per nome app/checkout/page.tsx cercavano il riquadro col nome vecchio: ora lo cercano con la costante (la-cassa-mostra-la-spedizione-…: il riquadro si distingue dalla riga del riepilogo per la colonna a blocco, e il riepilogo esclude solo il riquadro e il suo contenuto; l-ordine-con-un-appuntamento-…:319; la-veloce-resta-scelta-…:147). Nessuna indebolita.",
+      "nota": "Restano due «Consegna a casa» che non sono il nome della voce da 3 € ma lo slogan del servizio senza cifra: components/home/HeroStoreCard.tsx:251 («Consegna a casa · all'ora che scegli», riga dell'orario sulla card della home) e lib/promessa-consegna.ts:63 (CONSEGNA_ALL_ORA_CHE_SCEGLI, non mio). Se Nicola li vuole uguali, la card può usare quella costante. Prova rimessa rifatta con la sola prova riparazione-r29 (regge, uscita 0). tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts, tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts, tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx sono tornati come alla base in 80be8d82: la sua modifica la applica la regista; finché non lo fa è rosso sul ramo, perché si aspetta il comportamento di prima.",
+      "verificato_da": "revisore interno tolto per il tetto: collaudo con revisori sui soldi",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts b/tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts\nindex 12a9a787..ed0cd5db 100644\n--- a/tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts\n+++ b/tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts\n@@ -316,7 +316,10 @@ describe('gli invarianti sul checkout vero', () => {\n     // anche l'invio, «il file la chiama» ha smesso di provare che la RIGA la usi.\n     // Se ne è accorta una mutazione che prima era rossa ed è tornata verde: è il\n     // motivo per cui ogni mutazione si riprova dopo ogni aggiunta, non una volta.\n-    const riga = checkout.slice(checkout.indexOf('Consegna a domicilio'));\n+    // R29-012 — il titolo del riquadro è la costante del nome della consegna.\n+    const titolo = checkout.indexOf('>{VOCE_CONSEGNA}</p>');\n+    expect(titolo, 'il riquadro della consegna non c è più').toBeGreaterThan(0);\n+    const riga = checkout.slice(titolo);\n     expect(riga.slice(0, 400), 'la riga sotto le mattonelle torna un testo fisso')\n       .toMatch(/rigaQuandoArriva\\(consegna\\)/);\n   });\n"
+        },
+        {
+          "file": "tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts b/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts\nindex e66e5200..83cd921b 100644\n--- a/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts\n+++ b/tests/unit/la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi.test.ts\n@@ -137,12 +137,24 @@ function etichettaDi(colonna: Element): string {\n   return colonna.firstElementChild ? testoDiretto(colonna.firstElementChild) : '';\n }\n \n-/** Le cifre scritte accanto a «Spedizione», in ogni riepilogo e in ogni riquadro della pagina. */\n-function spedizioniMostrate(radice: HTMLElement, cercata: RegExp = /^Spedizione/): string[] {\n+/**\n+ * Le cifre scritte accanto a «Spedizione», in ogni riepilogo e in ogni riquadro della pagina.\n+ * 16/11/2026 (R29-012) — Il riquadro della cassa ha lo stesso nome della riga del riepilogo\n+ * (VOCE_CONSEGNA): `dove` li tiene distinti. «riquadro» = solo le righe con la colonna di sinistra\n+ * a blocco (titolo + sottotitolo); «riepilogo» = tutte, meno il riquadro della consegna, che si legge\n+ * a parte.\n+ */\n+function spedizioniMostrate(radice: HTMLElement, cercata: RegExp = /^Spedizione/, dove: 'tutte' | 'riepilogo' | 'riquadro' = 'tutte'): string[] {\n   const cifre: string[] = [];\n-  for (const riga of Array.from(radice.querySelectorAll('div'))) {\n+  const righe = Array.from(radice.querySelectorAll('div'));\n+  const aBlocco = (riga: Element) => riga.children.length === 2 && !testoDiretto(riga.children[0]);\n+  // Il riquadro della consegna: colonna di sinistra a blocco col nome della consegna per titolo.\n+  const riquadri = righe.filter((riga) => aBlocco(riga) && /^Consegna MyCity/.test(etichettaDi(riga.children[0])));\n+  for (const riga of righe) {\n     const figli = Array.from(riga.children);\n     if (figli.length !== 2) continue;\n+    if (dove === 'riquadro' && !aBlocco(riga)) continue;\n+    if (dove === 'riepilogo' && riquadri.some((q) => q.contains(riga))) continue;\n     if (!cercata.test(etichettaDi(figli[0]))) continue;\n     cifre.push(testoVisibile(figli[1]));\n   }\n@@ -248,12 +260,13 @@ async function spedizioneAllaCassa(mondo: Mondo, carrello: RigaCarrello[], opzio\n   // 27/10/2026 — Si leggono TUTTE le righe del riepilogo che parlano di farsi portare la spesa,\n   // non solo «Consegna MyCity». Leggendo quella sola, la prova restava verde mentre la riga\n   // «Spedizione» sopra scriveva «Gratis» in verde su un ordine che pagava 3 € di consegna.\n-  const cifre = spedizioniMostrate(s.radice, /^(Spedizione|Consegna MyCity)/);\n-  // 27/10/2026 (terzo giro) — Il riquadro «Consegna a domicilio», nel passo 2, si legge a parte:\n+  const cifre = spedizioniMostrate(s.radice, /^(Spedizione|Consegna MyCity)/, 'riepilogo');\n+  // 27/10/2026 (terzo giro) — Il riquadro della consegna, nel passo 2, si legge a parte:\n   // sta sempre in vista mentre si sceglie la fascia, ed è la prima cifra della consegna che si vede.\n   // Dentro il riquadro anche il titolo e la fascia («In giornata · 15:00–18:00») fanno una coppia:\n   // si tiene solo la colonna che dice un prezzo, o che dice «gratis».\n-  const riquadro = spedizioniMostrate(s.radice, /^Consegna a domicilio/).filter((c) => /€|gratis|gratuit/i.test(c));\n+  // R29-012 — il titolo del riquadro è il nome unico della consegna, come la riga del riepilogo.\n+  const riquadro = spedizioniMostrate(s.radice, /^Consegna MyCity/, 'riquadro').filter((c) => /€|gratis|gratuit/i.test(c));\n   const testo = testoVisibile(s.radice);\n   s.smonta();\n   return { cifre, riquadro, testo, letture: [...db.letture], errori: [...errori.values()] };\n"
+        },
+        {
+          "file": "tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx",
+          "modifica": "Applicare questo diff (prova comune: la tocca solo la regista). Senza, la prova resta rossa contro la correzione della voce:\ndiff --git a/tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx b/tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx\nindex 7cb35e0e..0ed16132 100644\n--- a/tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx\n+++ b/tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx\n@@ -33,6 +33,7 @@ import { act } from 'react';\n import { formatPrice } from '@/lib/format';\n import { romeNow } from '@/lib/store-hours';\n import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';\n+import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';\n import { monta, testoVisibile } from './aiuti/monta-componente';\n import { accendi } from './aiuti/schermo';\n \n@@ -142,9 +143,9 @@ async function cassaDopoLAccesso(fuso: string, istanteUtc: string, gruppi: typeo\n     adesso: () => tessera('Adesso'),\n     domani: () => tessera('Domani'),\n     testo: () => testoVisibile(s.radice),\n-    /** La cifra del riquadro «Consegna a domicilio», la prima della consegna che si vede. */\n+    /** La cifra del riquadro della consegna (R29-012: titolo VOCE_CONSEGNA), la prima della consegna che si vede. */\n     consegna: () => {\n-      const titolo = [...s.radice.querySelectorAll('p')].find((p) => (p.textContent ?? '').trim() === 'Consegna a domicilio');\n+      const titolo = [...s.radice.querySelectorAll('p')].find((p) => (p.textContent ?? '').trim() === VOCE_CONSEGNA);\n       return (titolo?.parentElement?.nextElementSibling?.textContent ?? '').trim();\n     },\n     /** Le righe che la pagina annuncia (role=status), tutte insieme. */\n"
+        }
+      ]
+    },
+    {
+      "id": "R29-013",
+      "chiave": "pagamenti-stripe|il sito vero lavora anche gli avvisi stripe «di prova»",
+      "esito": "riparato",
+      "commit": "831e3ccb",
+      "file_toccati": [
+        "lib/stripe/webhook/firma.ts",
+        "app/api/stripe/webhook/route.ts",
+        "tests/unit/riparazione-r29-avvisi-stripe-di-prova.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-avvisi-stripe-di-prova.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-avvisi-stripe-di-prova.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 831e3ccb^ --file lib/stripe/webhook/firma.ts,app/api/stripe/webhook/route.ts --prove tests/unit/riparazione-r29-avvisi-stripe-di-prova.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "verificaFirma (firma.ts) riceve la chiave Stripe del sito (di default env.stripeSecretKey()) e, se è quella vera (sk_live_/rk_live_), un avviso con livemode=false torna esito «di-prova»; la rotta lo tratta come «fuori-posto»: log, 200 {received, ignorato}, nessun gestore e nessuna scrittura (nemmeno stripe_event_log), così Stripe non ritenta. Con la chiave di prova (anteprima, sviluppo) gli avvisi di prova si lavorano come prima; gli avvisi senza livemode (prove esistenti) non cambiano. handleAccountUpdated (trasferimenti.ts:80) non si raggiunge più con un conto di prova sul sito vero, quindi non serve toccarlo; client.ts resta com'è (chiaveStripeFuoriPosto già vieta la chiave di prova in produzione). Prova con la firma vera di Stripe e chiavi finte: chiave vera + account.updated o checkout di prova → 200 senza gestore né database; avvisi veri lavorati; chiave di prova → avvisi di prova lavorati.",
+      "nota": "La rotta deve restare sotto 250 righe (tests/unit/webhook-diviso-per-mestiere.test.ts): il caso «di-prova» condivide il ramo di «fuori-posto», con il suo messaggio di log.",
+      "verificato_da": "revisore interno tolto per il tetto: collaudo con revisori sui soldi"
+    },
+    {
+      "id": "R29-014",
+      "chiave": "performance|ogni pagina scarica due caratteri in corsivo che quasi nessuna pagina usa",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-015",
+      "chiave": "performance|dieci punti del sito fanno rimpicciolire la stessa foto due volte, una da supabase e una da vercel",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-016",
+      "chiave": "performance|ogni pagina aperta fa tre letture uguali per tutti direttamente al database, e le categorie le legge due o tre volte",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-017",
+      "chiave": "performance-percepita|la home e la scheda prodotto partono senza il preload dei caratteri: il testo cambia faccia a metà caricamento",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-018",
+      "chiave": "performance-percepita|il traduttore degli errori dei moduli (zod) viaggia in ogni pagina, anche dove non c'è nessun modulo",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L4 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-019",
+      "chiave": "privacy-legale|il lotto riaccende una rotta che alla base era morta: il fattorino vede «kyc inviato, verifica in corso», ma nessuna parte del sistema chiude mai quello stato. i difetti qui sotto erano dormienti e ora si possono raggiungere",
+      "esito": "parziale",
+      "commit": "ad20ae7f",
+      "file_toccati": [
+        "app/api/cron/operational-alerts/route.ts",
+        "app/api/kyc/start-check/route.ts",
+        "tests/unit/riparazione-r29-allarme-ordine.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r29-allarme-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r29-allarme-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a194f532^ --file app/api/cron/operational-alerts/route.ts --prove tests/unit/riparazione-r29-allarme-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file la parte possibile: il sorvegliante (punto 4) avvisa l'amministratore della verifica d'identità ferma in PENDING da più di 48 ore anche per i fattorini (.in('role', ['seller','rider']), dettaglio «Fattorino <nome>»), non solo per i negozi; il commento di start-check (righe 21-30) non promette più il webhook /api/kyc/webhook, che non esiste, e dice chi decide. Prova con il finto database che applica i filtri: fattorino fermo da 72 ore suona, da 24 ore o già deciso no, un cliente no. Solo dati finti. Giro di correzione (qa, commit ad20ae7f): la lettura delle verifiche ferme aveva .limit(20) senza ordine, così con più di 20 verifiche ferme le stesse 20 occupavano sempre l'elenco; ora .order('kyc_provider_checked_at', { ascending: true }).limit(20), con un caso nella prova (20 fattorini fermi da 3 giorni messi per primi, uno fermo da 10 giorni per ultimo: deve suonare), rosso senza l'ordine. Prova rimessa sulla voce intera (a194f532^).",
+      "cosa_resta": "Nessuna parte del sistema scrive ancora la decisione sulla verifica: l'approvazione o il rifiuto del fattorino da /admin/users non chiude kyc_provider_status (vedi serve_file_altrui), e con Onfido acceso manca il webhook firmato del fornitore che chiuda il PENDING (rotta nuova, serve il fornitore configurato). Le schede Onfido orfane sono un'altra voce.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/users/[id]/moderate/route.ts",
+          "modifica": "nei casi 'approve' e 'reject' della funzione che costruisce il patch (righe ~75-91), quando il profilo letto (select riga ~191, aggiungere kyc_provider_status e kyc_provider_check_id) ha kyc_provider_status = 'PENDING' e kyc_provider_check_id che comincia con 'manual_', aggiungere al patch kyc_provider_status: 'APPROVED' (approve) o 'REJECTED' (reject) e kyc_provider_checked_at: now, e scrivere l'audit kyc.approve / kyc.reject con via: 'moderazione'; più una prova che approvare un fattorino con verifica manuale in attesa la chiude."
+        }
+      ],
+      "domanda": "Con Onfido acceso, la decisione deve arrivare dal webhook firmato di Onfido (rotta nuova /api/kyc/webhook) o resta sempre l'approvazione manuale da /admin/users a chiudere la verifica?",
+      "nota": "app/api/kyc/start-check/route.ts: solo il commento (righe 21-30), nessun comportamento cambiato; per questo non è nel --file della prova rimessa.",
+      "verificato_da": "qa (revisore interno Q3): stessa corsa verde; con a194f532^ cade il test del fattorino a 72 ore (regge); letti route.ts e start-check; moderate/route.ts non chiude il KYC: parziale onesto; difetto del revisore corretto nel giro di correzione (lotto 2)"
+    },
+    {
+      "id": "R29-020",
+      "chiave": "privacy-legale|il negozio può togliere il diritto di reso a un prodotto già venduto, e il cliente si vede rifiutare il ripensamento",
+      "esito": "serve_file_altrui",
+      "commit": "cf2d3a4c",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r29-il-recesso-del-prodotto-venduto.test.sql",
+        "tests/unit/riparazione-r29-il-recesso-del-prodotto-venduto.test.ts"
+      ],
+      "prova_comando": "(sul commit 5afe5ac7) bash tests/sql/harness/apply.sh r29_prova && psql -q -X -d r29_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r29-il-recesso-del-prodotto-venduto.test.sql ; npx vitest run tests/unit/riparazione-r29-il-recesso-del-prodotto-venduto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5afe5ac7^ --file migrations/530_il_recesso_si_decide_sul_prodotto_venduto.sql --prove tests/sql/rls/riparazione-r29-il-recesso-del-prodotto-venduto.test.sql --sql r29_rimessa --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5afe5ac7^ --file app/api/returns/create/route.ts --prove tests/unit/riparazione-r29-il-recesso-del-prodotto-venduto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "serve_file_altrui": [
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "Insieme al commit 5afe5ac7 (git cherry-pick 5afe5ac7): rigenerare con `node scripts/gen-db-types.mjs`. Aggiunge in Tables.order_items «non_recedibile: boolean | null;» in Row dopo product_image (riga ~1309) e «non_recedibile?: boolean | null;» in Insert (~1321) e Update (~1333); nient'altro cambia. Senza, tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts e tests/unit/riparazione-r11-viste-nei-tipi.test.ts («il file salvato è quello che il generatore produce») diventano rosse."
+        }
+      ],
+      "cosa_ho_fatto": "Riparazione scritta, provata e poi tolta dal ramo (commit 5afe5ac7, revert cf2d3a4c) perché la migrazione nuova cambia i tipi generati e lib/database.types.ts non è mio. Nel commit 5afe5ac7: migrazione 530 (non applicata) con order_items.non_recedibile scritta da un trigger BEFORE INSERT (SECURITY DEFINER, esecuzione revocata a PUBLIC/anon/authenticated) con lo stato del prodotto in quel momento, ignorando il valore mandato da chi inserisce; riga senza prodotto = recedibile; righe già scritte riempite dallo stato di adesso del prodotto (quelle col prodotto cancellato restano NULL); products.non_recedibile creata se manca (180 non applicata), così il trigger non fa cadere gli ordini. returns/create legge order_items con '*' e decide sulla copia quando c'è; il prodotto di adesso solo per le righe senza copia. Nessun file che crea gli ordini da toccare. Prova SQL sul Postgres locale (miele venduto recedibile poi escluso → resta recedibile; torta esclusa inserita dicendo «recedibile» e poi liberata → resta esclusa; riga senza prodotto → recedibile; tutta tests/sql/rls verde con la 530) e prova vitest della rotta vera. Due prove rimesse, tutte e due uscita 0.",
+      "nota": "Postgres locale avviato con pg_ctlcluster 16 main start e un ruolo locale root (createuser -s root). Il motore --sql non lancia vitest: per questo due rimesse (migrazione con --sql r29_rimessa, rotta con vitest). Dopo l'applicazione vera della 530 conviene controllare che la 180 ci sia: la 530 la crea comunque, uguale.",
+      "verificato_da": "revisore interno tolto per il tetto: collaudo con revisori sui soldi"
+    },
+    {
+      "id": "R29-021",
+      "chiave": "privacy-legale|l'esito di una segnalazione non dice né al venditore né a chi ha segnalato come si contesta la decisione",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-022",
+      "chiave": "privacy-legale|nelle domande frequenti la risposta sul reso dice due volte «fatti su ordinazione»",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-023",
+      "chiave": "privacy-legale|il sito non spiega da nessuna parte come verifica che le recensioni vengano da chi ha comprato, né che una recensione con foto dà punti",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-024",
+      "chiave": "privacy-legale|buco nelle prove (variante): macchina: regge. le due prove della bocciatura vecchia ora passano (cb6/riacc 2/2 e cb6r 2/2), quindi il motivo è chiuso",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    },
+    {
+      "id": "R29-025",
+      "chiave": "privacy-legale|i termini descrivono un ordine dei risultati che il sito non usa, e lo spazio pagato si chiama «sponsored» in inglese invece di «sponsorizzato»",
+      "esito": "non_fatto",
+      "nota": "freno dei 40 $ dell'onda 4: a fine L2 la spesa era 38,4 $, e il lotto L3 (modello piccolo) non e' partito; la regista ha chiesto di sacrificare L3 e L4. La voce resta da fare in un'onda dopo."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la prova «la cassa disegna il modulo» usa prodotti finti e una cassa senza JavaScript: con dati veri sarebbe rossa",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts:~210",
+      "descrizione": "Lasciata fuori dal lavoro e2e-cassa-vera; va riscritta con prodotti seminati."
+    },
+    {
+      "titolo": "ogni rilancio della verifica d'identità manuale rimanda all'infinito l'allarme delle 48 ore",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/kyc/start-check/route.ts:96-101",
+      "descrizione": "Il rilancio riscrive kyc_provider_checked_at, quindi l'attesa riparte da zero."
+    },
+    {
+      "titolo": "il controllo esterno del sorvegliante dice ancora «ogni 15 minuti» e tollera 2 ore di silenzio",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/cron-health.ts:115 e :131",
+      "descrizione": "Con il cron a 5 minuti (R29-002) il commento è vecchio, e SOGLIA_SORVEGLIANTE_MIN = 120 vuol dire 24 giri saltati prima di accorgersene; abbassarla è una scelta."
+    },
+    {
+      "titolo": "l'allarme «rimessa mai confermata» non vede i contanti degli ordini rimborsati ancora in mano al fattorino",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "app/api/cron/operational-alerts/route.ts:276-292",
+      "descrizione": "Stesso caso di R29-011, ma nel sorvegliante invece che nella pagina delle rimesse."
+    },
+    {
+      "titolo": "il calcolo dei prezzi passa ancora sette ingressi alla spedizione che vale sempre zero",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/ordini/prezzi.ts:263",
+      "descrizione": "Resto di R29-005 in un file non mio: shippingCentsFor riceve argomenti che non usa."
+    }
+  ],
+  "domande_per_nicola": [
+    "R29-019: con Onfido acceso, chi chiude la verifica d'identità del fattorino, il webhook di Onfido (oggi /api/kyc/webhook non esiste) o l'approvazione manuale da /admin/users?",
+    "R29-001: per far girare in CI le tre prove dell'acquisto vero servono la variabile E2E_DATI_DI_PROVA=1, il segreto STRIPE_TEST_SECRET_KEY (sk_test_) e la variabile E2E_STRIPE_CONTO_NEGOZIO (acct_ di prova): li metti?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "L1, Q1, Q2, Q3 (revisori del lotto 1), L2 (con il giro di correzione del lotto 1), correzione della guardia. Q4, L3 e L4 non lanciati: freno dei 40 $ e scelta della regista.",
+    "subagenti": 6
+  },
+  "costo_usd": 42.95
+}
