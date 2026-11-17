@@ -6,6 +6,7 @@ import { apiSuccess, ApiErrors } from '@/lib/api/responses';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
+import { AiCallError } from '@/lib/ai/run';
 import {
   fetchExternalSnapshot,
   isStale,
@@ -53,8 +54,21 @@ async function loadRow(id: string, comeVisitatore = false): Promise<Row | null> 
   return (data as Row | null) ?? null;
 }
 
+/**
+ * 17/11/2026 (R03-007) — Il fornitore AI risponde 404: il modello configurato non
+ * c'e' (piu'). Non e' un guasto di questo prodotto e riprovare non serve: si dice
+ * come nelle rotte AI (`mapAiError`) e parte l'allarme sul modello.
+ */
+function modelloNonTrovato(err: unknown): boolean {
+  return err instanceof AiCallError && err.status === 404;
+}
+
 /** Recupera lo snapshot fresco dal marketplace e lo salva. Best-effort. */
-async function doRefresh(id: string, sourceUrl: string, marketplace: string | null): Promise<ExternalData | null> {
+async function doRefresh(
+  id: string,
+  sourceUrl: string,
+  marketplace: string | null,
+): Promise<{ data: ExternalData; errore?: undefined } | { data: null; errore: unknown }> {
   const admin = getAdminSupabase();
   try {
     const extract = await fetchExternalSnapshot(sourceUrl, (marketplace as Marketplace) ?? undefined);
@@ -63,18 +77,22 @@ async function doRefresh(id: string, sourceUrl: string, marketplace: string | nu
       .from('products')
       .update({ external_data: data, external_synced_at: new Date().toISOString(), external_sync_status: 'idle' })
       .eq('id', id);
-    return data;
+    return { data };
   } catch (err) {
     // Segna l'errore. 12/11/2026 (R04-011) — external_synced_at NON si tocca:
     // vuol dire «dati arrivati a quest'ora», e qui non e' arrivato niente. Il
     // freno contro i tentativi a raffica resta il cancello di 30 minuti per
     // prodotto nel GET.
-    logger.warn('external-refresh fallito', { id, status: err instanceof Error ? err.message : 'err' });
+    if (modelloNonTrovato(err)) {
+      logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: 'marketplace-import', id });
+    } else {
+      logger.warn('external-refresh fallito', { id, status: err instanceof Error ? err.message : 'err' });
+    }
     await admin
       .from('products')
       .update({ external_sync_status: 'error' })
       .eq('id', id);
-    return null;
+    return { data: null, errore: err };
   }
 }
 
@@ -142,7 +160,11 @@ export const POST = withAdminAuth(async ({ params }): Promise<NextResponse> => {
     const row = await loadRow(id);
     if (!row || !row.external_source_url) return ApiErrors.invalidRequest('Prodotto senza sorgente esterna');
 
-    const data = await doRefresh(id, row.external_source_url, row.external_marketplace);
-    if (!data) return ApiErrors.badGateway('Aggiornamento non riuscito. Riprova.');
-    return apiSuccess({ external: data, synced_at: new Date().toISOString() });
+    const esito = await doRefresh(id, row.external_source_url, row.external_marketplace);
+    if (!esito.data) {
+      // R03-007 — Un 404 del fornitore non e' «riprova»: le stesse parole delle rotte AI.
+      if (modelloNonTrovato(esito.errore)) return ApiErrors.unavailable('Funzione AI momentaneamente non disponibile.');
+      return ApiErrors.badGateway('Aggiornamento non riuscito. Riprova.');
+    }
+    return apiSuccess({ external: esito.data, synced_at: new Date().toISOString() });
 });
