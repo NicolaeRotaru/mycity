@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 16:57",
+  "aggiornato": "2026-11-17 17:00",
   "finita": false,
-  "testa": "6903516344924294c9e53a53f503f8c91d656f83",
+  "testa": "cc46a00405bf597a22a9227fbcc0c0b882ab6bc2",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -39,6 +39,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nel modulo prodotto una guardia sincrona (useRef) blocca ogni secondo invio dal primo clic fino alla fine dell'invio; la pagina «Nuovo prodotto» passa la promessa dell'inserimento (mutateAsync, errore già detto da onError), così il modulo resta chiuso finché l'insert in products non è finito. Primo giro della rimessa: la pagina non aveva una prova sua (uscita 1), aggiunta nel secondo commit.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R01-003",
+      "chiave": "architettura|il modulo prodotto non passa i due campi nuovi alle regole comuni delle proposte dell'assistente",
+      "esito": "riparato",
+      "commit": "cc46a00405bf597a22a9227fbcc0c0b882ab6bc2",
+      "file_toccati": [
+        "components/seller/ProductForm.tsx",
+        "tests/unit/riparazione-r01-proposte-con-varianti-e-attributi.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-proposte-con-varianti-e-attributi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-proposte-con-varianti-e-attributi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cc46a00405bf597a22a9227fbcc0c0b882ab6bc2^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r01-proposte-con-varianti-e-attributi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le regole comuni sono pianoPatchPerIlModulo (lib/products/aiPatch.ts) e i due campi nuovi di R04-020 sono haVarianti e attributiAttuali: applyPatch del modulo ora li passa (hasVariants e attributes). Con le varianti la disponibilità proposta non si scrive né si dice «aggiornata», e togliere un attributo assente non conta come cambiato.",
       "verificato_da": ""
     }
   ],
