@@ -1,0 +1,244 @@
+diff --git a/migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql b/migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql
+new file mode 100644
+index 00000000..a4a2485a
+--- /dev/null
++++ b/migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql
+@@ -0,0 +1,50 @@
++-- I visitatori non leggono la tabella dei profili: scritto qui, non solo in produzione.
++--
++-- IL DIFETTO (R30-022). Sul sito vero has_table_privilege('anon', 'public.profiles', 'SELECT')
++-- vale false; sul database ricostruito dalle migrazioni vale true. Nessuna migrazione revoca SELECT
++-- su profiles ad anon (le revoche scritte riguardano seller_public_profiles, coupons e zone_codes):
++-- la differenza e' stata fatta a mano in produzione. Il permesso arriva dalla partenza di Supabase di
++-- una volta (ALL ad anon su ogni tabella nuova, tests/sql/harness/00_shim_supabase.sql), e la 425 lo
++-- dava gia' per tolto senza toglierlo. Oggi le regole per riga non danno ai visitatori nessuna riga di
++-- profiles, ma le copie del sito e le prove SQL certificano un permesso diverso da quello vero: se un
++-- giorno una regola di lettura su profiles si allarga, sulle copie i dati personali (IBAN, documenti,
++-- saldo) diventano leggibili e sul sito vero no, o viceversa.
++--
++-- LA CURA. La revoca che il sito vero ha gia', scritta. REVOKE SELECT sulla tabella toglie anche
++-- l'eventuale SELECT colonna per colonna. Il resto dei permessi di anon su profiles non si tocca:
++-- la voce misura solo la lettura. authenticated non cambia: il cliente legge ancora il suo profilo.
++--
++-- PERCHE' NIENTE SI SPEGNE (sul database ricostruito, 17/11/2026: tutte le prove SQL verdi tranne i
++-- due controlli di 19 e 34 che leggono profiles da visitatore e si aspettano zero righe invece del
++-- rifiuto; la loro modifica viaggia con questa migrazione):
++--   · le viste che un visitatore legge e che guardano profiles (seller_public_profiles,
++--     shop_of_month_leaderboard, live_activity_public) girano coi permessi del creatore;
++--   · le funzioni che leggono profiles per conto del visitatore sono SECURITY DEFINER
++--     (is_admin, negozio_approvato, store_cards, …);
++--   · le pagine pubbliche leggono i negozi da seller_public_profiles; le regole degli
++--     amministratori sulle tabelle che i visitatori leggono usano public.is_admin() (422).
++--
++-- SUL SITO VERO non cambia niente: revocare un permesso che non c'e' non fa nulla. Si puo' rieseguire.
++-- NON si applica a mano: lo decide Nicola, come ogni migrazione.
++--
++-- REVERSIBILE: GRANT SELECT ON public.profiles TO anon (riporterebbe le copie com'erano, e il sito
++-- vero a un permesso che oggi non ha: da non fare).
++--
++-- LA PROVA: tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql pretende che anon non
++-- abbia SELECT su profiles (ne' sulla tabella ne' su una colonna) e che il catalogo si veda lo stesso.
++
++BEGIN;
++
++REVOKE SELECT ON TABLE public.profiles FROM anon;
++
++DO $$
++BEGIN
++  IF has_table_privilege('anon', 'public.profiles', 'SELECT')
++     OR has_any_column_privilege('anon', 'public.profiles', 'SELECT') THEN
++    RAISE EXCEPTION '541: anon legge ancora public.profiles dopo la revoca';
++  END IF;
++END $$;
++
++COMMIT;
++
++NOTIFY pgrst, 'reload schema';
+diff --git a/tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql b/tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql
+index 2bb639a7..607207b0 100644
+--- a/tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql
++++ b/tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql
+@@ -175,10 +175,18 @@ SELECT 'la fascia dei piu'' visti si riempie anche per un visitatore',
+ 
+ -- ⑨ Il contrario: quello che era chiuso resta chiuso. La riparazione non deve
+ --    riaprire `profiles`, che contiene IBAN, documenti e saldo del portafoglio.
+-INSERT INTO esiti
+-SELECT 'la tabella dei profili resta chiusa a un visitatore',
+-       count(*) = 0, 'righe di profiles lette da anon: ' || count(*)
+-  FROM public.profiles;
++--    17/11/2026 (R30-022) — Come in produzione, la migrazione 541 toglie ad anon la lettura
++--    di profiles: chiusa vuol dire zero righe lette OPPURE lettura negata. Una riga letta resta rossa.
++DO $$
++DECLARE n bigint;
++BEGIN
++  SELECT count(*) INTO n FROM public.profiles;
++  INSERT INTO esiti VALUES ('la tabella dei profili resta chiusa a un visitatore', n = 0,
++                            'righe di profiles lette da anon: ' || n);
++EXCEPTION WHEN insufficient_privilege THEN
++  INSERT INTO esiti VALUES ('la tabella dei profili resta chiusa a un visitatore', true,
++                            'lettura negata: ' || SQLERRM);
++END $$;
+ 
+ -- ⑩ E le visite restano private una per una: solo il conteggio e' pubblico.
+ INSERT INTO esiti
+diff --git a/tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql b/tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql
+index 639e0708..f1e3db6d 100644
+--- a/tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql
++++ b/tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql
+@@ -152,20 +152,33 @@ SELECT 'visitatore: la bottega non approvata non compare nella vetrina',
+   FROM public.seller_public_profiles WHERE id = '55555555-5555-5555-5555-555555555555';
+ 
+ -- ⑦ E `profiles` resta chiusa: e' il gemello della prova 19, nello stesso posto.
+-INSERT INTO esiti
+-SELECT 'visitatore: la tabella dei profili resta chiusa',
+-       count(*) = 0, 'righe di profiles lette: ' || count(*)
+-  FROM public.profiles;
++--    17/11/2026 (R30-022) — Con la migrazione 541 (come in produzione) la lettura e' negata:
++--    chiusa vuol dire zero righe OPPURE lettura negata. Una riga letta resta rossa.
++DO $$
++DECLARE n bigint;
++BEGIN
++  SELECT count(*) INTO n FROM public.profiles;
++  INSERT INTO esiti VALUES ('visitatore: la tabella dei profili resta chiusa', n = 0, 'righe di profiles lette: ' || n);
++EXCEPTION WHEN insufficient_privilege THEN
++  INSERT INTO esiti VALUES ('visitatore: la tabella dei profili resta chiusa', true, 'lettura negata: ' || SQLERRM);
++END $$;
+ 
+ -- ⑧ La malattia, misurata: il VECCHIO aggancio a profiles (come lo esegue
+---    PostgREST, un LEFT JOIN coi permessi di chi guarda) torna vuoto. Se un
+---    giorno tornasse pieno, vorrebbe dire che `profiles` si e' riaperta.
+-INSERT INTO esiti
+-SELECT 'visitatore: il vecchio aggancio a profiles torna vuoto, per questo il sito non lo usa piu',
+-       count(*) = 1 AND bool_and(pr.id IS NULL), 'righe: ' || count(*)
+-  FROM public.products p
+-  LEFT JOIN LATERAL (SELECT id FROM public.profiles WHERE id = p.seller_id) pr ON true
+- WHERE p.id = 'c0000000-0000-0000-0000-0000000000a1';
++--    PostgREST, un LEFT JOIN coi permessi di chi guarda) torna vuoto, o e' negato
++--    del tutto (541). Se un giorno tornasse pieno, vorrebbe dire che `profiles` si e' riaperta.
++DO $$
++DECLARE n bigint; vuoto boolean;
++BEGIN
++  SELECT count(*), bool_and(pr.id IS NULL) INTO n, vuoto
++    FROM public.products p
++    LEFT JOIN LATERAL (SELECT id FROM public.profiles WHERE id = p.seller_id) pr ON true
++   WHERE p.id = 'c0000000-0000-0000-0000-0000000000a1';
++  INSERT INTO esiti VALUES ('visitatore: il vecchio aggancio a profiles torna vuoto, per questo il sito non lo usa piu',
++                            n = 1 AND vuoto IS TRUE, 'righe: ' || n);
++EXCEPTION WHEN insufficient_privilege THEN
++  INSERT INTO esiti VALUES ('visitatore: il vecchio aggancio a profiles torna vuoto, per questo il sito non lo usa piu',
++                            true, 'aggancio negato: ' || SQLERRM);
++END $$;
+ 
+ RESET ROLE;
+ 
+diff --git a/tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql b/tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql
+new file mode 100644
+index 00000000..65457c8f
+--- /dev/null
++++ b/tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql
+@@ -0,0 +1,105 @@
++-- =============================================================================
++-- R30-022 — I visitatori non leggono la tabella dei profili (migrazione 541)
++-- =============================================================================
++--   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test
++--
++-- In produzione anon non ha SELECT su public.profiles; il database delle migrazioni deve
++-- essere uguale. E con la porta chiusa il sito pubblico deve restare in piedi.
++-- ① anon non ha SELECT su profiles, ne' sulla tabella ne' su una colonna, e da visitatore la
++--    lettura e' negata (non solo vuota)
++-- ② da visitatore si leggono ancora la vetrina dei negozi, il catalogo, gli eventi e il
++--    negozio del mese
++-- ③ il cliente collegato legge ancora il suo profilo, e solo quello
++-- Senza la 541 il passo ① e' rosso. Tutto con ROLLBACK.
++-- =============================================================================
++
++BEGIN;
++
++SET LOCAL mycity.allow_profile_write = '1';
++
++CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;
++GRANT ALL ON esiti TO anon, authenticated;
++
++INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
++  ('e2400000-0000-0000-0000-000000000001', 'negozio-r30v@test.it', '{"role":"seller"}'),
++  ('e2400000-0000-0000-0000-000000000002', 'cliente-r30v@test.it', '{"role":"buyer"}');
++UPDATE public.profiles
++   SET is_approved = true, approval_status = 'approved', store_name = 'Bottega di prova',
++       store_address = 'Via Roma 1', store_lat = 45.05, store_lng = 9.69
++ WHERE id = 'e2400000-0000-0000-0000-000000000001';
++
++INSERT INTO public.products (id, name, description, price, seller_id, status, stock)
++VALUES ('e2400000-0000-0000-0000-0000000000a1', 'Focaccia di prova', 'cotta al mattino',
++        4.50, 'e2400000-0000-0000-0000-000000000001', 'available', 10);
++INSERT INTO public.marketplace_events (title, description, starts_at, ends_at)
++VALUES ('Mercatino di prova r30v', 'x', now() + interval '1 day', now() + interval '1 day 2 hours');
++DELETE FROM public.shop_of_month WHERE month = DATE '2099-02-01';
++INSERT INTO public.shop_of_month (seller_id, month, headline)
++VALUES ('e2400000-0000-0000-0000-000000000001', DATE '2099-02-01', 'Il forno del mese');
++
++RESET mycity.allow_profile_write;
++
++-- ── ① I permessi, letti dal catalogo di Postgres ─────────────────────────────
++INSERT INTO esiti
++SELECT 'anon non ha SELECT sulla tabella dei profili', NOT has_table_privilege('anon', 'public.profiles', 'SELECT'),
++       'has_table_privilege = ' || has_table_privilege('anon', 'public.profiles', 'SELECT');
++INSERT INTO esiti
++SELECT 'anon non ha SELECT su nessuna colonna dei profili', NOT has_any_column_privilege('anon', 'public.profiles', 'SELECT'),
++       'has_any_column_privilege = ' || has_any_column_privilege('anon', 'public.profiles', 'SELECT');
++
++-- ── ① ② Il visitatore ───────────────────────────────────────────────────────
++SET LOCAL ROLE anon;
++SET LOCAL request.jwt.claims = '{"role":"anon"}';
++
++DO $$
++DECLARE n int;
++BEGIN
++  BEGIN
++    SELECT count(*) INTO n FROM public.profiles;
++    INSERT INTO esiti VALUES ('visitatore: la lettura di profiles e'' negata, come in produzione', false,
++                              'letta: ' || n || ' righe (il permesso c''e'')');
++  EXCEPTION WHEN insufficient_privilege THEN
++    INSERT INTO esiti VALUES ('visitatore: la lettura di profiles e'' negata, come in produzione', true, SQLERRM);
++  END;
++  BEGIN
++    SELECT count(*) INTO n FROM public.seller_public_profiles WHERE id = 'e2400000-0000-0000-0000-000000000001';
++    INSERT INTO esiti VALUES ('visitatore: la vetrina del negozio si legge', n = 1, n || ' righe');
++  EXCEPTION WHEN OTHERS THEN INSERT INTO esiti VALUES ('visitatore: la vetrina del negozio si legge', false, SQLERRM); END;
++  BEGIN
++    SELECT count(*) INTO n FROM public.products WHERE id = 'e2400000-0000-0000-0000-0000000000a1';
++    INSERT INTO esiti VALUES ('visitatore: il catalogo si legge', n = 1, n || ' righe');
++  EXCEPTION WHEN OTHERS THEN INSERT INTO esiti VALUES ('visitatore: il catalogo si legge', false, SQLERRM); END;
++  BEGIN
++    SELECT count(*) INTO n FROM public.marketplace_events WHERE title = 'Mercatino di prova r30v';
++    INSERT INTO esiti VALUES ('visitatore: gli eventi si leggono', n = 1, n || ' righe');
++  EXCEPTION WHEN OTHERS THEN INSERT INTO esiti VALUES ('visitatore: gli eventi si leggono', false, SQLERRM); END;
++  BEGIN
++    SELECT count(*) INTO n FROM public.shop_of_month WHERE month = DATE '2099-02-01';
++    INSERT INTO esiti VALUES ('visitatore: il negozio del mese si legge', n = 1, n || ' righe');
++  EXCEPTION WHEN OTHERS THEN INSERT INTO esiti VALUES ('visitatore: il negozio del mese si legge', false, SQLERRM); END;
++END $$;
++
++-- ── ③ Il cliente collegato ─────────────────────────────────────────────────
++SET LOCAL ROLE authenticated;
++SET LOCAL request.jwt.claims = '{"sub":"e2400000-0000-0000-0000-000000000002","role":"authenticated"}';
++
++INSERT INTO esiti
++SELECT 'cliente: legge il suo profilo, e solo quello',
++       count(*) = 1 AND bool_and(id = 'e2400000-0000-0000-0000-000000000002'), count(*) || ' righe'
++  FROM public.profiles;
++
++RESET ROLE;
++DO $$
++DECLARE r record; rossi int;
++BEGIN
++  FOR r IN SELECT * FROM esiti ORDER BY nome LOOP
++    RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
++  END LOOP;
++  SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
++  IF rossi > 0 THEN
++    RAISE EXCEPTION '% controlli su % sono rossi', rossi, (SELECT count(*) FROM esiti);
++  END IF;
++  RAISE INFO 'tutti verdi: % controlli', (SELECT count(*) FROM esiti);
++END $$;
++
++ROLLBACK;

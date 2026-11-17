@@ -1,0 +1,64 @@
+diff --git a/app/admin/users/page.tsx b/app/admin/users/page.tsx
+index 282f3418..8c9289cc 100644
+--- a/app/admin/users/page.tsx
++++ b/app/admin/users/page.tsx
+@@ -404,12 +404,18 @@ function AdminUsersPageInner() {
+    * nessuno che possa prendere un ordine.
+    */
+   const siPuoModerare = (ruolo: string) => ruolo === 'seller' || ruolo === 'rider';
++  // R30-024 — Un cliente non si approva: si sospende e si riattiva (app/api/admin/users/[id]/moderate).
++  // Nasce «pending», ma per lui vuol dire «attivo»: niente «Esamina» e niente «In attesa».
++  const clienteSospendibile = (p: { role: string; approval_status: string | null }) =>
++    p.role === 'buyer' && p.approval_status !== 'suspended';
+ 
+   /** Come si chiama, nei messaggi di conferma: un fattorino non e' un negozio. */
+   const comeSiChiama = (p: { role: string; store_name?: string | null; full_name?: string | null }) =>
+     p.role === 'rider'
+       ? { cosa: 'il fattorino', chi: p.full_name ?? 'Il fattorino' }
+-      : { cosa: 'il negozio',   chi: p.store_name ?? 'Il venditore' };
++      : p.role === 'buyer'
++        ? { cosa: 'il cliente', chi: p.full_name ?? 'Il cliente' }
++        : { cosa: 'il negozio',   chi: p.store_name ?? 'Il venditore' };
+ 
+   const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && siPuoModerare(p.role)).length;
+ 
+@@ -683,8 +689,8 @@ function AdminUsersPageInner() {
+               const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
+               const moderabile  = siPuoModerare(p.role);
+               const isPending   = moderabile && p.approval_status === 'pending';
+-              const isApproved  = moderabile && p.approval_status === 'approved' && p.is_approved;
+-              const isSuspended = moderabile && p.approval_status === 'suspended';
++              const isApproved  = (moderabile && p.approval_status === 'approved' && p.is_approved) || clienteSospendibile(p);
++              const isSuspended = (moderabile || p.role === 'buyer') && p.approval_status === 'suspended';
+               return (
+                 <tr key={p.id} className="border-t hover:bg-cream-50">
+                   <td className="p-3">
+@@ -703,7 +709,7 @@ function AdminUsersPageInner() {
+                     </span>
+                   </td>
+                   <td className="p-3">
+-                    {moderabile && a && (
++                    {(moderabile || isSuspended) && a && (
+                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${a.color}`}>
+                         {a.label}
+                       </span>
+@@ -796,8 +802,8 @@ function AdminUsersPageInner() {
+           // Prima dal telefono un fattorino in attesa non aveva «Esamina».
+           const moderabile  = siPuoModerare(p.role);
+           const isPending   = moderabile && p.approval_status === 'pending';
+-          const isApproved  = moderabile && p.approval_status === 'approved' && p.is_approved;
+-          const isSuspended = moderabile && p.approval_status === 'suspended';
++          const isApproved  = (moderabile && p.approval_status === 'approved' && p.is_approved) || clienteSospendibile(p);
++          const isSuspended = (moderabile || p.role === 'buyer') && p.approval_status === 'suspended';
+           return (
+             <div key={p.id} className="bg-white border border-cream-300 rounded-xl p-4">
+               <div className="flex items-start justify-between gap-2">
+@@ -813,7 +819,7 @@ function AdminUsersPageInner() {
+                 </span>
+               </div>
+               <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs text-ink-500">
+-                {moderabile && a && (
++                {(moderabile || isSuspended) && a && (
+                   <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${a.color}`}>{a.label}</span>
+                 )}
+                 <span>Iscritto il {formatDate(p.created_at)}</span>

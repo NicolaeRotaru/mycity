@@ -1,0 +1,201 @@
+diff --git a/app/api/account/delete/route.ts b/app/api/account/delete/route.ts
+index bd7f760a..b537448c 100644
+--- a/app/api/account/delete/route.ts
++++ b/app/api/account/delete/route.ts
+@@ -159,11 +159,38 @@ async function smettiDiScrivergli(admin: ReturnType<typeof getAdminSupabase>, us
+       .is('sent_at', null)
+       .is('cancelled_at', null);
+     if (erroreCoda) logger.warn('[account-delete] coda email non chiusa', { userId, message: erroreCoda.message });
+-    const { error: erroreCarrello } = await admin
++    // R30-003 — Il carrello mai avvisato si chiude col segno «senza email» del giro dei carrelli
++    // (app/api/cron/abandoned-carts): la sua ultima attività, non l'ora di adesso. Con l'ora di
++    // adesso il conto della campagna (lib/carrelli-abbandonati.ts) lo prendeva per un promemoria
++    // spedito. Se il carrello è cambiato fra la lettura e la scrittura, si chiude come prima.
++    // Un carrello per persona (user_id è la chiave): la lista ha al massimo una riga.
++    const { data: carrelli } = await admin
+       .from('abandoned_carts')
+-      .update({ recovery_email_sent_at: adesso })
++      .select('last_activity')
+       .eq('user_id', userId)
+       .is('recovery_email_sent_at', null);
++    const ultima = (Array.isArray(carrelli) ? (carrelli[0] as { last_activity?: string | null } | undefined) : undefined)?.last_activity ?? null;
++    let erroreCarrello: { message: string } | null = null;
++    let chiuso = false;
++    if (ultima) {
++      const r = await admin
++        .from('abandoned_carts')
++        .update({ recovery_email_sent_at: ultima })
++        .eq('user_id', userId)
++        .eq('last_activity', ultima)
++        .is('recovery_email_sent_at', null)
++        .select('user_id');
++      erroreCarrello = r.error;
++      chiuso = !r.error && Array.isArray(r.data) && r.data.length > 0;
++    }
++    if (!chiuso) {
++      const { error } = await admin
++        .from('abandoned_carts')
++        .update({ recovery_email_sent_at: adesso })
++        .eq('user_id', userId)
++        .is('recovery_email_sent_at', null);
++      erroreCarrello = error ?? erroreCarrello;
++    }
+     if (erroreCarrello) logger.warn('[account-delete] carrello non segnato', { userId, message: erroreCarrello.message });
+   } catch (e) {
+     logger.warn('[account-delete] pulizia delle email non riuscita', { userId, errore: e instanceof Error ? e.message : 'errore' });
+diff --git a/app/api/cron/abandoned-carts/route.ts b/app/api/cron/abandoned-carts/route.ts
+index 2ad6fd09..fde1ef6f 100644
+--- a/app/api/cron/abandoned-carts/route.ts
++++ b/app/api/cron/abandoned-carts/route.ts
+@@ -143,7 +143,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
+   for (const c of candidates) {
+     if (troppoVecchio(c.last_activity)) {
+       skipped++;
+-      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
++      // R30-003 — Anche questo si chiude senza scrivere: stesso segno «senza email» del ramo sotto.
++      const { error: errMarca } = await chiudiSenzaEmail(supa, c);
+       if (errMarca) logger.error('[abandoned-carts] marcatura fallita (carrello troppo vecchio)', errMarca);
+       continue;
+     }
+diff --git a/tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts b/tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts
+index fcc66185..9d030931 100644
+--- a/tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts
++++ b/tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts
+@@ -33,6 +33,8 @@ let erroreProfili: { message: string } | null = null;
+ /** Il segno nel «database»: chi l'ha gia' messo. */
+ const segnati = new Set<string>();
+ const marcature: string[] = [];
++/** R30-003 — I carrelli chiusi senza email: segno scritto e filtri della scrittura. */
++const chiusi: Array<{ valori: Record<string, unknown>; filtri: unknown[][] }> = [];
+ 
+ function finto() {
+   return {
+@@ -53,7 +55,19 @@ function finto() {
+         in: async () =>
+           tabella === 'profiles' && erroreProfili ? { data: null, error: erroreProfili } : { data: profili, error: null },
+       }),
+-      update: () => ({ eq: async () => ({ error: null }) }),
++      // R30-003 — Il carrello chiuso senza email si scrive con due filtri in più (ultima attività, segno vuoto).
++      update: (valori: Record<string, unknown>) => {
++        const filtri: unknown[][] = [];
++        const q: Record<string, unknown> = {
++          eq: (...a: unknown[]) => (filtri.push(a), q),
++          is: (...a: unknown[]) => (filtri.push(a), q),
++          then: (ok: (v: unknown) => unknown) => {
++            if ('recovery_email_sent_at' in valori && valori.recovery_email_sent_at !== null) chiusi.push({ valori, filtri });
++            return Promise.resolve({ error: null }).then(ok);
++          },
++        };
++        return q;
++      },
+     }),
+   };
+ }
+@@ -75,6 +89,7 @@ beforeEach(() => {
+   vi.resetModules();
+   spedite.length = 0;
+   marcature.length = 0;
++  chiusi.length = 0;
+   segnati.clear();
+   carrelli = [];
+   profili = [];
+@@ -89,7 +104,9 @@ describe('① un carrello di settimane fa non riceve il promemoria «4 ore»', (
+     carrelli = [carrello('u1', 21 * 24)];
+     await giroDeiCarrelli();
+     expect(spedite, 'e partito un promemoria per un carrello di tre settimane fa').toHaveLength(0);
+-    expect(marcature).toContain('u1');
++    // R30-003 — Esce dalla lista col segno «chiuso senza email» (la sua ultima attività), non con l'ora del giro.
++    expect(chiusi.map((x) => x.valori.recovery_email_sent_at)).toEqual([carrelli[0].last_activity]);
++    expect(chiusi[0].filtri).toEqual(expect.arrayContaining([['user_id', 'u1'], ['last_activity', carrelli[0].last_activity]]));
+   });
+ 
+   it('controprova: un carrello di cinque ore fa riceve il promemoria', async () => {
+diff --git a/tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts b/tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts
+new file mode 100644
+index 00000000..cef212eb
+--- /dev/null
++++ b/tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts
+@@ -0,0 +1,83 @@
++import { describe, it, expect, vi, beforeEach } from 'vitest';
++
++/**
++ * R30-003 — Chi chiede la cancellazione dell'account non risulta «avvisato» del carrello.
++ *
++ * Alla richiesta di cancellazione (app/api/account/delete) il carrello mai avvisato si chiude
++ * perché non parta più il promemoria. Lo si chiudeva con l'ora di adesso, cioè lo stesso segno di
++ * un'email spedita: il conto della campagna (lib/carrelli-abbandonati.ts) lo contava fra i
++ * promemoria inviati. Ora porta il segno «senza email» del giro dei carrelli: la sua ultima attività.
++ */
++
++const UTENTE = { id: 'u-1', email: 'anna@example.com' };
++const ULTIMA = '2026-11-17T06:12:34.567891+00:00';
++type Scrittura = { tabella: string; valori: Record<string, unknown>; filtri: Array<[string, string, unknown]> };
++const stato = vi.hoisted(() => ({
++  carrello: null as { last_activity: string } | null,
++  scritture: [] as Scrittura[],
++  righeToccate: 1,
++}));
++
++vi.mock('@/lib/api/middleware', () => ({
++  withAuth: (handler: (ctx: { user: typeof UTENTE }) => unknown) => () => handler({ user: UTENTE }),
++  withAuthRateLimit: (_o: unknown, handler: (ctx: { user: typeof UTENTE }) => unknown) => () => handler({ user: UTENTE }),
++}));
++vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn(), spesa: vi.fn() } }));
++vi.mock('@/lib/email/client', () => ({ sendEmail: async () => ({ ok: true, id: 'e' }) }));
++vi.mock('@/lib/api/dopo-la-risposta', () => ({ dopoLaRisposta: (lavoro: () => Promise<void>) => { void lavoro(); } }));
++vi.mock('@/lib/supabase/server', () => ({
++  getAdminSupabase: () => ({
++    from(tabella: string) {
++      const filtri: Array<[string, string, unknown]> = [];
++      let valori: Record<string, unknown> | null = null;
++      let colonne = '';
++      const q: Record<string, unknown> = {};
++      q.select = (c: string) => { colonne = c; return q; };
++      q.eq = (c: string, v: unknown) => { filtri.push(['eq', c, v]); return q; };
++      q.is = (c: string, v: unknown) => { filtri.push(['is', c, v]); return q; };
++      q.in = (c: string, v: unknown) => { filtri.push(['in', c, v]); return q; };
++      q.update = (v: Record<string, unknown>) => { valori = v; return q; };
++      q.single = async () => ({ data: { deletion_requested_at: null }, error: null });
++      q.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
++        if (valori) {
++          stato.scritture.push({ tabella, valori, filtri: [...filtri] });
++          const data = tabella === 'abandoned_carts' && colonne === 'user_id' ? Array.from({ length: stato.righeToccate }, () => ({ user_id: UTENTE.id })) : null;
++          return Promise.resolve({ data, error: null }).then(ok, ko);
++        }
++        if (tabella === 'abandoned_carts') return Promise.resolve({ data: stato.carrello ? [stato.carrello] : [], error: null }).then(ok, ko);
++        return Promise.resolve({ data: [], error: null }).then(ok, ko);
++      };
++      return q;
++    },
++  }),
++}));
++
++import { POST } from '@/app/api/account/delete/route';
++
++beforeEach(() => {
++  stato.carrello = { last_activity: ULTIMA };
++  stato.scritture = [];
++  stato.righeToccate = 1;
++});
++
++const segni = () =>
++  stato.scritture.filter((s) => s.tabella === 'abandoned_carts').map((s) => ({ segno: s.valori.recovery_email_sent_at, filtri: s.filtri }));
++
++describe('R30-003 — la richiesta di cancellazione chiude il carrello senza dire «avvisato»', () => {
++  it('il carrello mai avvisato prende come segno la sua ultima attività, solo se è ancora quello letto', async () => {
++    await (POST as unknown as () => Promise<Response>)();
++    const s = segni();
++    expect(s).toHaveLength(1);
++    expect(s[0].segno).toBe(ULTIMA);
++    expect(s[0].filtri).toEqual(expect.arrayContaining([['eq', 'last_activity', ULTIMA], ['is', 'recovery_email_sent_at', null]]));
++  });
++
++  it('se il carrello è cambiato nel frattempo si chiude lo stesso, come prima: il promemoria non deve partire', async () => {
++    stato.righeToccate = 0;
++    await (POST as unknown as () => Promise<Response>)();
++    const s = segni();
++    expect(s).toHaveLength(2);
++    expect(s[1].segno).not.toBe(ULTIMA);
++    expect(typeof s[1].segno).toBe('string');
++  });
++});

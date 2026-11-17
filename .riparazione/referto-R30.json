@@ -1,6 +1,6 @@
 {
   "sessione": "R30",
-  "aggiornato": "2026-11-17 10:05",
+  "aggiornato": "2026-11-17 11:20",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -163,6 +163,182 @@
         }
       ],
       "verificato_da": ""
+    },
+    {
+      "id": "R30-023",
+      "chiave": "sicurezza-auth|sospendere un fattorino non gli toglie le consegne in corso: continua a vedere i recapiti, ritirare e consegnare",
+      "esito": "parziale",
+      "commit": "46596883",
+      "file_toccati": [
+        "migrations/540_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql",
+        "app/api/rider/cash-confirm/route.ts",
+        "app/api/rider/orders/[id]/cliente-assente/route.ts"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r30-rider-sospeso.test.sql",
+        "tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r30-rider-sospeso.test.sql; npx vitest run tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46596883^ --file migrations/540_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql --prove tests/sql/rls/riparazione-r30-rider-sospeso.test.sql --sql riparazione_r30_rimessa --json (uscita 0); timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46596883^ --file app/api/rider/cash-confirm/route.ts,app/api/rider/orders/[id]/cliente-assente/route.ts --prove tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Ripreso il lavoro già scritto per questa voce con cherry-pick -n, adattato: la migrazione diventa la 540 (mai applicata) e la prova SQL si chiama riparazione-r30. La 540 mette is_rider_approvato() in verify_pickup_code, verify_delivery_code e nella regola con cui il fattorino legge gli ordini; le due funzioni restano per il resto identiche alla base, con gli stessi permessi (dopo la 420 nessuna migrazione le ridefinisce, la 425 dà solo i GRANT). cash-confirm e cliente-assente rispondono 403 a un profilo che non è un fattorino approvato. Prove SQL verdi con la 540 sul Postgres 16 locale, rosse senza.",
+      "cosa_resta": "Rimettere in bacheca le consegne ASSIGNED al momento della sospensione (rotta di moderazione): con quella parte la prova comune riparazione-r08-moderazione diventa rossa (1 su 17), quindi va in patch insieme alla prova.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/users/[id]/moderate/route.ts + tests/unit/riparazione-r08-moderazione.test.ts (comune) + tests/unit/riparazione-r30-sospensione-rider.test.ts (nuova)",
+          "modifica": "Patch .riparazione/patch-R30/r30-023-sospensione-in-bacheca.patch: la parte sulla rotta di moderazione (alla sospensione di un fattorino le sue consegne ASSIGNED tornano in bacheca), più le 5 righe `update` nel finto `orders` della prova r08, più la prova nuova. Provata sulla testa: 8 file di prove sulla moderazione 68/68, tsc 0; la prova nuova cade 3 su 6 senza la rotta."
+        }
+      ],
+      "nota": "I controlli in cash-confirm e cliente-assente leggono il `profile` che il portiere passa già (id, role, is_approved) invece di una lettura nuova di profiles: la lettura scritta nella scheda faceva diventare rossi 45 test in 11 file comuni che mockano lib/supabase/server. withAuthRateLimit passa sempre il profilo (senza profilo risponde 403 prima); il controllo vale quando il profilo c'è.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-024",
+      "chiave": "sicurezza-auth|un cliente che abusa del sito non si può sospendere: l'unica strada è cancellargli l'account",
+      "esito": "parziale",
+      "commit": "54aec469",
+      "file_toccati": [
+        "app/api/admin/users/[id]/moderate/route.ts",
+        "lib/api/middleware.ts",
+        "lib/shopping-access.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-cliente-sospeso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-cliente-sospeso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54aec469^ --file lib/api/middleware.ts,lib/shopping-access.ts,app/api/admin/users/[id]/moderate/route.ts --prove tests/unit/riparazione-r30-cliente-sospeso.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna migrazione: uso approval_status='suspended', lo stesso segno di negozi e fattorini, e il vincolo chk_approvazione_coerente regge. La moderazione sospende e riattiva anche i clienti; un cliente riattivato torna a 'pending', come nasce; approvare o rifiutare un cliente resta 400. Il portiere legge approval_status solo per i clienti e solo sulle porte della cassa e della chat (orders/cod, stripe/checkout, gift-cards/checkout, chat/conversations, chat/messages; solo i metodi che scrivono) e risponde 403 se il cliente è sospeso. assertCanPurchase/purchaseBlockReason rifiutano il cliente sospeso. Restano aperti i diritti: cancellazione, esportazione dei dati, reso, assistenza, annullo. La prova: il sospeso è rifiutato, l'attivo passa. r08 e 323 file vicini verdi.",
+      "cosa_resta": "Il pannello admin non mostra ancora «Sospendi»/«Riattiva» per i clienti (file di R33: patch sotto). La sospensione vale sulle rotte del sito; il resto lo trova la regista nel messaggio finale di R30.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/users/page.tsx",
+          "modifica": "Patch .riparazione/patch-R30/r30-024-pannello-utenti.patch: clienteSospendibile(p) e «il cliente» in comeSiChiama; in tabella e schede isApproved || clienteSospendibile(p), isSuspended anche per buyer, badge anche se sospeso. Provata sulla testa: tsc 0, eslint 0, 4 file di prove 49/49."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-022",
+      "chiave": "rls-database|sul sito vero i visitatori non possono leggere la tabella dei profili, ma nessuna migrazione lo dice",
+      "esito": "parziale",
+      "commit": "1a1e78f9",
+      "file_toccati": [
+        "scripts/check-migration-drift.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-deriva-dei-permessi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-deriva-dei-permessi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a1e78f9^ --file scripts/check-migration-drift.mjs --prove tests/unit/riparazione-r30-deriva-dei-permessi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il controllo di deriva confronta anche i permessi effettivi di anon e authenticated (tabelle, colonne con ACL, funzioni, schema public). Con PERMESSI_ATTESI=<file> una differenza esce 2; con PERMESSI_ESPORTA=<file> scrive l'elenco. Il database lo dà sempre SUPABASE_DB_URL. La prova lancia lo script vero in una cartella con un `pg` finto, senza database né rete. A mano, solo sul Postgres locale: elenco esportato da un database con la 541, confrontato con uno senza → uscita 2, «+ tabella|profiles|anon|SELECT».",
+      "cosa_resta": "La migrazione 541 non è nel commit: con lei le prove comuni 19 e 34 diventano rosse (permission denied for table profiles). Va in patch, insieme alle due prove adattate.",
+      "serve_file_altrui": [
+        {
+          "file": "migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql (nuova) + tests/sql/rls/riparazione-r30-profili-chiusi-ai-visitatori.test.sql (nuova) + tests/sql/rls/19-il-catalogo-si-vede-anche-senza-account.test.sql + tests/sql/rls/34-la-scheda-prodotto-trova-il-negozio-senza-profiles.test.sql",
+          "modifica": "Patch .riparazione/patch-R30/r30-022-profili-chiusi-ai-visitatori.patch. La 541 è `REVOKE SELECT ON TABLE public.profiles FROM anon;` più un blocco DO che ferma la migrazione se anon ha ancora SELECT, sulla tabella o su una colonna. Nella 19 il controllo ⑨ e nella 34 i controlli ⑦ e ⑧ diventano blocchi DO: verdi con zero righe o con insufficient_privilege, rossi con una riga letta. Sul Postgres locale tutte le prove SQL sono verdi con la 541; senza, 19 e 34 restano verdi. La prova nuova cade 3 su 8 senza la 541; rimessa --sql in un worktree: uscita 0. Girata solo sul Postgres locale, mai applicata al database vero."
+        }
+      ],
+      "nota": "Prima di applicare la 541 sul sito vero: SELECT has_any_column_privilege('anon','public.profiles','SELECT') deve dare false. La REVOKE sulla tabella toglie anche i SELECT colonna per colonna.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-010",
+      "chiave": "qa-flussi|la modifica in blocco mette in vendita un prodotto a zero euro e dà per salvato un prezzo che non ha salvato",
+      "esito": "riparato",
+      "commit": "414691f2",
+      "file_toccati": [
+        "lib/ordini/valida-carrello.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-carrello-a-zero-euro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-carrello-a-zero-euro.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 414691f2^ --file lib/ordini/valida-carrello.ts --prove tests/unit/riparazione-r30-carrello-a-zero-euro.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina e la porta di scrittura erano già a posto alla base (leggiPrezzo senza ≤0/NaN, conta solo i salvati, salvataggio-tracciato rifiuta price≤0; prova minori-s06-modifica-in-blocco). Mancava la cassa: validaRigaDelCarrello, comune a contanti e carta, scarta la riga se il prezzo da pagare, già scontato e in centesimi, non è maggiore di zero. Copre anche 0,01 € col 70% di sconto. 65 file vicini 498/498.",
+      "nota": "Niente CHECK nel database: con NOT VALID ogni UPDATE di una riga vecchia a 0 € fallirebbe, anche solo per la scorta. La cassa basta a non venderla.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-025",
+      "chiave": "stati-ui|nel pannello dei coupon un codice scaduto o esaurito risulta ancora «attivo»",
+      "esito": "riparato",
+      "commit": "53093965",
+      "file_toccati": [
+        "lib/admin/vista-dei-coupon.ts",
+        "app/admin/coupons/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-coupon-scaduti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-coupon-scaduti.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 53093965^ --file lib/admin/vista-dei-coupon.ts,app/admin/coupons/page.tsx --prove tests/unit/riparazione-r30-coupon-scaduti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La vista dà a ogni coupon lo stato che gli darebbe la cassa, nell'ordine di check_coupon: disattivato, poi scaduto (expires_at), poi esaurito (uses_count ≥ max_uses), altrimenti attivo; e la scritta del badge. La pagina mostra il badge e «Scade il / Scaduto il <data>». La prova monta la pagina con l'orologio finto al 17/11/2026.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R30-003",
+      "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
+      "esito": "parziale",
+      "commit": "8785910a",
+      "file_toccati": [
+        "app/api/cron/abandoned-carts/route.ts",
+        "lib/carrelli-abbandonati.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8785910a^ --file lib/carrelli-abbandonati.ts,app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il commit indicato dalla scheda come lavoro precedente non c'è nel deposito e la base non aveva il segno «chiuso senza email»: l'ho scritto io. Il ramo senza consenso chiude il carrello con recovery_email_sent_at = last_activity, con un UPDATE condizionato a user_id, last_activity e segno vuoto (punto 3, verificato sul Postgres locale col formato di PostgREST). Il conto (contaRendimentoRecupero) non prende per email un segno uguale all'ultima attività; la lettura chiede anche last_activity.",
+      "cosa_resta": "(2) I carrelli chiusi prima di questa modifica hanno l'ora del giro e non si distinguono da un invio vero. Il ramo dei carrelli oltre 48 ore e la cancellazione dell'account sono in patch (una prova comune e un file di R33).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/abandoned-carts/route.ts (ramo troppoVecchio) + tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts (comune) + app/api/account/delete/route.ts (R33) + tests/unit/riparazione-r30-la-cancellazione-chiude-il-carrello-senza-email.test.ts (nuova)",
+          "modifica": "Patch .riparazione/patch-R30/r30-003-carrelli-chiusi-senza-email.patch. Il ramo troppoVecchio usa chiudiSenzaEmail: la prova ① della comune pretendeva la RPC, ora pretende il segno = last_activity coi filtri. account/delete (righe 162-166) legge last_activity del carrello mai avvisato e lo scrive come segno, condizionato; se il carrello è cambiato nel frattempo ripiega su now(). Provata sulla testa: 22 file 302/302, tsc 0, eslint 0; senza la patch la prova nuova cade 3 su 6."
+        }
+      ],
+      "verificato_da": ""
     }
   ],
   "nuovi_difetti_visti": [
@@ -184,10 +360,13 @@
   "domande_per_nicola": [
     "R30-001: la migrazione 159 (categories.image_url) è applicata in produzione?",
     "R30-001: va bene che le foto di categoria rotte o scartate arrivino a Sentry (un evento per visitatore), con un limite per problema impostato in Sentry?",
-    "R30-002: finché non c'è il precarico nel layout, nell'HTML del server il piede elenca le 8 categorie di riserva: va bene così?"
+    "R30-002: finché non c'è il precarico nel layout, nell'HTML del server il piede elenca le 8 categorie di riserva: va bene così?",
+    "R30-022: sul sito vero SELECT has_any_column_privilege('anon','public.profiles','SELECT') dà false? Va controllato prima di applicare la 541 (REVOKE SELECT ON TABLE public.profiles FROM anon).",
+    "R30-024: va bene l'elenco delle porte chiuse al cliente sospeso (cassa, buoni regalo, chat che scrive) lasciando aperti i diritti (cancellazione, dati, reso, assistenza, annullo)? Recensioni e domande ai negozi vanno chiuse anche loro?",
+    "R30-010: in produzione ci sono prodotti a 0 €? Serve a decidere se mettere nel database un CHECK (price > 0) NOT VALID."
   ],
   "conto": {
-    "agenti": 1,
+    "agenti": 2,
     "nota": "tetto 8 subagenti (onda 5); costo letto dalla regista sull'id"
   }
 }
