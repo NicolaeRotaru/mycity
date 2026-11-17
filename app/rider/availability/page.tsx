@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Calendar, MapPin, CheckCircle2, Circle, Plus, Save, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -59,10 +59,6 @@ export default function RiderAvailabilityPage() {
   // non compaiono finché la lettura non riesce.
   const [letturaFallita, setLetturaFallita] = useState(false);
   const [tentativo, setTentativo] = useState(0);
-  // R03-008 — L'ultimo elenco di zone che il database ha confermato, e la fila delle scritture delle
-  // zone: una alla volta, così arrivano nell'ordine dei tocchi e l'ultima vince davvero.
-  const zoneConfermate = useRef<string[]>([]);
-  const filaZone = useRef<{ coda: Promise<void>; ultimo: number }>({ coda: Promise.resolve(), ultimo: 0 });
 
   // Carica la disponibilità persistita dal profilo del rider.
   useEffect(() => {
@@ -86,9 +82,7 @@ export default function RiderAvailabilityPage() {
           online: !!data.rider_is_online,
           schedule: (data.rider_schedule as Availability['schedule'] | null) ?? DEFAULT_SCHEDULE,
         });
-        const lette = (data.rider_zones as string[] | null) ?? [];
-        setZones(lette);
-        zoneConfermate.current = lette;
+        setZones((data.rider_zones as string[] | null) ?? []);
       }
       setLoading(false);
     })();
@@ -124,24 +118,9 @@ export default function RiderAvailabilityPage() {
     });
   };
 
-  // R03-008 — «Zone salvate» solo quando quello che si vede è salvato davvero. Le scritture vanno in
-  // fila (due in parallelo potevano arrivare al contrario: database con l'elenco vecchio e due
-  // «salvate»), e conta l'esito dell'ultimo tocco: se ne è arrivato un altro, a schermo c'è già una
-  // scelta più nuova che la scrittura dopo porta al database. Se l'ultima cade (l'errore lo dice
-  // `persist`), lo schermo torna all'ultimo elenco confermato, non a quello di prima del tocco.
   const saveZones = (next: string[]) => {
     setZones(next);
-    const fila = filaZone.current;
-    const numero = ++fila.ultimo;
-    fila.coda = fila.coda
-      .then(() => persist({ rider_zones: next }))
-      .catch(() => false)
-      .then((ok) => {
-        if (ok) zoneConfermate.current = next;
-        if (numero !== fila.ultimo) return;
-        if (ok) toast.success('Zone salvate');
-        else setZones(zoneConfermate.current);
-      });
+    void persist({ rider_zones: next });
   };
 
   const toggleZone = (zone: string) => {
