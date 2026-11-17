@@ -236,7 +236,7 @@ function SearchInner() {
       {/* Ordinamento + Categoria */}
       <div className="pb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-3">
         <label className="block">
-          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('sortBy')}</span>
+          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-label">{t('sortBy')}</span>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortOption)}
@@ -251,7 +251,7 @@ function SearchInner() {
           </select>
         </label>
         <label className="block">
-          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('category')}</span>
+          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-label">{t('category')}</span>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
@@ -283,7 +283,7 @@ function SearchInner() {
       {/* Range prezzo — compatto */}
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
+          <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-label">{t('price')}</span>
           <span className="font-bold text-primary-700 text-xs">€{minPrezzoInCorso} – €{maxPrezzoInCorso}{maxPrezzoInCorso >= 500 ? '+' : ''}</span>
         </div>
         <input
@@ -310,7 +310,7 @@ function SearchInner() {
 
       {/* Rating minimo */}
       <div className="py-3">
-        <span className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+        <span className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-label flex items-center gap-1">
           <Star size={11} strokeWidth={2.2} />
           {t('minRating')}
         </span>
