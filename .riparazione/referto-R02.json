@@ -1,13 +1,13 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 23:55",
-  "finita": false,
+  "aggiornato": "2026-11-18 00:20",
+  "finita": true,
   "testa": "276fc3fad8d9eb76fc2c4690e555579e1c062861",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "non_eseguito",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "e19e93f09f3ed484f74c34d825fe426d1e2f16c8",
+    "nota": "girato su e19e93f0 (dopo 276fc3fa c è solo il commit del referto): typecheck 0 errori, lint 0 errori (99 avvisi), vitest 1738 file passati e 1 saltato, 10976 casi passati. Con NODE_OPTIONS=--max-old-space-size=8192 perché tsc col limite di default dell ambiente esaurisce la memoria."
   },
   "voci": [
     {
@@ -17,7 +17,8 @@
       "file_toccati": [],
       "prova": "app/faq/page.tsx:270 (base f93d246a): il Link «Contattaci» ha già focus-visible:outline-white (R04-004). Nel CSS compilato .focus-visible\\:outline-white:focus-visible{outline-color:#fff} pesa 0,2,0 e vince su :focus-visible (0,1,0) di app/globals.css:295-298. In Chrome, navigando col Tab: outline solid 2px rgb(255,255,255), offset 2px, su sfondo #C0492C→#B82A28 (stacco ~5:1). La prova esistente tests/unit/riparazione-r04-faq-fuoco.test.ts è verde.",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Controllati sorgente, CSS compilato e resa vera in Chrome: l'anello bianco c'è già. Nessun commit."
+      "cosa_ho_fatto": "Controllati sorgente, CSS compilato e resa vera in Chrome: l'anello bianco c'è già. Nessun commit.",
+      "verificato_da": "subagente smentitore 1: CSS compilato (regola dopo :focus-visible, peso 0,2,0) e Chrome col fuoco da tastiera: anello bianco 2px staccato 2px, contrasto 4,96-6,18:1"
     },
     {
       "id": "R02-002",
@@ -48,7 +49,8 @@
           "file": "components/Navbar.tsx",
           "modifica": "riga 363, Link «Accedi» della barra mobile: togliere shrink-0 e aggiungere min-w-0 [overflow-wrap:anywhere] text-right («MyCity» 146 px + «Accedi» 93 px + px-3 e gap-2 non stanno in 280). Simulato nel DOM in Chrome: da 295 a 280."
         }
-      ]
+      ],
+      "verificato_da": "subagente smentitore 1: prova verde, rimessa regge (0), pagina resa in Chrome con CSS e caratteri veri da 280 a 1024 px e dal 100% al 200%; col testo normale colonne identiche; Tailwind genera la classe min(100%,max(…)); asserzione R03 resta un confronto esatto; 40 prove vicine verdi"
     },
     {
       "id": "R02-003",
@@ -57,7 +59,8 @@
       "file_toccati": [],
       "prova": "app/about/page.tsx (base f93d246a): alla :74 le colonne sono auto-fit minmax(max(8rem,…)) al posto di grid-cols-2, alla :127 c'è min-w-0 e alla :129 il valore è text-xl sm:text-2xl … break-words (R03-002, be37e7a2). Misurato in Chrome a 320/360/390/412 px col testo al 130-200%: «Alla consegna» resta nel suo riquadro e la pagina non scorre. La prova tests/unit/riparazione-r03-chi-siamo-testo-grande.test.ts è verde.",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Verificato in Chrome il testo dentro ogni riquadro a più larghezze e scale: il difetto non c'è più. Nessun commit."
+      "cosa_ho_fatto": "Verificato in Chrome il testo dentro ogni riquadro a più larghezze e scale: il difetto non c'è più. Nessun commit.",
+      "verificato_da": "subagente smentitore 1: righe sulla base (be37e7a2 antenato), in Chrome «Alla consegna» resta nel riquadro da 280 a 412 px e dal 100% al 200%"
     },
     {
       "id": "R02-004",
@@ -66,7 +69,8 @@
       "file_toccati": [],
       "prova": "app/globals.css:153 --tabbar-altezza-vera: 58px e :345 body { padding-bottom: calc(var(--tabbar-altezza-vera) + env(safe-area-inset-bottom, 0)) } (R04-022, e0a88aff). In Chrome a 360 e 390 px la barra è alta 57,5 px e il padding del body è 58 px. La prova tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts calcola l'altezza dalle classi di components/MobileTabBar.tsx. --tabbar-height resta 72 di proposito (app/globals.css:127-145).",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Misurata in Chrome la barra contro il padding del body: allineati al mezzo pixel. Nessun commit."
+      "cosa_ho_fatto": "Misurata in Chrome la barra contro il padding del body: allineati al mezzo pixel. Nessun commit.",
+      "verificato_da": "subagente smentitore 1: altezza ricalcolata dalle classi 57,5 px, in Chrome barra 57,5 e padding 58 a 360 e 390 px; gli altri usi di --tabbar-height non lasciano vuoto"
     },
     {
       "id": "R02-005",
@@ -90,8 +94,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ab1dfaf95e60051ea94380aeb479fd3568a06c74^ --file components/Footer.tsx --prove tests/unit/riparazione-r02-piede-280.test.ts"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "A 360 px col testo al 200% le parti mie della voce (piede, /lavora-con-noi, /returns, /faq) erano già a posto da R15-008. A 280 px il piede sporgeva ancora di 8 px su ogni pagina pubblica: ora la colonna minima è min(100%,max(8rem,…)) e il piede passa da 288 a 280; col testo normale restano 2 colonne a 360 px e 4 a 1024 px. Prova esistente toccata e dichiarata: tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx (prova solo file miei: Footer, lavora-con-noi, returns, faq): aggiornata la classe attesa delle colonne, stessa asserzione.",
-      "cosa_resta": "Le pagine non mie scorrono ancora a 360 px col testo al 200%, misurate col piede già corretto: / 422, /help 391, /contact 429, /terms 393, /privacy 414. Le modifiche sotto, simulate nel DOM in Chrome, le riportano tutte a 360. Il Turnstile da 300 px di /contact non è misurato (serve la chiave del sito).",
+      "cosa_ho_fatto": "A 360 px col testo al 200% le parti mie della voce (piede, /lavora-con-noi, /returns, /faq) erano già a posto da R15-008. A 280 px il piede sporgeva ancora di 8 px su ogni pagina pubblica: ora la colonna minima è min(100%,max(8rem,…)) e il piede passa da 288 a 280; col testo normale restano 2 colonne a 360 px e 5 da 768 a 1024 px. Prova esistente toccata e dichiarata: tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx (prova solo file miei: Footer, lavora-con-noi, returns, faq): aggiornata la classe attesa delle colonne, stessa asserzione.",
+      "cosa_resta": "Il piede non fa più scorrere nessuna pagina (288 → 280 px a 280 px col testo al 200%). Restano: (1) nei miei file, fuori dal piede, a 320 e 280 px col testo al 200% scorrono ancora per colpa loro /faq 344 px (app/faq/page.tsx:219 h1 senza break-words, :232 h2 «Account e impostazioni», :245 bottoni delle domande), /returns 357 px (app/returns/page.tsx:63 e :72 parole lunghe nelle liste, :122 bottone «Contatta supporto»), /lavora-con-noi 341 px (app/lavora-con-noi/page.tsx:171 didascalie, :183 h2 «Posizioni aperte», :231 bottone «Invia una candidatura spontanea»); a 360 px sono già a posto da R15-008. (2) Le pagine non mie scorrono ancora a 360 px col testo al 200%, misurate col piede già corretto: / 422, /help 391, /contact 429, /terms 393, /privacy 414; le modifiche in serve_file_altrui, simulate nel DOM in Chrome, le riportano tutte a 360. Il Turnstile da 300 px di /contact non è misurato (serve la chiave del sito).",
       "serve_file_altrui": [
         {
           "file": "app/help/page.tsx",
@@ -121,16 +125,18 @@
           "file": "components/LiveActivityFeed.tsx",
           "modifica": "righe 56 e 151: aggiungere min-w-0 all'h2; righe 55 e 150: aggiungere gap-2 al div che lo contiene"
         }
-      ]
+      ],
+      "verificato_da": "subagente smentitore 1: prova verde, rimessa regge (0), piede in Chrome da 288 a 280 px anche con «Abbigliamento», 2 colonne a 360 e 5 da 768 a 1024 col testo normale; ha trovato i residui delle pagine mie a 320/280 px, ora in cosa_resta (esito resta parziale)"
     },
     {
       "id": "R02-006",
       "chiave": "microcopy|il piede rimette «abbigliamento» dopo la lettura se la categoria è attiva nel database (non verificato)",
       "esito": "gia_riparato_prima",
       "file_toccati": [],
-      "prova": "components/Footer.tsx:126-137: la riserva non contiene «Abbigliamento». Footer.tsx:188-195: dopo la lettura l'elenco passa da soloLePiene(madriLette, piene.data), quindi una Abbigliamento senza prodotti viene tolta. lib/queries/precarico.ts:74-89: il server precarica albero e piene, la categoria vuota manca già nel primo HTML. Prove esistenti verdi: tests/unit/le-categorie-vuote-non-si-mostrano-in-home-nel-piede-ne-a-google.test.tsx:104-109 e tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx. Abbigliamento torna solo se ha prodotti di un negozio approvato, o se la lettura delle piene non è mai riuscita (scelta scritta in Footer.tsx:126-127 e lib/queries/categorie-piene.ts:20-21).",
+      "prova": "components/Footer.tsx:126-137: la riserva non contiene «Abbigliamento». Footer.tsx:188-195: dopo la lettura l'elenco passa da soloLePiene(madriLette, piene.data), quindi una Abbigliamento senza prodotti viene tolta. lib/queries/precarico.ts:74-89: il server precarica albero e piene, quando la lettura delle piene riesce, la categoria vuota manca già nel primo HTML (se sul server la lettura delle piene cade, per 60 secondi di unstable_cache il primo HTML mostra tutte le madri: è il ripiego dichiarato). Prove esistenti verdi: tests/unit/le-categorie-vuote-non-si-mostrano-in-home-nel-piede-ne-a-google.test.tsx:104-109 e tests/unit/la-home-e-il-piede-non-tengono-l-abbigliamento.test.tsx. Abbigliamento torna solo se ha prodotti di un negozio approvato, o se la lettura delle piene non è mai riuscita (scelta scritta in Footer.tsx:126-127 e lib/queries/categorie-piene.ts:20-21).",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Controllati sul codice la riserva, il filtro delle piene e il precarico: il difetto non si riproduce. Nessun commit."
+      "cosa_ho_fatto": "Controllati sul codice la riserva, il filtro delle piene e il precarico: il difetto non si riproduce. Nessun commit.",
+      "verificato_da": "subagente smentitore 2: righe sulla base, precarico dentro HydrationBoundary, nessuna colonna is_active; Abbigliamento torna solo se le piene non si sono mai sapute (ripiego dichiarato)"
     },
     {
       "id": "R02-007",
@@ -139,7 +145,8 @@
       "file_toccati": [],
       "prova": "Il commit 83bdc3624f9485cb2ee712bda101cf2e7c8a23f5 (R01-005, già sulla base f93d246a) ha tolto `piene.isError ? null : piene.data` nei quattro punti, che ora usano `piene.data`: components/Footer.tsx:188-192, components/CategoryShowcase.tsx:159-166, components/CategoryBar.tsx:140-144, app/categorie/page.tsx:47-51. La prova di comportamento tests/unit/riparazione-r01-categorie-piene-restano-dopo-una-rilettura-caduta.test.tsx (react-query vero, rilettura caduta) è verde.",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Cura già applicata ai quattro punti dalla sessione R01; rilanciata la sua prova: verde. Nessun commit."
+      "cosa_ho_fatto": "Cura già applicata ai quattro punti dalla sessione R01; rilanciata la sua prova: verde. Nessun commit.",
+      "verificato_da": "subagente smentitore 2: i quattro punti usano piene.data (83bdc362 antenato della base), react-query tiene data con isError, prova R01 verde; nessun isError ? null rimasto nei file R02"
     },
     {
       "id": "R02-008",
@@ -167,7 +174,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6324bb64c1ff4c7c8dcbd8b4f73460f399870b7e^ --file app/stores/page.tsx --prove tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Le categorie si leggono con l'helper esistente leggiTutteLeRighe (lib/supabase/blocchi), a finestre con .range(), ordinate per nome e per id. La prova monta la pagina con react-query vero su un finto PostgREST che taglia a mille righe, con 1.103 categorie: la madre dopo la millesima compare tra i filtri e trova il suo negozio."
+      "cosa_ho_fatto": "Le categorie si leggono con l'helper esistente leggiTutteLeRighe (lib/supabase/blocchi), a finestre con .range(), ordinate per nome e per id. La prova monta la pagina con react-query vero su un finto PostgREST che taglia a mille righe, con 1.103 categorie: la madre dopo la millesima compare tra i filtri e trova il suo negozio.",
+      "verificato_da": "subagente smentitore 2: prova verde, rimessa regge (0), ordine stabile tra finestre con nomi uguali (order name + id), 9 prove vicine verdi"
     },
     {
       "id": "R02-010",
@@ -189,7 +197,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b19f233b21caeccc7bd57d9763159a32291a0ea^ --file components/store-sections/ReviewsSection.tsx --prove tests/unit/riparazione-r02-recensioni-giorno-di-piacenza.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La data usa toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA }) con FUSO_PIACENZA da lib/tempo-piacenza (oggi la riga è la 162, non la 109 del registro). La prova gira con TZ=America/New_York su una recensione delle 23:30Z del 16/11: mostra 17/11/2026; senza la correzione 16/11."
+      "cosa_ho_fatto": "La data usa toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA }) con FUSO_PIACENZA da lib/tempo-piacenza (oggi la riga è la 162, non la 109 del registro). La prova gira con TZ=America/New_York su una recensione delle 23:30Z del 16/11: mostra 17/11/2026; senza la correzione 16/11.",
+      "verificato_da": "subagente smentitore 2: prova verde, rimessa regge (0), cambi d ora di marzo e ottobre e capodanno in quattro fusi, nessuna altra data nel file, niente differenza server/client; 7 prove vicine verdi"
     },
     {
       "id": "R02-011",
@@ -219,7 +228,8 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "I punti 182/185/188/211 del registro erano già sulla scala da R24-021 (8f70c8d0). Restavano due text-[11px] (nome del negozio e prezzo barrato): portati a text-xs (12 px, per non rimpicciolire il testo; scelta scritta in un commento). Cambiate solo le classi di dimensione, prezzi e importi intatti. app/globals.css non aveva niente da cambiare.",
-      "cosa_resta": "Con `grep -rEo 'text-\\[[0-9.]+(px|rem|em)\\]' app components lib --include=*.ts --include=*.tsx` restano 271 misure a mano in 92 file: 253 in 87 file fuori dai miei file (le più frequenti text-[13px] 87, text-[11px] 69, text-[10px] 35, text-[15px] 17, text-[17px] 16); 18 nei miei file ma fuori da questa voce (app/about 8, app/lavora-con-noi 6, components/MobileTabBar 2, ReviewsSection 1 alla :158, app/returns 1). Per gli 11 px resta da decidere: un gradino da 11 in tailwind.config.ts (file altrui) o la regola «11 → 12» usata qui."
+      "cosa_resta": "Con `grep -rEo 'text-\\[[0-9.]+(px|rem|em)\\]' app components lib --include=*.ts --include=*.tsx` restano 272 occorrenze in 93 file (una è il commento nuovo in components/ProductCard.tsx:235, quindi 271 misure vere in 92 file): 253 in 87 file fuori dai miei file (le più frequenti text-[13px] 86, text-[11px] 66, text-[10px] 35, text-[15px] 11, text-[17px] 10); 18 nei miei file ma fuori da questa voce (app/about 8, app/lavora-con-noi 6, components/MobileTabBar 2, ReviewsSection 1 alla :158, app/returns 1). Per gli 11 px resta da decidere: un gradino da 11 in tailwind.config.ts (file altrui) o la regola «11 → 12» usata qui.",
+      "verificato_da": "subagente smentitore 2: prova verde, rimessa regge (0), git show 276fc3fa cambia solo due classi e un commento, righe 182/185/188/211 già sulla scala da R24-021, conteggio ricontato; 23 prove su ProductCard verdi"
     }
   ],
   "nuovi_difetti_visti": [
@@ -248,15 +258,43 @@
       "titolo": "Nella pagina dei negozi, se la lettura delle categorie cade, i filtri spariscono senza avviso",
       "dimensione": "qa-flussi",
       "severita": "minore",
-      "file": "app/stores/page.tsx:95",
-      "descrizione": "Dentro fetchStoresData, nel Promise.all, gli errori della lettura delle categorie e di categorie_per_negozio vengono ignorati. C era già prima."
+      "file": "app/stores/page.tsx:95 · app/stores/page.tsx:150",
+      "descrizione": "Dentro fetchStoresData gli errori della lettura delle categorie (categoriesRes.error, :150) e di categorie_per_negozio vengono ignorati: se la lettura cade (anche solo una finestra dopo la prima), i filtri o le madri dopo la millesima spariscono senza avviso. C era già prima."
+    },
+    {
+      "titolo": "Nella pagina dei negozi le categorie per negozio si leggono senza finestre: sopra i mille negozi con prodotti alcuni perderebbero le loro categorie nel filtro",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/stores/page.tsx:106",
+      "descrizione": "rpc('categorie_per_negozio') restituisce una riga per negozio (RETURNS TABLE), senza range e senza ordine, con il tetto di 1000 righe di PostgREST. Non è nel registro."
+    },
+    {
+      "titolo": "Col testo al 200% sul telefono la barra a schede è più alta del margine in fondo: l ultima parte della pagina finisce sotto la barra",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/globals.css:153 · components/MobileTabBar.tsx:114",
+      "descrizione": "--tabbar-altezza-vera è 58px fissi, ma py-2 e gap-0.5 della barra sono in rem: col testo al 200% la barra è alta 75,5 px contro un padding di 58, 17,5 px coperti (con 72 erano 3,5). Viene da R04-022, già sulla base."
+    },
+    {
+      "titolo": "Sul tablet col testo al 200% «Dichiarazione accessibilità» esce dal piede e la pagina scorre di lato",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/Footer.tsx (md:grid-cols-5)",
+      "descrizione": "A 768 px col testo al 200% la pagina arriva a 817 px. C era già prima."
+    },
+    {
+      "titolo": "In chi siamo a 280 px col testo al 200% il titolo «Come siamo arrivati qui» entra nel margine destro",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/about/page.tsx:205",
+      "descrizione": "Il titolo senza break-words è largo 229 px in 184 e arriva a 277 px: la pagina non scorre, ma il titolo esce dal suo spazio."
     }
   ],
   "domande_per_nicola": [
     "R02-011: se l'ultimo giorno del recesso cade di sabato, domenica o in un festivo, la scadenza va spostata al primo giorno feriale? Con quali festivi?"
   ],
   "conto": {
-    "agenti": 2,
-    "nota": "lotto A e lotto B: 2 subagenti riparatori"
+    "agenti": 4,
+    "nota": "2 subagenti riparatori (lotti A e B) e 2 smentitori"
   }
 }
