@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:40",
+  "aggiornato": "2026-11-17 18:42",
   "finita": false,
-  "testa": "ae7214d9bc52343e0cb72607926b7cc10fd366a5",
+  "testa": "2fe845f3919411efcb470d99bf4c32199688bbd8",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -155,7 +155,7 @@
       "id": "R03-008",
       "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
       "esito": "riparato",
-      "commit": "69847de49ab221cdef1bedc3c870d4552a0d771b",
+      "commit": "2fe845f3919411efcb470d99bf4c32199688bbd8",
       "file_toccati": [
         "app/rider/availability/page.tsx"
       ],
@@ -171,7 +171,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 69847de49ab221cdef1bedc3c870d4552a0d771b^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r03-zone-salvate-dopo-l-esito.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "saveZones aspetta l'esito di persist: «Zone salvate» compare solo dopo la scrittura riuscita; se cade resta l'errore di persist e la zona torna com'era (salvo un tocco arrivato dopo), invece di restare scelta come se fosse salvata. Toccato solo saveZones; l'altro salvataggio dello stesso file (save, turni e online) aspetta già l'esito sulla base, quindi niente difetto nuovo da segnalare."
+      "cosa_ho_fatto": "saveZones aspetta l'esito di persist: «Zone salvate» compare solo dopo la scrittura riuscita; se cade resta l'errore di persist e la zona torna com'era (salvo un tocco arrivato dopo), invece di restare scelta come se fosse salvata. Toccato solo saveZones; l'altro salvataggio dello stesso file (save, turni e online) aspetta già l'esito sulla base, quindi niente difetto nuovo da segnalare. Giro di correzione: con due tocchi prima dell'esito lo schermo tornava allo stato di prima del tocco (Stazione scelta col database vuoto), e due scritture in parallelo arrivate al contrario lasciavano il database con l'elenco vecchio e due «Zone salvate». Ora la pagina tiene l'ultimo elenco confermato dal database (dalla lettura e da ogni scrittura riuscita), le scritture delle zone vanno in fila una alla volta, conta solo l'esito dell'ultimo tocco: «Zone salvate» se riesce, ritorno all'ultimo elenco confermato se cade. Prova: i due scenari del revisore più «prima riesce, seconda cade». Commit 69847de4 e 2fe845f3.",
+      "verificato_da": "revisore del lotto 1 (smentita: Stazione poi Roma con le due scritture cadute nell'ordine di partenza, e due scritture riuscite arrivate in ordine inverso con due «Zone salvate»), poi giro di correzione con i casi del revisore nella prova"
     },
     {
       "id": "R03-009",
