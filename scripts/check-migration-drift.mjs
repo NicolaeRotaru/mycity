@@ -25,6 +25,15 @@
  *
  * Pensato per girare in locale/CI in un job OPT-IN (richiede la connection
  * string con password: NON metterla in un workflow pubblico senza secret).
+ *
+ * 17/11/2026 (R30-022) — Anche i permessi, a richiesta:
+ *   PERMESSI_ESPORTA=<file>  scrive nel file i permessi di anon e authenticated del database
+ *                            a cui e' collegato (tabelle, colonne, funzioni, schema public);
+ *   PERMESSI_ATTESI=<file>   li confronta con un elenco fornito nello stesso formato (per
+ *                            esempio quello esportato dal sito vero da chi ne ha la chiave):
+ *                            una differenza e' deriva (exit 2), come una migrazione mancante.
+ * Lo script non sceglie mai lui il database: legge quello di SUPABASE_DB_URL. Le prove usano
+ * solo `confrontaIPermessi` con dati finti.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -333,6 +342,101 @@ export function esitoDelConfronto(repo, applicate) {
 }
 
 /**
+ * 17/11/2026 (R30-022) — I PERMESSI, NON SOLO I NOMI.
+ *
+ * Il confronto dei nomi non vede un permesso cambiato a mano: sul sito vero anon non legge
+ * public.profiles, sul database ricostruito dalle migrazioni si', e nessun controllo lo diceva.
+ * Qui i permessi EFFETTIVI dei due ruoli del browser (contano anche quelli dati a PUBLIC):
+ * tabelle e viste, colonne con un permesso loro, funzioni, schema public. Una riga e'
+ * { tipo, oggetto, ruolo, permesso }.
+ */
+export const RUOLI_DEL_BROWSER = Object.freeze(['anon', 'authenticated']);
+
+export const DOMANDA_DEI_PERMESSI = `
+WITH ruoli(ruolo) AS (VALUES ('anon'), ('authenticated'))
+SELECT 'tabella' AS tipo, c.relname::text AS oggetto, r.ruolo, p.permesso
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+  CROSS JOIN ruoli r
+  CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) p(permesso)
+ WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND has_table_privilege(r.ruolo, c.oid, p.permesso)
+UNION ALL
+SELECT DISTINCT 'colonna', c.relname || '.' || a.attname, r.ruolo, x.privilege_type
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND a.attacl IS NOT NULL
+  CROSS JOIN LATERAL aclexplode(a.attacl) x
+  CROSS JOIN ruoli r
+ WHERE x.grantee = 0 OR x.grantee = (SELECT oid FROM pg_roles WHERE rolname = r.ruolo)
+UNION ALL
+SELECT 'funzione', p.oid::regprocedure::text, r.ruolo, 'EXECUTE'
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+  CROSS JOIN ruoli r
+ WHERE has_function_privilege(r.ruolo, p.oid, 'EXECUTE')
+UNION ALL
+SELECT 'schema', 'public', r.ruolo, x.permesso
+  FROM ruoli r CROSS JOIN (VALUES ('USAGE'), ('CREATE')) x(permesso)
+ WHERE has_schema_privilege(r.ruolo, 'public', x.permesso)
+`;
+
+const TIPI_DI_PERMESSO = new Set(['tabella', 'colonna', 'funzione', 'schema']);
+
+/** Una riga di permesso come chiave confrontabile: «tipo|oggetto|ruolo|permesso». */
+export function chiaveDelPermesso(riga) {
+  return [riga?.tipo, riga?.oggetto, riga?.ruolo, riga?.permesso].map((x) => String(x ?? '').trim()).join('|');
+}
+
+/**
+ * L'elenco fornito (JSON: un array di righe { tipo, oggetto, ruolo, permesso }). Lancia con un
+ * messaggio chiaro se il file non e' in quel formato: un elenco storto non vale «nessuna differenza».
+ */
+export function leggiPermessiAttesi(testo) {
+  let dati;
+  try {
+    dati = JSON.parse(String(testo));
+  } catch (e) {
+    throw new Error(`l'elenco dei permessi non e' JSON (${e instanceof Error ? e.message : String(e)})`);
+  }
+  if (!Array.isArray(dati) || dati.length === 0) throw new Error("l'elenco dei permessi deve essere un array non vuoto di righe { tipo, oggetto, ruolo, permesso }");
+  dati.forEach((r, i) => {
+    if (!r || !TIPI_DI_PERMESSO.has(r.tipo) || !r.oggetto || !RUOLI_DEL_BROWSER.includes(r.ruolo) || !r.permesso) {
+      throw new Error(`l'elenco dei permessi ha una riga storta (la ${i + 1}): ${JSON.stringify(r)}`);
+    }
+  });
+  return dati;
+}
+
+/**
+ * Il verdetto sui permessi, separato dal database perche' sia provabile.
+ * `inPiu`: il database collegato li concede e l'elenco no. `mancanti`: l'elenco li concede e il
+ * database collegato no. Tutte e due sono deriva.
+ */
+export function confrontaIPermessi(delDatabase, attesi) {
+  const qui = new Set(delDatabase.map(chiaveDelPermesso));
+  const la = new Set(attesi.map(chiaveDelPermesso));
+  const inPiu = [...qui].filter((k) => !la.has(k)).sort();
+  const mancanti = [...la].filter((k) => !qui.has(k)).sort();
+  if (inPiu.length === 0 && mancanti.length === 0) {
+    return {
+      codice: USCITA.ALLINEATO, inPiu, mancanti, errore: false,
+      righe: [`✅ check-migration-drift: i permessi di anon e authenticated coincidono con l'elenco (${la.size} righe).`],
+    };
+  }
+  const righe = [`❌ check-migration-drift: i permessi di anon e authenticated non coincidono con l'elenco.`];
+  if (inPiu.length > 0) {
+    righe.push(`   ${inPiu.length} concessi da questo database e non dall'elenco (tipo|oggetto|ruolo|permesso):`);
+    for (const k of inPiu) righe.push(`   + ${k}`);
+  }
+  if (mancanti.length > 0) {
+    righe.push(`   ${mancanti.length} concessi dall'elenco e non da questo database:`);
+    for (const k of mancanti) righe.push(`   - ${k}`);
+  }
+  righe.push('   Un permesso cambiato a mano va scritto in una migrazione nuova (GRANT o REVOKE), cosi\' le copie del sito restano uguali a quello vero.');
+  return { codice: USCITA.DERIVA, inPiu, mancanti, righe, errore: true };
+}
+
+/**
  * 5/11/2026 — Le righe da stampare quando il collegamento riesce ma il registro delle migrazioni non
  * si legge. Funzione pura. Mai l'oggetto d'errore intero: solo codice e messaggio.
  */
@@ -408,6 +512,10 @@ async function main() {
     process.exit(USCITA.NON_HO_CONTROLLATO);
   }
   let applicate;
+  // R30-022 — I permessi si leggono solo se richiesti (PERMESSI_ATTESI o PERMESSI_ESPORTA).
+  const fileAttesi = process.env.PERMESSI_ATTESI;
+  const fileDaScrivere = process.env.PERMESSI_ESPORTA;
+  let permessi = null;
   try {
     // `version` e' il prefisso numerico, `name` la parte descrittiva: servono
     // tutti e due per riconoscere una migrazione (#46). `statements` porta
@@ -421,14 +529,43 @@ async function main() {
   } catch (err) {
     // 5/11/2026 — Collegati, ma il registro non si legge: si dice cosa fare, non la traccia nuda.
     for (const riga of spiegaIlRegistroIlleggibile(err)) console.error(riga);
+    await client.end().catch(() => {});
     process.exit(USCITA.NON_HO_CONTROLLATO);
-  } finally {
-    await client.end();
+  }
+  if (fileAttesi || fileDaScrivere) {
+    try {
+      const res = await client.query(DOMANDA_DEI_PERMESSI);
+      permessi = res.rows.map((r) => ({ tipo: r.tipo, oggetto: r.oggetto, ruolo: r.ruolo, permesso: r.permesso }));
+    } catch (err) {
+      console.error(`❌ check-migration-drift: collegato, ma non riesco a leggere i permessi (${String(err?.code ?? 'senza codice')}: ${String(err?.message ?? err)}).`);
+      await client.end().catch(() => {});
+      process.exit(USCITA.NON_HO_CONTROLLATO);
+    }
+  }
+  await client.end();
+
+  if (fileDaScrivere && permessi) {
+    fs.writeFileSync(fileDaScrivere, `${JSON.stringify(permessi, null, 1)}\n`);
+    console.log(`📝 check-migration-drift: ${permessi.length} permessi di anon e authenticated scritti in ${fileDaScrivere}.`);
   }
 
   const esito = esitoDelConfronto(repoMigrationNames(), applicate);
   for (const riga of esito.righe) (esito.errore ? console.error : console.log)(riga);
-  process.exit(esito.codice);
+  let codice = esito.codice;
+
+  if (fileAttesi && permessi) {
+    let attesi;
+    try {
+      attesi = leggiPermessiAttesi(fs.readFileSync(fileAttesi, 'utf8'));
+    } catch (err) {
+      console.error(`❌ check-migration-drift: ${err instanceof Error ? err.message : String(err)} (${fileAttesi}).`);
+      process.exit(USCITA.NON_HO_CONTROLLATO);
+    }
+    const suiPermessi = confrontaIPermessi(permessi, attesi);
+    for (const riga of suiPermessi.righe) (suiPermessi.errore ? console.error : console.log)(riga);
+    if (codice === USCITA.ALLINEATO) codice = suiPermessi.codice;
+  }
+  process.exit(codice);
 }
 
 // Si parte solo quando il file e' lanciato da riga di comando: le prove lo
