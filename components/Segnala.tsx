@@ -36,6 +36,14 @@ const MOTIVI: Array<{ valore: string; etichetta: string }> = [
   { valore: 'altro', etichetta: 'Altro' },
 ];
 
+/**
+ * 17/11/2026 (R32-023) — Nome e dichiarazione di buona fede (regolamento sui servizi digitali,
+ * art. 16.2 lettere c e d): si possono dare, non si pretendono. Le stesse parole le scrive il
+ * server accanto alla segnalazione (app/api/segnalazioni/route.ts).
+ */
+const DICHIARAZIONE_DI_BUONA_FEDE =
+  'Dichiaro in buona fede che le informazioni e le accuse contenute in questa segnalazione sono esatte e complete.';
+
 /** 12/11/2026 (R02-005) — Una recensione non è un prodotto: «contraffatto» non vuol dire niente. */
 const MOTIVI_RECENSIONE: Array<{ valore: string; etichetta: string }> = [
   { valore: 'ingannevole', etichetta: 'Recensione non genuina o ingannevole' },
@@ -56,6 +64,8 @@ export function Segnala({
   const [motivo, setMotivo] = useState(motivi[0].valore);
   const [dettaglio, setDettaglio] = useState('');
   const [email, setEmail] = useState('');
+  const [nome, setNome] = useState('');
+  const [buonaFede, setBuonaFede] = useState(false);
   const [inCorso, setInCorso] = useState(false);
   const [erroreEmail, setErroreEmail] = useState<string | null>(null);
 
@@ -79,6 +89,8 @@ export function Segnala({
           motivo,
           dettaglio: dettaglio.trim() || undefined,
           emailContatto: email.trim() || undefined,
+          nomeSegnalante: nome.trim() || undefined,
+          buonaFede: buonaFede || undefined,
         }),
       });
       if (!res.ok) {
@@ -99,6 +111,7 @@ export function Segnala({
       toast.success('Segnalazione ricevuta: la esaminiamo.');
       setAperto(false);
       setDettaglio('');
+      setBuonaFede(false);
     } catch {
       toast.error('Non è stato possibile inviare la segnalazione. Riprova.');
     } finally {
@@ -175,6 +188,30 @@ export function Segnala({
         {erroreEmail && (
           <p id="segnala-email-errore" role="alert" className="mt-1 text-xs font-semibold text-secondary-700">{erroreEmail}</p>
         )}
+
+        <label htmlFor="segnala-nome" className="mt-3 block text-sm font-medium text-ink-700">
+          Il tuo nome, o quello dell&apos;organizzazione per cui segnali (facoltativo)
+        </label>
+        <input
+          id="segnala-nome"
+          type="text"
+          autoComplete="name"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          maxLength={120}
+          className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
+        />
+
+        <label htmlFor="segnala-buona-fede" className="mt-3 flex items-start gap-2 text-sm text-ink-700">
+          <input
+            id="segnala-buona-fede"
+            type="checkbox"
+            checked={buonaFede}
+            onChange={(e) => setBuonaFede(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>{DICHIARAZIONE_DI_BUONA_FEDE} (facoltativo)</span>
+        </label>
       </Modal>
     </>
   );
