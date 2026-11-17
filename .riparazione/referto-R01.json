@@ -1,6 +1,6 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:22",
+  "aggiornato": "2026-11-17 20:26",
   "finita": false,
   "testa": "db38a0f0064b758039f6debd9b1fe1ecc660992d",
   "verifica": {
@@ -177,6 +177,19 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Inizio e fine nella tabella (righe 211-212) e nella scheda del telefono (riga 267) passano da toLocaleString('it-IT') a dataEOraPiacenza di lib/admin/etichette.ts (Europe/Rome), l'aiutante già usato dalle altre pagine dell'amministrazione; i campi datetime-local del modulo erano già nell'ora di Piacenza (campoDataOraPiacenza / istanteDaCampoPiacenza). La prova monta la pagina vera con process.env.TZ a New York e a UTC e orologio finto: un evento delle 00:30 dell'11 a Piacenza deve dire l'11 alle 00:30 (e la fine alle 02:15), alla base dice il 10 alle 18:30 o alle 23:30."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+          "modifica": "In bancoDiProva, subito dopo la riga 59 `chmodSync(join(finti, 'rclone'), 0o755);`, aggiungere un psql finto eseguibile in `finti` (scripts/backup-db.sh, file_nel_database alle righe 367-380, lo chiama con `-v secchio=<secchio>` e la domanda su storage.objects da stdin quando la copia di un secchio è vuota; oggi su una macchina con /usr/bin/psql la prova interroga localhost:5432 col SUPABASE_DB_URL finto, e con un Postgres locale acceso il conto non dipende più dalla prova):\n  // Il database finto: risponde come un database coerente con l'origine (quanti file ha il secchio), senza rete.\n  writeFileSync(join(finti, 'psql'), [\n    '#!/usr/bin/env bash',\n    'secchio=\"\"; for a in \"$@\"; do case \"$a\" in secchio=*) secchio=\"${a#secchio=}\";; esac; done',\n    'domanda=\"$(cat)\"',\n    '[[ \"$domanda\" == *storage.objects* ]] || { echo \"domanda inattesa\" >&2; exit 3; }',\n    'find \"${STORAGE_SYNC_SOURCE}${secchio}\" -type f 2>/dev/null | wc -l | tr -d \" \"',\n  ].join('\\n') + '\\n');\n  chmodSync(join(finti, 'psql'), 0o755);\nVerificato su una copia temporanea della prova (poi tolta): 5 su 5 verdi, il psql finto viene chiamato per il secchio products vuoto e risponde 0 senza toccare la rete."
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La prova non è fra i miei file e non importa nessuno di essi: non l'ho toccata. Scritta la modifica esatta (psql finto in `finti`, che conta i file del secchio nell'origine finta) e provata su una copia temporanea fuori dal ramo."
     }
   ],
   "nuovi_difetti_visti": [
