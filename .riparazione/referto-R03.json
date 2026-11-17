@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:45",
+  "aggiornato": "2026-11-17 19:48",
   "finita": false,
-  "testa": "959a2a423140d69c2091a436f120e9202a7e27e4",
+  "testa": "7f72739b13c511795e9de5844c37379ba2e3b9be",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -36,9 +36,26 @@
     },
     {
       "id": "R03-002",
-      "chiave": "frontend-ux|la home di un negozio inesistente ripete «negozio non trovato» nel titolo e nella pagina",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "7f72739b13c511795e9de5844c37379ba2e3b9be",
+      "file_toccati": [
+        "app/store/[id]/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-titolo-negozio-mancante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-titolo-negozio-mancante.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7f72739b^ --file app/store/[id]/layout.tsx --prove tests/unit/riparazione-r03-titolo-negozio-mancante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il doppione: generateMetadata del guscio dava il titolo «Negozio non trovato · MyCity» e la pagina (app/store/[id]/page.tsx:66) disegna il riquadro «Negozio non trovato»; Next 15 manda i metadati in streaming dentro il corpo, quindi la scritta compariva due volte (come alla 404 e alla pagina su misura del negozio prima delle loro cure). Ora il titolo è «Vetrina non trovata · MyCity», con noindex e senza canonical come prima (resta il formato «non trovat[oa] · MyCity» che pretende tests/unit/minori-s09-scheda-prodotto.test.ts). Prova: generateMetadata vera con la lettura finta, confrontata col titolo del riquadro letto dalla pagina: negozio inesistente, non approvato o non negozio → nessuna ripetizione; negozio vero → il suo nome. Le 8 prove esistenti che leggono o montano il guscio restano verdi (82 prove).",
+      "verificato_da": "",
+      "chiave": "frontend-ux|la home di un negozio inesistente ripete «negozio non trovato» nel titolo e nella pagina"
     },
     {
       "id": "R03-003",
