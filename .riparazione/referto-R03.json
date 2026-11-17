@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:03",
+  "aggiornato": "2026-11-17 18:06",
   "finita": false,
-  "testa": "69847de49ab221cdef1bedc3c870d4552a0d771b",
+  "testa": "e6d7bc0f13d8b8469eb3f8f176964c19d9d5a43f",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -59,8 +59,24 @@
     {
       "id": "R03-006",
       "chiave": "qa-flussi|il primo messaggio mandato insieme all'apertura della conversazione non avvisa il negozio",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "e6d7bc0f13d8b8469eb3f8f176964c19d9d5a43f",
+      "file_toccati": [
+        "app/api/chat/conversations/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-primo-messaggio-avvisa-il-negozio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-primo-messaggio-avvisa-il-negozio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e6d7bc0f13d8b8469eb3f8f176964c19d9d5a43f^ --file app/api/chat/conversations/route.ts --prove tests/unit/riparazione-r03-primo-messaggio-avvisa-il-negozio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "L'avviso della chat (avvisaChiRiceve: campanella + email via avvisaNegozioMessaggioNuovo) vive non esportato dentro app/api/chat/messages/route.ts; invece di ricopiarlo, la rotta delle conversazioni manda il firstMessage chiamando il POST esportato di quella rotta (solo import, file non toccato) con le stesse intestazioni: stesso salvataggio, stessa campanella, stessa email. La risposta resta 200 con conversationId (best effort come prima), con un avviso nel registro se l'invio cade."
     },
     {
       "id": "R03-007",
