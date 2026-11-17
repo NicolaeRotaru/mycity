@@ -291,15 +291,7 @@ export async function contaProdottiDellaGriglia(
       : d.categoryId
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
-  // 17/11/2026 — Lo stesso filtro sui negozi approvati della lettura: la lettura tiene solo i
-  // prodotti il cui negozio sta nella vista `seller_public_profiles` (che ha solo i negozi
-  // approvati); qui l'aggancio `!inner` alla stessa vista scarta gli altri DENTRO il conteggio.
-  // Senza, il numero in alto contava anche prodotti che la griglia non mostra (al negoziante non
-  // approvato i suoi, all'amministratore tutti). Se l'aggancio non c'è, errore → null → «non lo so».
-  let q = supabase
-    .from('products')
-    .select('id, negozio:seller_public_profiles!inner(id)', { count: 'exact', head: true })
-    .eq('status', 'available');
+  let q = supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'available');
   q = applicaFiltriComuni(q, d, categorie);
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
   if (termine) q = q.ilike('name', `%${termine}%`);
