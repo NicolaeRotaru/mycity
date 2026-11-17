@@ -81,6 +81,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
   const frenoAggiunta = useRef(creaFrenoDoppioTocco());
+  // Il freno vale per la stessa scelta (variante + quantità): una scelta diversa riparte da capo.
+  const sceltaFrenata = useRef<string | null>(null);
   // 5/11/2026 — Dopo il primo tocco su «Compra ora» il pulsante si spegne fino al cambio pagina.
   const [inPartenza, setInPartenza] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -583,6 +585,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     }
     // R02-016 — Il secondo tocco dello stesso gesto (scheda o barra in fondo) non aggiunge un altro
     // pezzo: addToCart somma alla riga che c'è. Il tocco frenato non sparisce in silenzio: lo dice.
+    // Il freno scarta solo il tocco ripetuto sulla stessa scelta: un'altra variante o un'altra
+    // quantità entro il secondo è un'aggiunta nuova, non un doppio tocco.
+    const scelta = `${selectedVariant?.id ?? ''}|${qty}`;
+    if (sceltaFrenata.current !== scelta) {
+      sceltaFrenata.current = scelta;
+      frenoAggiunta.current = creaFrenoDoppioTocco();
+    }
     if (!frenoAggiunta.current()) {
       toast.info('Già aggiunto: controlla il carrello', { duration: 2000 });
       return;
