@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:22",
+  "aggiornato": "2026-11-17 18:24",
   "finita": false,
-  "testa": "5ddf13b7e12f1048c1714feaba0937ef7888e649",
+  "testa": "2eb57568d9596ff49c3c62a8931d694627a6116e",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -147,8 +147,24 @@
     {
       "id": "R03-010",
       "chiave": "qa-flussi|«spesso comprati insieme» mette nel carrello il prezzo pieno anche con una promozione attiva",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "2eb57568d9596ff49c3c62a8931d694627a6116e",
+      "file_toccati": [
+        "components/products/FrequentlyBoughtTogether.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-comprati-insieme-scontati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-comprati-insieme-scontati.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2eb57568d9596ff49c3c62a8931d694627a6116e^ --file components/products/FrequentlyBoughtTogether.tsx --prove tests/unit/riparazione-r03-comprati-insieme-scontati.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La queryFn della fascia ora fa lo stesso calcolo di CartUpsell (fetchActiveDiscounts + discountedUnitCents, aiutanti esistenti non toccati): prezzo mostrato e prezzo messo nel carrello sono quelli con la promo attiva. La prova monta la fascia vera con uno sconto finto del 20%: il carrello riceve 8 € invece di 10 €, e il prodotto senza sconto resta a prezzo pieno."
     },
     {
       "id": "R03-011",
