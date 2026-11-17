@@ -25,12 +25,13 @@
  * chiama a mano). La pagina è vetrina; il freno vero è la rotta.
  * Le eccezioni, dove una rotta da frenare non c'è e il freno è la pagina (o il
  * componente): la classifica inviti la legge il browser da una vista (nessun
- * premio passa di mano, la promessa è solo nella pagina); il caricamento da
- * file è il lettore della pagina, che poi scrive come il modulo «Nuovo
- * prodotto», acceso; inviti e punti (`INVITI_E_PUNTI_ACCESI`) li frenano le
+ * premio passa di mano, la promessa è solo nella pagina); inviti e punti
+ * (`INVITI_E_PUNTI_ACCESI`) li frenano le
  * pagine, il menu e il passaggio giornaliero, mentre i punti li scrive il
  * database; l'app installabile (`APP_INSTALLABILE_ACCESA`) è solo il manifest
  * nella pagina; PostHog (`POSTHOG_ACCESO`) parte solo dal browser.
+ * Il caricamento da file non è un'eccezione: lo rifiuta la sua rotta,
+ * app/api/seller/products/import (R02-002).
  *
  * Prima di riaccenderne una, leggi il «Per riaccendere» accanto.
  *
