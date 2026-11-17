@@ -12,7 +12,7 @@ import {
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { ORE_DELLA_VELOCE, QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 import { formatPrice } from './format';
-import { CARTA_ACCESA } from './funzioni-al-lancio';
+import { CARTA_ACCESA, CODICI_SCONTO_IN_CASSA } from './funzioni-al-lancio';
 import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents, vociDellaConsegna, type VociDellaConsegna } from './ordini/prezzi';
 
 /**
@@ -614,7 +614,7 @@ export function spiegazioneDellaConsegna(fraseDelPagamento: string = frasePagame
       `Consegna veloce, in ${EXPRESS_ETA_LABEL}: ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola per tutto il carrello. Se hai già un negozio sotto i ${soglia}, la veloce è compresa: non paghi niente in più. La veloce si sceglie in cassa, alla voce «Adesso». Si può ${ORE_DELLA_VELOCE}, se tutti i negozi del carrello sono aperti e c’è un fattorino in servizio.`,
     ],
     esempi,
-    chiusura: `Se in cassa usi un codice sconto, i ${soglia} si contano dopo lo sconto. Il totale con la consegna lo vedi sempre prima di confermare l’ordine. Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. ${fraseDelPagamento}`,
+    chiusura: `${CODICI_SCONTO_IN_CASSA ? `Se in cassa usi un codice sconto, i ${soglia} si contano dopo lo sconto. ` : ''}Il totale con la consegna lo vedi sempre prima di confermare l’ordine. Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. ${fraseDelPagamento}`,
   };
 }
 

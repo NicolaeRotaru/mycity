@@ -115,7 +115,7 @@ const SECTIONS: Section[] = [
         q: 'Posso restituire un prodotto?',
         // 5/11/2026 — Non diceva che pane e freschi sono esclusi (art. 59 Cod. Cons.), come
         // invece dicono i Termini e la pagina Resi.
-        a: `Hai 14 giorni dalla consegna per esercitare il diritto di recesso, ${RESO_ESCLUSI} e quelli fatti su ordinazione. Vai su "I miei ordini" → apri l'ordine → "Richiedi reso".`,
+        a: `Hai 14 giorni dalla consegna per esercitare il diritto di recesso, ${RESO_ESCLUSI}. Vai su "I miei ordini" → apri l'ordine → "Richiedi reso".`,
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',

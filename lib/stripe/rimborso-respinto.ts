@@ -34,6 +34,7 @@
  * rimasti solo quello che manca, non di nuovo tutto.
  */
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
+import { formatPriceFromCents } from '@/lib/format';
 
 /** I campi dell'ordine che servono a rimettere a posto un rimborso respinto. */
 export type OrdineDelRimborsoRespinto = {
@@ -57,6 +58,11 @@ export type ScritturaDelRimborsoRespinto = {
   ordineId: string;
   /** Quanto del rimborso respinto si toglie da questo ordine (centesimi). */
   quotaCents: number;
+  /**
+   * R31-014 — Bonifico già partito ('TRANSFERRED') e quota ripresa al negozio con uno storno: quanto
+   * va ridato A MANO al negozio di questo ordine (centesimi). Il sito non lo riaccredita da solo.
+   */
+  daRidareAlNegozioCents: number;
   valori: Record<string, unknown>;
   /**
    * La scrittura passa solo se l'ordine ha ancora questi valori, cioè quelli
@@ -81,6 +87,11 @@ export type PianoDelRimborsoRespinto = {
   scritture: ScritturaDelRimborsoRespinto[];
   /** Gli ordini su cui questo rimborso respinto è già stato rimesso a posto. */
   giaFatti: string[];
+  /**
+   * R31-014 — La frase per l'avviso agli amministratori, solo se a qualche negozio va ridata a mano la
+   * quota ripresa col bonifico già partito: a quale ordine (cioè a quale negozio) quanto, in euro.
+   */
+  fraseDaRidareAMano?: string;
 };
 
 const SEGNO = /^respinto:(\d+):(.+)$/;
@@ -106,6 +117,38 @@ export function quotaGiaTolta(
   return null;
 }
 
+/** La parte di `quota` che spetta al negozio: la stessa proporzione netto/lordo del rimborso. */
+function quotaDelNegozio(ordine: OrdineDelRimborsoRespinto, quota: number): number {
+  const lordo = ordine.gross_total_cents ?? Math.round(Number(ordine.total_price ?? 0) * 100);
+  const nettoNegozio = ordine.seller_payout_cents ?? 0;
+  return lordo > 0 ? Math.min(Math.round((quota * nettoNegozio) / lordo), nettoNegozio) : 0;
+}
+
+/**
+ * R31-014 — IL BONIFICO ERA GIÀ PARTITO: LA QUOTA DEL NEGOZIO SI RIDÀ A MANO.
+ *
+ * Un rimborso parziale su un ordine col bonifico già uscito riprende al negozio la sua quota con uno
+ * storno (`seller_payout_reversed_cents` sale, il bonifico resta 'TRANSFERRED'). Se la banca respinge il
+ * rimborso, il cliente non ha avuto niente ma al negozio la quota resta tolta. Rifare il bonifico in
+ * automatico non regge (carrello di più negozi, storni successivi): qui si dice solo QUANTO va ridato,
+ * mai più di quanto risulta stornato. `seller_payout_reversed_cents` non si tocca.
+ */
+function daRidareAMano(ordine: OrdineDelRimborsoRespinto, quota: number): number {
+  if (ordine.payout_status !== 'TRANSFERRED') return 0;
+  return Math.max(0, Math.min(quotaDelNegozio(ordine, quota), ordine.seller_payout_reversed_cents ?? 0));
+}
+
+/** R31-014 — La frase per l'avviso: `undefined` se non c'è niente da ridare a mano. */
+function fraseDaRidareAMano(scritture: ReadonlyArray<ScritturaDelRimborsoRespinto>): string | undefined {
+  const daRidare = scritture.filter((s) => s.daRidareAlNegozioCents > 0);
+  if (daRidare.length === 0) return undefined;
+  const righe = daRidare.map((s) => `ordine ${s.ordineId}: ${formatPriceFromCents(s.daRidareAlNegozioCents)}`).join('; ');
+  return (
+    `Il bonifico al negozio era già partito e il rimborso gli aveva ripreso la sua quota: va ridata a mano al negozio (${righe}). ` +
+    "Il sito non la riaccredita da solo: prima guarda su Stripe (Connect → il bonifico dell'ordine → Storni) quanto è stato stornato."
+  );
+}
+
 /**
  * Cosa scrivere su un ordine da cui si toglie `quota` di un rimborso respinto.
  * È la contabilità di sempre (R039 del 27/8, R85 del 15/10), più il segno.
@@ -129,9 +172,7 @@ function valoriDellOrdine(ordine: OrdineDelRimborsoRespinto, quota: number, segn
    * c'entra. E' lo stesso ragionamento della contestazione vinta
    * (lib/stripe/webhook/dispute.ts).
    */
-  const lordo = ordine.gross_total_cents ?? Math.round(Number(ordine.total_price ?? 0) * 100);
-  const nettoNegozio = ordine.seller_payout_cents ?? 0;
-  const quotaNegozio = lordo > 0 ? Math.min(Math.round((quota * nettoNegozio) / lordo), nettoNegozio) : 0;
+  const quotaNegozio = quotaDelNegozio(ordine, quota);
   const bonificoChiusoDalRimborso = ordine.payout_status === 'REVERSED' || ordine.payout_status === 'REFUNDED';
   const bonificoEraGiaUscito = ordine.payout_status === 'REVERSED';
   /**
@@ -241,6 +282,7 @@ export function pianoDelRimborsoRespinto(
     return {
       ordineId: o.id,
       quotaCents: quota,
+      daRidareAlNegozioCents: daRidareAMano(o, quota),
       valori: valoriDellOrdine(o, quota, refundId ? segnoDelRimborsoRespinto(refundId, quota) : null),
       seAncora: {
         refunded_amount_cents: o.refunded_amount_cents ?? null,
@@ -250,5 +292,6 @@ export function pianoDelRimborsoRespinto(
       },
     };
   });
-  return { scritture, giaFatti };
+  const fraseDaRidare = fraseDaRidareAMano(scritture);
+  return fraseDaRidare ? { scritture, giaFatti, fraseDaRidareAMano: fraseDaRidare } : { scritture, giaFatti };
 }

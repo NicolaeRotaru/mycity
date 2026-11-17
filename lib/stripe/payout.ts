@@ -1029,6 +1029,12 @@ export interface RefundOrderOpts {
    */
   annullatoDaChiChiama?: boolean;
   /**
+   * R31-022 — LA MERCE NON C'È PIÙ IN NEGOZIO: l'ha già ritirata il fattorino, o l'ha il cliente.
+   * Chi annulla un ordine in viaggio lo dice, e la merce non torna in vendita da sola: un pezzo
+   * fantasma lo scopre un cliente che ha già pagato (lib/ordini/annulla.ts, annullo dell'amministrazione).
+   */
+  merceNonTorna?: boolean;
+  /**
    * Quando il cliente ha chiesto il reso (`returns.created_at`). Sui contanti
    * l'avviso del bonifico da fare dice da lì il termine dei 14 giorni.
    */
@@ -2679,18 +2685,23 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // no — 25,00 su 30,00 chiudono l'ordine e i 5,00 restanti possono uscire
   // dopo — e la somma sarebbe girata due volte. La regola sta in
   // lib/ordini/rimessa-a-scaffale.ts, dove una prova può eseguirla.
-  await rimettiLaMerceAScaffale(admin, order, {
-    ordineDaChiudere,
-    giaRimborsatoPrimaCents: alreadyRefunded,
-    annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
-    // 5/11/2026 — La merce torna in negozio solo col reso (o col fattorino,
-    // quando il cliente e' assente): un reclamo chiuso col rimborso pieno su un
-    // ordine consegnato non la rimette in vendita.
-    merceTornata:
-      opts.annullaLOrdine === true ||
-      (typeof opts.metadata?.return_id === 'string' && opts.metadata.return_id.length > 0) ||
-      (opts.idempotencyKey ?? '').startsWith('return_'),
-  });
+  // R31-022 — Merce già col fattorino o col cliente: non si rimette in vendita.
+  if (opts.merceNonTorna === true) {
+    logger.info('[scaffale] merce gia uscita dal negozio: non torna a scaffale', { orderId: order.id });
+  } else {
+    await rimettiLaMerceAScaffale(admin, order, {
+      ordineDaChiudere,
+      giaRimborsatoPrimaCents: alreadyRefunded,
+      annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
+      // 5/11/2026 — La merce torna in negozio solo col reso (o col fattorino,
+      // quando il cliente e' assente): un reclamo chiuso col rimborso pieno su un
+      // ordine consegnato non la rimette in vendita.
+      merceTornata:
+        opts.annullaLOrdine === true ||
+        (typeof opts.metadata?.return_id === 'string' && opts.metadata.return_id.length > 0) ||
+        (opts.idempotencyKey ?? '').startsWith('return_'),
+    });
+  }
 
   const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero);
   // 5/11/2026 — L'IBAN si chiede solo con quell'email, e l'avviso del bonifico

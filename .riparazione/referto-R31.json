@@ -1,0 +1,474 @@
+{
+  "sessione": "R31",
+  "aggiornato": "2026-11-17 12:15",
+  "finita": true,
+  "testa": "02b6db8ea7942316ede9c1872915af2e29455abf",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "02b6db8ea7942316ede9c1872915af2e29455abf",
+    "nota": "typecheck pulito, lint 0 errori (99 avvisi), vitest 1612 file verdi e 1 saltato (10559 casi verdi). SHA preso con git rev-parse HEAD prima del lancio. Nessuna prova comune toccata sul ramo: le correzioni che ne rompevano una sono nelle patch intere (commit b2c776dc: 001, 003, 016, 018; commit b7c0699a: 012, 014, 023), da applicare in quest'ordine; in pila sono verdi: 160 file di prova che le riguardano, 1114 casi. La patch 014 è da NON applicare finché la quota non usa lo storno vero (vedi R31-014)."
+  },
+  "voci": [
+    {
+      "id": "R31-002",
+      "chiave": "accessibilita|le foto delle recensioni e l'importazione dei prodotti da file non si aprono da tastiera",
+      "esito": "gia_riparato_prima",
+      "prova": "commit a44980ac (R28-002) già nella base d1eaba80 (components/rider/CashConfirmDialog.tsx: il label di PhotoSlot ha focus-within:ring-2 e input sr-only; collaudo K15 «regge»). Comando: npx vitest run tests/unit/riparazione-r28-foto-e-documenti-del-fattorino-da-tastiera.test.ts --reporter=dot → verde sulla base d1eaba80 (5 file, 18 casi insieme alle altre quattro)"
+    },
+    {
+      "id": "R31-005",
+      "chiave": "architettura|interfacce zombie: shippingforeuro vale sempre 0 ma riceve 7 ingressi; promessaspedizione ha un argomento morto e campi sempre costanti",
+      "esito": "gia_riparato_prima",
+      "prova": "commit 4420402b (R29-005) già nella base d1eaba80 (shippingForEuro e promessaSpedizione senza argomenti né campi morti; collaudo K16 «regge»). Comando: npx vitest run tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts --reporter=dot → verde sulla base d1eaba80 (5 file, 18 casi insieme alle altre quattro)"
+    },
+    {
+      "id": "R31-008",
+      "chiave": "frontend-ux|il negoziante col negozio non ancora approvato vede «negozio» al posto della sua insegna nella lista condivisa e alla cassa",
+      "esito": "gia_riparato_prima",
+      "prova": "commit 2c9f8412 (R29-007) già nella base d1eaba80 (app/cart/page.tsx legge l'insegna propria del negozio non approvato; collaudo K16 «regge»). Comando: npx vitest run tests/unit/riparazione-r19-insegna-del-negozio-non-approvato.test.ts --reporter=dot → verde sulla base d1eaba80 (5 file, 18 casi insieme alle altre quattro)"
+    },
+    {
+      "id": "R31-010",
+      "chiave": "microcopy|la conferma d'ordine non dice quando arriva né quanto pagare in contanti, e a chi ritira in negozio parla di rider",
+      "esito": "gia_riparato_prima",
+      "prova": "commit 8a4ec811 (R28-010) già nella base d1eaba80 (lib/stripe/webhook/ordini.ts passa fascia, ritiro e metodo di pagamento alla conferma; collaudo K15 «regge»). Comando: npx vitest run tests/unit/riparazione-r28-conferma-carta.test.ts --reporter=dot → verde sulla base d1eaba80 (5 file, 18 casi insieme alle altre quattro)"
+    },
+    {
+      "id": "R31-013",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso dal cruscotto che aspetta ancora la divisione, il sito lo toglie dagli ordini che non l'avevano mai registrato",
+      "esito": "gia_riparato_prima",
+      "prova": "commit eb59bba9 (R28-014) già nella base d1eaba80 (lib/stripe/rimborso-respinto.ts filtra gli ordini che non avevano registrato il rimborso; collaudo K15 «regge»). Comando: npx vitest run tests/unit/riparazione-r28-rimborso-respinto-da-dividere.test.ts --reporter=dot → verde sulla base d1eaba80 (5 file, 18 casi insieme alle altre quattro)"
+    },
+    {
+      "id": "R31-001",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-sos-testo.test.tsx (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-sos-testo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base HEAD^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r31-sos-testo.test.tsx --json (su un commit temporaneo con la patch, poi annullato: mai spinto)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il dialogo di conferma dice che si apre il telefono col 112 già scritto e che CHIAMA lo preme il fattorino. Il testo nuovo rende rossa la prova comune il-testo-dice-quello-che-succede-davvero (vincola la frase vecchia), quindi niente commit di codice: tutto nella patch.",
+      "serve_file_altrui": [
+        {
+          "file": "components/rider/SOSButton.tsx, tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts, tests/unit/riparazione-r28-sos-testo.test.tsx, tests/unit/riparazione-r31-sos-testo.test.tsx (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-001-intera.patch dal commit b2c776dc del ramo (git show b2c776dc:.riparazione/patch-R31/R31-001-intera.patch | git apply). Prova comune: la tocca solo la regista. In fila 001, 003, 016, 018 le quattro patch sono verdi insieme sulla testa 5f893345: 78 file, 555 casi. Da sola: 9 file e 46 casi del SOS verdi sulla base; 75 file e 538 casi sulla testa. Rimessa a mano: SOSButton alla base → la prova nuova è rossa (2 casi su 2)."
+        }
+      ]
+    },
+    {
+      "id": "R31-003",
+      "chiave": "api-backend|le rotte accettano una consegna a domicilio senza fascia: l'ordine nasce senza orario, mentre la cassa ne manda sempre una",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-consegna-senza-fascia.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-consegna-senza-fascia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base HEAD^ --file app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r31-consegna-senza-fascia.test.ts --json (commit temporaneo, poi annullato)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le due rotte rispondono 400 «Scegli quando vuoi ricevere l'ordine.» a una consegna a domicilio senza fascia, dopo il controllo del ritiro spento. La regola sta nelle due rotte e non in lib/ordini/fascia-consegna.ts: con l'aiutante condiviso la rimessa usciva 3 (strutturale). Rende rosse 34 prove comuni (la scheda ne diceva 33: c'è anche riparazione-r26-credito-della-cassa; riparazione-r13-riserva-della-cassa non esiste).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts, 34 prove comuni (deliverySlot: FASCE_DI_DOMANI[0] con l'import), tests/unit/riparazione-r31-consegna-senza-fascia.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-003-intera.patch dal commit b2c776dc del ramo (git show b2c776dc:.riparazione/patch-R31/R31-003-intera.patch | git apply). Prova comune: la tocca solo la regista. In fila 001, 003, 016, 018 le quattro patch sono verdi insieme sulla testa 5f893345: 78 file, 555 casi. 37 file. Da sola: 65 file e 500 casi verdi sulla base; 75 file e 541 casi sulla testa. Le 34 prove allineate sono verdi anche sul codice vecchio. Rimessa a mano: rotte alla base → 4 casi rossi su 6. Va prima della 016: scrivono nello stesso punto di checkout/route.ts."
+        }
+      ]
+    },
+    {
+      "id": "R31-016",
+      "chiave": "privacy-legale|un cliente coi termini 2.0 e la cassa già aperta ordina lo stesso: le rotte d'ordine non guardano la versione accettata",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-termini-in-cassa.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-termini-in-cassa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base HEAD^ --file app/api/orders/cod/route.ts,app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r31-termini-in-cassa.test.ts --json (commit temporaneo, poi annullato)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le due rotte chiedono vaChiestaSenzaTrattenere col tetto del portiere: con 'chiedi' rispondono 403 «I Termini di MyCity sono cambiati…»; con scaduto o rotto lasciano passare e scrivono logger.warn, come middleware.ts. Senza il vi.mock le 8 prove comuni sono rosse (25 casi).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts, 8 prove comuni (vi.mock di accettazione-testi prima del primo vi.mock), tests/unit/riparazione-r31-termini-in-cassa.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-016-intera.patch dal commit b2c776dc del ramo (git show b2c776dc:.riparazione/patch-R31/R31-016-intera.patch | git apply). Prova comune: la tocca solo la regista. In fila 001, 003, 016, 018 le quattro patch sono verdi insieme sulla testa 5f893345: 78 file, 555 casi. 11 file. Da sola: 65 file e 502 casi verdi sulla base; 75 file e 543 casi sulla testa. Rimessa a mano: rotte alla base → la prova nuova è rossa."
+        }
+      ]
+    },
+    {
+      "id": "R31-018",
+      "chiave": "privacy-legale|confine senza coordinate chiuso solo a parole: l'ordine non misurato passa senza nessun segno, e ora /shipping lo annuncia",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-confine-non-misurato.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-confine-non-misurato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base HEAD^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r31-confine-non-misurato.test.ts --json (commit temporaneo, poi annullato)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Coi contanti, un ordine nato senza la misura del confine (negozio senza posizione o indirizzo non trovato) manda agli amministratori la campanella «distanza non misurata», col perché e il link all'ordine. Rende rosso 1 caso di ordini-contrassegno-due-negozi (conta le campanelle).",
+      "cosa_resta": "La strada della carta, spenta al lancio: l'ordine nasce nel webhook (lib/stripe/webhook/ordini.ts a 598 righe su 600); il segno va portato dal pending al webhook, con la campanella agli amministratori in comune.ts.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts, tests/unit/ordini-contrassegno-due-negozi.test.ts:344, tests/unit/riparazione-r31-confine-non-misurato.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-018-intera.patch dal commit b2c776dc del ramo (git show b2c776dc:.riparazione/patch-R31/R31-018-intera.patch | git apply). Prova comune: la tocca solo la regista. In fila 001, 003, 016, 018 le quattro patch sono verdi insieme sulla testa 5f893345: 78 file, 555 casi. 3 file. Da sola: 65 file e 497 casi verdi sulla base; 75 file e 538 casi sulla testa. Rimessa a mano: cod alla base → la prova nuova è rossa."
+        }
+      ]
+    },
+    {
+      "id": "R31-024",
+      "chiave": "qa-flussi|faccine nei titoli delle notifiche scritte dal codice del sito",
+      "esito": "parziale",
+      "commit": "7af9bf46",
+      "file_toccati": [
+        "app/api/orders/[id]/cancel/route.ts",
+        "app/api/admin/orders/[id]/cancel/route.ts",
+        "app/api/seller/orders/[id]/reject/route.ts",
+        "app/api/orders/cod/route.ts",
+        "lib/stripe/webhook/comune.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-titoli-senza-faccine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-titoli-senza-faccine.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7af9bf46^ --file app/api/orders/[id]/cancel/route.ts,app/api/admin/orders/[id]/cancel/route.ts,app/api/seller/orders/[id]/reject/route.ts,app/api/orders/cod/route.ts,lib/stripe/webhook/comune.ts --prove tests/unit/riparazione-r31-titoli-senza-faccine.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Tolte le faccine (✕ ❌ 🎉 ✅ 📦) dai titoli delle campanelle a clienti, negozi e fattorini nei miei file. Le 138 prove che importano quei file restano verdi.",
+      "cosa_resta": "Gli avvisi agli amministratori (⚠️ ℹ️ ✓ ✕ 💶 📭) in ordini.ts, rimborsi.ts, annulla.ts, payout.ts (miei) e in circa 12 file webhook non miei, alcuni vincolati da prove comuni (un-avviso-ripetuto-non-rifa-il-lavoro, la-merce-del-carrello-che-non-quadra, il-rimborso-parziale-dal-cruscotto): aspetta la domanda per Nicola. E i titoli ai negozi nei file webhook non miei qui sotto (non provati: il permesso automatico ha negato di toccarli anche solo per provarli). Il revisore ne ha trovate anche verso fattorini, clienti e negozi in file non miei: app/api/rider/orders/[id]/cliente-assente/route.ts:104 e :112, app/api/returns/create/route.ts:213, app/api/rider/cash-confirm/route.ts:265 e :275 (probabile admin).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/abbonamenti.ts:146,210 + tests/unit/un-avviso-vecchio-dell-abbonamento-non-riscrive-quello-nuovo.test.ts:114,134,143,152",
+          "modifica": "title '✅ Abbonamento attivo' diventa 'Abbonamento attivo'; '⚠️ Pagamento abbonamento non riuscito' diventa 'Pagamento abbonamento non riuscito'; nella prova comune le stesse stringhe in avvisiAlNegozio(...). Non provato."
+        },
+        {
+          "file": "lib/stripe/webhook/sponsorizzati.ts:161",
+          "modifica": "'✨ Sponsorizzazione attiva' diventa 'Sponsorizzazione attiva'. Non provato."
+        },
+        {
+          "file": "lib/stripe/webhook/trasferimenti.ts:135,217",
+          "modifica": "'⚠️ Il tuo conto Stripe ha bisogno di te' diventa 'Il tuo conto Stripe ha bisogno di te'; '⚠️ Il bonifico non è arrivato in banca' diventa 'Il bonifico non è arrivato in banca'. Non provato."
+        }
+      ],
+      "verificato_da": "revisore minori (sonnet): rimessa 0, 220 prove vicine verdi (1507 casi), nessuna faccina rimasta nei titoli dei 5 file; restano in file non suoi"
+    },
+    {
+      "id": "R31-025",
+      "chiave": "qa-flussi|la campanella «nuovo ordine» del negozio non dice per quando va consegnato: lo dice solo l'email",
+      "esito": "riparato",
+      "commit": "5f893345",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "lib/stripe/webhook/comune.ts",
+        "lib/stripe/webhook/ordini.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-campanella-quando-contanti.test.ts",
+        "tests/unit/riparazione-r31-campanella-quando-carta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-campanella-quando-contanti.test.ts tests/unit/riparazione-r31-campanella-quando-carta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5f893345^ --file app/api/orders/cod/route.ts,lib/stripe/webhook/comune.ts,lib/stripe/webhook/ordini.ts --prove tests/unit/riparazione-r31-campanella-quando-contanti.test.ts,tests/unit/riparazione-r31-campanella-quando-carta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La campanella al negozio aggiunge « — Consegna: <fascia>» (anche la veloce) o « — Ritiro in negozio», coi contanti e con la carta. ordini.ts resta a 598 righe. Le 143 prove che importano i file restano verdi; tsc ed eslint puliti. Accanto a «Domani» non c'è la data che l'email aggiunge (conLaData manca in molte prove finte dei template).",
+      "verificato_da": "revisore minori (sonnet): rimessa 0, controllati ritiro (ha la precedenza) e veloce nel testo, ordini.ts a 598 righe, nessun'altra strada crea la campanella nuovo ordine"
+    },
+    {
+      "id": "R31-012",
+      "chiave": "pagamenti-stripe|con la carta accesa si può pagare anche un negozio che non ha finito la verifica stripe",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-carta-solo-negozi-verificati.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-carta-solo-negozi-verificati.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": null,
+        "comando": "a mano: con la patch applicata, app/api/stripe/checkout/route.ts rimessa com'è alla testa → la prova nuova è rossa (4 casi su 6, 200 invece di 409)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta della carta legge stripe_payouts_enabled dalla vista seller_public_profiles (e dal profilo per i negozi senza insegna): se un negozio del carrello non ce l'ha a true risponde 409 «<negozio> per ora accetta solo il pagamento in contanti alla consegna» prima della pulizia, senza aprire la sessione Stripe né il pagamento in attesa. Rende rosse 16 prove comuni (negozi finti senza stripe_payouts_enabled). La prova nuova porta la fascia e il mock dei termini, così regge anche dopo le patch 003 e 016.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts, 16 prove comuni (al-lancio-carta-…, api-stripe-checkout, con-la-carta-la-pagina-di-ieri…, con-la-carta-lo-stesso-carrello…, il-codice-sconto-a-uso-unico…, il-telefono-corretto…, la-carta-rifiuta-l-indirizzo-fuori-zona…, la-carta-rifiuta-la-fascia…, la-carta-si-ferma-se-la-lettura…, la-cassa-non-fa-la-fila…, le-rotte-fanno-pagare-la-veloce…, minori-s01-cassa-carta, minori-s01-negozio-senza-insegna, minori-s01-veloce-carta, minori-s01-zona-carta, riparazione-r26-la-pulizia-dopo-i-rifiuti: stripe_payouts_enabled: true ai negozi finti), tests/unit/riparazione-r31-carta-solo-negozi-verificati.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-012-intera.patch dal commit b7c0699a del ramo (git show b7c0699a:.riparazione/patch-R31/R31-012-intera.patch | git apply), dopo le patch 001, 003, 016, 018. Prova comune: la tocca solo la regista. Le sette patch in fila (001, 003, 016, 018, 012, 014, 023) sopra acfc8a94: 160 file di prova che le riguardano, 1114 casi verdi. Da sola sulla testa acfc8a94: 17 file e 129 casi verdi; tsc e lint puliti."
+        }
+      ]
+    },
+    {
+      "id": "R31-014",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso parziale su un ordine col bonifico già partito, al negozio resta tolta la sua quota",
+      "esito": "parziale",
+      "commit": "349268d0",
+      "file_toccati": [
+        "lib/stripe/rimborso-respinto.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-rimborso-respinto-quota-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-rimborso-respinto-quota-a-mano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 349268d0^ --file lib/stripe/rimborso-respinto.ts --prove tests/unit/riparazione-r31-rimborso-respinto-quota-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Col bonifico già partito (TRANSFERRED), il piano del rimborso respinto calcola per ogni ordine la quota da ridare a mano, min(quota del negozio, seller_payout_reversed_cents), e prepara la frase per l'avviso agli amministratori («ordine X: 4,05 €», col rimando agli storni su Stripe). Niente riaccredito automatico; lo storno registrato non si tocca.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/rimborso-respinto-dalla-banca.ts (qui vive handleRefundUpdated; il file non è in nessuna scheda dell'onda) + tests/unit/riparazione-r31-rimborso-respinto-avviso-quota.test.ts (nuova)",
+          "modifica": "ATTENZIONE: il revisore ha trovato che la cifra può essere sbagliata in due varianti (vedi cosa_resta): consiglio di NON applicare questa riga finché la quota non usa lo storno vero. Nel messaggio di avvisaGliAmministratori: `${fraseDelBonifico} Se il rimborso era pieno` diventa `${fraseDelBonifico}${piano.fraseDaRidareAMano ? ` ${piano.fraseDaRidareAMano}` : ''} Se il rimborso era pieno`. Applicare .riparazione/patch-R31/R31-014-intera.patch dal commit b7c0699a del ramo (git show b7c0699a:.riparazione/patch-R31/R31-014-intera.patch | git apply), dopo le patch 001, 003, 016, 018. Prova comune: la tocca solo la regista. Le sette patch in fila (001, 003, 016, 018, 012, 014, 023) sopra acfc8a94: 160 file di prova che le riguardano, 1114 casi verdi."
+        }
+      ],
+      "cosa_resta": "La riga nell'avviso (serve_file_altrui sopra) e il riaccredito automatico al negozio: domanda per Nicola (nell'onda 4 un revisore l'ha bocciato sul carrello di due negozi). Difetti trovati dal revisore, da correggere prima di applicare la riga dell'avviso: (1) rimborso-respinto.ts:295 calcola la frase solo sugli ordini da scrivere adesso, quindi al ritentativo l'avviso parte senza cifra; (2) rimborso-respinto.ts:121-139 ricalcola la quota in proporzione invece di prendere lo storno vero: con gli euro della veloce (che al negozio tolgono 0) e 4,97 € stornati da un altro reso dice di ridare 0,71 € mai tolti; col rimborso dal cruscotto su ordine pagato in parte col credito dice 4,05 € invece di 5,40 € (rimborsi-da-fuori.ts:166). La frase rimanda comunque agli storni su Stripe.",
+      "verificato_da": "revisore soldi (opus): rimessa 0, 5 casi verdi, 23 prove vicine verdi (223 casi); provati storno null/0/più alto, bonifico non partito, due negozi, centesimi, formato. Difetti: cifra persa al secondo passaggio (rimborso-respinto.ts:295) e quota proporzionale sbagliata con gli euro della veloce e col rimborso dal cruscotto su ordine pagato in parte col credito (rimborso-respinto.ts:121-139)."
+    },
+    {
+      "id": "R31-004",
+      "chiave": "architettura|il codice pgrst204 su una colonna della 124 ora fa scattare il ripiego per tutti: con la cache dello schema di postgrest vecchia, la scrittura salta gross_total_cents anche a migrazione applicata",
+      "esito": "scelta_di_nicola",
+      "domanda": "Con la cache di PostgREST vecchia, la scrittura del rimborso respinto e della contestazione parziale vinta deve andare senza gross_total_cents (oggi), fallire e lasciar riprovare Stripe, o si toglie il ripiego della 124 ora che la migrazione è applicata?",
+      "nota": "La modifica scritta nella scheda usa memoriaDiPostgrestVecchia, che alla testa non esiste più in lib/db/migrazione-124.ts: la sessione che l'aveva aggiunta è stata tolta dopo un collaudo dell'onda 2, perché con la memoria vecchia la contestazione parziale vinta rifaceva il bonifico al negozio a ogni ripetizione di Stripe. Rimetterla vorrebbe dire rimettere una correzione bocciata. I due ripieghi scritti a mano sono in file non miei: lib/stripe/webhook/rimborso-respinto-dalla-banca.ts:199 e lib/stripe/webhook/contestazione-parziale-vinta.ts:44."
+    },
+    {
+      "id": "R31-023",
+      "chiave": "qa-flussi|quando un ordine viene annullato il negozio non riceve nessuna email, e se lo annulla il sito perché nessuno l'ha accettato non riceve nemmeno la campanella",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": null,
+        "comando": "a mano: con la patch applicata, i 5 file di codice rimessi alla testa → 3 casi rossi su 5"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La campanella al negozio sugli scaduti c'era già. Nuovo modello ordineAnnullatoAlNegozioTemplate e avvisaIlNegozioDellAnnullo in annulla.ts (email transazionale al negozio, mai bloccante), chiamato dopo l'annullo riuscito nelle tre strade: giro degli scaduti, annullo del cliente, annullo dell'amministrazione. Rende rosse 4 prove comuni che contano le email.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/email/templates.ts, lib/ordini/annulla.ts, app/api/cron/expire-stale-orders/route.ts, app/api/orders/[id]/cancel/route.ts, app/api/admin/orders/[id]/cancel/route.ts, 4 prove comuni (chi-paga-alla-consegna-sa-che-l-ordine-e-annullato, minori-s01-giro-notturno, minori-s02-annullo-del-cliente, minori-s03-ordini-scaduti: le email si contano per destinatario, quella al cliente resta una, più quella al negozio), tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-023-intera.patch dal commit b7c0699a del ramo (git show b7c0699a:.riparazione/patch-R31/R31-023-intera.patch | git apply), dopo le patch 001, 003, 016, 018. Prova comune: la tocca solo la regista. Le sette patch in fila (001, 003, 016, 018, 012, 014, 023) sopra acfc8a94: 160 file di prova che le riguardano, 1114 casi verdi. Fatta sopra acfc8a94 (R31-022)."
+        }
+      ]
+    },
+    {
+      "id": "R31-022",
+      "chiave": "qa-flussi|«annulla» dell'amministratore su un ordine in viaggio o già consegnato non avvisa fattorino e negozio e rimette a scaffale merce che non c'è più",
+      "esito": "parziale",
+      "commit": "acfc8a94",
+      "file_toccati": [
+        "app/api/admin/orders/[id]/cancel/route.ts",
+        "lib/ordini/annulla.ts",
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-annullo-merce-in-viaggio.test.ts",
+        "tests/unit/riparazione-r31-rimborso-merce-in-viaggio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-annullo-merce-in-viaggio.test.ts tests/unit/riparazione-r31-rimborso-merce-in-viaggio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base acfc8a94^ --file lib/ordini/annulla.ts,lib/stripe/payout.ts,app/api/admin/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r31-annullo-merce-in-viaggio.test.ts,tests/unit/riparazione-r31-rimborso-merce-in-viaggio.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Con l'ordine PICKED_UP, OUT_FOR_DELIVERY o DELIVERED la rotta dell'amministrazione passa merceNonTorna: coi contanti annullaERimborsa salta restore_stock_for_order, con la carta refundOrder salta rimettiLaMerceAScaffale. Il «cliente assente» non cambia (lì la merce torna col fattorino). Le campanelle a negozio e fattorino c'erano già: la prova le controlla.",
+      "verificato_da": "revisore soldi (opus): rimessa 0, 10 casi verdi, 117 prove vicine verdi (813 casi); provati ACCEPTED/READY/ASSIGNED/PICKED_UP/OUT_FOR_DELIVERY/DELIVERED, contanti e carta, doppio annullo, cliente assente, carrello. Difetto: la merce in mano al fattorino che torna in negozio resta fuori dallo scaffale senza che negozio e fattorino lo sappiano (route.ts:121-123). Verdetto: parziale.",
+      "cosa_resta": "Da PICKED_UP o OUT_FOR_DELIVERY la merce è col fattorino e di solito torna in negozio: la correzione non la rimette a scaffale (giusto finché non è tornata) ma le campanelle di app/api/admin/orders/[id]/cancel/route.ts:121-123 dicono solo «non va più preparato né consegnato»: al fattorino non si dice di riportarla e il negozio non sa che le quantità non sono tornate in vendita (giacenza più bassa del vero). Dipende dalla domanda per Nicola su chi rimette a scaffale la merce riportata. Nota: con la carta resta una corsa stretta se il fattorino ritira fra la lettura dello stato della rotta e quella di refundOrder (coi contanti la chiude annulla.ts:390)."
+    },
+    {
+      "id": "R31-006",
+      "chiave": "dati-analytics|gli ordini annullati o rimborsati restano venduti per sempre in google analytics e posthog",
+      "esito": "non_fatto",
+      "nota": "Non è una modifica piccola. L'acquisto lato server parte da contaAcquisto in lib/analytics/server.ts (file non mio) verso GA4 e PostHog: servirebbe un contaAnnullamento lì, col consenso, l'evento refund di GA4 sul transaction_id (serve il client_id GA, che oggi non è salvato sull'ordine) e order_refunded/canceled su PostHog, chiamato da annullaERimborsa, dal giro degli scaduti, dal rifiuto, da rimborsi.ts, da refundOrder parziale e dal webhook. trackOrderCanceled esiste solo nel browser (orders/[id]) e manda a PostHog senza valore."
+    },
+    {
+      "id": "R31-015",
+      "chiave": "privacy-legale|il buono regalo manda a stripe nome, email e messaggio privato del destinatario, e lì non si cancellano mai",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha fermato il lotto 4 (privacy e dati) a 26,61 $ di spesa, per consegnare entro 38 $. Voce non aperta: resta per l'onda dopo."
+    },
+    {
+      "id": "R31-019",
+      "chiave": "privacy-legale|chi cancella l'account da negozio o da fattorino lascia aperto il suo conto stripe collegato, e noi perdiamo il codice per chiuderlo",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha fermato il lotto 4 (privacy e dati) a 26,61 $ di spesa, per consegnare entro 38 $. Voce non aperta: resta per l'onda dopo."
+    },
+    {
+      "id": "R31-020",
+      "chiave": "privacy-legale|quando un negozio cancella l'account, logo, foto della vetrina e dei prodotti e storie restano nei secchi pubblici: la prova che gira per la voce delle foto dei resi, e il pezzo che quella voce non nomina",
+      "esito": "non_fatto",
+      "nota": "tetto: la regista ha fermato il lotto 4 (privacy e dati) a 26,61 $ di spesa, per consegnare entro 38 $. Voce non aperta: resta per l'onda dopo."
+    },
+    {
+      "id": "R31-017",
+      "chiave": "privacy-legale|nelle domande frequenti la risposta sul reso dice due volte «fatti su ordinazione»",
+      "esito": "riparato",
+      "commit": "4f229dce",
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-faq-reso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-faq-reso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f229dce^ --file app/faq/page.tsx --prove tests/unit/riparazione-r31-faq-reso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto da app/faq/page.tsx il «e quelli fatti su ordinazione» aggiunto a mano dopo RESO_ESCLUSI, che lo contiene già. lib/promesse-pubbliche.ts non serviva.",
+      "verificato_da": "revisore minori (sonnet): rimessa 0, «su ordinazione» una sola volta nella FAQ, messages/ senza doppioni"
+    },
+    {
+      "id": "R31-007",
+      "chiave": "frontend-ux|le domande frequenti dicono di inserire il codice sconto alla cassa, ma alla cassa il campo non c'è",
+      "esito": "riparato",
+      "commit": "ae780870",
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-codice-sconto-in-cassa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-codice-sconto-in-cassa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ae780870^ --file lib/promesse-pubbliche.ts --prove tests/unit/riparazione-r31-codice-sconto-in-cassa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La risposta della FAQ seguiva già CODICI_SCONTO_IN_CASSA; restava la frase fissa «Se in cassa usi un codice sconto…» nel testo della consegna (spiegazioneDellaConsegna.chiusura): ora compare solo con l'interruttore acceso. La prova finge l'interruttore spento e acceso.",
+      "verificato_da": "revisore minori (sonnet): rimessa 0, nessun altro punto promette il codice sconto fuori dall'interruttore"
+    },
+    {
+      "id": "R31-009",
+      "chiave": "microcopy|il riquadro newsletter della home, se riacceso, promette «una volta a settimana, ogni venerdì», ma nessun invio esiste e le impostazioni la chiamano «mensile»",
+      "esito": "riparato",
+      "commit": "02b6db8e",
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-newsletter-senza-cadenza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-newsletter-senza-cadenza.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 02b6db8e^ --file app/profile/settings/page.tsx --prove tests/unit/riparazione-r31-newsletter-senza-cadenza.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il riquadro della home era già senza cadenza. Nelle impostazioni l'etichetta con la newsletter accesa diceva «Newsletter mensile»: ora «Newsletter». Home e impostazioni dicono la stessa cosa, nessuna cadenza inventata.",
+      "verificato_da": "revisore minori (sonnet): rimessa 0, nessuna cadenza della newsletter rimasta in app, components e messages"
+    },
+    {
+      "id": "R31-011",
+      "chiave": "microcopy|in tanti punti l'euro è ancora scritto all'inglese: «€12.50», «€0 – €500+», «€ 2,50»",
+      "esito": "parziale",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica: alla testa i file della mia lista sono già a posto (lib/format.ts usa Intl it-IT; opengraph-image e ShareCartButton usano formatPrice; messages/it.json ha «30 €», «Fino a {max} €», «{min} € – {max} €»; il filtro «€0 – €500+» non c'è più). Il grep sui file dell'elenco non trova righe di codice con l'euro all'inglese.",
+      "cosa_resta": "32 righe con l'euro scritto a mano (grep «€ ?[0-9]|€${», senza commenti) in 22 file fuori dalla mia lista: app/api/ai/catalog-chat, app/api/ai/copilot, app/api/ai/improve-product, app/api/cron/operational-alerts, app/api/cron/release-payouts, app/api/gift-cards/checkout, app/api/rider/cash-confirm, app/api/seller/orders/[id]/reject, app/profile/page.tsx, app/profile/referral, app/rider/orders/[id], app/seller/dashboard, app/seller/earnings/commissione.ts, app/seller/products/import, app/seller/promote, app/sign-up, components/WelcomeCreditBanner.tsx, lib/coupons.ts:84, lib/loyalty.ts, lib/products/economics.ts, lib/products/externalAlert.ts, lib/stripe/webhook/ordini.ts. Molte sono testi fissi («€5 di credito»), non importi calcolati. Tre di quei file sono anche nella mia fascia (gift-cards/checkout, seller reject, webhook/ordini.ts, quest'ultimo a 598 righe su 600) ma non nella riga della voce: rimandati all'onda dopo per il tetto di spesa."
+    },
+    {
+      "id": "R31-021",
+      "chiave": "privacy-legale|sugli alimenti confezionati il peso netto è facoltativo e il prezzo al chilo non compare mai",
+      "esito": "scelta_di_nicola",
+      "domanda": "Quali prodotti sono «alimenti confezionati» e come si scrive il peso netto? Oggi c'è solo la categoria «alimentari» (che comprende lo «Sfuso») e «Peso / Quantità» è testo libero: serve un campo numerico con unità, obbligatorio se il prodotto non è sfuso, da cui calcolare il prezzo al chilo o al litro?",
+      "nota": "lib/category-attributes.ts ha «Peso / Quantità» come testo libero, lib/products/schema.ts non valida gli attributi di categoria e «confezionato» non si distingue da «sfuso»: renderlo obbligatorio vuol dire inventare il modello dei dati."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Se il webhook del rimborso respinto muore fra la scrittura e l'avviso, al secondo passaggio l'avviso agli amministratori parte senza la cifra da ridare al negozio",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/rimborso-respinto-dalla-banca.ts",
+      "descrizione": "Il secondo passaggio prende la strada giaFatti, che non ricalcola fraseDaRidareAMano. Il file non è in nessuna scheda dell'onda: va assegnato."
+    },
+    {
+      "titolo": "L'Aiuto elenca «modifica» dell'ordine fra le cose che si possono fare: da controllare se la modifica esiste davvero",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/help/page.tsx:25",
+      "descrizione": "La riga «Stato ordine, modifica, annullamento»: se il cliente non può modificare un ordine, il testo promette una cosa che non c'è."
+    }
+  ],
+  "domande_per_nicola": [
+    "R31-024: anche negli avvisi agli amministratori va tolto il ⚠️ (e ℹ️ ✓ ✕ 💶 📭), o per loro resta un segnale utile?",
+    "R31-014: rimborso parziale respinto dalla banca col bonifico già partito: va riaccreditato al negozio in automatico (un bonifico per ordine, con chiave per ordine) o resta l'avviso agli amministratori con la cifra da ridare a mano?",
+    "R31-022: il pannello Ordini mostra «Annulla» anche sugli ordini in viaggio e consegnati: va vietato o tenuto? Se resta, chi rimette a scaffale la merce che il fattorino riporta?",
+    "R31-004: con la cache di PostgREST vecchia, meglio scrivere senza gross_total_cents (oggi), far fallire e lasciar riprovare Stripe, o togliere il ripiego della 124 ora che la migrazione è applicata?",
+    "R31-021: quali prodotti sono «alimenti confezionati» (la categoria «alimentari» comprende lo sfuso) e il peso netto diventa un campo numerico con unità, obbligatorio se non sfuso, da cui calcolare il prezzo al chilo/litro?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "nota": "lotto 1 e lotto 2 opus, lotto 3 sonnet, revisore soldi opus (R31-022, R31-014), revisore minori sonnet (R31-024, 025, 017, 007, 009). Lotto 4 non aperto: la regista l'ha fermato a 26,61 $. Le patch intere le giudica il collaudo sul ramo unito (decisione della regista). Costo letto con get_session senza id prima della consegna: 33,68 $.",
+    "subagenti": 5
+  },
+  "costo_usd": 33.68
+}
