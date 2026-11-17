@@ -41,7 +41,16 @@ import { queryKeys } from '@/lib/queries/keys';
  * lo scrive la scrittura che segue. La rilettura dell'elenco aspetta che la fila sia vuota, perché
  * una lettura a metà fila riporterebbe a schermo uno stato di passaggio.
  *
- * 🟢 Puro: nessuna rete, nessun orologio.
+ * ── 17/11/2026 (R03-012) — Due rifiuti in fila, e la richiesta che non risponde ─────────────
+ * Due tocchi, tutte e due le scritture rifiutate: il primo rifiuto non ribaltava (non era l'ultimo
+ * tocco), il secondo ribaltava il cuore del secondo tocco, cioè lo riempiva. Cuore pieno e nessun
+ * preferito. Adesso la fila ricorda l'ultimo stato CONFERMATO dal server (all'inizio quello della
+ * lista in mano, poi quello di ogni scrittura riuscita), e un rifiuto dell'ultimo tocco rimette il
+ * cuore lì, invece di ribaltare quello che si vede. E una scrittura che non risponde non tiene più
+ * ferma la fila per sempre: dopo `TEMPO_MASSIMO_SCRITTURA_MS` vale come rifiutata, la fila va avanti
+ * e il cuore torna allo stato confermato. La rilettura a fila vuota riporta comunque il database.
+ *
+ * 🟢 Niente rete: l'unico orologio è il tempo massimo di una scrittura.
  */
 
 /** La chiave della lista dei preferiti in cache: una sola, la stessa che legge chi disegna i cuori. */
@@ -68,15 +77,28 @@ export function versoDaScrivere(mostrato: ReadonlySet<string>, idProdotto: strin
   return mostrato.has(idProdotto) ? 'aggiungi' : 'togli';
 }
 
+/** Oltre questo tempo una scrittura senza risposta vale come rifiutata: la fila non resta ferma. */
+const TEMPO_MASSIMO_SCRITTURA_MS = 10_000;
+
+/** La scrittura, o un rifiuto se il server non risponde entro il tempo massimo. */
+function entroIlTempoMassimo(scrittura: Promise<void>): Promise<void> {
+  let sveglia: ReturnType<typeof setTimeout> | undefined;
+  const scaduta = new Promise<never>((_, rifiuta) => {
+    sveglia = setTimeout(() => rifiuta(new Error('PREFERITO_SENZA_RISPOSTA')), TEMPO_MASSIMO_SCRITTURA_MS);
+  });
+  return Promise.race([scrittura, scaduta]).finally(() => clearTimeout(sveglia));
+}
+
 /**
  * Le file delle scritture, una per prodotto. Stanno fuori da `opzioniDelTocco` perché l'aggancio le
  * ricrea a ogni disegno, e ogni scheda ha il suo aggancio: la fila deve essere una sola per tutta
- * la cache. `ultimo` è il numero dell'ultimo tocco sul prodotto, `coda` la fine della fila.
+ * la cache. `ultimo` è il numero dell'ultimo tocco sul prodotto, `coda` la fine della fila,
+ * `confermato` l'ultimo stato del prodotto che il server ha confermato (pieno = fra i preferiti).
  */
-type Fila = { coda: Promise<void>; ultimo: number };
+type Fila = { coda: Promise<void>; ultimo: number; confermato: boolean };
 const FILE_DEI_TOCCHI = new WeakMap<QueryClient, Map<string, Fila>>();
 
-function filaDelProdotto(qc: QueryClient, idProdotto: string): Fila {
+function filaDelProdotto(qc: QueryClient, idProdotto: string, confermato: boolean): Fila {
   let file = FILE_DEI_TOCCHI.get(qc);
   if (!file) {
     file = new Map();
@@ -84,7 +106,7 @@ function filaDelProdotto(qc: QueryClient, idProdotto: string): Fila {
   }
   let fila = file.get(idProdotto);
   if (!fila) {
-    fila = { coda: Promise.resolve(), ultimo: 0 };
+    fila = { coda: Promise.resolve(), ultimo: 0, confermato };
     file.set(idProdotto, fila);
   }
   return fila;
@@ -117,9 +139,13 @@ export function opzioniDelTocco(
       const verso = versoDaScrivere(dopo, idProdotto);
 
       // Il posto in fila si prende nello stesso blocco: l'ordine delle scritture è quello dei tocchi.
-      const fila = filaDelProdotto(qc, idProdotto);
+      const fila = filaDelProdotto(qc, idProdotto, prima.has(idProdotto));
       const numero = ++fila.ultimo;
-      const scrittura = fila.coda.then(() => scrivi(idProdotto, verso));
+      const scrittura = fila.coda
+        .then(() => entroIlTempoMassimo(scrivi(idProdotto, verso)))
+        .then(() => {
+          fila.confermato = verso === 'aggiungi';
+        });
       fila.coda = scrittura.then(
         () => undefined,
         () => undefined,
@@ -130,13 +156,15 @@ export function opzioniDelTocco(
         //    scrittura del tocco prima, sullo stesso prodotto, ha avuto la sua risposta.
         await scrittura;
       } catch (errore) {
-        // ③ Il server ha rifiutato: torna indietro QUESTO cuore, non tutta la lista. Rimettere la
-        //    fotografia di prima cancellerebbe i cuori toccati nel frattempo su altre schede.
-        //    Solo se è l'ultimo tocco: se ne è arrivato un altro, il cuore a schermo è già quello
-        //    scelto dopo, e la sua scrittura è in fila.
+        // ③ Il server ha rifiutato (o non ha risposto in tempo): QUESTO cuore torna all'ultimo stato
+        //    confermato, non tutta la lista. Rimettere la fotografia di prima cancellerebbe i cuori
+        //    toccati nel frattempo su altre schede. Solo se è l'ultimo tocco: se ne è arrivato un
+        //    altro, il cuore a schermo è già quello scelto dopo, e la sua scrittura è in fila.
         if (numero === fila.ultimo) {
           const corrente = qc.getQueryData<Set<string>>(CHIAVE_PREFERITI) ?? dopo;
-          qc.setQueryData(CHIAVE_PREFERITI, insiemeDopoIlTocco(corrente, idProdotto));
+          if (corrente.has(idProdotto) !== fila.confermato) {
+            qc.setQueryData(CHIAVE_PREFERITI, insiemeDopoIlTocco(corrente, idProdotto));
+          }
         }
         throw errore;
       } finally {
