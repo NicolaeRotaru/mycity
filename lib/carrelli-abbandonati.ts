@@ -93,7 +93,25 @@ export type RigaDiRecupero = {
   recovered?: boolean | null;
   recovered_at?: string | null;
   recovery_email_sent_at?: string | null;
+  /** L'ultima volta che il carrello è cambiato: serve a riconoscere il segno «chiuso senza email». */
+  last_activity?: string | null;
 };
+
+/**
+ * 17/11/2026 (R30-003) — «SEGNATO» NON VUOL DIRE «EMAIL PARTITA».
+ *
+ * Il giro dei carrelli (app/api/cron/abandoned-carts) mette il segno anche sui carrelli che chiude
+ * SENZA scrivere (chi non ha dato il consenso), perché non tornino in lista a ogni giro. Prima quel
+ * segno era l'ora del giro, identico a un invio vero, e il conto li prendeva per promemoria
+ * spediti. Ora il carrello chiuso senza email porta come segno la sua ultima attività: un'email
+ * vera parte almeno quattro ore dopo, quindi i due istanti uguali vogliono dire «nessuna email».
+ */
+export function chiusoSenzaEmail(riga: Pick<RigaDiRecupero, 'recovery_email_sent_at' | 'last_activity'>): boolean {
+  if (!riga.recovery_email_sent_at || !riga.last_activity) return false;
+  const segno = Date.parse(riga.recovery_email_sent_at);
+  const ultima = Date.parse(riga.last_activity);
+  return Number.isFinite(segno) && segno === ultima;
+}
 
 export type RendimentoRecupero = {
   /** A quanti è partita l'email «hai dimenticato qualcosa». */
@@ -121,7 +139,7 @@ export function contaRendimentoRecupero(righe: RigaDiRecupero[]): RendimentoRecu
     tornatiSenzaData: 0,
   };
   for (const riga of righe) {
-    const inviata = riga.recovery_email_sent_at ?? null;
+    const inviata = chiusoSenzaEmail(riga) ? null : riga.recovery_email_sent_at ?? null;
     if (inviata) conto.emailInviate++;
     if (!riga.recovered) continue;
     conto.tornatiInTutto++;
@@ -142,11 +160,11 @@ export function contaRendimentoRecupero(righe: RigaDiRecupero[]): RendimentoRecu
   return conto;
 }
 
-/** Lo stesso conto, leggendo le righe vere. Solo le tre colonne che servono. */
+/** Lo stesso conto, leggendo le righe vere. Solo le colonne che servono (non la spesa). */
 export async function rendimentoRecuperoCarrelli(admin: SupabaseClient): Promise<RendimentoRecupero> {
   const { data, error } = await admin
     .from('abandoned_carts')
-    .select('recovered, recovered_at, recovery_email_sent_at');
+    .select('recovered, recovered_at, recovery_email_sent_at, last_activity');
   if (error) {
     logger.warn('[carrelli] rendimento del recupero non letto', { message: error.message });
     return contaRendimentoRecupero([]);
