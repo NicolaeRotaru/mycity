@@ -1,8 +1,8 @@
 {
   "sessione": "R31",
-  "aggiornato": "2026-11-17 10:20",
+  "aggiornato": "2026-11-17 11:05",
   "finita": false,
-  "testa": "5f893345",
+  "testa": "acfc8a94",
   "verifica": {
     "comando": "npm run verify",
     "esito": "",
@@ -210,14 +210,144 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La campanella al negozio aggiunge « — Consegna: <fascia>» (anche la veloce) o « — Ritiro in negozio», coi contanti e con la carta. ordini.ts resta a 598 righe. Le 143 prove che importano i file restano verdi; tsc ed eslint puliti. Accanto a «Domani» non c'è la data che l'email aggiunge (conLaData manca in molte prove finte dei template)."
+    },
+    {
+      "id": "R31-012",
+      "chiave": "pagamenti-stripe|con la carta accesa si può pagare anche un negozio che non ha finito la verifica stripe",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-carta-solo-negozi-verificati.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-carta-solo-negozi-verificati.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": null,
+        "comando": "a mano: con la patch applicata, app/api/stripe/checkout/route.ts rimessa com'è alla testa → la prova nuova è rossa (4 casi su 6, 200 invece di 409)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta della carta legge stripe_payouts_enabled dalla vista seller_public_profiles (e dal profilo per i negozi senza insegna): se un negozio del carrello non ce l'ha a true risponde 409 «<negozio> per ora accetta solo il pagamento in contanti alla consegna» prima della pulizia, senza aprire la sessione Stripe né il pagamento in attesa. Rende rosse 16 prove comuni (negozi finti senza stripe_payouts_enabled). La prova nuova porta la fascia e il mock dei termini, così regge anche dopo le patch 003 e 016.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts, 16 prove comuni (al-lancio-carta-…, api-stripe-checkout, con-la-carta-la-pagina-di-ieri…, con-la-carta-lo-stesso-carrello…, il-codice-sconto-a-uso-unico…, il-telefono-corretto…, la-carta-rifiuta-l-indirizzo-fuori-zona…, la-carta-rifiuta-la-fascia…, la-carta-si-ferma-se-la-lettura…, la-cassa-non-fa-la-fila…, le-rotte-fanno-pagare-la-veloce…, minori-s01-cassa-carta, minori-s01-negozio-senza-insegna, minori-s01-veloce-carta, minori-s01-zona-carta, riparazione-r26-la-pulizia-dopo-i-rifiuti: stripe_payouts_enabled: true ai negozi finti), tests/unit/riparazione-r31-carta-solo-negozi-verificati.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-012-intera.patch dal commit b7c0699a del ramo (git show b7c0699a:.riparazione/patch-R31/R31-012-intera.patch | git apply), dopo le patch 001, 003, 016, 018. Prova comune: la tocca solo la regista. Le sette patch in fila (001, 003, 016, 018, 012, 014, 023) sopra acfc8a94: 160 file di prova che le riguardano, 1114 casi verdi. Da sola sulla testa acfc8a94: 17 file e 129 casi verdi; tsc e lint puliti."
+        }
+      ]
+    },
+    {
+      "id": "R31-014",
+      "chiave": "pagamenti-stripe|se la banca respinge un rimborso parziale su un ordine col bonifico già partito, al negozio resta tolta la sua quota",
+      "esito": "parziale",
+      "commit": "349268d0",
+      "file_toccati": [
+        "lib/stripe/rimborso-respinto.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-rimborso-respinto-quota-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-rimborso-respinto-quota-a-mano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 349268d0^ --file lib/stripe/rimborso-respinto.ts --prove tests/unit/riparazione-r31-rimborso-respinto-quota-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Col bonifico già partito (TRANSFERRED), il piano del rimborso respinto calcola per ogni ordine la quota da ridare a mano, min(quota del negozio, seller_payout_reversed_cents), e prepara la frase per l'avviso agli amministratori («ordine X: 4,05 €», col rimando agli storni su Stripe). Niente riaccredito automatico; lo storno registrato non si tocca.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/stripe/webhook/rimborso-respinto-dalla-banca.ts (qui vive handleRefundUpdated; il file non è in nessuna scheda dell'onda) + tests/unit/riparazione-r31-rimborso-respinto-avviso-quota.test.ts (nuova)",
+          "modifica": "Nel messaggio di avvisaGliAmministratori: `${fraseDelBonifico} Se il rimborso era pieno` diventa `${fraseDelBonifico}${piano.fraseDaRidareAMano ? ` ${piano.fraseDaRidareAMano}` : ''} Se il rimborso era pieno`. Applicare .riparazione/patch-R31/R31-014-intera.patch dal commit b7c0699a del ramo (git show b7c0699a:.riparazione/patch-R31/R31-014-intera.patch | git apply), dopo le patch 001, 003, 016, 018. Prova comune: la tocca solo la regista. Le sette patch in fila (001, 003, 016, 018, 012, 014, 023) sopra acfc8a94: 160 file di prova che le riguardano, 1114 casi verdi."
+        }
+      ],
+      "cosa_resta": "La riga nell'avviso (serve_file_altrui sopra) e il riaccredito automatico al negozio: domanda per Nicola (nell'onda 4 un revisore l'ha bocciato sul carrello di due negozi)."
+    },
+    {
+      "id": "R31-004",
+      "chiave": "architettura|il codice pgrst204 su una colonna della 124 ora fa scattare il ripiego per tutti: con la cache dello schema di postgrest vecchia, la scrittura salta gross_total_cents anche a migrazione applicata",
+      "esito": "scelta_di_nicola",
+      "domanda": "Con la cache di PostgREST vecchia, la scrittura del rimborso respinto e della contestazione parziale vinta deve andare senza gross_total_cents (oggi), fallire e lasciar riprovare Stripe, o si toglie il ripiego della 124 ora che la migrazione è applicata?",
+      "nota": "La modifica scritta nella scheda usa memoriaDiPostgrestVecchia, che alla testa non esiste più in lib/db/migrazione-124.ts: la sessione che l'aveva aggiunta è stata tolta dopo un collaudo dell'onda 2, perché con la memoria vecchia la contestazione parziale vinta rifaceva il bonifico al negozio a ogni ripetizione di Stripe. Rimetterla vorrebbe dire rimettere una correzione bocciata. I due ripieghi scritti a mano sono in file non miei: lib/stripe/webhook/rimborso-respinto-dalla-banca.ts:199 e lib/stripe/webhook/contestazione-parziale-vinta.ts:44."
+    },
+    {
+      "id": "R31-023",
+      "chiave": "qa-flussi|quando un ordine viene annullato il negozio non riceve nessuna email, e se lo annulla il sito perché nessuno l'ha accettato non riceve nemmeno la campanella",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts (nella patch)"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": null,
+        "comando": "a mano: con la patch applicata, i 5 file di codice rimessi alla testa → 3 casi rossi su 5"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La campanella al negozio sugli scaduti c'era già. Nuovo modello ordineAnnullatoAlNegozioTemplate e avvisaIlNegozioDellAnnullo in annulla.ts (email transazionale al negozio, mai bloccante), chiamato dopo l'annullo riuscito nelle tre strade: giro degli scaduti, annullo del cliente, annullo dell'amministrazione. Rende rosse 4 prove comuni che contano le email.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/email/templates.ts, lib/ordini/annulla.ts, app/api/cron/expire-stale-orders/route.ts, app/api/orders/[id]/cancel/route.ts, app/api/admin/orders/[id]/cancel/route.ts, 4 prove comuni (chi-paga-alla-consegna-sa-che-l-ordine-e-annullato, minori-s01-giro-notturno, minori-s02-annullo-del-cliente, minori-s03-ordini-scaduti: le email si contano per destinatario, quella al cliente resta una, più quella al negozio), tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts (nuova)",
+          "modifica": "Applicare .riparazione/patch-R31/R31-023-intera.patch dal commit b7c0699a del ramo (git show b7c0699a:.riparazione/patch-R31/R31-023-intera.patch | git apply), dopo le patch 001, 003, 016, 018. Prova comune: la tocca solo la regista. Le sette patch in fila (001, 003, 016, 018, 012, 014, 023) sopra acfc8a94: 160 file di prova che le riguardano, 1114 casi verdi. Fatta sopra acfc8a94 (R31-022)."
+        }
+      ]
+    },
+    {
+      "id": "R31-022",
+      "chiave": "qa-flussi|«annulla» dell'amministratore su un ordine in viaggio o già consegnato non avvisa fattorino e negozio e rimette a scaffale merce che non c'è più",
+      "esito": "riparato",
+      "commit": "acfc8a94",
+      "file_toccati": [
+        "app/api/admin/orders/[id]/cancel/route.ts",
+        "lib/ordini/annulla.ts",
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r31-annullo-merce-in-viaggio.test.ts",
+        "tests/unit/riparazione-r31-rimborso-merce-in-viaggio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r31-annullo-merce-in-viaggio.test.ts tests/unit/riparazione-r31-rimborso-merce-in-viaggio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base acfc8a94^ --file lib/ordini/annulla.ts,lib/stripe/payout.ts,app/api/admin/orders/[id]/cancel/route.ts --prove tests/unit/riparazione-r31-annullo-merce-in-viaggio.test.ts,tests/unit/riparazione-r31-rimborso-merce-in-viaggio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con l'ordine PICKED_UP, OUT_FOR_DELIVERY o DELIVERED la rotta dell'amministrazione passa merceNonTorna: coi contanti annullaERimborsa salta restore_stock_for_order, con la carta refundOrder salta rimettiLaMerceAScaffale. Il «cliente assente» non cambia (lì la merce torna col fattorino). Le campanelle a negozio e fattorino c'erano già: la prova le controlla."
+    },
+    {
+      "id": "R31-006",
+      "chiave": "dati-analytics|gli ordini annullati o rimborsati restano venduti per sempre in google analytics e posthog",
+      "esito": "non_fatto",
+      "nota": "Non è una modifica piccola. L'acquisto lato server parte da contaAcquisto in lib/analytics/server.ts (file non mio) verso GA4 e PostHog: servirebbe un contaAnnullamento lì, col consenso, l'evento refund di GA4 sul transaction_id (serve il client_id GA, che oggi non è salvato sull'ordine) e order_refunded/canceled su PostHog, chiamato da annullaERimborsa, dal giro degli scaduti, dal rifiuto, da rimborsi.ts, da refundOrder parziale e dal webhook. trackOrderCanceled esiste solo nel browser (orders/[id]) e manda a PostHog senza valore."
     }
   ],
-  "nuovi_difetti_visti": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Se il webhook del rimborso respinto muore fra la scrittura e l'avviso, al secondo passaggio l'avviso agli amministratori parte senza la cifra da ridare al negozio",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "lib/stripe/webhook/rimborso-respinto-dalla-banca.ts",
+      "descrizione": "Il secondo passaggio prende la strada giaFatti, che non ricalcola fraseDaRidareAMano. Il file non è in nessuna scheda dell'onda: va assegnato."
+    }
+  ],
   "domande_per_nicola": [
-    "R31-024: anche negli avvisi agli amministratori va tolto il ⚠️ (e ℹ️ ✓ ✕ 💶 📭), o per loro resta un segnale utile?"
+    "R31-024: anche negli avvisi agli amministratori va tolto il ⚠️ (e ℹ️ ✓ ✕ 💶 📭), o per loro resta un segnale utile?",
+    "R31-014: rimborso parziale respinto dalla banca col bonifico già partito: va riaccreditato al negozio in automatico (un bonifico per ordine, con chiave per ordine) o resta l'avviso agli amministratori con la cifra da ridare a mano?",
+    "R31-022: il pannello Ordini mostra «Annulla» anche sugli ordini in viaggio e consegnati: va vietato o tenuto? Se resta, chi rimette a scaffale la merce che il fattorino riporta?",
+    "R31-004: con la cache di PostgREST vecchia, meglio scrivere senza gross_total_cents (oggi), far fallire e lasciar riprovare Stripe, o togliere il ripiego della 124 ora che la migrazione è applicata?"
   ],
   "conto": {
-    "agenti": 1,
-    "nota": "lotto 1: 1 subagente (opus)"
+    "agenti": 2,
+    "nota": "lotto 1 e lotto 2: un subagente opus ciascuno"
   }
 }
