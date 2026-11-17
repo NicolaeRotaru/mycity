@@ -28,6 +28,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import {
+  avvisoDopoIlPatch,
   chiaveCampo,
   esitoDelPiano,
   patchAiPerIlForm,
@@ -662,13 +663,18 @@ export default function ProductForm({
       if (!res.ok) { toast.error(apiErrorMessage(json, 'Il codice EAN è salvato, ma la ricerca online non è riuscita.'), { id: tid }); return; }
       if (json.found && json.patch) {
         const esito = applyPatch(json.patch as ProductEditPatch);
-        dilloDopoIlPatch(
-          esito,
-          { applicato: 'Compilato dal codice EAN — controlla e salva', niente: 'Codice EAN salvato' },
-          { id: tid },
-        );
+        const testi = { applicato: 'Compilato dal codice EAN — controlla e salva', niente: 'Codice EAN salvato' };
+        // 17/11/2026 — Quando non cambia niente `dilloDopoIlPatch` dice la frase neutra con
+        // `toast(msg, { id })`, e in sonner 1.7.4 un caricamento ripreso così resta «loading»,
+        // senza X e senza scadenza (vedi sotto): quella frase la diciamo qui, come informazione.
+        const avviso = avvisoDopoIlPatch(esito, testi);
+        if (avviso.tono === 'neutro') toast.info(avviso.testo, { id: tid });
+        else dilloDopoIlPatch(esito, testi, { id: tid });
       } else {
-        toast('Codice EAN salvato. Non ho trovato il prodotto online: compila a mano.', { id: tid });
+        // 17/11/2026 — `toast.info`, non `toast(msg, { id })`: sonner 1.7.4 aggiorna l'avviso
+        // dello stesso id tenendone il tipo, e un «loading» non scade mai e non ha la X. Il negoziante
+        // restava con «Codice EAN salvato…» fisso sullo schermo, accanto a una rotella che girava.
+        toast.info('Codice EAN salvato. Non ho trovato il prodotto online: compila a mano.', { id: tid });
       }
     } catch {
       toast.dismiss(tid);
@@ -706,7 +712,9 @@ export default function ProductForm({
         applyAxes(next);
         toast.success(`Proposte ${json.axes.length} varianti — controlla le combinazioni e lo stock`, { id: tid });
       } else {
-        toast('Nessuna variante sensata per questo prodotto.', { id: tid });
+        // 17/11/2026 — `toast.info` e non `toast(msg, { id })`: il caricamento deve diventare un
+        // avviso che scade e si chiude con la X (sopra, il codice EAN).
+        toast.info('Nessuna variante sensata per questo prodotto.', { id: tid });
       }
     } catch (err) {
       toast.dismiss(tid);
