@@ -74,13 +74,30 @@ export function sellerMayBrowseMarketplace(hasShoppingMode: boolean): boolean {
   return hasShoppingMode;
 }
 
+/**
+ * 17/11/2026 (R30-024) — UN CLIENTE SOSPESO NON COMPRA.
+ *
+ * Un cliente che abusa del sito (ordini finti in contanti, messaggi molesti) si
+ * poteva solo cancellare. Ora l'amministratore lo sospende dalla stessa rotta di
+ * negozi e fattorini (app/api/admin/users/[id]/moderate): il segno è lo stesso,
+ * `approval_status = 'suspended'`. Per un cliente `is_approved` non dice niente:
+ * nasce già falso.
+ */
+export function clienteSospeso(role: ProfileRole | string | undefined, approvalStatus?: string | null): boolean {
+  return role === 'buyer' && approvalStatus === 'suspended';
+}
+
+export const MOTIVO_CLIENTE_SOSPESO =
+  "Il tuo account è sospeso: non puoi fare ordini né scrivere ai negozi finché l'assistenza non lo riattiva.";
+
 /** Messaggio API se il ruolo non può acquistare; null = ok. */
-export function purchaseBlockReason(role: ProfileRole | string | undefined): string | null {
+export function purchaseBlockReason(role: ProfileRole | string | undefined, approvalStatus?: string | null): string | null {
   if (role === 'admin') {
     return 'Gli account di assistenza/admin non possono effettuare acquisti sul marketplace.';
   }
   if (!canRolePurchase(role)) {
     return 'Il tuo account non può effettuare acquisti.';
   }
+  if (clienteSospeso(role, approvalStatus)) return MOTIVO_CLIENTE_SOSPESO;
   return null;
 }

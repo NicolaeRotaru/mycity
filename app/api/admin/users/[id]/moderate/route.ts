@@ -54,6 +54,11 @@ const TESTI_PER_RUOLO = {
     reactivate: { titolo: '✅ Negozio riattivato',  corpo: 'Il tuo negozio è di nuovo operativo. Puoi tornare a vendere su MyCity.', link: '/seller/dashboard' },
     suspend:    { titolo: '⏸️ Negozio sospeso',     corpo: 'Il tuo negozio è stato temporaneamente sospeso da un amministratore. Contatta il supporto per chiarimenti.', link: '/contact' },
   },
+  // 17/11/2026 (R30-024) — Il cliente si sospende e si riattiva, non si approva né si rifiuta.
+  buyer: {
+    reactivate: { titolo: '✅ Account riattivato',  corpo: 'Il tuo account è di nuovo attivo: puoi tornare a fare ordini e a scrivere ai negozi.', link: '/' },
+    suspend:    { titolo: '⏸️ Account sospeso',     corpo: 'Il tuo account è stato temporaneamente sospeso da un amministratore: finché non viene riattivato non puoi fare ordini né scrivere ai negozi. Contatta il supporto per chiarimenti.', link: '/contact' },
+  },
 } as const;
 
 function buildModeration(action: Action, reason: string | undefined, adminId: string, ruolo: string): {
@@ -62,8 +67,9 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
   audit: AuditAction;
 } {
   const now = new Date().toISOString();
+  // R30-024 — Per un cliente arrivano solo «sospendi» e «riattiva» (l'handler ferma gli altri due).
   const testi = ruolo === 'rider' ? TESTI_PER_RUOLO.rider : TESTI_PER_RUOLO.seller;
-  const scheda = testi[action];
+  const scheda = ruolo === 'buyer' && (action === 'suspend' || action === 'reactivate') ? TESTI_PER_RUOLO.buyer[action] : testi[action];
   const note = {
     title: scheda.titolo,
     // 5/11/2026 (S05) — Anche chi è sospeso riceve il motivo (prima solo il rifiuto lo portava).
@@ -91,6 +97,11 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
         audit: 'user.reject',
       };
     case 'reactivate':
+      // R30-024 — Il cliente torna allo stato con cui nasce ('pending', is_approved falso):
+      // un cliente non e' mai stato «approvato», e la sua riga non deve dirlo.
+      if (ruolo === 'buyer') {
+        return { patch: { is_approved: false, approval_status: 'pending', rejection_reason: null }, note, audit: 'user.reactivate' };
+      }
       return {
         patch: { is_approved: true, approval_status: 'approved', rejection_reason: null, approved_at: now, approved_by: adminId },
         note,
@@ -204,9 +215,22 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (target.id === user.id || params.id === user.id) {
     return ApiErrors.forbidden('Non puoi moderare il tuo stesso account.');
   }
-  if (target.role !== 'seller' && target.role !== 'rider') {
+  /**
+   * 17/11/2026 (R30-024) — E UN CLIENTE SI SOSPENDE.
+   *
+   * Un cliente che abusa (ordini finti in contanti, messaggi molesti) si poteva solo
+   * cancellare, che non si torna indietro. Ora si sospende e si riattiva da qui, con lo
+   * stesso segno di negozi e fattorini (`approval_status = 'suspended'`): il portiere delle
+   * rotte (lib/api/middleware.ts) gli chiude la cassa e la chat finché non torna attivo.
+   * Approvare o rifiutare un cliente resta senza senso: si ferma come prima.
+   */
+  const cliente = target.role === 'buyer';
+  if (cliente && body.action !== 'suspend' && body.action !== 'reactivate') {
+    return ApiErrors.invalidRequest('Un cliente non si approva né si rifiuta: da qui si sospende o si riattiva.');
+  }
+  if (!cliente && target.role !== 'seller' && target.role !== 'rider') {
     return ApiErrors.invalidRequest(
-      'Da qui si moderano solo negozi e fattorini: per questo ruolo l\'approvazione non ha effetto.',
+      'Da qui si moderano solo negozi, fattorini e clienti: per questo ruolo l\'approvazione non ha effetto.',
     );
   }
 
@@ -225,7 +249,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * `risultaMinorenne` dice esattamente questo.
    */
   const approva = body.action === 'approve' || body.action === 'reactivate';
-  if (approva && risultaMinorenne(target.legal_birth_date)) {
+  // R30-024 — Non per il cliente: riattivarlo lo rimette com'era prima della sospensione.
+  if (approva && !cliente && risultaMinorenne(target.legal_birth_date)) {
     const anni = anniCompiuti(String(target.legal_birth_date), giornoPiacenza());
     return ApiErrors.forbidden(
       `Non si approva: la data di nascita dice ${anni} anni. Servono ${ETA_MINIMA_RIDER} anni compiuti (condizioni d'uso, punto 3). Se la data è sbagliata, falla correggere prima di approvare.`,
@@ -256,7 +281,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (body.action === 'suspend' && target.approval_status === 'suspended') {
     return ApiErrors.conflict('Questo profilo è già sospeso.');
   }
-  if (body.action === 'suspend' && target.approval_status !== 'approved') {
+  // R30-024 — Un cliente non e' mai «approvato»: si sospende da come nasce ('pending', o vuoto).
+  if (body.action === 'suspend' && !cliente && target.approval_status !== 'approved') {
     return ApiErrors.invalidRequest(
       'Si sospende solo un profilo approvato. Questo non lo è: per chi è in attesa o respinto usa «Approva» o «Rifiuta».',
     );
