@@ -1,13 +1,13 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 21:45",
-  "finita": false,
+  "aggiornato": "2026-11-17 22:15",
+  "finita": true,
   "testa": "b9a114b3b53c9bec7f5c366f0edc92e77c1ea274",
   "verifica": {
-    "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "974de28e3179794c6d77f47be87cf74c6ced76e4",
+    "nota": "typecheck + lint + test: 1699 file di prova passati, 1 saltato preesistente (10838 test). 974de28e viene dopo l'ultimo commit di codice b9a114b3 e tocca solo il referto."
   },
   "voci": [
     {
@@ -35,7 +35,7 @@
       "insieme_a": [
         "R02-005"
       ],
-      "verificato_da": ""
+      "verificato_da": "smentitore A (subagente diverso dal riparatore): prova e rimessa verdi (uscita 0); prova esplorativa sulla scheda vera con orologio finto: S→M→S entro 1 s dà S=2 e M=1, il tocco ripetuto resta frenato; la barra in fondo usa lo stesso gestore (page.tsx:1580); prodotto senza varianti a posto; 39 file di prove vicine verdi. Regge."
     },
     {
       "id": "R02-005",
@@ -62,7 +62,7 @@
       "insieme_a": [
         "R02-001"
       ],
-      "verificato_da": ""
+      "verificato_da": "smentitore A: prova e rimessa verdi; letto create() di sonner 1.7.4: con un id già presente aggiorna l'avviso invece di impilarlo. Regge."
     },
     {
       "id": "R02-006",
@@ -86,7 +86,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Stesso schema della pagina del negozio: onSubmit restituisce create.mutateAsync(...).catch(() => undefined), così la guardia di ProductForm resta chiusa fino alla fine dell'inserimento. La prova monta la pagina vera dell'amministrazione col modulo vero: un secondo invio mentre la richiesta è in volo dà una sola POST /api/admin/products (sulla base erano 2).",
-      "verificato_da": ""
+      "verificato_da": "smentitore A: prova e rimessa verdi; prova esplorativa con la rotta che risponde 400: errore mostrato, nessun redirect, secondo invio possibile dopo l'errore, nessun rifiuto non gestito; la guardia di ProductForm (891-899) aspetta la promessa. Regge."
     },
     {
       "id": "R02-008",
@@ -110,7 +110,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "ParsedRow.stock diventa number | null: una quantità scritta male resta null e la cella dell'anteprima mostra «—» accanto all'errore; uno 0 scritto nel file si vede 0. Le righe valide vanno al server come prima (stock ?? 0, mai null per una riga valida).",
-      "verificato_da": ""
+      "verificato_da": "smentitore A: prova e rimessa verdi; controllati i 4 usi di stock nel file (135, 151, 186, 309), 11 prove vicine verdi, tipi dei file toccati senza errori. Regge."
     },
     {
       "id": "R02-004",
@@ -134,7 +134,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Se il controllo anti-robot fallisce senza gettone e manca NEXT_PUBLIC_TURNSTILE_SITE_KEY, la rotta risponde 503 con «…Scrivici a info@…» (indirizzoContatto('info') di lib/contatti-pubblici.ts, lo stesso della pagina Contatti), anche in details.recapito. Il robot vero (chiave pubblica presente e gettone assente o falso) dà ancora 400 «Verifica anti-bot fallita. Riprova.».",
-      "verificato_da": ""
+      "verificato_da": "smentitore A: prova e rimessa verdi; il 503 esce prima di ogni scrittura come il 400, con la chiave pubblica il robot ha ancora 400, in sviluppo senza chiave segreta nulla cambia (lib/captcha.ts:33-40); la pagina contatti disegna il recapito (app/contact/page.tsx:82-83, 208-213); 7 prove vicine verdi. Regge."
     },
     {
       "id": "R02-013",
@@ -158,7 +158,7 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La barra cadeva nell'effetto della pillola della posizione, che leggeva localStorage al montaggio senza try: lo ha chiuso il commit fc5cea5d, già sulla base. Aggiunta solo una prova di guardia: la Navbar montata coi figli veri e localStorage che lancia (ogni metodo, o già il getter) si disegna; con la pillola di fc5cea5d^ la prova cade.",
       "prova": "components/LocationPill.tsx:85-89 legge localStorage dentro try/catch (commit fc5cea5d, antenato della base); components/Navbar.tsx:59-78 ha ogni accesso a window.localStorage già in try/catch. tests/unit/riparazione-r02-barra-senza-memoria.test.ts è verde sulla base e rosso con components/LocationPill.tsx di fc5cea5d^ (prova-rimessa uscita 0).",
-      "verificato_da": ""
+      "verificato_da": "R02 (capo squadra): fc5cea5d è antenato della base, components/LocationPill.tsx:85-89 legge localStorage dentro try/catch, la prova della barra rilanciata verde (2 test)"
     },
     {
       "id": "R02-010",
@@ -181,12 +181,12 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il taglio su idsColVoto non sta più dentro base(): fino a 100 id la domanda resta identica (una, con range/limit), oltre ogni blocco di leggiInBlocchi (lib/supabase/blocchi.ts, DIMENSIONE_BLOCCO) chiede le prime righe fino a fine finestra, le righe si riuniscono, si riordinano come il database (prezzo o data, poi id) e si taglia la finestra; stessa cosa sul ripiego per nome del ramo pertinenza e nel conteggio (somma dei conti per blocco, id deduplicati). Prova con il finto PostgREST che dà 414: con 500 id nessun .in supera 100 id e le righe coincidono con una lettura sola (3 ordinamenti, 2 finestre).",
-      "verificato_da": ""
+      "verificato_da": "smentitore B (subagente diverso dal riparatore): prova e rimessa verdi; l'ordine rifatto in JS coincide col database per ogni ordinamento (price numeric NOT NULL, parità per id decrescente come base()), finestra giusta sulle pagine dopo la prima, conteggio senza doppioni; 200.000 coppie di date nel formato PostgREST ordinate come stringhe senza discordanze; 25 file di prove della griglia verdi. Regge (margine teorico: products.created_at è nullable)."
     },
     {
       "id": "R02-011",
       "chiave": "qa-flussi|nella pagina novità il numero in alto conta anche prodotti che la griglia non mostra",
-      "esito": "riparato",
+      "esito": "non_fatto",
       "commit": "779973551c34a8113ae6c73ef66ccd7e629a4dfd",
       "file_toccati": [
         "lib/queries/griglia-prodotti.ts"
@@ -202,9 +202,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 779973551c34a8113ae6c73ef66ccd7e629a4dfd^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r02-novita-conteggio-negozi.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "L'unica differenza di filtri fra griglia e conteggio (con i soli soloNovita/sort che la pagina Novità passa) era il filtro sui negozi in vetrina fatto dalla lettura in fondo: ora il conteggio aggancia il prodotto con 'negozio:seller_public_profiles!inner(id)' (lo schema già usato dalle storie in home), e se PostgREST risponde PGRST200/PGRST201 conta come prima con un logger.warn. Prova: su dati finti con un negozio fuori vetrina il numero è uguale alle righe della griglia (10, prima 13), più il ripiego. Limite: l'aggancio prodotti→vista non l'ho potuto provare sul servizio dati vero (vietato); se non viene riconosciuto vale il ripiego, cioè il numero di prima.",
-      "verificato_da": ""
+      "verificato_da": "smentitore B: prova e rimessa verdi ma col PostgREST finto; lette le migrazioni su chiavi esterne, chiavi composte e vista 126: aggancio ambiguo (PGRST201), il ripiego scatta sempre. Non regge.",
+      "nota": "La correzione nel commit 77997355 non regge (smentitore B, dallo schema): l'aggancio senza indicazione 'negozio:seller_public_profiles!inner(id)' (lib/queries/griglia-prodotti.ts:356) è ambiguo per PostgREST, perché oltre a products_seller_id_fkey c'è una molti-a-molti prodotti↔profili attraverso recently_viewed (chiave (user_id, product_id), migrations/027_growth_engagement_foundations.sql:205-210). PostgREST risponde PGRST201, il ripiego scatta sempre e il numero resta quello di prima, con una domanda fallita e un logger.warn in più a ogni conteggio. La prova passa solo perché il PostgREST finto accetta l'aggancio. Alla regista: togliere 77997355 all'integrazione (con la sua prova tests/unit/riparazione-r02-novita-conteggio-negozi.test.ts), oppure correggere in 'negozio:seller_public_profiles!products_seller_id_fkey!inner(id)' e provarlo su un PostgREST locale vero (lo smentitore non l'ha potuto avviare). Non corretto qui: spesa sopra i 20 $, niente giri di correzione."
     },
     {
       "id": "R02-012",
@@ -227,14 +228,18 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "leggiProdottiDellaGriglia ora restituisce PaginaGriglia: le righe tenute, con attaccata la proprietà non enumerabile righeLette = righe lette dal database prima del filtro sui negozi (invisibile a confronti, cicli e JSON). Prova con client finto: pagina piena con una riga scartata (anche sul ramo pertinenza) → con righeLette pagineSuccessiva dice che c'è la pagina dopo; l'ultima pagina vera resta l'ultima.",
-      "cosa_resta": "Chi decide «Carica altri» è ProductGrid (file non mio), che conta ancora ultima.length: va applicata la modifica qui sotto insieme a questo commit (provata in locale: typecheck verde). Limite noto: dopo una rilettura in cui l'ultima pagina cambia, la condivisione strutturale di React Query ricopia l'array e la proprietà si perde; in quel caso si torna alla lunghezza, cioè al comportamento di prima.",
+      "cosa_resta": "Chi decide «Carica altri» è ProductGrid (file non mio), che conta ancora la lunghezza dell'ultima pagina in due punti (righe 279 e 723): vanno applicate tutte e due le modifiche qui sotto insieme a questo commit. Limite noto e confermato dallo smentitore: con @tanstack/query-core 5.100.14, dopo una rilettura in cui l'ultima pagina cambia, replaceEqualDeep ricopia l'array e la proprietà non enumerabile si perde; in quel caso si torna alla lunghezza, cioè al comportamento di prima. Non c'è persistenza della cache né preparazione lato server della griglia.",
       "serve_file_altrui": [
         {
           "file": "components/ProductGrid.tsx",
-          "modifica": "riga 279: getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length, righePerPagina) → getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.righeLette ?? ultima.length, tutte.length, righePerPagina) (il tipo PaginaGriglia arriva già da leggiProdottiDellaGriglia, niente import nuovi)"
+          "modifica": "riga 279: getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length, righePerPagina) → pagineSuccessiva(ultima.righeLette ?? ultima.length, tutte.length, righePerPagina)"
+        },
+        {
+          "file": "components/ProductGrid.tsx",
+          "modifica": "riga 723: const forseCeNeSonoAltri = cEUnAltraPagina(ultimaPagina.length, righePerPagina) → cEUnAltraPagina(('righeLette' in ultimaPagina ? ultimaPagina.righeLette : undefined) ?? ultimaPagina.length, righePerPagina) (è questa riga a decidere se «Carica altri» compare, a :745; senza di lei la 279 da sola non basta). Il tipo PaginaGriglia arriva da leggiProdottiDellaGriglia; ultimaPagina ha il ripiego [] senza la proprietà."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "smentitore B: prova e rimessa verdi; la riga 279 era giusta ma non bastava: il pulsante dipende da components/ProductGrid.tsx:722-723 (usato a :745), aggiunta al serve_file_altrui; provato in node replaceEqualDeep (pagina uguale tiene la proprietà, pagina cambiata la perde). Parziale."
     },
     {
       "id": "R02-009",
@@ -268,7 +273,7 @@
           "modifica": "righe 32-36: prima del conto aggiungere const { data: preferenze, error: errPreferenze } = await supabase.from('profiles').select('notif_promos').eq('id', userId).maybeSingle(); if (errPreferenze) throw errPreferenze; poi let conta = supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false); if (preferenze?.notif_promos !== true) conta = conta.neq('category', 'promo'); const { count, error } = await conta;"
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "smentitore B: prova e rimessa verdi; 'promo' è la categoria del trigger del calo di prezzo (migrations/215:699-707); notifications.category è NOT NULL DEFAULT 'order' (115:209-211), quindi .neq non perde righe NULL; notif_promos NOT NULL default false (119:603); le due modifiche per i file altrui sono esatte. Parziale come dichiarato."
     },
     {
       "id": "R02-002",
@@ -291,7 +296,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il titolo «Perché esistiamo» prende break-words hyphens-auto come l'h1 e la sua cella di griglia min-w-0 come le caselle dei numeri; sistemato il titolo restavano 5 px dalle tre schede «I nostri valori» (stessa causa, cella di griglia senza min-w-0), che prendono min-w-0 break-words. Misurato con Playwright (Chromium preinstallato) su next dev con env finte, html{font-size:200%}: prima scrollWidth 337 su 320, dopo 320 (anche con la sillabazione spenta), 360 resta 360, 1280 invariato.",
-      "verificato_da": ""
+      "verificato_da": "smentitore B: prova e rimessa verdi; min-w-0 sul figlio diretto della griglia, break-words hyphens-auto sull'h2, min-w-0 break-words sulle schede dei valori; a larghezze grandi nulla cambia; 8 file di prove vicine verdi. Regge."
     },
     {
       "id": "R02-003",
@@ -314,7 +319,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il contenitore del testo della riga push prende min-w-0 break-words, lo stesso delle righe di components/ui/Toggle.tsx nella stessa scheda. Prova leggera: pagina vera montata sulla scheda Notifiche, la classe del contenitore è quella degli interruttori.",
-      "verificato_da": ""
+      "verificato_da": "smentitore B: prova e rimessa verdi; min-w-0 break-words è sul figlio flex col testo accanto a PushNotificationOptIn (righe 696-708), stesso schema di Toggle.tsx:47; 16 file di prove vicine verdi. Regge."
     },
     {
       "id": "R02-007",
@@ -344,7 +349,7 @@
           "modifica": "riga 65: scroll-mt-24 → scroll-mt-24 md:scroll-mt-0 (nella className del <form id=\"bonifici\">)"
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "smentitore A: prova e rimessa verdi; la classe è coerente con lo scroll-padding di html da md in su (app/globals.css:199-200) e uguale a LegalLayout.tsx:122; confermata l'altra ancora ancora aperta a components/seller/DatiPerIBonifici.tsx:65. Parziale come dichiarato."
     }
   ],
   "nuovi_difetti_visti": [
@@ -372,7 +377,7 @@
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 2,
-    "nota": "lotto 1 e lotto 2: due subagenti riparatori"
+    "agenti": 4,
+    "nota": "2 riparatori (lotto 1, lotto 2) + 2 smentitori (A: R02-001/004/005/006/007/008; B: R02-002/003/009/010/011/012); R02-013 verificata dal capo squadra. Spesa della sessione alla consegna circa 24 $ (usage.cost_usd 23,74 prima della chiusura)."
   }
 }
