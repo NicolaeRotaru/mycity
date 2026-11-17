@@ -266,6 +266,13 @@
       "severita": "minore",
       "file": "components/providers/ToastProvider.tsx:90",
       "descrizione": "Il Toaster di sonner usa containerAriaLabel di fabbrica («Notifications»): basta passare containerAriaLabel=\"Avvisi\". Non riparato: fuori dalla voce R01-001, che parla solo della X."
+    },
+    {
+      "titolo": "Le prove unitarie montano i componenti con React 18.3.1, ma il sito gira con il React 19.2 di Next",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "package.json:51-52 · vitest.config.ts",
+      "descrizione": "package.json chiede react/react-dom ^18.2.0 (installati 18.3.1) e vitest li usa; il router app di Next 15.5.29 invece disegna col React vendorizzato 19.2.0-canary (node_modules/next/dist/build/create-compiler-aliases.js:251). Le prove dei componenti girano quindi su un React diverso da quello del sito: per esempio l avviso su fetchPriority (R01-010) esce solo nelle prove, e un comportamento proprio di React 19 non si vedrebbe. Cura possibile: portare react/react-dom a 19.x in package.json, scelta da fare con chi tiene le dipendenze. Non riparato: file non miei."
     }
   ],
   "domande_per_nicola": [],
