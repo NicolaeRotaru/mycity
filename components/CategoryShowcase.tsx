@@ -89,24 +89,13 @@ const chiaveFoto = (slug: string, src: string | null) => `${slug}|${src ?? ''}`;
  * «nuova». Adesso il ricordo sta qui, fuori dal componente, e passano tutti e due di qui. Sul
  * server non si riempie mai: `ref` ed eventi girano solo nel browser.
  */
-/*
- * 17/11/2026 (R30-001) — E ARRIVA A CHI GESTISCE IL SITO, NON SOLO ALLA CONSOLE DI CHI VISITA.
- * Prima era `logger.warn`, cioè un `console.warn` nel browser del visitatore: nessuno dei nostri
- * lo leggeva. `logger.error` con un Error è il canale che il sito usa già dal browser per arrivare
- * a Sentry (lib/logger.ts → captureError), e senza Sentry scrive comunque in console. Lo stesso
- * ricordo vale per la foto SCARTATA dal dato: prima si ridiceva quando arrivavano le categorie
- * piene (tessere ricalcolate) e a ogni ritorno in home.
- */
-const fotoGiaDette = new Set<string>();
-const diUnaVolta = (chiave: string, frase: string, contesto: Record<string, unknown>) => {
-  if (fotoGiaDette.has(chiave)) return;
-  fotoGiaDette.add(chiave);
-  logger.error(new Error(frase), contesto);
+const fotoRotteGiaDette = new Set<string>();
+const diLaFotoRotta = (slug: string, src: string | null) => {
+  const chiave = chiaveFoto(slug, src);
+  if (fotoRotteGiaDette.has(chiave)) return;
+  fotoRotteGiaDette.add(chiave);
+  logger.warn('[categorie] la foto della tessera non si è caricata', { slug, src });
 };
-const diLaFotoRotta = (slug: string, src: string | null) =>
-  diUnaVolta(`rotta|${chiaveFoto(slug, src)}`, '[categorie] la foto della tessera non si è caricata', { slug, src });
-const diLaFotoScartata = (slug: string, scartato: string | null, dettaglio: string) =>
-  diUnaVolta(`scartata|${chiaveFoto(slug, scartato)}`, '[categorie] foto di categoria scartata', { slug, dettaglio });
 
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 
@@ -174,12 +163,12 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // UN INDIRIZZO SCRITTO MALE NON SPARISCE IN SILENZIO. Se qualcuno salva nel
   // pannello una foto che il browser non potrà caricare, prima non se ne
   // accorgeva nessuno: si vedeva un gradiente, come quando la foto non c'è.
-  // Adesso arriva a Sentry, con dentro l'indirizzo da correggere, una volta per
-  // foto (`diLaFotoScartata`). Il campo vuoto — lo stato normale di oggi — non si segnala.
+  // Adesso resta scritto nei log del browser, con dentro l'indirizzo da
+  // correggere. Il campo vuoto — lo stato normale di oggi — non si segnala.
   useEffect(() => {
     for (const { c, foto } of tessere) {
       const daDire = motivoDaSegnalare(foto);
-      if (daDire) diLaFotoScartata(c.slug, foto.scartato ?? null, daDire);
+      if (daDire) logger.warn('[categorie] foto di categoria scartata', { slug: c.slug, dettaglio: daDire });
     }
   }, [tessere]);
 

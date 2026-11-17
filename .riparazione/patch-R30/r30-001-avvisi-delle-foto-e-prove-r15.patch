@@ -1,0 +1,223 @@
+diff --git a/components/CategoryShowcase.tsx b/components/CategoryShowcase.tsx
+index 64b97a98..16441f5c 100644
+--- a/components/CategoryShowcase.tsx
++++ b/components/CategoryShowcase.tsx
+@@ -89,13 +89,24 @@ const chiaveFoto = (slug: string, src: string | null) => `${slug}|${src ?? ''}`;
+  * «nuova». Adesso il ricordo sta qui, fuori dal componente, e passano tutti e due di qui. Sul
+  * server non si riempie mai: `ref` ed eventi girano solo nel browser.
+  */
+-const fotoRotteGiaDette = new Set<string>();
+-const diLaFotoRotta = (slug: string, src: string | null) => {
+-  const chiave = chiaveFoto(slug, src);
+-  if (fotoRotteGiaDette.has(chiave)) return;
+-  fotoRotteGiaDette.add(chiave);
+-  logger.warn('[categorie] la foto della tessera non si è caricata', { slug, src });
++/*
++ * 17/11/2026 (R30-001) — E ARRIVA A CHI GESTISCE IL SITO, NON SOLO ALLA CONSOLE DI CHI VISITA.
++ * Prima era `logger.warn`, cioè un `console.warn` nel browser del visitatore: nessuno dei nostri
++ * lo leggeva. `logger.error` con un Error è il canale che il sito usa già dal browser per arrivare
++ * a Sentry (lib/logger.ts → captureError), e senza Sentry scrive comunque in console. Lo stesso
++ * ricordo vale per la foto SCARTATA dal dato: prima si ridiceva quando arrivavano le categorie
++ * piene (tessere ricalcolate) e a ogni ritorno in home.
++ */
++const fotoGiaDette = new Set<string>();
++const diUnaVolta = (chiave: string, frase: string, contesto: Record<string, unknown>) => {
++  if (fotoGiaDette.has(chiave)) return;
++  fotoGiaDette.add(chiave);
++  logger.error(new Error(frase), contesto);
+ };
++const diLaFotoRotta = (slug: string, src: string | null) =>
++  diUnaVolta(`rotta|${chiaveFoto(slug, src)}`, '[categorie] la foto della tessera non si è caricata', { slug, src });
++const diLaFotoScartata = (slug: string, scartato: string | null, dettaglio: string) =>
++  diUnaVolta(`scartata|${chiaveFoto(slug, scartato)}`, '[categorie] foto di categoria scartata', { slug, dettaglio });
+ 
+ const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
+ 
+@@ -163,12 +174,12 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
+   // UN INDIRIZZO SCRITTO MALE NON SPARISCE IN SILENZIO. Se qualcuno salva nel
+   // pannello una foto che il browser non potrà caricare, prima non se ne
+   // accorgeva nessuno: si vedeva un gradiente, come quando la foto non c'è.
+-  // Adesso resta scritto nei log del browser, con dentro l'indirizzo da
+-  // correggere. Il campo vuoto — lo stato normale di oggi — non si segnala.
++  // Adesso arriva a Sentry, con dentro l'indirizzo da correggere, una volta per
++  // foto (`diLaFotoScartata`). Il campo vuoto — lo stato normale di oggi — non si segnala.
+   useEffect(() => {
+     for (const { c, foto } of tessere) {
+       const daDire = motivoDaSegnalare(foto);
+-      if (daDire) logger.warn('[categorie] foto di categoria scartata', { slug: c.slug, dettaglio: daDire });
++      if (daDire) diLaFotoScartata(c.slug, foto.scartato ?? null, daDire);
+     }
+   }, [tessere]);
+ 
+diff --git a/tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx b/tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx
+index 7ada2160..eeb5f705 100644
+--- a/tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx
++++ b/tests/unit/riparazione-r15-la-foto-rotta-della-tessera-si-dice.test.tsx
+@@ -32,7 +32,14 @@ vi.mock('@tanstack/react-query', () => ({
+ }));
+ vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
+ vi.mock('@/lib/logger', () => ({
+-  logger: { warn: (...a: unknown[]) => { avvisi.push(a); }, error: () => {}, info: () => {}, debug: () => {} },
++  // R30-001: la foto rotta va a Sentry con logger.error(new Error(frase), contesto). Qui la frase
++  // si legge dal messaggio dell'Error, così le prove guardano lo stesso avviso di prima.
++  logger: {
++    warn: (...a: unknown[]) => { avvisi.push(a); },
++    error: (e: unknown, ctx?: unknown) => { avvisi.push([e instanceof Error ? e.message : e, ctx]); },
++    info: () => {},
++    debug: () => {},
++  },
+ }));
+ 
+ type Componente = typeof import('@/components/CategoryShowcase').default;
+diff --git a/tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx b/tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx
+index 6b765d8d..0f7081c8 100644
+--- a/tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx
++++ b/tests/unit/riparazione-r15-la-foto-rotta-si-dice-una-volta.test.tsx
+@@ -43,7 +43,14 @@ vi.mock('@tanstack/react-query', () => ({
+ }));
+ vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
+ vi.mock('@/lib/logger', () => ({
+-  logger: { warn: (...a: unknown[]) => { stato.avvisi.push(a); }, error: () => {}, info: () => {}, debug: () => {} },
++  // R30-001: la foto rotta va a Sentry con logger.error(new Error(frase), contesto). Qui la frase
++  // si legge dal messaggio dell'Error, così le prove guardano lo stesso avviso di prima.
++  logger: {
++    warn: (...a: unknown[]) => { stato.avvisi.push(a); },
++    error: (e: unknown, ctx?: unknown) => { stato.avvisi.push([e instanceof Error ? e.message : e, ctx]); },
++    info: () => {},
++    debug: () => {},
++  },
+ }));
+ 
+ const { default: CategoryShowcase } = await import('@/components/CategoryShowcase');
+diff --git a/tests/unit/riparazione-r30-foto-di-categoria.test.tsx b/tests/unit/riparazione-r30-foto-di-categoria.test.tsx
+new file mode 100644
+index 00000000..68c9ffe4
+--- /dev/null
++++ b/tests/unit/riparazione-r30-foto-di-categoria.test.tsx
+@@ -0,0 +1,126 @@
++/**
++ * @vitest-environment jsdom
++ */
++import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++import { act, createElement } from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++
++/**
++ * R30-001 — una foto di categoria sparita o scartata arriva a chi gestisce il sito, una volta sola.
++ *
++ * ① La foto SCARTATA dal dato (indirizzo su un host che il browser bloccherà): l'avviso stava in un
++ * effetto su `tessere`, e si ridiceva quando arrivavano le categorie piene (tessere ricalcolate) e a
++ * ogni ritorno in home. Tre avvisi per la stessa foto.
++ * ② Il canale: `logger.warn` è solo `console.warn` nel browser del visitatore. Deve passare da
++ * `logger.error` con un Error, che dal browser arriva a Sentry (lib/logger.ts → captureError).
++ */
++
++const stato = vi.hoisted(() => ({
++  avvisi: [] as unknown[][],
++  errori: [] as unknown[][],
++  /** Le categorie piene: prima non si sa, poi arrivano. */
++  piene: undefined as string[] | undefined,
++  /** Se le immagini sono già finite (e, larghe zero in jsdom, quindi rotte). */
++  rotte: false,
++}));
++
++const SCARTATA = 'https://altro-sito.example/casa.jpg';
++const ROTTA = 'https://abcdefgh.supabase.co/storage/v1/object/public/categorie/libri.jpg';
++
++vi.mock('@tanstack/react-query', () => ({
++  useQuery: (o: { queryKey: readonly string[] }) =>
++    o.queryKey.join('/') === 'categories/con-prodotti'
++      ? { data: stato.piene, isLoading: false, isError: false }
++      : {
++          data: [
++            { id: 'c1', slug: 'casa-cucina', name: 'Casa & Cucina', parent_id: null, image_url: SCARTATA },
++            { id: 'c2', slug: 'alimentari', name: 'Alimentari', parent_id: null },
++            { id: 'c3', slug: 'libri', name: 'Libri', parent_id: null, image_url: ROTTA },
++          ],
++          isLoading: false,
++          isError: false,
++        },
++}));
++vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
++vi.mock('@/lib/logger', () => ({
++  logger: {
++    warn: (...a: unknown[]) => { stato.avvisi.push(a); },
++    error: (...a: unknown[]) => { stato.errori.push(a); },
++    info: () => {},
++    debug: () => {},
++  },
++}));
++
++Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, get: () => stato.rotte });
++
++type Componente = typeof import('@/components/CategoryShowcase').default;
++let CategoryShowcase: Componente;
++let radice: Root;
++let contenitore: HTMLDivElement;
++let erroreDiConsole: ReturnType<typeof vi.spyOn>;
++
++beforeEach(async () => {
++  // Ogni prova è una pagina appena aperta: il ricordo delle foto già dette vale per la vita della pagina.
++  vi.resetModules();
++  ({ default: CategoryShowcase } = await import('@/components/CategoryShowcase'));
++  stato.avvisi.length = 0;
++  stato.errori.length = 0;
++  stato.piene = undefined;
++  stato.rotte = false;
++  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  // React 18 non conosce ancora `fetchPriority`: lo dice in console, non è quello che si prova qui.
++  erroreDiConsole = vi.spyOn(console, 'error').mockImplementation(() => {});
++  contenitore = document.createElement('div');
++  document.body.appendChild(contenitore);
++  radice = createRoot(contenitore);
++});
++afterEach(() => {
++  act(() => radice.unmount());
++  contenitore.remove();
++  erroreDiConsole.mockRestore();
++});
++
++/** Tutto quello che è uscito, dal canale giusto o da quello sbagliato, con la frase in chiaro. */
++const detti = (frase: string) =>
++  [...stato.avvisi, ...stato.errori].filter((a) => String(a[0] instanceof Error ? a[0].message : a[0]).includes(frase));
++/** Solo quello che arriva a Sentry: logger.error con un Error vero. */
++const aSentry = (frase: string) =>
++  stato.errori.filter((a) => a[0] instanceof Error && (a[0] as Error).message.includes(frase));
++
++describe('R30-001 — la foto scartata si dice una volta sola', () => {
++  it('non si ridice quando arrivano le piene, né tornando in home', () => {
++    act(() => radice.render(createElement(CategoryShowcase)));
++    expect(detti('scartata')).toHaveLength(1);
++
++    // Arrivano le categorie piene: le tessere si ricalcolano, la foto è la stessa.
++    stato.piene = ['c1', 'c3'];
++    act(() => radice.render(createElement(CategoryShowcase)));
++    expect(detti('scartata'), 'la stessa foto scartata ridetta quando arrivano le piene').toHaveLength(1);
++
++    // Si va altrove e si torna in home: la vetrina rinasce da capo.
++    act(() => radice.unmount());
++    radice = createRoot(contenitore);
++    act(() => radice.render(createElement(CategoryShowcase)));
++    expect(detti('scartata'), 'a ogni ritorno in home la stessa foto scartata di nuovo').toHaveLength(1);
++  });
++});
++
++describe('R30-001 — la foto sparita o scartata arriva a Sentry, non solo alla console', () => {
++  it('la foto scartata esce da logger.error con un Error, con l’indirizzo da correggere', () => {
++    act(() => radice.render(createElement(CategoryShowcase)));
++    const arrivati = aSentry('scartata');
++    expect(arrivati, 'la foto scartata resta nella console del visitatore').toHaveLength(1);
++    expect(arrivati[0][1]).toMatchObject({ slug: 'casa-cucina' });
++    expect(String((arrivati[0][1] as { dettaglio?: string }).dettaglio)).toContain(SCARTATA);
++    expect(stato.avvisi).toEqual([]);
++  });
++
++  it('la foto rotta esce da logger.error con un Error, con slug e indirizzo', () => {
++    stato.rotte = true;
++    act(() => radice.render(createElement(CategoryShowcase)));
++    const arrivati = aSentry('non si è caricata');
++    expect(arrivati, 'la foto rotta resta nella console del visitatore').toHaveLength(1);
++    expect(arrivati[0][1]).toMatchObject({ slug: 'libri', src: ROTTA });
++    expect(stato.avvisi).toEqual([]);
++  });
++});

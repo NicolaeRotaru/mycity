@@ -32,14 +32,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }));
 vi.mock('@/lib/logger', () => ({
-  // R30-001: la foto rotta va a Sentry con logger.error(new Error(frase), contesto). Qui la frase
-  // si legge dal messaggio dell'Error, così le prove guardano lo stesso avviso di prima.
-  logger: {
-    warn: (...a: unknown[]) => { avvisi.push(a); },
-    error: (e: unknown, ctx?: unknown) => { avvisi.push([e instanceof Error ? e.message : e, ctx]); },
-    info: () => {},
-    debug: () => {},
-  },
+  logger: { warn: (...a: unknown[]) => { avvisi.push(a); }, error: () => {}, info: () => {}, debug: () => {} },
 }));
 
 type Componente = typeof import('@/components/CategoryShowcase').default;
