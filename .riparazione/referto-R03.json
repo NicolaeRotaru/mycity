@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:26",
+  "aggiornato": "2026-11-17 18:27",
   "finita": false,
-  "testa": "2eb57568d9596ff49c3c62a8931d694627a6116e",
+  "testa": "81aa847d77f63ff60d7689188373475ba3c7c84c",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -169,8 +169,24 @@
     {
       "id": "R03-011",
       "chiave": "qa-flussi|aria-busy sulla variante «cards» del caricamento può zittire l'annuncio per lo screen reader",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in quest'onda (referto preparato per una consegna anticipata)"
+      "esito": "riparato",
+      "commit": "81aa847d77f63ff60d7689188373475ba3c7c84c",
+      "file_toccati": [
+        "components/ui/LoadingState.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-caricamento-cards-annuncia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-caricamento-cards-annuncia.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81aa847d77f63ff60d7689188373475ba3c7c84c^ --file components/ui/LoadingState.tsx --prove tests/unit/riparazione-r03-caricamento-cards-annuncia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella variante cards aria-busy=\"true\" è tolto dal div role=status/aria-live e messo sulla sola griglia degli scheletri (figlia, non antenata); il messaggio resta nella regione viva. Prova leggera di render: nessun aria-busy=true sulla regione o sopra, e il testo è dentro."
     },
     {
       "id": "R03-012",
