@@ -118,9 +118,18 @@ export default function RiderAvailabilityPage() {
     });
   };
 
+  // R03-008 — «Zone salvate» solo dopo l'esito. Se la scrittura cade l'errore lo dice `persist`, e
+  // la scelta non salvata non resta a schermo come se lo fosse (salvo un tocco arrivato dopo).
   const saveZones = (next: string[]) => {
+    const prima = zones;
     setZones(next);
-    void persist({ rider_zones: next });
+    void persist({ rider_zones: next }).then((ok) => {
+      if (!ok) {
+        setZones((ora) => (ora === next ? prima : ora));
+        return;
+      }
+      toast.success('Zone salvate');
+    });
   };
 
   const toggleZone = (zone: string) => {
