@@ -673,7 +673,7 @@ export default function SettingsPage() {
                     chi l'aveva accesa e vuole spegnerla. */}
                 {NEWSLETTER_ACCESA || prefs.notif_newsletter ? (
                   <Toggle
-                    label={NEWSLETTER_ACCESA ? 'Newsletter mensile' : 'Newsletter'}
+                    label="Newsletter"
                     desc={NEWSLETTER_ACCESA ? 'Novità, nuovi negozi, articoli del blog.' : 'La newsletter non è ancora attiva.'}
                     value={prefs.notif_newsletter}
                     onChange={(v) => updatePref('notif_newsletter', v)}
