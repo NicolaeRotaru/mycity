@@ -143,7 +143,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   for (const c of candidates) {
     if (troppoVecchio(c.last_activity)) {
       skipped++;
-      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+      // R30-003 — Anche questo si chiude senza scrivere: stesso segno «senza email» del ramo sotto.
+      const { error: errMarca } = await chiudiSenzaEmail(supa, c);
       if (errMarca) logger.error('[abandoned-carts] marcatura fallita (carrello troppo vecchio)', errMarca);
       continue;
     }
