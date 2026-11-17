@@ -386,7 +386,7 @@ function HomeBlock({
               href={c.href || '/sell'}
               ctaId="seller_cta"
               location="seller_band"
-              className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg whitespace-nowrap"
+              className="inline-flex max-w-full items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg"
             >
               <Store size={18} strokeWidth={2.4} />
               {c.ctaLabel || 'Diventa venditore'}
