@@ -81,6 +81,18 @@ export interface DomandaGriglia {
 const COLONNE = 'id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id';
 
 /**
+ * 17/11/2026 (R02-012) — «CARICA ALTRI» SI FERMAVA SE IL FILTRO IN FONDO SCARTAVA RIGHE.
+ *
+ * La pagina si chiede al database piena (la `finestra`), poi in fondo a `leggiProdottiDellaGriglia`
+ * si tolgono le righe dei negozi fuori vetrina. Chi sfoglia decideva «è l'ultima» contando le righe
+ * tornate: una pagina piena con una riga scartata sembrava l'ultima, e «Carica altri» spariva con
+ * altri prodotti ancora da vedere. Ora le righe LETTE viaggiano attaccate alla pagina
+ * (`righeLette`, non enumerabile: non entra nei confronti, nei cicli né nel JSON) e chi sfoglia
+ * decide su quelle. Dove manca (una pagina ricopiata da altri) vale la lunghezza, come prima.
+ */
+export type PaginaGriglia = RigaGriglia[] & { readonly righeLette?: number };
+
+/**
  * 13/11/2026 (R15-011) — LA FINESTRA DELLE NOVITÀ.
  *
  * «Novità» era il catalogo intero ordinato per data. Una novità è un prodotto «Nuovo» come lo
@@ -206,7 +218,7 @@ async function leggiFraGliIdsColVoto(
 export async function leggiProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: DomandaGriglia,
-): Promise<RigaGriglia[]> {
+): Promise<PaginaGriglia> {
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
 
   // La pertinenza la sa solo il database: la si chiede prima, e poi si vanno a prendere le righe
@@ -320,7 +332,10 @@ export async function leggiProdottiDellaGriglia(
     rows.map((p) => p.seller_id as string),
     'id, store_name, store_hours, is_approved',
   );
-  return attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved) as RigaGriglia[];
+  const tenute = attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved) as RigaGriglia[];
+  // R02-012 — Quante ne ha date il database, prima del filtro: è su queste che si sa se ce ne sono altre.
+  Object.defineProperty(tenute, 'righeLette', { value: rows.length, enumerable: false });
+  return tenute;
 }
 
 /**
