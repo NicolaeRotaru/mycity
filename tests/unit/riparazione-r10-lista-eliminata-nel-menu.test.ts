@@ -18,6 +18,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const db = vi.hoisted(() => ({
   liste: [] as Array<Record<string, unknown>>,
   righe: [] as Array<{ list_id: string; product_id: string }>,
+  /** Millisecondi di attesa di ogni risposta del database finto (0 = subito). */
+  ritardo: 0,
 }));
 
 vi.mock('@/lib/supabase/client', () => {
@@ -52,7 +54,11 @@ vi.mock('@/lib/supabase/client', () => {
     c.update = (v: Record<string, unknown>) => { operazione = 'update'; modifica = v; return c; };
     c.delete = () => { operazione = 'delete'; return c; };
     c.maybeSingle = () => { una = true; return c; };
-    c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(esegui()).then(ok, ko);
+    c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) =>
+      (db.ritardo
+        ? new Promise((r) => setTimeout(r, db.ritardo)).then(() => esegui())
+        : Promise.resolve(esegui())
+      ).then(ok, ko);
     return c;
   }
   return {
@@ -74,6 +80,7 @@ vi.mock('next-intl', () => import('./aiuti/finti/next-intl.mjs'));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/components/ConfirmDialog', () => ({ confirmDialog: vi.fn(async () => true) }));
 
+import { toast } from 'sonner';
 import AddToListButton from '@/components/AddToListButton';
 import ListDetailPage from '@/app/lists/[id]/page';
 
@@ -84,6 +91,7 @@ const COLAZIONE = {
 
 let root: Root | null = null;
 afterEach(() => {
+  db.ritardo = 0;
   if (root) act(() => root!.unmount());
   root = null;
   document.body.innerHTML = '';
@@ -128,5 +136,47 @@ describe('dopo l’eliminazione di una lista, il menu «Aggiungi a lista» non l
     await act(async () => { avvio().click(); });
     await aspetta(() => menu() !== null && voceColazione() === undefined && /Non hai ancora liste/.test(menu()!.textContent ?? ''),
       'dopo l’eliminazione il menu «Aggiungi a lista» mostra ancora la lista Colazione');
+  });
+  it('con la rete lenta, riaperto il menu subito dopo l’eliminazione la lista eliminata non c’è già', async () => {
+    db.liste = [{ ...COLAZIONE }];
+    db.righe = [];
+    db.ritardo = 150;
+    vi.mocked(toast.success).mockClear();
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    root = createRoot(box);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+    await act(async () => {
+      root!.render(createElement(QueryClientProvider, { client: qc },
+        createElement('div', null,
+          createElement(AddToListButton, { productId: 'p-focaccia' }),
+          createElement(ListDetailPage as never, { params: { id: 'L1' } }))));
+    });
+
+    const menu = () => box.querySelector('[role="dialog"]') as HTMLElement | null;
+    const avvio = () => [...box.querySelectorAll('button')].find((b) => /Aggiungi a lista/.test(b.textContent ?? '')) as HTMLButtonElement;
+    const voceColazione = () => [...(menu()?.querySelectorAll('li button') ?? [])].find((b) => (b.textContent ?? '').includes('Colazione'));
+
+    await act(async () => { avvio().click(); });
+    await aspetta(() => voceColazione() !== undefined, 'la lista Colazione non è nel menu: la prova non guarda niente');
+    await act(async () => { (menu()!.querySelector('button[aria-label="Chiudi"]') as HTMLButtonElement).click(); });
+    expect(menu()).toBeNull();
+
+    const cestino = () => box.querySelector('button[aria-label="Elimina"]') as HTMLButtonElement | null;
+    await aspetta(() => cestino() !== null, 'la pagina della lista non offre «Elimina» a chi l’ha creata');
+    await act(async () => { cestino()!.click(); });
+    await aspetta(() => vi.mocked(toast.success).mock.calls.some((c) => c[0] === 'Lista eliminata'),
+      'l’eliminazione non è finita');
+    expect(db.liste).toEqual([]);
+
+    // Si riapre il menu SUBITO: la rilettura (150 ms) non è ancora tornata, ma la lista eliminata
+    // non deve esserci già, né come voce toccabile.
+    await act(async () => { avvio().click(); });
+    expect(menu(), 'il menu non si è riaperto').not.toBeNull();
+    expect(voceColazione(), 'riaperto subito, il menu mostra ancora la lista eliminata').toBeUndefined();
+    // E resta così quando la rilettura torna.
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    expect(voceColazione()).toBeUndefined();
+    expect(menu()!.textContent ?? '').toMatch(/Non hai ancora liste/);
   });
 });
