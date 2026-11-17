@@ -4,7 +4,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
-import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
+import { DaCompletare, tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
@@ -222,11 +222,13 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
       if (errore instanceof DaCompletare) return ApiErrors.conflict(errore.message);
       return ApiErrors.internal('Errore nel salvataggio delle varianti');
     }
-    if (Object.keys(patch).length > 0) {
-      const { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
-      if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
-      prima = data as unknown as Record<string, unknown> | null;
-    }
+  }
+  // R02-003 — Com'era il prodotto si legge anche senza varianti: serve alla traccia, che dice
+  // il valore di prima e quello di dopo di ogni campo cambiato, come le altre porte.
+  if (Object.keys(patch).length > 0) {
+    const { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
+    if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+    prima = data as unknown as Record<string, unknown> | null;
   }
 
   if (Object.keys(patch).length > 0) {
@@ -261,13 +263,18 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     }
   }
 
-  await writeAudit({
-    actorId: user.id,
-    action: 'product.update',
-    targetTable: 'products',
-    targetId: id,
-    metadata: { fields: Object.keys(patch) },
+  // R02-003 — La traccia «chi ha cambiato cosa» nella stessa forma del modulo del prodotto e delle
+  // porte dell'AI (`tracciaDellaModifica`): solo i campi cambiati, col valore di prima e di dopo.
+  // Il negozio e i dati esterni li cambia solo l'amministrazione: entrano nella stessa voce.
+  const voce = tracciaDellaModifica({
+    prodottoId: id,
+    attoreId: user.id,
+    origine: 'admin',
+    prima: prima ?? {},
+    dopo: patch,
+    altreColonne: ['seller_id', 'external_source_url', 'external_marketplace', 'external_data'],
   });
+  if (voce) await writeAudit(voce);
 
   return apiSuccess({ ok: true });
 });
