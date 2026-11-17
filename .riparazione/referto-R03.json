@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 18:34",
+  "aggiornato": "2026-11-17 18:40",
   "finita": false,
-  "testa": "cb813b984fde5e26ea893f034aceafbf957f4bca",
+  "testa": "ae7214d9bc52343e0cb72607926b7cc10fd366a5",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -243,7 +243,7 @@
       "id": "R03-012",
       "chiave": "qa-flussi|il doppio tocco sul cuore con due salvataggi falliti lascia il cuore pieno e il preferito non salvato, e una richiesta che non risponde blocca la fila del prodotto",
       "esito": "riparato",
-      "commit": "60f1ee8982073e8653e8c3d97ad738226977acc9",
+      "commit": "ae7214d9bc52343e0cb72607926b7cc10fd366a5",
       "file_toccati": [
         "lib/preferiti/tocco-del-cuore.ts"
       ],
@@ -259,7 +259,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 60f1ee8982073e8653e8c3d97ad738226977acc9^ --file lib/preferiti/tocco-del-cuore.ts --prove tests/unit/riparazione-r03-cuore-rifiuti-e-silenzio.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La fila di ogni prodotto ricorda l'ultimo stato confermato dal server e un rifiuto dell'ultimo tocco rimette il cuore lì invece di ribaltarlo (due rifiuti in fila: cuore vuoto). Ogni scrittura ha un tempo massimo di 10 s: senza risposta vale come rifiutata, la fila va avanti e il cuore torna allo stato confermato. Prove esistenti del cuore (r15 e il-cuore-dei-preferiti) verdi."
+      "cosa_ho_fatto": "La fila di ogni prodotto ricorda l'ultimo stato confermato dal server e un rifiuto dell'ultimo tocco rimette il cuore lì invece di ribaltarlo (due rifiuti in fila: cuore vuoto). Ogni scrittura ha un tempo massimo di 10 s: senza risposta vale come rifiutata, la fila va avanti e il cuore torna allo stato confermato. Prove esistenti del cuore (r15 e il-cuore-dei-preferiti) verdi. Giro di correzione: la scrittura scaduta non si fermava e, arrivata dopo la rilettura, cambiava il database sotto il cuore (togli a 12 s: cuore pieno, preferito cancellato). Ora quando una scrittura scaduta arriva comunque (riuscita o rifiutata) si rilegge l'elenco, a fila vuota; con altri tocchi in fila lo fa la fine della fila, così niente stato di passaggio. Prova con rilettura vera (QueryObserver sul finto database) e orologio finto: i due casi del revisore, la scrittura tardiva che fallisce e quella che arriva a metà fila. Commit 60f1ee89 e ae7214d9.",
+      "verificato_da": "revisore del lotto 1 (smentita: togli che risponde dopo 12 s, e togli tardivo a 11,1 s dopo un aggiungi riuscito a 10,6 s: cuore pieno col database vuoto), poi giro di correzione con i casi del revisore nella prova"
     },
     {
       "id": "R03-013",
