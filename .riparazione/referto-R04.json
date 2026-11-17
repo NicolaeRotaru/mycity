@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:28",
+  "aggiornato": "2026-11-17 18:30",
   "finita": false,
-  "testa": "234686de7fbf24bc91fb81fefa86133d53519784",
+  "testa": "8d5109714b92c009992db4b2a4f816ae74c05449",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -116,8 +116,25 @@
     {
       "id": "R04-006",
       "chiave": "frontend-ux|sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "8d5109714b92c009992db4b2a4f816ae74c05449",
+      "file_toccati": [
+        "components/seller/site/SectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-testo-lungo-vetrina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-testo-lungo-vetrina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8d5109714b92c009992db4b2a4f816ae74c05449^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r04-testo-lungo-vetrina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto maxLength={4000} dal campo Testo della sezione richText (il browser tagliava in silenzio): il testo resta intero, il suggerimento mostra il contatore N/4.000 contato come lo schema (il testo salvato, ogni a-capo è «<br>» e conta 4, lo dice il campo) e oltre RICHTEXT_MAX l'errore dice di accorciarlo, prima che il salvataggio lo rifiuti. Come il gemello dell'amministrazione (R10-014).",
+      "verificato_da": ""
     },
     {
       "id": "R04-007",
