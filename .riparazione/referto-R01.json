@@ -78,7 +78,30 @@
   },
   {
    "id": "R01-003",
-   "chiave": "architettura|sei rami iserror scritti a mano invece del presidio lib/vista-query.ts (vistadaquery): il difetto può tornare alla settima pagina"
+   "chiave": "architettura|sei rami iserror scritti a mano invece del presidio lib/vista-query.ts (vistadaquery): il difetto può tornare alla settima pagina",
+   "esito": "riparato",
+   "commit": "da2237edda489e9b0777d288500d23e29971bad1",
+   "file_toccati": [
+    "app/admin/cod-remittance/page.tsx",
+    "app/admin/payouts/page.tsx",
+    "app/admin/support/page.tsx",
+    "app/admin/products/page.tsx",
+    "app/admin/audit/page.tsx",
+    "tests/unit/riparazione-r01-pannello-dal-presidio.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-pannello-dal-presidio.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-pannello-dal-presidio.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base da2237edda489e9b0777d288500d23e29971bad1^ --file app/admin/cod-remittance/page.tsx,app/admin/payouts/page.tsx,app/admin/support/page.tsx,app/admin/products/page.tsx,app/admin/audit/page.tsx --prove tests/unit/riparazione-r01-pannello-dal-presidio.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Le cinque pagine admin (rimesse contanti, bonifici, assistenza, prodotti, registro) passano da vistaDaQuery con i rami mostraScheletro/mostraErrore/mostraVuoto, come app/admin/today/page.tsx; testi e aspetto invariati (la pagina dei reclami lo faceva già). La prova monta le cinque pagine: con la lettura in attesa ma ferma (isPending vero, isLoading falso, nessun dato: React Query 5 senza rete) resta lo scheletro invece della frase di vuoto (rossa senza la correzione, su ognuna delle cinque); con l'errore «Non riesco a leggere» e «Riprova» che rilegge; con la lettura vuota la frase di sempre. Verdi anche le 30 prove esistenti che nominano queste pagine e tsc."
   },
   {
    "id": "R01-004",
@@ -90,7 +113,33 @@
   },
   {
    "id": "R01-005",
-   "chiave": "deploy-sre|la prova «migrazione su database pieno» mette ancora i file nell'ordine vecchio"
+   "chiave": "deploy-sre|la prova «migrazione su database pieno» mette ancora i file nell'ordine vecchio",
+   "esito": "riparato",
+   "commit": "21af7a5515fba2c30ca1c5a23d7314b5d46fb0b6",
+   "file_toccati": [
+    "tests/sql/harness/migrazione-su-database-pieno.sh",
+    "tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh",
+    "tests/sql/harness/la-159-non-lascia-la-tabella-scoperta.sh",
+    "tests/sql/harness/la-160-regge-un-ordine-annullato.sh",
+    "tests/sql/harness/lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh",
+    "tests/supabase-locale/avvia.sh",
+    "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts",
+    "tests/unit/riparazione-r01-ordine-delle-migrazioni.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-ordine-delle-migrazioni.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-ordine-delle-migrazioni.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 21af7a5515fba2c30ca1c5a23d7314b5d46fb0b6^ --file tests/sql/harness/migrazione-su-database-pieno.sh,tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh,tests/sql/harness/la-159-non-lascia-la-tabella-scoperta.sh,tests/sql/harness/la-160-regge-un-ordine-annullato.sh,tests/sql/harness/lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh,tests/supabase-locale/avvia.sh,tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts --prove tests/unit/riparazione-r01-ordine-delle-migrazioni.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "«sort -V» diventa «LC_ALL=C sort», come in tests/sql/harness/apply.sh:34, in tutti i punti elencati: migrazione-su-database-pieno.sh:42 e :50, la-158:54, la-159:61, la-160:45, lo-script-non-si-schianta…:55, tests/supabase-locale/avvia.sh:36 e la simulazione del rilascio (il-rilascio-non-riallinea…test.ts:38, ora sort con LC_ALL=C). La prova nuova esegue ogni ordinamento delle migrazioni scritto negli script su nomi d'esempio (052/052b, 108/108b) e lo confronta con quello di apply.sh; rossa togliendo ognuno dei sette file. tests/unit/minori-s03-ordine-migrazioni.test.ts non serve toccarla: guarda già solo apply.sh e lo script del rilascio, e resta verde. Prove SQL non eseguite: nessun Postgres locale acceso (bash -n verde sui sei script).",
+   "nota": "Gli script SQL non sono stati eseguiti contro un database: in questa macchina non c'è un Postgres locale in ascolto; la modifica è solo l'ordinamento dei nomi."
   },
   {
    "id": "R01-006",
@@ -223,11 +272,50 @@
   },
   {
    "id": "R01-011",
-   "chiave": "qa-flussi|la prima compilazione di monta() pesa sul primo caso di ~85 file di prove"
+   "chiave": "qa-flussi|la prima compilazione di monta() pesa sul primo caso di ~85 file di prove",
+   "esito": "riparato",
+   "commit": "ef7318a84d4d4072be3fe1acaaf84489c499c446",
+   "file_toccati": [
+    "tests/unit/aiuti/monta-componente.ts",
+    "tests/unit/riparazione-r01-monta-scalda-i-pacchetti.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-monta-scalda-i-pacchetti.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-monta-scalda-i-pacchetti.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ef7318a84d4d4072be3fe1acaaf84489c499c446^ --file tests/unit/aiuti/monta-componente.ts --prove tests/unit/riparazione-r01-monta-scalda-i-pacchetti.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La metà «testTimeout 15000» della correzione scritta c'era già sulla base (vitest.config.ts:27, commit b8246095 di un riparatore passato). Ho applicato l'altra metà: in tests/unit/aiuti/monta-componente.ts:31-32 un await di primo livello importa react, react-dom/client, react-dom/server, lucide-react e @tanstack/react-query al caricamento dell'aiutante, così il costo cade nella raccolta del file e non nel primo caso. La prova (vi.doMock su quei cinque pacchetti, poi import dell'aiutante) è rossa senza il riscaldamento. Suite unitaria intera verde con la modifica: 1693 file passati, 1 saltato (già prima), 10846 prove.",
+   "nota": "Il costo della compilazione del componente (execFileSync, 80-400 ms) resta nel primo caso: non si può scaldare senza sapere quale componente; con il tempo massimo a 15 s il margine è largo."
   },
   {
    "id": "R01-012",
-   "chiave": "qa-flussi|prova con un nome che promette il contrario"
+   "chiave": "qa-flussi|prova con un nome che promette il contrario",
+   "esito": "riparato",
+   "commit": "ce56056f8b97563c0c5e97be95a35b2ea3d6ea82",
+   "file_toccati": [
+    "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+    "tests/unit/riparazione-r01-il-nome-della-prova-del-drop.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-il-nome-della-prova-del-drop.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-il-nome-della-prova-del-drop.test.ts tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ce56056f8b97563c0c5e97be95a35b2ea3d6ea82^ --file tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts --prove tests/unit/riparazione-r01-il-nome-della-prova-del-drop.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "In tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts:139 il caso «… anche senza chiave di servizio» (con middleware finto e getAdminSupabase che risponde) ora si chiama «il pannello admin riceve 409 e non scrive nessun drop: il gestore si ferma prima di chiedere getAdminSupabase (middleware finto)», come nella correzione scritta; il corpo del caso non cambia (file MIO secondo chi-e-mia). Prova leggera: legge il file, trova il caso che chiama salvaDrop e controlla che il nome non prometta «senza chiave» e nomini dove si ferma; rossa col nome vecchio."
   },
   {
    "id": "R01-013",
@@ -257,7 +345,7 @@
  "nuovi_difetti_visti": [],
  "domande_per_nicola": [],
  "conto": {
-  "agenti": 2,
+  "agenti": 3,
   "nota": ""
  }
 }
