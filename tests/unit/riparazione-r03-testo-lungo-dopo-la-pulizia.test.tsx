@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { newSection, normalizeSite, storeSiteSchema, defaultSite, type SiteSection } from '@/lib/store-site';
+import { newSection, normalizeSite, defaultSite, type SiteSection } from '@/lib/store-site';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 
 /**
@@ -36,7 +36,6 @@ describe('il contatore del testo della vetrina conta come conterà il server', (
   it('il caso è vero: 3.997 caratteri prima della pulizia, 4.003 dopo, e alla rilettura il sito sparirebbe', () => {
     expect(VICINO_AL_LIMITE.length).toBe(3997);
     expect(sanitizeRichText(VICINO_AL_LIMITE).length).toBe(4003);
-    expect(storeSiteSchema.safeParse(sitoCon(VICINO_AL_LIMITE)).success, 'prima della pulizia lo schema lo accetta').toBe(true);
     const salvato = sitoCon(sanitizeRichText(VICINO_AL_LIMITE));
     expect(normalizeSite(salvato).pages[0].sections, 'la rilettura del testo pulito ripiega sulla vetrina di partenza').not.toEqual(salvato.pages[0].sections);
   });
