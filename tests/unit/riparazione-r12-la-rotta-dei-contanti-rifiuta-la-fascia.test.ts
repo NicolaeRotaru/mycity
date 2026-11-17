@@ -27,6 +27,7 @@ function risolvibile(valore: unknown) {
   return b;
 }
 
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   withAuthRateLimit: (

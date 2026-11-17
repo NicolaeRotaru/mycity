@@ -41,6 +41,7 @@ const db = {
   rpc: [] as string[],
 };
 
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
   ...((await originale()) as Record<string, unknown>),
   CARTA_ACCESA: true,

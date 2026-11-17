@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
+import { vaChiestaSenzaTrattenere } from '@/lib/auth/accettazione-testi';
+import { TETTO_PORTIERE_MS } from '@/lib/auth/decisione-portiere';
 import { ApiErrors, apiError, apiSuccess } from '@/lib/api/responses';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
@@ -371,6 +373,14 @@ export const POST = withAuthRateLimit(
 
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
+
+    // 17/11/2026 (R31-016) — I Termini in vigore anche qui, non solo nel portiere di /checkout: chi aveva
+    // la cassa già aperta prima del cambio ordinava senza ripassarci. Stessa regola e stesso dubbio del portiere.
+    const termini = await vaChiestaSenzaTrattenere(() => supa, user.id, TETTO_PORTIERE_MS);
+    if (termini === 'chiedi') {
+      return ApiErrors.forbidden('I Termini di MyCity sono cambiati: ricarica la pagina e accettali prima di ordinare.');
+    }
+    if (termini !== 'lascia-entrare') logger.warn('[contanti] Termini accettati non controllati prima dell’ordine', { esito: termini });
 
     /**
      * #172 — Doppio clic, un ordine solo.

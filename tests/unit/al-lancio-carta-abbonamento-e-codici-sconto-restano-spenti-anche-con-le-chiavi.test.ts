@@ -24,6 +24,7 @@ const stato = vi.hoisted(() => ({
   rpc: [] as string[],
 }));
 
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/funzioni-al-lancio', async (originale) => {
   const vero = (await originale()) as Record<string, unknown>;
   return {

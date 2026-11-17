@@ -96,6 +96,7 @@ function tabellaConsensi() {
   };
 }
 
+vi.mock('@/lib/auth/accettazione-testi', async (o) => ({ ...((await o()) as object), vaChiestaSenzaTrattenere: async () => 'lascia-entrare' }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 // S10 (5/11/2026) — L'invio dal server a PostHog ora rispetta POSTHOG_ACCESO
 // (spento al lancio): qui si prova la strada accesa, come prima.
