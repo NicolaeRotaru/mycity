@@ -66,7 +66,7 @@
       "serve_file_altrui": [
         {
           "file": "app/api/ai/catalog-batch/apply/route.ts",
-          "modifica": "(file di R02, va applicato INSIEME alle cinque prove qui sotto, se no diventano rosse 13 prove) righe 74-76: al posto di «const onlyIds = Array.isArray(body.productIds) ? new Set(...) : null;» scrivere «if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Elenco dei prodotti mancante.'); const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));»"
+          "modifica": "(file di R02, va applicato INSIEME alle cinque prove qui sotto, se no diventano rosse 13 prove) righe 75-77 (74-76 sulla base, prima dell'import aggiunto da R02-001): al posto di «const onlyIds = Array.isArray(body.productIds) ? new Set(...) : null;» scrivere «if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Elenco dei prodotti mancante.'); const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));»"
         },
         {
           "file": "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
