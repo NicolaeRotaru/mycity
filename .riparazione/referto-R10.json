@@ -1,6 +1,6 @@
 {
   "sessione": "R10",
-  "aggiornato": "2026-11-18 00:15",
+  "aggiornato": "2026-11-18 00:50",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -93,9 +93,13 @@
       "id": "R10-005",
       "chiave": "navigazione-gerarchia|su notifiche e messaggi i titoli saltano dal titolo principale al terzo livello",
       "esito": "riparato",
-      "commit": "b03a4312fa1741a42b1776040b257cafa34dad6e",
+      "commit": "55edefd4cd157c7ae91cdff04fc9697f2cfed93e",
+      "commit_precedenti": [
+        "b03a4312fa1741a42b1776040b257cafa34dad6e"
+      ],
       "file_toccati": [
-        "app/messages/page.tsx"
+        "app/messages/page.tsx",
+        "app/notifications/page.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts"
@@ -106,16 +110,19 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b03a4312fa1741a42b1776040b257cafa34dad6e^ --file app/messages/page.tsx --prove tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b03a4312^ --file app/messages/page.tsx,app/notifications/page.tsx --prove tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Le notifiche erano già a posto sulla base (app/notifications/page.tsx:232 ha l'h2). Nei messaggi le righe restano h3 (la prova comune la-chat-con-l-assistenza-a-video le cerca così); sopra l'elenco c'è ora un h2 per il lettore di schermo, «Le tue conversazioni», così l'ordine è h1 → h2 → h3."
+      "cosa_ho_fatto": "Primo commit: un h2 per il lettore di schermo, «Le tue conversazioni», sopra l'elenco dei messaggi. Secondo commit, dopo il revisore: negli stati vuoti «Nessuna conversazione» e «Nessuna notifica» passano da p a h2 con le stesse classi, così dopo l'h1 c'è sempre un h2 prima dell'h3 del piè di pagina. La prova monta le due pagine vuote e legge i titoli in ordine."
     },
     {
       "id": "R10-012",
       "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
       "esito": "riparato",
-      "commit": "bdf98f47671b21189da9d1a7fb79fc9d453e073a",
+      "commit": "215b55236bb231c775d8b55cde89ed15513e5236",
+      "commit_precedenti": [
+        "bdf98f47671b21189da9d1a7fb79fc9d453e073a"
+      ],
       "file_toccati": [
         "app/notifications/page.tsx"
       ],
@@ -128,16 +135,19 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bdf98f47671b21189da9d1a7fb79fc9d453e073a^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r10-notifiche-carica-altre.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bdf98f47^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r10-notifiche-carica-altre.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Mentre carica, il tasto resta visibile, disattivato, con aria-busy e il testo «Caricamento…». L'ultimo elenco letto è tenuto in un useRef: se «Carica altre» fallisce, le notifiche già lette restano a video e sotto compaiono l'errore e «Riprova»; la pagina intera di errore resta solo quando non c'è niente di già letto. La prova monta la pagina vera e senza la correzione è rossa nei due casi."
+      "cosa_ho_fatto": "Primo commit: «Carica altre» resta visibile, disattivato, con «Caricamento…», e l'ultimo elenco letto resta a video con l'errore e «Riprova». Secondo commit, dopo il revisore: l'elenco tenuto vale solo per la sessione che l'ha letto e si svuota quando la sessione cambia; dopo «Segna tutte come lette» riuscito risulta letto; la frase «Non riusciamo a caricare altre notifiche» esce solo quando cade proprio «Carica altre», altrimenti «Non riusciamo ad aggiornare le notifiche». Sette casi col react-query vero, rossi senza la correzione."
     },
     {
       "id": "R10-002",
       "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
       "esito": "riparato",
-      "commit": "4f0bd4ad5bfd87e467886a7b504f207ed94436ab",
+      "commit": "9be1a8a1443ab0f5c16b652c373d4d2478335954",
+      "commit_precedenti": [
+        "4f0bd4ad5bfd87e467886a7b504f207ed94436ab"
+      ],
       "file_toccati": [
         "components/home-sections/HomeSectionRenderer.tsx"
       ],
@@ -150,10 +160,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f0bd4ad5bfd87e467886a7b504f207ed94436ab^ --file components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f0bd4ad^ --file components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "A tenere larga la home era il pulsante «Diventa venditore» della fascia per i negozi, con whitespace-nowrap: tolto, e aggiunto max-w-full, così va a capo. /about era già a posto sulla base (app/about/page.tsx:74 colonne in auto-fit, riga 110 titolo con break-words, R02-002 e R03-002)."
+      "cosa_ho_fatto": "Primo commit: tolto whitespace-nowrap dal pulsante «Diventa venditore» (più max-w-full). Secondo commit, dopo la misura del revisore: nel riquadro «Perché scegliere MyCity» il testo accanto all'icona ha min-w-0 e break-words. Misura in Chromium a 360 px col testo al 200%: 422 px sulla base, 401 dopo il primo commit, 360 adesso. /about era già a posto sulla base (R02-002, R03-002)."
     },
     {
       "id": "R10-007",
@@ -178,7 +188,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dea92f379d278176497564b820491568db8c0dd^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Dopo il salvataggio di titolo e descrizione, la pagina della lista rilegge anche le tre chiavi da cui legge /lists (mine, public, inVetrina), oltre al dettaglio. La prova monta /lists e la pagina della lista in un QueryClient vero, con staleTime di 30 secondi come sul sito: dopo la rinomina /lists mostra titolo e descrizione nuovi."
+      "cosa_ho_fatto": "Dopo il salvataggio di titolo e descrizione, la pagina della lista rilegge anche le tre chiavi da cui legge /lists (mine, public, inVetrina), oltre al dettaglio. La prova monta /lists e la pagina della lista in un QueryClient vero, con staleTime di 30 secondi come sul sito: dopo la rinomina /lists mostra titolo e descrizione nuovi.",
+      "verificato_da": "subagente revisore lotto B (worktree separato): prova e prova rimessa rilanciate (uscita 0), 24 file di prove vicine verdi; chiavi rilette confrontate con lib/queries/keys.ts:259-261 e app/lists/page.tsx:54,78,96; lista pubblica rinominata aggiornata anche nelle sezioni pubbliche e in vetrina; rinomina fallita senza effetti sulla cache"
     },
     {
       "id": "R10-008",
@@ -203,7 +214,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dea92f379d278176497564b820491568db8c0dd^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Stessa riga e stessa correzione di R10-007: dopo il salvataggio, updateMeta.onSuccess chiama anche rileggiLeListeDiLists()."
+      "cosa_ho_fatto": "Stessa riga e stessa correzione di R10-007: dopo il salvataggio, updateMeta.onSuccess chiama anche rileggiLeListeDiLists().",
+      "verificato_da": "subagente revisore lotto B (worktree separato): prova e prova rimessa rilanciate (uscita 0), 24 file di prove vicine verdi; chiavi rilette confrontate con lib/queries/keys.ts:259-261 e app/lists/page.tsx:54,78,96; lista pubblica rinominata aggiornata anche nelle sezioni pubbliche e in vetrina; rinomina fallita senza effetti sulla cache"
     },
     {
       "id": "R10-009",
@@ -252,9 +264,16 @@
     {
       "id": "R10-001",
       "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
-      "esito": "gia_riparato_prima",
-      "prova": "Sulla base f93d246a, app/api/health/route.ts:359 fa `const foto = await controllaTrasformazioneFoto({ fetch, timeoutMs: 2000, urlFoto });`: chiede una foto vera di un prodotto in vendita passando da sizedImage (/render/image) e, se fallisce, mette checks.foto e status 'degraded' (commit 80bdba2d, R30-009). L'interruttore NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE è in lib/image-url.ts:106 (R15-007). Le prove tests/unit/riparazione-r30-foto-salute.test.ts e tests/unit/riparazione-r30-la-salute-guarda-le-foto.test.ts sono verdi.",
-      "nota": "Resta una parte che non è codice, per Nicola: 1) controllare che il piano Supabase comprenda le Image Transformations; 2) far avvisare il monitor esterno quando /api/health risponde 'degraded' o con checks.foto.ok=false, perché la rotta risponde comunque 200; 3) se il piano scade, mettere NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/health/ready/route.ts",
+          "modifica": "far guardare anche le foto alla rotta che il monitor esterno interroga: chiamare controllaTrasformazioneFoto (lib/image-url.ts) con una foto vera di un prodotto in vendita, come fa app/api/health/route.ts:340-360, e quando foto.ok === false rispondere come per il database non pronto (il codice che fa avvisare il monitor), con il motivo nel corpo"
+        }
+      ],
+      "prova": "Sulla base f93d246a il controllo delle foto c è solo in app/api/health/route.ts:359 (controllaTrasformazioneFoto passa da sizedImage → /storage/v1/render/image/, lo stesso indirizzo di lib/image-loader.ts:51) e dà «degraded» con 200; ma il commento di app/api/health/route.ts:387-389 dice che il monitor esterno interroga /api/health/ready, che le foto non le guarda. Nei miei file (lib/image-url.ts, lib/image-loader.ts) non c è niente da cambiare: l interruttore NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE esiste già (lib/image-url.ts:106).",
+      "nota": "Per Nicola, non codice: controllare che il piano Supabase comprenda le Image Transformations e quale rotta interroga davvero il monitor esterno (il CHANGELOG:44 dice /api/health, il codice /api/health/ready); se il piano scade, NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy.",
+      "verificato_da": "subagente revisore lotto B: confrontati con git show f93d246a route.ts, image-url.ts e image-loader.ts; lanciate le prove riparazione-r30-foto-salute e riparazione-r30-la-salute-guarda-le-foto (verdi); trovato che /api/health/ready non guarda le foto"
     }
   ],
   "nuovi_difetti_visti": [
@@ -292,13 +311,41 @@
       "severita": "minore",
       "file": "app/lists/page.tsx:139",
       "descrizione": "Dopo la creazione si rilegge solo lists.mine, non lists.mineMin."
+    },
+    {
+      "titolo": "una lista si può salvare col titolo vuoto",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:134",
+      "descrizione": "La modifica (righe 134 e 280) non controlla il titolo vuoto, e nemmeno il database (migrations/036_curated_lists_and_indices.sql:19 ammette stringa vuota); la creazione invece lo vieta."
+    },
+    {
+      "titolo": "tornando indietro dopo l eliminazione la lista eliminata ricompare per 30 secondi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:207-213",
+      "descrizione": "Dopo l eliminazione la cache del dettaglio della lista non viene tolta: col tasto indietro entro 30 secondi la lista ricompare con «Modifica» ed «Elimina»."
+    },
+    {
+      "titolo": "la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/home/HowItWorks.tsx:81",
+      "descrizione": "L h3 «Ricevi e paghi alla consegna» non va a capo: la pagina arriva a 338 px su uno schermo da 320 px."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (notifiche): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "(nel referto privato)"
     }
   ],
   "domande_per_nicola": [
-    "Foto (R10-001, non codice): il piano Supabase comprende le Image Transformations? E il monitor esterno avvisa quando /api/health risponde «degraded» o checks.foto.ok=false (la rotta risponde 200 lo stesso)? Se il piano scade: NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
+    "Foto (R10-001): il piano Supabase comprende le Image Transformations? Quale rotta interroga il monitor esterno, /api/health (che guarda le foto e dice «degraded» con 200) o /api/health/ready (che non le guarda)? Se il piano scade: NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
   ],
   "conto": {
-    "agenti": 3,
+    "agenti": 5,
     "nota": ""
   }
 }
