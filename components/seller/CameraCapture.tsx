@@ -149,6 +149,8 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
             accept="image/*"
             capture="environment"
             className="sr-only"
+            // R01-002 — Lo apre il pulsante qui sopra: col Tab il fuoco finiva su un campo invisibile.
+            tabIndex={-1}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) { onCapture(f); onClose(); }
