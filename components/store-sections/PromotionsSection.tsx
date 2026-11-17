@@ -3,7 +3,6 @@
 import { Tag } from 'lucide-react';
 import type { SectionContext } from './SectionContext';
 import { Badge } from '@/components/ui/Badge';
-import { FUSO_PIACENZA } from '@/lib/tempo-piacenza';
 
 /** Promozioni attive del negozio (badge sconto + scadenza). */
 export default function PromotionsSection({ ctx }: { ctx: SectionContext }) {
@@ -25,7 +24,7 @@ export default function PromotionsSection({ ctx }: { ctx: SectionContext }) {
             <Badge variant="discount" className="rounded-full">-{p.discount_percent}%</Badge>
             <span className="font-medium text-ink-800">{p.title}</span>
             <span className="text-ink-400 text-xs whitespace-nowrap">
-              fino al {new Date(p.ends_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}
+              fino al {new Date(p.ends_at).toLocaleDateString('it-IT')}
             </span>
           </span>
         ))}
