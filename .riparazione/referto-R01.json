@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:31",
+  "aggiornato": "2026-11-17 20:34",
   "finita": false,
-  "testa": "55307e9165992c45cb06102d47fcbc5d7755950e",
+  "testa": "340318af1520de8d65a90db7ea617fe19beccdb3",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -242,6 +242,32 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Dopo un'aggiunta o una rimozione (e dopo «crea lista e aggiungi») il pulsante rilegge anche le tre chiavi da cui /lists prende il conteggio: queryKeys.lists.mine, .public e .inVetrina. La prova monta /lists e il pulsante nello stesso QueryClient vero sopra un database finto in memoria: dopo l'aggiunta le tre schede dicono «2 prodotti», dopo la rimozione «1 prodotto» (senza la cura restano «1 prodotto»). Passano le 6 prove esistenti che montano il pulsante."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "stati-ui|sulla bacheca del fattorino, se la lettura dello stato online cade, la pagina scrive «sei offline» invece di dire che non lo sa; anche il voto ignora l’errore",
+      "esito": "riparato",
+      "commit": "340318af1520de8d65a90db7ea617fe19beccdb3",
+      "commit_tutti": [
+        "340318af1520de8d65a90db7ea617fe19beccdb3"
+      ],
+      "file_toccati": [
+        "app/rider/page.tsx",
+        "tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx tests/unit/riparazione-r20-interruttore-online.test.ts tests/unit/minori-s02-bacheca-del-fattorino.test.ts tests/unit/riparazione-r20-incasso-di-oggi.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 340318af1520de8d65a90db7ea617fe19beccdb3^ --file app/rider/page.tsx --prove tests/unit/riparazione-r01-bacheca-fattorino-stato-ignoto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le letture dello stato online e del voto ora fanno salire l'errore (anche getUser senza rete, come già la lettura di oggi nella stessa pagina) invece di rispondere «offline»/«nessun voto». Senza un dato letto, la scheda dice «Non so se sei online» con «Riprova» (niente interruttore né riquadro «Vai online»), e la testata dice «Non riesco a leggere il tuo voto · Riprova» invece di «Pronto a consegnare». La prova monta la pagina col react-query vero: lettura caduta, poi Riprova riuscito. Passano le 11 prove esistenti che montano la pagina (119 casi)."
     }
   ],
   "nuovi_difetti_visti": [
