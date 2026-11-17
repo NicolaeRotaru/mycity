@@ -593,7 +593,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       frenoAggiunta.current = creaFrenoDoppioTocco();
     }
     if (!frenoAggiunta.current()) {
-      toast.info('Già aggiunto: controlla il carrello', { duration: 2000 });
+      // Un id fisso: più tocchi frenati aggiornano lo stesso avviso invece di impilarne di uguali.
+      toast.info('Già aggiunto: controlla il carrello', { id: 'gia-aggiunto', duration: 2000 });
       return;
     }
     addToCart({
