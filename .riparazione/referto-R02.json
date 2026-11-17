@@ -378,6 +378,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 4,
-    "nota": "2 riparatori (lotto 1, lotto 2) + 2 smentitori (A: R02-001/004/005/006/007/008; B: R02-002/003/009/010/011/012); R02-013 verificata dal capo squadra. Spesa della sessione alla consegna circa 24 $ (usage.cost_usd 23,74 prima della chiusura)."
-  }
+    "nota": "2 riparatori (lotto 1, lotto 2) + 2 smentitori (A: R02-001/004/005/006/007/008; B: R02-002/003/009/010/011/012); R02-013 verificata dal capo squadra. Spesa della sessione alla consegna circa 24 $ (usage.cost_usd 23,74 prima della chiusura).",
+    "subagenti": 4
+  },
+  "costo_usd": 23.74
 }
