@@ -1,0 +1,127 @@
+{
+  "sessione": "R06",
+  "aggiornato": "2026-11-17 23:00",
+  "finita": false,
+  "testa": "f93d246a42b25cd5fa86da712755526d7d6388dc",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_eseguito",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R06-004",
+      "chiave": "microcopy|gli errori dei moduli controllati dal server arrivano al cliente in inglese, per esempio «string must contain at most 120 character»",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "lib/api/responses.ts",
+          "modifica": "aggiungere in testa `import '@/lib/zod-i18n';`: accende il traduttore italiano di Zod in tutte le rotte che rispondono con ApiErrors, cioè le 13 che rimandano issues[0].message senza traduttore: admin/branding, admin/categories, admin/cms/[slug], admin/daily-drops, admin/home, admin/products, chat/conversations, chat/messages, marketplace/import-fetch, products/rehost-images, seller/apply, seller/site, support/conversation. In alternativa la stessa riga in ognuna di quelle route.ts."
+        }
+      ],
+      "cosa_resta": "le 13 rotte qui sopra rispondono ancora coi testi predefiniti inglesi di Zod; la correzione sta in file non miei",
+      "nota": "La parte del modulo contatti era già riparata: app/api/contact/route.ts:21 importa lib/zod-i18n e :28-32 ha un messaggio italiano per ogni limite (120, 200, 5000); lo confermano tests/unit/riparazione-r24-errori-dal-server.test.ts e api-contact.test.ts, verdi. Il ripiego lato browser c'è già (lib/errors.ts:178 traduciTestoDiZod). Nei miei file non c'è un punto comune che chiuda il resto."
+    },
+    {
+      "id": "R06-005",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "esito": "parziale",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "prova": "public/manifest.json: orientation già tolto, \"id\": \"/\" alla riga 5, display_override alla riga 8 (commit 5153b28c)",
+      "cosa_resta": "«screenshots»: servono immagini vere dell'app (almeno una stretta, circa 1080x1920 con form_factor narrow, e una larga con form_factor wide). In public/ ci sono solo icone, foto-mancante.svg e i segnaposti della mappa: non le invento. Quando Nicola le mette in public/, si aggiunge l'array screenshots al manifest.",
+      "cosa_ho_fatto": "Controllato: blocco in verticale, id e display_override erano già sistemati prima; nessuna modifica."
+    },
+    {
+      "id": "R06-006",
+      "chiave": "qa-flussi|quando il fattorino segna «cliente assente» il negozio riceve solo la campanella, non l'email di annullo",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts",
+          "modifica": "righe 172-173: sostituire `expect(sendEmailMock).toHaveBeenCalledTimes(1); const posta = sendEmailMock.mock.calls[0][0];` con `const alCliente = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled'); expect(alCliente).toHaveLength(1); const posta = alCliente[0][0];`; riga 189: `sendEmailMock.mock.calls.at(-1)![0]` diventa `sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled').at(-1)![0]` (stesso numero di asserzioni: l'email al cliente resta una sola, si aggiunge quella al negozio)."
+        },
+        {
+          "file": "tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts",
+          "modifica": "nel vi.mock('@/lib/ordini/annulla') (riga 37) aggiungere `avvisaIlNegozioDellAnnullo: vi.fn(async () => true),` dopo COLONNE_ANNULLO."
+        }
+      ],
+      "nota": "La cura nel mio file è pronta ma non è nel ramo, perché da sola rende rosse due prove esistenti comuni (usano file di R04, R05, R07). Riusa avvisaIlNegozioDellAnnullo (lib/ordini/annulla, R31-023) dopo la campanella, con la stessa frase; non tocca contanti, rimborsi o importi. Porta la prova nuova tests/unit/riparazione-r06-cliente-assente-email.test.ts (1 caso rosso senza la cura, 3 verdi con). Con le due modifiche alle prove comuni i 6 file di prova del cliente assente sono verdi (29 casi). Dopo l'adeguamento: git apply della patch in cura_pronta_patch, commit «R06-006 …», prova rimessa.",
+      "cura_pronta_patch": "diff --git a/app/api/rider/orders/[id]/cliente-assente/route.ts b/app/api/rider/orders/[id]/cliente-assente/route.ts\nindex 159fa772..3482f765 100644\n--- a/app/api/rider/orders/[id]/cliente-assente/route.ts\n+++ b/app/api/rider/orders/[id]/cliente-assente/route.ts\n@@ -4,7 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';\n import { withAuthRateLimit } from '@/lib/api/middleware';\n import { ApiErrors } from '@/lib/api/responses';\n import { logger } from '@/lib/logger';\n-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';\n+import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';\n \n export const runtime = 'nodejs';\n \n@@ -106,6 +106,7 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo\n           // torna la merce e la differenza della consegna (COSA_TORNA). La cifra la dice l'email.\n           `${primaFrase} Il rimborso sulla carta è partito: l'importo è nell'email «Rimborso emesso».`\n         : `${primaFrase} Non devi pagare niente.`;\n+  const fraseAlNegozio = `Il cliente dell'ordine #${sigla} non era in casa: la merce torna in negozio.`;\n   const { error: nErr } = await admin.from('notifications').insert([\n     {\n       category: 'order',\n@@ -119,12 +120,15 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo\n           category: 'order',\n           user_id: order.seller_id,\n           title: '↩️ Ordine annullato: cliente assente',\n-          body: `Il cliente dell'ordine #${sigla} non era in casa: la merce torna in negozio.`,\n+          body: fraseAlNegozio,\n           link: `/seller/orders/${order.id}`,\n         }]\n       : []),\n   ]);\n   if (nErr) logger.error('[cliente-assente] notifiche non scritte', { orderId: order.id, message: nErr.message });\n+  // R06-006 — Al negozio anche l'email dell'annullo, come nelle altre rotte d'annullo (R31-023): con la sola\n+  // campanella il negozio non lo sapeva finché non apriva il pannello. Non lancia: l'annullo è già scritto.\n+  await avvisaIlNegozioDellAnnullo(admin, order, fraseAlNegozio);\n \n   return NextResponse.json({ ok: true, motivo: MOTIVO_CLIENTE_ASSENTE, refundId: esito.refundId }, { status: 200 });\n }\ndiff --git a/tests/unit/riparazione-r06-cliente-assente-email.test.ts b/tests/unit/riparazione-r06-cliente-assente-email.test.ts\nnew file mode 100644\nindex 00000000..510cc99f\n--- /dev/null\n+++ b/tests/unit/riparazione-r06-cliente-assente-email.test.ts\n@@ -0,0 +1,90 @@\n+/**\n+ * R06-006 — Quando il fattorino segna «cliente assente» l'ordine si annulla, ma il negozio riceveva\n+ * solo la campanella: l'email dell'annullo (R31-023) partiva dalle altre rotte d'annullo, non da qui.\n+ *\n+ * Qui la rotta VERA con la vera `avvisaIlNegozioDellAnnullo`: l'annullo e il rimborso sono finti\n+ * (non sono l'oggetto della voce), la posta è una spia.\n+ */\n+import { describe, it, expect, vi, beforeEach } from 'vitest';\n+\n+const ID = '11111111-2222-4333-8444-555555555555';\n+const RIDER = 'rider-1';\n+\n+const posta = vi.hoisted(() => ({ inviate: [] as Array<Record<string, unknown>> }));\n+vi.mock('@/lib/email/client', () => ({\n+  sendEmail: vi.fn(async (m: Record<string, unknown>) => { posta.inviate.push(m); return { ok: true }; }),\n+}));\n+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+vi.mock('@/lib/ordini/annulla', async (originale) => ({\n+  ...(await originale<typeof import('@/lib/ordini/annulla')>()),\n+  annullaERimborsa: vi.fn(async () => ({ ok: true, refundId: null })),\n+}));\n+vi.mock('@/lib/api/middleware', () => ({\n+  withAuthRateLimit:\n+    (_o: unknown, h: (c: { user: { id: string }; req: unknown; params: Record<string, string>; profile?: unknown }) => unknown) =>\n+    (req: unknown, ctx: { params: Record<string, string> }) =>\n+      h({ user: { id: RIDER }, req, params: ctx.params, profile: { role: 'rider', is_approved: true } }),\n+}));\n+\n+const db = vi.hoisted(() => ({ ordine: {} as Record<string, unknown>, notifiche: [] as unknown[] }));\n+const admin = {\n+  from: (tabella: string) => {\n+    if (tabella === 'notifications') {\n+      return { insert: (r: unknown) => { db.notifiche.push(r); return Promise.resolve({ error: null }); } };\n+    }\n+    return {\n+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { ...db.ordine }, error: null }) }) }),\n+    };\n+  },\n+  auth: {\n+    admin: {\n+      getUserById: async (id: string) =>\n+        id === 'negozio-1'\n+          ? { data: { user: { email: 'negozio@esempio.it' } }, error: null }\n+          : { data: { user: { email: 'cliente@esempio.it' } }, error: null },\n+    },\n+  },\n+};\n+vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => admin }));\n+\n+import { POST } from '@/app/api/rider/orders/[id]/cliente-assente/route';\n+\n+async function tocca() {\n+  // eslint-disable-next-line @typescript-eslint/no-explicit-any\n+  const res = (await (POST as any)(new Request(`http://localhost/api/rider/orders/${ID}/cliente-assente`, { method: 'POST' }), {\n+    params: { id: ID },\n+  })) as Response;\n+  return res.status;\n+}\n+\n+beforeEach(() => {\n+  posta.inviate = [];\n+  db.notifiche = [];\n+  db.ordine = {\n+    id: ID, user_id: 'cliente-1', seller_id: 'negozio-1', rider_id: RIDER, total_price: 18.5,\n+    payment_method: 'cod', payment_status: 'PENDING', delivery_status: 'OUT_FOR_DELIVERY',\n+  };\n+});\n+\n+describe('R06-006 · cliente assente: al negozio anche l email dell annullo', () => {\n+  it('il negozio riceve l email «annullato» con la frase della campanella', async () => {\n+    expect(await tocca()).toBe(200);\n+    const alNegozio = posta.inviate.filter((m) => m.to === 'negozio@esempio.it');\n+    expect(alNegozio, 'il negozio non ha ricevuto nessuna email dell annullo').toHaveLength(1);\n+    expect(alNegozio[0].tags).toEqual([{ name: 'template', value: 'order_canceled_seller' }]);\n+    expect(String(alNegozio[0].text)).toContain('non era in casa');\n+    expect(String(alNegozio[0].text)).toContain(`#${ID.slice(0, 6).toUpperCase()}`);\n+  });\n+\n+  it('la campanella al negozio resta', async () => {\n+    await tocca();\n+    const righe = (db.notifiche[0] ?? []) as Array<{ user_id: string }>;\n+    expect(righe.some((r) => r.user_id === 'negozio-1')).toBe(true);\n+  });\n+\n+  it('un ordine senza negozio non manda email a nessun negozio', async () => {\n+    db.ordine.seller_id = null;\n+    expect(await tocca()).toBe(200);\n+    expect(posta.inviate.filter((m) => m.to === 'negozio@esempio.it')).toHaveLength(0);\n+  });\n+});\n",
+      "prove_comuni_patch": "diff --git a/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts b/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts\nindex ab2ee72a..4a5b1adc 100644\n--- a/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts\n+++ b/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts\n@@ -169,8 +169,9 @@ describe('cliente assente, credito MyCity che non torna', () => {\n     const n = allaPersona();\n     expect(n.body).toMatch(/Non devi pagare niente/);\n     expect(n.body).toMatch(/\\(4,00 €\\) non è ancora tornato/);\n-    expect(sendEmailMock).toHaveBeenCalledTimes(1);\n-    const posta = sendEmailMock.mock.calls[0][0];\n+    const alCliente = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled');\n+    expect(alCliente).toHaveLength(1);\n+    const posta = alCliente[0][0];\n     expect(posta.text + posta.html).not.toMatch(/ti è stato restituito/);\n   });\n \n@@ -186,7 +187,7 @@ describe('cliente assente, credito MyCity che non torna', () => {\n     db.ordine = ordine({ wallet_applied_cents: 400 });\n     await tocca();\n     expect(allaPersona().body).not.toMatch(/non è ancora tornato/);\n-    const posta = sendEmailMock.mock.calls.at(-1)![0];\n+    const posta = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled').at(-1)![0];\n     expect(posta.text + posta.html).toMatch(/ti è stato restituito/);\n   });\n });\ndiff --git a/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts b/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts\nindex ecaba540..97f7caf6 100644\n--- a/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts\n+++ b/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts\n@@ -36,6 +36,7 @@ vi.mock('@/lib/rider/prova-del-fattorino', () => ({\n }));\n vi.mock('@/lib/ordini/annulla', () => ({\n   COLONNE_ANNULLO: 'id, user_id, seller_id, total_price, payment_method, delivery_status',\n+  avvisaIlNegozioDellAnnullo: vi.fn(async () => true),\n   annullaERimborsa: vi.fn(async (_admin: unknown, ordine: unknown) => {\n     stato.annulli.push(ordine);\n     return { ok: true, refundId: null, creditoNonTornatoCents: 0 };\n"
+    },
+    {
+      "id": "R06-007",
+      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — la strada per diventare fattorino decide chi ottiene il ruolo rider (permessi: chi diventa fattorino). Il difetto c'è ancora: app/help/page.tsx:56-60 «Diventa rider» porta a /contact.",
+      "file_toccati": []
+    },
+    {
+      "id": "R06-008",
+      "chiave": "qa-flussi|il filtro «oggi» nei guadagni del fattorino taglia la giornata a mezzanotte del telefono, non di piacenza",
+      "esito": "riparato",
+      "commit": "289c7de989aaa3a4a155739cd6f29c2e9d17757f",
+      "file_toccati": [
+        "app/rider/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-oggi-del-fattorino.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-oggi-del-fattorino.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 289c7de9^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r06-oggi-del-fattorino.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il filtro «Oggi» confronta giornoPiacenza(delivered_at) con giornoPiacenza() invece della mezzanotte del telefono (setHours); gli importi non sono toccati (è una data, eccezione della regola 3). La prova monta la pagina vera con orologio finto e fuso del processo UTC e America/New_York, d'inverno e d'estate: 3 casi rossi senza la cura, verdi con la cura."
+    },
+    {
+      "id": "R06-009",
+      "chiave": "qa-flussi|il drop del giorno usa il giorno di greenwich: fra mezzanotte e le 2 la home e la pagina admin sono su giorni diversi",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "components/home/DropOfDay.tsx:68 `const today = giornoPiacenza()` e :56-60 endOfTodayIso con inizioGiornoPiacenza (commit 04cc4b9a R04-004); la pagina admin usa lo stesso giornoPiacenza (app/admin/daily-drops/page.tsx:32)",
+      "cosa_ho_fatto": "Controllato: home e admin calcolano il giorno con lo stesso aiutante di Piacenza."
+    },
+    {
+      "id": "R06-010",
+      "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+      "esito": "gia_riparato_prima",
+      "prova": "components/store-sections/useStorePageData.ts:77 author = authorById.get(user_id) ?? handleById.get(user_id) ?? null (handle pubblico come ripiego, righe 63-65); commit 0f92b386 «R04-011 nelle recensioni della vetrina chi non ha il nome vero firma col nome pubblico», già sulla base f93d246a",
+      "file_toccati": []
+    },
+    {
+      "id": "R06-011",
+      "chiave": "stati-ui|la modifica prodotto dell'amministratore dice «prodotto non trovato» senza riprova quando la lettura non riesce",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "app/admin/products/[id]/edit/page.tsx:46 una lettura non riuscita lancia l'errore e non diventa null; :147 «Non riesco a leggere questo prodotto…» e :152-155 bottone «Riprova» (rileggiProdotto); «Prodotto non trovato» solo se la riga manca (commit 5fd4ce74 e 4e48718f, R22-017)",
+      "cosa_ho_fatto": "Controllato: errore di lettura e prodotto assente sono già distinti, con Riprova."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la modifica prodotto dell'amministratore, se non legge le varianti, dice «Ricarica la pagina» ma non ha il bottone Riprova",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/products/[id]/edit/page.tsx:149-152",
+      "descrizione": "Con erroreVarianti il messaggio chiede di ricaricare la pagina, ma il bottone Riprova compare solo con error (lettura del prodotto)."
+    }
+  ],
+  "domande_per_nicola": [
+    "Typecheck: `tsc --noEmit` va in esaurimento di memoria con le impostazioni normali; con NODE_OPTIONS=--max-old-space-size=6144 è verde. Serve anche per npm run verify in sessione."
+  ],
+  "conto": {
+    "agenti": 1,
+    "nota": "lotto 1: 1 subagente riparatore"
+  }
+}
