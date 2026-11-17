@@ -175,10 +175,18 @@ SELECT 'la fascia dei piu'' visti si riempie anche per un visitatore',
 
 -- ⑨ Il contrario: quello che era chiuso resta chiuso. La riparazione non deve
 --    riaprire `profiles`, che contiene IBAN, documenti e saldo del portafoglio.
-INSERT INTO esiti
-SELECT 'la tabella dei profili resta chiusa a un visitatore',
-       count(*) = 0, 'righe di profiles lette da anon: ' || count(*)
-  FROM public.profiles;
+--    17/11/2026 (R30-022) — Come in produzione, la migrazione 541 toglie ad anon la lettura
+--    di profiles: chiusa vuol dire zero righe lette OPPURE lettura negata. Una riga letta resta rossa.
+DO $$
+DECLARE n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM public.profiles;
+  INSERT INTO esiti VALUES ('la tabella dei profili resta chiusa a un visitatore', n = 0,
+                            'righe di profiles lette da anon: ' || n);
+EXCEPTION WHEN insufficient_privilege THEN
+  INSERT INTO esiti VALUES ('la tabella dei profili resta chiusa a un visitatore', true,
+                            'lettura negata: ' || SQLERRM);
+END $$;
 
 -- ⑩ E le visite restano private una per una: solo il conteggio e' pubblico.
 INSERT INTO esiti

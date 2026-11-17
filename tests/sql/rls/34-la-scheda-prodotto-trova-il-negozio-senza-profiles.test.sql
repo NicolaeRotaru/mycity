@@ -152,20 +152,33 @@ SELECT 'visitatore: la bottega non approvata non compare nella vetrina',
   FROM public.seller_public_profiles WHERE id = '55555555-5555-5555-5555-555555555555';
 
 -- ⑦ E `profiles` resta chiusa: e' il gemello della prova 19, nello stesso posto.
-INSERT INTO esiti
-SELECT 'visitatore: la tabella dei profili resta chiusa',
-       count(*) = 0, 'righe di profiles lette: ' || count(*)
-  FROM public.profiles;
+--    17/11/2026 (R30-022) — Con la migrazione 541 (come in produzione) la lettura e' negata:
+--    chiusa vuol dire zero righe OPPURE lettura negata. Una riga letta resta rossa.
+DO $$
+DECLARE n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM public.profiles;
+  INSERT INTO esiti VALUES ('visitatore: la tabella dei profili resta chiusa', n = 0, 'righe di profiles lette: ' || n);
+EXCEPTION WHEN insufficient_privilege THEN
+  INSERT INTO esiti VALUES ('visitatore: la tabella dei profili resta chiusa', true, 'lettura negata: ' || SQLERRM);
+END $$;
 
 -- ⑧ La malattia, misurata: il VECCHIO aggancio a profiles (come lo esegue
---    PostgREST, un LEFT JOIN coi permessi di chi guarda) torna vuoto. Se un
---    giorno tornasse pieno, vorrebbe dire che `profiles` si e' riaperta.
-INSERT INTO esiti
-SELECT 'visitatore: il vecchio aggancio a profiles torna vuoto, per questo il sito non lo usa piu',
-       count(*) = 1 AND bool_and(pr.id IS NULL), 'righe: ' || count(*)
-  FROM public.products p
-  LEFT JOIN LATERAL (SELECT id FROM public.profiles WHERE id = p.seller_id) pr ON true
- WHERE p.id = 'c0000000-0000-0000-0000-0000000000a1';
+--    PostgREST, un LEFT JOIN coi permessi di chi guarda) torna vuoto, o e' negato
+--    del tutto (541). Se un giorno tornasse pieno, vorrebbe dire che `profiles` si e' riaperta.
+DO $$
+DECLARE n bigint; vuoto boolean;
+BEGIN
+  SELECT count(*), bool_and(pr.id IS NULL) INTO n, vuoto
+    FROM public.products p
+    LEFT JOIN LATERAL (SELECT id FROM public.profiles WHERE id = p.seller_id) pr ON true
+   WHERE p.id = 'c0000000-0000-0000-0000-0000000000a1';
+  INSERT INTO esiti VALUES ('visitatore: il vecchio aggancio a profiles torna vuoto, per questo il sito non lo usa piu',
+                            n = 1 AND vuoto IS TRUE, 'righe: ' || n);
+EXCEPTION WHEN insufficient_privilege THEN
+  INSERT INTO esiti VALUES ('visitatore: il vecchio aggancio a profiles torna vuoto, per questo il sito non lo usa piu',
+                            true, 'aggancio negato: ' || SQLERRM);
+END $$;
 
 RESET ROLE;
 
