@@ -161,6 +161,11 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
+      // R02-008 — /lists legge il conteggio dei prodotti da queste tre: come quando /lists crea una
+      // lista, si rileggono, invece di mostrare il numero vecchio fino a quando scadono.
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.public });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.inVetrina });
     },
     onError: (err: unknown) => toast.error(`Prodotto non tolto: ${friendlyError(err)}`),
   });
