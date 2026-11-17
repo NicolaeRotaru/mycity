@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 17:58",
+  "aggiornato": "2026-11-17 18:03",
   "finita": false,
-  "testa": "bcecf354e90ea44a87e8f0fa7a94a3fe8e27e7a6",
+  "testa": "c1b6f93ee62a900b37ddd6a6d1bad1faf414e57d",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -13,8 +13,25 @@
     {
       "id": "R04-001",
       "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "c1b6f93ee62a900b37ddd6a6d1bad1faf414e57d",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-categoria-lettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-categoria-lettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c1b6f93ee62a900b37ddd6a6d1bad1faf414e57d^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r04-categoria-lettura-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella categoria madre (hub) le file di ProductGrid si nascondono da sole in errore senza avvisare la pagina: la pagina ora chiede il conteggio dell'albero (contaProdottiDellaGriglia, una domanda head) e, se non risponde e nessuna fila è a schermo, mostra ErrorState con «Riprova» (rilegge tutte le domande dei prodotti) e il ritorno alle categorie. Il ramo a griglia piatta mostrava già l'errore di ProductGrid.",
+      "verificato_da": ""
     },
     {
       "id": "R04-002",
