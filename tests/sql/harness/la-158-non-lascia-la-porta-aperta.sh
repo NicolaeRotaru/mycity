@@ -51,7 +51,7 @@ echo "▶ ricostruisco $BASE come la produzione: senza la 131 e senza la 158"
 psql -q -d postgres -c "DROP DATABASE IF EXISTS $BASE WITH (FORCE);" >/dev/null 2>&1
 psql -q -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $BASE;" >/dev/null || exit 1
 psql -q -d "$BASE" -v ON_ERROR_STOP=1 -f "$HERE/00_shim_supabase.sql" >/dev/null 2>&1
-for f in $(ls "$MIG"/*.sql | sort -V); do
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   nome="$(basename "$f")"
   case "$nome" in 131_*|158_*|159_*|160_*) continue ;; esac
   if ! out="$(psql -q -d "$BASE" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then

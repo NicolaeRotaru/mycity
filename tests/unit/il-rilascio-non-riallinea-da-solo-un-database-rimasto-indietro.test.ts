@@ -32,10 +32,10 @@ import { passo, esegui } from './_lavoro-di-rilascio';
 
 const RADICE = process.cwd();
 
-/** I file di migrazione nell'ordine in cui li applica lo script (sort -V). */
+/** I file di migrazione nell'ordine in cui li applica lo script (byte per byte, `LC_ALL=C sort`, come apply.sh). */
 function migrazioni(): string[] {
   const nomi = readdirSync(join(RADICE, 'migrations')).filter((f) => /^\d{3}[a-z]?_.+\.sql$/.test(f));
-  const ordinati = spawnSync('sort', ['-V'], { input: nomi.join('\n'), encoding: 'utf8' }).stdout.trim().split('\n');
+  const ordinati = spawnSync('sort', [], { input: nomi.join('\n'), encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } }).stdout.trim().split('\n');
   if (ordinati.length < 100) throw new Error(`Ho letto solo ${ordinati.length} migrazioni: qualcosa non va`);
   return ordinati;
 }

@@ -33,7 +33,7 @@ npx --yes supabase@2 start --workdir "$ROOT"
 
 echo "▶ applico le migrazioni ($(ls "$MIG"/*.sql | wc -l | tr -d ' ') file)"
 applicate=0
-for f in $(ls "$MIG"/*.sql | sort -V); do
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   if ! out="$(psql -q -d "$DB_URL" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then
     echo "  ✗ $(basename "$f")"
     echo "$out" | grep -E "^psql:|ERROR" | head -4 | sed 's/^/      /'
