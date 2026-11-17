@@ -68,9 +68,31 @@ function formatDateSeparator(iso: string): string {
  * schermo leggeva tutto il filo. Sta in un pezzo suo perché il suo stato nasce spento a ogni
  * comparsa del filo, e accenderlo non ridisegna tutta la pagina.
  */
+/*
+ * 17/11/2026 — «UN GIRO DOPO» ERA ANCORA LO STESSO FRAME.
+ * `useEffect(() => setAcceso(caricato))` accende il registro al commit successivo di React, pochi
+ * millisecondi dopo e prima che il browser disegni: l'albero di accessibilità vedeva un registro
+ * già «polite» con dentro tutto il filo appena entrato, e il lettore di schermo lo leggeva tutto
+ * (all'apertura, quando i messaggi arrivano dopo la conversazione, e dopo «Riprova»). Adesso il
+ * registro si accende al SECONDO frame dopo il caricamento: il primo frame disegna il filo a
+ * registro spento, e solo quello dopo lo accende per i messaggi nuovi dal vivo.
+ */
+function dopoUnFrameDisegnato(fatto: () => void): () => void {
+  if (typeof requestAnimationFrame !== 'function') {
+    const t = setTimeout(fatto, 100);
+    return () => clearTimeout(t);
+  }
+  let secondo = 0;
+  const primo = requestAnimationFrame(() => { secondo = requestAnimationFrame(fatto); });
+  return () => { cancelAnimationFrame(primo); if (secondo) cancelAnimationFrame(secondo); };
+}
+
 function RegistroDelFilo({ caricato, children }: { caricato: boolean; children: ReactNode }) {
   const [acceso, setAcceso] = useState(false);
-  useEffect(() => { setAcceso(caricato); }, [caricato]);
+  useEffect(() => {
+    if (!caricato) { setAcceso(false); return; }
+    return dopoUnFrameDisegnato(() => setAcceso(true));
+  }, [caricato]);
   return (
     <div
       role="log"

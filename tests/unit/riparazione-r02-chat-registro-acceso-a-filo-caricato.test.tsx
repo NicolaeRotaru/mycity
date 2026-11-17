@@ -5,6 +5,7 @@
  * a registro spento, e solo dopo il registro diventa «polite» (per i messaggi nuovi dal vivo).
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { act } from 'react';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
@@ -62,6 +63,9 @@ describe('R02-001 · registro live della chat', () => {
       subtree: true, childList: true, attributes: true, attributeFilter: ['aria-live'], attributeOldValue: true,
     });
     const s = await apri();
+    // 17/11/2026 — il registro si accende al secondo frame dopo il caricamento, non al commit
+    // successivo di React: si lasciano passare alcuni frame veri di jsdom prima di guardarlo.
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
     annotati.push(...osservatore.takeRecords());
     osservatore.disconnect();
 
