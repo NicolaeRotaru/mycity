@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 17:25",
+  "aggiornato": "2026-11-17 18:17",
   "finita": false,
-  "testa": "b7fa1b600a73d19842decfcf1203a226fcbd8d6c",
+  "testa": "889144c60304798f6f9ecd62c48a543d029f8988",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -159,6 +159,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "translateAuthError (il ripiego della pagina di accesso, sopra traduciErroreAuth di lib/errors.ts) legge «after N seconds» e risponde «Hai appena chiesto un link: puoi chiederne un altro fra N secondi.» (la frase di /reset-password per la stessa richiesta), invece di «Accesso non riuscito. Riprova.». Il tetto orario con lo stesso codice over_email_send_rate_limit («email rate limit exceeded») resta tradotto da traduciErroreAuth come prima. lib/errors.ts non toccato.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R01-013",
+      "chiave": "qa-flussi|il conteggio delle novità non applica il filtro sui negozi approvati",
+      "esito": "riparato",
+      "commit": "889144c60304798f6f9ecd62c48a543d029f8988",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts",
+        "tests/unit/riparazione-r01-conteggio-negozi-approvati.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-conteggio-negozi-approvati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-conteggio-negozi-approvati.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 889144c60304798f6f9ecd62c48a543d029f8988^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r01-conteggio-negozi-approvati.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "contaProdottiDellaGriglia aggancia il conteggio con `negozio:seller_public_profiles!inner(id)` alla stessa vista dei negozi approvati da cui la lettura prende il negozio (come già fa StoriesCarousel), così il database scarta dentro il conteggio i prodotti dei negozi non approvati. La prova usa un finto PostgREST che applica davvero l'aggancio !inner: 3 prodotti di un negozio approvato e 4 di uno in attesa danno 3 sia nella lettura sia nel conteggio (prima 7).",
       "verificato_da": ""
     }
   ],
