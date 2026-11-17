@@ -1,6 +1,6 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:19",
+  "aggiornato": "2026-11-17 18:23",
   "finita": false,
   "testa": "422b77e368526914d9072fcf98442fbf98ec984b",
   "verifica": {
@@ -197,8 +197,22 @@
     {
       "id": "R02-009",
       "chiave": "qa-flussi|chi sceglie «fattorino» nell'iscrizione e poi si registra con google diventa cliente, e non trova una strada per diventare fattorino",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/ui/AuthShell.tsx",
+          "modifica": "AuthAlternatives (righe 109-157): nuovo prop facoltativo `ruolo?: 'rider'` (documentato: chi ha scelto Rider nell'iscrizione); in handleGoogle, subito dopo `ritorno.searchParams.set('versione', VERSIONE_TESTI_LEGALI);` (riga 146) aggiungere `if (ruolo === 'rider') ritorno.searchParams.set('ruolo', 'rider');`. Il pulsante Google sta qui: signInWithOAuth non accetta `data`, quindi oggi il ruolo scelto non arriva da nessuna parte e il profilo nasce 'buyer' (handle_new_user, migrations/161:106-114)."
+        },
+        {
+          "file": "app/auth/callback/route.ts",
+          "modifica": "Subito dopo `const utente = data?.user;` (riga 79), PRIMA del blocco dell'accettazione che può rimandare a /accetta-condizioni: se `utente` c'è, `url.searchParams.get('ruolo') === 'rider'`, il canale non è email (`utente.app_metadata?.provider !== 'email'`) e l'account è appena nato (created_at a meno di 60 s, la stessa regola di `appenaNato` più sotto), allora `await getAdminSupabase().from('profiles').update({ role: 'rider', is_approved: false, approval_status: 'pending' }).eq('id', utente.id).eq('role', 'buyer')` dentro try/catch con `logger.warn('[callback] candidatura fattorino non registrata', …)` senza bloccare l'ingresso. Così chi sceglie Rider e usa Google diventa candidato fattorino come chi si iscrive con email (handle_new_user mette role 'rider', is_approved false, 'pending'); mai per un account già esistente né per un profilo che non è 'buyer'. La destinazione resta `next`: NON /rider/onboarding, perché il portiere rimanda in home i fattorini non approvati (lib/auth/decisione-portiere.ts:276-280, decisione 1 del 26/10, prova tests/unit/il-portiere-non-chiude-fuori-chi-aspetta-e-non-perde-il-rinnovo.test.ts:107-112)."
+        },
+        {
+          "file": "app/sign-up/page.tsx",
+          "modifica": "(file di R02, va insieme alla modifica di AuthShell, se no tsc è rosso per il prop che non c'è) riga 343: `<AuthAlternatives condizioniDalModulo={acceptTos} ruolo={role === 'rider' ? 'rider' : undefined} />`. Prove da scrivere insieme: con Rider scelto signInWithOAuth riceve options.redirectTo con ruolo=rider (con Acquirente no); nella callback un account Google appena nato con ruolo=rider fa l'update del profilo con .eq('role','buyer'), un account di più di 60 s o senza ruolo no."
+        }
+      ],
+      "nota": "Il pulsante Google e la chiamata a signInWithOAuth stanno in components/ui/AuthShell.tsx (AuthAlternatives), e il ruolo lo può scrivere solo il server (la regola del database 107 vieta il cambio di ruolo dal browser): nessuna parte della cura sta solo in app/sign-up/page.tsx. La pagina di candidatura /rider/onboarding esiste ma non serve come `next`: i fattorini in attesa non ci entrano (reclutamento dal sito chiuso, decisione 1 del 26/10)."
     },
     {
       "id": "R02-010",
