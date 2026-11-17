@@ -779,13 +779,18 @@ jobs:
             else
               echo "**Attenzione: il database e' avanti di $QUANTE migrazioni rispetto al sito che e' online adesso.**"
               echo "Applicate prima di pubblicare: ${MIGRAZIONI_ELENCO:-non so quali}."
-              echo "Il ritorno indietro rimette il CODICE di prima, non lo schema. Se una di quelle migrazioni TOGLIE qualcosa (DROP COLUMN, DROP TABLE, RENAME), il sito online puo' chiedere una colonna che non c'e' piu' — e il sito resta rotto anche se qui sopra e' scritto che si e' tornati indietro."
+              echo "Il ritorno indietro rimette il CODICE di prima, non lo schema. Se una di quelle migrazioni TOGLIE qualcosa (DROP COLUMN, DROP TABLE, DROP FUNCTION, DROP VIEW, RENAME), il sito online puo' chiedere una colonna, una funzione o una vista che non c'e' piu' — e il sito resta rotto anche se qui sopra e' scritto che si e' tornati indietro."
               # R01-015 (12/11/2026) — Prima qui si chiedeva a una persona di aprire i file e cercare
               # DROP o RENAME. Lo si fa da qui, e si nominano i file e le righe.
+              # R07-001 — Si guardavano solo DROP COLUMN, DROP TABLE e RENAME: un DROP FUNCTION
+              # (la 105 alla riga 17), un DROP VIEW o un ALTER TABLE ... DROP senza la parola
+              # COLUMN passavano, e il riepilogo rassicurava. Adesso si guardano anche quelli,
+              # dopo colonne, tabelle e nomi cambiati, che restano i primi nominati. DEFAULT,
+              # IDENTITY ed EXPRESSION non tolgono niente che il codice chiami per nome.
               DISTRUTTIVE=""
               for m in ${MIGRAZIONI_ELENCO:-}; do
                 [ -f "migrations/$m" ] || continue
-                RIGHE="$(grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m" | grep -vE '^[0-9]+:[[:space:]]*--' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
+                RIGHE="$( { grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m"; grep -niE 'DROP[[:space:]]+(FUNCTION|VIEW|MATERIALIZED[[:space:]]+VIEW|IF[[:space:]]+EXISTS)([^[:alnum:]_]|$)|(ALTER[[:space:]]+TABLE.*[[:space:]]|^[[:space:]]*)DROP[[:space:]]+"?[[:alpha:]_][[:alnum:]_]*"?[[:space:]]*(,|;|CASCADE|RESTRICT|$)' "migrations/$m" | grep -viE 'DROP[[:space:]]+(DEFAULT|IDENTITY|EXPRESSION)[[:space:]]*(,|;|$)'; } | grep -vE '^[0-9]+:[[:space:]]*--' | awk '!visto[$0]++' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
                 if [ -n "$RIGHE" ]; then
                   DISTRUTTIVE="${DISTRUTTIVE}"$'\n'"- \`$m\`: ${RIGHE}"
                 fi
@@ -796,7 +801,7 @@ jobs:
                 echo ""
                 echo "Controlla subito il sito. Se e' rotto, la strada e' andare AVANTI con una correzione, non tornare piu' indietro."
               else
-                echo "Ho guardato quelle migrazioni: nessuna contiene DROP COLUMN, DROP TABLE o RENAME, quindi il codice di prima dovrebbe trovare ancora tutto quello che gli serve."
+                echo "Ho guardato quelle migrazioni: nessuna contiene DROP COLUMN, DROP TABLE o RENAME, e nemmeno DROP FUNCTION, DROP VIEW o un DROP di colonna scritto senza COLUMN, quindi il codice di prima dovrebbe trovare ancora tutto quello che gli serve."
               fi
             fi
           }
