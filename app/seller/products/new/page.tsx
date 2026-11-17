@@ -127,7 +127,7 @@ function NewProductInner() {
   } = useConsegnaVeloceDelNegozio();
 
   // Duplica: precarica da un prodotto esistente (?from=ID).
-  const { data: source, isLoading: loadingSource } = useQuery({
+  const { data: source, isLoading: loadingSource, isError: sorgenteNonLetta, fetchStatus: sorgenteFetchStatus, refetch: rileggiSorgente } = useQuery({
     queryKey: ['duplicate-source', fromId],
     enabled: !!fromId,
     queryFn: async () => {
@@ -153,6 +153,9 @@ function NewProductInner() {
     enabled: !!fromId,
     queryFn: () => loadProductVariants(fromId!),
   });
+  // Senza il prodotto da duplicare (lettura caduta, o in pausa senza rete) il modulo non si apre
+  // vuoto come un prodotto nuovo: si dice, con «Riprova», e si apre pieno quando la lettura riesce.
+  const sorgenteNonArrivata = !!fromId && !source && (sorgenteNonLetta || sorgenteFetchStatus === 'paused');
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
     if (imported) {
@@ -294,6 +297,12 @@ function NewProductInner() {
           <button type="button" onClick={() => { void rileggiCategorie(); }} className="text-sm font-semibold text-rose-700 underline">
             Riprova
           </button>
+        </div>
+      ) : sorgenteNonArrivata ? (
+        <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
+          <p className="font-bold mb-1">Non riesco a caricare il prodotto da duplicare</p>
+          <p className="text-sm mb-3">Senza il prodotto la copia partirebbe vuota. Riprova fra un momento.</p>
+          <button type="button" onClick={() => { void rileggiSorgente(); }} className="text-sm font-semibold text-rose-700 underline">Riprova</button>
         </div>
       ) : fromId && variantiNonLette ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
