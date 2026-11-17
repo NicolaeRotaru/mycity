@@ -1,0 +1,198 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-17 15:49",
+  "finita": true,
+  "testa": "fc5cea5d3cef08c569b455a36e12876db81d6d1f",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "fc5cea5d3cef08c569b455a36e12876db81d6d1f",
+    "nota": "typecheck e lint verdi (0 errori, 99 avvisi già sulla base); vitest 1646 file passati, 1 saltato già prima (10699 prove passate). La memoria alzata serve solo a tsc, che con quella standard va in Aborted."
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "chiave": "api-backend|la newsletter non guarda l'esito dell'invio email",
+      "esito": "riparato",
+      "commit": "ff3b1064b0518043a8cbf07ea948677cf73bc284",
+      "file_toccati": [
+        "app/api/newsletter/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-o6-newsletter-esito-invio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-o6-newsletter-esito-invio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "NODE_OPTIONS=--max-old-space-size=8192 timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ff3b1064b0518043a8cbf07ea948677cf73bc284^ --file app/api/newsletter/route.ts --prove tests/unit/riparazione-r03-o6-newsletter-esito-invio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta ora legge l'esito di sendEmail: se Resend rifiuta, scrive un errore nel registro (senza indirizzo). La risposta alla persona resta uguale.",
+      "verificato_da": "revisore (opus, worktree separato): prova verde 2/2, prova rimessa da ff3b1064^ uscita 0, verdi le 6 prove vicine della newsletter. Riserva: sulla base sendEmail scriveva già «[email] invio fallito dopo retry» (lib/email/client.ts:215) senza dire che era la newsletter; ora il rifiuto resta scritto due volte, e a chiave Resend spenta la rotta scrive un error dove sendEmail scrive un warn (vedi nuovi_difetti_visti)."
+    },
+    {
+      "id": "R03-002",
+      "chiave": "api-backend|comunicare l esito di una segnalazione: se il processo muore tra «prendo il canale» e l invio, quel canale resta preso e non riparte piu",
+      "esito": "non_fatto",
+      "nota": "Sulla base c83c3e4e il difetto non esiste ancora: app/api/segnalazioni/esito/comunica.ts non ha nessun «prendo il canale» (manda email, notifica e avviso al venditore e basta) e la migrazione 385_l_esito_della_segnalazione_si_comunica_una_volta_per_canale.sql non c'è in migrations/ né in nessun ramo del deposito. La voce riguarda codice e schema di un altro ramo non ancora unito: da rifare dopo che quel ramo è sulla base. Non so se la colonna del segno sia jsonb/timestamptz, quindi non posso dire se servirà una migrazione.",
+      "verificato_da": "revisore: confermato che sulla base comunica.ts non ha nessun «prendo il canale» (righe 108-142) e che la migrazione 385 non esiste (ultime 500-572, git log --all non la trova)."
+    },
+    {
+      "id": "R03-003",
+      "chiave": "api-backend|una segnalazione di tipo recensione o messaggio si registra con un id qualsiasi",
+      "esito": "riparato",
+      "commit": "19de476e36c60901c7ae6c60499e0d22d6f47157",
+      "file_toccati": [
+        "app/api/segnalazioni/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-o6-segnalazioni-oggetto-esiste.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-o6-segnalazioni-oggetto-esiste.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19de476e36c60901c7ae6c60499e0d22d6f47157^ --file app/api/segnalazioni/route.ts --prove tests/unit/riparazione-r03-o6-segnalazioni-oggetto-esiste.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il controllo «l'oggetto esiste» ora vale anche per recensione (tabelle reviews e store_reviews, perché il pulsante c'è su prodotti e negozi) e messaggio (messages). Stesso client di servizio di prima; id inventato = 404, nessuna riga, nessun avviso agli admin.",
+      "verificato_da": "revisore (opus): prova verde 5/5, prova rimessa da 19de476e^ uscita 0; tabelle vere con id uuid: reviews (001_create_tables.sql:46), store_reviews (014_mvp_sprint.sql:56), messages (026_chat_messaging.sql:46); una recensione di negozio valida e un messaggio vero passano; verdi le 8 prove vicine delle segnalazioni."
+    },
+    {
+      "id": "R03-004",
+      "chiave": "api-backend|le pagine d'errore del venditore e del fattorino dicono «abbiamo registrato il problema» anche senza il registratore acceso",
+      "esito": "riparato",
+      "commit": "f393b49dbe790e5a29b76e856533df6d66338fcc",
+      "file_toccati": [
+        "app/seller/error.tsx",
+        "app/rider/error.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-o6-pagine-errore-registratore.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-o6-pagine-errore-registratore.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f393b49dbe790e5a29b76e856533df6d66338fcc^ --file app/seller/error.tsx,app/rider/error.tsx --prove tests/unit/riparazione-r03-o6-pagine-errore-registratore.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base registratoreAcceso() non esiste (nemmeno in app/error.tsx, che ha ancora la frase fissa) e sentry.tsx non è mio: ho messo in ogni pagina una piccola funzione locale che guarda SENTRY_DSN (lo stesso che usa captureError). Senza DSN la frase diventa solo «Riprova fra un momento.»",
+      "verificato_da": "revisore (opus): prova verde 4/4, prova rimessa da f393b49d^ uscita 0, verdi le 2 prove vicine; SENTRY_DSN è la stessa variabile con cui captureError decide se registrare. Caso prudente: un errore registrato solo dal Sentry del server fa dire alla pagina solo «Riprova»."
+    },
+    {
+      "id": "R03-005",
+      "chiave": "api-backend|il modulo dell'assistenza non manda nessuna chiave per invio",
+      "esito": "non_fatto",
+      "nota": "Sulla base c83c3e4e la rotta app/api/support/conversation/route.ts non accetta nessuna chiave per invio: lo schema ha solo firstMessage e non c'è traccia di R14-022 né dell'impronta del testo in 5 secondi (grep di R14-022 e di idempot/chiave: niente). Senza il nome del campo/intestazione e il formato non si può far mandare la chiave al modulo con una prova che cambia davvero qualcosa. Da rifare quando R14-022 è sulla base; poi la modifica è piccola: in start() una chiave (crypto.randomUUID) tenuta in un useRef, rigenerata solo dopo un invio riuscito o quando il testo cambia, mandata nel campo che la rotta leggerà.",
+      "verificato_da": "revisore: confermato che sulla base la rotta app/api/support/conversation/route.ts ha lo schema col solo firstMessage (righe 13-14), nessuna chiave per invio né impronta del testo."
+    },
+    {
+      "id": "R03-006",
+      "chiave": "architettura|il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
+      "esito": "serve_file_altrui",
+      "nota": "La correzione di scripts/gen-db-types.mjs (sqlTypeToTs guarda l'array prima del nome del tipo; esportate sqlTypeToTs e parseColumnLine, nessun cambio da riga di comando) e la prova nuova passano. Ma due prove comuni, riparazione-r11-tipi-che-possono-restare-vuoti e riparazione-r11-viste-nei-tipi ('il file salvato è quello che il generatore produce'), diventano rosse finché lib/database.types.ts non è rigenerato: quel file non è mio, quindi NON ho committato e ho rimesso l'albero pulito. Rigenerando, 18 righe cambiano (percorsi, tags, rider_zones, photo_urls, product_ids ecc. diventano string[]) e `npx tsc --noEmit` resta pulito (0 errori) con i tipi rigenerati: nessun tipo usato dal codice si rompe.",
+      "serve_file_altrui": [
+        {
+          "file": "scripts/gen-db-types.mjs",
+          "modifica": "diff --git a/scripts/gen-db-types.mjs b/scripts/gen-db-types.mjs\nindex bf567a76..008030d0 100644\n--- a/scripts/gen-db-types.mjs\n+++ b/scripts/gen-db-types.mjs\n@@ -29,22 +29,28 @@ const ROOT = join(__dirname, '..');\n const MIGRATIONS_DIR = join(ROOT, 'migrations');\n const OUT = join(ROOT, 'lib', 'database.types.ts');\n \n-/** Mappa tipo SQL → tipo TS. */\n-function sqlTypeToTs(sqlType) {\n+/**\n+ * Mappa tipo SQL → tipo TS.\n+ *\n+ * R03-006 — L'array si riconosce PRIMA di guardare il nome del tipo: `text[]` e `uuid[]` iniziano\n+ * per «text» e «uuid», e il primo controllo li dava per stringhe semplici (products.tags,\n+ * profiles.rider_zones, reviews.photo_urls… risultavano `string` invece di `string[]`).\n+ */\n+export function sqlTypeToTs(sqlType) {\n   const t = sqlType.toLowerCase().trim();\n+  if (/\\[\\]$/.test(t) || /^_/.test(t)) {\n+    const base = sqlTypeToTs(t.replace(/\\[\\]$/, '').replace(/^_/, ''));\n+    return `${base}[]`;\n+  }\n   if (/^(uuid|text|varchar|char|citext|bpchar|name|date|timestamptz|timestamp|time|inet|interval)/.test(t)) return 'string';\n   if (/^(numeric|decimal|real|double|float|int|integer|bigint|smallint|serial|bigserial)/.test(t)) return 'number';\n   if (/^bool/.test(t)) return 'boolean';\n   if (/^(jsonb|json)/.test(t)) return 'Json';\n-  if (/\\[\\]$/.test(t) || /^_/.test(t)) {\n-    const base = sqlTypeToTs(t.replace(/\\[\\]$/, ''));\n-    return `${base}[]`;\n-  }\n   return 'Json'; // fallback sicuro per tipi custom (enum, ecc)\n }\n \n /** Estrae il nome colonna + tipo + nullable da una riga di definizione. */\n-function parseColumnLine(line) {\n+export function parseColumnLine(line) {\n   // 22/8/2026 — LE COLONNE SCRITTE SU PIU' RIGHE SPARIVANO, IN SILENZIO.\n   //\n   // La riga qui sotto confronta con un'espressione che NON attraversa gli a\n"
+        },
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "rigenerare con `node scripts/gen-db-types.mjs`; differenza esatta:\n--- lib/database.types.ts\t2026-11-17 15:35:13.679809701 +0000\n+++ lib/database.types.ts\t2026-11-17 15:34:50.831808343 +0000\n@@ -1011,19 +1011,19 @@\n         Row: {\n           id: number;\n           profilo: string;\n-          percorsi: string;\n+          percorsi: string[];\n           messo_at: string;\n         };\n         Insert: {\n           id: number;\n           profilo: string;\n-          percorsi: string;\n+          percorsi: string[];\n           messo_at?: string;\n         };\n         Update: {\n           id?: number;\n           profilo?: string;\n-          percorsi?: string;\n+          percorsi?: string[];\n           messo_at?: string;\n         };\n         Relationships: [];\n@@ -1879,7 +1879,7 @@\n           unit: string | null;\n           compare_at_price: number | null;\n           condition: string | null;\n-          tags: string;\n+          tags: string[];\n           express_enabled: boolean | null;\n           has_variants: boolean;\n           external_source_url: string | null;\n@@ -1905,7 +1905,7 @@\n           unit?: string | null;\n           compare_at_price?: number | null;\n           condition?: string | null;\n-          tags?: string;\n+          tags?: string[];\n           express_enabled?: boolean | null;\n           has_variants?: boolean;\n           external_source_url?: string | null;\n@@ -1931,7 +1931,7 @@\n           unit?: string | null;\n           compare_at_price?: number | null;\n           condition?: string | null;\n-          tags?: string;\n+          tags?: string[];\n           express_enabled?: boolean | null;\n           has_variants?: boolean;\n           external_source_url?: string | null;\n@@ -2019,7 +2019,7 @@\n           store_customization: Json;\n           rider_is_online: boolean;\n           rider_schedule: Json | null;\n-          rider_zones: string;\n+          rider_zones: string[];\n           notif_order_updates: boolean;\n           notif_promos: boolean;\n           notif_groups: boolean;\n@@ -2108,7 +2108,7 @@\n           store_customization?: Json;\n           rider_is_online?: boolean;\n           rider_schedule?: Json | null;\n-          rider_zones?: string;\n+          rider_zones?: string[];\n           notif_order_updates?: boolean;\n           notif_promos?: boolean;\n           notif_groups?: boolean;\n@@ -2197,7 +2197,7 @@\n           store_customization?: Json;\n           rider_is_online?: boolean;\n           rider_schedule?: Json | null;\n-          rider_zones?: string;\n+          rider_zones?: string[];\n           notif_order_updates?: boolean;\n           notif_promos?: boolean;\n           notif_groups?: boolean;\n@@ -2395,7 +2395,7 @@\n           rating: number;\n           comment: string | null;\n           created_at: string | null;\n-          photo_urls: string | null;\n+          photo_urls: string[] | null;\n           verified_purchase: boolean | null;\n         };\n         Insert: {\n@@ -2405,7 +2405,7 @@\n           rating: number;\n           comment?: string | null;\n           created_at?: string | null;\n-          photo_urls?: string | null;\n+          photo_urls?: string[] | null;\n           verified_purchase?: boolean | null;\n         };\n         Update: {\n@@ -2415,7 +2415,7 @@\n           rating?: number;\n           comment?: string | null;\n           created_at?: string | null;\n-          photo_urls?: string | null;\n+          photo_urls?: string[] | null;\n           verified_purchase?: boolean | null;\n         };\n         Relationships: [];\n@@ -2539,7 +2539,7 @@\n           discount_percent: number;\n           scope: string;\n           category_id: string | null;\n-          product_ids: string | null;\n+          product_ids: string[] | null;\n           starts_at: string;\n           ends_at: string;\n           status: string;\n@@ -2552,7 +2552,7 @@\n           discount_percent: number;\n           scope: string;\n           category_id?: string | null;\n-          product_ids?: string | null;\n+          product_ids?: string[] | null;\n           starts_at?: string;\n           ends_at: string;\n           status?: string;\n@@ -2565,7 +2565,7 @@\n           discount_percent?: number;\n           scope?: string;\n           category_id?: string | null;\n-          product_ids?: string | null;\n+          product_ids?: string[] | null;\n           starts_at?: string;\n           ends_at?: string;\n           status?: string;\n@@ -2797,7 +2797,7 @@\n           created_at: string | null;\n           seller_reply: string | null;\n           seller_reply_at: string | null;\n-          photo_urls: string;\n+          photo_urls: string[];\n           helpful_count: number;\n         };\n         Insert: {\n@@ -2810,7 +2810,7 @@\n           created_at?: string | null;\n           seller_reply?: string | null;\n           seller_reply_at?: string | null;\n-          photo_urls?: string;\n+          photo_urls?: string[];\n           helpful_count?: number;\n         };\n         Update: {\n@@ -2823,7 +2823,7 @@\n           created_at?: string | null;\n           seller_reply?: string | null;\n           seller_reply_at?: string | null;\n-          photo_urls?: string;\n+          photo_urls?: string[];\n           helpful_count?: number;\n         };\n         Relationships: [];\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r03-o6-tipi-delle-colonne-array.test.ts",
+          "modifica": "file nuovo, contenuto intero:\nimport { describe, it, expect } from 'vitest';\nimport { parseColumnLine, sqlTypeToTs } from '@/scripts/gen-db-types.mjs';\n\n/**\n * R03-006 — Il generatore dei tipi scriveva le colonne array (text[], uuid[]) come `string`\n * invece di `string[]`. Si esegue la vera funzione che legge ogni riga di colonna.\n */\ndescribe('R03-006 — le colonne array nei tipi generati', () => {\n  it.each([\n    ['tags text[]', 'string[]'],\n    ['rider_zones text[] NOT NULL DEFAULT \\'{}\\'', 'string[]'],\n    ['photo_urls text[] DEFAULT ARRAY[]::text[]', 'string[]'],\n    ['product_ids uuid[]', 'string[]'],\n    ['percorsi text[] NOT NULL', 'string[]'],\n    ['voti integer[]', 'number[]'],\n    ['dati jsonb[]', 'Json[]'],\n  ])('%s → %s', (riga, atteso) => {\n    expect(parseColumnLine(riga)?.tsType).toBe(atteso);\n  });\n\n  it('le colonne normali restano quelle di prima', () => {\n    expect(parseColumnLine('nome text NOT NULL')).toMatchObject({ tsType: 'string', nullable: false });\n    expect(parseColumnLine('id uuid PRIMARY KEY')?.tsType).toBe('string');\n    expect(parseColumnLine('prezzo numeric(10, 2) NOT NULL')?.tsType).toBe('number');\n  });\n\n  it('il nome interno degli array di Postgres (_text) non manda la funzione in ricorsione', () => {\n    expect(sqlTypeToTs('_text')).toBe('string[]');\n    expect(sqlTypeToTs('uuid[]')).toBe('string[]');\n  });\n});\n"
+        }
+      ],
+      "verificato_da": "non guardata dal revisore: fermato dalla regia prima di applicare le patch."
+    },
+    {
+      "id": "R03-007",
+      "chiave": "frontend-ux|una categoria con la lettura dei prodotti caduta resta una pagina bianca",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (FERMO della regista O5 alle 15:40; nessuna riga di codice toccata)."
+    },
+    {
+      "id": "R03-008",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (FERMO della regista O5 alle 15:40; nessuna riga di codice toccata)."
+    },
+    {
+      "id": "R03-009",
+      "chiave": "frontend-ux|la pillola della posizione legge localstorage senza protezione",
+      "esito": "riparato",
+      "commit": "fc5cea5d3cef08c569b455a36e12876db81d6d1f",
+      "file_toccati": [
+        "components/LocationPill.tsx",
+        "tests/unit/riparazione-r03-o6-pillola-senza-memoria-locale.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-o6-pillola-senza-memoria-locale.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-o6-pillola-senza-memoria-locale.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "cd /home/user/mycity && NODE_OPTIONS=--max-old-space-size=8192 timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fc5cea5d3cef08c569b455a36e12876db81d6d1f^ --file components/LocationPill.tsx --prove tests/unit/riparazione-r03-o6-pillola-senza-memoria-locale.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La lettura di localStorage al montaggio della pillola ora sta in un try: se il browser la rifiuta la pillola resta in piedi e il fumetto non compare (non si potrebbe ricordare il «chiudi»). La prova monta la pillola con getItem e setItem che lanciano: si apre e salva un CAP senza errori.",
+      "verificato_da": "non guardata da un revisore: fermo per il limite settimanale. Il riparatore (opus) ha lanciato la prova rimessa (uscita 0) e le 9 prove esistenti che leggono la pillola, tutte verdi."
+    },
+    {
+      "id": "R03-010",
+      "chiave": "frontend-ux|sulla pagina del negozio il testo lungo si taglia ancora in silenzio a 4.000 caratteri",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (FERMO della regista O5 alle 15:40; nessuna riga di codice toccata)."
+    },
+    {
+      "id": "R03-011",
+      "chiave": "frontend-ux|a menu spento, un link lasciato a metà sparisce al salvataggio senza avviso",
+      "esito": "non_fatto",
+      "nota": "Fermata dalla regia (limite settimanale) mentre leggevo il codice; nessuna modifica fatta. Non si chiude in pochi passi: per tenere il link a metà a menu spento serve uno schema del menu che scelga fra link rigido (menu acceso o enabled assente) e link in bozza (enabled:false esplicito), lasciando uguali il tipo MenuLink e i percorsi d'errore (menu.links.i.label) che usa dove-e-l-errore.ts, più la modifica dichiarata di tests/unit/riparazione-r20-menu-spento.test.ts (importa solo lib/store-site.ts), che oggi si aspetta il link scartato (['l2']).",
+      "verificato_da": "non guardata (non_fatto, nessun codice toccato)."
+    },
+    {
+      "id": "R03-012",
+      "chiave": "layout-responsive|col testo ingrandito al massimo anche la pagina chi siamo scorre di lato (466px su 360)",
+      "esito": "non_fatto",
+      "nota": "non iniziata: fermo per il limite settimanale del conto (FERMO della regista O5 alle 15:40; nessuna riga di codice toccata)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Le pagine d'errore principale e dell'amministrazione dicono ancora «Abbiamo registrato il problema» anche senza il registratore acceso",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/error.tsx:33 · app/admin/error.tsx:27",
+      "descrizione": "Stessa classe di R03-004, fuori dai miei file. Sulla base lib/analytics/sentry.tsx non esporta registratoreAcceso(), che il testo di R03-004 dava per esistente: in app/seller/error.tsx e app/rider/error.tsx ho messo una funzione locale Boolean(SENTRY_DSN), da sostituire con una condivisa quando arriverà."
+    },
+    {
+      "titolo": "La newsletter scrive due volte nel registro lo stesso rifiuto di Resend, e a chiave spenta scrive un errore invece di un avviso",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/newsletter/route.ts:162-168 · lib/email/client.ts:215",
+      "descrizione": "Effetto di R03-001 visto dal revisore: sendEmail registra già «[email] invio fallito dopo retry»; la rotta ora aggiunge la riga con il contesto newsletter. Cura piccola: nella rotta scrivere logger.warn quando l'esito è skipped (chiave spenta) e lasciare l'error solo per il rifiuto vero, oppure togliere la riga generica da sendEmail. La newsletter è spenta al lancio."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "nota": "4 subagenti su 6: lotto 1 (R03-001…006) col modello piccolo (sonnet), partito prima che la regia O6 chiedesse il modello grande; lotto 2 (opus), fermato dopo R03-009; un revisore (opus) sul lotto 1, fermato prima di R03-006. FERMO della regista O5 alle 15:40 per il limite settimanale (allowed_warning): R03-007, 008, 010, 012 non iniziate, R03-011 lasciata senza modifiche. Costo letto con get_session (senza id) alle 15:43: 7,10 $.",
+    "subagenti": 4,
+    "costo_usd": 7.1
+  },
+  "costo_usd": 7.1
+}

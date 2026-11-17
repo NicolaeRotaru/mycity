@@ -78,7 +78,15 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
   };
   useEffect(() => {
     if (compact || typeof window === 'undefined') return;
-    if (localStorage.getItem('mc_addr_hint') === '1') return;
+    // 17/11/2026 (R03-009) — In navigazione privata o coi dati dei siti bloccati
+    // `localStorage` lancia: senza protezione la barra andava in errore al montaggio.
+    // Se la memoria non si legge non possiamo ricordare il «chiudi», e allora il
+    // fumetto non si mostra: tornerebbe a ogni pagina.
+    try {
+      if (localStorage.getItem('mc_addr_hint') === '1') return;
+    } catch {
+      return;
+    }
     const t = setTimeout(() => setHint(true), 1400);
     return () => clearTimeout(t);
   }, [compact]);
