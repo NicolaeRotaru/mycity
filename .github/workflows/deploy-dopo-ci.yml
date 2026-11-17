@@ -559,8 +559,12 @@ jobs:
           # leggeva solo il passo del ritorno indietro (dopo una prova di fumo caduta). Se lo
           # script si ferma a meta', le migrazioni prima di quella rotta restano applicate e
           # registrate, e il sito online non le conosce: qui lo si scrive nel riepilogo.
+          # R07-002 — L'ultima «▶ applico» non e' per forza quella rotta: lo script cade anche
+          # DOPO averla applicata e registrata, sul controllo del registro per il file dopo, o
+          # sulla registrazione. Lo dice il numero d'uscita di psql: 3 = errore nell'SQL del
+          # file (ON_ERROR_STOP); 1 o 2 = un comando -c o la connessione, fra un file e l'altro.
           if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ] && grep -q '^▶ applico ' "$DIARIO"; then
-            ROTTA="$(grep '^▶ applico ' "$DIARIO" | tail -n 1 | sed 's/^▶ applico //')"
+            ULTIMA="$(grep '^▶ applico ' "$DIARIO" | tail -n 1 | sed 's/^▶ applico //')"
             PRIMA="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | sed '$d' | tr '\n' ' ')"
             echo "fermo=migrazioni-a-meta" >> "$GITHUB_OUTPUT"
             {
@@ -568,9 +572,17 @@ jobs:
               echo ""
               echo "Non ho pubblicato niente, ma il database e' gia' cambiato."
               echo "- Applicate e registrate prima del guasto: ${PRIMA:-nessuna}"
-              echo "- Quella che si e' rotta: \`$ROTTA\` (se contiene un COMMIT suo puo' essere rimasta a meta': guarda gli avvisi qui sopra)"
+              if [ "$USCITA" = "3" ]; then
+                echo "- Quella che si e' rotta: \`$ULTIMA\` (se contiene un COMMIT suo puo' essere rimasta a meta': guarda gli avvisi qui sopra)"
+              else
+                echo "- L'ultima cominciata: \`$ULTIMA\`. Il suo SQL non ha dato errori (lo script e' uscito con $USCITA, non con 3): e' caduto fra un file e il successivo, sulla connessione o sul registro. \`$ULTIMA\` puo' essere gia' applicata, e anche registrata: guardalo in \`supabase_migrations.schema_migrations\` prima di toccarla. Se e' applicata ma non registrata, il prossimo rilascio la riapplica."
+              fi
               echo ""
-              echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Poi correggi la migrazione rotta e unisci la correzione: il rilascio riparte dalla prima che manca."
+              if [ "$USCITA" = "3" ]; then
+                echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Poi correggi la migrazione rotta e unisci la correzione: il rilascio riparte dalla prima che manca."
+              else
+                echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Nessuna migrazione da correggere: guarda l'errore di psql nel passo qui sopra e il registro, poi rilancia il rilascio, che riparte dalla prima che manca."
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
