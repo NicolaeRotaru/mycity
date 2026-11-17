@@ -169,7 +169,7 @@ interface ProductFormProps {
        */
       scorteViste: Record<string, number>;
     },
-  ) => void;
+  ) => void | Promise<unknown>;
   onDelete?: () => void;
   /** 27/8/2026 (R029) — nel pannello venditore il tasto NASCONDE, non cancella;
    *  in quello dell'amministratore cancella davvero. L'etichetta deve dire
@@ -755,8 +755,18 @@ export default function ProductForm({
   };
 
   // ---- Submit ---------------------------------------------------------------
-  const makeSubmit = (intent: 'publish' | 'draft' | 'save') =>
-    handleSubmit((values) => {
+  /**
+   * R01-012 — UN DOPPIO CLIC SU «PUBBLICA» NON METTE IN VENDITA DUE PRODOTTI.
+   * Il pulsante si spegneva solo con `submitting`, cioè dopo la convalida
+   * asincrona e dopo che l'inserimento era partito: nel frattempo un secondo
+   * clic rifaceva il giro e inviava di nuovo. Questa guardia sincrona chiude il
+   * modulo dal primo clic fino alla fine dell'invio (anche se l'invio cade).
+   *
+   * LA PROVA: tests/unit/riparazione-r01-doppio-clic-pubblica.test.tsx
+   */
+  const invioInCorso = useRef(false);
+  const makeSubmit = (intent: 'publish' | 'draft' | 'save') => {
+    const invia = handleSubmit(async (values) => {
       if (imageUrls.length === 0) {
         setImageError('Aggiungi almeno una foto: senza immagini il prodotto non vende.');
         document.getElementById('image-dropzone')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -867,13 +877,23 @@ export default function ProductForm({
       if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante) {
         delete (payload as Partial<ProductPayload>).express_enabled;
       }
-      onSubmit(payload, {
+      await onSubmit(payload, {
         intent,
         variants,
         campiDallAi: [...campiDallAi.current],
         scorteViste: { ...scortaAllApertura.current.varianti },
       });
     });
+    return async (e?: React.BaseSyntheticEvent) => {
+      if (invioInCorso.current) { e?.preventDefault(); return; }
+      invioInCorso.current = true;
+      try {
+        await invia(e);
+      } finally {
+        invioInCorso.current = false;
+      }
+    };
+  };
 
   // ---- Anteprima prezzo -----------------------------------------------------
   const priceNum = prezzoDelCampo(watch('price')) || 0;
