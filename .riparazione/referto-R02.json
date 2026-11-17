@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-17 18:16",
+  "aggiornato": "2026-11-17 18:19",
   "finita": false,
-  "testa": "ff2d8564fc810af6b059e053e4ff050e71bf4672",
+  "testa": "422b77e368526914d9072fcf98442fbf98ec984b",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -173,8 +173,26 @@
     {
       "id": "R02-008",
       "chiave": "qa-flussi|dopo aver tolto un prodotto da una lista, il conteggio in /lists resta vecchio fino a 30 secondi",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questo turno"
+      "esito": "riparato",
+      "commit": "422b77e368526914d9072fcf98442fbf98ec984b",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 422b77e368526914d9072fcf98442fbf98ec984b^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r02-lista-conteggio-dopo-rimozione.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nell'onSuccess di removeItem, oltre a queryKeys.lists.items(id), si invalidano queryKeys.lists.mine, .public e .inVetrina: sono le tre chiavi da cui /lists legge items_count (come fa /lists quando crea una lista, che invalida lists.mine). La prova monta /lists per sapere da quali chiavi legge, poi toglie un prodotto da /lists/[id] e controlla che ognuna sia riletta (sulla base: solo ['lists','items','L1']); se la delete fallisce non si rilegge niente.",
+      "verificato_da": "da verificare"
     },
     {
       "id": "R02-009",
