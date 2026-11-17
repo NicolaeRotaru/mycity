@@ -56,91 +56,6 @@ export function useOraDiPiacenza(attivo: boolean = true): Date | null {
 /** Dopo quanto una risposta sulla veloce si richiede, al ritorno sulla scheda. */
 const RICHIEDI_VELOCE_MS = 5 * 60_000;
 
-/**
- * 17/11/2026 — UNA DOMANDA PER TUTTA LA LISTA, NON UNA PER SCHEDA.
- *
- * Sull'elenco dei negozi ogni scheda chiedeva la veloce del suo negozio: 30 schede, 30 domande,
- * tutte nello stesso istante e contro il freno della rotta, che è anche quello del carrello. Ora
- * le schede che chiedono nello stesso giro (lo stesso disegno, lo stesso ritorno sulla pagina) si
- * mettono in coda e parte UNA domanda con tutti i negozi (`?negozi=a,b,…`, fino a 20 per volta).
- *
- * La rotta risponde per il gruppo intero, come per un carrello: un sì vale per ognuno. Un no può
- * essere di tutti (fuori orario, nessun fattorino) o di un negozio solo (sta per chiudere): allora
- * si chiede una volta la regola senza negozi, e solo se quella dice sì si divide il gruppo in due,
- * finché il no trova il suo negozio. La decisione resta quella della cassa, negozio per negozio.
- */
-const NEGOZI_PER_DOMANDA = 20;
-type EsitoVeloceScheda = boolean | null;
-let codaVeloce = new Map<string, Array<(esito: EsitoVeloceScheda) => void>>();
-let codaInPartenza = false;
-
-async function domandaVeloce(ids: string[]): Promise<EsitoVeloceScheda> {
-  try {
-    const r = await fetch(`/api/consegna/veloce?negozi=${ids.map(encodeURIComponent).join(',')}`, { cache: 'no-store' });
-    const esito = (r.ok ? await r.json() : null) as { possibile?: boolean } | null;
-    return esito ? esito.possibile === true : null;
-  } catch {
-    return null;
-  }
-}
-
-async function esitiDeiNegozi(ids: string[]): Promise<Map<string, EsitoVeloceScheda>> {
-  const esiti = new Map<string, EsitoVeloceScheda>();
-  const segna = (gruppo: string[], esito: EsitoVeloceScheda) => {
-    for (const id of gruppo) esiti.set(id, esito);
-  };
-  let senzaNegozi: Promise<EsitoVeloceScheda> | null = null;
-  const decidi = async (gruppo: string[]): Promise<void> => {
-    const esito = await domandaVeloce(gruppo);
-    if (esito !== false || gruppo.length === 1) return segna(gruppo, esito);
-    senzaNegozi ??= domandaVeloce([]);
-    const perTutti = await senzaNegozi;
-    if (perTutti !== true) return segna(gruppo, perTutti);
-    await cercaIlNo(gruppo);
-  };
-  // Nel gruppo almeno un negozio dice no e la regola senza negozi dice sì: si chiede la prima metà.
-  // Se dice sì, il no sta nella seconda e quella non si richiede intera.
-  const cercaIlNo = async (gruppo: string[]): Promise<void> => {
-    if (gruppo.length === 1) return segna(gruppo, false);
-    const meta = Math.ceil(gruppo.length / 2);
-    const prima = gruppo.slice(0, meta);
-    const dopo = gruppo.slice(meta);
-    const esito = await domandaVeloce(prima);
-    if (esito === true) {
-      segna(prima, true);
-      return cercaIlNo(dopo);
-    }
-    if (esito === null) {
-      segna(prima, null);
-      return decidi(dopo);
-    }
-    await Promise.all([cercaIlNo(prima), decidi(dopo)]);
-  };
-  const blocchi: string[][] = [];
-  for (let i = 0; i < ids.length; i += NEGOZI_PER_DOMANDA) blocchi.push(ids.slice(i, i + NEGOZI_PER_DOMANDA));
-  await Promise.all(blocchi.map(decidi));
-  return esiti;
-}
-
-function chiediLaVeloce(negozioId: string): Promise<EsitoVeloceScheda> {
-  return new Promise((rispondi) => {
-    const attese = codaVeloce.get(negozioId) ?? [];
-    attese.push(rispondi);
-    codaVeloce.set(negozioId, attese);
-    if (codaInPartenza) return;
-    codaInPartenza = true;
-    // Gli effetti di uno stesso disegno girano tutti prima di questo microtask: la coda li prende tutti.
-    queueMicrotask(() => {
-      const coda = codaVeloce;
-      codaVeloce = new Map();
-      codaInPartenza = false;
-      void esitiDeiNegozi([...coda.keys()]).then((esiti) => {
-        for (const [id, risposte] of coda) for (const r of risposte) r(esiti.get(id) ?? null);
-      });
-    });
-  });
-}
-
 export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
   const [veloce, setVeloce] = useState<boolean | null>(null);
   useEffect(() => {
@@ -152,16 +67,21 @@ export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boole
     let ultimaDomanda = 0;
     const domanda = () => {
       ultimaDomanda = Date.now();
-      void chiediLaVeloce(negozioId).then((esito) => {
-        if (vivo) setVeloce(esito);
-      });
+      fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(negozioId)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((esito: { possibile?: boolean } | null) => {
+          if (vivo) setVeloce(esito ? esito.possibile === true : null);
+        })
+        .catch(() => {
+          if (vivo) setVeloce(null);
+        });
     };
     domanda();
     // S10 (5/11/2026, 2298) — La risposta si chiedeva una volta sola: se il
     // fattorino smetteva il servizio, la scheda rimasta aperta continuava a
     // dire «oggi». Si richiede quando la scheda torna visibile, se la risposta
     // ha piu' di 5 minuti (revisione S10: niente raffiche sulla lista dei
-    // negozi; dal 17/11 le righe che tornano insieme fanno una domanda sola).
+    // negozi, dove ogni riga chiede per conto suo e la rotta ha un freno).
     const suVisibilita = () => {
       if (document.visibilityState === 'visible' && Date.now() - ultimaDomanda >= RICHIEDI_VELOCE_MS) domanda();
     };
