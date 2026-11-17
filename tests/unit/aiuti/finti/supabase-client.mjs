@@ -63,8 +63,24 @@ const NESSUNO = { data: { user: null, session: null }, error: null };
  * prima dell'attesa: `.rpc(...).order(...).range(...)`. Prima `rpc` era una funzione async e
  * tornava una promessa nuda: il secondo anello scoppiava, e una pagina che pagina i risultati di
  * una funzione non si poteva montare. Qui gli anelli passano oltre (come quelli di `from` senza
- * database della prova) e l'attesa dà la stessa risposta di prima.
+ * database della prova) e l'attesa dà la risposta del database della prova.
  */
+/**
+ * 17/11/2026 — Una funzione che la prova non ha previsto (nessun database della prova con `rpc`)
+ * non risponde più «nessun errore». Prima `{ data: null, error: null }`: una pagina che salva con
+ * una funzione del database sembrava riuscita anche se non scriveva niente. Ora risponde con un
+ * errore che dice quale funzione mancava; la risposta la dà la prova con `__CLIENT_SUPABASE__`.
+ */
+const rpcNonPrevista = (nome) => ({
+  data: null,
+  error: {
+    code: 'RPC_NON_PREVISTA',
+    message: `Prova: nessuna risposta prevista per la funzione del database «${nome}» (dalla con globalThis.__CLIENT_SUPABASE__.rpc).`,
+    details: null,
+    hint: null,
+  },
+});
+
 const catenaDiUnaFunzione = (nome, argomenti) => {
   /**
    * 17/11/2026 — La chiamata al database della prova parte solo quando qualcuno aspetta la
@@ -79,7 +95,7 @@ const catenaDiUnaFunzione = (nome, argomenti) => {
   const parti = () => {
     if (!partita) {
       try {
-        let esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null };
+        let esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : rpcNonPrevista(nome);
         /**
          * 17/11/2026 — Gli anelli dopo la funzione arrivano al database della prova, come quelli di
          * `from`: se la sua risposta sa fare `order`, `range`, `eq`… li fa lei, e la prova vede la

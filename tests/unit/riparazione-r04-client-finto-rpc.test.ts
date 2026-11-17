@@ -29,9 +29,14 @@ afterEach(() => {
 });
 
 describe('il client finto: .rpc().order().range()', () => {
-  it('senza database della prova la catena arriva in fondo con la risposta vuota di sempre', async () => {
+  // 17/11/2026 — senza database della prova la risposta non è più «nessun errore» (era il difetto
+  // del finto che faceva sembrare riuscito un salvataggio mai fatto): è l'errore che nomina la funzione.
+  it('senza database della prova la catena arriva in fondo, con l’errore che nomina la funzione non prevista', async () => {
     const esito = await esitoDellaCatena(() => rpc('recensioni_del_negozio', { p_id: 'n1' }).order('created_at').range(0, 19));
-    expect(esito).toEqual({ data: null, error: null });
+    expect(esito).toEqual({
+      data: null,
+      error: expect.objectContaining({ code: 'RPC_NON_PREVISTA', message: expect.stringContaining('«recensioni_del_negozio»') }),
+    });
   });
 
   it('con il database della prova la catena porta la sua risposta', async () => {
@@ -43,7 +48,10 @@ describe('il client finto: .rpc().order().range()', () => {
     expect(esito).toEqual({ data: [{ nome: 'recensioni_del_negozio' }], error: null });
   });
 
-  it('l’attesa diretta, senza anelli, resta com’era', async () => {
-    expect(await rpc('qualcosa')).toEqual({ data: null, error: null });
+  it('l’attesa diretta, senza anelli, dà la stessa risposta della catena', async () => {
+    expect(await rpc('qualcosa')).toEqual({
+      data: null,
+      error: expect.objectContaining({ code: 'RPC_NON_PREVISTA', message: expect.stringContaining('«qualcosa»') }),
+    });
   });
 });
