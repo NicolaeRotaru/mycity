@@ -138,7 +138,10 @@ const CategoryBar = () => {
   // 5/11/2026 — Come home e piè di pagina: solo le categorie con qualcosa dentro (stessa
   // lettura e stessa chiave, quindi nessuna domanda in più). Se non si sa, si elencano tutte.
   const piene = useQuery(domandaCategoriePiene(supabase));
-  const catVisibili = soloLePiene(cats, piene.isError ? null : piene.data);
+  // 17/11/2026 — L'elenco delle piene già noto resta anche se una RILETTURA cade: react-query
+  // tiene `data` e accende `isError`, e scartare `data` per `isError` rimetteva nel menu tutte le
+  // categorie vuote. Solo se non si è mai saputo niente (`data` assente) si elencano tutte.
+  const catVisibili = soloLePiene(cats, piene.data);
 
   useEffect(() => {
     if (!open) return;

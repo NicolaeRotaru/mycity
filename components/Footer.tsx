@@ -185,7 +185,9 @@ const Footer = () => {
   // sapeva quali erano piene. Adesso in quel caso resta solo «Tutte le categorie».
   const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: !areaPro && !isSellerArea });
   const madriLette = (categorie ?? []).filter((c) => c.parent_id === null);
-  const pieneNote = piene.isError ? null : piene.data;
+  // 17/11/2026 — «Note» vuol dire lette almeno una volta: se una rilettura cade react-query tiene
+  // l'elenco in `data` (con `isError` acceso), e il piede non deve tornare alle categorie vuote.
+  const pieneNote = piene.data;
   const madri = pieneNote
     ? soloLePiene(madriLette, pieneNote)
     : madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
