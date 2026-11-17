@@ -1,0 +1,104 @@
+diff --git a/lib/stripe/webhook/rimborso-respinto-dalla-banca.ts b/lib/stripe/webhook/rimborso-respinto-dalla-banca.ts
+index 13f75a5..3b85f3f 100644
+--- a/lib/stripe/webhook/rimborso-respinto-dalla-banca.ts
++++ b/lib/stripe/webhook/rimborso-respinto-dalla-banca.ts
+@@ -156,7 +156,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
+   const avvisaGliAmministratori = () =>
+     notifyAdmins(
+       '⚠️ Rimborso rifiutato dalla banca',
+-      `Il rimborso di ${formatPriceFromCents(tornatoIndietro)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. ${fraseDelBonifico} Se il rimborso era pieno e l'ordine non era ancora consegnato, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
++      `Il rimborso di ${formatPriceFromCents(tornatoIndietro)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. ${fraseDelBonifico}${piano.fraseDaRidareAMano ? ` ${piano.fraseDaRidareAMano}` : ''} Se il rimborso era pieno e l'ordine non era ancora consegnato, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
+       '/admin/orders',
+       refund.id ? { unaVoltaPer: `rimborso-respinto:${refund.id}` } : {},
+     );
+diff --git a/tests/unit/riparazione-r31-rimborso-respinto-avviso-quota.test.ts b/tests/unit/riparazione-r31-rimborso-respinto-avviso-quota.test.ts
+new file mode 100644
+index 0000000..d74e819
+--- /dev/null
++++ b/tests/unit/riparazione-r31-rimborso-respinto-avviso-quota.test.ts
+@@ -0,0 +1,85 @@
++import { describe, it, expect, vi, beforeEach } from 'vitest';
++import { fintoDatabase, type FintoDatabase, type Riga } from './aiuti/finto-database-dei-pagamenti';
++
++/**
++ * R31-014 — L'avviso agli amministratori del rimborso respinto dice quanto ridare a mano al negozio.
++ *
++ * Ordine da 20 €, netto del negozio 16,20 €, bonifico già partito. Un rimborso parziale di 5 € gli
++ * aveva ripreso 4,05 € con uno storno. La banca respinge il rimborso: il cliente non ha avuto niente e
++ * il negozio resta stornato. Il sito non rifà il bonifico da solo: l'avviso deve dire la cifra, in euro,
++ * e l'ordine. Gira il gestore VERO dell'avviso su un database finto; Stripe non si chiama.
++ */
++
++const stato: { db: FintoDatabase } = { db: fintoDatabase() };
++
++vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
++vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
++vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => stato.db.client }));
++vi.mock('@/lib/stripe/client', () => ({
++  getStripe: () => { throw new Error('Stripe non va chiamato per un rimborso respinto'); },
++  isStripeConfigured: () => true,
++}));
++
++import { handleRefundUpdated } from '@/lib/stripe/webhook/rimborsi';
++
++function ordine(extra: Riga): Riga {
++  return {
++    payment_status: 'PARTIALLY_REFUNDED',
++    payout_status: 'TRANSFERRED',
++    stripe_payment_intent: 'pi_1',
++    stripe_transfer_id: 'tr_1',
++    stripe_reversal_id: null,
++    total_price: 20,
++    gross_total_cents: 2000,
++    seller_payout_cents: 1620,
++    seller_payout_reversed_cents: 405,
++    payout_tentativo: 0,
++    refunded_amount_cents: 500,
++    stripe_refund_id: 're_1',
++    internal_dispute_status: null,
++    ...extra,
++  };
++}
++
++const respinto = (id: string, centesimi: number, metadata: Record<string, string> = {}) =>
++  ({ id, amount: centesimi, status: 'failed', payment_intent: 'pi_1', metadata }) as unknown as Parameters<typeof handleRefundUpdated>[0];
++
++const avvisi = () => stato.db.tabelle.notifications!.filter((n) => n.title === '⚠️ Rimborso rifiutato dalla banca');
++const testo = (n: Riga) => String(n.body).replace(/ /g, ' ');
++
++beforeEach(() => {
++  stato.db = fintoDatabase({ orders: [], profiles: [{ id: 'admin1', role: 'admin' }], notifications: [] });
++});
++
++describe('R31-014 — l’avviso del rimborso respinto col bonifico già partito', () => {
++  it('IL CASO DELLA VOCE — l’avviso dice 4,05 € da ridare a mano al negozio dell’ordine', async () => {
++    stato.db.tabelle.orders = [ordine({ id: 'o1' })];
++    await handleRefundUpdated(respinto('re_1', 500, { order_id: 'o1' }));
++
++    expect(avvisi()).toHaveLength(1);
++    expect(testo(avvisi()[0])).toContain('ordine o1: 4,05 €');
++    expect(testo(avvisi()[0])).toMatch(/a mano/);
++    // Nessun riaccredito automatico: lo storno e il bonifico restano come sono.
++    const riga = stato.db.tabelle.orders!.find((r) => r.id === 'o1')!;
++    expect(riga).toMatchObject({ payout_status: 'TRANSFERRED', seller_payout_reversed_cents: 405, refunded_amount_cents: 0, payment_status: 'PAID' });
++  });
++
++  it('carrello di due negozi, rimborso dal cruscotto: l’avviso dice la cifra di ciascun ordine', async () => {
++    stato.db.tabelle.orders = [
++      ordine({ id: 'pane', gross_total_cents: 2000, seller_payout_cents: 1600, refunded_amount_cents: 400, seller_payout_reversed_cents: 320, stripe_refund_id: null }),
++      ordine({ id: 'fiori', total_price: 30, gross_total_cents: 3000, seller_payout_cents: 2400, refunded_amount_cents: 600, seller_payout_reversed_cents: 480, stripe_refund_id: null }),
++    ];
++    await handleRefundUpdated(respinto('re_cruscotto', 1000));
++
++    expect(avvisi()).toHaveLength(1);
++    expect(testo(avvisi()[0])).toContain('ordine pane: 3,20 €');
++    expect(testo(avvisi()[0])).toContain('ordine fiori: 4,80 €');
++  });
++
++  it('col bonifico ancora da fare l’avviso non chiede di ridare niente a mano', async () => {
++    stato.db.tabelle.orders = [ordine({ id: 'o1', payout_status: 'HELD', stripe_transfer_id: null })];
++    await handleRefundUpdated(respinto('re_1', 500, { order_id: 'o1' }));
++    expect(avvisi()).toHaveLength(1);
++    expect(testo(avvisi()[0])).not.toMatch(/ridata a mano/);
++  });
++});

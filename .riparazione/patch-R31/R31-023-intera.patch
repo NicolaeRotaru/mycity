@@ -1,0 +1,484 @@
+diff --git a/app/api/admin/orders/[id]/cancel/route.ts b/app/api/admin/orders/[id]/cancel/route.ts
+index 028a22b..9feb7a7 100644
+--- a/app/api/admin/orders/[id]/cancel/route.ts
++++ b/app/api/admin/orders/[id]/cancel/route.ts
+@@ -1,7 +1,7 @@
+ import { NextResponse, type NextRequest } from 'next/server';
+ import { z } from 'zod';
+ import { getAdminSupabase } from '@/lib/supabase/server';
+-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
++import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
+ import { withAdminAuth } from '@/lib/api/middleware';
+ import { ApiErrors } from '@/lib/api/responses';
+ import { writeAudit } from '@/lib/audit';
+@@ -112,18 +112,21 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
+     order.seller_id ? { user_id: order.seller_id, link: `/seller/orders/${order.id}` } : null,
+     order.rider_id ? { user_id: order.rider_id, link: `/rider/orders/${order.id}` } : null,
+   ].filter((x): x is { user_id: string; link: string } => x !== null);
++  const fraseAgliAltri = order.delivery_status === 'DELIVERED'
++    ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
++    : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.';
+   for (const a of altri) {
+     // 5/11/2026 (unione) — Dalla stessa porta delle altre campanelle (S02): se la scrittura cade, lo dice.
+     await scriviCampanella(admin, {
+       category: 'order',
+       user_id: a.user_id,
+       title: `Ordine ${numero} annullato`,
+-      body: order.delivery_status === 'DELIVERED'
+-        ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
+-        : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.',
++      body: fraseAgliAltri,
+       link: a.link,
+     }, { dove: 'admin/cancel (negozio e fattorino)', ordine: order.id });
+   }
++  // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine». Non lancia: l'annullo è già scritto.
++  await avvisaIlNegozioDellAnnullo(admin, order, fraseAgliAltri);
+ 
+   await writeAudit({
+     actorId: user.id,
+diff --git a/app/api/cron/expire-stale-orders/route.ts b/app/api/cron/expire-stale-orders/route.ts
+index 1c4f2e2..2088d4d 100644
+--- a/app/api/cron/expire-stale-orders/route.ts
++++ b/app/api/cron/expire-stale-orders/route.ts
+@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+ import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
+ import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
+ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
+-import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
++import { avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+ import { ApiErrors } from '@/lib/api/responses';
+ import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
+ import { scriviCampanella } from '@/lib/ordini/campanella';
+@@ -381,6 +381,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+         await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
+       }
+       await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
++      // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine»: non lancia, l'annullo è già scritto.
++      if (sellerId) {
++        await avvisaIlNegozioDellAnnullo(admin, { id: o.id, seller_id: sellerId }, `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: non è stato accettato in tempo.`);
++      }
+ 
+       canceled++;
+     } catch (e) {
+diff --git a/app/api/orders/[id]/cancel/route.ts b/app/api/orders/[id]/cancel/route.ts
+index c0293de..f27a768 100644
+--- a/app/api/orders/[id]/cancel/route.ts
++++ b/app/api/orders/[id]/cancel/route.ts
+@@ -3,7 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
+ import { withAuthRateLimit } from '@/lib/api/middleware';
+ import { ApiErrors } from '@/lib/api/responses';
+ import { logger } from '@/lib/logger';
+-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
++import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
+ import { scriviCampanella } from '@/lib/ordini/campanella';
+ import { idDiOrdineNonValido, percheNonSiAnnulla } from '@/lib/ordini/annullo-del-cliente';
+ 
+@@ -109,6 +109,9 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
+       : undefined,
+   });
+ 
++  // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine». Dopo l'annullo riuscito, e non lancia.
++  await avvisaIlNegozioDellAnnullo(admin, order, `Il cliente ha annullato l'ordine #${order.id.slice(0, 6).toUpperCase()}: non va più preparato né consegnato.`);
++
+   return NextResponse.json({ ok: true, refundId: esito.refundId }, { status: 200 });
+ }
+ 
+diff --git a/lib/email/templates.ts b/lib/email/templates.ts
+index 1f7d615..277bc47 100644
+--- a/lib/email/templates.ts
++++ b/lib/email/templates.ts
+@@ -501,6 +501,29 @@ export function ordineAnnullatoTemplate(args: {
+   };
+ }
+ 
++/**
++ * R31-023 — L'ORDINE ANNULLATO, DETTO PER EMAIL ANCHE AL NEGOZIO.
++ *
++ * Il negozio riceveva l'email «Nuovo ordine», ma quando l'ordine veniva annullato (dal cliente,
++ * dall'amministrazione o dal giro che chiude gli ordini mai accettati) restava solo la campanella,
++ * che si vede riaprendo il sito: chi lavora dall'email poteva preparare un ordine che non c'era più.
++ * `frase` dice perché, con le parole di chi annulla (la stessa della campanella).
++ */
++export function ordineAnnullatoAlNegozioTemplate(args: { orderId: string; frase: string }) {
++  const ordine = numeroOrdine(args.orderId);
++  const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
++  const body = `
++    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ${ordine} annullato</h1>
++    <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(args.frase)}</p>
++    <p style="margin:24px 0">${btn(orderUrl, 'Vedi l’ordine')}</p>
++  `;
++  return {
++    subject: `Ordine ${ordine} annullato`,
++    html: shell('Ordine annullato', body),
++    text: `Ordine ${ordine} annullato. ${args.frase} Vedi l'ordine: ${orderUrl}`,
++  };
++}
++
+ /**
+  * R25 — L'EMAIL DICE COME TORNANO DAVVERO I SOLDI.
+  *
+diff --git a/lib/ordini/annulla.ts b/lib/ordini/annulla.ts
+index 3709fd1..669034f 100644
+--- a/lib/ordini/annulla.ts
++++ b/lib/ordini/annulla.ts
+@@ -7,7 +7,7 @@ import { contantiIncassati } from '@/lib/rimborsi/regole-del-rimborso';
+ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
+ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+ import { sendEmail } from '@/lib/email/client';
+-import { ordineAnnullatoTemplate } from '@/lib/email/templates';
++import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate } from '@/lib/email/templates';
+ import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
+ import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
+ // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
+@@ -526,6 +526,54 @@ export async function avvisaIlClienteDellAnnullo(
+   }
+ }
+ 
++/**
++ * R31-023 — ANCHE IL NEGOZIO RICEVE L'EMAIL DELL'ANNULLO.
++ *
++ * Il negozio sapeva dell'ordine nuovo per email, e dell'annullo solo dalla campanella. Si chiama
++ * DOPO l'annullo riuscito, con la stessa frase della campanella. Non lancia mai: l'annullo è già
++ * scritto, e una posta giù non deve farlo sembrare fallito. Ma non tace: se l'email non parte, lo
++ * scrive nel registro degli errori.
++ */
++export async function avvisaIlNegozioDellAnnullo(
++  admin: SupabaseClient,
++  ordine: { id: string; seller_id?: string | null },
++  frase: string,
++): Promise<boolean> {
++  try {
++    if (!ordine.seller_id) return false;
++    const { data, error } = await admin.auth.admin.getUserById(ordine.seller_id);
++    const email = data?.user?.email;
++    if (error || !email) {
++      logger.error('[annullo] email di annullo al negozio non spedita: indirizzo non letto', {
++        orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
++      });
++      return false;
++    }
++    const t = ordineAnnullatoAlNegozioTemplate({ orderId: ordine.id, frase });
++    const res = await sendEmail({
++      to: email,
++      subject: t.subject,
++      html: t.html,
++      text: t.text,
++      tipo: 'transazionale',
++      tags: [{ name: 'template', value: 'order_canceled_seller' }],
++    });
++    if (!res.ok) {
++      logger.error('[annullo] email di annullo al negozio NON partita', {
++        orderId: ordine.id,
++        motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
++      });
++      return false;
++    }
++    return true;
++  } catch (e) {
++    logger.error('[annullo] email di annullo al negozio NON partita', {
++      orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
++    });
++    return false;
++  }
++}
++
+ /**
+  * 30/10/2026 — LA CAMPANELLA DICE IL CONTO NUOVO DEL CARRELLO.
+  *
+diff --git a/tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts b/tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts
+index 67b7eb6..e66e266 100644
+--- a/tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts
++++ b/tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts
+@@ -137,9 +137,11 @@ describe('il giro notturno fa scadere un ordine in contanti mai accettato', () =
+     stato.candidati = [{ ...ordineInContanti, id: 'o1', total_price: 20 }];
+     const corpo = await giro();
+     expect(corpo).toMatchObject({ ok: true, canceled: 1 });
+-    expect(spedite, 'il cliente in contanti non sa che l ordine e scaduto').toHaveLength(1);
+-    expect(spedite[0].to).toBe('maria@example.it');
+-    expect(String(spedite[0].text)).toMatch(/non devi pagare niente/i);
++    // R31-023 — Parte anche l'email al negozio, alla sua casella: quella della cliente resta una sola.
++    const aMaria = spedite.filter((m) => m.to === 'maria@example.it');
++    expect(aMaria, 'il cliente in contanti non sa che l ordine e scaduto').toHaveLength(1);
++    expect(String(aMaria[0].text)).toMatch(/non devi pagare niente/i);
++    expect(spedite.filter((m) => m.to !== 'maria@example.it').map((m) => m.to)).toEqual(['forno@example.it']);
+   });
+ 
+   it('controprova: sulla carta pagata avvisa il rimborso, non una seconda email', async () => {
+@@ -148,6 +150,8 @@ describe('il giro notturno fa scadere un ordine in contanti mai accettato', () =
+     }];
+     await giro();
+     expect(refundOrderMock).toHaveBeenCalledWith(expect.objectContaining({ notifyBuyer: true }));
+-    expect(spedite).toHaveLength(0);
++    // R31-023 — Alla cliente nessuna seconda email; al negozio parte la sua.
++    expect(spedite.filter((m) => m.to === 'maria@example.it')).toHaveLength(0);
++    expect(spedite.map((m) => m.to)).toEqual(['forno@example.it']);
+   });
+ });
+diff --git a/tests/unit/minori-s01-giro-notturno.test.ts b/tests/unit/minori-s01-giro-notturno.test.ts
+index fcf20bc..a5a7a92 100644
+--- a/tests/unit/minori-s01-giro-notturno.test.ts
++++ b/tests/unit/minori-s01-giro-notturno.test.ts
+@@ -35,7 +35,8 @@ function catena(risultato: unknown): unknown {
+ 
+ const auth = {
+   admin: {
+-    getUserById: async (id: string) => ({ data: { user: { id, email: 'maria@example.it' } }, error: null }),
++    // R31-023 — Ogni persona ha la sua casella: anche il negozio riceve l'email dell'annullo.
++    getUserById: async (id: string) => ({ data: { user: { id, email: id === 's1' ? 'forno@example.it' : 'maria@example.it' } }, error: null }),
+   },
+ };
+ 
+@@ -93,12 +94,13 @@ describe('1908 — l email del giro notturno dice il credito solo se è tornato
+     stato.creditoCade = true;
+     stato.candidati = [{ ...ordineInContanti, id: 'o1', total_price: 8, wallet_applied_cents: 400 }];
+     await giro();
+-    expect(spedite).toHaveLength(1);
+-    expect(String(spedite[0].text)).not.toMatch(/ti è stato restituito/);
++    const aMaria = spedite.filter((m) => m.to === 'maria@example.it');
++    expect(aMaria).toHaveLength(1);
++    expect(String(aMaria[0].text)).not.toMatch(/ti è stato restituito/);
+   });
+   it('controprova: storno riuscito, la riga del credito c è', async () => {
+     stato.candidati = [{ ...ordineInContanti, id: 'o1', total_price: 8, wallet_applied_cents: 400 }];
+     await giro();
+-    expect(String(spedite[0].text)).toMatch(/ti è stato restituito/);
++    expect(String(spedite.find((m) => m.to === 'maria@example.it')?.text)).toMatch(/ti è stato restituito/);
+   });
+ });
+diff --git a/tests/unit/minori-s02-annullo-del-cliente.test.ts b/tests/unit/minori-s02-annullo-del-cliente.test.ts
+index 83b1956..2ba19a0 100644
+--- a/tests/unit/minori-s02-annullo-del-cliente.test.ts
++++ b/tests/unit/minori-s02-annullo-del-cliente.test.ts
+@@ -19,7 +19,8 @@ const annullaERimborsa = vi.hoisted(() => vi.fn(async () => ({ ok: true, refundI
+ 
+ vi.mock('@/lib/logger', () => ({ logger }));
+ vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins }));
+-vi.mock('@/lib/ordini/annulla', () => ({ annullaERimborsa, COLONNE_ANNULLO: 'id' }));
++// R31-023 — Dopo l'annullo la rotta manda anche l'email al negozio: qui finta, non lancia.
++vi.mock('@/lib/ordini/annulla', () => ({ annullaERimborsa, COLONNE_ANNULLO: 'id', avvisaIlNegozioDellAnnullo: vi.fn(async () => true) }));
+ vi.mock('@/lib/supabase/server', () => ({
+   getAdminSupabase: () => ({
+     from: (t: string) => {
+diff --git a/tests/unit/minori-s03-ordini-scaduti.test.ts b/tests/unit/minori-s03-ordini-scaduti.test.ts
+index 5b22e70..201b2c7 100644
+--- a/tests/unit/minori-s03-ordini-scaduti.test.ts
++++ b/tests/unit/minori-s03-ordini-scaduti.test.ts
+@@ -8,9 +8,11 @@ vi.mock('@/lib/stripe/payout', () => ({ refundOrder: (a: { orderId: string; amou
+ vi.mock('@/lib/stripe/client', async (orig) => ({ ...(await orig<object>()), isStripeConfigured: () => true }));
+ vi.mock('@/lib/stripe/rimborsi-da-dividere', () => ({ ilCarrelloAspettaLaDivisione: async () => false }));
+ vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins: vi.fn(async () => undefined) }));
+-const spedite: Array<{ text: string; subject: string }> = [];
++const spedite: Array<{ text: string; subject: string; to?: string }> = [];
++// R31-023 — Anche il negozio (s0) riceve l'email dell'annullo: quelle del cliente sono le altre.
++const alCliente = () => spedite.filter((e) => e.to !== 's0@esempio.it');
+ vi.mock('@/lib/email/client', () => ({
+-  sendEmail: vi.fn(async (m: { text: string; subject: string }) => {
++  sendEmail: vi.fn(async (m: { text: string; subject: string; to?: string }) => {
+     // La posta risponde dopo un po': chi non la aspetta finisce il giro prima che parta.
+     await new Promise((r) => setTimeout(r, 30));
+     spedite.push(m);
+@@ -152,8 +154,8 @@ describe('giro degli ordini scaduti', () => {
+     db = finto({ orders: ordini });
+     conRpc({ wallet_credit: 'rpc giù' });
+     const r = await giro();
+-    expect(spedite).toHaveLength(1);
+-    expect(spedite[0].text).not.toMatch(/credito MyCity/);
++    expect(alCliente()).toHaveLength(1);
++    expect(alCliente()[0].text).not.toMatch(/credito MyCity/);
+     expect(avvisi().some((a) => /credito MyCity speso/.test(a))).toBe(true);
+     expect((await r.json()).ripristiniFalliti).toBe(1);
+   });
+@@ -179,7 +181,8 @@ describe('giro degli ordini scaduti', () => {
+     db = finto({ orders: carrello(['pane'], [1500], 'cod', { creati: [scaduto] }) });
+     conRpc();
+     await giro();
+-    expect(spedite).toHaveLength(1);
++    expect(alCliente()).toHaveLength(1);
++    expect(spedite.filter((e) => e.to === 's0@esempio.it')).toHaveLength(1);
+   });
+ 
+   it('2227 — carta in un carrello: l email del giro porta le cifre del carrello', async () => {
+diff --git a/tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts b/tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts
+new file mode 100644
+index 0000000..c835f7b
+--- /dev/null
++++ b/tests/unit/riparazione-r31-email-al-negozio-annullo.test.ts
+@@ -0,0 +1,178 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++
++/**
++ * R31-023 — Quando un ordine viene annullato il negozio non riceveva nessuna email.
++ *
++ * Il negozio sa dell'ordine nuovo per email («Nuovo ordine»), ma dell'annullo solo dalla campanella,
++ * che si vede riaprendo il sito. Qui le tre strade che annullano senza che sia il negozio a farlo: il
++ * giro che chiude gli ordini mai accettati, il cliente, l'amministrazione. Dopo l'annullo riuscito parte
++ * l'email al negozio (alla sua casella), e se la posta cade l'annullo resta fatto. Nessuna email vera:
++ * l'invio è finto, come Supabase e Stripe.
++ */
++
++let invio: (m: Record<string, unknown>) => Promise<unknown>;
++const spedite: Array<Record<string, unknown>> = [];
++
++vi.mock('@/lib/email/client', () => ({
++  sendEmail: (m: Record<string, unknown>) => invio(m),
++}));
++vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
++vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => undefined) }));
++vi.mock('@/lib/api/middleware', () => ({
++  withCronAuth: (h: (req: unknown) => unknown) => (req: unknown) => h(req),
++  withAuthRateLimit:
++    (_o: unknown, h: (ctx: { req: unknown; user: unknown; params: unknown }) => unknown) =>
++    (req: unknown, ctx: { params: Record<string, string> }) =>
++      h({ req, user: { id: 'u1' }, params: ctx.params }),
++  withAdminAuth:
++    (h: (ctx: { req: unknown; user: unknown; params: unknown }) => unknown) =>
++    (req: unknown, ctx: { params: Record<string, string> }) =>
++      h({ req, user: { id: 'admin1' }, params: ctx.params }),
++}));
++const refundOrderMock = vi.fn(async (_a: unknown) => ({ refundId: 're_1', reversedCents: 0 }));
++vi.mock('@/lib/stripe/payout', () => ({ refundOrder: (a: unknown) => refundOrderMock(a) }));
++vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true, getStripe: () => ({}) }));
++
++/** Una catena di query qualunque che finisce sempre con lo stesso risultato. */
++function catena(risultato: unknown): unknown {
++  const c: unknown = new Proxy({}, {
++    get(_b, k) {
++      if (k === 'then') {
++        return (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(risultato).then(ok, ko);
++      }
++      if (typeof k === 'symbol') return undefined;
++      return () => c;
++    },
++  });
++  return c;
++}
++
++const CASELLE: Record<string, string> = { u1: 'maria@example.it', s1: 'forno@example.it', r1: 'rider@example.it' };
++const auth = {
++  admin: {
++    getUserById: async (id: string) => ({ data: { user: { id, email: CASELLE[id] ?? `${id}@sconosciuto.example` } }, error: null }),
++  },
++};
++
++const ORDINE = {
++  id: 'a1b2c3d4-0000-4000-8000-000000000001',
++  user_id: 'u1',
++  seller_id: 's1',
++  rider_id: null,
++  total_price: 12,
++  payment_method: 'cod',
++  payment_status: 'PENDING',
++  delivery_status: 'NEW',
++  wallet_applied_cents: 0,
++  cash_confirmed_at: null,
++  coupon_code: null,
++  stripe_payment_intent: null,
++  created_at: '2026-11-16T08:00:00Z',
++};
++
++const stato = { candidati: [] as Array<Record<string, unknown>>, ordine: null as Record<string, unknown> | null, campanelle: [] as unknown[] };
++vi.mock('@/lib/supabase/server', () => ({
++  getAdminSupabase: () => ({
++    from: (t: string) => {
++      if (t === 'orders') {
++        return {
++          select: () => catena({ data: stato.ordine ?? stato.candidati, error: null }),
++          update: () => catena({ data: [{ id: ORDINE.id }], error: null }),
++        };
++      }
++      if (t === 'notifications') {
++        return { insert: async (r: unknown) => { stato.campanelle.push(r); return { error: null }; } };
++      }
++      return { select: () => catena({ data: [], error: null }), insert: async () => ({ error: null }) };
++    },
++    rpc: async () => ({ data: null, error: null }),
++    auth,
++  }),
++}));
++
++const alNegozio = () => spedite.filter((m) => m.to === 'forno@example.it');
++
++beforeEach(() => {
++  vi.useFakeTimers({ now: new Date('2026-11-17T09:30:00Z'), toFake: ['Date'] });
++  spedite.length = 0;
++  invio = async (m) => { spedite.push(m); return { ok: true, id: 'm1' }; };
++  stato.candidati = [];
++  stato.ordine = null;
++  stato.campanelle = [];
++  refundOrderMock.mockClear();
++  process.env.NEXT_PUBLIC_APP_URL = 'https://mycity.example';
++});
++afterEach(() => {
++  vi.useRealTimers();
++});
++
++describe('R31-023 — il giro che chiude gli ordini mai accettati', () => {
++  async function giro() {
++    const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
++    const res = await (POST as unknown as (req: Request) => Promise<Response>)(new Request('http://x', { method: 'POST' }));
++    return res.json();
++  }
++
++  it('IL CASO DELLA VOCE — il negozio riceve l’email dell’annullo, oltre alla campanella', async () => {
++    stato.candidati = [{ ...ORDINE }];
++    const corpo = await giro();
++    expect(corpo).toMatchObject({ ok: true, canceled: 1 });
++    expect(alNegozio(), 'il negozio non sa per email che l’ordine è annullato').toHaveLength(1);
++    expect(String(alNegozio()[0].subject)).toContain('#A1B2C3');
++    expect(String(alNegozio()[0].subject)).toMatch(/annullato/i);
++    expect(String(alNegozio()[0].text)).toMatch(/non è stato accettato in tempo/);
++    expect(alNegozio()[0].tipo).toBe('transazionale');
++    // La cliente riceve la sua, come prima.
++    expect(spedite.filter((m) => m.to === 'maria@example.it')).toHaveLength(1);
++  });
++
++  it('se la posta al negozio cade, l’ordine resta annullato lo stesso', async () => {
++    invio = async (m) => {
++      if (m.to === 'forno@example.it') throw new Error('resend giu');
++      spedite.push(m);
++      return { ok: true, id: 'm1' };
++    };
++    stato.candidati = [{ ...ORDINE }];
++    const corpo = await giro();
++    expect(corpo).toMatchObject({ ok: true, canceled: 1, failed: 0 });
++  });
++});
++
++describe('R31-023 — il cliente annulla', () => {
++  async function annulla() {
++    const { POST } = await import('@/app/api/orders/[id]/cancel/route');
++    return (POST as unknown as (req: Request, ctx: { params: Record<string, string> }) => Promise<Response>)(
++      new Request('http://x', { method: 'POST' }),
++      { params: { id: ORDINE.id } },
++    );
++  }
++
++  it('dopo l’annullo riuscito il negozio riceve l’email', async () => {
++    stato.ordine = { ...ORDINE };
++    const res = await annulla();
++    expect(res.status).toBe(200);
++    expect(alNegozio(), 'il negozio non sa per email che il cliente ha annullato').toHaveLength(1);
++    expect(String(alNegozio()[0].text)).toMatch(/cliente ha annullato/i);
++  });
++
++  it('un ordine già accettato non si annulla, e al negozio non parte niente', async () => {
++    stato.ordine = { ...ORDINE, delivery_status: 'ACCEPTED' };
++    const res = await annulla();
++    expect(res.status).toBe(409);
++    expect(alNegozio()).toHaveLength(0);
++  });
++});
++
++describe('R31-023 — l’amministrazione annulla', () => {
++  it('dopo l’annullo riuscito il negozio riceve l’email', async () => {
++    stato.ordine = { ...ORDINE };
++    const { POST } = await import('@/app/api/admin/orders/[id]/cancel/route');
++    const res = await (POST as unknown as (req: Request, ctx: { params: Record<string, string> }) => Promise<Response>)(
++      new Request('http://x', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } }),
++      { params: { id: ORDINE.id } },
++    );
++    expect(res.status).toBe(200);
++    expect(alNegozio(), 'il negozio non sa per email che l’amministrazione ha annullato').toHaveLength(1);
++    expect(String(alNegozio()[0].text)).toMatch(/amministrazione ha annullato/i);
++  });
++});
