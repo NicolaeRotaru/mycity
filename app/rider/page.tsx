@@ -338,7 +338,12 @@ export default function RiderDashboardPage() {
             // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
             : esito?.motivo === 'DOCUMENTI_SCADUTI'
               ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
-              : 'Ordine già preso da un altro rider',
+              // R03-009 — «Già preso» solo quando `prendi_ordine` lo dice (GIA_PRESO, migrazione 270).
+              // Una risposta vuota, storta o con un motivo che non conosciamo non è «l'ha preso un
+              // altro»: si dice che la presa non è riuscita, senza inventare il perché.
+              : esito?.motivo === 'GIA_PRESO'
+                ? 'Ordine già preso da un altro rider'
+                : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
       const data2 = { id: esito.id };
