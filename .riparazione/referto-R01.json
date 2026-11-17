@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 17:05",
+  "aggiornato": "2026-11-17 17:08",
   "finita": false,
-  "testa": "ff8f44dad6d62f4b09eac6d97272aa62a5b770b3",
+  "testa": "27a8b6d0d3e13bcfe7d62412cfff50aafd333813",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciato",
@@ -111,6 +111,30 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il campo file sr-only del ripiego della fotocamera ha tabIndex={-1}: lo apre già il pulsante visibile «Usa la fotocamera del telefono», che resta nell'ordine del Tab e continua ad aprirlo (provato col montaggio a fotocamera negata).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R01-009",
+      "chiave": "qa-flussi|nell'import da file la quantità scritta male diventa un numero sbagliato senza nessun errore (oggi spento)",
+      "esito": "riparato",
+      "commit": "27a8b6d0d3e13bcfe7d62412cfff50aafd333813",
+      "file_toccati": [
+        "app/seller/products/import/page.tsx",
+        "tests/unit/riparazione-r01-quantita-scritta-male-nel-file.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-quantita-scritta-male-nel-file.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-quantita-scritta-male-nel-file.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27a8b6d0d3e13bcfe7d62412cfff50aafd333813^ --file app/seller/products/import/page.tsx --prove tests/unit/riparazione-r01-quantita-scritta-male-nel-file.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al posto di parseInt(…) || 0 la pagina legge la quantità con leggiQuantita (solo cifre, intero non negativo): «1.5», «10abc», «1.000», «-3» danno l'errore di riga «Quantità non valida (…)», «12» e « 7 » passano come numeri. Anche una cella vuota ora è un errore invece di 0. CARICAMENTO_DA_FILE_ACCESO resta false (lib/funzioni-al-lancio.ts non toccato); la prova accende la funzione solo nel suo finto.",
       "verificato_da": ""
     }
   ],
