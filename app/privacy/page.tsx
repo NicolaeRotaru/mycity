@@ -283,7 +283,7 @@ export default function PrivacyPage() {
           {/* 17/11/2026 (R32-024) — I video incorporati non erano dichiarati. Si caricano solo al tocco
               (components/store-sections/VideoAlClic.tsx), e al fornitore arriva il sito, non la pagina
               (referrerPolicy strict-origin-when-cross-origin). */}
-          <li><strong>Google Ireland Ltd. / Google LLC (YouTube)</strong> e <strong>Vimeo.com, Inc.</strong> (Stati Uniti — SCC) — video incorporati nelle vetrine dei negozi, in home e nelle pagine informative. Il video si carica solo quando tocchi «Guarda il video»: da quel momento YouTube o Vimeo ricevono il tuo indirizzo IP e il sito da cui guardi, e trattano i dati secondo le proprie regole.</li>
+          <li><strong>Google Ireland Ltd. / Google LLC (YouTube)</strong> e <strong>Vimeo.com, Inc.</strong> (Stati Uniti) — non sono nostri responsabili: per i video incorporati sono titolari autonomi, senza un accordo con MyCity, e il trasferimento negli Stati Uniti segue le loro regole. Video incorporati nelle vetrine dei negozi, in home e nelle pagine informative. Il video si carica solo quando tocchi «Guarda il video»: da quel momento YouTube o Vimeo ricevono il tuo indirizzo IP e il sito da cui guardi, e trattano i dati secondo le proprie regole.</li>
           {/* #76 — Mancavano i due fornitori che ricevono davvero le foto
               caricate dai negozianti. La funzione «togli lo sfondo» manda
               l'immagine a un servizio esterno: quel servizio riceve un dato che

@@ -162,10 +162,11 @@ export default function CookiesPage() {
 
       <LegalSection id="extra-ue" heading="4. Trasferimenti extra-UE">
         <p>
-          Alcuni provider hanno sede negli Stati Uniti (Cloudflare, Google — anche per i video di
-          YouTube —, Stripe Inc., Anthropic, Resend, PostHog Inc., Vimeo.com, Inc. per i video di
-          Vimeo). I trasferimenti sono coperti dalle Standard Contractual Clauses
-          adottate dalla Commissione Europea con Decisione 2021/914.
+          Alcuni provider hanno sede negli Stati Uniti (Cloudflare, Google, Stripe Inc., Anthropic,
+          Resend, PostHog Inc.). I trasferimenti sono coperti dalle Standard Contractual Clauses
+          adottate dalla Commissione Europea con Decisione 2021/914. YouTube (Google LLC) e Vimeo
+          (Vimeo.com, Inc.), per i video che tocchi, non sono nostri fornitori: sono titolari
+          autonomi negli Stati Uniti e trattano i dati secondo le proprie regole.
         </p>
       </LegalSection>
 

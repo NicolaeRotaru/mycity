@@ -75,7 +75,11 @@ describe('R32-024 · i video esterni: al tocco, e dichiarati', () => {
   it('IL CASO CHE ROMPEVA — fra i trasferimenti extra-UE della cookie policy c\'è anche Vimeo, e Google anche per YouTube', () => {
     const extra = leggi(Cookies, (r) => testoVisibile(r.querySelector('#extra-ue')));
     expect(extra).toMatch(/Vimeo\.com, Inc\./);
-    expect(extra).toMatch(/Google[^.]*YouTube/);
+    expect(extra).toMatch(/YouTube \(Google LLC\)/);
+    // Per un video incorporato YouTube e Vimeo sono titolari autonomi: non stanno sotto le SCC.
+    expect(extra).toMatch(/non sono nostri fornitori: sono titolari\s+autonomi/);
+    const frasiScc = extra.split(/(?<=\.)\s/).filter((f) => /Standard Contractual Clauses/.test(f));
+    expect(frasiScc.join(' ')).not.toMatch(/YouTube|Vimeo/);
   });
 
   it('IL CASO CHE ROMPEVA — l\'informativa elenca YouTube e Vimeo fra chi riceve i dati, solo al tocco', () => {
@@ -83,6 +87,9 @@ describe('R32-024 · i video esterni: al tocco, e dichiarati', () => {
     const video = voci.find((t) => /YouTube/.test(t));
     expect(video, 'l\'informativa non nomina YouTube fra i destinatari').toBeTruthy();
     expect(video).toMatch(/Vimeo\.com, Inc\./);
+    // Non sono responsabili nostri con un accordo e le SCC: sono titolari autonomi.
+    expect(video).toMatch(/titolari autonomi/);
+    expect(video).not.toMatch(/SCC/);
     expect(video).toMatch(/solo quando tocchi «Guarda il video»/);
     expect(video).toMatch(/indirizzo IP/);
   }, 60000);
