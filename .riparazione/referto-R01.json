@@ -1,8 +1,8 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-17 20:03",
+  "aggiornato": "2026-11-17 20:09",
   "finita": false,
-  "testa": "e773dec05fdc36b68f781b2b0f4e61dff5ff78bc",
+  "testa": "bbef09573ef0de0369616d3430ee328f4a81e2de",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "da_fare",
@@ -61,6 +61,38 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il Toaster di sonner 1.7.4 riceve containerAriaLabel «Avvisi, scorciatoia»: sonner ci aggiunge da sé la scorciatoia e la regione si presenta come «Avvisi, scorciatoia alt+T» invece di «Notifications alt+T». La prova monta il provider col sonner vero, legge il nome della regione prima e dopo un avviso e controlla che Alt+T porti il fuoco sugli avvisi; alla base cade su «Notifications alt+T»."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "accessibilita|la x degli avvisi dice «close toast» in inglese e sui caricamenti non chiude niente",
+      "esito": "riparato",
+      "commit": "bbef09573ef0de0369616d3430ee328f4a81e2de",
+      "commit_tutti": [
+        "bbef09573ef0de0369616d3430ee328f4a81e2de"
+      ],
+      "file_toccati": [
+        "components/seller/ProductForm.tsx",
+        "tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx tests/unit/riparazione-r01-la-x-degli-avvisi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/ad-mycity/cervello/prova-rimessa.mjs --repo . --base bbef09573ef0de0369616d3430ee328f4a81e2de^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r01-caricamenti-che-si-chiudono.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La parte del provider (X «Chiudi avviso», nascosta sui caricamenti) era già nella base con la sua prova (riparazione-r01-la-x-degli-avvisi). Restava il caricamento chiuso con toast(msg, { id }), che in sonner 1.7.4 resta loading senza X e senza scadenza: in ProductForm «Nessuna variante sensata…» e «Codice EAN salvato. Non ho trovato…» usano toast.info sullo stesso id, e la frase neutra dopo un codice EAN che non cambia niente la dice il modulo con toast.info invece di passare da dilloDopoIlPatch. ProductForm è l'unico file con toast.loading: nessun caricamento resta più bloccato. La prova monta il modulo vero (assistente acceso con aiAccesa, al lancio spento), ToastProvider e sonner veri, orologio finto: tre flussi, l'avviso finale ha la X e scade; alla base restano loading.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/dilloDopoIlPatch.ts",
+          "modifica": "riga 17: «else toast(avviso.testo, opzioni);» diventa «else toast.info(avviso.testo, opzioni);» — oggi nessuno le passa l'id di un caricamento (ProductForm non lo fa più per la frase neutra), ma chi lo facesse ritroverebbe il caricamento bloccato; fatto questo, ProductForm può tornare a chiamare dilloDopoIlPatch(esito, testi, { id: tid }) in tutti i casi"
+        }
+      ]
     }
   ],
   "nuovi_difetti_visti": [],
