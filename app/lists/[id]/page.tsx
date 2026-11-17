@@ -139,6 +139,8 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       toast.success(tToasts('updated'));
       setEditTitle(false);
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
+      // R10-007, R10-008 — anche /lists mostra titolo e descrizione: prima restavano i vecchi.
+      rileggiLeListeDiLists();
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
