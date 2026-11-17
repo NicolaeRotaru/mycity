@@ -85,6 +85,14 @@ export default function NotificationsPage() {
   const [quante, setQuante] = useState(PER_VOLTA);
   const nonLetteDelCampanello = useNotificationsCount();
 
+  // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
+  // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
+  // pagina cancellando le notifiche già a video. Con questo restano, e l'errore sta accanto al tasto.
+  // Un riferimento, non uno stato: tenerlo da parte non deve ridisegnare la pagina.
+  // Vale solo per la sessione che l'ha letto (le righe dicono di chi sono): se la sessione finisce o
+  // cambia si butta, e una lettura caduta torna a dare la pagina d'errore.
+  const ultimoLetto = useRef<Notification[] | null>(null);
+
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useQuery({
     queryKey: [...queryKeys.notifications.list, quante],
     // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa.
@@ -95,6 +103,7 @@ export default function NotificationsPage() {
       // non è «non sei collegato»: si mostra l'errore con «Riprova», non la pagina di accesso.
       // All'accesso si va solo se la sessione manca davvero (nessun utente, o un errore di sessione).
       if (!user && errUtente && !sessioneMancante(errUtente)) throw errUtente;
+      if (!user || ultimoLetto.current?.some((n) => n.user_id !== user.id)) ultimoLetto.current = null;
       // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
       // distinguerli su un testo libero e' come non distinguerli.
       if (!user) throw new Error(AUTH_RICHIESTA);
@@ -109,23 +118,27 @@ export default function NotificationsPage() {
     },
   });
 
-  // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
-  // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
-  // pagina cancellando le notifiche già a video. Con questo restano, e l'errore sta accanto al tasto.
-  // Un riferimento, non uno stato: tenerlo da parte non deve ridisegnare la pagina.
-  const ultimoLetto = useRef<Notification[] | null>(null);
+  // Un elenco vuoto non ha niente da tenere, e non dice di chi è.
   useEffect(() => {
-    if (data && !isPlaceholderData) ultimoLetto.current = data;
+    if (data && !isPlaceholderData) ultimoLetto.current = data.length > 0 ? data : null;
   }, [data, isPlaceholderData]);
+  // Se la sessione finisce o cambia, l'elenco tenuto si butta subito, anche con la rete giù.
+  useEffect(() => {
+    const { data: ascolto } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      const chi = sessione?.user?.id;
+      if (evento === 'SIGNED_OUT' || !chi || ultimoLetto.current?.some((n) => n.user_id !== chi)) ultimoLetto.current = null;
+    });
+    return () => ascolto?.subscription?.unsubscribe();
+  }, []);
   const ultimoElenco = ultimoLetto.current;
 
   // Segna tutte come lette — su azione esplicita dell'utente (bottone), NON
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
   // senza azzerare il badge appena la apri.
   const markAllRead = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<string | null> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) return null;
       // 5/11/2026 — L'esito si legge: se la scrittura cade, i pallini restano e lo si dice.
       const { error: errAggiorna } = await supabase
         .from('notifications')
@@ -133,8 +146,13 @@ export default function NotificationsPage() {
         .eq('user_id', user.id)
         .eq('is_read', false);
       if (errAggiorna) throw errAggiorna;
+      return user.id;
     },
-    onSuccess: () => {
+    onSuccess: (chi) => {
+      // R10-012 — Scritte lette davvero: lo diventa anche l'elenco tenuto, se la rilettura cade.
+      if (chi && ultimoLetto.current) {
+        ultimoLetto.current = ultimoLetto.current.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
+      }
       qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
       qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
     },
@@ -191,6 +209,9 @@ export default function NotificationsPage() {
   const caricaAltre = isFetching && (isPlaceholderData || !data);
   // La lettura è caduta ma l'elenco già letto resta: l'errore si dice qui sotto, con «Riprova».
   const letturaCaduta = !!error && !caricaAltre;
+  // A cadere è proprio «Carica altre» se la domanda più lunga non ha dati suoi; se no è caduta una
+  // rilettura dell'elenco già a video, e si dice quello.
+  const altreCadute = letturaCaduta && !data && quante > PER_VOLTA;
   // Se ne sono arrivate quante ne ho chieste, ce ne possono essere altre più indietro.
   const forseAltre = caricaAltre || notifications.length >= quante;
 
@@ -281,7 +302,11 @@ export default function NotificationsPage() {
 
       {letturaCaduta ? (
         <div role="alert" className="mt-4 flex flex-col items-center gap-2 text-center">
-          <p className="text-sm text-ink-600">Non riusciamo a caricare altre notifiche. Quelle qui sopra restano.</p>
+          <p className="text-sm text-ink-600">
+            {altreCadute
+              ? 'Non riusciamo a caricare altre notifiche. Quelle qui sopra restano.'
+              : 'Non riusciamo ad aggiornare le notifiche.'}
+          </p>
           <button
             type="button"
             onClick={() => refetch()}
