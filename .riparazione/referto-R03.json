@@ -1,8 +1,8 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:24",
+  "aggiornato": "2026-11-17 19:27",
   "finita": false,
-  "testa": "1b6a971580d8ccba2650f72e360d61871beca2a4",
+  "testa": "e66bd7a8eefdf2bbce3b8accd5d67ab0eb594253",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "",
@@ -48,9 +48,26 @@
     },
     {
       "id": "R03-007",
-      "chiave": "qa-flussi|dopo «elimina lista» e dopo il cambio di visibilità /lists può mostrare dati vecchi",
-      "esito": "non_fatto",
-      "nota": "in lavorazione"
+      "esito": "riparato",
+      "commit": "e66bd7a8eefdf2bbce3b8accd5d67ab0eb594253",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-liste-dopo-elimina-e-visibilita.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-liste-dopo-elimina-e-visibilita.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e66bd7a8^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r03-liste-dopo-elimina-e-visibilita.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nell'onSuccess di deleteList (prima di portare a /lists) e di toggleVisibility la pagina invalida queryKeys.lists.mine, .public e .inVetrina, le tre chiavi da cui legge /lists (la prova le ricava montando /lists). Su errore niente invalidazione e, per l'eliminazione, niente spostamento. La prova monta la pagina della lista con il dialogo di conferma che risponde sì; le 8 prove che toccano la pagina restano verdi.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|dopo «elimina lista» e dopo il cambio di visibilità /lists può mostrare dati vecchi"
     },
     {
       "id": "R03-008",
