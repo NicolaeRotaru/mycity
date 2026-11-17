@@ -467,6 +467,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "lotto 1 e lotto 2 opus, lotto 3 sonnet, revisore soldi opus (R31-022, R31-014), revisore minori sonnet (R31-024, 025, 017, 007, 009). Lotto 4 non aperto: la regista l'ha fermato a 26,61 $. Le patch intere le giudica il collaudo sul ramo unito (decisione della regista)."
-  }
+    "nota": "lotto 1 e lotto 2 opus, lotto 3 sonnet, revisore soldi opus (R31-022, R31-014), revisore minori sonnet (R31-024, 025, 017, 007, 009). Lotto 4 non aperto: la regista l'ha fermato a 26,61 $. Le patch intere le giudica il collaudo sul ramo unito (decisione della regista). Costo letto con get_session senza id prima della consegna: 33,68 $.",
+    "subagenti": 5
+  },
+  "costo_usd": 33.68
 }
