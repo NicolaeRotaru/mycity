@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, createElement, type ComponentType } from 'react';
+import { act, createElement, type ComponentType, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -49,7 +49,7 @@ vi.mock('@/lib/supabase/client', () => {
 });
 vi.mock('next/link', async () => {
   const { createElement: ce } = await import('react');
-  return { default: ({ href, children, ...resto }: { href: string; children: unknown }) => ce('a', { href, ...resto }, children) };
+  return { default: ({ href, children, ...resto }: { href: string; children?: ReactNode }) => ce('a', { href, ...resto }, children) };
 });
 vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push: () => {} }) }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: () => {}, error: () => {}, info: () => {}, debug: () => {} } }));
