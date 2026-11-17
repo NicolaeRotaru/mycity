@@ -13,9 +13,10 @@ describe('R20-009 · titolo della home, variante A', () => {
     expect(varianteA).not.toMatch(/Consegna in giornata\./);
   });
 
-  it('la consegna si dice con la frase della cassa e a negozio aperto', () => {
+  it('la consegna si dice con la frase della cassa, senza «a negozio aperto» (la merce arriva anche dopo la chiusura)', () => {
     expect(varianteA).toContain('QUANDO_ARRIVA_SENZA_NEGOZIO');
-    expect(varianteA).toMatch(/a negozio aperto/);
+    expect(varianteA).not.toMatch(/a negozio aperto/);
     expect(QUANDO_ARRIVA_SENZA_NEGOZIO).toMatch(/in giornata/);
+    expect(QUANDO_ARRIVA_SENZA_NEGOZIO).toMatch(/fascia oraria che scegli/);
   });
 });

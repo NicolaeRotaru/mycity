@@ -69,6 +69,10 @@ async function buildStats(): Promise<typeof STATS> {
   }
 }
 
+/** Sotto lg: colonne larghe almeno 8rem e al massimo mezza riga (gap-4 = 1rem), come le colonne del piede:
+ *  col testo ingrandito una sola colonna invece di due che escono dallo schermo. */
+const COLONNE_DEI_NUMERI = 'grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_1rem)/2)),1fr))]';
+
 const VALUES = [
   {
     Icon: MapPin,
@@ -103,7 +107,7 @@ export default async function AboutPage() {
           <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-label text-accent-200 mb-3.5">
             <Sparkles size={14} strokeWidth={2.4} aria-hidden /> La nostra storia
           </span>
-          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.05] mb-4 max-w-[16ch]">
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.05] mb-4 max-w-[16ch] break-words hyphens-auto">
             Il quartiere, a portata di mano.
           </h1>
           <p className="text-lg md:text-xl leading-relaxed text-white/90 max-w-[52ch]">
@@ -116,7 +120,7 @@ export default async function AboutPage() {
 
       {/* Stats row, overlapping the hero */}
       <div className="container mx-auto px-6 max-w-5xl -mt-10 relative z-10">
-        <div className={`grid grid-cols-2 gap-4 ${stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+        <div className={`grid ${COLONNE_DEI_NUMERI} gap-4 ${stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
           {stats.map((s) => (
             <div
               key={s.label}

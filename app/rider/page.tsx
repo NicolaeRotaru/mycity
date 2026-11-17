@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -132,6 +133,8 @@ export default function RiderDashboardPage() {
    * li ha proprio (`ordini_disponibili_rider`), e la riga intera si legge solo
    * sugli ordini che quel fattorino ha preso.
    */
+  // R03-005 — Quante letture di fila sono tornate senza i negozi: decide l'attesa prima della prossima.
+  const lettureSenzaNegozi = useRef(0);
   const letturaBacheca = useQuery({
     queryKey: queryKeys.rider.orders,
     queryFn: async () => {
@@ -168,6 +171,7 @@ export default function RiderDashboardPage() {
         'id, store_name, store_logo, store_address',
         () => { negoziNonLetti = true; },
       );
+      lettureSenzaNegozi.current = negoziNonLetti ? lettureSenzaNegozi.current + 1 : 0;
 
       return {
         // 5/11/2026 — La vista esiste in produzione da tempo (migrazione 122): una lettura caduta
@@ -181,7 +185,12 @@ export default function RiderDashboardPage() {
     },
     // dashboard rider: 1 min è sufficiente. R20-007 — Ma se la vista dei negozi è caduta la lettura
     // è parziale (consegne senza il nome del negozio): si riprova dopo pochi secondi.
-    refetchInterval: (q) => (q.state.data?.negoziNonLetti ? 5_000 : 60_000),
+    // R03-005 — Non ogni 5 secondi per sempre: con la vista giù a lungo l'attesa raddoppia a ogni
+    // lettura parziale (5, 10, 20, 40 s) fino al minuto normale, e torna da capo quando risponde.
+    refetchInterval: (q) =>
+      q.state.data?.negoziNonLetti
+        ? Math.min(5_000 * 2 ** Math.max(lettureSenzaNegozi.current - 1, 0), 60_000)
+        : 60_000,
     refetchOnWindowFocus: true, // appena torna sulla tab fa refresh subito
     staleTime: 15_000,
   });
@@ -338,7 +347,12 @@ export default function RiderDashboardPage() {
             // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
             : esito?.motivo === 'DOCUMENTI_SCADUTI'
               ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
-              : 'Ordine già preso da un altro rider',
+              // R03-009 — «Già preso» solo quando `prendi_ordine` lo dice (GIA_PRESO, migrazione 270).
+              // Una risposta vuota, storta o con un motivo che non conosciamo non è «l'ha preso un
+              // altro»: si dice che la presa non è riuscita, senza inventare il perché.
+              : esito?.motivo === 'GIA_PRESO'
+                ? 'Ordine già preso da un altro rider'
+                : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
       const data2 = { id: esito.id };

@@ -50,12 +50,14 @@ export function LoadingState({ variant = 'spinner', message, description, rows =
   if (variant === 'cards') {
     // Stato di caricamento "branded" — spinner + serif + griglia card-skeleton
     // (trattamento states.html). Riusa la classe .skeleton/shimmer di globals.css.
+    // aria-busy sulla regione viva (o sopra) le fa rimandare l'annuncio finché resta "true": sta sulla
+    // sola griglia degli scheletri, così il messaggio si sente subito.
     return (
-      <div role="status" aria-busy="true" aria-live="polite" className={cn('text-center', className)}>
+      <div role="status" aria-live="polite" className={cn('text-center', className)}>
         <Loader2 size={40} className="animate-spin text-primary-700 mx-auto mb-5" strokeWidth={2.2} aria-hidden />
         <h2 className="font-serif text-2xl font-bold text-ink-900 mb-1.5">{msg}</h2>
         {description && <p className="text-base text-ink-600 mb-8">{description}</p>}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-left">
+        <div aria-busy="true" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-left">
           {Array.from({ length: cards }).map((_, i) => (
             <div key={i} className="bg-white border border-cream-300 rounded-2xl overflow-hidden" aria-hidden>
               <div className="skeleton aspect-square" />
