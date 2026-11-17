@@ -27,19 +27,21 @@ export type IngressiSpedizione = {
  *
  * La funzione resta perché è il punto unico da cui passa la spedizione: la colonna
  * `shipping_cost` dell'ordine e la riga «Spedizione» di Stripe nascono da qui. Se un giorno
- * tornasse una spedizione a pagamento, torna qui e da nessun'altra parte. Gli ingressi restano
- * quelli di prima perché li passano già tutti i chiamanti.
+ * tornasse una spedizione a pagamento, torna qui e da nessun'altra parte.
+ * 16/11/2026 (R29-005) — Senza ingressi: sette argomenti che non cambiavano niente facevano credere
+ * a chi legge che la spedizione dipendesse ancora da soglia e distanza. `shippingCentsFor` li
+ * accetta ancora (e li ignora) solo perché lib/ordini/prezzi.ts glieli passa.
  *
  * Il codice «Spedizione gratuita» non passa più da qui: qui non c'è più niente da azzerare. Toglie
  * la consegna in `prezziDelCarrello`, e il fattorino lo paga la piattaforma (vedi lì).
  */
-export function shippingForEuro(_opts: IngressiSpedizione): number {
+export function shippingForEuro(): number {
   return 0;
 }
 
-/** Come shippingForEuro ma restituisce centesimi interi. */
-export function shippingCentsFor(opts: Parameters<typeof shippingForEuro>[0]): number {
-  return Math.round(shippingForEuro(opts) * 100);
+/** Come shippingForEuro ma restituisce centesimi interi. Gli ingressi non cambiano niente (vedi sopra). */
+export function shippingCentsFor(_opts?: IngressiSpedizione): number {
+  return Math.round(shippingForEuro() * 100);
 }
 
 /**

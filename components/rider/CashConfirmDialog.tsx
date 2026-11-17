@@ -316,7 +316,7 @@ function PhotoSlot({
   onChange: (f: File) => void;
 }) {
   return (
-    <label className="cursor-pointer">
+    <label className="block cursor-pointer rounded-lg focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2">
       <div className="text-xs font-medium text-ink-700">
         {label} {required && <span className="text-rose-600">*</span>}
       </div>

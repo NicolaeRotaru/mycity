@@ -16,10 +16,57 @@
  * webhook sono la dimostrazione che non si è rotto niente.
  */
 import type Stripe from 'stripe';
+import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { logger } from '@/lib/logger';
+import { notifyAdmins } from './comune';
 import { scritturaFacoltativa } from './esito';
+
+/**
+ * 16/11/2026 (R28-016) — LA SPONSORIZZAZIONE RIMBORSATA O CONTESTATA IN BANCA SI SPEGNE.
+ *
+ * Il pagamento di una sponsorizzazione non ha ordini: il rimborso pieno e la contestazione passavano
+ * dai rami «senza ordini» dei gestori (rimborsi.ts, dispute.ts), che guardavano solo i buoni regalo.
+ * La vetrina restava «In primo piano» fino all'ultimo giorno anche coi soldi tornati al negozio o
+ * ripresi dalla banca. La sponsorizzazione si riconosce dalla sua sessione di cassa
+ * (`stripe_session_id`), che Stripe ritrova dal pagamento. Come il buono regalo, si spegne subito: il
+ * rimborso pieno la chiude ('ended'); la contestazione vera la mette in pausa ('paused') e lo dice
+ * agli amministratori, che la riaccendono da /admin/sponsored se la contestazione è vinta. La
+ * scrittura tocca solo le righe ancora accese: ripetuta, non trova più niente da spegnere.
+ * Torna vero se il pagamento era quello di una sponsorizzazione.
+ */
+export async function spegniLaSponsorizzazioneDelPagamento(
+  paymentIntent: string,
+  perche: 'rimborsata' | 'contestata',
+  contestazione: string | null = null,
+): Promise<boolean> {
+  const { data: sessioni } = await getStripe().checkout.sessions.list({ payment_intent: paymentIntent, limit: 1 });
+  const sessione = sessioni?.[0]?.id;
+  if (!sessione) return false;
+  const admin = getAdminSupabase();
+  const { data, error } = await admin
+    .from('sponsored_listings')
+    .update({ status: perche === 'rimborsata' ? 'ended' : 'paused' })
+    .eq('stripe_session_id', sessione)
+    .in('status', perche === 'rimborsata' ? ['active', 'paused'] : ['active'])
+    .select('id');
+  // Una scrittura caduta lancia: Stripe riprova l'avviso.
+  if (error) throw new Error(`[stripe] sponsorizzazione del pagamento ${paymentIntent} non spenta: ${error.message}`);
+  const spente = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  if (spente.length === 0) return true;
+  logger.warn('[stripe] sponsorizzazione spenta: il suo pagamento è tornato indietro', { paymentIntent, perche, spente });
+  if (perche === 'contestata') {
+    await notifyAdmins(
+      '⚠️ Sponsorizzazione in pausa per una contestazione',
+      `Il pagamento della sponsorizzazione ${spente.join(', ')} è contestato in banca${contestazione ? ` (${contestazione})` : ''}: ` +
+        "la sponsorizzazione è in pausa. Se la contestazione è vinta, va riaccesa a mano da /admin/sponsored.",
+      '/admin/sponsored',
+      { unaVoltaPer: `sponsorizzazione-contestata:${paymentIntent}` },
+    );
+  }
+  return true;
+}
 
 /**
  * Pagamento sponsorizzazione riuscito → crea la `sponsored_listing` attiva

@@ -11,7 +11,7 @@ import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flam
 import { supabase } from '@/lib/supabase/client';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/catalogo';
-import { addToCart, cartTotal, getCart, updateQuantity } from '@/lib/cart';
+import { addToCart, getCart, updateQuantity } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { discountedUnitCents } from '@/lib/promotions';
@@ -139,10 +139,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // `ref` l'osservatore si sarebbe attaccato al vuoto e non sarebbe mai scattato.
   const [nodoRecensioni, setNodoRecensioni] = useState<HTMLElement | null>(null);
   const [recensioniInVista, setRecensioniInVista] = useState(false);
-  // Quanto vale il carrello ADESSO, senza questo prodotto. Si legge dopo il
-  // montaggio: sul server il carrello non esiste e leggerlo qui romperebbe
-  // l'idratazione.
-  const [carrelloAttuale, setCarrelloAttuale] = useState(0);
 
   // 30/8/2026 (R068) — LA SCHEDA ARRIVAVA VUOTA NELL'HTML.
   //
@@ -399,15 +395,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     return () => osservatore.disconnect();
   }, [nodoRecensioni, recensioniInVista]);
 
-  // Il carrello vive in `localStorage` e cambia anche da un'altra scheda: si
-  // rilegge a ogni `cart:updated`, l'evento che `lib/cart` emette a ogni scrittura.
-  useEffect(() => {
-    const leggi = () => setCarrelloAttuale(cartTotal(getCart()));
-    leggi();
-    window.addEventListener('cart:updated', leggi);
-    return () => window.removeEventListener('cart:updated', leggi);
-  }, []);
-
   if (isLoading) {
     return (
       <div className="container mx-auto px-6 py-8">
@@ -556,19 +543,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const maxQty = stock === undefined ? Infinity : Math.max(1, stock);
   const qty = Math.min(quantity, maxQty);
 
-  // Quanto varra' il carrello premendo «Aggiungi al carrello»: quello che c'e' gia'
-  // dentro piu' i pezzi scelti qui. `addToCart` SOMMA alla riga esistente, quindi
-  // questa e' la cifra vera, non una stima.
-  const subtotaleConQuestoProdotto = carrelloAttuale + price * qty;
   // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
   // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
   // «Spedizione gratuita» e non nominava da nessuna parte i 3 € di consegna che partono comunque:
   // il cliente li vedeva per la prima volta nel carrello, cioe' dopo aver scelto.
   //
-  // E la cifra che legge e' quella del carrello: prima la pastiglia guardava il prezzo di
-  // UN pezzo mentre la barra guardava prezzo x quantita', e i due segnali si smentivano.
-  const spedizione = promessaSpedizione(subtotaleConQuestoProdotto);
-  const freeShipping = spedizione.sopraSoglia;
+  // 16/11/2026 (R29-005) — Senza il valore del carrello: dalla fine della soglia non cambiava la
+  // risposta. La pastiglia «gratis» si accende solo se la consegna davvero non si paga.
+  const spedizione = promessaSpedizione();
+  const consegnaSenzaCosto = spedizione.dettaglioConsegna === null;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
   // 29/10/2026 — Qui c'era `expressEligible` (interruttore Express del prodotto e del negozio): decideva
@@ -1162,7 +1145,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         <div className="md:col-span-2 lg:col-span-1 lg:sticky lg:top-[var(--header-height)] h-fit">
           <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
             <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
-            {freeShipping && (
+            {consegnaSenzaCosto && (
               <Badge variant="free" icon={Bike}>{spedizione.titolo}</Badge>
             )}
             <p className="text-xs">

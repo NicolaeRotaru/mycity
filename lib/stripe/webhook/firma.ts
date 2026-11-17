@@ -25,6 +25,13 @@
  * «pagamento completato» o un «rimborso» arrivati da lì non si lavorano mai:
  * i pagamenti di MyCity passano dal conto di MyCity, e un buono regalo o un
  * ordine non devono poter nascere da un conto che non è il nostro.
+ *
+ * 16/11/2026 (R29-013) — IL SITO VERO NON LAVORA GLI AVVISI «DI PROVA». Un
+ * indirizzo per i conti collegati riceve da Stripe anche gli avvisi in modalità
+ * di prova (`livemode: false`) dei conti dei negozi. Sul sito vero (chiave
+ * `sk_live_`/`rk_live_`) un avviso di prova si scarta senza effetti e si
+ * risponde 2xx, così Stripe non lo ritenta; nell'anteprima e in sviluppo (chiave
+ * di prova) gli avvisi di prova si lavorano come prima.
  */
 import type Stripe from 'stripe';
 import { env } from '@/lib/env';
@@ -52,18 +59,28 @@ export type EsitoFirma =
   | { esito: 'valida'; evento: Stripe.Event; indirizzo: SegretoWebhook['indirizzo'] }
   /** Firma buona, ma è un avviso di un conto di negozio che qui non si lavora. */
   | { esito: 'fuori-posto'; evento: Stripe.Event; indirizzo: SegretoWebhook['indirizzo'] }
+  /** Firma buona, ma è un avviso di prova (livemode false) arrivato al sito vero: non si lavora. */
+  | { esito: 'di-prova'; evento: Stripe.Event; indirizzo: SegretoWebhook['indirizzo'] }
   /** Nessun segreto ha riconosciuto la firma. */
   | { esito: 'non-valida'; errore: unknown };
+
+/** La chiave Stripe è quella vera (sito vero), non quella di prova. */
+export function chiaveStripeVera(chiave: string | undefined | null): boolean {
+  return typeof chiave === 'string' && /^(sk|rk)_live_/.test(chiave);
+}
 
 /**
  * Prova la firma con ogni segreto, nell'ordine. `costruisci` è la verifica di
  * Stripe (`stripe.webhooks.constructEvent`): lancia se la firma non torna.
+ * `chiave` è la chiave Stripe del sito: se è quella vera, gli avvisi di prova
+ * tornano «di-prova» e non si lavorano.
  */
 export function verificaFirma(
   corpo: string,
   firma: string,
   segreti: SegretoWebhook[],
   costruisci: (corpo: string, firma: string, segreto: string) => Stripe.Event,
+  chiave: string | undefined | null = env.stripeSecretKey(),
 ): EsitoFirma {
   let ultimoErrore: unknown = new Error('nessun segreto del webhook configurato');
   for (const segreto of segreti) {
@@ -73,6 +90,9 @@ export function verificaFirma(
     } catch (errore) {
       ultimoErrore = errore;
       continue;
+    }
+    if (evento.livemode === false && chiaveStripeVera(chiave)) {
+      return { esito: 'di-prova', evento, indirizzo: segreto.indirizzo };
     }
     const daUnConto = typeof evento.account === 'string' && evento.account.length > 0;
     if (daUnConto && !EVENTI_DEI_CONTI_COLLEGATI.has(evento.type)) {

@@ -539,6 +539,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           orderId: created.orderId,
           total: created.totalCents / 100,
           storeName,
+          deliverySlot: fasciaDellOrdine, pickupInStore, paymentMethod: 'card', // R28-010: quando arriva e come si è pagato
         });
         await provaAMandare('conferma al cliente', { orderId: created.orderId }, () =>
           sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text }));
