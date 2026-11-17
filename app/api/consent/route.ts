@@ -120,13 +120,29 @@ export async function POST(request: Request) {
     user_agent: userAgent,
   }));
 
+  /**
+   * 17/11/2026 (R32-011) — CHI TOGLIEVA IL SÌ ALLE STATISTICHE SI TENEVA L'IDENTIFICATIVO.
+   *
+   * `mc_vid` dura un anno ed è httpOnly: il browser non lo può cancellare, e la rotta delle
+   * visite smetteva solo di leggerlo. Al sì successivo tornava buono, e le visite nuove si
+   * riattaccavano a quelle di prima. Col no alle statistiche il server lo cancella, anche se
+   * la scrittura nel registro non riesce: la revoca vale comunque (art. 7.3 GDPR).
+   */
+  const togliVid = parsed.data.analytics === false && !!vid;
+  const conVidTolto = <T extends NextResponse>(r: T): T => {
+    if (togliVid) {
+      r.cookies.set({ name: 'mc_vid', value: '', maxAge: 0, path: '/', sameSite: 'lax', httpOnly: true, secure: true });
+    }
+    return r;
+  };
+
   const { error } = await getAdminSupabase().from('consent_log').insert(righe);
   if (error) {
     logger.error(new Error('[consent] scrittura nel registro fallita'), { message: error.message });
-    return ApiErrors.internal('Registrazione non riuscita');
+    return conVidTolto(ApiErrors.internal('Registrazione non riuscita'));
   }
 
-  const risposta = NextResponse.json({ ok: true });
+  const risposta = conVidTolto(NextResponse.json({ ok: true }));
   if (cidNuovo) {
     // Solo per il registro dei consensi: httpOnly (il browser non lo legge) e
     // durata pari a quella del consenso stesso.
