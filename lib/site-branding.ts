@@ -78,7 +78,7 @@ export const DEFAULT_FOOTER_TAGLINE =
  * Prova: tests/unit/le-frasi-della-consegna-non-tornano-indietro.test.tsx
  */
 export const DESCRIZIONE_DEL_SITO =
-  `Compra online dai negozi di Piacenza: alimentari, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`;
+  `Compra online dai negozi di Piacenza. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`;
 
 /**
  * 01/11/2026 — Le frasi salvate dall'amministratore vincono sui testi del codice: una riga scritta

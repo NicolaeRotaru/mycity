@@ -27,6 +27,16 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { indirizzoPubblico } from '@/lib/env';
 import { APP_INSTALLABILE_ACCESA } from '@/lib/funzioni-al-lancio';
+import { HydrationBoundary } from '@tanstack/react-query';
+import { unstable_cache } from 'next/cache';
+import { precaricaSito } from '@/lib/queries/precarico';
+import { SECONDI_CATALOGO_FRESCO } from '@/lib/queries/cache-pubblica';
+
+/** Le categorie di menu, piede e vetrina, lette una volta per tutti. */
+const precaricoDelSito = unstable_cache(precaricaSito, ['sito-precarico'], {
+  revalidate: SECONDI_CATALOGO_FRESCO,
+  tags: ['sito-precarico'],
+});
 
 // `style` con il corsivo dentro NON è un dettaglio: senza, si scarica solo la
 // variante dritta e il browser inclina le lettere da solo (corsivo finto). Nel
@@ -199,6 +209,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // i18n: locale rilevato da cookie NEXT_LOCALE + Accept-Language (vedi i18n.ts)
   const locale = await getLocale();
   const messages = await getMessages();
+  // Un precarico non riuscito non ferma la pagina: menu, piede e vetrina leggono dal browser come prima.
+  const precarico = await precaricoDelSito().catch(() => undefined);
 
   return (
     <html lang={locale} suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
@@ -247,6 +259,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <QueryProvider>
+            <HydrationBoundary state={precarico}>
             <Navbar />
             <SellerShoppingBanner />
             <WelcomeCreditBanner />
@@ -258,6 +271,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <CartCrossDeviceSync />
             <BuyerOnboardingTour />
             {APP_INSTALLABILE_ACCESA && <PWAInstallBanner />}
+            </HydrationBoundary>
           </QueryProvider>
           <ToastProvider />
           <ConfirmDialogHost />

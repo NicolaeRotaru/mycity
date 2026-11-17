@@ -22,6 +22,7 @@ import DropOfDay from '@/components/home/DropOfDay';
 import HeroStoreCard from '@/components/home/HeroStoreCard';
 import HowItWorks from '@/components/home/HowItWorks';
 import HomeCtaLink from '@/components/home/HomeCtaLink';
+import ChipDelleCategorie from '@/components/home-sections/ChipDelleCategorie';
 import MaybeSection from '@/components/home/MaybeSection';
 import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
 import StoriesCarousel from '@/components/home/StoriesCarousel';
@@ -152,22 +153,7 @@ function HomeBlock({
                   </HomeCtaLink>
                 </div>
 
-                {showChips && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {HERO_CHIPS.map((cat) => (
-                      <HomeCtaLink
-                        key={cat.slug}
-                        href={`/category/${cat.slug}`}
-                        ctaId={`hero_chip_${cat.slug}`}
-                        location="hero_chips"
-                        variant={heroVariant}
-                        className="inline-flex items-center bg-white text-ink-700 hover:text-primary-700 border border-cream-300 hover:border-primary-300 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                      >
-                        {cat.label}
-                      </HomeCtaLink>
-                    ))}
-                  </div>
-                )}
+                {showChips && <ChipDelleCategorie chips={HERO_CHIPS} heroVariant={heroVariant} />}
 
                 <DeliveryCutoff variant="banner" senzaNegozio className="max-w-sm" />
 
