@@ -1,6 +1,6 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:11",
+  "aggiornato": "2026-11-17 18:22",
   "finita": false,
   "testa": "04cc4b9afe900efe616879161e8203dd24acf367",
   "verifica": {
@@ -105,8 +105,8 @@
     {
       "id": "R04-007",
       "chiave": "frontend-ux|la vetrina legge al massimo 20 recensioni mentre la linguetta mostra il totale vero",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "gia_riparato_prima",
+      "prova": "components/store-sections/ReviewsSection.tsx:43-49 e :250-268 sulla base (commit 9b4f9271 R30-007, antenato della base): useStorePageData.ts:40 legge ancora le prime 20, ma «Mostra altre recensioni» ne chiede altre 20 alla volta con .range() finché non arriva al totale vero di store_review_stats, lo stesso della linguetta (SectionRenderer.tsx:117). Lo dimostra tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx («con 45 nel database si arriva a leggerle tutte e 45»), verde: npx vitest run --reporter=dot tests/unit/riparazione-r30-recensioni-a-pagine.test.tsx → 0 (3 passate)."
     },
     {
       "id": "R04-008",
