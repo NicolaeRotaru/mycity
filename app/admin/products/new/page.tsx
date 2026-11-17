@@ -63,8 +63,8 @@ export default function AdminNewProductPage() {
   const datiArrivati = Boolean(sellersData && categoriesData);
 
   const sellerOffersExpress = useMemo(
-    () => Boolean(sellers.find((s) => s.id === sellerId)?.offers_express),
-    [sellers, sellerId],
+    () => Boolean(sellersData?.find((s) => s.id === sellerId)?.offers_express),
+    [sellersData, sellerId],
   );
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
