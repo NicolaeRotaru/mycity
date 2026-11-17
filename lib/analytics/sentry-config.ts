@@ -119,16 +119,22 @@ export function ripulisciEvento(event: any): any {
         const pulito = indirizzoSenzaDatiPersonali(indirizzo);
         span.description = pulito ? (resto.length ? `${metodo} ${pulito}` : pulito) : '[nascosto]';
       }
-      const dati = span?.data;
-      if (dati && typeof dati === 'object') {
-        for (const campo of ['url', 'http.url', 'http.query', 'http.fragment'] as const) {
-          if (typeof dati[campo] !== 'string') continue;
-          const pulito = campo === 'url' || campo === 'http.url' ? indirizzoSenzaDatiPersonali(dati[campo]) : null;
-          if (pulito) dati[campo] = pulito;
-          else delete dati[campo];
-        }
-      }
+      ripulisciDatiDelloSpan(span?.data);
     }
+  }
+  /**
+   * 17/11/2026 (R32-025) — LA MISURA STESSA PORTAVA L'INDIRIZZO INTERO.
+   *
+   * Gli span figli erano ripuliti, la misura no: l'SDK scrive l'indirizzo della pagina
+   * (`url.full`, con la ricerca e il pezzo dopo il cancelletto) nei dati della misura,
+   * `contexts.trace.data`, e sul server anche `http.target`, `http.url` e il `referer`.
+   * Gli errori del server lo allegano in `contexts.nextjs.request_path`.
+   */
+  ripulisciDatiDelloSpan(event.contexts?.trace?.data);
+  if (event.contexts?.nextjs && typeof event.contexts.nextjs.request_path === 'string') {
+    const pulito = indirizzoSenzaDatiPersonali(event.contexts.nextjs.request_path);
+    if (pulito) event.contexts.nextjs.request_path = pulito;
+    else delete event.contexts.nextjs.request_path;
   }
   if (event.user) {
     delete event.user.email;
@@ -136,4 +142,24 @@ export function ripulisciEvento(event: any): any {
     delete event.user.username;
   }
   return event;
+}
+
+/**
+ * 17/11/2026 (R32-025) — I campi in cui l'SDK (browser, server, edge) scrive un indirizzo
+ * intero: della strada si tiene tutto, dei parametri solo il nome.
+ */
+const CAMPI_CON_INDIRIZZO = ['url', 'http.url', 'url.full', 'http.target', 'http.request.header.referer'] as const;
+/** I campi che portano solo la ricerca, il pezzo dopo il cancelletto o l'indirizzo IP: via. */
+const CAMPI_DA_TOGLIERE = ['http.query', 'url.query', 'http.fragment', 'url.fragment', 'http.client_ip', 'client.address'] as const;
+
+function ripulisciDatiDelloSpan(grezzi: unknown): void {
+  if (!grezzi || typeof grezzi !== 'object') return;
+  const dati = grezzi as Record<string, unknown>;
+  for (const campo of CAMPI_CON_INDIRIZZO) {
+    if (typeof dati[campo] !== 'string') continue;
+    const pulito = indirizzoSenzaDatiPersonali(dati[campo]);
+    if (pulito) dati[campo] = pulito;
+    else delete dati[campo];
+  }
+  for (const campo of CAMPI_DA_TOGLIERE) delete dati[campo];
 }

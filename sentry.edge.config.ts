@@ -8,6 +8,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 import { ambienteSentry } from '@/lib/analytics/ambiente';
+import { ripulisciEvento } from '@/lib/analytics/sentry-config';
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
 
@@ -22,5 +23,14 @@ if (DSN) {
       'NEXT_REDIRECT',
       'NEXT_NOT_FOUND',
     ],
+    // 17/11/2026 (R32-025) — Qui (il middleware) errori e misure partivano senza nessuna
+    // pulizia, con l'indirizzo intero della pagina: è la stessa del browser e del server.
+    sendDefaultPii: false,
+    beforeSend(event) {
+      return ripulisciEvento(event);
+    },
+    beforeSendTransaction(event) {
+      return ripulisciEvento(event);
+    },
   });
 }
