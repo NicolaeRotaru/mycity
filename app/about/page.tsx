@@ -137,9 +137,12 @@ export default async function AboutPage() {
 
       <div className="container mx-auto px-6 max-w-5xl">
         {/* Perché esistiamo */}
+        {/* R02-002 — A 320 px col testo al 200% «esistiamo» non ci stava e la pagina scorreva di lato:
+            il titolo va a capo come quello in cima (break-words hyphens-auto) e la colonna della griglia
+            può stringersi (min-w-0), come le caselle dei numeri. */}
         <section className="py-14 md:py-16 grid md:grid-cols-[1.1fr_1fr] gap-10 md:gap-12 items-center">
-          <div>
-            <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4">
+          <div className="min-w-0">
+            <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4 break-words hyphens-auto">
               Perché esistiamo
             </h2>
             <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
@@ -173,7 +176,8 @@ export default async function AboutPage() {
           </p>
           <div className="grid md:grid-cols-3 gap-4 mt-6">
             {VALUES.map(({ Icon, title, body }) => (
-              <div key={title} className="bg-white border border-cream-300 rounded-xl p-6">
+              // R02-002 — Anche qui, a 320 px col testo al 200%, una parola lunga allargava la pagina di 5 px.
+              <div key={title} className="min-w-0 break-words bg-white border border-cream-300 rounded-xl p-6">
                 <span className="w-12 h-12 rounded-lg bg-primary-100 text-primary-700 inline-flex items-center justify-center mb-3.5">
                   <Icon size={22} strokeWidth={2.2} aria-hidden />
                 </span>
