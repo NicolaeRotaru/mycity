@@ -10,6 +10,7 @@ import {
   type EsitoBattiti,
 } from '@/lib/cron-health';
 import { misuraVariabili, esitoVariabili, valorePresente } from '@/lib/health-env';
+import { controllaTrasformazioneFoto } from '@/lib/image-url';
 
 export const runtime = 'nodejs';
 // Sempre fresh: i monitor esterni devono sapere lo stato reale, no cache.
@@ -334,6 +335,39 @@ export async function GET(request: Request) {
   checks.envOpzionali = variabili;
 
   /**
+   * Check 4 (R30-009): LE FOTO DEL SITO ARRIVANO ANCORA?
+   *
+   * Se l'abbonamento Supabase scade, la trasformazione delle foto (`/render/image/`) risponde 403 e
+   * la vetrina resta senza foto, con tutto il resto verde. Qui si chiede una foto vera di un
+   * prodotto in vendita, nello stesso modo del sito (lib/image-url.ts, controllaTrasformazioneFoto).
+   * Non fatale: `degradato` con 200, come un lavoro periodico fermo. La cura è
+   * NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 e un nuovo deploy, o rinnovare il piano.
+   * Senza una foto dello Storage da chiedere (o col database giù) il controllo si salta.
+   */
+  if (checks.db.ok) {
+    try {
+      const admin = getAdminSupabase();
+      const { data } = await admin
+        .from('products')
+        .select('images')
+        .eq('status', 'available')
+        .not('images', 'is', null)
+        .limit(20);
+      const urlFoto = ((data ?? []) as { images?: unknown }[])
+        .flatMap((p) => (Array.isArray(p.images) ? p.images : []))
+        .find((u): u is string => typeof u === 'string' && u.includes('/storage/v1/object/public/'));
+      const foto = await controllaTrasformazioneFoto({ fetch, timeoutMs: 2000, urlFoto });
+      if (foto === 'degradato') {
+        checks.foto = { ok: false, stato: 'degradato', error: 'la trasformazione delle foto di Supabase non risponde: le foto del sito non arrivano' };
+      } else if (foto === 'ok') {
+        checks.foto = { ok: true, stato: 'ok' };
+      }
+    } catch {
+      // Una lettura che non va non dice niente sulle foto: il controllo si salta.
+    }
+  }
+
+  /**
    * 22/8/2026 — UN DATABASE LENTO FACEVA RIAVVIARE UN'ISTANZA SANA.
    *
    * Questa rotta e' quella che l'hosting interroga per decidere se il processo
@@ -355,7 +389,7 @@ export async function GET(request: Request) {
    * avere il potere di riavviare.
    */
   const processoMorto = !checks.env.ok;
-  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok || !cron.ok);
+  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok || !cron.ok || checks.foto?.ok === false);
   const status = processoMorto ? 'unhealthy' : degradato ? 'degraded' : 'ok';
   const httpStatus = processoMorto ? 503 : 200;
 
