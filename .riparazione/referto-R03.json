@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-17 19:28",
+  "aggiornato": "2026-11-17 19:32",
   "finita": false,
   "testa": "e66bd7a8eefdf2bbce3b8accd5d67ab0eb594253",
   "verifica": {
@@ -194,7 +194,22 @@
       "chiave": "stati-ui|senza rete il modulo prodotto crede che il negozio non offra la consegna veloce"
     }
   ],
-  "nuovi_difetti_visti": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "le visualizzazioni e i clic dei prodotti sponsorizzati non arrivano mai al database",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/SponsoredCarousel.tsx:75",
+      "descrizione": "void supabase.rpc('track_sponsored_impression', …) e, alla riga 117, void supabase.rpc('track_sponsored_click', …) non aspettano mai la risposta: nel client vero (postgrest-js) rpc() restituisce un builder pigro che manda la richiesta solo al then/await, quindi le due chiamate non partono. Basta aspettarle (per esempio .then(() => {}, () => {}))."
+    },
+    {
+      "titolo": "dopo aver cambiato titolo o descrizione di una lista, /lists mostra ancora quelli vecchi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:138",
+      "descrizione": "L'onSuccess di updateMeta rilegge solo queryKeys.lists.detail: /lists legge titoli e descrizioni da lists.mine, .public e .inVetrina e li mostra vecchi finché non scadono. La voce di questo lotto nomina solo eliminazione e visibilità, quindi non l'ho toccato: la cura è chiamare anche lì rileggiLeListeDiLists()."
+    }
+  ],
   "domande_per_nicola": [],
   "conto": {
     "agenti": 0,
