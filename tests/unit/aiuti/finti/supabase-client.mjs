@@ -66,32 +66,52 @@ const NESSUNO = { data: { user: null, session: null }, error: null };
  * database della prova) e l'attesa dà la stessa risposta di prima.
  */
 const catenaDiUnaFunzione = (nome, argomenti) => {
-  let esito;
-  try {
-    esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null };
-  } catch (errore) {
-    esito = Promise.reject(errore);
-  }
-  const c = {};
   /**
-   * 17/11/2026 — Gli anelli dopo la funzione arrivano al database della prova, come quelli di
-   * `from`: se la sua risposta sa fare `order`, `range`, `eq`… li fa lei, e la prova vede la
-   * finestra chiesta. Prima passavano oltre sempre, e una funzione che taglia e ordina restituiva
-   * tutte le righe. Una risposta che non li sa fare (una promessa nuda, come quella dei database
-   * delle prove di oggi) li lascia passare oltre come prima.
+   * 17/11/2026 — La chiamata al database della prova parte solo quando qualcuno aspetta la
+   * risposta (`then`/`await`, o la riga sola di `single`), come nel client vero, e una volta sola
+   * anche se la si aspetta due volte. Prima partiva subito, a `.rpc(...)`: una funzione chiamata e
+   * mai aspettata, che nel client vero non arriva mai al database, nella prova sembrava arrivata.
+   * Fino ad allora gli anelli si annotano, e alla partenza si fanno nell'ordine.
    */
-  const anello = (m) => (...a) => {
-    if (typeof esito?.[m] === 'function') esito = esito[m](...a);
-    return c;
+  const anelli = [];
+  let riga = null;
+  let partita;
+  const parti = () => {
+    if (!partita) {
+      try {
+        let esito = clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null };
+        /**
+         * 17/11/2026 — Gli anelli dopo la funzione arrivano al database della prova, come quelli di
+         * `from`: se la sua risposta sa fare `order`, `range`, `eq`… li fa lei, e la prova vede la
+         * finestra chiesta. Prima passavano oltre sempre, e una funzione che taglia e ordina
+         * restituiva tutte le righe. Una risposta che non li sa fare (una promessa nuda, come quella
+         * dei database delle prove di oggi) li lascia passare oltre come prima.
+         */
+        for (const [m, a] of anelli) if (typeof esito?.[m] === 'function') esito = esito[m](...a);
+        const daTagliare = riga !== null && typeof esito?.[riga] !== 'function';
+        if (riga !== null && !daTagliare) esito = esito[riga]();
+        partita = Promise.resolve(esito).then((r) => (daTagliare
+          ? { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null }
+          : r));
+      } catch (errore) {
+        partita = Promise.reject(errore);
+      }
+    }
+    return partita;
   };
+  const c = {};
   for (const m of ['eq', 'neq', 'in', 'or', 'ilike', 'gte', 'lte', 'order', 'limit', 'range', 'is', 'not', 'contains', 'overlaps', 'filter', 'match', 'select']) {
-    c[m] = anello(m);
+    c[m] = (...a) => { anelli.push([m, a]); return c; };
   }
-  c.then = (risolvi, rifiuta) => Promise.resolve(esito).then(risolvi, rifiuta);
-  const unaRiga = (m) => async () => {
-    if (typeof esito?.[m] === 'function') return esito[m]();
-    const r = await esito;
-    return { data: Array.isArray(r?.data) ? (r.data[0] ?? null) : (r?.data ?? null), error: r?.error ?? null };
+  c.then = (risolvi, rifiuta) => parti().then(risolvi, rifiuta);
+  // Una riga sola: si aspetta come una promessa, e parte anche lei solo all'attesa.
+  const unaRiga = (m) => () => {
+    riga = m;
+    return {
+      then: (risolvi, rifiuta) => parti().then(risolvi, rifiuta),
+      catch: (rifiuta) => parti().catch(rifiuta),
+      finally: (allaFine) => parti().finally(allaFine),
+    };
   };
   c.single = unaRiga('single');
   c.maybeSingle = unaRiga('maybeSingle');
