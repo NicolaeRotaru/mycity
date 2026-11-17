@@ -362,6 +362,9 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 4,
-    "nota": "2 riparatori (lotto A, lotto B, uno alla volta), 1 smentitore del lotto A (worktree separato a e66bd7a8), 1 smentitore del lotto B (worktree separato a fd0639e3); tutti sul modello della sessione. Spesa letta con get_session: 20,43 $ prima della smentita del lotto B."
-  }
+    "nota": "2 riparatori (lotto A, lotto B, uno alla volta), 1 smentitore del lotto A (worktree separato a e66bd7a8), 1 smentitore del lotto B (worktree separato a fd0639e3); tutti sul modello della sessione. Costo letto con get_session senza id prima della consegna: 22,75 $ (20,43 $ prima della smentita del lotto B: dopo i 20 $ solo smentita, verify e consegna, nessun giro di correzione).",
+    "subagenti": 4,
+    "costo_usd": 22.75
+  },
+  "costo_usd": 22.75
 }
