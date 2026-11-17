@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-17 18:03",
+  "aggiornato": "2026-11-17 18:05",
   "finita": false,
-  "testa": "c1b6f93ee62a900b37ddd6a6d1bad1faf414e57d",
+  "testa": "c6fafc1ff409f32e04db278a7ca11023232cef17",
   "verifica": {
     "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
     "esito": "non_lanciata",
@@ -78,8 +78,25 @@
     {
       "id": "R04-009",
       "chiave": "navigazione-gerarchia|le pagine di una categoria madre mostrano chip verso sottocategorie vuote",
-      "esito": "non_fatto",
-      "nota": "non ancora lavorata in questa sessione"
+      "esito": "riparato",
+      "commit": "c6fafc1ff409f32e04db278a7ca11023232cef17",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-chip-sottocategorie-piene.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-chip-sottocategorie-piene.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6fafc1ff409f32e04db278a7ca11023232cef17^ --file app/category/[slug]/page.tsx --prove tests/unit/riparazione-r04-chip-sottocategorie-piene.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina legge le categorie piene (domandaCategoriePiene, stessa chiave di home, piede e indice) e filtra con soloLePiene i bottoni delle sottocategorie: nel ramo madre (hub), nel ramo a griglia di una sottocategoria con figlie e nei «forse cercavi» dello stato vuoto. Mentre la lettura carica non mostra bottoni; se cade li mostra tutti come prima. Le file dei prodotti restano su tutte le figlie (si nascondono da sole se vuote).",
+      "verificato_da": ""
     },
     {
       "id": "R04-010",
