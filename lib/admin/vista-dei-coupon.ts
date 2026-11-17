@@ -27,6 +27,7 @@
 
 import { vistaDaQuery, type LetturaQuery } from '../vista-query';
 import type { StatoVista } from '../stato-vista';
+import { CODICI_SCONTO_IN_CASSA } from '../funzioni-al-lancio';
 
 export type CouponTipo = 'PERCENT' | 'FIXED' | 'FREE_SHIPPING';
 
@@ -41,7 +42,42 @@ export type Coupon = {
   first_order_only: boolean;
   active: boolean;
   description: string | null;
+  /** La scadenza, se c'è: la cassa rifiuta il codice dopo questo istante (check_coupon). */
+  expires_at?: string | null;
 };
+
+/**
+ * 17/11/2026 (R30-025) — «ATTIVO» VOLEVA DIRE SOLO «INTERRUTTORE ACCESO».
+ *
+ * La pagina guardava solo `active`: un codice scaduto o con tutti gli usi consumati risultava
+ * «Attivo», mentre la cassa lo rifiuta (check_coupon guarda expires_at e uses_count >= max_uses).
+ * L'amministratore poteva darlo ai clienti credendolo buono. Lo stato qui sotto segue la cassa,
+ * nello stesso ordine: spento, poi scaduto, poi esaurito. Ogni riga della vista porta il suo
+ * stato e la sua scritta, così la pagina non ha un ramo da scrivere a mano. L'ora la passa chi
+ * chiama (`vistaDeiCoupon(q, adesso)`); senza, vale quella del momento.
+ */
+export type StatoDelCoupon = 'disattivato' | 'scaduto' | 'esaurito' | 'attivo';
+
+export function statoDelCoupon(c: Pick<Coupon, 'active' | 'expires_at' | 'max_uses' | 'uses_count'>, adesso: Date): StatoDelCoupon {
+  if (!c.active) return 'disattivato';
+  if (c.expires_at) {
+    const scade = new Date(c.expires_at).getTime();
+    if (Number.isFinite(scade) && scade < adesso.getTime()) return 'scaduto';
+  }
+  if (c.max_uses != null && c.uses_count >= c.max_uses) return 'esaurito';
+  return 'attivo';
+}
+
+/** La scritta del badge. «Attivo» dice anche se la cassa i codici li accetta (CODICI_SCONTO_IN_CASSA). */
+export function etichettaDelCoupon(stato: StatoDelCoupon, codiciInCassa: boolean = CODICI_SCONTO_IN_CASSA): string {
+  if (stato === 'disattivato') return 'Disattivato';
+  if (stato === 'scaduto') return 'Scaduto';
+  if (stato === 'esaurito') return 'Esaurito';
+  return codiciInCassa ? 'Attivo' : 'Attivo (spento in cassa)';
+}
+
+/** Una riga della tabella: il coupon letto, col suo stato e la scritta del badge. */
+export type CouponInVista = Coupon & { stato: StatoDelCoupon; etichetta: string };
 
 export interface AvvisoLettura {
   titolo: string;
@@ -51,7 +87,7 @@ export interface AvvisoLettura {
 export interface VistaCoupon {
   stato: StatoVista;
   /** Quello che si è potuto leggere. Su una lettura caduta è vuoto, ed è per questo che non si mostra. */
-  coupons: Coupon[];
+  coupons: CouponInVista[];
   /** La riga sotto al titolo. Non dice mai un numero che non abbiamo letto. */
   sottotitolo: string;
   mostraScheletro: boolean;
@@ -71,9 +107,12 @@ export function quantiCodici(n: number): string {
   return n === 1 ? '1 codice sconto' : `${n} codici sconto`;
 }
 
-export function vistaDeiCoupon(q: LetturaQuery<Coupon[]>): VistaCoupon {
+export function vistaDeiCoupon(q: LetturaQuery<Coupon[]>, adesso: Date = new Date()): VistaCoupon {
   const v = vistaDaQuery<Coupon[]>(q);
-  const coupons = Array.isArray(v.dati) ? v.dati : [];
+  const coupons: CouponInVista[] = (Array.isArray(v.dati) ? v.dati : []).map((c) => {
+    const stato = statoDelCoupon(c, adesso);
+    return { ...c, stato, etichetta: etichettaDelCoupon(stato) };
+  });
 
   const sottotitolo =
     v.stato === 'rotto'

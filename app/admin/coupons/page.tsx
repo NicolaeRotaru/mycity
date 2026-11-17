@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ticket, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { formatPrice, formatPriceFromCents } from '@/lib/format';
+import { formatDate, formatPrice, formatPriceFromCents } from '@/lib/format';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -68,7 +68,8 @@ export default function AdminCouponsPage() {
     },
   });
 
-  const vista = vistaDeiCoupon({ data, isPending, isError, error });
+  // R30-025 — Ogni riga porta il suo stato: scaduto ed esaurito come li legge la cassa, all'ora di adesso.
+  const vista = vistaDeiCoupon({ data, isPending, isError, error }, new Date());
 
   const create = useMutation({
     mutationFn: async () => {
@@ -274,11 +275,20 @@ export default function AdminCouponsPage() {
                     disabled={toggle.isPending}
                     aria-label={c.active ? `Disattiva il coupon ${c.code}` : `Attiva il coupon ${c.code}`}
                     className={`text-xs px-2 py-1 rounded font-semibold disabled:opacity-60 ${
-                      c.active ? 'bg-olive-100 text-olive-700' : 'bg-cream-100 text-ink-500'
+                      c.stato === 'attivo'
+                        ? 'bg-olive-100 text-olive-700'
+                        : c.stato === 'disattivato'
+                          ? 'bg-cream-100 text-ink-500'
+                          : 'bg-accent-100 text-accent-800'
                     }`}
                   >
-                    {c.active ? (CODICI_SCONTO_IN_CASSA ? 'Attivo' : 'Attivo (spento in cassa)') : 'Disattivato'}
+                    {c.etichetta}
                   </button>
+                  {c.expires_at && (
+                    <span className="block mt-1 text-xs text-ink-500">
+                      {c.stato === 'scaduto' ? 'Scaduto il' : 'Scade il'} {formatDate(c.expires_at)}
+                    </span>
+                  )}
                 </td>
                 <td className="p-3">
                   <button
