@@ -1,4 +1,4 @@
-import { controllaTettoSpesaAi, registraSpesaAi } from '@/lib/ai/run';
+import { AiCallError, controllaTettoSpesaAi, mapAiError, registraSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiError } from '@/lib/api/responses';
@@ -31,6 +31,15 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api
 export const runtime = 'nodejs';
 
 const MAX_PRODUCTS = 200;
+
+/**
+ * 17/11/2026 (R03-012) — Quanto si traduce in una richiesta sola: lo stesso tetto
+ * della traduzione dal modulo (app/api/ai/translate/route.ts, MAX_TESTO_TRADUCIBILE).
+ */
+const MAX_TESTO_TRADUCIBILE = 2500;
+const testoTroppoLungoPerTradurre = (p: ProductRow) =>
+  (typeof p.name === 'string' ? p.name.length : 0) + (typeof p.description === 'string' ? p.description.length : 0) >
+  MAX_TESTO_TRADUCIBILE;
 
 /** Un lavoro in questi stati e' ancora aperto: pagato, e non ancora chiuso dal venditore. */
 const STATI_APERTI = ['submitting', 'processing', 'ready'];
@@ -107,11 +116,24 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     admin.from('categories').select('id, name, slug, parent_id').order('name'),
   ]);
 
-  const products = (productsData ?? []) as ProductRow[];
+  const tutti = (productsData ?? []) as ProductRow[];
   const categories = (categoriesData ?? []) as CategoryRow[];
-  if (products.length === 0) {
+  if (tutti.length === 0) {
     return ApiErrors.invalidRequest('Non hai prodotti pubblicati o in bozza su cui lavorare.');
   }
+  // 17/11/2026 (R03-012) — LA TRADUZIONE DEL CATALOGO NON TAGLIA IN SILENZIO.
+  // Il lotto manda al modello la descrizione tagliata a 4000 caratteri
+  // (catalogBatch.ts): per «traduci» tornava tradotto solo l'inizio e,
+  // applicato, il resto dell'italiano spariva. Come la traduzione dal modulo,
+  // una scheda troppo lunga non si traduce: resta fuori, e lo si dice.
+  const troppoLunghi = operation === 'translate' ? tutti.filter(testoTroppoLungoPerTradurre).length : 0;
+  const products = troppoLunghi > 0 ? tutti.filter((p) => !testoTroppoLungoPerTradurre(p)) : tutti;
+  if (products.length === 0) {
+    return ApiErrors.invalidRequest(
+      `Descrizioni troppo lunghe per la traduzione automatica: massimo ${MAX_TESTO_TRADUCIBILE} caratteri fra nome e descrizione.`,
+    );
+  }
+  const esclusi = troppoLunghi > 0 ? { esclusiTroppoLunghi: troppoLunghi } : {};
 
   const requests = buildCatalogBatchRequests({ operation, products, categories, targetLang });
 
@@ -169,7 +191,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       // deve esserci un istante in cui il lotto non e' contato da nessuna parte.
       await registraSpesaAi(impegnato);
     } finally {
-      liberaPrenotazione?.();
+      await liberaPrenotazione?.();
     }
     /**
      * 27/8/2026 (R143) — SI CONTROLLAVA IL TETTO E NON SI REGISTRAVA NIENTE.
@@ -200,10 +222,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       logger.error('catalog-batch start: batch avviato ma non agganciato', {
         sellerId: user.id, jobId: job.id, batchId: handle.id,
       });
-      return NextResponse.json({ jobId: job.id, total: products.length, status: 'submitting' });
+      // R03-003 — Il lotto e' partito ed e' pagato: la riga lo dice nel motivo,
+      // con il suo id. Lo stato (status/route.ts) lo aggancia da li' invece di
+      // chiudere la riga come fallita dopo 15 minuti e lasciarne pagare un altro.
+      await admin.from('catalog_ai_jobs').update({ error: `lotto partito ma non agganciato: ${handle.id}` }).eq('id', job.id);
+      return NextResponse.json({ jobId: job.id, total: products.length, status: 'submitting', ...esclusi });
     }
 
-    return NextResponse.json({ jobId: job.id, total: products.length, status: 'processing' });
+    return NextResponse.json({ jobId: job.id, total: products.length, status: 'processing', ...esclusi });
   } catch (err) {
     // R04-014 — Un invio rimasto senza risposta puo' essere partito: non lo si
     // dichiara fallito (e non si rimanda). La riga resta «in invio» con il
@@ -217,6 +243,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       return ApiErrors.unavailable(
         'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
       );
+    }
+    // R03-002 — Il tetto di spesa del giorno non e' un guasto: il lavoro non e'
+    // partito e non e' costato niente. Non si segna «fallito» e non si dice
+    // «riprova»: si dice che il budget AI del giorno e' finito.
+    if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
+      await admin
+        .from('catalog_ai_jobs')
+        .update({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' })
+        .eq('id', job.id);
+      return mapAiError(err, 'ai-catalog-batch-start');
     }
     await admin.from('catalog_ai_jobs').update({ status: 'failed' }).eq('id', job.id);
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');

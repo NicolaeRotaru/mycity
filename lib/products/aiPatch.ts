@@ -435,14 +435,26 @@ export function propostaPerLaChat(
       else delete fuori.attributes;
     }
     if (Array.isArray(fuori.attributes_remove)) {
+      // R03-015 — Come il server (`attributiDaTogliere` sugli attributi del
+      // prodotto dopo la proposta): si toglie solo cio' che c'e'. Prima bastava
+      // che la scheda avesse il campo: la proposta mostrava «Rimuovi marca» su
+      // un prodotto senza marca e il server non cambiava niente. Senza gli
+      // attributi attuali (`undefined`, non si sa) resta la regola dei campi.
+      const presenti: Record<string, unknown> | null =
+        attributiAttuali === undefined ? null : { ...(attributiAttuali ?? {}) };
+      if (presenti && fuori.attributes) {
+        for (const k of Object.keys(fuori.attributes as Record<string, string>)) {
+          if (!eCampoDichiarativo(k)) presenti[chiaveCampo(k)] = true;
+        }
+      }
       const daTogliere = (fuori.attributes_remove as unknown[]).filter(
         (k): k is string =>
           typeof k === 'string' &&
           (eCampoDichiarativo(k) ||
-            campi.some((f) => f.key === chiaveCampo(k)) ||
-            // Come il server: si toglie anche un attributo rimasto da una
-            // categoria di prima, se c'e' davvero nel prodotto.
-            (!!attributiAttuali && chiaveCampo(k) in attributiAttuali)),
+            (presenti
+              ? // Anche un attributo rimasto da una categoria di prima, se c'e' davvero.
+                chiaveCampo(k) in presenti
+              : campi.some((f) => f.key === chiaveCampo(k)))),
       );
       if (daTogliere.length > 0) fuori.attributes_remove = daTogliere;
       else delete fuori.attributes_remove;
@@ -802,6 +814,57 @@ export function disponibilitaDalPatch(
   return null;
 }
 
+/**
+ * 17/11/2026 (R03-018) — LE ULTIME REGOLE IN DUE COPIE, ADESSO IN UNA.
+ *
+ * Il modulo (`pianoPatchPerIlModulo`) e il server (`resolveAiPatch`) avevano
+ * ancora ognuno la sua copia di tre regole, e due erano gia' diverse: il
+ * prezzo pieno barrato proposto (il server diceva «NON applicato», il modulo
+ * niente) e una caratteristica scritta e tolta nella stessa proposta (il
+ * server la toglieva, il modulo la lasciava). Tag e caratteristiche da
+ * scrivere erano la stessa riga copiata due volte. Adesso le leggono tutti e
+ * due da qui.
+ */
+export function tagDelPatch(tags: readonly unknown[]): string[] {
+  const next: string[] = [];
+  for (const raw of tags) {
+    const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
+    if (t && !next.includes(t) && next.length < 15) next.push(t);
+  }
+  return next;
+}
+
+/** Le caratteristiche proposte che entrano nella scheda: campo della categoria, valore pieno e, per le scelte, ammesso. */
+export function caratteristicheDaScrivere(
+  attributes: AiProductPatch['attributes'],
+  fields: readonly AttributeField[],
+): { chiave: string; valore: string | boolean; etichetta: string }[] {
+  const fuori: { chiave: string; valore: string | boolean; etichetta: string }[] = [];
+  if (!attributes || typeof attributes !== 'object') return fuori;
+  for (const [aiKey, rawValue] of Object.entries(attributes)) {
+    const value = valoreAttributoDalPatch(rawValue);
+    if (!value) continue;
+    // 1687 — «Colore», «tipo prodotto»: la stessa lettura della chiave di ogni altra strada.
+    const chiave = chiaveCampo(aiKey);
+    const field = fields.find((f) => f.key === chiave);
+    if (!field) continue;
+    if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
+    // Una casella si salva come vero/falso: «sì» scritto dall'assistente non resta testo.
+    fuori.push({ chiave, valore: field.type === 'checkbox' ? attributoSpuntato(value) : value, etichetta: field.label });
+  }
+  return fuori;
+}
+
+/**
+ * Il prezzo pieno barrato proposto: `togli` (null: l'AI lo puo' togliere),
+ * `rifiutato` (un numero: lo sconto lo decide il negozio, 1/11/2026) o niente.
+ */
+export function prezzoPienoDalPatch(patch: AiProductPatch): 'togli' | 'rifiutato' | null {
+  if (!('compare_at_price' in patch)) return null;
+  if (patch.compare_at_price == null) return 'togli';
+  return typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0 ? 'rifiutato' : null;
+}
+
 /** Le chiavi da togliere che ci sono davvero (`attuali` assente = non si sa: tutte). */
 export function attributiDaTogliere(
   patch: AiProductPatch,
@@ -858,13 +921,15 @@ export function pianoPatchPerIlModulo(
   if (typeof patch.price === 'number' && patch.price > 0) {
     scritture.push({ campo: 'price', valore: patch.price, etichetta: 'prezzo' });
   }
-  if ('compare_at_price' in patch) {
-    if (patch.compare_at_price == null) {
-      scritture.push({ campo: 'compareAtPrice', valore: null, etichetta: 'prezzo pieno' });
-    }
-    // 1/11/2026 — Un prezzo pieno barrato proposto dall'AI non entra nel
-    // modulo: veniva dal mercato, non da uno sconto vero del negozio. L'AI puo'
-    // solo toglierlo (null); metterlo resta una scelta a mano.
+  // 1/11/2026 — Un prezzo pieno barrato proposto dall'AI non entra nel
+  // modulo: veniva dal mercato, non da uno sconto vero del negozio. L'AI puo'
+  // solo toglierlo (null); metterlo resta una scelta a mano. R03-018 — e lo si
+  // dice, con le parole del server.
+  const prezzoPieno = prezzoPienoDalPatch(patch);
+  if (prezzoPieno === 'togli') {
+    scritture.push({ campo: 'compareAtPrice', valore: null, etichetta: 'prezzo pieno' });
+  } else if (prezzoPieno === 'rifiutato') {
+    avvisi.push(MOTIVO_PREZZO_PIENO_RIFIUTATO);
   }
   if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
     scritture.push({ campo: 'unit', valore: patch.unit as ProductUnit, etichetta: 'unità' });
@@ -893,29 +958,18 @@ export function pianoPatchPerIlModulo(
   }
 
   if (Array.isArray(patch.tags)) {
-    const next: string[] = [];
-    for (const raw of patch.tags) {
-      const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
-      if (t && !next.includes(t) && next.length < 15) next.push(t);
-    }
-    scritture.push({ campo: 'tags', valore: next, etichetta: 'tag' });
+    scritture.push({ campo: 'tags', valore: tagDelPatch(patch.tags), etichetta: 'tag' });
   }
 
-  if (patch.attributes && typeof patch.attributes === 'object') {
-    for (const [aiKey, rawValue] of Object.entries(patch.attributes)) {
-      const value = valoreAttributoDalPatch(rawValue);
-      if (!value) continue;
-      // 1687 — «Colore», «tipo prodotto»: la stessa lettura della chiave di ogni altra strada.
-      const targetKey = chiaveCampo(aiKey);
-      const field = fields.find((f) => f.key === targetKey);
-      if (!field) continue;
-      if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
-      // Una casella si salva come vero/falso: «sì» scritto dall'assistente non resta testo.
-      const valore = field.type === 'checkbox' ? attributoSpuntato(value) : value;
-      scritture.push({ campo: 'attributo', chiave: targetKey, valore, etichetta: field.label });
-    }
-  }
-  for (const targetKey of attributiDaTogliere(patch, ctx.attributiAttuali)) {
+  const caratteristiche = caratteristicheDaScrivere(patch.attributes, fields);
+  for (const c of caratteristiche) scritture.push({ campo: 'attributo', ...c });
+  // R03-018 — Come il server: si toglie guardando gli attributi DOPO le scritture
+  // di questa proposta (una caratteristica scritta e tolta insieme si toglie).
+  const attualiDopo =
+    ctx.attributiAttuali === undefined
+      ? undefined
+      : { ...(ctx.attributiAttuali ?? {}), ...Object.fromEntries(caratteristiche.map((c) => [c.chiave, c.valore])) };
+  for (const targetKey of attributiDaTogliere(patch, attualiDopo)) {
     scritture.push({ campo: 'attributo', chiave: targetKey, valore: '', etichetta: `rimosso ${targetKey}` });
   }
 
@@ -1173,16 +1227,15 @@ export function resolveAiPatch(opts: {
       changed.push('prezzo');
     }
   }
-  if ('compare_at_price' in patch) {
-    if (patch.compare_at_price == null) {
-      update.compare_at_price = null;
-      changed.push('prezzo pieno');
-    } else if (typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0) {
-      // 1/11/2026 — Uno sconto barrato inventato dall'AI non si scrive mai:
-      // si dice perche', cosi' la chat non lo da' per fatto.
-      changed.push(MOTIVO_PREZZO_PIENO_RIFIUTATO);
-      rifiutati.push({ campo: 'compare_at_price', motivo: MOTIVO_PREZZO_PIENO_RIFIUTATO });
-    }
+  const prezzoPieno = prezzoPienoDalPatch(patch);
+  if (prezzoPieno === 'togli') {
+    update.compare_at_price = null;
+    changed.push('prezzo pieno');
+  } else if (prezzoPieno === 'rifiutato') {
+    // 1/11/2026 — Uno sconto barrato inventato dall'AI non si scrive mai:
+    // si dice perche', cosi' la chat non lo da' per fatto.
+    changed.push(MOTIVO_PREZZO_PIENO_RIFIUTATO);
+    rifiutati.push({ campo: 'compare_at_price', motivo: MOTIVO_PREZZO_PIENO_RIFIUTATO });
   }
   if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
     update.unit = patch.unit;
@@ -1226,12 +1279,7 @@ export function resolveAiPatch(opts: {
   }
 
   if (Array.isArray(patch.tags)) {
-    const next: string[] = [];
-    for (const raw of patch.tags) {
-      const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
-      if (t && !next.includes(t) && next.length < 15) next.push(t);
-    }
-    update.tags = next;
+    update.tags = tagDelPatch(patch.tags);
     changed.push('tag');
   }
 
@@ -1243,17 +1291,10 @@ export function resolveAiPatch(opts: {
     const merged: Record<string, unknown> = { ...(current.attributes ?? {}) };
     const primaDegliAttributi = changed.length;
     if (hasAttrSet) {
-      for (const [aiKey, rawValue] of Object.entries(patch.attributes!)) {
-        const value = valoreAttributoDalPatch(rawValue);
-        if (!value) continue;
-        // 1687 — «Colore», «tipo prodotto»: la stessa lettura della chiave di ogni altra strada.
-      const targetKey = chiaveCampo(aiKey);
-        const field = fields.find((f) => f.key === targetKey);
-        if (!field) continue;
-        if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
-        // Come il modulo: una casella si salva come vero/falso, mai come il testo «sì».
-        merged[targetKey] = field.type === 'checkbox' ? attributoSpuntato(value) : value;
-        changed.push(field.label);
+      // R03-018 — La stessa regola del modulo (`caratteristicheDaScrivere`).
+      for (const c of caratteristicheDaScrivere(patch.attributes, fields)) {
+        merged[c.chiave] = c.valore;
+        changed.push(c.etichetta);
       }
     }
     if (hasAttrRemove) {

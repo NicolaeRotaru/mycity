@@ -1,6 +1,6 @@
 // lib/ai/batch.ts
 import type Anthropic from '@anthropic-ai/sdk';
-import { APIConnectionError } from '@anthropic-ai/sdk';
+import { APIConnectionError, APIError } from '@anthropic-ai/sdk';
 import { getAnthropic, type ModelId } from '@/lib/ai/client';
 
 /**
@@ -68,7 +68,7 @@ export async function submitBatch(requests: BatchRequest[]): Promise<BatchHandle
   // non ha una chiave anti-doppione: se il primo invio era arrivato, presso
   // Anthropic partivano DUE lotti, e se ne pagavano due vedendone uno. Qui un
   // timeout resta un timeout: lo gestisce chi chiama, senza rimandare.
-  const batch = await client.messages.batches.create({
+  const invio = client.messages.batches.create({
     requests: requests.map((r) => ({
       custom_id: r.custom_id,
       params: {
@@ -81,7 +81,25 @@ export async function submitBatch(requests: BatchRequest[]): Promise<BatchHandle
       },
     })),
   }, { maxRetries: 0 });
-  return toHandle(batch);
+  // 17/11/2026 (R03-009, ripresa) — Prima la risposta, poi il corpo. Una risposta
+  // senza 2xx o una connessione caduta arrivano qui come sempre (vedi
+  // `invioIncerto`). Dopo un 2xx il lotto c'e': se il corpo non si legge
+  // (troncato, vuoto) l'errore lo dice, e non diventa un «fallito, riprova».
+  const rispostaArrivata = typeof invio.asResponse === 'function' ? (await invio.asResponse(), true) : false;
+  try {
+    return toHandle(await invio);
+  } catch (err) {
+    if (rispostaArrivata) throw new RispostaDelLottoIlleggibile(err);
+    throw err;
+  }
+}
+
+/** Il fornitore ha risposto 2xx (il lotto e' creato) ma la sua risposta non si legge. */
+class RispostaDelLottoIlleggibile extends Error {
+  constructor(readonly causa: unknown) {
+    super('lotto creato, ma la risposta del fornitore non si legge');
+    this.name = 'RispostaDelLottoIlleggibile';
+  }
 }
 
 /** Recupera lo stato di un batch (poll). `processingStatus === 'ended'` = pronto. */
@@ -137,6 +155,22 @@ export async function* streamBatchResults<TInput = unknown>(
 /** Il motivo scritto sulla riga di un invio incerto: lo stato lo riconosce da qui. */
 export const INVIO_SENZA_RISPOSTA = 'invio senza risposta: il lotto potrebbe essere partito, da verificare';
 
+/**
+ * 17/11/2026 (R03-009) — Anche un 500, 502 o 504 del fornitore (errore interno,
+ * gateway rotto o scaduto) puo' arrivare DOPO che il lotto e' stato creato:
+ * trattarlo come «fallito» rimetteva il pulsante e il secondo invio pagava un
+ * secondo lotto. Il 529 (sovraccarico) e gli altri dicono invece che la
+ * richiesta non e' stata presa.
+ *
+ * Ripresa: anche il 524 di Cloudflare («l'origine non ha risposto in tempo»),
+ * che e' proprio un invio rimasto senza risposta, e un 2xx col corpo
+ * illeggibile. Non il 503, il 520, il 522 o il 529: sono rifiuti prima
+ * dell'invio.
+ */
+const STATUS_FORSE_PARTITO: ReadonlySet<number> = new Set([500, 502, 504, 524]);
+
 export function invioIncerto(err: unknown): boolean {
-  return err instanceof APIConnectionError;
+  if (err instanceof APIConnectionError) return true;
+  if (err instanceof RispostaDelLottoIlleggibile) return true;
+  return err instanceof APIError && typeof err.status === 'number' && STATUS_FORSE_PARTITO.has(err.status);
 }

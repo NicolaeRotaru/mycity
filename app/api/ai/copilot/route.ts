@@ -42,6 +42,8 @@ Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In b
 - "tags" è la lista COMPLETA desiderata del prodotto (ricostruiscila da quella attuale per aggiungere/togliere).
 - Usa "status" tra: available, draft, sold.
 - Se la STESSA operazione vale per molti prodotti (più di 20: una percentuale di prezzo, aggiungere o togliere un tag, cambiare lo stato), NON scrivere una voce per prodotto: usa "regola" con l'elenco degli id ("product_ids") e l'operazione ("prezzo_percentuale", per esempio -10; "aggiungi_tag"/"togli_tag"; "status"). Il server calcola i nuovi valori dai dati veri. Usa "changes" solo per le modifiche diverse da prodotto a prodotto.
+- Se l'operazione vale per TUTTI i prodotti dell'elenco, nella "regola" metti "tutti": true e NON scrivere gli id: li mette il server.
+- In "changes" al massimo 40 voci: se ne servirebbero di più, prepara le prime 40 e dillo nel riepilogo.
 - Se l'istruzione è ambigua o pericolosa (es. "cancella tutto"), NON proporre modifiche: spiega e chiedi conferma in "reply".
 - Non inventare prodotti non in elenco. Niente emoji.
 - ${REGOLA_CAMPI_DICHIARATIVI} Nel riepilogo non dire mai di averli scritti o cambiati.
@@ -73,13 +75,13 @@ const TOOL: Anthropic.Tool = {
         type: 'object',
         description: 'La stessa operazione su molti prodotti: gli id e cosa fare. Il server calcola i valori.',
         properties: {
-          product_ids: { type: 'array', items: { type: 'string' }, description: 'ID presi dall\'elenco del catalogo.' },
+          tutti: { type: 'boolean', description: 'true se l\'operazione vale per TUTTI i prodotti dell\'elenco: allora gli id non servono.' },
+          product_ids: { type: 'array', items: { type: 'string' }, description: 'ID presi dall\'elenco del catalogo (non servono con "tutti").' },
           prezzo_percentuale: { type: 'number', description: 'Variazione del prezzo in percento, es. -10 per abbassare del 10%.' },
           aggiungi_tag: { type: 'array', items: { type: 'string' } },
           togli_tag: { type: 'array', items: { type: 'string' } },
           status: { type: 'string', enum: ['available', 'draft', 'sold'] },
         },
-        required: ['product_ids'],
       },
     },
     required: ['reply'],
@@ -88,7 +90,7 @@ const TOOL: Anthropic.Tool = {
 
 // R04-008 — `history` non c'e' piu': la rotta lo ignora (vedi sotto).
 type Body = { instruction?: string };
-type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[]; regola?: RegolaCopilot };
+type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[]; regola?: RegolaCopilot & { tutti?: unknown } };
 
 const MAX_CATALOG = 200;
 const MAX_CHANGES = 200;
@@ -256,7 +258,14 @@ ${list}`;
         !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0);
     // R04-007 — La regola si espande qui, sui dati veri; una voce singola sullo
     // stesso prodotto si aggiunge sopra (vince lei sui campi che tocca).
-    const daRegola = espandiRegolaCopilot(toolInput?.regola, products, MAX_CHANGES);
+    // R03-005 — Anche la regola, con duecento id da 20-25 token l'uno, non entrava nel tetto di
+    // 3000 token: «abbassa del 10% tutto» su 150 prodotti si tagliava e il negoziante leggeva
+    // «Riprova» a ogni tentativo. Con «tutti» il modello non scrive gli id: li mette il server,
+    // presi dall'elenco che il modello ha visto.
+    const regola = toolInput?.regola && typeof toolInput.regola === 'object' && toolInput.regola.tutti === true
+      ? { ...toolInput.regola, product_ids: products.map((p) => p.id) }
+      : toolInput?.regola;
+    const daRegola = espandiRegolaCopilot(regola, products, MAX_CHANGES);
     const unite = new Map<string, AiProductPatch>();
     for (const c of [...daRegola, ...singole]) unite.set(c.product_id, { ...(unite.get(c.product_id) ?? {}), ...c.patch });
     const changes = Array.from(unite, ([product_id, patch]) => ({ product_id, patch }))

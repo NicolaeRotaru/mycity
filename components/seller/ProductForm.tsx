@@ -254,6 +254,9 @@ export default function ProductForm({
   const [uploading, setUploading] = useState(false);
   const [attributes, setAttributes] = useState<Record<string, unknown>>(initialValues?.attributes ?? {});
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
+  // R03-006 — Il testo di «Genera con AI» sopra una descrizione già scritta: resta una proposta
+  // finché il negoziante non sceglie.
+  const [propostaDescrizione, setPropostaDescrizione] = useState<string | null>(null);
   const idTag = useId();
   const [tagInput, setTagInput] = useState('');
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
@@ -1013,7 +1016,13 @@ export default function ProductForm({
               productName={watch('name') ?? ''}
               categoryName={categories.find((c) => c.id === currentCategoryId)?.name}
               currentText={watch('description') ?? ''}
-              onResult={(text) => setValue('description', text, { shouldValidate: true })}
+              // R03-006 — Prima il testo generato (al massimo 3 frasi) prendeva il posto della
+              // descrizione del negoziante, e i dettagli scritti da lui sparivano. Sopra un campo
+              // vuoto entra com'era; sopra un testo già scritto si mostra come proposta.
+              onResult={(text) => {
+                if ((getValues('description') ?? '').trim()) setPropostaDescrizione(text);
+                else setValue('description', text, { shouldValidate: true });
+              }}
             />
           ) : undefined}
           {...register('description')}
@@ -1021,6 +1030,33 @@ export default function ProductForm({
           placeholder="Cosa è, materiali, dimensioni/taglia, condizione, cosa lo rende speciale…"
           error={typeof errors.description?.message === 'string' ? errors.description.message : undefined}
         />
+        {propostaDescrizione !== null && (
+          <div role="region" aria-label="Descrizione proposta dall'AI" className="space-y-2 rounded-lg border border-secondary-200 bg-secondary-50 p-3">
+            <p className="text-xs font-semibold text-secondary-800">
+              Proposta dell&apos;AI: la tua descrizione resta com&apos;è finché non scegli.
+            </p>
+            <p className="whitespace-pre-line text-sm text-gray-800">{propostaDescrizione}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setValue('description', propostaDescrizione, { shouldValidate: true });
+                  setPropostaDescrizione(null);
+                }}
+                className="rounded-lg border border-secondary-200 bg-white px-3 py-1.5 text-xs font-semibold text-secondary-800 hover:bg-secondary-100"
+              >
+                Usa questa
+              </button>
+              <button
+                type="button"
+                onClick={() => setPropostaDescrizione(null)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+              >
+                Tieni la mia
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Prezzo + unità + prezzo pieno barrato */}
         <div className="grid grid-cols-2 gap-4">

@@ -80,11 +80,31 @@ const INVIO_INCERTO_SCADUTO_MS = 24 * 60 * 60_000;
 
 const COLONNE = 'id, seller_id, operation, status, batch_id, target_lang, total, results, created_at, error';
 
+/**
+ * 17/11/2026 (R03-003) — Il lotto partito ma non agganciato: la rotta di avvio
+ * scrive il suo id nel motivo (start/route.ts, «lotto partito ma non
+ * agganciato: <id>»). Prima la riga restava senza id, dopo 15 minuti si
+ * chiudeva come fallita e il negoziante pagava un secondo lotto.
+ */
+const LOTTO_NON_AGGANCIATO = /^lotto partito ma non agganciato: (\S+)$/;
+
 async function rispondiPerLavoro(
   admin: ReturnType<typeof getAdminSupabase>,
   job: JobRow,
   sellerId: string,
 ): Promise<NextResponse> {
+  const daAgganciare = job.status === 'submitting' && !job.batch_id ? LOTTO_NON_AGGANCIATO.exec(job.error ?? '')?.[1] : undefined;
+  if (daAgganciare) {
+    // Se anche questa scrittura non riesce si riprova alla prossima lettura:
+    // intanto il lotto si interroga lo stesso, con l'id del motivo.
+    await admin
+      .from('catalog_ai_jobs')
+      .update({ status: 'processing', batch_id: daAgganciare, error: null, updated_at: new Date().toISOString() })
+      .eq('id', job.id)
+      .eq('seller_id', sellerId)
+      .eq('status', 'submitting');
+    job = { ...job, status: 'processing', batch_id: daAgganciare, error: null };
+  }
   if (job.status === 'submitting' && !job.batch_id) {
     const nato = job.created_at ? Date.parse(job.created_at) : NaN;
     // R04-014 (revisione) — Un invio rimasto SENZA RISPOSTA puo' essere partito:

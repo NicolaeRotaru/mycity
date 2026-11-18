@@ -8,7 +8,7 @@ import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { verificaImmagineBase64, TIPI_IMMAGINE, type TipoImmagine } from '@/lib/immagini-base64';
 import { env } from '@/lib/env';
-import { MODELS, AiConfigError } from '@/lib/ai/client';
+import { MODELS, AiConfigError, TEMPO_TENTATIVO_AI_MS } from '@/lib/ai/client';
 import { CATEGORY_SLUGS as CATEGORY_SLUGS_CONDIVISE } from '@/lib/products/visionShared';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
@@ -210,7 +210,18 @@ const BodySchema = z.object({
   image_urls: z.array(z.string().url()).min(1).max(4).optional(),
 });
 
+/**
+ * R03-010 — Il tempo della rotta (vercel.json: 120 s) e il margine per rispondere. Il secondo giro
+ * (la verifica sul web) parte solo se nel tempo che resta ci sta, e senza ritentativi: prima le due
+ * chiamate in fila, con i 60 s e il ritentativo del client, arrivavano a 241 s, e la rotta non
+ * aveva un tempo dichiarato.
+ */
+const TEMPO_ROTTA_MS = 120_000;
+const MARGINE_RISPOSTA_MS = 10_000;
+const TEMPO_MINIMO_VERIFICA_MS = 15_000;
+
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  const inizio = Date.now();
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
 
   // Rate limit: 10 chiamate / 5 min per utente (Anthropic costa)
@@ -325,11 +336,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const isGeneric = /prodotto generico/i.test(toolInput.name ?? '');
   const needsVerification =
     !isGeneric &&
-    toolInput.policy_ok !== false &&
+    toolInput.policy_ok === true &&
     typeof toolInput.confidence === 'number' &&
     toolInput.confidence < CONFIDENCE_THRESHOLD;
+  // R03-010 — Quanto resta alla rotta: un giro che non ci sta non parte, e si tiene
+  // l'estrazione del primo, come quando la verifica cade.
+  const restaMs = TEMPO_ROTTA_MS - MARGINE_RISPOSTA_MS - (Date.now() - inizio);
+  if (needsVerification && restaMs < TEMPO_MINIMO_VERIFICA_MS) {
+    logger.warn('vision-extract verifica web saltata: non resta tempo', { feature: 'vision-extract-verify', restaMs });
+  }
 
-  if (needsVerification) {
+  if (needsVerification && restaMs >= TEMPO_MINIMO_VERIFICA_MS) {
     // 6/9/2026 — QUESTO GIRO LEGGE PAGINE WEB E NON DICEVA AL MODELLO CHE SONO DATI.
     //
     // Cinque delle sette chiamate che accendono web_search portano la riga di
@@ -370,6 +387,8 @@ Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale most
         feature: 'vision-extract-verify',
         model: MODELS.vision,
         max_tokens: 1024,
+        timeoutMs: Math.min(restaMs, TEMPO_TENTATIVO_AI_MS),
+        senzaRitentativi: true,
         system: verifySystem,
         tools: [WEB_SEARCH_TOOL, EXTRACT_TOOL],
         tool_choice: { type: 'auto' },
@@ -409,7 +428,9 @@ Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale most
   }
 
   // Gate policy: blocca i prodotti vietati prima di compilare l'annuncio.
-  if (toolInput.policy_ok === false) {
+  // R03-008 — Passa solo un sì scritto bene, come nel filtro (lib/ai/moderation.ts): un
+  // «"false"» scritto come testo, o un campo mancante, non è un prodotto ammesso.
+  if (toolInput.policy_ok !== true) {
     // 12/11/2026 (R04-012) — L'uscita del modello si controlla prima di usarla:
     // un motivo che non e' testo faceva cadere la rotta con un 500.
     const reason = typeof toolInput.policy_reason === 'string' ? toolInput.policy_reason.trim() : '';
