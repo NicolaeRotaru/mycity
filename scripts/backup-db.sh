@@ -529,6 +529,11 @@ else
         # ma protegge: meglio uno storico nello stesso posto che nessuna copia nuova. Dirlo forte.
         STORICO_FOTO="${DEST_PULITA}/_storico"
         echo "[backup] ATTENZIONE: il secchio dello storico non esiste e non sono riuscito a crearlo: uso la cartella ${STORICO_FOTO} dentro la destinazione. Per uno storico fuori dal secchio della copia: crea il secchio presso il fornitore oppure imposta STORAGE_SYNC_STORICO." >&2
+        # R07-009 — Il ripiego non rende rossa la notte (resta una scelta di Nicola), ma non deve
+        # nemmeno passare in silenzio: la riga qui sopra finiva solo nel registro, e il riepilogo del
+        # lavoro restava pulito. Adesso lo dicono l'avviso del lavoro e il riepilogo.
+        echo "::warning::Lo storico delle foto e' nello stesso secchio della copia (${STORICO_FOTO}): il secchio ${DEST_PULITA}-storico non esiste e non si e' potuto creare. Se il secchio della copia sparisce, sparisce anche lo storico." >&2
+        riepilogo_lavoro "⚠️ **Lo storico delle foto e' nello stesso secchio della copia** (\`${STORICO_FOTO}\`): il secchio \`${DEST_PULITA}-storico\` non esiste e non si e' potuto creare. Crealo presso il fornitore oppure imposta \`STORAGE_SYNC_STORICO\`."
       else
         echo "[backup] ATTENZIONE: lo storico $STORICO_FOTO non esiste e non sono riuscito a crearlo. Se la copia qui sotto fallisce, e' questo: serve il secchio gia' creato presso il fornitore con una chiave che possa scriverci, oppure STORAGE_SYNC_STORICO che punti a uno che esiste." >&2
       fi

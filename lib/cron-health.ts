@@ -114,7 +114,8 @@ export function staleCrons(
 /**
  * 30/8/2026 (R183) — LA SOGLIA DEL SORVEGLIANTE, PER CHI LO GUARDA DA FUORI.
  *
- * `operational-alerts` gira ogni 15 minuti (vercel.json). Non compare in
+ * `operational-alerts` gira ogni 5 minuti (vercel.json; era ogni 15 fino a
+ * R29-002). Non compare in
  * `CRON_MAX_STALENESS_MIN` perché lì l'elenco lo legge lui stesso, e un morto
  * non si segnala da solo. Dalle porte di salute invece si vede, e sono l'unico
  * posto da cui si può vedere.
@@ -129,8 +130,14 @@ export function staleCrons(
  *
  * Vale per tutte e due le porte: su /api/health/ready la stessa cosa era ancora
  * da fare, ed è la porta che il monitor guarda davvero (31/8/2026, terzo giro).
+ *
+ * R07-006 — La soglia era 120 minuti: otto giri saltati quando il sorvegliante
+ * girava ogni 15 minuti. A 5 minuti gli stessi 120 erano 24 giri, e un
+ * sorvegliante morto si vedeva da fuori dopo due ore, mentre l'allarme
+ * dell'ordine non accettato promette 5-10 minuti. Adesso sono di nuovo otto
+ * giri saltati: 8 × 5 = 40 minuti.
  */
-export const SOGLIA_SORVEGLIANTE_MIN = 120;
+export const SOGLIA_SORVEGLIANTE_MIN = 40;
 
 /** L'elenco completo: i lavori sorvegliati PIÙ il sorvegliante. */
 export const SOGLIE_VISTE_DA_FUORI: Record<string, number> = {
