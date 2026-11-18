@@ -139,6 +139,8 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       toast.success(tToasts('updated'));
       setEditTitle(false);
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
+      // R10-007, R10-008 — anche /lists mostra titolo e descrizione: prima restavano i vecchi.
+      rileggiLeListeDiLists();
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -205,6 +207,13 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     onSuccess: () => {
       toast.success('Lista eliminata');
       rileggiLeListeDiLists();
+      // R10-009 — e il menu «Aggiungi a lista» della scheda prodotto: prima la mostrava ancora.
+      // Il menu legge solo quando è aperto, quindi l'invalidazione lo segna soltanto vecchio e
+      // alla riapertura mostrerebbe per un attimo (toccabile) la lista eliminata: la si toglie
+      // subito dai dati in memoria, poi si invalida perché si rilegga davvero.
+      qc.setQueryData<Array<{ id: string }> | null>(queryKeys.lists.mineMin, (vecchie) =>
+        vecchie ? vecchie.filter((l) => l.id !== params.id) : vecchie);
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
       router.push('/lists');
     },
     onError: (err: unknown) => toast.error(`Lista non eliminata: ${friendlyError(err)}`),

@@ -1,0 +1,366 @@
+{
+  "sessione": "R10",
+  "aggiornato": "2026-11-18 01:35",
+  "finita": true,
+  "testa": "8965d7afca58bf03beb55cc5fbd9768cbbe52ce4",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "8965d7afca58bf03beb55cc5fbd9768cbbe52ce4",
+    "nota": "typecheck, lint e test: 1740 file di prove passati, 1 saltato (10992 prove passate, 1 saltata); lo SHA preso con git rev-parse HEAD nello stesso comando"
+  },
+  "voci": [
+    {
+      "id": "R10-006",
+      "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9. La voce riguarda le prove del conto della consegna nel carrello (app/cart/page.tsx), cioè i soldi dei clienti: stasera non si tocca (regola 3)."
+    },
+    {
+      "id": "R10-010",
+      "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+      "esito": "scelta_di_nicola",
+      "domanda": "Quante consegne veloci può avere in mano insieme un solo fattorino? Il conteggio c'è già (contaVelociInCorso, lib/ordini/consegna-veloce.ts:135), manca solo il numero VELOCI_PER_FATTORINO (lib/ordini/consegna-veloce.ts:35, oggi null = nessun tetto)."
+    },
+    {
+      "id": "R10-004",
+      "chiave": "microcopy|il pulsante del negozio dice «pronto per il rider»: in tutto il resto del sito è «fattorino»",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/order-status.ts",
+          "modifica": "riga 45: 'Pronto per il rider' → 'Pronto per il fattorino' (file di R10: non messo nel ramo da solo perché fa diventare rosse 5 prove esistenti, 4 delle quali usano file di altre sessioni; va applicata insieme alle righe sotto, con una prova etichettaPronto(false) === 'Pronto per il fattorino')"
+        },
+        {
+          "file": "tests/unit/la-targhetta-dell-ordine-non-manda-il-cliente-a-ritirarlo.test.ts",
+          "modifica": "riga 26: .toMatch(/rider/i) → .toMatch(/fattorino/i), e il messaggio 'l’etichetta deve dire che passa il fattorino'"
+        },
+        {
+          "file": "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx",
+          "modifica": "riga 108: 'Pronto per il rider' → 'Pronto per il fattorino' (usa lib/promesse-pubbliche, di R08)"
+        },
+        {
+          "file": "tests/unit/minori-s02-varie.test.ts",
+          "modifica": "righe 46 e 48 (e la 52 per coerenza): 'Pronto per il rider' → 'Pronto per il fattorino' (legge app/seller/orders/[id]/page.tsx di R09 e app/globals.css di R02)"
+        },
+        {
+          "file": "tests/unit/minori-s06-centro-venditori.test.ts",
+          "modifica": "riga 29: '\"Pronto per il rider\"' → '\"Pronto per il fattorino\"' (il testo dell'aiuto in app/seller/help/domande.ts:54 segue da solo etichettaPronto)"
+        },
+        {
+          "file": "tests/unit/minori-s06-ordine-del-negozio.test.tsx",
+          "modifica": "riga 105: 'Pronto per il rider' → 'Pronto per il fattorino' (disegna app/seller/orders/[id]/page.tsx di R09)"
+        }
+      ],
+      "prova": "applicata la riga 45 e lanciate le 39 prove che nominano order-status, OrderTimeline, domande, shipping o la pagina ordine del negozio: rosse esattamente queste 5, il resto verde",
+      "nota": "Il difetto c'è ancora sulla base (lib/order-status.ts:45). La stessa etichetta gira nella targhetta, nella timeline, nell'aiuto per i negozi e nella pagina Spedizioni: cambia ovunque, come chiede la voce."
+    },
+    {
+      "id": "R10-003",
+      "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
+      "esito": "parziale",
+      "commit": "6c74b905103fc9d4a451a13c1f485dacf9f04ff6",
+      "file_toccati": [
+        "app/admin/sponsored/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-sponsorizzati-categoria.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-sponsorizzati-categoria.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6c74b905103fc9d4a451a13c1f485dacf9f04ff6^ --file app/admin/sponsored/page.tsx --prove tests/unit/riparazione-r10-sponsorizzati-categoria.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le intestazioni, le posizioni e la percentuale della tabella erano già in italiano sulla base (R09-018). Restava lo slug grezzo della categoria accanto alla posizione («· casa-tessili»): ora la pagina legge il nome dalla tabella categories, e finché non arriva mostra lo slug reso leggibile. Nel database non cambia niente.",
+      "cosa_resta": "I quattro riquadri in cima dicono ancora «Impressions», «CTR medio» e «3.55%» col punto: li scrive lib/admin/vista-delle-campagne.ts, che non è in nessuna sessione (vedi serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/admin/vista-delle-campagne.ts",
+          "modifica": "riga 279: `Impressions${coda}` → `Visualizzazioni${coda}`; riga 285: `${parziale ? 'CTR' : 'CTR medio'}${coda}` → `${parziale ? 'Clic su 100 visualizzazioni' : 'Clic su 100 visualizzazioni (media)'}${coda}`; riga 287: `${numeri.ctr.toFixed(2)}%` → `${numeri.ctr.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`"
+        },
+        {
+          "file": "tests/unit/i-riquadri-degli-sponsorizzati-non-chiamano-totale-un-pezzo.test.ts",
+          "modifica": "righe 90, 100 e 130: le etichette attese 'CTR medio', 'CTR · in pausa' e 'CTR' diventano le nuove; riga 180: not.toContain('CTR medio') → not.toContain('Clic su 100 visualizzazioni (media)')"
+        }
+      ],
+      "verificato_da": "subagente revisore lotto A: prova e prova rimessa rilanciate in un worktree separato (uscita 0), 29 prove vicine verdi; conferma parziale: il resto («Impressions», «CTR medio», «3.55%») sta in lib/admin/vista-delle-campagne.ts:279-287, e oggi le campagne nascono con category_slug null (lib/stripe/webhook/sponsorizzati.ts:136), quindi il nome della categoria si vedrà solo quando una campagna ne avrà una"
+    },
+    {
+      "id": "R10-005",
+      "chiave": "navigazione-gerarchia|su notifiche e messaggi i titoli saltano dal titolo principale al terzo livello",
+      "esito": "riparato",
+      "commit": "55edefd4cd157c7ae91cdff04fc9697f2cfed93e",
+      "commit_precedenti": [
+        "b03a4312fa1741a42b1776040b257cafa34dad6e"
+      ],
+      "file_toccati": [
+        "app/messages/page.tsx",
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b03a4312^ --file app/messages/page.tsx,app/notifications/page.tsx --prove tests/unit/riparazione-r10-titoli-notifiche-messaggi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Primo commit: un h2 per il lettore di schermo, «Le tue conversazioni», sopra l'elenco dei messaggi. Secondo commit, dopo il revisore: negli stati vuoti «Nessuna conversazione» e «Nessuna notifica» passano da p a h2 con le stesse classi, così dopo l'h1 c'è sempre un h2 prima dell'h3 del piè di pagina. La prova monta le due pagine vuote e legge i titoli in ordine.",
+      "verificato_da": "subagente revisore lotto A, due passate: nella prima ha trovato il salto h1→h3 negli stati vuoti (h3 del piè di pagina); nella seconda conferma l h2 dopo l h1 anche vuote (app/messages/page.tsx:181, app/notifications/page.tsx:224); prova rimessa uscita 0, rossa alla base per ciascuno dei due file"
+    },
+    {
+      "id": "R10-012",
+      "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
+      "esito": "parziale",
+      "commit": "215b55236bb231c775d8b55cde89ed15513e5236",
+      "commit_precedenti": [
+        "bdf98f47671b21189da9d1a7fb79fc9d453e073a"
+      ],
+      "file_toccati": [
+        "app/notifications/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-notifiche-carica-altre.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-notifiche-carica-altre.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bdf98f47^ --file app/notifications/page.tsx --prove tests/unit/riparazione-r10-notifiche-carica-altre.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo commit: «Carica altre» resta visibile, disattivato, con «Caricamento…», e l'ultimo elenco letto resta a video con l'errore e «Riprova». Secondo commit, dopo il revisore: l'elenco tenuto vale solo per la sessione che l'ha letto e si svuota quando la sessione cambia; dopo «Segna tutte come lette» riuscito risulta letto; la frase «Non riusciamo a caricare altre notifiche» esce solo quando cade proprio «Carica altre», altrimenti «Non riusciamo ad aggiornare le notifiche». Sette casi col react-query vero, rossi senza la correzione.",
+      "cosa_resta": "Dopo «Segna tutte come lette» riuscito, se la rilettura cade e prima non c era stato un «Carica altre», le notifiche restano a video come «Non letta» con il pulsante ancora visibile: react-query tiene i dati vecchi della domanda in errore e `notifications = data ?? ultimoElenco` (app/notifications/page.tsx:206) usa quelli, non l elenco tenuto aggiornato (:151-155). Cura proposta: nel successo della mutazione segnare lette anche le righe in memoria (queryClient.setQueryData sulla chiave delle notifiche). Non fatta per il budget di stasera.",
+      "verificato_da": "subagente revisore lotto A, due passate con react-query vero in una prova usa-e-getta: tasto visibile e disattivato mentre carica, elenco tenuto con l errore del «carica altre», «Riprova» funzionante; cambio di sessione con la rete giù o con la memoria svuotata: pagina d errore, mai l elenco tenuto; frase giusta per la rilettura di sfondo; la scrittura di «segna come lette» resta update is_read filtrata su user_id; resta il caso in cosa_resta"
+    },
+    {
+      "id": "R10-002",
+      "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
+      "esito": "riparato",
+      "commit": "9be1a8a1443ab0f5c16b652c373d4d2478335954",
+      "commit_precedenti": [
+        "4f0bd4ad5bfd87e467886a7b504f207ed94436ab"
+      ],
+      "file_toccati": [
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f0bd4ad^ --file components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r10-home-non-scorre-di-lato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Primo commit: tolto whitespace-nowrap dal pulsante «Diventa venditore» (più max-w-full). Secondo commit, dopo la misura del revisore: nel riquadro «Perché scegliere MyCity» il testo accanto all'icona ha min-w-0 e break-words. Misura in Chromium a 360 px col testo al 200%: 422 px sulla base, 401 dopo il primo commit, 360 adesso. /about era già a posto sulla base (R02-002, R03-002).",
+      "verificato_da": "subagente revisore lotto A, due passate in worktree separato: misura in Chromium (Inter, CSS compilato dalla repo) della home a 360 px col testo al 200%: 422 px sulla base, 401 dopo il primo commit (smentita), 360 dopo il secondo; rimettendo whitespace-nowrap torna a 422; prova rimessa sull insieme della voce uscita 0; 28 prove vicine verdi"
+    },
+    {
+      "id": "R10-007",
+      "chiave": "qa-flussi|dopo aver cambiato titolo o descrizione di una lista, /lists mostra ancora quelli vecchi",
+      "esito": "riparato",
+      "commit": "6dea92f379d278176497564b820491568db8c0dd",
+      "insieme_a": [
+        "R10-008"
+      ],
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dea92f379d278176497564b820491568db8c0dd^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo il salvataggio di titolo e descrizione, la pagina della lista rilegge anche le tre chiavi da cui legge /lists (mine, public, inVetrina), oltre al dettaglio. La prova monta /lists e la pagina della lista in un QueryClient vero, con staleTime di 30 secondi come sul sito: dopo la rinomina /lists mostra titolo e descrizione nuovi.",
+      "verificato_da": "subagente revisore lotto B (worktree separato): prova e prova rimessa rilanciate (uscita 0), 24 file di prove vicine verdi; chiavi rilette confrontate con lib/queries/keys.ts:259-261 e app/lists/page.tsx:54,78,96; lista pubblica rinominata aggiornata anche nelle sezioni pubbliche e in vetrina; rinomina fallita senza effetti sulla cache"
+    },
+    {
+      "id": "R10-008",
+      "chiave": "qa-flussi|dopo aver rinominato una lista, la pagina delle liste mostra ancora il titolo vecchio",
+      "esito": "riparato",
+      "commit": "6dea92f379d278176497564b820491568db8c0dd",
+      "insieme_a": [
+        "R10-007"
+      ],
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dea92f379d278176497564b820491568db8c0dd^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-rinominata-in-lists.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa riga e stessa correzione di R10-007: dopo il salvataggio, updateMeta.onSuccess chiama anche rileggiLeListeDiLists().",
+      "verificato_da": "subagente revisore lotto B (worktree separato): prova e prova rimessa rilanciate (uscita 0), 24 file di prove vicine verdi; chiavi rilette confrontate con lib/queries/keys.ts:259-261 e app/lists/page.tsx:54,78,96; lista pubblica rinominata aggiornata anche nelle sezioni pubbliche e in vetrina; rinomina fallita senza effetti sulla cache"
+    },
+    {
+      "id": "R10-009",
+      "chiave": "qa-flussi|dopo l'eliminazione di una lista il menu «aggiungi a lista» della scheda prodotto la mostra ancora",
+      "esito": "riparato",
+      "commit": "2efbfb4da879d56dc83b32ec71e69dafed45139b",
+      "commit_precedenti": [
+        "a9c59da359dd02a8389a8971b30cf7d62ee40f1e"
+      ],
+      "file_toccati": [
+        "app/lists/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a9c59da3^ --file app/lists/[id]/page.tsx --prove tests/unit/riparazione-r10-lista-eliminata-nel-menu.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando la lista viene eliminata, deleteList la toglie subito dai dati in memoria della chiave del menu (lists.mineMin) con setQueryData e poi invalida la chiave: il menu, che legge solo quando è aperto, non la mostra più nemmeno per un attimo. La prova riapre il menu subito dopo l'eliminazione con la rete finta lenta (150 ms).",
+      "verificato_da": "subagente revisore lotto B (prima passata: smentita, la lista eliminata compariva per un attimo col menu enabled: open) e revisore lotto A (seconda passata): con la rete finta a 150 ms, riaperto subito il menu, la lista eliminata non compare mai; unica cancellazione di liste in app/lists/[id]/page.tsx:204; prova rimessa uscita 0; 21 prove vicine verdi"
+    },
+    {
+      "id": "R10-011",
+      "chiave": "stati-ui|nel nuovo prodotto dell'amministrazione il modulo resta attivo anche se negozi o categorie non sono arrivati",
+      "esito": "riparato",
+      "commit": "8965d7afca58bf03beb55cc5fbd9768cbbe52ce4",
+      "commit_precedenti": [
+        "0669b5e4d410719cfda04e4a67038a4f1d0f039e",
+        "f34035891295d07150c804bc0a11843362f1454b"
+      ],
+      "file_toccati": [
+        "app/admin/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0669b5e4^ --file app/admin/products/new/page.tsx --prove tests/unit/riparazione-r10-nuovo-prodotto-aspetta-negozi-e-categorie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ProductForm sta dentro un <fieldset disabled> che si accende solo quando negozi e categorie sono davvero arrivati (sellersData && categoriesData): senza rete resta spento col messaggio d'attesa, e una rilettura in sottofondo caduta con i dati in mano non lo spegne; l'ErrorState con «Riprova» compare solo quando i dati mancano. Il terzo commit toglie un avviso eslint (exhaustive-deps) leggendo da sellersData.",
+      "verificato_da": "subagente revisore lotto B (prima passata: smentita su isLoading senza rete e isError con i dati in mano) e revisore lotto A (seconda passata): senza rete il modulo resta spento e si accende al ritorno della rete; rilettura caduta con i dati in mano lo lascia acceso; «Riprova» riaccende e «Pubblica» invia; prova rimessa uscita 0"
+    },
+    {
+      "id": "R10-001",
+      "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/health/ready/route.ts",
+          "modifica": "far guardare anche le foto alla rotta che il monitor esterno interroga: chiamare controllaTrasformazioneFoto (lib/image-url.ts) con una foto vera di un prodotto in vendita, come fa app/api/health/route.ts:340-360, e quando foto.ok === false rispondere come per il database non pronto (il codice che fa avvisare il monitor), con il motivo nel corpo"
+        }
+      ],
+      "prova": "Sulla base f93d246a il controllo delle foto c è solo in app/api/health/route.ts:359 (controllaTrasformazioneFoto passa da sizedImage → /storage/v1/render/image/, lo stesso indirizzo di lib/image-loader.ts:51) e dà «degraded» con 200; ma il commento di app/api/health/route.ts:387-389 dice che il monitor esterno interroga /api/health/ready, che le foto non le guarda. Nei miei file (lib/image-url.ts, lib/image-loader.ts) non c è niente da cambiare: l interruttore NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE esiste già (lib/image-url.ts:106).",
+      "nota": "Per Nicola, non codice: controllare che il piano Supabase comprenda le Image Transformations e quale rotta interroga davvero il monitor esterno (il CHANGELOG:44 dice /api/health, il codice /api/health/ready); se il piano scade, NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy.",
+      "verificato_da": "subagente revisore lotto B: confrontati con git show f93d246a route.ts, image-url.ts e image-loader.ts; lanciate le prove riparazione-r30-foto-salute e riparazione-r30-la-salute-guarda-le-foto (verdi); trovato che /api/health/ready non guarda le foto"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "resta «Rider in arrivo» a video per lo stato ASSIGNED",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/order-status.ts:52",
+      "descrizione": "Lo stato ASSIGNED dice «Rider in arrivo» a clienti e amministrazione, mentre il resto del sito dice «fattorino»; anche la pagina Spedizioni dice «In consegna (con nome del rider)», frase fissata in tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx:109."
+    },
+    {
+      "titolo": "/privacy e /come-funziona possono scorrere di lato col testo al 200%",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/ui/LegalLayout.tsx:41",
+      "descrizione": "Non misurato: l h1 text-3xl di LegalLayout non ha break-words, e app/come-funziona/page.tsx:75 ha la riga icona + h2 senza min-w-0."
+    },
+    {
+      "titolo": "il piè di pagina passa dall h1 all h3 su ogni pagina pubblica senza un h2 nel contenuto",
+      "dimensione": "navigazione-gerarchia",
+      "severita": "minore",
+      "file": "components/Footer.tsx:222",
+      "descrizione": "Le colonne del piè di pagina sono h3 («MyCity» e le altre, righe 222, 248, 264, 287, 320) e il piè non ha nessun h2: su ogni pagina che dopo l h1 non ha un h2 il lettore di schermo sente un salto di livello."
+    },
+    {
+      "titolo": "il menu «Aggiungi a lista» mostra il titolo vecchio dopo una rinomina",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:138",
+      "descrizione": "updateMeta rilegge le chiavi di /lists ma non lists.mineMin: il menu della scheda prodotto mostra il titolo vecchio fino a 30 secondi. Basta una riga."
+    },
+    {
+      "titolo": "una lista creata da /lists non compare subito nel menu «Aggiungi a lista»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/page.tsx:139",
+      "descrizione": "Dopo la creazione si rilegge solo lists.mine, non lists.mineMin."
+    },
+    {
+      "titolo": "una lista si può salvare col titolo vuoto",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:134",
+      "descrizione": "La modifica (righe 134 e 280) non controlla il titolo vuoto, e nemmeno il database (migrations/036_curated_lists_and_indices.sql:19 ammette stringa vuota); la creazione invece lo vieta."
+    },
+    {
+      "titolo": "tornando indietro dopo l eliminazione la lista eliminata ricompare per 30 secondi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:207-213",
+      "descrizione": "Dopo l eliminazione la cache del dettaglio della lista non viene tolta: col tasto indietro entro 30 secondi la lista ricompare con «Modifica» ed «Elimina»."
+    },
+    {
+      "titolo": "la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/home/HowItWorks.tsx:81",
+      "descrizione": "L h3 «Ricevi e paghi alla consegna» non va a capo: la pagina arriva a 338 px su uno schermo da 320 px."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (dati): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    }
+  ],
+  "domande_per_nicola": [
+    "Foto (R10-001): il piano Supabase comprende le Image Transformations? Quale rotta interroga il monitor esterno, /api/health (che guarda le foto e dice «degraded» con 200) o /api/health/ready (che non le guarda)? Se il piano scade: NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1 su Vercel e rifare il deploy."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "6 subagenti su 6: lotto A, lotto B, revisore A (ripreso tre volte), revisore B, correzioni di 002/005/012, correzioni di 009/011",
+    "subagenti": 6
+  },
+  "costo_usd": 28.86
+}

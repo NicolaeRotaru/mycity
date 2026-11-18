@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -85,7 +85,15 @@ export default function NotificationsPage() {
   const [quante, setQuante] = useState(PER_VOLTA);
   const nonLetteDelCampanello = useNotificationsCount();
 
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
+  // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
+  // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
+  // pagina cancellando le notifiche già a video. Con questo restano, e l'errore sta accanto al tasto.
+  // Un riferimento, non uno stato: tenerlo da parte non deve ridisegnare la pagina.
+  // Vale solo per la sessione che l'ha letto (le righe dicono di chi sono): se la sessione finisce o
+  // cambia si butta, e una lettura caduta torna a dare la pagina d'errore.
+  const ultimoLetto = useRef<Notification[] | null>(null);
+
+  const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useQuery({
     queryKey: [...queryKeys.notifications.list, quante],
     // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa.
     placeholderData: keepPreviousData,
@@ -95,6 +103,7 @@ export default function NotificationsPage() {
       // non è «non sei collegato»: si mostra l'errore con «Riprova», non la pagina di accesso.
       // All'accesso si va solo se la sessione manca davvero (nessun utente, o un errore di sessione).
       if (!user && errUtente && !sessioneMancante(errUtente)) throw errUtente;
+      if (!user || ultimoLetto.current?.some((n) => n.user_id !== user.id)) ultimoLetto.current = null;
       // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
       // distinguerli su un testo libero e' come non distinguerli.
       if (!user) throw new Error(AUTH_RICHIESTA);
@@ -109,13 +118,27 @@ export default function NotificationsPage() {
     },
   });
 
+  // Un elenco vuoto non ha niente da tenere, e non dice di chi è.
+  useEffect(() => {
+    if (data && !isPlaceholderData) ultimoLetto.current = data.length > 0 ? data : null;
+  }, [data, isPlaceholderData]);
+  // Se la sessione finisce o cambia, l'elenco tenuto si butta subito, anche con la rete giù.
+  useEffect(() => {
+    const { data: ascolto } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      const chi = sessione?.user?.id;
+      if (evento === 'SIGNED_OUT' || !chi || ultimoLetto.current?.some((n) => n.user_id !== chi)) ultimoLetto.current = null;
+    });
+    return () => ascolto?.subscription?.unsubscribe();
+  }, []);
+  const ultimoElenco = ultimoLetto.current;
+
   // Segna tutte come lette — su azione esplicita dell'utente (bottone), NON
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
   // senza azzerare il badge appena la apri.
   const markAllRead = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<string | null> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) return null;
       // 5/11/2026 — L'esito si legge: se la scrittura cade, i pallini restano e lo si dice.
       const { error: errAggiorna } = await supabase
         .from('notifications')
@@ -123,8 +146,13 @@ export default function NotificationsPage() {
         .eq('user_id', user.id)
         .eq('is_read', false);
       if (errAggiorna) throw errAggiorna;
+      return user.id;
     },
-    onSuccess: () => {
+    onSuccess: (chi) => {
+      // R10-012 — Scritte lette davvero: lo diventa anche l'elenco tenuto, se la rilettura cade.
+      if (chi && ultimoLetto.current) {
+        ultimoLetto.current = ultimoLetto.current.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
+      }
       qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
       qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
     },
@@ -158,11 +186,12 @@ export default function NotificationsPage() {
     if (serveAccesso) router.push('/sign-in');
   }, [serveAccesso, router]);
 
-  if (isLoading) {
+  if (isLoading && !ultimoElenco) {
     return <LoadingState />;
   }
 
-  if (error && !serveAccesso) {
+  // La pagina intera di errore solo se non c'è niente di già letto da mostrare.
+  if (error && !serveAccesso && !data && !ultimoElenco) {
     return (
       <ErrorState
         title="Non riusciamo a caricare le notifiche"
@@ -174,10 +203,17 @@ export default function NotificationsPage() {
 
   if (serveAccesso) return null;
 
-  const notifications = data ?? [];
+  const notifications = data ?? ultimoElenco ?? [];
   const hasUnread = nonLetteDelCampanello > 0 || notifications.some((n) => !n.is_read);
+  // A video c'è l'elenco di prima mentre arrivano le altre: il tasto resta, fermo, e dice che carica.
+  const caricaAltre = isFetching && (isPlaceholderData || !data);
+  // La lettura è caduta ma l'elenco già letto resta: l'errore si dice qui sotto, con «Riprova».
+  const letturaCaduta = !!error && !caricaAltre;
+  // A cadere è proprio «Carica altre» se la domanda più lunga non ha dati suoi; se no è caduta una
+  // rilettura dell'elenco già a video, e si dice quello.
+  const altreCadute = letturaCaduta && !data && quante > PER_VOLTA;
   // Se ne sono arrivate quante ne ho chieste, ce ne possono essere altre più indietro.
-  const forseAltre = notifications.length >= quante;
+  const forseAltre = caricaAltre || notifications.length >= quante;
 
   return (
     <div className="max-w-3xl">
@@ -205,7 +241,8 @@ export default function NotificationsPage() {
       {notifications.length === 0 ? (
         <div className="rounded-xl border border-cream-300 bg-white p-12 text-center">
           <Inbox size={48} className="mx-auto mb-3 text-ink-500" aria-hidden />
-          <p className="mb-1 font-semibold text-ink-600">Nessuna notifica</p>
+          {/* R10-005 — Anche vuota, la pagina ha un h2 dopo l'h1: se no il titolo seguente è l'h3 del piede. */}
+          <h2 className="mb-1 font-semibold text-ink-600">Nessuna notifica</h2>
           <p className="text-sm text-ink-400">Quando ci saranno aggiornamenti, li vedrai qui.</p>
         </div>
       ) : (
@@ -263,15 +300,32 @@ export default function NotificationsPage() {
         </ul>
       )}
 
-      {forseAltre && (
+      {letturaCaduta ? (
+        <div role="alert" className="mt-4 flex flex-col items-center gap-2 text-center">
+          <p className="text-sm text-ink-600">
+            {altreCadute
+              ? 'Non riusciamo a caricare altre notifiche. Quelle qui sopra restano.'
+              : 'Non riusciamo ad aggiornare le notifiche.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
+          >
+            Riprova
+          </button>
+        </div>
+      ) : forseAltre && (
         <div className="mt-4 flex justify-center">
           <button
             type="button"
             onClick={() => setQuante((q) => q + PER_VOLTA)}
             disabled={isFetching}
+            aria-busy={caricaAltre}
             className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
           >
-            Carica altre
+            {caricaAltre ? 'Caricamento…' : 'Carica altre'}
           </button>
         </div>
       )}

@@ -177,12 +177,17 @@ export default function MessagesListPage() {
       ) : conversations.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <MessageCircle size={48} className="mx-auto text-ink-500 mb-3" aria-hidden />
-          <p className="text-ink-600 font-semibold mb-1">Nessuna conversazione</p>
+          {/* R10-005 — Anche vuota, la pagina ha un h2 dopo l'h1: se no il titolo seguente è l'h3 del piede. */}
+          <h2 className="text-ink-600 font-semibold mb-1">Nessuna conversazione</h2>
           <p className="text-sm text-ink-400">
             Scrivi a un negozio dalla scheda prodotto per fare domande prima di acquistare.
           </p>
         </div>
       ) : (
+        <>
+        {/* R10-005 — Le righe sono h3 (le prove comuni le cercano così): l'h2 della sezione evita il
+            salto dal titolo principale al terzo livello. È per il lettore di schermo: a video c'è già l'h1. */}
+        <h2 className="sr-only">Le tue conversazioni</h2>
         <div className="bg-white border border-cream-300 rounded-xl divide-y divide-cream-100 overflow-hidden">
           {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
@@ -241,6 +246,7 @@ export default function MessagesListPage() {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );

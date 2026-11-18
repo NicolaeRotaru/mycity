@@ -29,7 +29,7 @@ export default function AdminNewProductPage() {
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
 
-  const { data: categories = [], isError: categoriesError, refetch: refetchCategories } = useQuery({
+  const { data: categoriesData, isError: categoriesReadError, refetch: refetchCategories } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -38,7 +38,7 @@ export default function AdminNewProductPage() {
     },
   });
 
-  const { data: sellers = [], isLoading: sellersLoading, isError: sellersError, refetch: refetchSellers } = useQuery({
+  const { data: sellersData, isError: sellersReadError, refetch: refetchSellers } = useQuery({
     queryKey: queryKeys.admin.sellersForm,
     queryFn: async (): Promise<SellerOption[]> => {
       const { data, error } = await supabase
@@ -51,9 +51,20 @@ export default function AdminNewProductPage() {
     },
   });
 
+  const categories = categoriesData ?? [];
+  const sellers = sellersData ?? [];
+  // R10-011 — Finché negozi e categorie non sono arrivati (in lettura, in pausa senza rete o
+  // caduti) il modulo non si invia: prima restava attivo e «Pubblica» partiva senza negozio o
+  // senza categorie. Conta l'avere i dati, non lo stato della lettura: senza rete la lettura è
+  // in pausa (né «in caricamento» né «caduta»), e una rilettura in sottofondo che cade con i
+  // dati già in mano non deve spegnere un modulo a metà compilazione.
+  const sellersError = sellersReadError && !sellersData;
+  const categoriesError = categoriesReadError && !categoriesData;
+  const datiArrivati = Boolean(sellersData && categoriesData);
+
   const sellerOffersExpress = useMemo(
-    () => Boolean(sellers.find((s) => s.id === sellerId)?.offers_express),
-    [sellers, sellerId],
+    () => Boolean(sellersData?.find((s) => s.id === sellerId)?.offers_express),
+    [sellersData, sellerId],
   );
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
@@ -141,7 +152,7 @@ export default function AdminNewProductPage() {
             label="Negozio di destinazione"
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
-            disabled={sellersLoading || sellers.length === 0}
+            disabled={sellers.length === 0}
             required
           >
             <option value="" disabled>— scegli il negozio —</option>
@@ -151,7 +162,7 @@ export default function AdminNewProductPage() {
               </option>
             ))}
           </Select>
-          {!sellersLoading && sellers.length === 0 && (
+          {sellersData && sellersData.length === 0 && (
             <p role="status" className="text-sm text-ink-600 mt-1.5">
               Non c&apos;è ancora nessun negozio: serve almeno un negozio per creare un prodotto.
             </p>
@@ -171,18 +182,27 @@ export default function AdminNewProductPage() {
         />
       )}
 
-      <ProductForm
-        key={importNonce}
-        mode="create"
-        categories={categories}
-        initialValues={initialValues}
-        submitting={create.isPending}
-        sellerOffersExpress={sellerOffersExpress}
-        // L'invio finisce quando finisce l'inserimento: fino ad allora il modulo non ne fa
-        // partire un altro (l'errore lo dice già `onError` della mutazione). Come il negozio.
-        onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
-        onDiscard={() => router.push('/admin/products')}
-      />
+      {!datiArrivati && (
+        <p id="modulo-in-attesa" role="status" className="text-sm text-ink-600">
+          {sellersError || categoriesError
+            ? 'Senza l\'elenco dei negozi e delle categorie il prodotto non si può salvare: premi «Riprova» qui sopra.'
+            : 'Sto leggendo negozi e categorie: il prodotto si potrà salvare appena arrivano.'}
+        </p>
+      )}
+      <fieldset disabled={!datiArrivati} aria-describedby={datiArrivati ? undefined : 'modulo-in-attesa'} className="min-w-0 disabled:opacity-70">
+        <ProductForm
+          key={importNonce}
+          mode="create"
+          categories={categories}
+          initialValues={initialValues}
+          submitting={create.isPending}
+          sellerOffersExpress={sellerOffersExpress}
+          // L'invio finisce quando finisce l'inserimento: fino ad allora il modulo non ne fa
+          // partire un altro (l'errore lo dice già `onError` della mutazione). Come il negozio.
+          onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
+          onDiscard={() => router.push('/admin/products')}
+        />
+      </fieldset>
     </div>
   );
 }
