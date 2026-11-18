@@ -270,9 +270,7 @@ function HomeBlock({
                   <span className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${trustColorClass(v.color)}`}>
                     <v.Icon size={20} strokeWidth={2.2} />
                   </span>
-                  {/* R10-002 — Accanto all'icona fissa il testo deve potersi stringere e andare a capo:
-                      col testo grande sul telefono «Commercianti locali» usciva dallo schermo. */}
-                  <div className="min-w-0 break-words">
+                  <div>
                     <p className="font-semibold text-ink-900">{v.t}</p>
                     <p className="text-sm text-ink-600">{v.d}</p>
                   </div>
