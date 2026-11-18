@@ -90,7 +90,7 @@ function AdminLogo() {
     <div className="font-serif text-2xl font-extrabold leading-none tracking-tight">
       <span className="text-accent-300">{branding.wordmark.accent}</span>
       <span className="text-white">{branding.wordmark.rest}</span>
-      <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-secondary-300">
+      <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-label text-secondary-300">
         Admin
       </span>
     </div>
@@ -127,7 +127,7 @@ function AdminNav({
     <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
       {NAV.map((sec) => (
         <div key={sec.group} className="mb-2">
-          <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-white/40">
+          <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-label text-white/40">
             {sec.group}
           </p>
           {sec.items.map((n) => {

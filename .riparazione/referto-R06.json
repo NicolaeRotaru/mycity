@@ -1,0 +1,248 @@
+{
+  "sessione": "R06",
+  "aggiornato": "2026-11-17 23:20",
+  "finita": true,
+  "testa": "677b393d04c004441f81b6dd175ff16135bb3375",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "677b393d04c004441f81b6dd175ff16135bb3375",
+    "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=6144 (con la memoria normale tsc --noEmit va in esaurimento); lint 0 errori, 99 avvisi già presenti; 1736 file di prova passati, 1 saltato (già sulla base); 10980 prove passate. HEAD preso con git rev-parse HEAD nello stesso comando."
+  },
+  "voci": [
+    {
+      "id": "R06-001",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "scelta_di_nicola",
+      "file_toccati": [],
+      "prova_file": [],
+      "copre_tutta_la_voce": false,
+      "domanda": "Le misure a 11px (text-[11px], 71 nel sito, tutte le 15 rimaste nei quattro file della voce) non hanno un gradino nella scala: vanno a 10px (text-2xs), a 12px (text-xs), o si aggiunge un gradino da 11px?",
+      "prova": "grep -rEo 'text-\\[[0-9.]+px\\]' app components | wc -l → 275 sulla base (non più 330). Nei quattro file restano solo text-[11px]: SellerShell 4, rider/earnings 4, search 4, AdminSidebar 3.",
+      "nota": "Nei quattro file le misure con un gradino uguale le aveva già portate sulla scala R24-021 (commit 8f70c8d0; prova tests/unit/riparazione-r24-scala-del-testo.test.ts, verde). Restano solo text-[11px], che non hanno un gradino uguale: cambiarle cambia l'aspetto. Nel resto del sito 52 misure hanno un gradino identico (10px×35→text-2xs, 12px×7→text-xs, 14px×5→text-sm, 18px×2→text-lg, 24px×2→text-2xl, 30px×1→text-3xl) ma stanno in file di altre sessioni; le altre 223 non hanno un gradino uguale (13px 88, 11px 71, 15px 17, 17px 16, 32px 8, 26px 6, 12.5px 5, 22px 4, 34px 3, 13.5px 2, 9px/28px/54px 1). Se Nicola vuole il gradino da 11px, si aggiunge in tailwind.config.ts (mio) più i token in app/globals.css e docs/mockup/tokens/typography.css (non miei).",
+      "verificato_da": "subagente smentitore B: ricontato 275 su base e testa, solo text-[11px] nei 4 file (15), nessun gradino da 11px in tailwind.config.ts:156-159, globals.css, typography.css; nessuna misura con gradino identico nei file di R06"
+    },
+    {
+      "id": "R06-002",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "esito": "parziale",
+      "commit": "677b393d04c004441f81b6dd175ff16135bb3375",
+      "file_toccati": [
+        "app/search/page.tsx",
+        "tests/unit/riparazione-r06-card-della-ricerca.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-card-della-ricerca.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-card-della-ricerca.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 677b393d04c004441f81b6dd175ff16135bb3375^ --file app/search/page.tsx --prove tests/unit/riparazione-r06-card-della-ricerca.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La primitiva offre già quello che cercano le card a mano (bordo cream bordered/elevated, surface-200 con ombra funnel, raggio lg/xl/2xl: components/ui/Card.tsx:23-24,63), quindi Card.tsx non è cambiato. Nei miei file ho convertito la colonna dei filtri di app/search/page.tsx: ora è <Card as=\"aside\" variant=\"elevated\" radius=\"2xl\"> con le stesse classi di prima; la prova confronta i due insiemi di classi.",
+      "cosa_resta": "Card è importata in 13 file (prima 12). Restano card a mano in file di altre sessioni: 151 righe nella forma 'bg-white…border-cream-300|surface-200…rounded-' in 79 file (rounded-2xl 79, rounded-xl 57, rounded-lg 15), più circa 33 righe con bg-surface-0 (stesso bianco) e circa 111 con le classi in ordine diverso. Nei miei file restano app/help/page.tsx:93 (è un <Link>, e Card non fa da link) e due card a mano in app/rider/earnings/page.tsx:214 e :220 ('rounded-lg border border-cream-300 bg-surface-0'), convertibili a <Card radius=\"lg\" padding=\"none\" className=…> senza cambiare aspetto: riprende giovedì.",
+      "serve_file_altrui": [
+        {
+          "file": "le 79 pagine e componenti di app/ e components/ con card a mano, fuori dai file di R06",
+          "modifica": "Sostituire il div 'bg-white border border-cream-300 rounded-{lg|xl|2xl} p-{3|4|6} [shadow-warm]' con <Card variant=\"bordered|elevated\" radius=\"lg|xl|2xl\" padding=\"sm|md|lg\" className=\"<le altre classi>\">, tenendo il raggio di oggi così l'aspetto non cambia; 'bg-white border-surface-200 shadow-card' diventa variant=\"funnel\". Prima il funnel d'acquisto: home, prodotto, carrello, cassa."
+        }
+      ],
+      "verificato_da": "subagente smentitore B: prova e prova rimessa rilanciate (regge, uscita 0); classi renderizzate identiche (cn unisce, non scarta); ha trovato le card a mano di rider/earnings:214,220 e corretto i conteggi di cosa_resta; nota: la terza asserzione della prova ricopia il className invece di leggerlo dalla pagina"
+    },
+    {
+      "id": "R06-003",
+      "chiave": "coerenza-brand|il design system di riferimento è incompleto: mancano button, badge e card e un file importa un componente che non esiste",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "copre_tutta_la_voce": true,
+      "prova": "docs/mockup/components/core/ contiene Badge.jsx, Button.jsx, Card.jsx e core.card.html già sulla base (git cat-file -e f93d246a:docs/mockup/components/core/Badge.jsx → ok); docs/mockup/components/commerce/ProductCard.jsx:2 importa '../core/Badge.jsx', che esiste ed esporta Badge (core/Badge.jsx:70); docs/mockup/_ds_manifest.json elenca Badge/Button/Card (sourcePath components/core/*.jsx); dei 44 percorsi distinti del manifest non ne manca nessuno; nessun import relativo del mockup è rotto.",
+      "verificato_da": "subagente smentitore B: controllato su f93d246a core/Badge, Button, Card, l'import di ProductCard.jsx:2 e i 44 percorsi del manifest"
+    },
+    {
+      "id": "R06-004",
+      "chiave": "microcopy|gli errori dei moduli controllati dal server arrivano al cliente in inglese, per esempio «string must contain at most 120 character»",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "lib/api/responses.ts",
+          "modifica": "aggiungere in testa `import '@/lib/zod-i18n';`: accende il traduttore italiano di Zod in tutte le rotte che rispondono con ApiErrors, cioè le 13 che rimandano issues[0].message senza traduttore: admin/branding, admin/categories, admin/cms/[slug], admin/daily-drops, admin/home, admin/products, chat/conversations, chat/messages, marketplace/import-fetch, products/rehost-images, seller/apply, seller/site, support/conversation. In alternativa la stessa riga in ognuna di quelle route.ts."
+        }
+      ],
+      "cosa_resta": "le 13 rotte qui sopra rispondono ancora coi testi predefiniti inglesi di Zod; la correzione sta in file non miei",
+      "nota": "La parte del modulo contatti era già riparata: app/api/contact/route.ts:21 importa lib/zod-i18n e :28-32 ha un messaggio italiano per ogni limite (120, 200, 5000); lo confermano tests/unit/riparazione-r24-errori-dal-server.test.ts e api-contact.test.ts, verdi. Il ripiego lato browser c'è già (lib/errors.ts:178 traduciTestoDiZod). Nei miei file non c'è un punto comune che chiuda il resto.",
+      "verificato_da": "subagente smentitore A: contact già in italiano (riga 21 e 29-32); nessun punto comune nei file di R06 (lib/errors e QueryProvider girano solo nel browser); provata la riga in lib/api/responses.ts: 28 file di prova verdi (193 casi), poi tolta"
+    },
+    {
+      "id": "R06-005",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "esito": "parziale",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "prova": "public/manifest.json: orientation già tolto, \"id\": \"/\" alla riga 5, display_override alla riga 8 (commit 5153b28c)",
+      "cosa_resta": "«screenshots»: servono immagini vere dell'app (almeno una stretta, circa 1080x1920 con form_factor narrow, e una larga con form_factor wide). In public/ ci sono solo icone, foto-mancante.svg e i segnaposti della mappa: non le invento. Quando Nicola le mette in public/, si aggiunge l'array screenshots al manifest.",
+      "cosa_ho_fatto": "Controllato: blocco in verticale, id e display_override erano già sistemati prima; nessuna modifica.",
+      "verificato_da": "subagente smentitore A: orientation assente, id riga 5, display_override riga 8, nessun app/manifest.ts; in public/ nessuna immagine adatta come screenshot (docs/mockup/uploads/Screenshot (438).png non è dell'app ed è inadatta)",
+      "nota": "Le schermate per la finestra d'installazione sono immagini che deve preparare Nicola (una stretta circa 1080x1920 e una larga, schermate vere dell'app senza dati personali), da mettere in public/; poi si aggiunge l'array screenshots al manifest."
+    },
+    {
+      "id": "R06-006",
+      "chiave": "qa-flussi|quando il fattorino segna «cliente assente» il negozio riceve solo la campanella, non l'email di annullo",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts",
+          "modifica": "righe 172-173: sostituire `expect(sendEmailMock).toHaveBeenCalledTimes(1); const posta = sendEmailMock.mock.calls[0][0];` con `const alCliente = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled'); expect(alCliente).toHaveLength(1); const posta = alCliente[0][0];`; riga 189: `sendEmailMock.mock.calls.at(-1)![0]` diventa `sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled').at(-1)![0]` (stesso numero di asserzioni: l'email al cliente resta una sola, si aggiunge quella al negozio)."
+        },
+        {
+          "file": "tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts",
+          "modifica": "nel vi.mock('@/lib/ordini/annulla') (riga 37) aggiungere `avvisaIlNegozioDellAnnullo: vi.fn(async () => true),` dopo COLONNE_ANNULLO."
+        }
+      ],
+      "nota": "La cura nel mio file è pronta ma non è nel ramo, perché da sola rende rosse due prove esistenti comuni (usano file di R04, R05, R07). Riusa avvisaIlNegozioDellAnnullo (lib/ordini/annulla, R31-023) dopo la campanella, con la stessa frase; non tocca contanti, rimborsi o importi. Porta la prova nuova tests/unit/riparazione-r06-cliente-assente-email.test.ts (1 caso rosso senza la cura, 3 verdi con). Con le due modifiche alle prove comuni i 6 file di prova del cliente assente sono verdi (29 casi). Dopo l'adeguamento: git apply della patch in cura_pronta_patch, commit «R06-006 …», prova rimessa. Attenzione per chi applica la patch delle prove comuni: «esattamente 1 email» diventa «1 email order_canceled», quindi un'eventuale terza email non verrebbe più vista.",
+      "cura_pronta_patch": "diff --git a/app/api/rider/orders/[id]/cliente-assente/route.ts b/app/api/rider/orders/[id]/cliente-assente/route.ts\nindex 159fa772..3482f765 100644\n--- a/app/api/rider/orders/[id]/cliente-assente/route.ts\n+++ b/app/api/rider/orders/[id]/cliente-assente/route.ts\n@@ -4,7 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';\n import { withAuthRateLimit } from '@/lib/api/middleware';\n import { ApiErrors } from '@/lib/api/responses';\n import { logger } from '@/lib/logger';\n-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';\n+import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';\n \n export const runtime = 'nodejs';\n \n@@ -106,6 +106,7 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo\n           // torna la merce e la differenza della consegna (COSA_TORNA). La cifra la dice l'email.\n           `${primaFrase} Il rimborso sulla carta è partito: l'importo è nell'email «Rimborso emesso».`\n         : `${primaFrase} Non devi pagare niente.`;\n+  const fraseAlNegozio = `Il cliente dell'ordine #${sigla} non era in casa: la merce torna in negozio.`;\n   const { error: nErr } = await admin.from('notifications').insert([\n     {\n       category: 'order',\n@@ -119,12 +120,15 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo\n           category: 'order',\n           user_id: order.seller_id,\n           title: '↩️ Ordine annullato: cliente assente',\n-          body: `Il cliente dell'ordine #${sigla} non era in casa: la merce torna in negozio.`,\n+          body: fraseAlNegozio,\n           link: `/seller/orders/${order.id}`,\n         }]\n       : []),\n   ]);\n   if (nErr) logger.error('[cliente-assente] notifiche non scritte', { orderId: order.id, message: nErr.message });\n+  // R06-006 — Al negozio anche l'email dell'annullo, come nelle altre rotte d'annullo (R31-023): con la sola\n+  // campanella il negozio non lo sapeva finché non apriva il pannello. Non lancia: l'annullo è già scritto.\n+  await avvisaIlNegozioDellAnnullo(admin, order, fraseAlNegozio);\n \n   return NextResponse.json({ ok: true, motivo: MOTIVO_CLIENTE_ASSENTE, refundId: esito.refundId }, { status: 200 });\n }\ndiff --git a/tests/unit/riparazione-r06-cliente-assente-email.test.ts b/tests/unit/riparazione-r06-cliente-assente-email.test.ts\nnew file mode 100644\nindex 00000000..510cc99f\n--- /dev/null\n+++ b/tests/unit/riparazione-r06-cliente-assente-email.test.ts\n@@ -0,0 +1,90 @@\n+/**\n+ * R06-006 — Quando il fattorino segna «cliente assente» l'ordine si annulla, ma il negozio riceveva\n+ * solo la campanella: l'email dell'annullo (R31-023) partiva dalle altre rotte d'annullo, non da qui.\n+ *\n+ * Qui la rotta VERA con la vera `avvisaIlNegozioDellAnnullo`: l'annullo e il rimborso sono finti\n+ * (non sono l'oggetto della voce), la posta è una spia.\n+ */\n+import { describe, it, expect, vi, beforeEach } from 'vitest';\n+\n+const ID = '11111111-2222-4333-8444-555555555555';\n+const RIDER = 'rider-1';\n+\n+const posta = vi.hoisted(() => ({ inviate: [] as Array<Record<string, unknown>> }));\n+vi.mock('@/lib/email/client', () => ({\n+  sendEmail: vi.fn(async (m: Record<string, unknown>) => { posta.inviate.push(m); return { ok: true }; }),\n+}));\n+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+vi.mock('@/lib/ordini/annulla', async (originale) => ({\n+  ...(await originale<typeof import('@/lib/ordini/annulla')>()),\n+  annullaERimborsa: vi.fn(async () => ({ ok: true, refundId: null })),\n+}));\n+vi.mock('@/lib/api/middleware', () => ({\n+  withAuthRateLimit:\n+    (_o: unknown, h: (c: { user: { id: string }; req: unknown; params: Record<string, string>; profile?: unknown }) => unknown) =>\n+    (req: unknown, ctx: { params: Record<string, string> }) =>\n+      h({ user: { id: RIDER }, req, params: ctx.params, profile: { role: 'rider', is_approved: true } }),\n+}));\n+\n+const db = vi.hoisted(() => ({ ordine: {} as Record<string, unknown>, notifiche: [] as unknown[] }));\n+const admin = {\n+  from: (tabella: string) => {\n+    if (tabella === 'notifications') {\n+      return { insert: (r: unknown) => { db.notifiche.push(r); return Promise.resolve({ error: null }); } };\n+    }\n+    return {\n+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { ...db.ordine }, error: null }) }) }),\n+    };\n+  },\n+  auth: {\n+    admin: {\n+      getUserById: async (id: string) =>\n+        id === 'negozio-1'\n+          ? { data: { user: { email: 'negozio@esempio.it' } }, error: null }\n+          : { data: { user: { email: 'cliente@esempio.it' } }, error: null },\n+    },\n+  },\n+};\n+vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => admin }));\n+\n+import { POST } from '@/app/api/rider/orders/[id]/cliente-assente/route';\n+\n+async function tocca() {\n+  // eslint-disable-next-line @typescript-eslint/no-explicit-any\n+  const res = (await (POST as any)(new Request(`http://localhost/api/rider/orders/${ID}/cliente-assente`, { method: 'POST' }), {\n+    params: { id: ID },\n+  })) as Response;\n+  return res.status;\n+}\n+\n+beforeEach(() => {\n+  posta.inviate = [];\n+  db.notifiche = [];\n+  db.ordine = {\n+    id: ID, user_id: 'cliente-1', seller_id: 'negozio-1', rider_id: RIDER, total_price: 18.5,\n+    payment_method: 'cod', payment_status: 'PENDING', delivery_status: 'OUT_FOR_DELIVERY',\n+  };\n+});\n+\n+describe('R06-006 · cliente assente: al negozio anche l email dell annullo', () => {\n+  it('il negozio riceve l email «annullato» con la frase della campanella', async () => {\n+    expect(await tocca()).toBe(200);\n+    const alNegozio = posta.inviate.filter((m) => m.to === 'negozio@esempio.it');\n+    expect(alNegozio, 'il negozio non ha ricevuto nessuna email dell annullo').toHaveLength(1);\n+    expect(alNegozio[0].tags).toEqual([{ name: 'template', value: 'order_canceled_seller' }]);\n+    expect(String(alNegozio[0].text)).toContain('non era in casa');\n+    expect(String(alNegozio[0].text)).toContain(`#${ID.slice(0, 6).toUpperCase()}`);\n+  });\n+\n+  it('la campanella al negozio resta', async () => {\n+    await tocca();\n+    const righe = (db.notifiche[0] ?? []) as Array<{ user_id: string }>;\n+    expect(righe.some((r) => r.user_id === 'negozio-1')).toBe(true);\n+  });\n+\n+  it('un ordine senza negozio non manda email a nessun negozio', async () => {\n+    db.ordine.seller_id = null;\n+    expect(await tocca()).toBe(200);\n+    expect(posta.inviate.filter((m) => m.to === 'negozio@esempio.it')).toHaveLength(0);\n+  });\n+});\n",
+      "prove_comuni_patch": "diff --git a/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts b/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts\nindex ab2ee72a..4a5b1adc 100644\n--- a/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts\n+++ b/tests/unit/il-cliente-assente-col-credito-non-tornato-legge-la-verita.test.ts\n@@ -169,8 +169,9 @@ describe('cliente assente, credito MyCity che non torna', () => {\n     const n = allaPersona();\n     expect(n.body).toMatch(/Non devi pagare niente/);\n     expect(n.body).toMatch(/\\(4,00 €\\) non è ancora tornato/);\n-    expect(sendEmailMock).toHaveBeenCalledTimes(1);\n-    const posta = sendEmailMock.mock.calls[0][0];\n+    const alCliente = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled');\n+    expect(alCliente).toHaveLength(1);\n+    const posta = alCliente[0][0];\n     expect(posta.text + posta.html).not.toMatch(/ti è stato restituito/);\n   });\n \n@@ -186,7 +187,7 @@ describe('cliente assente, credito MyCity che non torna', () => {\n     db.ordine = ordine({ wallet_applied_cents: 400 });\n     await tocca();\n     expect(allaPersona().body).not.toMatch(/non è ancora tornato/);\n-    const posta = sendEmailMock.mock.calls.at(-1)![0];\n+    const posta = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled').at(-1)![0];\n     expect(posta.text + posta.html).toMatch(/ti è stato restituito/);\n   });\n });\ndiff --git a/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts b/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts\nindex ecaba540..97f7caf6 100644\n--- a/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts\n+++ b/tests/unit/riparazione-r30-fattorino-sospeso-rotte.test.ts\n@@ -36,6 +36,7 @@ vi.mock('@/lib/rider/prova-del-fattorino', () => ({\n }));\n vi.mock('@/lib/ordini/annulla', () => ({\n   COLONNE_ANNULLO: 'id, user_id, seller_id, total_price, payment_method, delivery_status',\n+  avvisaIlNegozioDellAnnullo: vi.fn(async () => true),\n   annullaERimborsa: vi.fn(async (_admin: unknown, ordine: unknown) => {\n     stato.annulli.push(ordine);\n     return { ok: true, refundId: null, creditoNonTornatoCents: 0 };\n",
+      "verificato_da": "subagente smentitore A: con la sola cura cadono 3 casi in 2 prove comuni (usano lib/ordini/annulla R05, lib/email/client R04, lib/logger R07, app/api/rider/cash-confirm); con anche la patch delle prove comuni i 10 file di prova del cliente assente sono verdi (54 casi); la cura non tocca contanti/rimborsi/importi e l'email al negozio parte una volta sola"
+    },
+    {
+      "id": "R06-007",
+      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — la strada per diventare fattorino decide chi ottiene il ruolo rider (permessi: chi diventa fattorino). Il difetto c'è ancora: app/help/page.tsx:56-60 «Diventa rider» porta a /contact.",
+      "file_toccati": [],
+      "verificato_da": "subagente smentitore B: il difetto c'è ancora (help:56-61 → /contact; /lavora-con-noi vale solo per account nuovi; /rider protetto per ruolo in middleware.ts:70; il ruolo lo cambia solo l'admin): ripararlo decide chi ottiene il ruolo rider, quindi permessi"
+    },
+    {
+      "id": "R06-008",
+      "chiave": "qa-flussi|il filtro «oggi» nei guadagni del fattorino taglia la giornata a mezzanotte del telefono, non di piacenza",
+      "esito": "riparato",
+      "commit": "289c7de989aaa3a4a155739cd6f29c2e9d17757f",
+      "file_toccati": [
+        "app/rider/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-oggi-del-fattorino.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-oggi-del-fattorino.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 289c7de9^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r06-oggi-del-fattorino.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il filtro «Oggi» confronta giornoPiacenza(delivered_at) con giornoPiacenza() invece della mezzanotte del telefono (setHours); gli importi non sono toccati (è una data, eccezione della regola 3). La prova monta la pagina vera con orologio finto e fuso del processo UTC e America/New_York, d'inverno e d'estate: 3 casi rossi senza la cura, verdi con la cura.",
+      "verificato_da": "subagente smentitore A: prova verde e prova rimessa regge (uscita 0) in copia separata; 6 varianti scomode verdi (23:30 di Piacenza, cambi d'ora 25/10 e 29/3 col telefono a Tokyo e Los Angeles, delivered_at null, filtri 7/30 giorni e Tutto invariati, somma dei compensi giusta); 6 prove che importano la pagina verdi (34 casi)"
+    },
+    {
+      "id": "R06-009",
+      "chiave": "qa-flussi|il drop del giorno usa il giorno di greenwich: fra mezzanotte e le 2 la home e la pagina admin sono su giorni diversi",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "components/home/DropOfDay.tsx:68 `const today = giornoPiacenza()` e :56-60 endOfTodayIso con inizioGiornoPiacenza (commit 04cc4b9a R04-004); la pagina admin usa lo stesso giornoPiacenza (app/admin/daily-drops/page.tsx:32)",
+      "cosa_ho_fatto": "Controllato: home e admin calcolano il giorno con lo stesso aiutante di Piacenza.",
+      "verificato_da": "subagente smentitore A: giornoPiacenza in DropOfDay.tsx:68 e admin daily-drops:32, il toISOString di riga 58 lavora su una data Date.UTC; 6 prove su DropOfDay verdi (109 casi)"
+    },
+    {
+      "id": "R06-010",
+      "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+      "esito": "non_fatto",
+      "file_toccati": [],
+      "nota": "delicata: fuori dall'onda 9 — tocca i nomi mostrati nelle recensioni (dati personali). Le prime 20 recensioni sono già a posto (components/store-sections/useStorePageData.ts:77 ripiega sul nome pubblico, commit 0f92b386 R04-011), ma «Mostra altre recensioni» (components/store-sections/ReviewsSection.tsx:52-63, leggiAltreRecensioni) scrive ancora author = authorById.get(user_id) ?? null senza il ripiego: dalla 21ª in poi chi ha solo il nome pubblico appare «Cliente» (riga 154). ReviewsSection.tsx non è fra i file di R06; la cura sarebbe lo stesso ripiego di useStorePageData.ts:63-65.",
+      "verificato_da": "subagente smentitore B: ha trovato che il ripiego manca nelle recensioni dalla 21ª (ReviewsSection.tsx:63); l'esito «già riparato prima» è stato ritirato"
+    },
+    {
+      "id": "R06-011",
+      "chiave": "stati-ui|la modifica prodotto dell'amministratore dice «prodotto non trovato» senza riprova quando la lettura non riesce",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "app/admin/products/[id]/edit/page.tsx:46 una lettura non riuscita lancia l'errore e non diventa null; :147 «Non riesco a leggere questo prodotto…» e :152-155 bottone «Riprova» (rileggiProdotto); «Prodotto non trovato» solo se la riga manca (commit 5fd4ce74 e 4e48718f, R22-017)",
+      "cosa_ho_fatto": "Controllato: errore di lettura e prodotto assente sono già distinti, con Riprova.",
+      "verificato_da": "subagente smentitore A: errore lanciato a riga 46, controllato prima del prodotto assente a riga 141, Riprova a 152-155; prova R22-017 verde; restano due casi al limite che non sono «lettura fallita» (riga nascosta dalle regole di accesso → null; varianti senza Riprova, già in nuovi_difetti_visti)"
+    },
+    {
+      "id": "R06-012",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "commit": "801c438ab17969d8f8561a42b2e10d1311dfc3cf",
+      "file_toccati": [
+        "components/seller/SellerShell.tsx",
+        "components/admin/AdminSidebar.tsx",
+        "app/rider/earnings/page.tsx",
+        "app/search/page.tsx",
+        "components/home/DropOfDay.tsx",
+        "tests/unit/riparazione-r06-etichette-maiuscole.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-etichette-maiuscole.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-etichette-maiuscole.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 801c438ab17969d8f8561a42b2e10d1311dfc3cf^ --file components/seller/SellerShell.tsx,components/admin/AdminSidebar.tsx,app/rider/earnings/page.tsx,app/search/page.tsx,components/home/DropOfDay.tsx --prove tests/unit/riparazione-r06-etichette-maiuscole.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file le 11 etichette maiuscole con spaziatura usano tracking-label (0.04em): tracking-[0.08em]×4 nelle barre venditore/admin, [0.06em] e [0.03em] nei guadagni, tracking-wider×4 nella ricerca e ×1 nel drop. Il valore di tracking-label non è cambiato. La prova legge i cinque file e accetta solo tracking-label sulle righe uppercase.",
+      "cosa_resta": "Righe uppercase nel sito, prima → dopo: wider 42→37, label 17→28, [0.03em] 17→16, [0.06em] 3→2, [0.08em] 5→1; invariate wide 39, [0.05em] 7, [0.04em] 4, widest 3. Fuori token ne restano 66, tutte in file di altre sessioni (wider 37, [0.03em] 16, [0.05em] 7, widest 3, [0.06em] 2, [0.08em] 1 in components/account/AccountSidebar.tsx:143): la cura è la stessa, tracking-label. Nei miei file restano 2 etichette maiuscole senza spaziatura scritta (app/rider/earnings/page.tsx:134 e :138, text-2xs font-bold uppercase): la voce conta le spaziature scritte, ma per coerenza andrebbero su tracking-label. Ci sono poi 4 tracking-[0.04em] scritti a mano con lo stesso valore del token.",
+      "verificato_da": "subagente smentitore B: prova verde e prova rimessa regge (uscita 0, i 5 file rimessi uno a uno fanno cadere la prova); 34 prove che leggono i file di R06 verdi (248 test); diff limitato alle 11 classi tracking; conteggi di cosa_resta ricontati"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la modifica prodotto dell'amministratore, se non legge le varianti, dice «Ricarica la pagina» ma non ha il bottone Riprova",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/products/[id]/edit/page.tsx:149-152",
+      "descrizione": "Con erroreVarianti il messaggio chiede di ricaricare la pagina, ma il bottone Riprova compare solo con error (lettura del prodotto)."
+    },
+    {
+      "titolo": "la primitiva Card non può fare da link: le card cliccabili restano scritte a mano",
+      "dimensione": "coerenza-brand",
+      "severita": "minore",
+      "file": "components/ui/Card.tsx:56",
+      "descrizione": "La prop `as` accetta solo div/article/section/aside; una card cliccabile (es. app/help/page.tsx:93, un <Link>) non può usare la primitiva."
+    },
+    {
+      "titolo": "card a mano con bg-surface-0 restano fuori dal conteggio delle card ridisegnate",
+      "dimensione": "coerenza-brand",
+      "severita": "minore",
+      "file": "app/rider/earnings/page.tsx:214",
+      "descrizione": "Circa 33 righe di card a mano usano bg-surface-0 (#FFFFFF) invece di bg-white e sfuggono al conteggio del registro; esempi in app/rider/earnings/page.tsx:214 e :220."
+    },
+    {
+      "titolo": "nella pagina guadagni del fattorino la data nell'elenco delle consegne segue il fuso del telefono",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/rider/earnings/page.tsx:231",
+      "descrizione": "toLocaleDateString('it-IT') senza timeZone: 'Europe/Rome': ora che «Oggi» segue Piacenza, su un telefono a Greenwich una consegna delle 00:30 compare sotto «Oggi» con la data di ieri."
+    },
+    {
+      "titolo": "nella pagina admin dei drop l'etichetta del giorno si sposta indietro per chi è a ovest di Greenwich",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/admin/daily-drops/page.tsx:197",
+      "descrizione": "new Date(d.drop_date).toLocaleDateString(...) senza timeZone: 'UTC': da un browser a New York il drop del 17 appare come «lun 16 novembre»."
+    }
+  ],
+  "domande_per_nicola": [
+    "R06-001: le misure a 11px (71 nel sito) vanno a 10px, a 12px, o si aggiunge un gradino da 11px alla scala?",
+    "R06-005: servono due schermate vere dell'app (stretta ~1080x1920 e larga) da mettere in public/ per la finestra d'installazione."
+  ],
+  "conto": {
+    "agenti": 4,
+    "subagenti": 4,
+    "nota": "2 subagenti riparatori (lotti 1-2) e 2 smentitori; nessuno fermato"
+  },
+  "costo_usd": 13.16
+}
