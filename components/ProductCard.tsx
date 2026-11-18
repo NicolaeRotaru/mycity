@@ -232,7 +232,10 @@ const ProductCard = ({
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-primary-700 text-2xs font-bold text-white">
               {initials}
             </span>
-            <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>
+            {/* R02-012 (onda 9) — Era `text-[11px]`, fuori dalla scala (app/globals.css): 11 sta a un
+                pixel da 10 e da 12, e si sale al 12 (`text-xs`), come il prezzo barrato qui sotto, per
+                non rimpicciolire un testo che si legge già a fatica. */}
+            <span className="truncate text-xs font-semibold text-ink-500">{storeName}</span>
           </div>
         )}
         <h3 className="line-clamp-2 min-h-[2.6em] text-sm font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
@@ -270,7 +273,7 @@ const ProductCard = ({
                   {/* 5/11/2026 — Il prezzo era text-base (16px) contro un titolo di 13px: tre
                       pixel di differenza. Cresce a text-lg, così pesa più del titolo. */}
                   <span className="text-lg font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
-                  <s className="text-[11px] text-ink-500">
+                  <s className="text-xs text-ink-500">
                     <span className="sr-only">Prezzo pieno </span>{formatPrice(strikePrice)}
                   </s>
                 </>

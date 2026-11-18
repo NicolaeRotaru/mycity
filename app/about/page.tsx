@@ -70,8 +70,10 @@ async function buildStats(): Promise<typeof STATS> {
 }
 
 /** Sotto lg: colonne larghe almeno 8rem e al massimo mezza riga (gap-4 = 1rem), come le colonne del piede:
- *  col testo ingrandito una sola colonna invece di due che escono dallo schermo. */
-const COLONNE_DEI_NUMERI = 'grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_1rem)/2)),1fr))]';
+ *  col testo ingrandito una sola colonna invece di due che escono dallo schermo.
+ *  R02-002 (onda 9) — Mai più larghe della riga (min(100%,…)): a 280 px col testo al 200% gli 8rem
+ *  (256 px) non ci stavano nei 184 px tra i margini, e la pagina scorreva di lato. */
+const COLONNE_DEI_NUMERI = 'grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_1rem)/2))),1fr))]';
 
 const VALUES = [
   {
@@ -124,7 +126,7 @@ export default async function AboutPage() {
           {stats.map((s) => (
             <div
               key={s.label}
-              className="min-w-0 bg-white border border-cream-300 rounded-xl px-5 py-5 shadow-warm"
+              className="min-w-0 bg-white border border-cream-300 rounded-xl px-5 py-5 shadow-warm break-words"
             >
               <div className="font-serif text-xl sm:text-2xl md:text-3xl font-extrabold text-primary-700 leading-none break-words">
                 {s.value}
@@ -216,8 +218,10 @@ export default async function AboutPage() {
         </section>
 
         {/* CTA band scura */}
+        {/* R02-002 (onda 9) — A 280 px col testo al 200% «Apri un negozio» usciva di 39 px: sul telefono
+            meno margine nella banda, e i bottoni vanno a capo dentro di sé invece di allargarsi. */}
         <section className="pb-16">
-          <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
+          <div className="bg-ink-900 text-white rounded-2xl px-4 py-8 sm:p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
             <div>
               <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2">
                 Vuoi farne parte?
@@ -230,16 +234,16 @@ export default async function AboutPage() {
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/lavora-con-noi"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
+                className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full px-4 sm:px-5 py-3 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
               >
-                <Briefcase size={18} strokeWidth={2.2} aria-hidden /> Lavora con noi
+                <Briefcase size={18} strokeWidth={2.2} className="shrink-0" aria-hidden /> <span className="min-w-0 [overflow-wrap:anywhere]">Lavora con noi</span>
               </Link>
               <Link
                 href="/sell"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 font-bold text-[15px] bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
+                className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full px-4 sm:px-5 py-3 font-bold text-[15px] bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
               >
-                <Store size={18} strokeWidth={2.2} aria-hidden /> Apri un negozio
-                <ArrowRight size={16} strokeWidth={2.2} aria-hidden />
+                <Store size={18} strokeWidth={2.2} className="shrink-0" aria-hidden /> <span className="min-w-0 [overflow-wrap:anywhere]">Apri un negozio</span>
+                <ArrowRight size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />
               </Link>
             </div>
           </div>
