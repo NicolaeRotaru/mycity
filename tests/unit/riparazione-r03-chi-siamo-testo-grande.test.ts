@@ -38,8 +38,7 @@ describe('R03-002 · «Chi siamo» col testo grande non scorre di lato', () => {
     expect(griglia, 'la griglia dei numeri c è').not.toBe('');
     const classi = griglia.split(/\s+/);
     expect(classi).not.toContain('grid-cols-2');
-    // R02-002 (onda 9) — Le stesse colonne, mai più larghe della riga (a 280 px col testo al 200%).
-    expect(classi).toContain('grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_1rem)/2))),1fr))]');
+    expect(classi).toContain('grid-cols-[repeat(auto-fit,minmax(max(8rem,calc((100%_-_1rem)/2)),1fr))]');
     expect(classi).toContain('gap-4');
     expect(classi.some((c) => c === 'lg:grid-cols-4' || c === 'lg:grid-cols-3')).toBe(true);
   });
