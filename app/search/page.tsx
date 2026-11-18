@@ -7,6 +7,7 @@ import { Filter, RotateCcw, CircleDot, Star, ArrowDownWideNarrow, X, Tag, Packag
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { Card } from '@/components/ui/Card';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -236,7 +237,7 @@ function SearchInner() {
       {/* Ordinamento + Categoria */}
       <div className="pb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-3">
         <label className="block">
-          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('sortBy')}</span>
+          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-label">{t('sortBy')}</span>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortOption)}
@@ -251,7 +252,7 @@ function SearchInner() {
           </select>
         </label>
         <label className="block">
-          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('category')}</span>
+          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-label">{t('category')}</span>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
@@ -283,7 +284,7 @@ function SearchInner() {
       {/* Range prezzo — compatto */}
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
+          <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-label">{t('price')}</span>
           <span className="font-bold text-primary-700 text-xs">€{minPrezzoInCorso} – €{maxPrezzoInCorso}{maxPrezzoInCorso >= 500 ? '+' : ''}</span>
         </div>
         <input
@@ -310,7 +311,7 @@ function SearchInner() {
 
       {/* Rating minimo */}
       <div className="py-3">
-        <span className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+        <span className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-label flex items-center gap-1">
           <Star size={11} strokeWidth={2.2} />
           {t('minRating')}
         </span>
@@ -372,7 +373,7 @@ function SearchInner() {
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
       {/* DESKTOP: colonna filtri */}
-      <aside className="hidden md:block md:col-span-1 bg-white border border-cream-300 rounded-2xl p-4 h-fit md:sticky md:top-[var(--header-height)] shadow-warm">
+      <Card as="aside" variant="elevated" radius="2xl" className="hidden md:block md:col-span-1 h-fit md:sticky md:top-[var(--header-height)]">
         <div className="flex items-center justify-between pb-3 border-b border-cream-100 mb-1">
           <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
             <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
@@ -391,7 +392,7 @@ function SearchInner() {
           )}
         </div>
         {filterControls}
-      </aside>
+      </Card>
 
       {/* MOBILE: bottom-sheet filtri */}
       {filtersOpen && (

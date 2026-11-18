@@ -48,9 +48,10 @@ export default function RiderEarningsPage() {
     const conf = PERIODS.find((p) => p.key === period)!;
     if (conf.days === null) return orders;
     if (conf.days === 0) {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      return orders.filter((o) => o.delivered_at && new Date(o.delivered_at) >= startOfToday);
+      // R06-008 — «Oggi» è il giorno di Piacenza, come il grafico qui sotto: tagliato alla mezzanotte
+      // del telefono, su un telefono con un altro fuso la giornata cominciava all'ora sbagliata.
+      const oggi = giornoPiacenza();
+      return orders.filter((o) => o.delivered_at && giornoPiacenza(o.delivered_at) === oggi);
     }
     const cutoff = Date.now() - conf.days * 86400000;
     return orders.filter((o) => o.delivered_at && new Date(o.delivered_at).getTime() >= cutoff);
@@ -126,7 +127,7 @@ export default function RiderEarningsPage() {
       {/* Big number */}
       <div className="px-4 pb-4">
         <div className="rounded-2xl border border-accent-200 bg-gradient-to-br from-accent-100 to-cream-200 p-[22px]">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-accent-800">Hai guadagnato</p>
+          <p className="text-[11px] font-extrabold uppercase tracking-label text-accent-800">Hai guadagnato</p>
           <p className="mt-1 font-serif text-5xl font-extrabold leading-none text-ink-900">{formatPrice(totalEarned)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <div className="rounded-md bg-white/60 px-3 py-2.5">
@@ -208,7 +209,7 @@ export default function RiderEarningsPage() {
 
       {/* Storico consegne (filtrato dal periodo) */}
       <div className="px-4">
-        <p className="mb-2.5 text-sm font-bold uppercase tracking-[0.03em] text-ink-700">Storico consegne</p>
+        <p className="mb-2.5 text-sm font-bold uppercase tracking-label text-ink-700">Storico consegne</p>
         {filtered.length === 0 ? (
           <div className="rounded-lg border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
             Nessuna consegna in questo periodo.

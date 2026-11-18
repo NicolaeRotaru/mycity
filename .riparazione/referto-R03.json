@@ -1,0 +1,552 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-17 23:45",
+  "finita": true,
+  "testa": "b164a55be3181615c3184edc53ffb7e3c773e917",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "e669a8d7623eb9981c052fbede73261d1fda6335",
+    "nota": "typecheck, lint e 1748 file di prova verdi (11071 casi, 1 saltato già sulla base), lanciato con NODE_OPTIONS=--max-old-space-size=6144 (senza, tsc va in OOM). e669a8d7 = b164a55b, l'ultimo commit di codice, più il solo referto."
+  },
+  "voci": [
+    {
+      "id": "R03-017",
+      "chiave": "api-backend|«duplica» di un prodotto escluso dal recesso: finché non si sa se la colonna c'è, la copia si salva recedibile senza avviso",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — la voce decide se la copia di un prodotto resta esclusa dal diritto di recesso, cioè se il cliente può restituirlo ed essere rimborsato: tocca i rimborsi dei clienti."
+    },
+    {
+      "id": "R03-013",
+      "chiave": "ai-endpoints|il tetto di spesa ai del giorno si sfora quando più chiamate partono insieme",
+      "esito": "riparato",
+      "commit": "ef3188359d8c51ed964382bc2fd585450196f6f3",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-tetto-fra-copie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-tetto-fra-copie.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base ef3188359d8c51ed964382bc2fd585450196f6f3^ --file lib/ai/run.ts --prove tests/unit/riparazione-r03-tetto-fra-copie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dentro una copia la prenotazione c'era già (R04-017); ora controllaTettoSpesaAi prenota la stima anche su Upstash (INCRBY atomico, finestre di 5 minuti con scadenza 15) prima di leggere lo speso, e la toglie a spesa registrata o a tetto che ferma. Nessuna migrazione; nella rotta del lotto solo l'await sulla liberazione, ora asincrona.",
+      "nota": "Fra copie regge solo con UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN su Vercel (le stesse del freno anti-abuso, segnalate da /api/health); senza, resta la prenotazione per copia.",
+      "verificato_da": "subagente revisore lotto 1: due copie del modulo con Upstash finto muto e lento a 600 ms; prova e rimessa rilanciate (regge col solo run.ts); la chiamata AI non si blocca (al massimo +0,5 s prima e dopo); una prenotazione può restare appesa 5-10 minuti se Upstash risponde oltre i 500 ms: prudente, il tetto non si sfora."
+    },
+    {
+      "id": "R03-009",
+      "chiave": "ai-endpoints|se l'invio di un lotto ai resta senza risposta, il sito lo rimanda e anthropic ne esegue due, uno pagato e mai visto",
+      "esito": "riparato",
+      "commit": "df5d420d55fdf3c4d8c370c67f5aa83ef7a047da",
+      "file_toccati": [
+        "lib/ai/batch.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-errore-del-fornitore.test.ts",
+        "tests/unit/riparazione-r03-lotto-524.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-errore-del-fornitore.test.ts tests/unit/riparazione-r03-lotto-524.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base df5d420d55fdf3c4d8c370c67f5aa83ef7a047da^ --file lib/ai/batch.ts --prove tests/unit/riparazione-r03-lotto-524.test.ts --json",
+        "prima_parte": "commit d5cc3827: timeout --base d5cc38278982a85d5274e4c5a2feb308fd30f829^ --prove tests/unit/riparazione-r03-lotto-errore-del-fornitore.test.ts → uscita 0"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In due commit. d5cc3827: un 500/502/504 del fornitore all'invio, che può arrivare a lotto già creato, lascia la riga aperta con INVIO_SENZA_RISPOSTA e risponde 503 «Non riavviarlo» invece di chiudere come fallito e dire «Riprova» (maxRetries 0 e connessione caduta erano già sulla base, R04-014). df5d420d: anche il 524 di Cloudflare e una risposta 2xx col corpo illeggibile (submitBatch aspetta la risposta, poi legge il corpo: solo un errore dopo un 2xx confermato diventa RispostaDelLottoIlleggibile) valgono «forse partito»; 503, 520, 522, 529 e 400 restano rifiuti veri.",
+      "nota": "Niente ricerca con batches.list (rischierebbe di agganciare il lotto di un altro negozio). Se fallisce anche la scrittura del motivo INVIO_SENZA_RISPOSTA, la regola dei 15 minuti chiude la riga come fallita (vedi R03-003).",
+      "verificato_da": "subagente revisore lotto 1 sulla prima parte (d5cc3827: errori veri dell'SDK per ogni codice, prova e rimessa rilanciate). La seconda parte (df5d420d, il 524 e il 2xx illeggibile) è non smentita: il revisore del lotto 3 è stato fermato alla consegna prima di rapportare; prova e rimessa (uscita 0) del subagente che ha riparato, e verify verde."
+    },
+    {
+      "id": "R03-003",
+      "chiave": "ai-endpoints|un lotto ai partito e pagato ma non agganciato alla sua riga si chiude come fallito dopo 15 minuti e se ne può pagare un secondo",
+      "esito": "parziale",
+      "commit": "83c59ea12b146183cee1002f512df9cca8df4deb",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-non-agganciato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-non-agganciato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83c59ea12b146183cee1002f512df9cca8df4deb^ --file app/api/ai/catalog-batch/start/route.ts,app/api/ai/catalog-batch/status/route.ts --prove tests/unit/riparazione-r03-lotto-non-agganciato.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Se l'aggancio fallisce due volte la rotta di avvio scrive nella riga «lotto partito ma non agganciato: <id>»; lo stato legge quell'id, aggancia il lotto (processing, batch_id) e lo interroga invece di chiudere a 15 minuti. Finché la riga è aperta un secondo avvio riceve 409.",
+      "nota": "Se il database rifiuta anche la terza scrittura la riga resta senza motivo e vale la regola dei 15 minuti di R04-005 (prova comune riparazione-r04-lavoro-in-invio, non toccata); l'id resta nel log.",
+      "cosa_resta": "Se il database rifiuta anche la terza scrittura (quella del motivo con l'id, app/api/ai/catalog-batch/start/route.ts:206, esito non controllato) — lo scenario realistico di un timeout del database — dopo 15 minuti lo stato chiude la riga come fallita e un secondo avvio paga un secondo lotto. Chiuderlo vuole un segno fuori dal database (es. Upstash per negozio) o un ritocco della regola dei 15 minuti fissata dalla prova comune riparazione-r04-lavoro-in-invio.",
+      "verificato_da": "subagente revisore lotto 1: rifatta la prova con tutte le scritture rotte, compresa la terza: un'ora dopo lo stato risponde failed e il secondo avvio chiama submitBatch due volte. Riportata a parziale."
+    },
+    {
+      "id": "R03-004",
+      "chiave": "ai-endpoints|un lotto ai partito ma non agganciato resta «in invio» per sempre, e la pagina del negozio non mostra né rotella né pulsante",
+      "esito": "riparato",
+      "commit": "83c59ea12b146183cee1002f512df9cca8df4deb",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-non-agganciato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-non-agganciato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83c59ea12b146183cee1002f512df9cca8df4deb^ --file app/api/ai/catalog-batch/start/route.ts,app/api/ai/catalog-batch/status/route.ts --prove tests/unit/riparazione-r03-lotto-non-agganciato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base R04-005 aveva già sistemato la pagina (rotella per «in invio», pulsante per «fallito», chiusura a 15 minuti). Restava il caso esatto della voce, il lotto partito ma non agganciato, che ora si aggancia con lo stesso commit di R03-003. La pagina non è stata toccata.",
+      "verificato_da": "subagente revisore lotto 1: la pagina era già a posto (R04-005: rotella per «in invio», pulsante per «fallito»); il lotto partito ma non agganciato ora si aggancia; anche con tutte le scritture rotte la riga non resta «in invio» per sempre (dopo 15 minuti diventa fallita e compare il pulsante). Il secondo lotto pagato in quel caso è il resto di R03-003."
+    },
+    {
+      "id": "R03-002",
+      "chiave": "ai-endpoints|quando il tetto di spesa ai blocca un lavoro sul catalogo il negoziante legge «riprova» e il lavoro risulta fallito",
+      "esito": "riparato",
+      "commit": "c81e4d0b498d68d522cc31274964e8af013543b5",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-lotto-fermato-dal-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-fermato-dal-tetto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base c81e4d0b498d68d522cc31274964e8af013543b5^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r03-lotto-fermato-dal-tetto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel catch della rotta di avvio il blocco del tetto (AiCallError tetto_spesa) non passa più dal ramo dei guasti: risponde 503 «Budget AI giornaliero esaurito. Riprova domani.» via mapAiError e la riga si chiude «canceled» col motivo del tetto, invece di «failed» con un 502 «Riprova».",
+      "verificato_da": "subagente revisore lotto 1: percorso intero verificato (503 «Budget AI giornaliero esaurito. Riprova domani.», riga canceled, friendlyError passa la frase, riprendiUltimo non ripesca la riga annullata); prova e rimessa rilanciate."
+    },
+    {
+      "id": "R03-014",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+      "esito": "serve_file_altrui",
+      "nota": "Il difetto c'è ancora: segnalaRipiego (lib/ai/tettoSpesa.ts:185-231) conta l'ora nella memoria della singola copia; allarmiTettoSpesaAiPerIlCron (tettoSpesa.ts:407, R04-018) ricorda l'inizio del guasto in operational_alert_log ma non ha chiamanti. Il cron degli avvisi è di R07 in quest'onda; in tettoSpesa.ts non serve cambiare niente.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "Dopo l'import da '@/lib/privacy/cancellazioni-in-sospeso' (riga 18) aggiungere: import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa'; poi subito prima di `const incompleto = controlliSaltati.length > 0;` (riga 674 sulla base) aggiungere: alerts.push(...(await allarmiTettoSpesaAiPerIlCron())); La funzione non lancia, legge da sola AI_GLOBAL_DAILY_BUDGET_EUR e AI_COPIE_ATTESE e restituisce righe {key,type,detail,url} già nella forma AlertRow."
+        }
+      ],
+      "verificato_da": "subagente revisore lotto 1: allarmiTettoSpesaAiPerIlCron esiste (tettoSpesa.ts:407), la sua prova è verde, la forma è compatibile con AlertRow, il cron non la chiama; in tettoSpesa.ts non serve niente."
+    },
+    {
+      "id": "R03-001",
+      "chiave": "ai-endpoints|le rotte catalog-apply e catalog-apply-bulk non leggono l'interruttore ai_negozi_accesa",
+      "esito": "serve_file_altrui",
+      "nota": "Il difetto c'è ancora: nessuna delle due rotte legge AI_NEGOZI_ACCESA. La cura (la stessa di catalog-batch/apply) provata e tolta senza commit: con l'interruttore spento fa diventare rossi 26 casi in 9 prove esistenti comuni (fanno vi.mock di lib/api/middleware e lib/supabase/server, di R05). Va applicata tutta insieme, con una prova nuova «con AI_NEGOZI_ACCESA false, POST → 503 e nessuna scrittura».",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-apply/route.ts",
+          "modifica": "(di R03, da applicare solo insieme alle prove qui sotto) aggiungere import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio'; e come prima riga del POST: if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');"
+        },
+        {
+          "file": "app/api/ai/catalog-apply-bulk/route.ts",
+          "modifica": "(di R03, insieme alle prove) lo stesso import e la stessa prima riga del POST"
+        },
+        {
+          "file": "tests/unit/il-copilot-applica-tutto-in-una-volta.test.ts",
+          "modifica": "accanto agli altri vi.mock: vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));"
+        },
+        {
+          "file": "tests/unit/il-copilot-dice-cosa-non-e-entrato.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/il-copilot-non-dice-applicato-se-il-prezzo-non-e-entrato.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/il-freno-sul-prezzo-si-accende-davvero.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/il-prezzo-rifiutato-si-dice-anche-quando-la-chat-si-ferma-per-altro.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/la-chat-non-dice-salvate-se-il-prezzo-e-rimasto.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/minori-s10-copilot-applica.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        },
+        {
+          "file": "tests/unit/una-dichiarazione-che-la-scheda-non-ha-non-si-chiede.test.ts",
+          "modifica": "lo stesso vi.mock di funzioni-al-lancio con AI_NEGOZI_ACCESA: true"
+        }
+      ],
+      "verificato_da": "subagente revisore lotto 2: messa la cura nella sua copia e lanciate le 14 prove che chiamano le due rotte: 26 casi rossi in 9 file, tutti con vi.mock di lib/api/middleware e lib/supabase/server e nati in commit di altre sessioni; poi tolta."
+    },
+    {
+      "id": "R03-005",
+      "chiave": "ai-endpoints|il copilot non riesce a preparare una modifica su tutto il catalogo oltre circa cento prodotti: risponde «riprova» e fallisce ogni volta",
+      "esito": "riparato",
+      "commit": "8ba0223f7e8658776890814c7aa67903f20e398f",
+      "file_toccati": [
+        "app/api/ai/copilot/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-copilot-tutto-il-catalogo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-copilot-tutto-il-catalogo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8ba0223f7e8658776890814c7aa67903f20e398f^ --file app/api/ai/copilot/route.ts --prove tests/unit/riparazione-r03-copilot-tutto-il-catalogo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Anche la regola con gli id supera il tetto di token oltre circa 120 prodotti. Ora la regola ha «tutti»: true e gli id li mette il server dall'elenco che il modello ha visto: «abbassa del 10% tutto» su 150 prodotti dà 150 modifiche. Il prompt chiede al massimo 40 voci singole (tetto solo nel prompt, non misurato col modello vero).",
+      "verificato_da": "subagente revisore lotto 2: seguito «tutti» fino all'elenco del server e al tetto di 200, prova sua con «tutti»: true e id parziali; il freno ±30% resta in espandiRegolaCopilot; prova e rimessa rilanciate (regge). Variante accanto (sottoinsieme grande scritto id per id) messa nei difetti nuovi."
+    },
+    {
+      "id": "R03-010",
+      "chiave": "ai-endpoints|quando anthropic non risponde, vercel spegne la funzione ai prima che il negozio legga un errore chiaro",
+      "esito": "parziale",
+      "commit": "d28d5e71502d1e09d313b4901aa1dd6f01718290",
+      "file_toccati": [
+        "lib/ai/client.ts",
+        "vercel.json",
+        "app/api/vision/extract-product/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-tempo-sotto-la-rotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-tempo-sotto-la-rotta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base d28d5e71502d1e09d313b4901aa1dd6f01718290^ --file lib/ai/client.ts,vercel.json,app/api/vision/extract-product/route.ts --prove tests/unit/riparazione-r03-tempo-sotto-la-rotta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il client fa un solo tentativo da 60 s (maxRetries 1 → 0): una chiamata dura al massimo 60 s invece di 120,5. vercel.json dà 120 s a app/api/vision/extract-product; la verifica sul web parte solo se nel tempo che resta ci sta (120 s meno 10 di margine). Le rotte col filtro reggono insieme a R03-011 (10 s + 60 s).",
+      "cosa_resta": "Un tempo in vercel.json per le rotte non di R03 che chiamano il modello: app/api/vision/extract-products e app/api/vision/photo-order (es. \"maxDuration\": 120), e anche marketplace/import-fetch; classifyProductPolicy (lib/ai/moderation.ts:131) senza un tempo suo, chiamata a gruppi di 5 su fino a 200 righe da catalog-batch/apply (file non di R03), può superare i 120 s; products/[id]/external-refresh non ha durata in vercel.json.",
+      "nota": "Costo: con un tentativo solo un 529 o un 500 passeggero non si ritenta più da solo; il negoziante legge subito l'errore chiaro e riprova lui.",
+      "verificato_da": "subagente revisore lotto 2: controllati vercel.json e ogni rotta che chiama il modello: Copilot, chat ed extract-product ora stanno nei 120 s; parziale confermato (extract-products, photo-order, import-fetch, external-refresh senza durata in vercel.json; classifyProductPolicy senza tempo suo)."
+    },
+    {
+      "id": "R03-011",
+      "chiave": "ai-endpoints|il filtro di moderazione prima del copilot non ha un tempo suo",
+      "esito": "riparato",
+      "commit": "96421fef6e09ecb92907aef48c575bbf0666553e",
+      "file_toccati": [
+        "lib/ai/moderation.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-filtro-col-suo-tempo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-filtro-col-suo-tempo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 96421fef6e09ecb92907aef48c575bbf0666553e^ --file lib/ai/moderation.ts --prove tests/unit/riparazione-r03-filtro-col-suo-tempo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "assertSafeText ha un tempo suo: un tentativo da 10 s senza ritentativi. Filtro più Copilot (80 s) fanno 90 s, sotto i 120 della rotta. La prova passa dalla rotta del Copilot vera, col filtro vero.",
+      "verificato_da": "subagente revisore lotto 2: prova sua col filtro che scade (APIConnectionTimeoutError): la rotta blocca con 502 «Errore nel servizio AI. Riprova.» e il Copilot non viene chiamato; prova e rimessa rilanciate (regge)."
+    },
+    {
+      "id": "R03-008",
+      "chiave": "ai-endpoints|la lettura da foto accetta il testo «false» del modello come prodotto ammesso",
+      "esito": "riparato",
+      "commit": "5ba3e28cb87c3c0ffb27c04b115227793e2ecbe6",
+      "file_toccati": [
+        "app/api/vision/extract-product/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-foto-policy-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-foto-policy-testo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5ba3e28cb87c3c0ffb27c04b115227793e2ecbe6^ --file app/api/vision/extract-product/route.ts --prove tests/unit/riparazione-r03-foto-policy-testo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il blocco dei prodotti vietati fa passare solo policy_ok === true, come classifyProductPolicy: «\"false\"» come testo o il campo mancante danno 400, e senza quel sì non parte la verifica sul web.",
+      "verificato_da": "subagente revisore lotto 2: prova sua con policy_ok \"true\" testuale (ora rifiutato, coerente con «nel dubbio si blocca»), cercate le altre letture di policy_ok nella rotta (ora rigide, route.ts:339 e :433); prova e rimessa rilanciate (regge)."
+    },
+    {
+      "id": "R03-006",
+      "chiave": "ai-endpoints|«genera con ai» riscrive la descrizione partendo solo dal nome e la sostituisce a quella del negoziante, senza la regola «non inventare»",
+      "esito": "riparato",
+      "commit": "71116772673508287f469b9ea698c6d0da47a05f",
+      "file_toccati": [
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-descrizione-proposta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-descrizione-proposta.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 71116772673508287f469b9ea698c6d0da47a05f^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r03-descrizione-proposta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base la rotta era già a posto (S10: «Non inventare», niente provenienza locale, descrizione attuale intera fino a 4000 caratteri). Restava il modulo che sostituiva il testo in silenzio: sopra un testo già scritto il risultato ora si mostra come proposta con «Usa questa» e «Tieni la mia»; su un campo vuoto entra subito. La prova monta il ProductForm vero e guarda anche la rotta.",
+      "verificato_da": "subagente revisore lotto 2: letta la rotta sulla base f93d246a («Non inventare», descrizione attuale intera fino a 4000 caratteri) e il diff del modulo; prova e rimessa rilanciate (regge)."
+    },
+    {
+      "id": "R03-015",
+      "chiave": "ai-endpoints|nella chat assistenza la scheda della proposta promette caratteristiche che il server butta via, e dopo «applica» dice «modifiche salvate» senza aver cambiato niente",
+      "esito": "riparato",
+      "commit": "54319c41bc7f55f0c151fce65ff6be7c1ebaddec",
+      "file_toccati": [
+        "lib/products/aiPatch.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-chat-togli-solo-cio-che-ce.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-chat-togli-solo-cio-che-ce.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54319c41bc7f55f0c151fce65ff6be7c1ebaddec^ --file lib/products/aiPatch.ts --prove tests/unit/riparazione-r03-chat-togli-solo-cio-che-ce.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "propostaPerLaChat teneva «Rimuovi <caratteristica>» anche se il prodotto non l'aveva, e il server non toglieva niente. Ora, con gli attributi attuali noti, la proposta tiene una rimozione solo se il dato c'è o se la stessa proposta lo scrive, come attributiDaTogliere sul server. La prova passa dalla rotta catalog-chat vera.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
+    },
+    {
+      "id": "R03-018",
+      "chiave": "architettura|il modulo del prodotto applica le proposte dell'assistente con una seconda copia delle regole del server, e le due copie sono già diverse",
+      "esito": "riparato",
+      "commit": "a55668fb332309f58aa991803e7d916317e250ba",
+      "file_toccati": [
+        "lib/products/aiPatch.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-modulo-e-server-una-copia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-modulo-e-server-una-copia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base a55668fb332309f58aa991803e7d916317e250ba^ --file lib/products/aiPatch.ts --prove tests/unit/riparazione-r03-modulo-e-server-una-copia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Restavano due differenze fra pianoPatchPerIlModulo e resolveAiPatch (prezzo pieno barrato taciuto dal modulo; caratteristica scritta e tolta nella stessa proposta). Ora tag, caratteristiche da scrivere e prezzo pieno stanno in un solo posto (tagDelPatch, caratteristicheDaScrivere, prezzoPienoDalPatch) usato da tutte e due; la prova manda 25 casi su due prodotti per le due strade e controlla che scrivano e dicano la stessa cosa.",
+      "nota": "Resta una sola differenza voluta da R04: una chiave vuota il server la toglie dal JSON, il modulo non la conta.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
+    },
+    {
+      "id": "R03-016",
+      "chiave": "ai-endpoints|il freno di sei ore sui prodotti importati in errore regge solo con upstash: senza, ogni copia del sito ripaga le chiamate ai",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — senza Upstash il freno condiviso vuole un posto nel database per l'ora dell'errore, che il prodotto non ha (in errore si scrive solo external_sync_status='error', external_synced_at non si muove, products non ha updated_at; external_data è la fotografia del prezzo esterno vista dai clienti e letta dagli avvisi): serve una migrazione (es. products.external_sync_error_at scritta nei due catch e letta da ritentoDopoErroreConsentito). Strada senza codice per Nicola: impostare UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in produzione, e il freno vale già fra tutte le copie."
+    },
+    {
+      "id": "R03-007",
+      "chiave": "ai-endpoints|un 404 del fornitore nell'aggiornamento dei prezzi esterni diventa un generico «aggiornamento non riuscito»",
+      "esito": "riparato",
+      "commit": "7b7dcd779ab489c01264da80b183ac7b0af275eb",
+      "file_toccati": [
+        "app/api/products/[id]/external-refresh/route.ts",
+        "app/api/cron/external-price-alerts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-prezzi-esterni-404.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-prezzi-esterni-404.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7b7dcd779ab489c01264da80b183ac7b0af275eb^ --file app/api/products/[id]/external-refresh/route.ts,app/api/cron/external-price-alerts/route.ts --prove tests/unit/riparazione-r03-prezzi-esterni-404.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Cambiati solo la classificazione e il testo dell'errore: con un AiCallError 404 «Aggiorna ora» risponde 503 «Funzione AI momentaneamente non disponibile.» (le parole di mapAiError) invece di 502 «Aggiornamento non riuscito. Riprova.»; nel refresh in sottofondo e nel giro a orario parte l'allarme sul modello (AI_MODELLO_SMART) e il giro lo scrive nella risposta. Prezzi e scritture non cambiano.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
+    },
+    {
+      "id": "R03-012",
+      "chiave": "ai-endpoints|se si riaccende «traduci», una descrizione lunga torna tradotta solo all'inizio e il modulo la presenta come intera",
+      "esito": "riparato",
+      "commit": "7ffe94441a90a1bfe309877ea37c4b87ad8dfd77",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/seller/products/ai-batch/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-traduzione-lotto-lunga.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-traduzione-lotto-lunga.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ffe94441a90a1bfe309877ea37c4b87ad8dfd77^ --file app/api/ai/catalog-batch/start/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r03-traduzione-lotto-lunga.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dal modulo la strada era già chiusa sulla base (R04-016: translate/route.ts:106 rifiuta prima di spendere, runMessage rifiuta un'uscita tagliata). Restava il lotto «traduci» del catalogo (catalogBatch.ts:192 taglia a 4000 caratteri senza dirlo): ora la rotta start, con operation translate, lascia fuori le schede oltre i 2500 caratteri fra nome e descrizione (lo stesso tetto del modulo), lo dice in esclusiTroppoLunghi e la pagina lo scrive; se sono tutte lunghe risponde 400 e non parte niente.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
+    },
+    {
+      "id": "R03-019",
+      "chiave": "stati-ui|quando la rete torna, le pagine prodotto del negoziante rimettono il caricamento al posto del modulo e le modifiche non salvate si perdono",
+      "esito": "riparato",
+      "commit": "19b705f73405290d1d04903958e50d55480d8090",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "app/seller/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-modulo-resta-quando-torna-la-rete.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-modulo-resta-quando-torna-la-rete.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19b705f73405290d1d04903958e50d55480d8090^ --file app/seller/products/new/page.tsx,app/seller/products/[id]/edit/page.tsx --prove tests/unit/riparazione-r03-modulo-resta-quando-torna-la-rete.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In tutte e due le pagine il modulo, una volta aperto, resta: una lettura che riparte in pausa non rimette il caricamento al suo posto. Se il modulo si è aperto senza la consegna del negozio, per lui resta «non letta» e al salvataggio non scrive un express_enabled=false indovinato; in «Duplica» le taglie in pausa senza dati non aprono il modulo senza taglie. Niente del recesso (R03-017) è stato toccato.",
+      "nota": "Il commit b164a55b (R03-varie) cambia solo il nome del modulo finto nella prova, per il lint; dopo, la prova rimessa è uscita di nuovo 0.",
+      "verificato_da": "non smentita: il revisore del lotto 3 è stato fermato alla consegna (spesa della sessione oltre il tetto) prima di rapportare. Solo il subagente che ha riparato ha lanciato la prova, la prova rimessa (uscita 0) e le prove esistenti vicine; poi npm run verify verde sulla testa."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "un lavoro sul catalogo «in invio» incerto promette «tra poco lo vedi partire» per 24 ore, e a riga chiusa dice «puoi avviarne un altro» mentre il motivo dice di chiedere all'assistenza",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "lib/ai/statoLavoroCatalogo.ts:41-47",
+      "descrizione": "testoStatoLavoro non distingue il lavoro incerto: per 24 ore il testo dice che sta per partire, e quando la riga si chiude il testo e il motivo si contraddicono. File non di R03."
+    },
+    {
+      "titolo": "un lavoro «in invio» incerto non si può scartare: il negozio resta bloccato fino a 24 ore",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/seller/products/ai-batch/page.tsx",
+      "descrizione": "«Scarta» c'è solo per lo stato «pronto» (anche /api/ai/catalog-batch/cancel). Con R03-009 il caso capita anche dopo un 500/502/504 del fornitore all'invio."
+    },
+    {
+      "titolo": "dopo ogni 500/502/504 del fornitore all'invio di un lotto il negozio resta bloccato fino a 24 ore, senza modo di scartare il lavoro",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-batch/start/route.ts:36",
+      "descrizione": "La riga resta 'submitting', il secondo avvio dà 409 (anche status/route.ts:79) e la rotta cancel scarta solo i lavori 'ready'; il messaggio finale dice «chiedi all'assistenza». Effetto accanto di R03-009, visto dal revisore."
+    },
+    {
+      "titolo": "i controlli di conformità del copilot in blocco partono tutti insieme, fino a 200, senza un tetto",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-apply-bulk/route.ts:190-200",
+      "descrizione": "Promise.allSettled su tutti i prodotti che toccano nome o descrizione: con molte chiamate insieme un 429 è probabile e quei prodotti restano fermi con «controllo di conformita non riuscito»; dopo R03-010 il client non ritenta più da solo. Lo stesso schema c'è in catalog-create-bulk e catalog-batch/apply."
+    },
+    {
+      "titolo": "la lettura di più prodotti da foto chiede 6000 token in un tentativo da 60 secondi",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/vision/extract-products/route.ts:230",
+      "descrizione": "Sotto i 100 token al secondo una risposta lunga non arriva in 60 s (era così anche prima). Rotta non di R03."
+    },
+    {
+      "titolo": "il messaggio di «genera con ai» dice «modifica come preferisci» anche quando il testo è solo una proposta",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "components/AIDescriptionButton.tsx:53",
+      "descrizione": "Dopo R03-006, sopra una descrizione già scritta il testo resta una proposta, ma il messaggio del bottone è rimasto quello di prima."
+    },
+    {
+      "titolo": "il copilot su un sottoinsieme grande del catalogo (es. «tutti i disponibili», 150 su 200) scrive ancora gli id uno per uno e risponde «riprova»",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/copilot/route.ts:44",
+      "descrizione": "Dopo R03-005 «tutti» regge sul catalogo intero; una regola su un sottoinsieme grande supera ancora i 3000 token di risposta (lib/ai/regole-copilot.ts:33-35); il tetto di 40 voci singole sta solo nel prompt (route.ts:46)."
+    },
+    {
+      "titolo": "con la proposta di «genera con ai» aperta, le correzioni fatte a mano nel frattempo si perdono premendo «usa questa»",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/seller/ProductForm.tsx:1043",
+      "descrizione": "«Usa questa» sostituisce il testo corrente con la proposta senza guardare se il negoziante l'ha cambiato dopo che la proposta è comparsa."
+    },
+    {
+      "titolo": "la lettura di più prodotti da foto accetta il «false» scritto come testo come prodotto ammesso",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/vision/extract-products/route.ts:304",
+      "descrizione": "policy_ok: p.policy_ok !== false, stesso difetto di R03-008 nella rotta delle foto multiple; attenuato perché catalog-create-bulk ripassa classifyProductPolicy prima di creare."
+    },
+    {
+      "titolo": "la conformità dei prodotti (classifyProductPolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/ai/moderation.ts:131",
+      "descrizione": "Usa i 60 s del client; catalog-batch/apply (route.ts:41, :50-51, :222) la chiama a gruppi di 5 su fino a 200 righe: con il fornitore lento si superano i 120 s della funzione."
+    },
+    {
+      "titolo": "la scheda della chat non mostra la rimozione di un attributo rimasto da una categoria di prima, che il server invece toglie",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/products/prontoPerLaVendita.ts:769",
+      "descrizione": "righeDellaProposta salta una rimozione che non è un campo della categoria attuale, ma la proposta della rotta la tiene e resolveAiPatch la toglie: il server cambia una cosa che la scheda non ha mostrato. File non di R03."
+    },
+    {
+      "titolo": "con il modello AI mancante il giro dei prezzi esterni segna in errore tutti i prodotti del giro e continua a chiamare",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/cron/external-price-alerts/route.ts:147",
+      "descrizione": "Dopo il primo 404 tutti gli altri prodotti del giro prendono lo stesso 404 e vengono segnati 'error': prodotti sani finiscono dietro il freno di sei ore. Fermare il giro al primo 404 cambierebbe più di un messaggio."
+    }
+  ],
+  "domande_per_nicola": [
+    "R03-016 e R03-013: impostare UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in produzione? Senza, il freno di sei ore e il tetto di spesa AI reggono solo dentro una copia del sito.",
+    "R03-016: aprire una migrazione per products.external_sync_error_at (ora dell'ultimo errore dell'import), così il freno regge anche senza Upstash?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "costo_usd": 37.35,
+    "nota": "3 che riparano (uno per lotto) e 3 revisori; il revisore del lotto 3 fermato alla consegna. Costo letto dalla regia 2.0 col controllo della spesa delle 23:41 (oltre il tetto di 35 $): la sessione non vede il suo usage.cost_usd."
+  },
+  "costo_usd": 37.35
+}

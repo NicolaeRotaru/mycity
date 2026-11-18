@@ -400,6 +400,10 @@ function CatalogTab() {
         body: JSON.stringify({ operation, ...(operation === 'translate' ? { targetLang: lang } : {}) }),
       });
       toast.success(`Job avviato su ${data.total} prodotti. Può volerci qualche minuto: puoi chiudere la pagina, lo ritrovi qui.`);
+      // R03-012 — Le schede troppo lunghe la traduzione non le prende: si dice, invece di tradurne solo l'inizio.
+      if (Number(data.esclusiTroppoLunghi) > 0) {
+        toast.warning(`${data.esclusiTroppoLunghi} prodotti non sono nel lavoro: nome e descrizione superano i 2500 caratteri della traduzione automatica. Traducili a mano.`);
+      }
       ricordaLavoro(String(data.jobId));
       setJob({ id: data.jobId, operation, status: data.status === 'submitting' ? 'submitting' : 'processing', total: data.total, targetLang: operation === 'translate' ? lang : null, results: [], counts: { total: 0, withChanges: 0 } });
     } catch (err) {

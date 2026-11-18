@@ -31,7 +31,6 @@ interface Props {
 export default function CameraCapture({ open, onClose, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fallbackInputRef = useRef<HTMLInputElement>(null);
   const [facing, setFacing] = useState<Facing>('environment');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -136,24 +135,23 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
         <div className="text-center py-6 space-y-4">
           <ImageOff className="mx-auto text-ink-400" size={40} strokeWidth={1.6} aria-hidden />
           <p className="text-sm text-ink-600">{error}</p>
-          <button
-            type="button"
-            onClick={() => fallbackInputRef.current?.click()}
-            className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-primary-700"
-          >
+          {/* 17/11/2026 (R01-006) — Prima un pulsante apriva un campo file sr-only che stava fuori:
+              due fermate di Tab per la stessa cosa, e sulla seconda il fuoco non si vedeva. Ora il
+              campo sta dentro l'etichetta: una fermata sola, e l'anello si vede sull'etichetta.
+              (Non tabIndex=-1: la trappola del fuoco di Modal conta anche quei campi.) */}
+          <label className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-primary-700 cursor-pointer focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { onCapture(f); onClose(); }
+              }}
+            />
             <Camera size={18} strokeWidth={2.2} aria-hidden /> Usa la fotocamera del telefono
-          </button>
-          <input
-            ref={fallbackInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) { onCapture(f); onClose(); }
-            }}
-          />
+          </label>
         </div>
       ) : (
         <div className="space-y-3">

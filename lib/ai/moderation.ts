@@ -72,6 +72,17 @@ const SAFETY_SYSTEM =
   'In caso di dubbio, allowed=false.';
 
 /**
+ * R03-011 — Il tempo del filtro sul testo: un tentativo da 10 s, senza ritentativi.
+ *
+ * Prima usava il tempo del client (60 s, e allora anche un ritentativo): con un
+ * fornitore che non risponde affatto, filtro più Copilot (80 s) passavano i 120 s
+ * della rotta (vercel.json), e Vercel la spegneva prima dell'errore chiaro. Il
+ * filtro chiede 128 token: 10 s bastano anche a un fornitore lento, e il conto
+ * resta sotto la rotta anche dove i filtri sono due prima del modello.
+ */
+const TEMPO_FILTRO_MS = 10_000;
+
+/**
  * Verifica un testo libero (descrizione, messaggio, recensione). Lancia
  * UnsafeContentError se non conforme; ritorna void se ok.
  */
@@ -80,6 +91,8 @@ export async function assertSafeText(text: string, feature = 'moderation-text'):
     feature,
     model: MODELS.fast,
     max_tokens: 128,
+    timeoutMs: TEMPO_FILTRO_MS,
+    senzaRitentativi: true,
     system: SAFETY_SYSTEM,
     tools: [SAFETY_TOOL],
     tool_choice: { type: 'tool', name: 'flag' },

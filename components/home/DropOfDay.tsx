@@ -120,7 +120,7 @@ export default function DropOfDay() {
 
       <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-6 md:p-10 items-center">
         <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 bg-accent-500 text-ink-900 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 bg-accent-500 text-ink-900 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-label">
             <Flame size={14} strokeWidth={2.4} />
             Drop del giorno
           </div>

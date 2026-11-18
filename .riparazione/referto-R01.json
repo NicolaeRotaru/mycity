@@ -1,0 +1,237 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-18 00:45",
+  "finita": true,
+  "testa": "675c91f9cab17e739bada9e7ac98206882577a35",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "8853089a763d57f1dffc440e64bf2b961c9fe64c",
+    "nota": "typecheck + lint + 1740 file di prove verdi (1 saltato già sulla base); girato su 8853089a, che dopo la testa tocca solo .riparazione/. tsc vuole NODE_OPTIONS=--max-old-space-size=6144."
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "accessibilita|nell'elenco conversazioni dell'assistenza il lettore di schermo dice solo il numero dei non letti",
+      "esito": "riparato",
+      "commit": "560394a66a48eb8ec6c13c7a89ce422baeee1da6",
+      "file_toccati": [
+        "app/admin/support-chat/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-non-letti-assistenza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-non-letti-assistenza.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 560394a6^ --file app/admin/support-chat/page.tsx --prove tests/unit/riparazione-r01-non-letti-assistenza.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il numero nel pallino ora è aria-hidden e accanto c'è in sr-only «1 messaggio non letto» o «N messaggi non letti».",
+      "verificato_da": "subagente revisore A: montata la pagina con 0, 1, 5 e null non letti, nome accessibile calcolato con dom-accessibility-api; numero non letto due volte; 37 file di prove vicine verdi"
+    },
+    {
+      "id": "R01-002",
+      "chiave": "accessibilita|nella pagina del reclamo il bottone resta spento senza dire cosa manca",
+      "esito": "riparato",
+      "commit": "d4b70c7db3e14e1af859d4a5afc3e8714184282c",
+      "file_toccati": [
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-reclamo-dice-cosa-manca.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-reclamo-dice-cosa-manca.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d4b70c7db3e14e1af859d4a5afc3e8714184282c^ --file 'app/orders/[id]/dispute/page.tsx' --prove tests/unit/riparazione-r01-reclamo-dice-cosa-manca.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sotto il bottone spento compare cosa manca (il motivo, i caratteri che mancano ai 20), legato al bottone con aria-describedby e con le stesse condizioni che lo spengono; cosa invia il reclamo non cambia.",
+      "verificato_da": "subagente revisore B: varianti con soli spazi, 19 e 20 caratteri con spazi/a capo/tab, invio in corso; stesse condizioni del bottone; corpo inviato identico {orderId, reason, description: trim}"
+    },
+    {
+      "id": "R01-003",
+      "chiave": "accessibilita|nel modulo «nuova promozione» l'etichetta «cosa scontare» non è legata a nessun campo",
+      "esito": "riparato",
+      "commit": "a281044b352a452455719a80a2f5fb72c9500680",
+      "file_toccati": [
+        "app/seller/promotions/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-cosa-scontare.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-cosa-scontare.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a281044b^ --file app/seller/promotions/page.tsx --prove tests/unit/riparazione-r01-cosa-scontare.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il blocco «Cosa scontare» ora è un fieldset con la scritta come legend, come per «Sconto»: dà il nome al gruppo dei due radio. Il label slegato non c'è più.",
+      "verificato_da": "subagente revisore A: modulo montato, fieldset «Cosa scontare» con i due radio e la select nel gruppo; axe senza violazioni; l'avviso jsx-a11y a page.tsx:311 sparisce"
+    },
+    {
+      "id": "R01-004",
+      "chiave": "accessibilita|nella pagina chi siamo e nella vetrina del negozio il banner ignora il testo alternativo e lascia la scritta bianca sulla foto senza velo",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/site/BannerFields.tsx",
+          "modifica": "Dopo il <Textarea label=\"Sottotitolo\" …/> (righe 64-71) e prima di <Select label=\"Sfondo del testo\"> (riga 72) aggiungere: <Input label=\"Testo alternativo della foto\" value={c.alt ?? ''} maxLength={160} onChange={(e) => set({ alt: e.target.value })} placeholder=\"Descrivi la foto per chi non la vede (vuoto = foto solo di sfondo)\" />. Input è già importato e alt è già nel tipo Cfg."
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_resta": "Il negoziante non può ancora scrivere il testo alternativo del banner della vetrina (oggi esce sempre alt vuoto = foto di sfondo). Lettura dell'alt e velo sono già chiusi nei miei file.",
+      "nota": "Nei miei file la voce è già chiusa sulla base: components/cms/CmsBlockRenderer.tsx:48 alt={c.alt ?? ''} e :37 sfumatura col velo; components/store-sections/BannerSection.tsx:51 alt={config.alt ?? ''} e :39 sfumatura; lib/store-site.ts:159 alt: shortText(160) facoltativo (R20-003, commit ad621b51). Prova tests/unit/riparazione-r20-banner-vetrina.test.tsx verde 4/4. Resta solo il campo nel modulo, file non mio (come in R20-003, parziale). Nessun commit.",
+      "verificato_da": "subagente revisore A: confermato che alt e sfumatura sono già letti in CmsBlockRenderer.tsx e BannerSection.tsx (chi siamo e vetrina) e che manca solo il campo in components/seller/site/BannerFields.tsx:53-79"
+    },
+    {
+      "id": "R01-005",
+      "chiave": "accessibilita|tra 768 e 1023 px i tasti ordini, consegne e admin della testata sono solo un'icona senza nome per chi vede",
+      "esito": "parziale",
+      "commit": "4a4bee7eeb6e8145fcd23e9e35a7cdb23ce061e7",
+      "file_toccati": [
+        "components/Navbar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-tasti-testata-tablet.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-tasti-testata-tablet.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4a4bee7e^ --file components/Navbar.tsx --prove tests/unit/riparazione-r01-tasti-testata-tablet.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Aggiunto title «Ordini», «Consegne» e «Admin» ai tre link, come già per «Registrati»; toccata solo la parte visiva, non la logica di sessione.",
+      "cosa_resta": "Il title dà il nome col mouse e ai lettori di schermo, ma tra 768 e 1023 px su tablet touch (e da tastiera) il nome resta invisibile (components/Navbar.tsx:300, :306, :312). Una scritta visibile (md:inline / md:not-sr-only) riapre lo spazio stretto della ricerca della testata (R09-016) e fa diventare rossa tests/unit/riparazione-r09-ricerca-della-testata-su-tablet.test.ts:17-20, che esige sr-only lg:not-sr-only: serve una scelta di regia sullo spazio della testata (didascalia piccola sotto l'icona, oppure queste voci nel menu account sotto lg).",
+      "verificato_da": "subagente revisore A: il title chiude il controllo alla lettera ma non «per chi vede» su touch; una cura visibile romperebbe la prova di R09-016 → parziale"
+    },
+    {
+      "id": "R01-006",
+      "chiave": "accessibilita|il campo file nascosto della fotocamera del negoziante si raggiunge col tab ma non mostra il fuoco",
+      "esito": "riparato",
+      "commit": "d81e9758fa3518ed532513d78a102b87849407ed",
+      "file_toccati": [
+        "components/seller/CameraCapture.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-fotocamera-fuoco.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-fotocamera-fuoco.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d81e9758^ --file components/seller/CameraCapture.tsx --prove tests/unit/riparazione-r01-fotocamera-fuoco.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Pulsante e campo file sr-only sono diventati un label che contiene il campo, con focus-within:ring-2: una sola fermata di Tab con l'anello visibile; la trappola del fuoco del Modal resta chiusa (provato col Modal vero).",
+      "verificato_da": "subagente revisore A: col Modal vero un clic su etichetta/testo/icona attiva il campo una volta sola, nessun doppione, Invio/Spazio non bloccati, onCapture una volta e chiusura"
+    },
+    {
+      "id": "R01-007",
+      "chiave": "mobile-pwa|quando la sessione scade da sola, il telefono perde le notifiche in silenzio e al nuovo accesso nessuno le riaccende",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — la cura tocca la gestione della sessione (onAuthStateChange su SIGNED_OUT in components/Navbar.tsx, distinguere uscita voluta da scadenza) e middleware.ts, che stasera sono permessi/sessioni."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|il rimando all accesso fatto dalla pagina delle impostazioni perde ?tab=",
+      "esito": "gia_riparato_prima",
+      "prova": "app/profile/settings/page.tsx:200-202 (commit 6f880b3c, R19-020): returnTo = encodeURIComponent('/profile/settings' + window.location.search); tests/unit/riparazione-r19-ritorno-con-la-scheda-dalle-impostazioni.test.tsx verde 3/3.",
+      "verificato_da": "subagente revisore B: sulla testa del ramo app/profile/settings/page.tsx:197-202 porta percorso e query codificati; prova R19 verde"
+    },
+    {
+      "id": "R01-009",
+      "chiave": "qa-flussi|anche chi sceglie «venditore» nell'iscrizione vede il pulsante google, che probabilmente crea un cliente",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — riguarda chi si iscrive con quale ruolo (il pulsante Google crea un account cliente anche per chi ha scelto «venditore»)."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|le visualizzazioni e i clic dei prodotti sponsorizzati non arrivano mai al database",
+      "esito": "riparato",
+      "commit": "8474cbefb9f30891028b9f1cd8b5d68d70eb4107",
+      "file_toccati": [
+        "components/SponsoredCarousel.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sponsorizzati-contano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sponsorizzati-contano.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8474cbefb9f30891028b9f1cd8b5d68d70eb4107^ --file components/SponsoredCarousel.tsx --prove tests/unit/riparazione-r01-sponsorizzati-contano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "`void supabase.rpc(...)` preparava la richiesta senza spedirla (postgrest manda la fetch solo in then()); ora un aiutante conta() chiama .then(ok, ko). Stesse funzioni e argomenti. Non delicata: visualizzazioni e clic servono solo alle statistiche; l'annuncio è pagato prima a prezzo fisso (lib/stripe/webhook/sponsorizzati.ts:130-141), nessuna migrazione.",
+      "verificato_da": "subagente revisore B: migrations/151_revoca_esecuzione_agli_anonimi.sql:224-259 aggiorna solo impressions/clicks (nessun soldo, budget, stato o fine); postgrest-js spedisce solo in then(); in StrictMode e ri-render una sola visualizzazione e un clic per tocco"
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|col telefono del negozio un po' indietro, un ordine non più ritirabile legge «entro le 12:46» invece di «ritiro non più possibile»",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/ordini/scadenza-accettazione.ts:297-299 (commit a5d24779, R18-015): rigaScadenzaPerIlNegozio guarda ultimoMomentoDelRitiro === 'impossibile' prima di confrontare con adesso; app/seller/orders/page.tsx:225 e app/seller/orders/[id]/page.tsx:451 usano solo rigaScadenzaPerIlNegozio; tests/unit/riparazione-r18-ritiro-impossibile-col-telefono-indietro.test.ts verde 3/3 con orologio finto.",
+      "verificato_da": "subagente revisore B: lib/ordini/scadenza-accettazione.ts:296-299 risponde «ritiro non più possibile» a qualunque ora; nessun altro punto mostra «entro le …» per un ordine non più ritirabile"
+    },
+    {
+      "id": "R01-012",
+      "chiave": "stati-ui|con la sessione scaduta il pulsante «apri reclamo» non fa niente, non chiede di rientrare e il testo scritto si perde",
+      "esito": "riparato",
+      "commit": "85f2677b7576b29c7e7e8594699dcba58609579f",
+      "file_toccati": [
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85f2677b7576b29c7e7e8594699dcba58609579f^ --file 'app/orders/[id]/dispute/page.tsx' --prove tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Su 401 da /api/disputes compare l'avviso «La sessione è scaduta: rientra» con link all'accesso che torna alla pagina; motivo e testo restano in sessionStorage e tornano nel modulo, la bozza si cancella a reclamo aperto. Nessun cambio ad autenticazione, permessi o server.",
+      "nota": "Sulla base l'uscita silenziosa `if (!user) return;` era già stata tolta da R03-013 (invio su /api/disputes con 401); restava l'avviso senza modo di rientrare e il testo perso, chiusi qui.",
+      "verificato_da": "subagente revisore B: app/sign-in/page.tsx:89 legge returnTo via safeInternalPath; bozza per ordine (mycity:bozza-reclamo:<id>), bozza manomessa scartata, cancellata a reclamo aperto; nessun cambio in app/api, lib/supabase, middleware.ts, migrazioni"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la trappola del fuoco delle finestre conta anche i campi con tabindex -1",
+      "dimensione": "accessibilita",
+      "severita": "minore",
+      "file": "components/ui/Modal.tsx:73",
+      "descrizione": "I selettori degli elementi attivabili (righe 73 e 94) non escludono [tabindex=\"-1\"]: un campo con tabIndex=-1 dentro una finestra fa uscire il fuoco dalla trappola. Cura: aggiungere :not([tabindex=\"-1\"]) ai selettori."
+    }
+  ],
+  "domande_per_nicola": [
+    "R01-005: tra 768 e 1023 px i tasti Ordini/Consegne/Admin hanno solo l'icona; per dar loro una scritta visibile si toglie spazio alla ricerca della testata (R09-016). Preferisci una didascalia piccola sotto l'icona o spostarli nel menu account sotto i 1024 px?"
+  ],
+  "conto": {
+    "agenti": 4,
+    "subagenti": 4,
+    "nota": "2 subagenti riparatori (lotto 1, lotto 2) + 2 revisori in sola lettura; costo letto con get_session alle 23:08 UTC (usage.cost_usd)"
+  },
+  "costo_usd": 13.99609358
+}

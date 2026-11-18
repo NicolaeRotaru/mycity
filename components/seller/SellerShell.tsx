@@ -306,7 +306,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             <Link href="/seller/dashboard" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
               <span className="text-accent-300">My</span>
               <span className="text-white">City</span>
-              <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-ink-300">
+              <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-label text-ink-300">
                 Seller
               </span>
             </Link>
@@ -360,7 +360,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           {NAV.map((sec) => (
             <div key={sec.group} className="mb-1.5">
               {!collapsed && (
-                <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-white/40">
+                <p className="mx-3 mb-1 mt-1.5 text-2xs font-bold uppercase tracking-label text-white/40">
                   {sec.group}
                 </p>
               )}

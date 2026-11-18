@@ -105,6 +105,24 @@ export default function AdminSponsoredPage() {
 
   const vista = vistaDelleCampagne({ data, isPending, isError, error }, filter);
 
+  // R10-003 — Accanto a «In cima alla categoria» compariva lo slug grezzo («· casa-tessili»): qui si
+  // legge il nome vero della categoria. Finché non arriva (o se la lettura cade) si mostra lo slug
+  // reso leggibile, mai il codice così com'è.
+  const { data: nomiCategorie } = useQuery({
+    queryKey: ['admin', 'nomi-delle-categorie'],
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data: righe, error: errore } = await supabase.from('categories').select('slug, name');
+      if (errore) throw errore;
+      return Object.fromEntries(((righe ?? []) as { slug: string; name: string }[]).map((c) => [c.slug, c.name]));
+    },
+  });
+  const nomeCategoria = (slug: string) => {
+    const nome = nomiCategorie?.[slug];
+    if (typeof nome === 'string' && nome) return nome;
+    const leggibile = slug.replace(/[-_]+/g, ' ');
+    return leggibile.charAt(0).toUpperCase() + leggibile.slice(1);
+  };
+
   const setStatus = useMutation({
     mutationFn: (v: { campagna: Campagna; status: Campagna['status'] }) =>
       cambiaStatoCampagna(supabase, v.campagna, v.status),
@@ -222,7 +240,7 @@ export default function AdminSponsoredPage() {
                       <p className="font-semibold text-ink-900 text-sm">{l.product?.name ?? '—'}</p>
                       <p className="text-xs text-ink-500">{l.seller?.store_name ?? '—'}</p>
                     </td>
-                    <td className="px-4 py-3 text-ink-700">{POSIZIONE[l.placement] ?? l.placement}{l.category_slug ? ` · ${l.category_slug}` : ''}</td>
+                    <td className="px-4 py-3 text-ink-700">{POSIZIONE[l.placement] ?? l.placement}{l.category_slug ? ` · ${nomeCategoria(l.category_slug)}` : ''}</td>
                     <td className="px-4 py-3 text-ink-600 text-xs">
                       {formatDate(l.start_date)} → {formatDate(l.end_date)}
                     </td>

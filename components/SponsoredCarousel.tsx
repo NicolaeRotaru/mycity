@@ -21,6 +21,16 @@ type Props = {
 type SponsoredItem = Sponsorizzato;
 
 /**
+ * R01-010 — Il conteggio parte davvero. `supabase.rpc(...)` non spedisce niente finché qualcuno
+ * non aspetta la risposta (`await` o `.then`): con `void` davanti la richiesta restava preparata e
+ * mai mandata, e visualizzazioni e clic degli annunci non arrivavano mai al database. Qui si fa
+ * partire e l'esito si lascia cadere: un conteggio perso non deve toccare la vetrina.
+ */
+function conta(funzione: 'track_sponsored_impression' | 'track_sponsored_click', id: string) {
+  supabase.rpc(funzione, { p_id: id }).then(() => undefined, () => undefined);
+}
+
+/**
  * Carosello «Sponsorizzato» — placement-aware. Mostra prodotti dei seller
  * che hanno comprato il listing sponsored per quel placement.
  *
@@ -72,7 +82,7 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
               attese.delete(id);
               if (impressedRef.current.has(id)) return;
               impressedRef.current.add(id);
-              void supabase.rpc('track_sponsored_impression', { p_id: id });
+              conta('track_sponsored_impression', id);
             }, 1000));
           } else {
             const t = attese.get(id);
@@ -114,7 +124,7 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
                 if (el) schedeRef.current.set(it.id, el);
                 else schedeRef.current.delete(it.id);
               }}
-              onClick={() => { void supabase.rpc('track_sponsored_click', { p_id: it.id }); }}
+              onClick={() => conta('track_sponsored_click', it.id)}
               className="shrink-0 w-32 sm:w-36 snap-start bg-white border border-cream-200 rounded-xl overflow-hidden card-hover"
             >
               <div className="relative aspect-square bg-cream-100">

@@ -260,9 +260,25 @@ la differenza si scopre il giorno peggiore:
 
 Da oggi, prima di dirsi riuscita, la copia va a **riprendere una foto dal
 secchio di destinazione e la legge davvero**. Se non ci riesce — o se in tutta
-la copia non c'è nemmeno un file — la notte diventa rossa. Un singolo secchio
-vuoto resta legittimo (`reviews` può non avere ancora nessuna foto): quello che
-non è più ammesso è che siano vuoti tutti.
+la copia non c'è nemmeno un file — la notte diventa rossa.
+
+Un secchio vuoto non è sempre legittimo (R15-004, quello che fa oggi
+`scripts/backup-db.sh`):
+
+- **vuoto da sempre** va bene: `reviews` può non avere ancora nessuna foto;
+- **vuoto nella copia mentre il database ne elenca ancora file** è rosso, ogni
+  notte: l'origine non li restituisce;
+- **aveva file e adesso è vuoto anche nel database** è rosso se è `products` o
+  `stories`, che l'app non svuota mai (cancellazione a mano, uno script
+  sbagliato, una chiave rubata). Se è `reviews`, che l'app svuota da sola quando
+  si cancella un account, la notte è verde con un avviso;
+- se il database non risponde decide la memoria fra le notti: un secchio che ha
+  avuto file resta rosso.
+
+La memoria è un file per secchio, `<destinazione>/_memoria-copia/<secchio>.aveva-file`.
+Se lo svuotamento di `products` o `stories` è voluto, quel file si toglie a mano
+e dalla notte dopo il secchio vuoto torna verde. Che siano vuoti tutti, invece,
+resta sempre rosso. Queste regole le tiene ferme `tests/unit/riparazione-r15-backup-secchio-vuoto.test.ts`.
 
 Lo tiene fermo `tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts`, che
 fa girare notti vere con una chiave di sola scrittura, con un file da zero byte

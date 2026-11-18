@@ -6,6 +6,7 @@ import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { AiCallError } from '@/lib/ai/run';
 import { fetchExternalSnapshot, ritentoDopoErroreConsentito } from '@/lib/products/externalSync';
 import { isStale, type ExternalData, type Marketplace } from '@/lib/products/externalSyncShared';
 import { detectExternalChange, changeMessage } from '@/lib/products/externalAlert';
@@ -94,6 +95,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   let checked = 0, alerts = 0, errors = 0;
+  let modelloNonTrovato = false;
   const now = new Date().toISOString();
 
   for (const r of rows) {
@@ -129,16 +131,31 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
         });
         alerts += 1;
       }
-    } catch {
+    } catch (err) {
       errors += 1;
-      logger.warn('external-price-alerts: check failed', { productId: r.id });
+      // 17/11/2026 (R03-007) — Un 404 del fornitore AI vuol dire «il modello configurato
+      // non c'e' (piu')», non «questo prodotto non si aggiorna»: si dice per quello che e',
+      // con l'allarme delle rotte AI (`mapAiError`).
+      if (err instanceof AiCallError && err.status === 404) {
+        modelloNonTrovato = true;
+        logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_SMART', { feature: err.feature, productId: r.id });
+      } else {
+        logger.warn('external-price-alerts: check failed', { productId: r.id });
+      }
       // Marca come errore. R04-011 — external_synced_at NON si tocca (non e'
       // arrivato niente): il freno e' ritentoDopoErroreConsentito, qui sopra.
       await supa.from('products').update({ external_sync_status: 'error' }).eq('id', r.id);
     }
   }
 
-  return NextResponse.json({ ok: true, candidates: rows.length, checked, alerts, errors });
+  return NextResponse.json({
+    ok: true,
+    candidates: rows.length,
+    checked,
+    alerts,
+    errors,
+    ...(modelloNonTrovato ? { errore: 'Il fornitore AI non trova il modello: controllare AI_MODELLO_SMART.' } : {}),
+  });
 });
 
 export const POST = handler;

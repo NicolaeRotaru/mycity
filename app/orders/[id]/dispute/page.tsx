@@ -138,6 +138,16 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   }
 
   const selectedReason = REASONS.find((r) => r.value === reason);
+  // R01-002 — Il bottone spento adesso dice cosa manca, a chi guarda e a chi ascolta: prima
+  // restava grigio senza un perché, e i messaggi di `submit` non scattavano mai (il bottone
+  // spento non manda il modulo). Le condizioni sono le stesse che lo spengono.
+  const caratteriScritti = description.trim().length;
+  const cosaManca: string[] = [];
+  if (!reason) cosaManca.push('scegli un motivo');
+  if (caratteriScritti < 20) {
+    const mancano = 20 - caratteriScritti;
+    cosaManca.push(`scrivi almeno 20 caratteri in «Cosa è successo?» (${mancano === 1 ? 'ne manca 1' : `ne mancano ${mancano}`})`);
+  }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-2xl">
@@ -210,10 +220,16 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         <button
           type="submit"
           disabled={submitting || !reason || description.trim().length < 20}
+          aria-describedby={cosaManca.length > 0 ? 'reclamo-cosa-manca' : undefined}
           className="w-full bg-secondary-600 hover:bg-secondary-700 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
         >
           {submitting ? tStates('sending') : tForms('openDispute')}
         </button>
+        {cosaManca.length > 0 && (
+          <p id="reclamo-cosa-manca" className="text-sm text-ink-600">
+            Per aprire il reclamo: {cosaManca.join(' e ')}.
+          </p>
+        )}
       </form>
     </div>
   );

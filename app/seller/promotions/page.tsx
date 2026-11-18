@@ -306,9 +306,10 @@ export default function SellerPromotionsPage() {
               </div>
             </fieldset>
 
-            {/* Step 3: Cosa scontare */}
-            <div>
-              <label className="block text-sm font-semibold text-ink-900 mb-2">Cosa scontare</label>
+            {/* Step 3: Cosa scontare — 17/11/2026 (R01-003): fieldset con legend, come lo Sconto,
+                così «Cosa scontare» è il nome del gruppo di scelte e non un'etichetta legata a nulla. */}
+            <fieldset>
+              <legend className="block text-sm font-semibold text-ink-900 mb-2">Cosa scontare</legend>
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${scope === 'store' ? 'border-primary-400 bg-primary-50' : 'border-cream-300'}`}>
                   <input type="radio" name="scope" checked={scope === 'store'} onChange={() => setScope('store')} />
@@ -332,7 +333,7 @@ export default function SellerPromotionsPage() {
                   </Select>
                 )}
               </div>
-            </div>
+            </fieldset>
 
             {/* Step 4: Durata */}
             <Select

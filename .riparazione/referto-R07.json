@@ -1,0 +1,265 @@
+{
+  "sessione": "R07",
+  "aggiornato": "2026-11-17 23:45",
+  "finita": true,
+  "testa": "c0b2f01f58b426f5bbc3ee2862c961c83d0e1717",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "b593ad576ca759ef399cd9672719ed6025b7b9f1",
+    "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=8192 (senza, tsc finisce la memoria in questa macchina); 1738 file di prova passati, 1 saltato già alla base; b593ad57 aggiunge al codice c0b2f01f solo il referto"
+  },
+  "voci": [
+    {
+      "id": "R07-001",
+      "chiave": "deploy-sre|dopo un ritorno indietro il riepilogo del rilascio rassicura a torto se una migrazione ha tolto una funzione o una vista",
+      "esito": "riparato",
+      "commit": "3b65a6a9",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-ritorno-vede-ogni-drop.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-ritorno-vede-ogni-drop.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b65a6a9^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r07-ritorno-vede-ogni-drop.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel passo «Torna indietro» (nota_database) la ricerca delle migrazioni che tolgono qualcosa vede anche DROP FUNCTION, DROP VIEW / MATERIALIZED VIEW e ALTER TABLE ... DROP [IF EXISTS] colonna senza COLUMN (anche su due righe), elencati dopo colonne, tabelle e RENAME; DROP DEFAULT/IDENTITY/EXPRESSION, NOT NULL, CONSTRAINT, POLICY e TRIGGER restano fuori. La frase rassicurante tiene il testo di prima e aggiunge le forme nuove. Cambia solo il riepilogo; la prova esegue lo script vero del passo in una cartella con migrazioni finte. La prova esistente riparazione-r01-ritorno-con-database-avanti resta verde senza modifiche.",
+      "verificato_da": "subagente revisore: prova verde 6/6, rimessa uscita 0; passo vero fatto girare con 17 varianti (IF EXISTS, minuscole, MATERIALIZED VIEW, tab, a capo): tutte viste; restano fuori solo DROP e FUNCTION su due righe e «DROP DEFAULT, DROP col» sulla stessa riga, forme che nessuna migrazione del deposito usa; 19 prove del rilascio verdi."
+    },
+    {
+      "id": "R07-002",
+      "chiave": "deploy-sre|se lo script delle migrazioni cade fra un file e il successivo, il riepilogo accusa una migrazione sana",
+      "esito": "riparato",
+      "commit": "9842603c",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-migrazioni-cadute-fra-due-file.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-migrazioni-cadute-fra-due-file.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9842603c^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r07-migrazioni-cadute-fra-due-file.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel riepilogo «migrazioni fermate a metà» l'ultima riga «▶ applico» si chiama «quella che si è rotta» solo se lo script esce con 3 (psql ON_ERROR_STOP su un errore nell'SQL del file, misurato col Postgres locale); con 1 o 2 (un comando -c o la connessione, fra un file e il successivo) dice che è l'ultima cominciata, che può essere già applicata e registrata, e manda a guardare il registro invece di correggere una migrazione sana. Lo script non è toccato, le uscite del passo (fermo, exit) restano quelle. La prova fa girare il passo vero contro un Postgres usa e getta con un psql finto che fa cadere la connessione dopo la registrazione della 001.",
+      "verificato_da": "subagente revisore: prova verde 2/2 (Postgres usa e getta), rimessa uscita 0; exit \"$USCITA\" e fermo= intatti, lo script delle migrazioni non toccato; l'uscita 3 viene da psql -f con ON_ERROR_STOP."
+    },
+    {
+      "id": "R07-003",
+      "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+      "esito": "scelta_di_nicola",
+      "domanda": "Per avere la notifica del nuovo ordine in pochi secondi: portiamo il giro delle push da ogni 5 minuti a ogni minuto in vercel.json (5 volte le chiamate del lavoro, costo Vercel), oppure mandiamo la push subito quando nasce l'ordine (dentro il webhook dei pagamenti, file non miei)?",
+      "serve_file_altrui": [
+        {
+          "file": "vercel.json",
+          "modifica": "riga 21: \"schedule\": \"*/5 * * * *\" → \"* * * * *\" per /api/cron/send-push (solo se Nicola accetta il costo)"
+        },
+        {
+          "file": "app/api/cron/send-push/route.ts",
+          "modifica": "riga 63 (mio): il commento «Cadenza: ogni 5 minuti» va aggiornato insieme a vercel.json se la cadenza cambia"
+        }
+      ],
+      "cosa_resta": "Dentro send-push/route.ts non c'è una correzione piccola: il ritardo viene dalla cadenza del lavoro, non dal codice del giro.",
+      "cosa_ho_fatto": "Il difetto c'è ancora sulla base f93d246a: vercel.json:21 fa partire /api/cron/send-push ogni 5 minuti (route.ts:63 «Cadenza: ogni 5 minuti») e la nascita dell'ordine scrive solo la riga in notifications (lib/stripe/webhook/ordini.ts:480), senza invio immediato."
+    },
+    {
+      "id": "R07-004",
+      "chiave": "deploy-sre|il documento della copia notturna dice ancora che un secchio vuoto è sempre legittimo",
+      "esito": "riparato",
+      "commit": "0c1ffcc2",
+      "file_toccati": [
+        "docs/backup-restore.md"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-documento-secchio-vuoto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-documento-secchio-vuoto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0c1ffcc2^ --file docs/backup-restore.md --prove tests/unit/riparazione-r07-documento-secchio-vuoto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In docs/backup-restore.md la frase «Un singolo secchio vuoto resta legittimo» è sostituita dalle regole che applica oggi scripts/backup-db.sh (R15-004): vuoto da sempre va bene; rosso se il database elenca ancora file, o se products/stories avevano file e ora sono vuoti anche nel database; reviews svuotato dall'app verde con avviso; database muto decide la memoria; il file <destinazione>/_memoria-copia/<secchio>.aveva-file si toglie a mano se lo svuotamento è voluto; tutti vuoti resta rosso. Prova leggera sul testo, confrontato con SECCHI_SVUOTATI_DALL_APP e il nome della memoria nello script.",
+      "verificato_da": "subagente revisore: prova verde 4/4, rimessa uscita 0; docs/backup-restore.md:263-281 confrontato riga per riga con scripts/backup-db.sh:336-480 e 576-590: dice il vero."
+    },
+    {
+      "id": "R07-005",
+      "chiave": "deploy-sre|dopo il deploy il freno della veloce può risultare «mai partito» per un attimo, con un falso allarme agli amministratori",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r01-battiti-iniziali.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-battiti-iniziali.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "Sulla base f93d246a la riga iniziale c'è già: migrations/250_battiti_iniziali_dei_lavori_nuovi.sql:21-25 semina 'veloce-non-confermata' (e riquadra-casse, external-price-alerts) in cron_heartbeats con now(), ON CONFLICT DO NOTHING; .github/workflows/deploy-dopo-ci.yml:488 applica le migrazioni mancanti prima di pubblicare, quindi il freno ha il suo battito prima che il sorvegliante lo cerchi. tests/unit/riparazione-r01-battiti-iniziali.test.ts:30-34 fa rossa ogni soglia di CRON_MAX_STALENESS_MIN senza seme in una migrazione (verde sulla base, 3/3 col Postgres locale).",
+      "cosa_ho_fatto": "Nessuna modifica. Ho valutato la correzione solo in lib/cron-health.ts: senza una data di nascita nei dati il codice non può sapere quando nasce un lavoro (una data scritta nel codice o l'ora della build allenterebbero il controllo «mai partito» di #242), quindi la finestra misurata dal battito più vecchio resta voluta; la cura è il seme, già presente e tenuto da una prova.",
+      "nota": "Il commento di staleCrons (lib/cron-health.ts:84-87) dice ancora che i cron senza battito sono ignorati: è falso da #242, segnalato fra i nuovi difetti visti.",
+      "verificato_da": "capo squadra R07: prova ricontrollata con git show sulla base f93d246a"
+    },
+    {
+      "id": "R07-006",
+      "chiave": "deploy-sre|il sorvegliante ora gira ogni 5 minuti, ma la sua soglia di morte e il commento sono rimasti quelli dei 15 minuti",
+      "esito": "riparato",
+      "commit": "8acb4d95",
+      "file_toccati": [
+        "lib/cron-health.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-soglia-sorvegliante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-soglia-sorvegliante.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8acb4d95^ --file lib/cron-health.ts --prove tests/unit/riparazione-r07-soglia-sorvegliante.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il commento di lib/cron-health.ts ora dice che operational-alerts gira ogni 5 minuti e SOGLIA_SORVEGLIANTE_MIN passa da 120 a 40 (di nuovo otto giri saltati). La prova, con orologio finto, pretende che un sorvegliante fermo da un'ora esca «fermi» dalle porte di salute e che la soglia non superi otto giri della cadenza letta da vercel.json.",
+      "verificato_da": "subagente revisore: prova verde 4/4, rimessa uscita 0; soglia 40 = 8 giri della cadenza */5 di vercel.json; le 11 prove che leggono lib/cron-health verdi (63 casi)."
+    },
+    {
+      "id": "R07-007",
+      "chiave": "deploy-sre|nessuna pagina admin mostra la configurazione mancante (chiave di servizio, dati del titolare)",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base f93d246a app/admin/page.tsx:161-175 legge /api/admin/configurazione e :244-255 mostra il riquadro «Configurazione da completare» (chiave di servizio non configurata, dati del titolare incompleti con i nomi mancanti); app/api/admin/configurazione/route.ts:18-25 è dietro withAdminAuth e restituisce solo c'è/manca e i nomi, mai i valori. Arrivato col commit a3c7915f (R06-023). Comando: git show f93d246a:app/admin/page.tsx | sed -n 244,255p",
+      "cosa_ho_fatto": "Controllato che la pagina admin c'è già; corretto solo il commento sbagliato in lib/health/checks.ts:264 che diceva «nessuna pagina admin lo mostra ancora» (commit c0b2f01f, R07-varie, solo commento).",
+      "verificato_da": "capo squadra R07: prova ricontrollata con git show sulla base f93d246a"
+    },
+    {
+      "id": "R07-008",
+      "chiave": "deploy-sre|il giorno del lancio un errore del sito non lo vede nessuno: il registratore degli errori è spento e l'unico allarme dipende dalla chiave che manca",
+      "esito": "scelta_di_nicola",
+      "domanda": "Prima del lancio accendiamo il registratore degli errori (Sentry: DSN e piano, con il suo costo) e mettiamo su Vercel la chiave di servizio di Supabase, senza la quale l'allarme operativo non gira?",
+      "cosa_resta": "Accendere Sentry o un allarme oggi spento è una scelta di Nicola (costi e chiavi): nessuna modifica fatta.",
+      "cosa_ho_fatto": "Il difetto c'è ancora sulla base f93d246a: lib/logger.ts:80-81 esce senza DSN, sentry.server.config.ts:17-19 inizializza solo con DSN, next.config.js:102-104 idem, e app/api/cron/operational-alerts/route.ts:63-68 risponde «non disponibile» se il client amministrativo (chiave di servizio) non si crea."
+    },
+    {
+      "id": "R07-009",
+      "chiave": "deploy-sre|se il secchio dello storico delle foto non si crea, lo storico finisce nello stesso secchio della copia e la notte resta verde",
+      "esito": "parziale",
+      "commit": "96727f3c",
+      "file_toccati": [
+        "scripts/backup-db.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 96727f3c^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Quando il secchio «-storico» non esiste e non si crea, il ripiego su <destinazione>/_storico (scripts/backup-db.sh:530) ora scrive anche un ::warning:: e una riga nel riepilogo del lavoro; prima lo diceva solo il registro. Stessa copia, stessa uscita (la prova controlla uscita 0). Prove vicine della copia notturna (17 file, 153 casi) verdi.",
+      "cosa_resta": "Lo storico finisce ancora nello stesso secchio della copia e la notte resta verde (con avviso): rifiutare il ripiego o rendere rossa la notte cambia cosa fa la copia → scelta di Nicola.",
+      "domanda": "Se il secchio dello storico non si crea, la copia notturna deve finire rossa (uscita con errore dopo aver copiato) invece di ripiegare in silenzio su una cartella dentro il secchio della copia?",
+      "verificato_da": "subagente revisore: prova verde 2/2, rimessa uscita 0; fuori dai commenti solo un ::warning:: su stderr e una riga di riepilogo, copia e uscite identiche; 17 prove della copia verdi (153 casi). Regge come parziale."
+    },
+    {
+      "id": "R07-010",
+      "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
+      "esito": "scelta_di_nicola",
+      "domanda": "Uniamo applicazione e registrazione della migrazione in un solo psql --single-transaction in scripts/applica-migrazioni-mancanti.sh (cambia il cancello del rilascio e la prova comune che conta i comandi psql)?",
+      "cosa_resta": "La metà «confronta solo i nomi» non c'è più già sulla base: scripts/check-migration-drift.mjs:296-306 confronta l'md5 registrato con quello del file (R16-003) e la promessa in testa (:8-11, :54-63) dice «il contenuto dove il registro tiene l'impronta». Resta la registrazione in un passo separato: scripts/applica-migrazioni-mancanti.sh:359 applica e :360-362 registra con un secondo psql (documentato a :334-339). Le migrazioni registrate prima dell'impronta si riconoscono ancora solo per numero e nome.",
+      "cosa_ho_fatto": "Controllato sulla base f93d246a: il testo è già onesto e il contenuto è confrontato dove c'è l'impronta; la registrazione separata c'è ancora (applica-migrazioni-mancanti.sh:359-362). Nessuna modifica: cambierebbe il cancello del rilascio."
+    },
+    {
+      "id": "R07-011",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "scelta_di_nicola",
+      "domanda": "Quando il dominio non conferma un commit diverso da quello che esce (dominio senza commit, o già spostato sul nuovo), il ritorno indietro deve rifiutarsi sempre e chiedere il ritorno a mano (rilascioDaTornare restituisce null anche con un solo candidato), accettando che il caso normale «Y esce dopo X» non torni più indietro da solo?",
+      "cosa_resta": "Modifica proposta, non fatta: in scripts/prova-di-fumo.mjs:326-329 restituire null invece di candidati[0] quando il dominio non dice un altro commit.",
+      "cosa_ho_fatto": "Il difetto c'è ancora sulla base f93d246a: scripts/prova-di-fumo.mjs:328-329 con un solo commit fra i candidati sceglie candidati[0] (che può essere un rilascio già tolto perché rotto), e un dominio senza commit (:323-324) ricade proprio in quella regola."
+    },
+    {
+      "id": "R07-012",
+      "chiave": "deploy-sre|altre quattro prove dell'impalcatura sql mettono ancora le migrazioni nell'ordine di sort -v",
+      "esito": "gia_riparato_prima",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "git -C /home/user/mycity grep -n 'sort' f93d246a -- tests/sql/harness/la-158-non-lascia-la-porta-aperta.sh tests/sql/harness/la-159-non-lascia-la-tabella-scoperta.sh tests/sql/harness/la-160-regge-un-ordine-annullato.sh tests/sql/harness/lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "Sulla base f93d246a tutte e quattro ordinano già come apply.sh e lo script: la-158:54, la-159:61, la-160:45 e lo-script-non-si-schianta…:55 hanno «for f in $(ls \"$MIG\"/*.sql | LC_ALL=C sort)». Le ha corrette il commit 21af7a55 (R01-005). Il «sort -V» in scripts/applica-migrazioni-mancanti.sh:11 non è un'istruzione d'uso: è la citazione del ciclo vecchio del rilascio, nel paragrafo che racconta perché lo script esiste, e il ciclo vero dello script (riga 230) usa LC_ALL=C sort; l'ho lasciato com'è perché cambiarlo falserebbe la storia raccontata.",
+      "cosa_ho_fatto": "Nessuna modifica: controllato sulla base con git grep.",
+      "verificato_da": "capo squadra R07: prova ricontrollata con git show sulla base f93d246a"
+    },
+    {
+      "id": "R07-013",
+      "chiave": "deploy-sre|un'ultima prova ordina ancora le migrazioni con l'ordine vecchio",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts",
+          "modifica": "alla riga 507, in `const migrazioni = () => spawnSync('sort', ['-V'], { input: …, encoding: 'utf8' })` sostituire `['-V']` con `[]` e aggiungere fra le opzioni `env: { ...process.env, LC_ALL: 'C' }` (lo stesso ordine di LC_ALL=C sort dello script); nessuna asserzione da toccare. Provato in locale: 37/37 verdi."
+        }
+      ],
+      "cosa_resta": "La modifica è pronta e provata (37/37 verdi), ma la guardia-ramo la dà rossa: la prova nomina anche scripts/conta-migrazioni-mancanti.sh, che non è di R07 («prova esistente che usa anche file di altre sessioni: la tocca solo la regista»). L'ho tolta dal ramo; serve la regista o un'eccezione firmata in piano.json.",
+      "nota": "Oggi innocuo: con LC_ALL=C sort e con sort -V le ultime quattro migrazioni sono le stesse (501, 540, 541, 572)."
+    },
+    {
+      "id": "R07-014",
+      "chiave": "qa-flussi|il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
+      "esito": "non_fatto",
+      "nota": "delicata: fuori dall'onda 9 — tocca dati personali e segreti nei log (cosa si oscura prima di scrivere e mandare a Sentry).",
+      "cosa_ho_fatto": "Il difetto c'è ancora sulla base f93d246a: lib/logger.ts:51-56 oscura solo per nome di chiave, toCtx (:64) mette un contesto stringa sotto «detail» che passa in chiaro, e line() (:104) scrive msg senza oscurarlo."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il commento di staleCrons dice ancora che i lavori senza battito sono ignorati",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/cron-health.ts:84-87",
+      "descrizione": "Il commento sopra staleCrons dice «I cron senza alcun heartbeat vengono IGNORATI … la migrazione 095 li seed-a», ma da #242 un lavoro mai visto dopo la finestra di prima accensione si segnala, e i semi sono anche nella 250. Solo testo: chi legge crede che un lavoro mai partito resti invisibile."
+    }
+  ],
+  "domande_per_nicola": [
+    "R07-003: notifiche push ogni minuto (vercel.json, costo) o invio immediato alla nascita dell'ordine?",
+    "R07-008: accendere Sentry e mettere la chiave di servizio su Vercel prima del lancio?",
+    "R07-009: se il secchio dello storico non si crea, la notte deve finire rossa invece di ripiegare dentro il secchio della copia?",
+    "R07-010: applicazione e registrazione della migrazione in una sola transazione?",
+    "R07-011: senza conferma dal dominio, il ritorno indietro si fa sempre a mano?"
+  ],
+  "conto": {
+    "agenti": 3,
+    "subagenti": 3,
+    "nota": "2 subagenti riparatori (lotti 1 e 2) e 1 revisore, nessuno fermato"
+  },
+  "costo_usd": 12.41
+}
