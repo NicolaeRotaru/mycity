@@ -63,12 +63,31 @@ function snapshotToInitial(s: Snapshot): ProductInitialValues | undefined {
   };
 }
 
+/** R04-007 — Le taglie riconosciute dagli id: altre taglie, o un numero diverso, danno un'altra firma. */
+function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
+  return taglie.map((t) => t.id ?? '').sort().join('|');
+}
+
 function NewProductInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromId = searchParams.get('from');
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
+  /**
+   * 19/11/2026 (R04-007) — QUANDO TORNA LA RETE IL MODULO RESTA DOV'E'.
+   *
+   * Senza rete una lettura senza dati (la consegna del negozio) resta «in pausa»
+   * e il modulo si apre lo stesso: il negoziante ci lavora. Tornata la rete la
+   * lettura riparte, risulta di nuovo «in lettura», e la pagina rimetteva il
+   * caricamento al posto del modulo: smontato, con le modifiche non salvate.
+   * Adesso, aperto una volta, il modulo resta. Se si e' aperto senza sapere la
+   * consegna del negozio, per lui resta «non letta» (il suo tempo di consegna e'
+   * un ripiego): al salvataggio non scrive un «no» indovinato.
+   * In «Duplica» resta aperto finche' le taglie d'origine sono le stesse (`taglie`,
+   * gli id): se ne arrivano altre, si riapre con quelle vere (sotto, prima del modulo).
+   */
+  const [moduloAperto, setModuloAperto] = useState<{ consegnaNonLetta: boolean; taglie: string | null } | null>(null);
 
   // R16-021 — Il ripiego `= []` faceva passare una lettura caduta per «non ci sono categorie»:
   // il modulo chiedeva di sceglierne una che non c'era. Come in «Modifica prodotto», senza
@@ -148,7 +167,7 @@ function NewProductInner() {
 
   // Duplica: carica anche le varianti del prodotto sorgente (id azzerati → nuove).
   // Senza le taglie lette la copia non si apre: nascerebbe senza, e nessuno lo direbbe.
-  const { data: sourceVariants = [], isLoading: loadingVariants, isError: variantiNonLette, refetch: rileggiVarianti } = useQuery({
+  const { data: sourceVariants = [], isLoading: loadingVariants, isError: variantiNonLette, isPending: variantiSenzaDati, fetchStatus: variantiFetchStatus, refetch: rileggiVarianti } = useQuery({
     queryKey: ['duplicate-variants', fromId],
     enabled: !!fromId,
     queryFn: () => loadProductVariants(fromId!),
@@ -156,6 +175,9 @@ function NewProductInner() {
   // Senza il prodotto da duplicare (lettura caduta, o in pausa senza rete) il modulo non si apre
   // vuoto come un prodotto nuovo: si dice, con «Riprova», e si apre pieno quando la lettura riesce.
   const sorgenteNonArrivata = !!fromId && !source && (sorgenteNonLetta || sorgenteFetchStatus === 'paused');
+  // R04-007 — Anche le taglie in pausa senza dati: la copia non si apre senza (nascerebbe senza
+  // taglie, e restando aperto il modulo non le prenderebbe piu').
+  const variantiNonArrivate = !!fromId && (variantiNonLette || (variantiSenzaDati && variantiFetchStatus === 'paused'));
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
     if (imported) {
@@ -260,6 +282,27 @@ function NewProductInner() {
     },
   });
 
+  // R04-007 — Cosa sta al posto del modulo; aperto una volta, resta il modulo.
+  const davanti = moduloAperto
+    ? 'modulo'
+    : (fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura
+      ? 'caricamento'
+      : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0
+        ? 'categorie'
+        : sorgenteNonArrivata
+          ? 'sorgente'
+          : variantiNonArrivate
+            ? 'varianti'
+            : 'modulo';
+  // R04-007 — Il modulo prende le taglie solo quando si monta. Se dopo l'apertura arrivano taglie
+  // d'origine diverse (la copia in memoria era vecchia, aperta senza rete), la copia si riapre con
+  // quelle vere, come prima: nascerebbe con le taglie sbagliate. Con le stesse taglie resta com'e'.
+  // Se si riapre mentre la consegna del negozio e' ancora in lettura, anche per lui resta «non letta».
+  const taglieLette = fromId && !variantiSenzaDati ? firmaDelleTaglie(sourceVariants) : null;
+  if (davanti === 'modulo' && (!moduloAperto || (taglieLette !== null && taglieLette !== moduloAperto.taglie))) {
+    setModuloAperto({ consegnaNonLetta: consegnaNonLetta || offersExpress === undefined, taglie: taglieLette });
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
       <SellerPageTitle
@@ -286,9 +329,9 @@ function NewProductInner() {
         </>
       )}
 
-      {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura ? (
+      {davanti === 'caricamento' ? (
         <LoadingState />
-      ) : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0 ? (
+      ) : davanti === 'categorie' ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
           <p className="text-sm mb-3">
@@ -298,13 +341,13 @@ function NewProductInner() {
             Riprova
           </button>
         </div>
-      ) : sorgenteNonArrivata ? (
+      ) : davanti === 'sorgente' ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1">Non riesco a caricare il prodotto da duplicare</p>
           <p className="text-sm mb-3">Senza il prodotto la copia partirebbe vuota. Riprova fra un momento.</p>
           <button type="button" onClick={() => { void rileggiSorgente(); }} className="text-sm font-semibold text-rose-700 underline">Riprova</button>
         </div>
-      ) : fromId && variantiNonLette ? (
+      ) : davanti === 'varianti' ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1">Non riesco a leggere le taglie del prodotto da duplicare</p>
           <p className="text-sm mb-3">La copia nascerebbe senza taglie. Riprova fra un momento.</p>
@@ -312,13 +355,13 @@ function NewProductInner() {
         </div>
       ) : (
         <ProductForm
-          key={importNonce}
+          key={`${importNonce}|${moduloAperto?.taglie ?? ''}`}
           mode="create"
           categories={categories}
           initialValues={initialValues}
           submitting={create.isPending || creato}
           sellerOffersExpress={offersExpress}
-          consegnaDelNegozioNonLetta={consegnaNonLetta}
+          consegnaDelNegozioNonLetta={consegnaNonLetta || moduloAperto?.consegnaNonLetta === true}
           recessoSegnabile={recessoSegnabile}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           // R01-012 — l'invio finisce quando finisce l'inserimento: fino ad allora il modulo

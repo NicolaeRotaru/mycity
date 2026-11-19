@@ -1,0 +1,218 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-19 11:55",
+  "finita": true,
+  "testa": "be90b6d3e3966191fac92a7b0b7e2768113245ef",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "be90b6d3e3966191fac92a7b0b7e2768113245ef",
+    "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=6144: tsc con la memoria di default finisce la memoria su questa macchina (uscita 134), anche sulla base. Risultato: typecheck pulito; lint 0 errori, 98 avvisi; vitest 1774 file passati e 1 saltato (11157 prove passate e 1 saltata)."
+  },
+  "voci": [
+    {
+      "id": "R04-001",
+      "chiave": "deploy-sre|dopo un ritorno indietro il riepilogo del rilascio rassicura a torto se una migrazione ha tolto una funzione o una vista",
+      "esito": "riparato",
+      "commit": "94c6d30ce3a7fac777b273db92b68b14fbd764c7",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-ritorno-non-scarta-la-riga.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-ritorno-non-scarta-la-riga.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 94c6d30ce3a7fac777b273db92b68b14fbd764c7^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r04-ritorno-non-scarta-la-riga.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il filtro del ritorno indietro non butta più la riga intera. Un sed toglie dalla riga solo DROP DEFAULT/IDENTITY/EXPRESSION, il resto si cerca come prima, e c'è un ramo nuovo per «, DROP col». La prova esegue nota_database estratta dal YAML vero, sotto set -euo pipefail. I casi 901, 902, 902b e 903 sono rossi col filtro di 3b65a6a9; 904 e «solo DROP DEFAULT» restano come devono.",
+      "verificato_da": "revisore B (sonnet): 25 varianti sul passo vero (minuscole, tab, CRLF, IF EXISTS, più istruzioni per riga, SET DEFAULT), tutte come atteso; tolta la riparazione, 4 prove su 6 rosse"
+    },
+    {
+      "id": "R04-002",
+      "chiave": "deploy-sre|se lo script delle migrazioni cade fra un file e il successivo, il riepilogo accusa una migrazione sana",
+      "esito": "riparato",
+      "commit": "93c6dc2c36f6d3a10baf07918cad01a483a234bd",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-migrazioni-cadute-incertezza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-migrazioni-cadute-incertezza.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 93c6dc2c36f6d3a10baf07918cad01a483a234bd^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r04-migrazioni-cadute-incertezza.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Lo script è scripts/applica-migrazioni-mancanti.sh (non mio, senza riga «✔ registrata»), quindi l'incertezza resta nel YAML. Con uscita 3 il riepilogo accusa la migrazione rotta. Con ogni altra uscita parla dell'«ultima cominciata», che può essere applicata, rimasta a metà (se ha un COMMIT suo) o non registrata, e non dice più «Nessuna migrazione da correggere». La prova gira sul passo vero e sullo script vero, con un psql finto: (a) è rossa sulla base, (b) è rossa sul codice di 9842603c. Il residuo «INSERT di registrazione caduto = uscita 3», che temevo, non c'è: il revisore ha visto che l'INSERT è psql -c ed esce con 1, quindi finisce nel ramo prudente.",
+      "verificato_da": "revisore B (sonnet): uscite misurate su PostgreSQL 16 locale (-c errore 1, -f errore 3, connessione persa 2); casi 1 e 2 prudenti, nessuna rassicurazione; tolta la riparazione, 2 prove su 3 rosse"
+    },
+    {
+      "id": "R04-003",
+      "chiave": "deploy-sre|se il secchio dello storico delle foto non si crea, lo storico finisce nello stesso secchio della copia e la notte resta verde",
+      "esito": "parziale",
+      "cosa_resta": "La scelta di Nicola sulla notte di ripiego (verde con avviso come oggi, rossa, o ripiego rifiutato) e la riga di docs/backup-restore.md che dice dove finisce lo storico nelle notti di ripiego e come lo trova chi ripristina (file non mio: modifica esatta in serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "docs/backup-restore.md",
+          "modifica": "Nel riquadro ⚠️ «I secchi da creare sono due, non uno» (righe 226-232), sostituire le righe 229-232:\n> in fondo. Va creato prima, e la chiave deve poterci scrivere. La copia\n> notturna prova a crearlo da sé e, se non ci riesce, lo scrive a chiare\n> lettere nel registro della notte. **Non è mai stato provato con chiavi\n> vere:** la prima notte che si accende, quella riga si guarda.\n\ncon queste righe (restano dentro lo stesso riquadro, prima della riga vuota che precede «Ogni notte il lavoro scrive una riga»):\n> in fondo. Va creato prima, e la chiave deve poterci scrivere. La copia\n> notturna prova a crearlo da sé. **Se non ci riesce** (e `STORAGE_SYNC_STORICO`\n> non è impostata) la notte **resta verde**, ma lo storico di quella notte\n> finisce in una cartella **dentro il secchio della copia**:\n> `<destinazione>/_storico` (con l'esempio sopra, `b2:mycity-foto/_storico`).\n> Lo dicono un avviso in cima alla pagina dell'esecuzione e una riga ⚠️ nel\n> riepilogo («Lo storico delle foto e' nello stesso secchio della copia»).\n> Protegge meno di un secchio a parte: se sparisce il secchio della copia,\n> sparisce anche quello storico. **Non è mai stato provato con chiavi\n> vere:** la prima notte che si accende, quella riga si guarda.\n>\n> **Chi ripristina le foto sparite guarda in tutti e due i posti:** il secchio\n> `<destinazione>-storico` (o quello di `STORAGE_SYNC_STORICO`) per le notti\n> normali, e la cartella `<destinazione>/_storico` per le notti di ripiego.\n> Dentro c'è una cartella per notte e una per secchio,\n> `<storico>/<AAAAMMGG_HHMMSS>/<secchio>/` (ora UTC della copia). Per vedere\n> le notti: `rclone lsd b2:mycity-foto/_storico`; per rimettere un secchio:\n> `rclone copy b2:mycity-foto/_storico/<notte>/products supabase:products`."
+        }
+      ],
+      "domanda": "Nelle notti in cui il secchio «-storico» non esiste e non si crea, lo storico delle foto va in <destinazione>/_storico dentro il secchio della copia e la notte resta verde con un avviso: va bene così, o la notte deve diventare rossa (la copia si fa lo stesso), o il ripiego va rifiutato (senza secchio -storico la copia fallisce ed è rossa)?",
+      "cosa_ho_fatto": "Sulla testa del ramo (169132cb) la parte di 96727f3c c'è ancora: scripts/backup-db.sh:535-536 scrive ::warning:: e la riga ⚠️ nel riepilogo col percorso _storico, stessa copia, stessa uscita. La prova esistente tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts è verde (2 su 2) e torna rossa togliendo quelle due righe (provato a mano, file rimesso com'era, albero pulito). Con l'rclone finto ho fatto girare due notti di ripiego: la foto sparita finisce in b2:mycity-foto/_storico/<AAAAMMGG_HHMMSS>/products/ e registro, avviso, riepilogo ed esito-foto lo dicono ogni notte. Nel mio file non resta un'altra lacuna di questa voce che si chiuda senza cambiare cosa fa la copia: codice non toccato, nessun commit. Preparata la modifica esatta del documento e la domanda per Nicola.",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts --reporter=dot",
+      "prova_eseguita": true,
+      "verificato_da": "revisore B (sonnet): backup-db.sh:530, :535-536 e :556 come dichiarato; il percorso <destinazione>/_storico/<AAAAMMGG_HHMMSS>/<secchio>/ (in UTC) del documento è giusto; prova r07 2/2"
+    },
+    {
+      "id": "R04-004",
+      "chiave": "deploy-sre|un'ultima prova ordina ancora le migrazioni con l'ordine vecchio",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts",
+          "modifica": "riga 507, in const migrazioni = () => spawnSync('sort', ['-V'], { input: …, encoding: 'utf8' }): sostituire ['-V'] con [] e aggiungere fra le opzioni env: { ...process.env, LC_ALL: 'C' } (lo stesso ordine di LC_ALL=C sort dello script). Nessuna asserzione da toccare. Provata: 37/37 verdi."
+        }
+      ],
+      "nota": "Modifica fatta e provata (37/37 verdi) e messa in un commit, ma guardia-ramo è uscita rossa: «è una prova esistente che usa anche file di altre sessioni dell'onda: non è di nessuno, la tocca solo la regista». Il commit, mai spinto, l'ho tolto con git reset --hard HEAD~1, come voleva la regia. Oggi l'ordine con LC_ALL=C e con -V è lo stesso: la prova non può ancora diventare rossa.",
+      "copre_tutta_la_voce": false,
+      "verificato_da": "revisore B (sonnet): modifica applicata in una copia, 37/37 prima e dopo; lo script usa LC_ALL=C sort alle righe 170 e 230"
+    },
+    {
+      "id": "R04-005",
+      "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
+      "esito": "parziale",
+      "commit": "be90b6d3e3966191fac92a7b0b7e2768113245ef",
+      "file_toccati": [
+        "components/LiveActivityFeed.tsx",
+        "components/home/HowItWorks.tsx",
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b5afcaefce6fae1f0efd191e03fce8c0b423038^ --file components/LiveActivityFeed.tsx,components/home/HowItWorks.tsx,components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Misurata in Chromium col Fraunces ExtraBold del deposito, la home a 360 px col testo al 200% passa da 422 a 360 px. Ora si stringono la riga «Live» e il titolo del feed, il titolo «Ricevi e paghi alla consegna» e il testo accanto all'icona di «Perché scegliere MyCity». «Diventa venditore» resta su una riga a 640, 1024, 1280, 1366 e 1440 px. La prova misura, non cerca classi, e senza Chromium esce rossa col motivo. Un salto dichiarato (c9bf7172) l'ho tolto con be90b6d3, perché guardia-ramo non accetta prove spente.",
+      "cosa_resta": "/come-funziona (438-450 px) e /privacy (414 px) stanno in file non miei: le modifiche esatte sono qui sotto. ⚠️ Nella CI il lavoro unit-tests non ha Chromium: finché .github/workflows/ci.yml non lo installa (modifica qui sotto, da fare PRIMA dell'unione), lì questa prova è rossa. /about non è nella prova (pagina server asincrona); il collaudo e il revisore la misurano già a 360 px. Osservato dal revisore, fuori dal dichiarato (360 px): a 320 px col testo al 200% la home misura 324 px (sulla base 422).",
+      "serve_file_altrui": [
+        {
+          "file": "app/come-funziona/page.tsx",
+          "modifica": "Righe 75-84: la griglia 'grid gap-4 sm:grid-cols-3' diventa 'grid grid-cols-1 gap-4 sm:grid-cols-3'. Sull'h2 del riquadro (riga ~83) 'font-serif font-bold text-ink-900' diventa 'min-w-0 break-words font-serif font-bold text-ink-900'. Nella griglia dei due link finali (~riga 90) 'grid gap-4 sm:grid-cols-2' diventa 'grid grid-cols-1 gap-4 sm:grid-cols-2', e i due <div> dentro i link (righe ~95 e ~105) diventano <div className=\"min-w-0\">. Misurato su una copia della pagina a 360 px col testo al 200% e Fraunces: 450 px prima, 360 dopo."
+        },
+        {
+          "file": "components/ui/LegalLayout.tsx",
+          "modifica": "Riga 41: aggiungere break-words all'h1, className='font-serif text-3xl md:text-5xl font-extrabold text-ink-900 mb-2 break-words'. Misurato su /privacy a 360 px col testo al 200% e Fraunces: 414 px prima, 360 dopo."
+        },
+        {
+          "file": ".github/workflows/ci.yml",
+          "modifica": "Nel lavoro unit-tests: runs-on da ubuntu-latest a ubuntu-24.04, perché su 26.04 Playwright non installa Chromium (lo dicono i commenti del file alle righe ~368, ~650 e ~809). Dopo «Install deps» aggiungere il passo «npx playwright install --with-deps chromium». Senza questo passo tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx è rossa nella CI: misura in un browser vero e non si salta."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): misurata in Chromium con più larghezze e zoom e 5 mutazioni; 360@200% = 360 px (base 422); «Diventa venditore» su una riga da 640 a 1540 px; desktop come la base; /about regge a 320-1280 px"
+    },
+    {
+      "id": "R04-006",
+      "chiave": "microcopy|gli errori dei moduli controllati dal server arrivano al cliente in inglese, per esempio «string must contain at most 120 character»",
+      "esito": "riparato",
+      "commit": "1037f1e7051f333e44d0c491399d5585b584cded",
+      "file_toccati": [
+        "lib/api/responses.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-errori-rotte-in-italiano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-errori-rotte-in-italiano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1037f1e7051f333e44d0c491399d5585b584cded^ --file lib/api/responses.ts --prove tests/unit/riparazione-r04-errori-rotte-in-italiano.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In testa a lib/api/responses.ts c'è import '@/lib/zod-i18n', e tutte e 13 le rotte elencate importano quel file (controllato con grep). La prova chiama le rotte vere admin/categories e chat/messages, con accesso e database finti. Risponde «Massimo 60 caratteri», «Campo obbligatorio», «ID non valido»; senza la correzione i tre casi sono rossi. Il modulo contatti era già a posto.",
+      "verificato_da": "revisore B (sonnet): tutte e 13 le rotte importano lib/api/responses; i messaggi già scritti nelle rotte non cambiano; nessun componente del browser lo importa; prova 3/3, senza la correzione 3/3 rosse; suite intera verde"
+    },
+    {
+      "id": "R04-007",
+      "chiave": "stati-ui|quando la rete torna, le pagine prodotto del negoziante rimettono il caricamento al posto del modulo e le modifiche non salvate si perdono",
+      "esito": "riparato",
+      "commit": "fe6b3b0532b8d32f75a24d4e912c8aae2502a2ec",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "app/seller/products/[id]/edit/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-modulo-resta-quando-torna-la-rete.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-modulo-resta-quando-torna-la-rete.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 336f2fbda9b1b50209fbe94e1f5fde1c74134ab7 --file \"app/seller/products/new/page.tsx,app/seller/products/[id]/edit/page.tsx\" --prove tests/unit/riparazione-r04-modulo-resta-quando-torna-la-rete.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In «Nuovo prodotto»/«Duplica» e in «Modifica prodotto» il modulo, una volta aperto, resta montato quando torna la rete: un nuovo caricamento o una rilettura caduta non lo smontano, le modifiche non salvate restano, e una consegna non letta resta «non letta». Si apre la prima volta solo con le taglie lette: «Riprova» per le taglie in pausa in «Modifica», freno variantiNonArrivate in «Duplica». Resta aperto solo finché le taglie (gli id) sono le stesse: se dopo arrivano taglie diverse (per esempio una copia vecchia in memoria aperta senza rete), si rimonta con quelle vere, come faceva la base. Due commit: 169132cb e il giro di correzione fe6b3b05.",
+      "verificato_da": "revisore A (opus): 12 varianti, trovato il caso E4 (taglie vecchie [] in memoria) → giro di correzione fe6b3b05; poi R04 (capo): file del revisore 12/12 verde, casi (c) rossi su 169132cb, prova rimessa 0"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Nella pagina di amministrazione del prodotto, quando torna la rete, il caricamento prende il posto del modulo e le modifiche si perdono; senza rete il modulo si apre con 0 taglie",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/products/[id]/edit/page.tsx:137",
+      "descrizione": "Stesso difetto di R04-007 nella pagina admin (anche :141): la rilettura con refetchOnMount 'always' rimette il caricamento; senza rete e senza taglie in memoria il modulo si apre con 0 taglie; senza il prodotto in memoria dice «Prodotto non trovato» invece di «Riprova» (manca il controllo fetchStatus 'paused')."
+    },
+    {
+      "titolo": "Con una destinazione che ha una cartella dentro il secchio, lo storico predefinito finisce nello stesso secchio della copia senza avviso e la notte resta verde",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "scripts/backup-db.sh:313",
+      "descrizione": "Con STORAGE_SYNC_DEST=\"b2:mycity-foto/copie\" lo storico predefinito diventa b2:mycity-foto/copie-storico, una cartella dello stesso secchio: niente ripiego dichiarato né avviso (visto con rclone finto; probabile anche con un remote alias o cifrato usato alla radice, «cifrata:-storico»)."
+    },
+    {
+      "titolo": "Con STORAGE_SYNC_STORICO impostata ma il secchio che manca, lo dice solo il registro: niente avviso né riga nel riepilogo",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "scripts/backup-db.sh:538",
+      "descrizione": "Se poi la copia fallisce, il riepilogo dice «non sincronizzato» senza nominare lo storico mancante."
+    },
+    {
+      "titolo": "Alcuni errori di Zod arrivano ancora in inglese: «Invalid input» di un'unione, chiavi non riconosciute, literal sbagliato, refine senza messaggio",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/zod-i18n.ts",
+      "descrizione": "Il traduttore copre i casi comuni (lunghezze, campo obbligatorio, formato), ma non invalid_union, unrecognized_keys, invalid_literal e custom senza messaggio. Per esempio string().max(8).optional().or(z.literal('')) con un numero dà «Invalid input» (visto dal revisore di R04-006)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R04-003: Nelle notti in cui il secchio «-storico» non esiste e non si crea, lo storico delle foto va in <destinazione>/_storico dentro il secchio della copia e la notte resta verde con un avviso: va bene così, o la notte deve diventare rossa (la copia si fa lo stesso), o il ripiego va rifiutato (senza secchio -storico la copia fallisce ed è rossa)?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "nota": "3 per riparare (lotto 1 opus, lotto 2 opus, lotto 3 sonnet), 2 revisori (A opus su R04-007, B sonnet sulle altre sei), 1 giro di correzione (opus) su R04-007. Tetto 6 raggiunto: la correzione l'ho verificata io (prove del revisore 12/12, casi nuovi rossi sulla prima versione, prova rimessa 0).",
+    "costo_usd": 19.35
+  },
+  "costo_usd": 19.35
+}

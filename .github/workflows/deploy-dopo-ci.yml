@@ -560,7 +560,7 @@ jobs:
           # script si ferma a meta', le migrazioni prima di quella rotta restano applicate e
           # registrate, e il sito online non le conosce: qui lo si scrive nel riepilogo.
           if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ] && grep -q '^▶ applico ' "$DIARIO"; then
-            ROTTA="$(grep '^▶ applico ' "$DIARIO" | tail -n 1 | sed 's/^▶ applico //')"
+            ULTIMA="$(grep '^▶ applico ' "$DIARIO" | tail -n 1 | sed 's/^▶ applico //')"
             PRIMA="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | sed '$d' | tr '\n' ' ')"
             echo "fermo=migrazioni-a-meta" >> "$GITHUB_OUTPUT"
             {
@@ -568,9 +568,17 @@ jobs:
               echo ""
               echo "Non ho pubblicato niente, ma il database e' gia' cambiato."
               echo "- Applicate e registrate prima del guasto: ${PRIMA:-nessuna}"
-              echo "- Quella che si e' rotta: \`$ROTTA\` (se contiene un COMMIT suo puo' essere rimasta a meta': guarda gli avvisi qui sopra)"
+              if [ "$USCITA" = "3" ]; then
+                echo "- Quella che si e' rotta: \`$ULTIMA\` (se contiene un COMMIT suo puo' essere rimasta a meta': guarda gli avvisi qui sopra)"
+              else
+                echo "- L'ultima cominciata: \`$ULTIMA\`. Lo script e' uscito con $USCITA, non con 3 (il 3 e' l'errore nell'SQL del file): non so se e' caduto dentro \`$ULTIMA\` o fra questo file e il successivo. \`$ULTIMA\` puo' essere applicata e registrata, ma anche rimasta a meta' (se contiene un COMMIT suo: guarda gli avvisi qui sopra) o applicata e non registrata. Guarda lo schema e \`supabase_migrations.schema_migrations\` prima di toccarla."
+              fi
               echo ""
-              echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Poi correggi la migrazione rotta e unisci la correzione: il rilascio riparte dalla prima che manca."
+              if [ "$USCITA" = "3" ]; then
+                echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Poi correggi la migrazione rotta e unisci la correzione: il rilascio riparte dalla prima che manca."
+              else
+                echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Non so ancora se c'e' una migrazione da correggere: guarda l'errore di psql nel passo qui sopra e il registro. Se \`$ULTIMA\` e' registrata, rilancia il rilascio, che riparte dalla prima che manca; se non e' registrata e lo schema e' cambiato a meta', sistemala prima di rilanciare."
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
@@ -790,7 +798,7 @@ jobs:
               DISTRUTTIVE=""
               for m in ${MIGRAZIONI_ELENCO:-}; do
                 [ -f "migrations/$m" ] || continue
-                RIGHE="$( { grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m"; grep -niE 'DROP[[:space:]]+(FUNCTION|VIEW|MATERIALIZED[[:space:]]+VIEW|IF[[:space:]]+EXISTS)([^[:alnum:]_]|$)|(ALTER[[:space:]]+TABLE.*[[:space:]]|^[[:space:]]*)DROP[[:space:]]+"?[[:alpha:]_][[:alnum:]_]*"?[[:space:]]*(,|;|CASCADE|RESTRICT|$)' "migrations/$m" | grep -viE 'DROP[[:space:]]+(DEFAULT|IDENTITY|EXPRESSION)[[:space:]]*(,|;|$)'; } | grep -vE '^[0-9]+:[[:space:]]*--' | awk '!visto[$0]++' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
+                RIGHE="$( { grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m"; sed -E 's/DROP[[:space:]]+(DEFAULT|IDENTITY|EXPRESSION)([^[:alnum:]_]|$)/\2/Ig' "migrations/$m" | grep -niE 'DROP[[:space:]]+(FUNCTION|VIEW|MATERIALIZED[[:space:]]+VIEW|IF[[:space:]]+EXISTS)([^[:alnum:]_]|$)|(ALTER[[:space:]]+TABLE.*[[:space:]]|,[[:space:]]*|^[[:space:]]*)DROP[[:space:]]+"?[[:alpha:]_][[:alnum:]_]*"?[[:space:]]*(,|;|CASCADE|RESTRICT|$)' | cut -d: -f1 | while read -r n; do printf '%s:' "$n"; sed -n "${n}p" "migrations/$m"; done; } | grep -vE '^[0-9]+:[[:space:]]*--' | awk '!visto[$0]++' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
                 if [ -n "$RIGHE" ]; then
                   DISTRUTTIVE="${DISTRUTTIVE}"$'\n'"- \`$m\`: ${RIGHE}"
                 fi
