@@ -130,3 +130,10 @@ describe("R09-010 — VendorForm avvisa se si esce con modifiche non salvate", (
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 });
+
+describe("R09-010 — il profilo dice al modulo quando il salvataggio è riuscito", () => {
+  it("app/seller/profile/page.tsx passa saved al VendorForm dei contatti", async () => {
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync("app/seller/profile/page.tsx", "utf8")).toContain("saved={updateContact.isSuccess}");
+  });
+});

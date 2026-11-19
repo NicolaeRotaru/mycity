@@ -11,7 +11,6 @@ import { normalizeCustomization } from '@/lib/store-customization';
 import type { StoreHours } from '@/lib/store-hours';
 import type { StoreMediaItem } from '@/components/StoreMediaCarousel';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
-import { MESSAGGIO_USCITA } from '@/components/seller/useAvvisoUscita';
 
 /**
  * Schermata "Dettagli negozio" del site builder: logo, nome, copertina, descrizione,
@@ -32,6 +31,8 @@ type ProfileRow = {
   store_hours: unknown;
   store_customization: unknown;
 };
+
+const MESSAGGIO_USCITA = 'Hai modifiche non salvate: se esci le perdi. Uscire lo stesso?';
 
 export default function StoreDetailsEditor({ profile, onBack }: { profile: ProfileRow; onBack: () => void }) {
   const qc = useQueryClient();

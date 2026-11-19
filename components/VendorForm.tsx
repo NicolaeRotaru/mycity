@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -20,7 +21,7 @@ import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
 import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
-import { useAvvisoUscita } from './seller/useAvvisoUscita';
+import { clicDaFermare } from './seller/site/dove-e-l-errore';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
 import SocialLinksFields from './seller/SocialLinksFields';
@@ -42,6 +43,40 @@ function erroriPerCampoSocial(
     if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !(i.path[1] in out)) out[i.path[1]] = i.message;
   }
   return out;
+}
+
+const MESSAGGIO_USCITA = 'Hai modifiche non salvate: se esci le perdi. Uscire lo stesso?';
+
+/**
+ * R09-010 — Con modifiche non salvate: il browser avvisa se si chiude o ricarica la pagina
+ * (beforeunload), e un clic su un collegamento interno (il menu del pannello) chiede conferma,
+ * perché beforeunload i collegamenti di Next non li vede.
+ */
+function useAvvisoUscita(dirty: boolean) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!dirty) return;
+    const alRicarico = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', alRicarico);
+    return () => window.removeEventListener('beforeunload', alRicarico);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const alClic = (e: MouseEvent) => {
+      // clicDaFermare decide se è un collegamento interno verso un'altra pagina; il testo è nostro.
+      if (clicDaFermare(e, dirty, pathname ?? '', () => window.confirm(MESSAGGIO_USCITA))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener('click', alClic, true);
+    return () => document.removeEventListener('click', alClic, true);
+  }, [dirty, pathname]);
 }
 
 type SchemaData = { storeName: string; storePhone: string };
