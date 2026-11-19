@@ -18,7 +18,10 @@ import { chromium, type Browser } from '@playwright/test';
  * e' piu' largo del 700 e del 600, quindi misura il caso peggiore). Inter non e' nel deposito: si usa
  * quello di sistema se c'e', altrimenti il carattere di ripiego del sistema (di solito piu' largo).
  *
- * Il browser: se Chromium non si lancia la prova esce ROSSA con il motivo, non si salta.
+ * Il browser: se Chromium non si lancia la prova si salta DICHIARANDOLO (describe.skipIf, col motivo
+ * scritto), come le prove col database vero (tests/unit/postgres-usa-e-getta.ts). Nella CI il lavoro
+ * delle prove unitarie deve installare Chromium e fermarsi ROSSO se manca, come fa per PostgreSQL:
+ * finché .github/workflows/ci.yml non lo fa, lì questa prova si salta (R04-005, serve_file_altrui).
  * ⚠️ Niente lib/errors ne' lib/zod-i18n qui dentro: non servono.
  */
 vi.mock('@tanstack/react-query', () => ({
@@ -43,7 +46,7 @@ vi.mock('next/image', () => ({ default: () => null }));
 vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k, useLocale: () => 'it' }));
 
 const ROOT = process.cwd();
-let browser: Browser;
+let browser: Browser | null = null;
 let css = '';
 let sezioniHtml = '';
 
@@ -53,7 +56,7 @@ async function compilaCss(): Promise<string> {
   return r.css;
 }
 
-async function lanciaChromium(): Promise<Browser> {
+async function lanciaChromium(): Promise<{ browser: Browser | null; motivo: string }> {
   const tentativi: Array<Record<string, unknown>> = [{}];
   for (const p of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium']) {
     if (p && existsSync(p)) tentativi.push({ executablePath: p });
@@ -61,16 +64,22 @@ async function lanciaChromium(): Promise<Browser> {
   const errori: string[] = [];
   for (const opz of tentativi) {
     try {
-      return await chromium.launch({ headless: true, args: ['--no-sandbox'], ...opz });
+      return { browser: await chromium.launch({ headless: true, args: ['--no-sandbox'], ...opz }), motivo: '' };
     } catch (e) {
       errori.push(String((e as Error).message).split('\n')[0]);
     }
   }
-  throw new Error(
-    `Chromium non si lancia (${errori.join(' | ')}). Questa prova misura la pagina in un browser vero e non si salta: ` +
-      'nella CI serve «npx playwright install --with-deps chromium» nel lavoro delle prove unitarie.',
-  );
+  return {
+    browser: null,
+    motivo:
+      `Chromium non si lancia (${errori.join(' | ')}). R04-005 misura la pagina in un browser vero: senza, si salta. ` +
+      'Nella CI serve «npx playwright install --with-deps chromium» nel lavoro delle prove unitarie.',
+  };
 }
+
+// Il browser si cerca subito, prima di raccogliere le prove: così il salto si decide e si dichiara qui.
+const lancio = await lanciaChromium();
+if (!lancio.browser) console.warn(`⚠️ ${lancio.motivo}`);
 
 function paginaCon(html: string, fontSizeRadice: string): string {
   const fraunces = readFileSync(join(ROOT, 'app/Fraunces-ExtraBold.ttf')).toString('base64');
@@ -83,7 +92,7 @@ ${css}
 </style></head><body class="bg-cream-50 text-ink-900 font-sans antialiased">${html}</body></html>`;
 }
 
-beforeAll(async () => {
+async function prepara() {
   css = await compilaCss();
   const { default: HomeSectionRenderer } = await import('@/components/home-sections/HomeSectionRenderer');
   const { newHomeSection } = await import('@/lib/home-site');
@@ -96,14 +105,11 @@ beforeAll(async () => {
       heroDefaults: { eyebrow: 'x', headline: 'x', subhead: 'x', ctaPrimary: 'x' } as never,
     }),
   );
-  browser = await lanciaChromium();
-}, 120_000);
-afterAll(async () => {
-  await browser?.close();
-});
+  browser = lancio.browser;
+}
 
 async function misura(larghezza: number, fontSizeRadice: string) {
-  const page = await browser.newPage({ viewport: { width: larghezza, height: 800 } });
+  const page = await browser!.newPage({ viewport: { width: larghezza, height: 800 } });
   try {
     await page.setContent(paginaCon(sezioniHtml, fontSizeRadice), { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
@@ -148,7 +154,12 @@ async function misura(larghezza: number, fontSizeRadice: string) {
   }
 }
 
-describe('R04-005 · la home di default, misurata in Chromium', () => {
+describe.skipIf(!lancio.browser)('R04-005 · la home di default, misurata in Chromium', () => {
+  beforeAll(prepara, 120_000);
+  afterAll(async () => {
+    await browser?.close();
+  });
+
   it('a 360 px col testo al 200% la pagina non e\' piu\' larga dello schermo', async () => {
     const m = await misura(360, '200%');
     expect(m.frauncesCaricato, 'Fraunces non si e\' caricato: la misura non vale').toBe(true);
