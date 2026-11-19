@@ -78,7 +78,7 @@ export default function HowItWorks({ className }: { className?: string }) {
                     {s.n}
                   </span>
                 </span>
-                <h3 className="min-w-0 break-words font-serif font-bold text-ink-900 text-lg leading-tight">{s.title}</h3>
+                <h3 className="font-serif font-bold text-ink-900 text-lg leading-tight">{s.title}</h3>
               </div>
               <p className="text-sm text-ink-600 leading-relaxed">{s.desc}</p>
             </Card>
