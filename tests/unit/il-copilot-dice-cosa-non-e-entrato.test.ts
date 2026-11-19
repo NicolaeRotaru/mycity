@@ -54,6 +54,7 @@ const avvisi = vi.hoisted(() => ({
 }));
 vi.mock('sonner', () => ({ toast: avvisi.toast, Toaster: () => null }));
 
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth:
     (h: (ctx: { user: { id: string }; req: Request }) => unknown) =>

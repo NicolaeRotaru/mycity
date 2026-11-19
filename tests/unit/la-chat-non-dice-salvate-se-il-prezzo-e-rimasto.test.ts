@@ -40,6 +40,7 @@ vi.mock('@/lib/ai/moderation', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/ai/moderation')>();
   return { ...actual, classifyProductPolicy: async () => ({ allowed: true, reason: '' }) };
 });
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth:
     (h: (ctx: { user: { id: string }; req: Request }) => unknown) =>
