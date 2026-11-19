@@ -1,8 +1,8 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-19 09:57",
+  "aggiornato": "2026-11-19 10:19",
   "finita": false,
-  "testa": "b91478cea6467233a1de202b909df2ae44501e68",
+  "testa": "13a3a15fa7bef167d0be784a6753a5e12ffdeda7",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_eseguito",
@@ -19,31 +19,21 @@
     {
       "id": "R09-002",
       "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
-      "esito": "parziale",
-      "commit": "bd93805546b5e9759ac2ec40e72d366856f5cb0c",
-      "file_toccati": [
-        "app/u/[handle]/page.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r09-pagine-non-trovate.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r09-pagine-non-trovate.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bd93805546b5e9759ac2ec40e72d366856f5cb0c^ --file app/u/[handle]/page.tsx --prove tests/unit/riparazione-r09-pagine-non-trovate.test.ts --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Il generateMetadata del profilo pubblico inesistente ora ha canonical nullo (prima ereditava quello della home, in contraddizione col noindex). Prodotto, negozio, pagina del negozio, categoria e il titolo di app/not-found.tsx erano già a posto sulla base.",
-      "cosa_resta": "Il codice HTTP resta 200 invece di 404 su /product, /store, /category, /u e /store/<id>/<pagina> inesistenti: lo tengono app/loading.tsx (radice) e anche app/store/loading.tsx e app/product/[id]/loading.tsx (non miei). Togliere app/loading.tsx toglierebbe lo scheletro a tutte le pagine senza uno proprio (e tests/unit/minori-s09-aspetto.test.ts:219-224 ne sorveglia la scritta). Strade: (a) togliere i loading.tsx di radice, store e product, con notFound() nei layout letto col client di servizio; (b) un controllo in middleware.ts con rewrite a 404; (c, non verificata) notFound() nel generateMetadata più htmlLimitedBots in next.config. Serve una scelta di Nicola (vedi domande_per_nicola)."
+      "esito": "scelta_di_nicola",
+      "domanda": "Le pagine che non esistono rispondono 200 (con il testo «non trovato») invece di 404. Per /u lo causa lo scheletro di caricamento della radice (app/loading.tsx): senza, risponde 404. Per /product, /store e /store/<id>/<pagina> le pagine sono preparate nel browser e nessun layout chiama notFound() (c'è anche app/store/[id]/loading.tsx). Preferisci (a) togliere gli scheletri di radice, store e product e fare il controllo nei layout con una lettura sul server, (b) un controllo nel middleware che manda a 404, oppure (c) lasciare così (i motori di ricerca vedono già noindex)?",
+      "nota": "Il commit bd938055 (canonical nullo sul profilo inesistente) è stato annullato con 13a3a15f: il controllore 3 ha verificato con next dev che non cambiava la pagina che esce (app/layout.tsx non ha più alternates dal 5/11). Prodotto, negozio, pagina del negozio, categoria e il titolo di app/not-found.tsx erano già a posto sulla base. Non dichiarato prima: le pagine «non trovato» portano ancora og:title, description e twitter della home.",
+      "verificato_da": "controllore 3 (opus): next dev con indirizzi finti locali su /u, base contro correzione e senza app/loading.tsx",
+      "commit_annullati": [
+        "bd93805546b5e9759ac2ec40e72d366856f5cb0c",
+        "13a3a15f (revert)"
+      ]
     },
     {
       "id": "R09-003",
       "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
-      "esito": "gia_riparato_prima",
-      "prova": "app/messages/[id]/page.tsx:309-311: handleSend esce se sendMutation.isPending e il testo resta nel campo; il campo si svuota solo all'invio (riga 310), onSuccess (riga 292) non lo cancella più, onError (riga 300) rimette il testo davanti a quello nuovo. Già riparato da R22-003: tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts passa (uscita 0)."
+      "esito": "non_fatto",
+      "nota": "Il testo non sparisce più (già riparato da R22-003: app/messages/[id]/page.tsx:292, 300, 309-311; tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts verde), ma il secondo Invio mentre il primo è in volo viene ignorato in silenzio: il pulsante resta acceso (riga 478, disabled solo a campo vuoto), nessun avviso, e dopo la risposta del primo il secondo non parte e resta nel campo. La voce chiede di avvisare se non parte: non fatto in questo giro.",
+      "verificato_da": "controllore 3 (opus): prova r22 verde; sonda sulla pagina montata con react-query vero (secondo Invio in volo, poi risposta del primo: inviati resta [\"Ciao\"])"
     },
     {
       "id": "R09-004",
@@ -69,12 +59,13 @@
         "R09-017"
       ],
       "cosa_ho_fatto": "Sulla base c'erano già 'prezzoSotto' (soglia esclusa, R07-016) e il totale vero per la sola pagina Novità. Ho esteso il conteggio del database a «Sotto i N €» e a «I più recensiti»: ora la pagina dice il totale (es. 106) e non 40.",
-      "cosa_resta": "I prodotti che a prezzo pieno costano 10 € o più ma in promozione meno di 10 € restano fuori. Per includerli senza svuotare la pagina serve un filtro sul prezzo scontato nel database: una funzione o vista nuova che esponga il prezzo effettivo (prezzo meno lo sconto attivo), cioè una migrazione, che questo giro non può fare."
+      "cosa_resta": "I prodotti che a prezzo pieno costano 10 € o più ma in promozione meno di 10 € restano fuori. Per includerli senza svuotare la pagina serve un filtro sul prezzo scontato nel database: una funzione o vista nuova che esponga il prezzo effettivo (prezzo meno lo sconto attivo), cioè una migrazione, che questo giro non può fare. Inoltre: contaProdottiDellaGriglia (lib/queries/griglia-prodotti.ts:348-376) conta anche i prodotti dei negozi approvati senza insegna, che la lettura scarta a :334 (la vista seller_public_profiles vuole anche store_name), quindi la testa può dire 40 con 30 schede mostrabili, anche per un visitatore; e components/ProductGrid.tsx:279 getNextPageParam guarda ultima.length e non righeLette, quindi «Carica altri» sparisce prima del totale promesso.",
+      "verificato_da": "controllore 3 (opus): prova rilanciata, rimessa uscita 0, sonda sul modulo vero col finto-postgrest con un negozio approvato senza insegna (40 contro 30) e sulla griglia montata con una pagina che perde righe; prezzi non toccati"
     },
     {
       "id": "R09-005",
       "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "3651417d99f403a982c4578cdbf7025fec49248c",
       "file_toccati": [
         "app/seller/analytics/letture-dell-andamento.ts",
@@ -91,13 +82,15 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3651417d99f403a982c4578cdbf7025fec49248c^ --file app/seller/analytics/letture-dell-andamento.ts,app/seller/analytics/page.tsx --prove tests/unit/riparazione-r09-tasso-di-conversione.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Gli ordini sono di tutti e le visite solo di chi accetta i cookie: tassoDiConversione torna null quando gli ordini superano le visite misurate (niente valore oltre il 100%, niente verde). La scheda dice «Campione troppo piccolo: più ordini che visite misurate» e l'etichetta è «Visite che diventano ordini»."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Gli ordini sono di tutti e le visite solo di chi accetta i cookie: tassoDiConversione torna null quando gli ordini superano le visite misurate (niente valore oltre il 100%, niente verde). La scheda dice «Campione troppo piccolo: più ordini che visite misurate» e l'etichetta è «Visite che diventano ordini».",
+      "cosa_resta": "app/seller/analytics/page.tsx:356: con 0 visite misurate e ordini > 0 la scheda dice «Serve il conto delle visite per calcolarlo» mentre la scheda Visite mostra 0; il messaggio «campione troppo piccolo» non scatta (è il caso del lancio se nessuno accetta i cookie). Ordini uguali alle visite danno 100,0% in verde.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0, sonda (0,0) (3,0) (x,null) (1,-1) (5,5) (6,5) e griglia 60×62: mai sopra 100, mai NaN, mai verde sopra 100"
     },
     {
       "id": "R09-006",
       "chiave": "frontend-ux|il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "8e442b1100aecdcb5b718e5a6115d81bd3de2853",
       "commit_altri": [
         "b7c16513df29e9adf00688d5093c84561020e6ae"
@@ -116,8 +109,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8e442b1100aecdcb5b718e5a6115d81bd3de2853^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r09-storie-link-intero.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Prima di validare, un indirizzo intero con la stessa origine del sito (window.location.origin) si riduce a percorso, ricerca e #. Un altro dominio resta com'è e la regola esistente lo rifiuta. Aggiornato il testo di aiuto del campo."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prima di validare, un indirizzo intero con la stessa origine del sito (window.location.origin) si riduce a percorso, ricerca e #. Un altro dominio resta com'è e la regola esistente lo rifiuta. Aggiornato il testo di aiuto del campo.",
+      "cosa_resta": "La voce nomina anche la migrazione 403 (migrations/403:21-25), che mette NULL anche ai link interi verso il nostro dominio nelle storie vecchie: una migrazione esistente non si tocca e in questo giro non se ne scrivono di nuove; serve una migrazione nuova che riduca a percorso i link interi del nostro dominio invece di cancellarli (la 403 non è applicata al database vero). Minore: un http:// del nostro dominio riceve «I siti esterni non si possono collegare».",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 7/7, rimessa uscita 0, sonda con 21 varianti nella pagina vera (maiuscole, http/https, www, porte, host dentro un altro dominio, sottodomini, javascript:, data:, //altro-sito, /\\, tab, credenziali): tutte gestite"
     },
     {
       "id": "R09-007",
@@ -143,7 +138,8 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Le miniature dei prodotti nelle tre pagine (carrello condiviso, prodotti del negozio, riga d'ordine) usano loader={caricatoreFotoRemote} al posto di unoptimized. Prova esistente modificata e dichiarata: tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts legge per nome i tre file e contava tre file senza caricatore, ora ne conta uno (più stretta, non indebolita).",
-      "cosa_resta": "Il logo del negozio in app/orders/[id]/page.tsx:859 resta unoptimized apposta: il caricatore ritaglia a quadrato le larghezze sotto 200. Serve una variante del caricatore senza ritaglio in lib/image-loader.ts, che non è fra i miei file."
+      "cosa_resta": "Il logo del negozio in app/orders/[id]/page.tsx:859 resta unoptimized apposta: il caricatore ritaglia a quadrato le larghezze sotto 200. Serve una variante del caricatore senza ritaglio in lib/image-loader.ts, che non è fra i miei file.",
+      "verificato_da": "controllore 3 (opus): prova rilanciata, rimessa uscita 0, prova esistente modificata più stretta (3→1 file); sonda con getImageProps vero su Supabase pubblico e firmato, Pexels, placehold.co, data:, blob:, /foto-mancante.svg, /icon-192.png, stringa vuota: nessuna foto rotta"
     },
     {
       "id": "R09-008",
@@ -166,18 +162,23 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Tolti i maxLength dai 27 campi brevi di HomeSectionConfigForm: il testo incollato resta intero e oltre il tetto dello schema il campo mostra «Troppo lungo: N caratteri su M. Accorcialo, così si salva.»",
-      "cosa_resta": "components/seller/site/BannerFields.tsx ha ancora maxLength={120} (riga 60), maxLength={200} (riga 67) e maxLength={40} (riga 91): file di un'altra sessione.",
+      "cosa_resta": "components/seller/site/BannerFields.tsx (file di un'altra sessione) ha ancora tre maxLength; lib/admin/editor-della-home.ts:41 dice «manca il titolo» per un titolo troppo lungo (vedi serve_file_altrui). I maxLength tolti sono 28, non 27.",
       "serve_file_altrui": [
         {
           "file": "components/seller/site/BannerFields.tsx",
-          "modifica": "Togliere maxLength={120} (riga 60), maxLength={200} (riga 67) e maxLength={40} (riga 91) dai tre campi, e aggiungere a ciascuno error={...} quando il testo senza spazi in coda supera lo stesso numero, con il messaggio di HomeSectionConfigForm: `Troppo lungo: ${n} caratteri su ${max}. Accorcialo, così si salva.`"
+          "modifica": "Togliere maxLength={120} (riga 60), maxLength={200} (riga 67) e maxLength={40} (riga 91) e aggiungere a ciascuno error={...} quando il testo con trim() (da tutti e due i lati, come lo schema bannerConfig di lib/store-site.ts) supera lo stesso numero: `Troppo lungo: ${n} caratteri su ${max}. Accorcialo, così si salva.`"
+        },
+        {
+          "file": "lib/admin/editor-della-home.ts",
+          "modifica": "riga 41, erroreConIlPosto: un errore too_big su bullets[i].title o bullets[i].desc va tradotto in «vantaggio N: titolo (o descrizione) troppo lungo», non in «manca il titolo/la descrizione» (caso raggiungibile ora che i campi non hanno più maxLength)"
         }
-      ]
+      ],
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0, sonda sui 28 campi a tetto e tetto+1 confrontata con homeSectionSchema (spazi, accenti, emoji): identica"
     },
     {
       "id": "R09-009",
       "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "cfc9ba89e3051aab743d25bdf02231df0b521ebd",
       "file_toccati": [
         "components/seller/site/SectionConfigForm.tsx"
@@ -193,8 +194,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cfc9ba89e3051aab743d25bdf02231df0b521ebd^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r09-testo-vetrina-entita.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "htmlInACapo decodifica &lt; &gt; &amp; (&amp; per ultimo) e aCapoInHtml ricodifica & < >: il giro scrivi, pulisci con sanitizeRichText e rileggi ridà il testo scritto. Il testo senza simboli si salva identico a prima."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "htmlInACapo decodifica &lt; &gt; &amp; (&amp; per ultimo) e aCapoInHtml ricodifica & < >: il giro scrivi, pulisci con sanitizeRichText e rileggi ridà il testo scritto. Il testo senza simboli si salva identico a prima.",
+      "cosa_resta": "PEGGIORAMENTO da correggere (components/seller/site/SectionConfigForm.tsx:78-91): (a) un testo già salvato con tag veri (fino al 5/11 l'aiuto prometteva grassetto, corsivo, elenchi e link) modificato e risalvato diventa &lt;strong&gt;… e in vetrina si leggono i tag; (b) lo spazio non separabile incollato si salva come &nbsp;, non si decodifica, e al giro dopo diventa &amp;nbsp; visibile. Cura suggerita: ricodificare solo i «<» che non aprono un tag ammesso da lib/sanitize-html.ts e decodificare anche &nbsp;.",
+      "verificato_da": "controllore 1 (opus): prova rilanciata 5/5, rimessa uscita 0, sonda con contenuto già salvato con tag veri, &nbsp; incollato, riga sola, entità miste: il caso della voce è chiuso ma i tag veri e &nbsp; si rompono; vicini 10 file verdi"
     },
     {
       "id": "R09-010",
@@ -223,12 +226,19 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La guardia sta dentro VendorForm (Dettagli negozio e profilo): firma dei campi, azzerata quando il salvataggio riesce. Avvisa alla chiusura o ricarica della pagina e chiede conferma sul clic dei link interni; «Tutte le impostazioni» chiede prima di tornare indietro.",
-      "cosa_resta": "Il tasto indietro del browser e il tasto indietro dentro SiteEditor (che guarda solo il suo stato) non sono coperti: Next non offre un hook per intercettarli e SiteEditor non è fra i miei file."
+      "cosa_resta": "PEGGIORAMENTO da correggere: (a) components/VendorForm.tsx:300 contro :282: la firma inviata è fatta su parsed.data di zod (chiavi riordinate, spazi in coda tolti) mentre il modulo tiene la versione corretta, quindi dopo un salvataggio riuscito l'avviso resta acceso (social in altro ordine, slogan con spazio in coda, annuncio acceso su negozio con badge). (b) In Dettagli negozio (/seller/site?details=1) la voce del menu «La tua vetrina» (/seller/site, SellerShell.tsx:53) ha lo stesso percorso: clicDaFermare la lascia passare e le modifiche si perdono senza domanda; si ripara da VendorForm confrontando anche la parte dopo «?». Fuori dai miei file: il tasto indietro del browser e quello di SiteEditor.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/site/SiteEditor.tsx",
+          "modifica": "il tasto indietro che chiude i Dettagli negozio deve chiedere conferma quando VendorForm segnala modifiche non salvate (esporre lo stato «modificato» da VendorForm con una prop onDirtyChange e usarlo prima di chiudere)"
+        }
+      ],
+      "verificato_da": "controllore 1 (opus): prove rilanciate 6+2, rimessa uscita 0, sonda con 4 varianti di cui 3 rosse (salvataggio riuscito con social in altro ordine, slogan con spazio in coda, menu della sezione stessa); vicini verdi"
     },
     {
       "id": "R09-011",
       "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "6ef7924e017a6f114b92ef1155834482df37daf9",
       "commit_altri": [
         "fed864043b61ba470dad0cc80b0c7110733fcd91"
@@ -250,8 +260,10 @@
         "uscita": 0,
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ef7924e017a6f114b92ef1155834482df37daf9^ --file lib/store-customization.ts,components/VendorForm.tsx,components/seller/SocialLinksFields.tsx,components/seller/CustomizationSection.tsx --prove tests/unit/riparazione-r09-social-vetrina.test.tsx --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già. Aggiunto il resto: il link copiato dall'app (?igsh=, ?mibextid=, ?lang=) si riduce al nome; l'errore compare sotto il campo giusto; la sezione «Social e contatti» si apre da sola; scrivendo si toglie solo l'errore di quel campo."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già. Aggiunto il resto: il link copiato dall'app (?igsh=, ?mibextid=, ?lang=) si riduce al nome; l'errore compare sotto il campo giusto; la sezione «Social e contatti» si apre da sola; scrivendo si toglie solo l'errore di quel campo.",
+      "cosa_resta": "PEGGIORAMENTO da correggere: togliendo la guardia /\\?/ (lib/store-customization.ts:329) i link non di profilo si salvano in silenzio come nome sbagliato (facebook story.php?…, permalink.php?…, photo.php?…, photo/?fbid=…; instagram /stories/<nome>/<n>?igsh=…, /explore/…?igsh=; tiktok /t/<codice>/?k=1), mentre sulla base erano fermati con l'errore. Minori: il riassunto in fondo a VendorForm.tsx:479 resta dopo aver corretto il campo; it-it.facebook.com e web.facebook.com non si riducono al nome.",
+      "verificato_da": "controllore 1 (opus): prova rilanciata 4/4, rimessa uscita 0, sonda con 7 link non di profilo (7 su 7 salvati come nome sbagliato), vicini 12 file verdi"
     },
     {
       "id": "R09-012",
@@ -279,7 +291,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a7793b07c7fcdac81872c04ee7756086d3bc0cae^ --file lib/admin/etichette.ts --prove tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Aggiunta l'etichetta PAID_MANUALLY («pagato a mano») all'elenco degli stati del bonifico; app/admin/orders/[id]/page.tsx usa già etichettaStatoBonifico e non è cambiato."
+      "cosa_ho_fatto": "Aggiunta l'etichetta PAID_MANUALLY («pagato a mano») all'elenco degli stati del bonifico; app/admin/orders/[id]/page.tsx usa già etichettaStatoBonifico e non è cambiato.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 2/2, rimessa uscita 0; app/admin/orders/[id]/page.tsx:254 mostra etichettaStatoBonifico(o.payout_status); tutti gli 11 stati di bonifico hanno un'etichetta"
     },
     {
       "id": "R09-014",
@@ -301,7 +314,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 33472da75000dfb4e60627eda3938fe6203b1604^ --file lib/store-customization.ts --prove tests/unit/riparazione-r09-annuncio-fuso.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "announcementActive confronta il giorno di Piacenza di adesso (giornoPiacenza, già in lib/tempo-piacenza.ts) con until, invece di costruire una data nel fuso del processo. Prova con orologio finto e TZ del processo UTC, Rome, Los Angeles e Tokyo, in inverno e in estate."
+      "cosa_ho_fatto": "announcementActive confronta il giorno di Piacenza di adesso (giornoPiacenza, già in lib/tempo-piacenza.ts) con until, invece di costruire una data nel fuso del processo. Prova con orologio finto e TZ del processo UTC, Rome, Los Angeles e Tokyo, in inverno e in estate.",
+      "verificato_da": "controllore 1 (opus): prova rilanciata 16/16, rimessa uscita 0, sonda con fusi UTC/Kiritimati/Etc/GMT+12/Rome, cambi d'ora, mezzanotte esatta, capodanno, until vuoto o malformato: tutte verdi; vicini verdi"
     },
     {
       "id": "R09-015",
@@ -313,7 +327,8 @@
           "modifica": "nel <ProductGrid> a riga ~223 (griglia «tutti i prodotti» della vetrina, sotto le sezioni del negozio) aggiungere prioritaPrimeFoto={false}: oggi usa il valore di serie e chiede ancora quattro foto urgenti"
         }
       ],
-      "nota": "Gli altri punti della voce sono già a posto sulla base: components/ProductGrid.tsx:665 priority={prioritaPrimeFoto && !formaFila && i < 4}; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:89 priority={false} e :147 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4} (solo la prima riga). Prova esistente: tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts."
+      "nota": "Gli altri punti della voce sono già a posto sulla base: components/ProductGrid.tsx:665 priority={prioritaPrimeFoto && !formaFila && i < 4}; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:89 priority={false} e :147 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4} (solo la prima riga). Prova esistente: tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts.",
+      "verificato_da": "controllore 1 (opus): righe lette sulla base (PromoDeals:71, CollectionSection:89 e :147, promozioni:138, la fila della home passa rail); la modifica chiesta a StoreProductExplorer.tsx:223 è giusta"
     },
     {
       "id": "R09-016",
@@ -337,7 +352,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cb46ae5166a8f68fcd0198f6bd25d4f17c774c5d^ --file app/orders/[id]/page.tsx,app/seller/orders/[id]/page.tsx,app/rider/orders/[id]/page.tsx --prove tests/unit/riparazione-r09-note-con-link-lungo.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Alla nota di consegna delle tre pagine [overflow-wrap:anywhere] e break-words; min-w-0 sugli elementi dentro i flex (indirizzo del cliente, indirizzo nella pagina del negozio, nota del fattorino). La prova legge il sorgente."
+      "cosa_ho_fatto": "Alla nota di consegna delle tre pagine [overflow-wrap:anywhere] e break-words; min-w-0 sugli elementi dentro i flex (indirizzo del cliente, indirizzo nella pagina del negozio, nota del fattorino). La prova legge il sorgente.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0; Tailwind compilato e misura in Chrome a 360 px con un URL lungo: scrollWidth 809→360 (cliente), 794→360 (negozio), 763→360 (fattorino)"
     },
     {
       "id": "R09-017",
@@ -363,7 +379,8 @@
         "R09-004"
       ],
       "cosa_ho_fatto": "Sulla base soloRecensiti (R15-009) escludeva già i prodotti a zero recensioni, con stato vuoto onesto. Ho tolto l'occhiello «Scelti dai clienti» (ora «Con recensioni»). Il numero vero in testa è nel commit di R09-004 (stesso onCount).",
-      "cosa_resta": "I 40 mostrati sono i 40 più recenti tra i recensiti, non i 40 con più recensioni. L'RPC prodotti_con_voto_almeno restituisce solo product_id, senza conteggio: serve una funzione nuova che dia gli id ordinati per numero di recensioni (migrazione, non in questo giro). Oggi le recensioni sono zero, quindi è latente."
+      "cosa_resta": "I 40 mostrati sono i 40 più recenti tra i recensiti, non i 40 con più recensioni. L'RPC prodotti_con_voto_almeno restituisce solo product_id, senza conteggio: serve una funzione nuova che dia gli id ordinati per numero di recensioni (migrazione, non in questo giro). Oggi le recensioni sono zero, quindi è latente. Il conteggio dei recensiti ha lo stesso buco di R09-004 (negozi senza insegna, «Carica altri» che sparisce) e nessuna prova lo esegue; le schede non mostrano voto né numero di recensioni mentre la frase sotto il titolo dice «ordinati per numero di recensioni».",
+      "verificato_da": "controllore 3 (opus): prova rilanciata (guarda occhiello e props), rimessa uscita 0, sonda sulla griglia montata con soloRecensiti (onCount riceve il totale) e sul modulo vero col negozio senza insegna"
     },
     {
       "id": "R09-018",
@@ -386,7 +403,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b91478cea6467233a1de202b909df2ae44501e68^ --file app/rider/help/page.tsx,app/rider/onboarding/page.tsx --prove tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "I tasti indietro della guida e dell'iscrizione del fattorino passano da h-9 w-9 a h-11 w-11 (44 px); quello di app/rider/orders/[id]/page.tsx:494 era già h-11 w-11 sulla base. La prova legge il sorgente delle tre pagine."
+      "cosa_ho_fatto": "I tasti indietro della guida e dell'iscrizione del fattorino passano da h-9 w-9 a h-11 w-11 (44 px); quello di app/rider/orders/[id]/page.tsx:494 era già h-11 w-11 sulla base. La prova legge il sorgente delle tre pagine.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0; grep su app/rider e components/rider: gli unici tasti indietro sono i tre della voce, tutti h-11 w-11"
     },
     {
       "id": "R09-019",
@@ -397,18 +415,15 @@
     {
       "id": "R09-020",
       "chiave": "qa-flussi|la pagina novità mostra tutto il catalogo, anche un prodotto di tre mesi fa, e il numero in alto conta solo i prodotti già caricati",
-      "esito": "gia_riparato_prima",
-      "prova": "app/novita/page.tsx:50 passa soloNovita; components/ProductGrid.tsx:248 creatiDal = inizioFinestraNovita(); lib/queries/griglia-prodotti.ts:~107 inizioFinestraNovita usa NEW_PRODUCT_DAYS (14, lib/constants.ts:2, la soglia del badge «Nuovo»); ProductGrid.tsx:285-293 il totale viene da contaProdottiDellaGriglia. Prove verdi: tests/unit/riparazione-r15-novita-conteggio.test.ts e tests/unit/riparazione-r15-novita-finestra.test.ts."
+      "esito": "parziale",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun commit in questo giro: la finestra di 14 giorni (inizioFinestraNovita, lib/queries/griglia-prodotti.ts:101, NEW_PRODUCT_DAYS) e il totale dal database c'erano già sulla base (R15).",
+      "cosa_resta": "Il conteggio (contaProdottiDellaGriglia) conta anche i prodotti dei negozi approvati senza insegna che la lettura scarta (40 contro 30 anche per un visitatore), e ProductGrid.tsx:279 (getNextPageParam su ultima.length invece di righeLette) ferma la griglia prima del totale promesso.",
+      "verificato_da": "controllore 3 (opus): prove r15 verdi, righe controllate sulla base, sonda sul modulo vero con creatiDal e un negozio senza insegna (40 contro 30)",
+      "prova_letta": "app/novita/page.tsx:50 soloNovita; lib/queries/griglia-prodotti.ts:101 inizioFinestraNovita; tests/unit/riparazione-r15-novita-conteggio.test.ts e riparazione-r15-novita-finestra.test.ts verdi"
     }
   ],
   "nuovi_difetti_visti": [
-    {
-      "titolo": "Il conteggio del database per le griglie non filtra i negozi non approvati",
-      "dimensione": "qa-flussi",
-      "severita": "minore",
-      "file": "lib/queries/griglia-prodotti.ts:~340",
-      "descrizione": "contaProdottiDellaGriglia non scarta i prodotti di negozi con profiles.is_approved falso, mentre la lettura li scarta dopo il fetch. Per un visitatore la regola del database (migrazione 129) filtra già, quindi il numero coincide; per admin o il venditore stesso il totale può superare le schede mostrabili. Latente."
-    },
     {
       "titolo": "Tre etichette del modulo negozio e una del profilo non sono legate al loro campo",
       "dimensione": "frontend-ux",
@@ -422,16 +437,37 @@
       "severita": "minore",
       "file": "lib/store-customization.ts:150",
       "descrizione": "«people» ora è fra i percorsi che non sono un nome di profilo (dentro R09-011); restano altri percorsi Facebook non elencati che verrebbero salvati come nome."
+    },
+    {
+      "titolo": "La pagina del negozio in cache può mostrare un annuncio già scaduto dopo la mezzanotte",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/store/[id]/layout.tsx:8",
+      "descrizione": "revalidate = 300: una pagina preparata prima della mezzanotte di Piacenza può arrivare con l'annuncio scaduto al primo visitatore dopo, con errore di idratazione, finché non si rigenera. Causa diversa dal fuso di R09-014."
+    },
+    {
+      "titolo": "Il costruttore della vetrina ha ancora campi brevi che tagliano in silenzio",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/seller/site/SectionConfigForm.tsx:54,140,162,171,172 · CollectionFields.tsx:24 · GalleryFields.tsx:99,119 · PageEditor.tsx:89,110,111 · MenuEditor.tsx:61",
+      "descrizione": "Lo stesso meccanismo di R09-008 (maxLength che tronca senza avviso) nei campi brevi del costruttore della vetrina del negozio; non nominati dalla voce."
+    },
+    {
+      "titolo": "«Carica altri» sparisce quando una pagina della griglia perde righe al filtro dei negozi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/ProductGrid.tsx:279 · lib/queries/griglia-prodotti.ts:336",
+      "descrizione": "getNextPageParam usa ultima.length: la metà di R02-012 sulla griglia (righeLette) non è mai stata collegata. Con i totali veri di R09-004 e R09-017 ora si vede, perché il numero in testa supera quello che la griglia carica."
     }
   ],
   "domande_per_nicola": [
     {
       "voce": "R09-002",
-      "domanda": "Le pagine di prodotti, negozi, categorie e profili che non esistono rispondono 200 (con il testo «non trovato») invece di 404 perché lo scheletro di caricamento (app/loading.tsx, app/store/loading.tsx, app/product/[id]/loading.tsx) fa partire la risposta prima del controllo: preferisci (a) togliere quegli scheletri e fare il controllo nei layout, (b) un controllo nel middleware che manda a 404, oppure (c) lasciare così (i motori di ricerca vedono già noindex)?"
+      "domanda": "Le pagine che non esistono rispondono 200 (con il testo «non trovato») invece di 404. Per /u lo causa lo scheletro di caricamento della radice (app/loading.tsx): senza, risponde 404. Per /product, /store e /store/<id>/<pagina> le pagine sono preparate nel browser e nessun layout chiama notFound() (c'è anche app/store/[id]/loading.tsx). Preferisci (a) togliere gli scheletri di radice, store e product e fare il controllo nei layout con una lettura sul server, (b) un controllo nel middleware che manda a 404, oppure (c) lasciare così (i motori di ricerca vedono già noindex)?"
     }
   ],
   "conto": {
-    "agenti": 3,
-    "nota": ""
+    "agenti": 6,
+    "nota": "3 lotti su sonnet, 3 controllori su opus; spesa letta da get_session: 23,84 $ dopo i controllori"
   }
 }
