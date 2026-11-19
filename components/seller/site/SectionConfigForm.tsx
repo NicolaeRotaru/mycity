@@ -70,24 +70,11 @@ function VideoField({ section, onChange }: { section: VideoSec; onChange: (s: Si
  * pagina vera faceva del testo un blocco unico, mentre l'aiuto prometteva
  * a-capo e grassetto (che senza una barra di formattazione non si può fare).
  */
-/**
- * R09-009 — La pulizia lato server salva «&» come «&amp;» e «<» come «&lt;»: nel campo si vede il
- * carattere vero (htmlInACapo decodifica), e quello che si scrive si ricodifica (aCapoInHtml) così
- * il giro di andata e ritorno non cambia il testo né lo trasforma in un tag.
- */
 export function aCapoInHtml(testo: string): string {
-  return testo
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\r?\n/g, '<br>');
+  return testo.replace(/\r?\n/g, '<br>');
 }
 export function htmlInACapo(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&'); // per ultimo: «&amp;lt;» deve restare «&lt;», non diventare «<»
+  return html.replace(/<br\s*\/?>/gi, '\n');
 }
 
 function StructuralNote({ type }: { type: string }) {
