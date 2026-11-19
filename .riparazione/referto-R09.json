@@ -1,13 +1,13 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-19 10:19",
-  "finita": false,
-  "testa": "13a3a15fa7bef167d0be784a6753a5e12ffdeda7",
+  "aggiornato": "2026-11-19 10:33",
+  "finita": true,
+  "testa": "e6672c3da9c3074f6c8db9da8ee89fd9ca192019",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "non_eseguito",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "e6672c3da9c3074f6c8db9da8ee89fd9ca192019",
+    "nota": "typecheck, lint e 1743 file di prova verdi (11010 casi, 1 saltato già sulla base), dopo i revert di R09-009, R09-010 e R09-011; guardia-ramo verde (una prova esistente comune sospesa da eccezione firmata da Nicola il 18/11)"
   },
   "voci": [
     {
@@ -178,92 +178,40 @@
     {
       "id": "R09-009",
       "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
-      "esito": "parziale",
-      "commit": "cfc9ba89e3051aab743d25bdf02231df0b521ebd",
-      "file_toccati": [
-        "components/seller/site/SectionConfigForm.tsx"
+      "esito": "non_fatto",
+      "cosa_resta": "Cura da rifare (dal commit annullato cfc9ba89) correggendo il peggioramento trovato dal controllore 1, in components/seller/site/SectionConfigForm.tsx (htmlInACapo e aCapoInHtml, ~:76-91): htmlInACapo decodifica &lt; &gt; &amp; (&amp; per ultimo) e anche &nbsp; (in spazio normale o non separabile); aCapoInHtml ricodifica & e solo i «<» che NON aprono o chiudono un tag ammesso da lib/sanitize-html.ts (strong, b, em, i, ul, ol, li, a, br, p…), così un testo già salvato con tag veri (fino al 5/11 l'aiuto prometteva grassetto, corsivo, elenchi e link) risalvato resta com'era. Varianti da mettere nella prova: «Pane & vino» e «3 < 5» → giro scrivi-pulisci-rileggi identico; «Orari: <strong>lun-sab</strong><br>Vedi <a href=\"https://esempio.it\">il sito</a>» caricato, modificato di una lettera e risalvato → tag intatti; «a\\u00a0b» incollato → mai «&nbsp;» né «&amp;nbsp;» visibile al secondo giro.",
+      "verificato_da": "controllore 1 (opus): tag veri già salvati e &nbsp; rotti al risalvataggio (peggioramento): annullato",
+      "commit_annullati": [
+        "cfc9ba89e3051aab743d25bdf02231df0b521ebd",
+        "916a6405 (revert)"
       ],
-      "prova_file": [
-        "tests/unit/riparazione-r09-testo-vetrina-entita.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r09-testo-vetrina-entita.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cfc9ba89e3051aab743d25bdf02231df0b521ebd^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r09-testo-vetrina-entita.test.ts --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "htmlInACapo decodifica &lt; &gt; &amp; (&amp; per ultimo) e aCapoInHtml ricodifica & < >: il giro scrivi, pulisci con sanitizeRichText e rileggi ridà il testo scritto. Il testo senza simboli si salva identico a prima.",
-      "cosa_resta": "PEGGIORAMENTO da correggere (components/seller/site/SectionConfigForm.tsx:78-91): (a) un testo già salvato con tag veri (fino al 5/11 l'aiuto prometteva grassetto, corsivo, elenchi e link) modificato e risalvato diventa &lt;strong&gt;… e in vetrina si leggono i tag; (b) lo spazio non separabile incollato si salva come &nbsp;, non si decodifica, e al giro dopo diventa &amp;nbsp; visibile. Cura suggerita: ricodificare solo i «<» che non aprono un tag ammesso da lib/sanitize-html.ts e decodificare anche &nbsp;.",
-      "verificato_da": "controllore 1 (opus): prova rilanciata 5/5, rimessa uscita 0, sonda con contenuto già salvato con tag veri, &nbsp; incollato, riga sola, entità miste: il caso della voce è chiuso ma i tag veri e &nbsp; si rompono; vicini 10 file verdi"
+      "nota": "Riparazione fatta e poi annullata su decisione della regia (strada B del 19/11): i controllori hanno trovato un peggioramento rispetto alla base e il tetto di 6 subagenti non permetteva un giro di correzione. Va al prossimo giro di correzione, con un altro padrone. Cosa faceva la riparazione annullata: il blocco di testo della vetrina rileggeva «&» e «<» com'erano scritti (decodifica in htmlInACapo, ricodifica di & < > in aCapoInHtml)."
     },
     {
       "id": "R09-010",
       "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
-      "esito": "parziale",
-      "commit": "347f4d39fcb5c914a35147ed00192c292283ff16",
-      "commit_altri": [
-        "708646b4abdaeb23d315e093b90fcf2169cbdfb2"
+      "esito": "non_fatto",
+      "cosa_resta": "Cura da rifare (dai commit annullati 347f4d39 e 708646b4) correggendo i due buchi trovati dal controllore 1: (a) components/VendorForm.tsx: la firma «salvata» va calcolata sugli stessi valori del modulo (la versione corretta dei campi), non su parsed.data di zod, che riordina le chiavi e toglie gli spazi in coda; meglio una firma stabile (chiavi ordinate, stringhe con trim) usata da entrambi i lati, così dopo un salvataggio riuscito l'avviso si spegne anche con i social scritti in altro ordine, lo slogan con uno spazio in coda o l'annuncio acceso su un negozio con badge. (b) clicDaFermare in VendorForm deve confrontare anche la parte dopo «?»: in Dettagli negozio (/seller/site?details=1) il link del menu «La tua vetrina» (/seller/site, components/seller/SellerShell.tsx:53) ha lo stesso percorso ma chiude i dettagli, quindi va fermato con la domanda. Fuori dai file di R09: il tasto indietro di components/seller/site/SiteEditor.tsx deve chiedere conferma quando VendorForm segnala modifiche (prop onDirtyChange); il tasto indietro del browser non è intercettabile in Next.",
+      "verificato_da": "controllore 1 (opus): avviso acceso dopo un salvataggio riuscito e menu «La tua vetrina» non fermato: annullato",
+      "commit_annullati": [
+        "347f4d39fcb5c914a35147ed00192c292283ff16",
+        "708646b4abdaeb23d315e093b90fcf2169cbdfb2",
+        "43e969e7 (revert)"
       ],
-      "file_toccati": [
-        "components/VendorForm.tsx",
-        "components/seller/site/StoreDetailsEditor.tsx",
-        "app/seller/profile/page.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r09-modifiche-non-salvate.test.tsx",
-        "tests/unit/riparazione-r09-tutte-le-impostazioni.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r09-modifiche-non-salvate.test.tsx tests/unit/riparazione-r09-tutte-le-impostazioni.test.tsx",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 347f4d39fcb5c914a35147ed00192c292283ff16^ --file components/VendorForm.tsx,components/seller/site/StoreDetailsEditor.tsx,app/seller/profile/page.tsx --prove tests/unit/riparazione-r09-modifiche-non-salvate.test.tsx,tests/unit/riparazione-r09-tutte-le-impostazioni.test.tsx --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "La guardia sta dentro VendorForm (Dettagli negozio e profilo): firma dei campi, azzerata quando il salvataggio riesce. Avvisa alla chiusura o ricarica della pagina e chiede conferma sul clic dei link interni; «Tutte le impostazioni» chiede prima di tornare indietro.",
-      "cosa_resta": "PEGGIORAMENTO da correggere: (a) components/VendorForm.tsx:300 contro :282: la firma inviata è fatta su parsed.data di zod (chiavi riordinate, spazi in coda tolti) mentre il modulo tiene la versione corretta, quindi dopo un salvataggio riuscito l'avviso resta acceso (social in altro ordine, slogan con spazio in coda, annuncio acceso su negozio con badge). (b) In Dettagli negozio (/seller/site?details=1) la voce del menu «La tua vetrina» (/seller/site, SellerShell.tsx:53) ha lo stesso percorso: clicDaFermare la lascia passare e le modifiche si perdono senza domanda; si ripara da VendorForm confrontando anche la parte dopo «?». Fuori dai miei file: il tasto indietro del browser e quello di SiteEditor.",
-      "serve_file_altrui": [
-        {
-          "file": "components/seller/site/SiteEditor.tsx",
-          "modifica": "il tasto indietro che chiude i Dettagli negozio deve chiedere conferma quando VendorForm segnala modifiche non salvate (esporre lo stato «modificato» da VendorForm con una prop onDirtyChange e usarlo prima di chiudere)"
-        }
-      ],
-      "verificato_da": "controllore 1 (opus): prove rilanciate 6+2, rimessa uscita 0, sonda con 4 varianti di cui 3 rosse (salvataggio riuscito con social in altro ordine, slogan con spazio in coda, menu della sezione stessa); vicini verdi"
+      "nota": "Riparazione fatta e poi annullata su decisione della regia (strada B del 19/11): i controllori hanno trovato un peggioramento rispetto alla base e il tetto di 6 subagenti non permetteva un giro di correzione. Va al prossimo giro di correzione, con un altro padrone. Cosa faceva la riparazione annullata: VendorForm (Dettagli negozio e profilo) avvisava alla chiusura o ricarica della pagina e chiedeva conferma sul clic dei link interni; «Tutte le impostazioni» chiedeva prima di tornare indietro."
     },
     {
       "id": "R09-011",
       "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
-      "esito": "parziale",
-      "commit": "6ef7924e017a6f114b92ef1155834482df37daf9",
-      "commit_altri": [
-        "fed864043b61ba470dad0cc80b0c7110733fcd91"
+      "esito": "non_fatto",
+      "cosa_resta": "Cura da rifare (dai commit annullati 6ef7924e e fed86404) correggendo il peggioramento trovato dal controllore 1: (1) lib/store-customization.ts (~:329 nella versione annullata): non togliere la guardia /\\?/ che sulla base fermava i link con «?»; togliere dalla query solo i parametri di tracciamento noti (igsh, mibextid, lang, utm_*, si) e poi, se resta una query o il primo segmento del percorso non è un nome di profilo, fermare con l'errore. Da fermare almeno i percorsi trovati dal controllore: facebook story.php, permalink.php, photo.php, photo, people; instagram stories, explore; tiktok t (altri percorsi simili da valutare). Varianti da mettere nella prova: facebook.com/story.php?story_fbid=1&id=2, facebook.com/permalink.php?…, facebook.com/photo.php?fbid=1, facebook.com/photo/?fbid=1, instagram.com/stories/nome/123?igsh=x, instagram.com/explore/tags/x?igsh=y, tiktok.com/t/ZM123/?k=1 → tutte fermate con l'errore; instagram.com/nome?igsh=x → «nome». (2) L'errore sotto il campo giusto (SocialLinksFields.tsx, CustomizationSection.tsx, VendorForm.tsx:180-186 e :355) e la sezione «Social e contatti» che si apre da sola: tenerli, ma il riassunto in fondo a VendorForm (:479 nella versione annullata) deve sparire quando il campo è corretto. (3) Facoltativo: it-it.facebook.com e web.facebook.com ridotti al nome come facebook.com.",
+      "verificato_da": "controllore 1 (opus): 7 link non di profilo su 7 salvati come nome sbagliato (peggioramento): annullato",
+      "commit_annullati": [
+        "6ef7924e017a6f114b92ef1155834482df37daf9",
+        "fed864043b61ba470dad0cc80b0c7110733fcd91",
+        "e6672c3d (revert)"
       ],
-      "file_toccati": [
-        "lib/store-customization.ts",
-        "components/VendorForm.tsx",
-        "components/seller/SocialLinksFields.tsx",
-        "components/seller/CustomizationSection.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r09-social-vetrina.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r09-social-vetrina.test.tsx",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ef7924e017a6f114b92ef1155834482df37daf9^ --file lib/store-customization.ts,components/VendorForm.tsx,components/seller/SocialLinksFields.tsx,components/seller/CustomizationSection.tsx --prove tests/unit/riparazione-r09-social-vetrina.test.tsx --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già. Aggiunto il resto: il link copiato dall'app (?igsh=, ?mibextid=, ?lang=) si riduce al nome; l'errore compare sotto il campo giusto; la sezione «Social e contatti» si apre da sola; scrivendo si toglie solo l'errore di quel campo.",
-      "cosa_resta": "PEGGIORAMENTO da correggere: togliendo la guardia /\\?/ (lib/store-customization.ts:329) i link non di profilo si salvano in silenzio come nome sbagliato (facebook story.php?…, permalink.php?…, photo.php?…, photo/?fbid=…; instagram /stories/<nome>/<n>?igsh=…, /explore/…?igsh=; tiktok /t/<codice>/?k=1), mentre sulla base erano fermati con l'errore. Minori: il riassunto in fondo a VendorForm.tsx:479 resta dopo aver corretto il campo; it-it.facebook.com e web.facebook.com non si riducono al nome.",
-      "verificato_da": "controllore 1 (opus): prova rilanciata 4/4, rimessa uscita 0, sonda con 7 link non di profilo (7 su 7 salvati come nome sbagliato), vicini 12 file verdi"
+      "nota": "Riparazione fatta e poi annullata su decisione della regia (strada B del 19/11): i controllori hanno trovato un peggioramento rispetto alla base e il tetto di 6 subagenti non permetteva un giro di correzione. Va al prossimo giro di correzione, con un altro padrone. Cosa faceva la riparazione annullata: il link copiato dall'app (?igsh=, ?mibextid=, ?lang=) si riduceva al nome, l'errore compariva sotto il campo giusto, la sezione «Social e contatti» si apriva da sola."
     },
     {
       "id": "R09-012",
@@ -468,6 +416,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "3 lotti su sonnet, 3 controllori su opus; spesa letta da get_session: 23,84 $ dopo i controllori"
-  }
+    "subagenti": 6,
+    "nota": "3 riparatori su sonnet (lotti 1-3) e 3 controllori su opus; costo letto con get_session alle 10:26 (23,84 $), prima dei revert e del secondo verify: il valore finale lo legge la regia"
+  },
+  "costo_usd": 23.84
 }
