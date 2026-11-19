@@ -63,11 +63,6 @@ async function accendi(elemento: ReturnType<typeof createElement>) {
   return radice;
 }
 
-const storia = (link_url: string | null) => ({
-  id: 'st-1', image_url: 'https://x/storia.jpg', caption: 'Fragole del Trebbia', link_url,
-  seller: { id: 'negozio-1', store_name: 'Frutta di Ada', store_logo: null },
-});
-
 beforeEach(() => {
   stato.insert.mockResolvedValue({ error: null });
   stato.carica.mockResolvedValue({ publicUrl: 'https://x/storia.jpg' });
