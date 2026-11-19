@@ -316,6 +316,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "6 su 6: 2 riparatori di lotto, 1 giro di correzione, 3 revisori «smentisci», tutti su sonnet, nessun Workflow, nessuna migrazione"
-  }
+    "nota": "6 su 6: 2 riparatori di lotto, 1 giro di correzione, 3 revisori «smentisci», tutti su sonnet, nessun Workflow, nessuna migrazione",
+    "subagenti": 6
+  },
+  "costo_usd": 9.66
 }
