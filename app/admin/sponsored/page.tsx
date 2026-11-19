@@ -22,6 +22,21 @@ const POSIZIONE: Record<string, string> = {
   search_top: 'In cima alla ricerca',
   category_top: 'In cima alla categoria',
 };
+/**
+ * R02-006 — «Invalid Date» e il codice grezzo erano ancora possibili: `formatDate` su una data
+ * mancante scrive «Invalid Date» (inglese), e un valore di posizione nuovo usciva com'è nel database.
+ * La data mancante è «—»; la posizione sconosciuta è il codice reso leggibile, mai quello grezzo.
+ */
+const giorno = (d: string | null | undefined) => {
+  if (!d || Number.isNaN(new Date(d).getTime())) return '—';
+  return formatDate(d);
+};
+const posizione = (codice: string | null | undefined) => {
+  const nota = codice ? POSIZIONE[codice] : undefined;
+  if (nota) return nota;
+  const leggibile = (codice ?? '').replace(/[-_]+/g, ' ').trim();
+  return leggibile ? `Altra posizione (${leggibile})` : 'Altra posizione';
+};
 const percentuale = (n: number) => `${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 import {
   vistaDelleCampagne,
@@ -240,9 +255,9 @@ export default function AdminSponsoredPage() {
                       <p className="font-semibold text-ink-900 text-sm">{l.product?.name ?? '—'}</p>
                       <p className="text-xs text-ink-500">{l.seller?.store_name ?? '—'}</p>
                     </td>
-                    <td className="px-4 py-3 text-ink-700">{POSIZIONE[l.placement] ?? l.placement}{l.category_slug ? ` · ${nomeCategoria(l.category_slug)}` : ''}</td>
+                    <td className="px-4 py-3 text-ink-700">{posizione(l.placement)}{l.category_slug ? ` · ${nomeCategoria(l.category_slug)}` : ''}</td>
                     <td className="px-4 py-3 text-ink-600 text-xs">
-                      {formatDate(l.start_date)} → {formatDate(l.end_date)}
+                      {giorno(l.start_date)} → {giorno(l.end_date)}
                     </td>
                     <td className="px-4 py-3 text-right">{formatPrice(l.daily_budget_cents / 100)}</td>
                     <td className="px-4 py-3 text-right">{formatPrice(l.spent_cents / 100)}</td>
