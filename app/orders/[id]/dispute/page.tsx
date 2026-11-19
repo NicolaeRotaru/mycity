@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useRef, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
@@ -22,6 +22,45 @@ const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'other',             label: 'Altro motivo',                 hint: 'Descrivi nei dettagli qui sotto.' },
 ];
 
+/**
+ * R01-003 — LA BOZZA DEL RECLAMO, SE LA SESSIONE SCADE MENTRE LO SCRIVI.
+ *
+ * Con la sessione scaduta il server risponde 401: prima usciva solo un avviso che spariva, senza
+ * modo di rientrare, e chi andava all'accesso tornava a un modulo vuoto. Adesso la pagina dice di
+ * rientrare (il link torna qui) e tiene motivo e testo in questa scheda del browser
+ * (sessionStorage), una bozza per ordine. Al ritorno la bozza torna nel modulo e si cancella
+ * subito: da lì in poi il testo vero è quello del modulo, e una bozza vecchia non torna più.
+ * La bozza riprende il testo solo per chi l'ha scritto.
+ * I controlli restano tutti nel server (/api/disputes).
+ */
+type BozzaReclamo = { utente: string; reason: string; description: string };
+const chiaveBozza = (orderId: string) => `mycity:bozza-reclamo:${orderId}`;
+
+/** Legge la bozza di questo ordine e la toglie dalla scheda: quello che serve passa nel modulo. */
+function prendiBozza(orderId: string): BozzaReclamo | null {
+  try {
+    const grezza = window.sessionStorage.getItem(chiaveBozza(orderId));
+    if (grezza === null) return null;
+    window.sessionStorage.removeItem(chiaveBozza(orderId));
+    const b = JSON.parse(grezza) as Partial<BozzaReclamo>;
+    if (typeof b.utente !== 'string' || !b.utente) return null;
+    const reason = REASONS.some((r) => r.value === b.reason) ? String(b.reason) : '';
+    const description = typeof b.description === 'string' ? b.description.slice(0, 2000) : '';
+    return reason || description ? { utente: b.utente, reason, description } : null;
+  } catch {
+    return null;
+  }
+}
+
+function scriviBozza(orderId: string, bozza: BozzaReclamo | null) {
+  try {
+    if (bozza) window.sessionStorage.setItem(chiaveBozza(orderId), JSON.stringify(bozza));
+    else window.sessionStorage.removeItem(chiaveBozza(orderId));
+  } catch {
+    // Memoria della scheda chiusa (navigazione privata, blocchi): il testo resta nel modulo aperto.
+  }
+}
+
 export default function OpenDisputePage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const router = useRouter();
@@ -36,6 +75,10 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const [tentativo, setTentativo] = useState(0);
   // 5/11/2026 — Il database tiene un solo reclamo aperto per ordine: se c'è già, lo si dice.
   const [reclamoAperto, setReclamoAperto] = useState<{ created_at: string; status: string } | null>(null);
+  // R01-003 — Il server ha risposto «non sei più dentro»: si dice di rientrare, e la bozza è salva.
+  const [sessioneScaduta, setSessioneScaduta] = useState(false);
+  // R01-003 — Chi ha aperto il modulo: la bozza porta il suo id.
+  const utenteDelModulo = useRef<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -44,6 +87,14 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       if (!user) {
         router.push(`/sign-in?returnTo=/orders/${params.id}/dispute`);
         return;
+      }
+      utenteDelModulo.current = user.id;
+      // R01-003 — Di ritorno dall'accesso: la bozza torna nel modulo e lascia la scheda (si toglie
+      // anche se poi c'è già un reclamo aperto). La bozza riprende il testo solo per chi l'ha scritto.
+      const bozza = prendiBozza(params.id);
+      if (bozza && bozza.utente === user.id) {
+        setReason(bozza.reason);
+        setDescription(bozza.description);
       }
       const { data, error } = await supabase
         .from('orders')
@@ -79,12 +130,20 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
     })();
   }, [params.id, router, tentativo]);
 
+  // R01-003 — Finché si aspetta di rientrare la bozza segue il modulo: si ritrova l'ultimo testo,
+  // e un modulo svuotato non lascia una bozza vecchia.
+  useEffect(() => {
+    if (!sessioneScaduta || !utenteDelModulo.current) return;
+    scriviBozza(params.id, description.trim() ? { utente: utenteDelModulo.current, reason, description } : null);
+  }, [sessioneScaduta, reason, description, params.id]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason) { toast.error('Seleziona un motivo'); return; }
     if (description.trim().length < 20) { toast.error('Descrivi meglio (min 20 caratteri)'); return; }
 
     setSubmitting(true);
+    setSessioneScaduta(false);
     try {
       // 12/11/2026 (R03-013) — Il reclamo lo apre il server (/api/disputes): controlla che
       // l'ordine sia tuo, avvisa gli amministratori e il negozio, e ti manda la ricevuta. Prima la
@@ -95,10 +154,16 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         body: JSON.stringify({ orderId: params.id, reason, description: description.trim() }),
       });
       if (!res.ok) {
+        if (res.status === 401) {
+          if (utenteDelModulo.current) scriviBozza(params.id, { utente: utenteDelModulo.current, reason, description });
+          setSessioneScaduta(true);
+          return;
+        }
         const corpo = await res.json().catch(() => ({}));
         toast.error(apiErrorMessage(corpo, 'Non sono riuscito ad aprire il reclamo: riprova fra poco.'));
         return;
       }
+      scriviBozza(params.id, null);
       toast.success('Reclamo aperto: ti abbiamo mandato una ricevuta per email e ti scriviamo noi con la decisione.');
       router.push('/orders');
     } catch (err) {
@@ -216,6 +281,19 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
             <li>Se ti diamo ragione → rimborso completo o parziale</li>
           </ul>
         </div>
+
+        {sessioneScaduta && (
+          <div role="alert" className="rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
+            <p className="font-semibold">La sessione è scaduta: rientra per aprire il reclamo.</p>
+            <p className="mt-1">Quello che hai scritto resta salvato in questa scheda e lo ritrovi qui al ritorno.</p>
+            <Link
+              href={`/sign-in?returnTo=${encodeURIComponent(`/orders/${params.id}/dispute`)}`}
+              className="inline-block mt-2 font-semibold text-primary-700 hover:underline"
+            >
+              Rientra
+            </Link>
+          </div>
+        )}
 
         <button
           type="submit"
