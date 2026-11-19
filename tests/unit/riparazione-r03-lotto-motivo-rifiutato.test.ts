@@ -33,7 +33,7 @@ const PRODUCTS = [{
 type Riga = Record<string, unknown>;
 const db = vi.hoisted(() => ({
   riga: null as Record<string, unknown> | null,
-  rifiuta: (_v: Record<string, unknown>) => false,
+  rifiuta: ((_v: Record<string, unknown>) => false) as (v: Record<string, unknown>) => boolean,
 }));
 
 function lavori() {
