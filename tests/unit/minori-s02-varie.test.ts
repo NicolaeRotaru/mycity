@@ -43,13 +43,13 @@ describe('2325 · le ore della veloce hanno una casa sola', () => {
 });
 
 describe('1528 · «Pronto» nella timeline', () => {
-  it('a domicilio dice «Pronto per il rider» come la targhetta; col ritiro «Pronto per il ritiro»', () => {
+  it('a domicilio dice «Pronto per il fattorino» come la targhetta; col ritiro «Pronto per il ritiro»', () => {
     const a = renderToStaticMarkup(createElement(OrderTimeline, { status: 'READY', readyAt: '2026-11-02T10:00:00Z' }));
-    expect(a).toContain('Pronto per il rider');
+    expect(a).toContain('Pronto per il fattorino');
     expect(a).not.toContain('Pronto per il ritiro');
     const b = renderToStaticMarkup(createElement(OrderTimeline, { status: 'READY', readyAt: '2026-11-02T10:00:00Z', ritiroInNegozio: true }));
     expect(b).toContain('Pronto per il ritiro');
-    expect(readFileSync('app/seller/orders/[id]/page.tsx', 'utf8')).not.toContain("'Pronto per il ritiro' : 'Pronto per il rider'");
+    expect(readFileSync('app/seller/orders/[id]/page.tsx', 'utf8')).not.toContain("'Pronto per il ritiro' : 'Pronto per il fattorino'");
   });
 });
 

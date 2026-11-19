@@ -23,7 +23,7 @@ describe('l’etichetta di «pronto» segue l’interruttore del ritiro', () => 
   });
 
   it('e dice chi passa a prenderlo', () => {
-    expect(etichettaPronto(false), 'l’etichetta deve dire che passa il rider').toMatch(/rider/i);
+    expect(etichettaPronto(false), 'l’etichetta deve dire che passa il fattorino').toMatch(/fattorino/i);
   });
 
   it('riacceso il ritiro, la parola torna da sé', () => {
