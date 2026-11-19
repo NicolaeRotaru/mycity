@@ -1,20 +1,20 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-19 09:45",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-19 11:20",
+  "finita": true,
+  "testa": "cdcb621a26a8e4b175bd9b14c30fca354090f48c",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "cdcb621a26a8e4b175bd9b14c30fca354090f48c",
+    "nota": "NODE_OPTIONS=--max-old-space-size=8192 (tsc va fuori memoria con l'heap standard). typecheck e lint verdi, vitest 1738 file e 10986 prove verdi, 1 saltata già prima."
   },
   "voci": [
     {
       "id": "R04-001",
       "chiave": "api-backend|quando l'amministrazione cambia solo le taglie di un prodotto, il registro delle azioni non scrive più niente",
       "esito": "riparato",
-      "commit": "885efa0c21e541b5318f8f957dcdc30f64160224",
+      "commit": "d9c913556a35d556cfed4a31f1af337ea2c3a15e",
       "file_toccati": [
         "app/api/admin/products/route.ts"
       ],
@@ -30,7 +30,12 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 885efa0c21e541b5318f8f957dcdc30f64160224^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r04-001-taglie-traccia.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Quando arrivano le varianti la voce di traccia si scrive sempre, con il campo variants (da solo o insieme agli altri campi cambiati)."
+      "cosa_ho_fatto": "La rotta legge le taglie vere dal database prima di salvarle e scrive la traccia variants solo se sono cambiate davvero (stesso ordine e normalizzazione): prima = le taglie vere di prima, dopo = quelle salvate. Un salvataggio identico dal modulo non scrive niente (giro di correzione d9c91355 dopo il primo smentitore: la prima versione 885efa0c scriveva a ogni salvataggio).",
+      "commit_della_voce": [
+        "885efa0c21e541b5318f8f957dcdc30f64160224",
+        "d9c913556a35d556cfed4a31f1af337ea2c3a15e"
+      ],
+      "verificato_da": "smentitore A (modello grande) sulla prima versione: trovata la traccia a ogni salvataggio → giro di correzione; smentitore C (modello grande) sul giro: regge con un corpo fedele al modulo vero, prova rossa senza d9c91355 e senza 885efa0c, 7 prove della rotta verdi, R04-002 intatto; due casi limite in nuovi_difetti_visti"
     },
     {
       "id": "R04-002",
@@ -52,7 +57,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd6db8a9d5618950aca9b241e821d9a4c0c25d62^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r04-002-prodotto-inesistente.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La lettura di com'era il prodotto ora viene prima di tutto (anche con solo le taglie): se non esiste risponde 404 e non salva varianti né scrive la traccia."
+      "cosa_ho_fatto": "La lettura di com'era il prodotto ora viene prima di tutto (anche con solo le taglie): se non esiste risponde 404 e non salva varianti né scrive la traccia.",
+      "verificato_da": "smentitore A (modello grande): prova rossa senza la correzione; patch legittimi (solo campi, solo taglie, tutti e due) 200 come prima; errore del database 500 e non 404; 7 prove che importano la rotta verdi"
     },
     {
       "id": "R04-003",
@@ -70,7 +76,7 @@
       "id": "R04-005",
       "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
       "esito": "riparato",
-      "commit": "cd07e425a37bcf7a35a53ae6f2cab9fbd99511c6",
+      "commit": "eca4bba2f223cf52da1b95338e3348c90ef15cf0",
       "file_toccati": [
         "app/api/cron/abandoned-carts/route.ts"
       ],
@@ -86,7 +92,12 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cd07e425a37bcf7a35a53ae6f2cab9fbd99511c6^ --file app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il ramo senza consenso era già a posto sulla base (R30-003: il segno diventa l'ultima attività). Restava il carrello rivendicato il cui invio fallisce: teneva il segno «avvisato» e il conto lo contava come inviato. Ora su invio fallito il segno torna all'ultima attività (update condizionato a last_activity), che chiusoSenzaEmail riconosce; nessun nuovo invio."
+      "cosa_ho_fatto": "Il ramo senza consenso era già a posto sulla base (R30-003). Restavano due rami che lasciavano un carrello rivendicato col segno «avvisato» senza nessuna email: l'invio fallito e il modello dell'email mancante. Ora tutti e due rimettono il segno all'ultima attività con lo stesso update condizionato (aiutante segnoSenzaEmailPartita), che chiusoSenzaEmail e il conteggio riconoscono; nessun nuovo invio.",
+      "commit_della_voce": [
+        "cd07e425a37bcf7a35a53ae6f2cab9fbd99511c6",
+        "eca4bba2f223cf52da1b95338e3348c90ef15cf0"
+      ],
+      "verificato_da": "smentitore A (modello grande): ramo senza consenso già a posto sulla base, conteggio giusto; trovato il ramo del modello mancante → giro eca4bba2; smentitore C: regge, rami «saltato» e «inviato» invariati, prova rossa senza i commit, 9 prove della rotta verdi"
     },
     {
       "id": "R04-006",
@@ -108,7 +119,11 @@
     },
     {
       "id": "R04-009",
-      "chiave": "api-backend|la ricerca degli indirizzi chiama il servizio pubblico delle mappe più volte al secondo, senza un freno per tutto il sito"
+      "chiave": "api-backend|la ricerca degli indirizzi chiama il servizio pubblico delle mappe più volte al secondo, senza un freno per tutto il sito",
+      "esito": "scelta_di_nicola",
+      "domanda": "Un freno unico a 1 chiamata al secondo su Nominatim (la regola d'uso del servizio pubblico) fa arrivare agli ordini coordinate vuote, e allora il controllo della zona di consegna salta: preferisci (a) un servizio di mappe con chiave e limiti più alti, (b) una memoria delle coordinate per indirizzo e il freno solo sulle ricerche della pagina, con attesa invece di rifiuto, (c) lasciare com'è oggi?",
+      "nota": "Riparazione fatta e tolta. Commit 53e804a4 + ec5b406c (freno globale 'nominatim:globale' su rateLimitAsync nella rotta e in coordinateDiUnIndirizzo, attesa massima 300 ms), tolti col revert bcaeaf49: i file sono di nuovo come sulla base. Lo smentitore (modello grande) ha riprodotto il danno: con due ordini nello stesso secondo il secondo prende coordinate null (lib/geocodifica.ts), con null il controllo della zona salta (lib/ordini/zona-di-consegna.ts:43) e un ordine per Milano con il negozio a Piacenza passa. Sulla carta il salto è muto (app/api/stripe/checkout/route.ts:603-614) e l'ordine nasce senza destinazione per il fattorino. In più un 429 della rotta fa salvare l'indirizzo del profilo senza coordinate per sempre (app/profile/addresses/page.tsx:81). La regia ha detto che la consegna non deve cambiare, quindi il freno non resta.",
+      "verificato_da": "smentitore B (modello grande): prova rossa senza la correzione; attesa peggiore 302 ms; danno sulla zona di consegna riprodotto"
     },
     {
       "id": "R04-010",
@@ -132,7 +147,8 @@
       "id": "R04-013",
       "chiave": "api-backend|comunicare l esito di una segnalazione: se il processo muore tra «prendo il canale» e l invio, quel canale resta preso e non riparte piu",
       "esito": "gia_riparato_prima",
-      "prova": "Sulla base f93d246a il meccanismo della voce non esiste: app/api/segnalazioni/esito/comunica.ts (comunicaEsito, righe 88-168) legge la segnalazione e spedisce senza nessun passo «prendo il canale» (nessun update o rpc di rivendicazione), e la migrazione 385_l_esito_della_segnalazione_si_comunica_una_volta_per_canale.sql non c'è in migrations/ (ls migrations | grep -E '^385|esito|segnalaz' vuoto). Un canale non può restare preso. Se quel meccanismo arriva da un altro ramo, la voce va rivalutata allora."
+      "prova": "Sulla base f93d246a il meccanismo della voce non esiste: app/api/segnalazioni/esito/comunica.ts (comunicaEsito, righe 88-168) legge la segnalazione e spedisce senza nessun passo «prendo il canale» (nessun update o rpc di rivendicazione), e la migrazione 385_l_esito_della_segnalazione_si_comunica_una_volta_per_canale.sql non c'è in migrations/ (ls migrations | grep -E '^385|esito|segnalaz' vuoto). Un canale non può restare preso. Se quel meccanismo arriva da un altro ramo, la voce va rivalutata allora.",
+      "verificato_da": "smentitore A (modello grande): nessuna rivendicazione del canale sulla base né su HEAD; nessuna migrazione 385, la tabella segnalazioni (126) e le 127/215/364/425 non aggiungono niente del genere"
     },
     {
       "id": "R04-014",
@@ -142,7 +158,13 @@
     },
     {
       "id": "R04-015",
-      "chiave": "api-backend|due invii uguali all'assistenza nello stesso istante creano due messaggi e due avvisi"
+      "chiave": "api-backend|due invii uguali all'assistenza nello stesso istante creano due messaggi e due avvisi",
+      "esito": "non_fatto",
+      "nota": "Difetto presente sulla base (app/api/support/conversation/route.ts:134-151): messages e notifications non hanno colonne di chiave né vincoli unici, e non c'è una rpc per un invio idempotente. In questo giro le migrazioni nuove sono vietate. MIGRAZIONE che servirebbe (fascia 610-619), migrations/610_messages_chiave_invio.sql: ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS chiave_invio text CHECK (chiave_invio IS NULL OR char_length(chiave_invio) BETWEEN 1 AND 100); CREATE UNIQUE INDEX IF NOT EXISTS messages_sender_chiave_invio_uniq ON public.messages (sender_id, chiave_invio); (indice unico pieno: i NULL sono già distinti, e un indice parziale farebbe fallire un upsert onConflict di PostgREST con 42P10). MODIFICA AL TS in app/api/support/conversation/route.ts: const chiave = (req.headers.get('idempotency-key') ?? '').trim().slice(0,100) || null (il modulo di R04-017 la manda già in questa intestazione); chiave_invio: chiave nell'insert di messages (insert semplice, non upsert); se msgErr?.code === '23505' e la chiave c'è, rispondere 200 con { conversationId, supportId: support.id } senza scrivere l'avviso; senza chiave resta tutto come oggi. Strade senza migrazione scartate: usare operational_alert_log (alert_key PRIMARY KEY, come lib/ai/tettoSpesa.ts:420-427) è un uso fuori scopo del registro degli allarmi; rateLimitAsync con tetto 1 per utente+chiave è atomico solo con Upstash attivo e scade. Tutte e due andrebbero rilasciate se l'insert del messaggio fallisce.",
+      "insieme_a": [
+        "R04-017"
+      ],
+      "verificato_da": "smentitore B (modello grande): confermato che non ci sono colonne o vincoli di chiave su messages/notifications in 209 migrazioni; migrazione proposta giusta con indice pieno"
     },
     {
       "id": "R04-016",
@@ -152,7 +174,33 @@
     },
     {
       "id": "R04-017",
-      "chiave": "api-backend|il modulo dell'assistenza non manda nessuna chiave per invio"
+      "chiave": "api-backend|il modulo dell'assistenza non manda nessuna chiave per invio",
+      "esito": "riparato",
+      "commit": "cdcb621a26a8e4b175bd9b14c30fca354090f48c",
+      "file_toccati": [
+        "components/SupportChatModal.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-assistenza-chiave-per-invio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-assistenza-chiave-per-invio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 790e7c4ff0d2897d123b88a1d6ca15a2db7bfb08^ --file components/SupportChatModal.tsx --prove tests/unit/riparazione-r04-assistenza-chiave-per-invio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "insieme_a": [
+        "R04-015"
+      ],
+      "cosa_ho_fatto": "Il modulo genera una chiave per invio (crypto.randomUUID, con lo stesso ripiego della cassa quando manca) e la manda nell'intestazione idempotency-key; la riusa sui ritentativi dello stesso testo e ne fa una nuova se il testo cambia o dopo un invio riuscito. Effetto sui doppioni solo quando la rotta la leggerà (R04-015, che chiede una migrazione).",
+      "commit_della_voce": [
+        "790e7c4ff0d2897d123b88a1d6ca15a2db7bfb08",
+        "cdcb621a26a8e4b175bd9b14c30fca354090f48c"
+      ],
+      "verificato_da": "smentitore B (modello grande): regge; trovato che senza crypto.randomUUID il pulsante non faceva niente → giro cdcb621a; smentitore C: regge con crypto assente, chiave stabile su errore e nuova dopo un invio riuscito; segnala che la rotta ancora ignora la chiave (è R04-015)"
     },
     {
       "id": "R04-018",
@@ -181,7 +229,8 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Una risposta senza errore ma senza id di invio (anche una risposta d'errore conservata e riproposta con stato 200) ora è ok:false e non conta come spedita.",
-      "cosa_resta": "Il ramo 409 invalid_idempotent_request (lib/email/client.ts, circa riga 201) resta ok:true con id vuoto: la prova esistente riparazione-r22-coda-email-timeout.test.ts lo richiede (stessa chiave, corpo diverso = già accettata). Se il servizio ha conservato una risposta d'errore sotto quella chiave, il 409 non si distingue da un invio riuscito. Chiuderlo chiede una scelta di Nicola (ritentare con chiave nuova o accettare il rischio di doppio invio) e un cambio della prova r22, che non è di R04."
+      "cosa_resta": "Il buco vero della voce resta aperto: il link di disiscrizione ha una parte casuale (lib/email/unsubscribe.ts:65, file non di R04), quindi ogni ritentativo della coda con la stessa chiave ha un corpo diverso; il servizio risponde 409 invalid_idempotent_request, che lib/email/client.ts:207-209 tratta come spedito (ok:true, id vuoto), e la riga della promozione prende sent_at. La prova esistente riparazione-r22-coda-email-timeout.test.ts (non di R04) vuole proprio ok:true sul 409. Chiuderlo chiede una scelta: un link di disiscrizione stabile per messaggio (cambio in lib/email/unsubscribe.ts) oppure trattare il 409 come non spedito e cambiare la prova r22.",
+      "verificato_da": "smentitore A (modello grande): prova rossa senza la correzione; 227 prove che importano lib/email/client verdi; ok:false non causa doppi invii (stessa chiave, attesa crescente); il ramo coperto è quasi teorico perché su 2xx l'API dà sempre un id"
     },
     {
       "id": "R04-020",
@@ -197,11 +246,50 @@
       "severita": "minore",
       "file": "app/api/cron/abandoned-carts/route.ts:212-222",
       "descrizione": "Nel ramo «skipped» il rilascio del segno aggiorna solo per user_id, senza condizione su last_activity: se nel frattempo il cliente ha cambiato il carrello, il segno del carrello nuovo si perde. Visto dal subagente del lotto 1, fuori dalla voce R04-005."
+    },
+    {
+      "titolo": "L'esito di una segnalazione si rimanda due volte: dopo un errore parziale la pagina chiede di registrare di nuovo e tutti i canali ripartono, anche quelli già arrivati",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/segnalazioni/esito/comunica.ts:111-142",
+      "descrizione": "Dopo un 502 parziale app/admin/segnalazioni/page.tsx:149 dice di registrare di nuovo la decisione, e comunicaEsito rimanda email (senza chiave di idempotenza) e notifiche a tutti i canali, compresi quelli già arrivati."
+    },
+    {
+      "titolo": "Un ordine con carta senza coordinate passa senza controllo della zona e senza avviso agli amministratori",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/stripe/checkout/route.ts:603-614",
+      "descrizione": "Quando le coordinate dell'indirizzo mancano (Nominatim che non risponde), il controllo della zona di consegna salta (lib/ordini/zona-di-consegna.ts:43) senza nessuna campanella, mentre sui contanti c'è (R31-018)."
+    },
+    {
+      "titolo": "Un rifiuto per troppe richieste della ricerca indirizzi fa salvare l'indirizzo senza coordinate per sempre",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/profile/addresses/page.tsx:81",
+      "descrizione": "Un 429 di /api/geocode viene trattato come «posizione non trovata»: l'indirizzo del profilo si salva senza coordinate; il negoziante legge «Indirizzo non trovato» (components/StoreLocationPicker.tsx:170)."
+    },
+    {
+      "titolo": "La traccia delle taglie dice «tolta» una taglia aggiunta da un'altra scheda mentre questa era aperta",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/admin/products/route.ts:315",
+      "descrizione": "Caso limite della correzione di R04-001: una taglia aggiunta altrove non è nelle scorte viste dal modulo; il salvataggio non la cancella (lib/products/persistVariantsServer.ts:121) ma il «dopo» della traccia non la contiene."
+    },
+    {
+      "titolo": "Con taglie alla stessa posizione la traccia può segnare un riordino che non c'è",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/admin/products/route.ts:239-242",
+      "descrizione": "Caso limite della correzione di R04-001: la lettura delle taglie di prima non ha .order('position') e lo spareggio per indice (route.ts:306) può dare un ordine diverso da quello del modulo."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "R04-009: un freno unico a 1 al secondo su Nominatim fa saltare il controllo della zona di consegna agli ordini. Preferisci (a) un servizio di mappe con chiave, (b) una memoria delle coordinate per indirizzo e il freno solo sulle ricerche della pagina, oppure (c) lasciare com'è?",
+    "R04-015: per i doppioni all'assistenza serve la migrazione 610 scritta nel referto (colonna chiave_invio su messages e indice unico). Si fa in un giro con le migrazioni?",
+    "R04-019: per una promozione che risulta spedita senza esserlo: preferisci un link di disiscrizione stabile per messaggio, oppure il 409 trattato come non spedito (cambiando la prova r22)?"
+  ],
   "conto": {
-    "agenti": 1,
-    "nota": ""
+    "agenti": 6,
+    "nota": "2 riparatori (sonnet), 1 giro di correzione (sonnet), 3 smentitori (modello grande). Tetto di 6 raggiunto a fine lavoro."
   }
 }
