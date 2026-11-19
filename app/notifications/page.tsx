@@ -190,14 +190,28 @@ export default function NotificationsPage() {
     return <LoadingState />;
   }
 
+  // R01-001 — Il titolo della pagina, anche nello stato d'errore: l'h2 dell'errore viene dopo l'h1.
+  const intestazione = (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-label text-primary-700">Attività</p>
+      <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+        Notifiche
+      </h1>
+      <p className="mt-1 text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
+    </div>
+  );
+
   // La pagina intera di errore solo se non c'è niente di già letto da mostrare.
   if (error && !serveAccesso && !data && !ultimoElenco) {
     return (
-      <ErrorState
-        title="Non riusciamo a caricare le notifiche"
-        description="Abbiamo provato a leggerle e non ci siamo riusciti. Riprova fra un attimo."
-        onRetry={() => refetch()}
-      />
+      <div className="max-w-3xl">
+        <div className="mb-6">{intestazione}</div>
+        <ErrorState
+          title="Non riusciamo a caricare le notifiche"
+          description="Abbiamo provato a leggerle e non ci siamo riusciti. Riprova fra un attimo."
+          onRetry={() => refetch()}
+        />
+      </div>
     );
   }
 
@@ -218,13 +232,7 @@ export default function NotificationsPage() {
   return (
     <div className="max-w-3xl">
       <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-label text-primary-700">Attività</p>
-          <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
-            Notifiche
-          </h1>
-          <p className="mt-1 text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
-        </div>
+        {intestazione}
         {hasUnread && (
           <button
             type="button"
@@ -241,7 +249,10 @@ export default function NotificationsPage() {
       {notifications.length === 0 ? (
         <div className="rounded-xl border border-cream-300 bg-white p-12 text-center">
           <Inbox size={48} className="mx-auto mb-3 text-ink-500" aria-hidden />
-          <p className="mb-1 font-semibold text-ink-600">Nessuna notifica</p>
+          {/* R01-001 — Anche vuota, dopo l'h1 viene un h2 (se no il titolo seguente è l'h3 del piede).
+              Stesso aspetto del paragrafo di prima: le regole di elemento di h2 (serif, 20px, spaziatura
+              stretta) sono rimesse a posto dalle classi. */}
+          <h2 className="mb-1 font-sans text-base font-semibold tracking-normal text-ink-600">Nessuna notifica</h2>
           <p className="text-sm text-ink-400">Quando ci saranno aggiornamenti, li vedrai qui.</p>
         </div>
       ) : (
