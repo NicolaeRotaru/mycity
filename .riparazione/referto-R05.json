@@ -1,13 +1,13 @@
 {
   "sessione": "R05",
-  "aggiornato": "2026-11-19 10:30",
+  "aggiornato": "2026-11-19 10:45",
   "finita": true,
-  "testa": "0cb2424c56754335cb4c4742cde50fa840f67991",
+  "testa": "dbbb9793e1ab127f1ed2d11bfbe51d57ce96969d",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "0cb2424c56754335cb4c4742cde50fa840f67991",
-    "nota": "NODE_OPTIONS=--max-old-space-size=10000 (tsc va in memoria col valore di default); 1737 file di prova passati, 1 saltato; lint 0 errori, 99 avvisi; 6 min 14 s"
+    "testa": "dbbb9793e1ab127f1ed2d11bfbe51d57ce96969d",
+    "nota": "NODE_OPTIONS=--max-old-space-size=10000 (tsc va in memoria col valore di default); 1737 file di prova passati, 1 saltato; lint 0 errori, 99 avvisi"
   },
   "voci": [
     {
@@ -317,9 +317,24 @@
         "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts"
       ],
       "prove_esistenti_modificate": [
-        "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts (legge app/layout.tsx)",
-        "tests/unit/riparazione-r10-manifest-nel-head.test.tsx (importa app/layout.tsx)",
-        "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts (importa app/layout.tsx)"
+        {
+          "file": "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts",
+          "perche": "legge app/layout.tsx",
+          "prima": "caratteriCaricati() legge import {…} from next/font/google; casi: «chiede anche la variante inclinata» (style: [normal, italic]) e «il corsivo ce l ha davvero» (catalogo di Google font-data.json, styles contiene italic); 10 expect",
+          "dopo": "caratteriCaricati() legge const x = localFont({…}); casi: «dichiara anche la variante inclinata» (style normal e italic), «i file del corsivo e del dritto esistono sul disco» e di nuovo «il corsivo ce l ha davvero» (commit dbbb9793: legge le tabelle del woff2 con node:zlib, il file italic ha il bit del corsivo e italicAngle < 0, il dritto no; head.magicNumber controllato); 18 expect. Con il file dritto al posto del corsivo il caso cade (2 su 9, uno per carattere)."
+        },
+        {
+          "file": "tests/unit/riparazione-r10-manifest-nel-head.test.tsx",
+          "perche": "importa app/layout.tsx",
+          "prima": "vi.mock(\"next/font/google\", () => ({ Inter: () => ({ variable: \"font-inter\", className: \"\" }), Fraunces: () => ({ variable: \"font-serif\", className: \"\" }) }));",
+          "dopo": "vi.mock(\"next/font/local\", () => ({ default: (opzioni: { variable?: string }) => ({ variable: opzioni.variable ?? \"\", className: \"\" }) }));"
+        },
+        {
+          "file": "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts",
+          "perche": "importa app/layout.tsx",
+          "prima": "vi.mock(\"next/font/google\", () => ({ Inter: () => ({ variable: \"font-inter\", className: \"\" }), Fraunces: () => ({ variable: \"font-serif\", className: \"\" }) }));",
+          "dopo": "vi.mock(\"next/font/local\", () => ({ default: (opzioni: { variable?: string }) => ({ variable: opzioni.variable ?? \"\", className: \"\" }) }));"
+        }
       ],
       "prova_file": [
         "tests/unit/riparazione-r05-caratteri-dal-disco.test.ts"
@@ -335,7 +350,10 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "layout.tsx passa da next/font/google a next/font/local con 4 woff2 in app/fonts/ (Inter 100-900 e Fraunces 400-800, latin, dritto e corsivo, solo asse wght come prima: nessun axes c era). Uguale a vista: glifi identici al latin che Google serve oggi (cmap uguali, stesse metriche verticali; accentate, €, «» presenti), stesse variabili --font-inter e --font-serif, stesso display swap, preload di default, riserva Arial / Times New Roman. next build completo passa.",
       "nota": "Correzione della prima nota: i file NON sono byte per byte uguali alla versione v38 che Google serve oggi (differenze di qualche decina di byte), ma hanno gli stessi glifi e le stesse metriche. La riserva di metriche ora è calcolata da next/font/local sul file (adjustFontFallback esplicito) e può differire di poco da quella che calcolava next/font/google: conta solo nell istante prima che il carattere si carichi. Aggiornate 3 prove esistenti che leggono o importano app/layout.tsx: r10 e r15 (mock di next/font/local al posto di next/font/google), il-corsivo (resta il controllo dritto+corsivo e preload acceso; il controllo «il corsivo esiste nel catalogo di Google» è sostituito da «i file del corsivo ci sono», perché Google non serve più). Nella rimessa --file ha solo layout.tsx: con i woff2 dentro dava uscita 3 perché la prova ne legge l impronta md5.",
-      "verificato_da": "revisore generico (sonnet): confronto layout prima/dopo su famiglie, pesi, stili, subset, variabili, display, preload; assi letti con fontkit (solo wght); cmap confrontate con il latin di Google di oggi; nessun altro next/font/google nel sito; le 3 prove modificate non indebolite in modo grave; prova rilanciata verde (22 test)."
+      "verificato_da": "revisore generico (sonnet): confronto layout prima/dopo su famiglie, pesi, stili, subset, variabili, display, preload; assi letti con fontkit (solo wght); cmap confrontate con il latin di Google di oggi; nessun altro next/font/google nel sito; le 3 prove modificate non indebolite in modo grave; prova rilanciata verde (22 test).",
+      "commit_extra": [
+        "dbbb9793e1ab127f1ed2d11bfbe51d57ce96969d"
+      ]
     },
     {
       "id": "R05-020",
@@ -362,10 +380,10 @@
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 3,
-    "subagenti": 3,
-    "costo_usd": 4.73,
-    "nota": "2 subagenti che riparano (sonnet, un lotto alla volta) + 1 revisore (sonnet). Costo letto con get_session (usage.cost_usd) alle 09:54 UTC, prima della consegna: 4,73 $."
+    "agenti": 4,
+    "subagenti": 4,
+    "costo_usd": 6.01,
+    "nota": "2 subagenti che riparano (sonnet, un lotto alla volta) + 1 revisore (sonnet) + 1 giro di correzione chiesto dalla regista (sonnet). Costo letto con get_session (usage.cost_usd) prima della consegna: 6,01 $."
   },
-  "costo_usd": 4.73
+  "costo_usd": 6.01
 }
