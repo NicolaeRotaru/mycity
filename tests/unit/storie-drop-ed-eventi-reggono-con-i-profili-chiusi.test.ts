@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 import { act, createElement, Suspense } from 'react';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
@@ -36,7 +37,9 @@ const MARIA = 'u-maria';
 
 const DOMANI = new Date(Date.now() + 86_400_000).toISOString();
 const IERI = new Date(Date.now() - 86_400_000).toISOString();
-const OGGI_DATA = new Date().toISOString().slice(0, 10);
+// Il giorno del drop è quello di Piacenza, come in DropOfDay: con toISOString fra mezzanotte e l'una
+// (le 23 di Londra) la prova cercava il drop di ieri e la vetrina non lo mostrava.
+const OGGI_DATA = giornoPiacenza();
 
 function dati(dropDi: string = PANE): Dati {
   const prodottoDelDrop: Record<string, string> = { [PANE]: 'p-focaccia', [SENZA_INSEGNA]: 'p-anonimo', [SEGRETA]: 'p-segreto' };
