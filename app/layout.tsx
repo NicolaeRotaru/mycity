@@ -1,6 +1,6 @@
 import { DESCRIZIONE_DEL_SITO } from '@/lib/site-branding';
 import './globals.css';
-import localFont from 'next/font/local';
+import { Inter, Fraunces } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
 import SellerShoppingBanner from '@/components/SellerShoppingBanner';
@@ -44,30 +44,18 @@ const precaricoDelSito = unstable_cache(precaricaSito, ['sito-precarico'], {
 // «veri» del titolone della home, in Fraunces a 60px — e Fraunces un corsivo
 // vero, disegnato, ce l'ha. Le regole in più costano qualche riga di CSS: il
 // browser scarica un file solo quando c'è davvero del testo che lo usa.
-//
-// I caratteri stanno sul disco (app/fonts/), non si scaricano da Google al
-// momento della costruzione: R05-019 — il download falliva ogni tanto da solo e
-// con lui la costruzione. I quattro file sono IDENTICI byte per byte a quelli
-// che Google serviva per il sottoinsieme latin (stessi md5): Inter variabile
-// 100-900 e Fraunces variabile (usata dal 400 all'800), dritto e corsivo. Stessa
-// variabile CSS, stesso `display: swap`, stessa riserva di metriche.
-const inter = localFont({
-  src: [
-    { path: './fonts/inter-latin-wght-normal.woff2', weight: '100 900', style: 'normal' },
-    { path: './fonts/inter-latin-wght-italic.woff2', weight: '100 900', style: 'italic' },
-  ],
+const inter = Inter({
+  subsets: ['latin'],
   variable: '--font-inter',
   display: 'swap',
-  adjustFontFallback: 'Arial',
+  style: ['normal', 'italic'],
 });
-const fraunces = localFont({
-  src: [
-    { path: './fonts/fraunces-latin-wght-normal.woff2', weight: '400 800', style: 'normal' },
-    { path: './fonts/fraunces-latin-wght-italic.woff2', weight: '400 800', style: 'italic' },
-  ],
+const fraunces = Fraunces({
+  subsets: ['latin'],
   variable: '--font-serif',
   display: 'swap',
-  adjustFontFallback: 'Times New Roman',
+  weight: ['400', '500', '600', '700', '800'],
+  style: ['normal', 'italic'],
 });
 
 // metadataBase: rende assoluti i canonical/openGraph relativi delle pagine

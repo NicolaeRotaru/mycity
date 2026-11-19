@@ -28,7 +28,8 @@
  * a sette per Inter e quindici per Fraunces.)
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 const LAYOUT = readFileSync('app/layout.tsx', 'utf8');
@@ -46,15 +47,19 @@ function bloccoGraffe(src: string, da: number): string {
   return '';
 }
 
-/** I caratteri che il layout carica dal disco (R05-019), con le opzioni che passa a ognuno. */
+/** I caratteri che il layout carica da Google, con le opzioni che passa a ognuno. */
 function caratteriCaricati(): Array<{ nome: string; opzioni: string }> {
-  const nomi: Array<{ nome: string; opzioni: string }> = [];
-  const chiamate = LAYOUT.matchAll(/const\s+(\w+)\s*=\s*localFont\s*\(\s*\{/g);
-  for (const m of chiamate) {
-    const inizio = LAYOUT.indexOf('{', m.index! + m[0].length - 1);
-    nomi.push({ nome: m[1], opzioni: bloccoGraffe(LAYOUT, inizio) });
-  }
-  return nomi;
+  const importazione = LAYOUT.match(/import\s*\{([^}]*)\}\s*from\s*'next\/font\/google'/);
+  if (!importazione) return [];
+  const nomi = importazione[1]
+    .split(',')
+    .map((n) => n.trim())
+    .filter(Boolean);
+  return nomi.map((nome) => {
+    const chiamata = new RegExp(`\\b${nome}\\s*\\(\\s*\\{`).exec(LAYOUT);
+    const opzioni = chiamata ? bloccoGraffe(LAYOUT, LAYOUT.indexOf('{', chiamata.index)) : '';
+    return { nome, opzioni };
+  });
 }
 
 /** Ogni punto del sito che chiede al browser di inclinare il testo. */
@@ -72,7 +77,18 @@ function puntiCheChiedonoIlCorsivo(): string[] {
   return trovati;
 }
 
+/** Il catalogo dei caratteri che Next si porta dietro: dice quali varianti esistono davvero. */
+function catalogoDeiCaratteri(): Record<string, { styles: string[] }> | null {
+  try {
+    const require = createRequire(import.meta.url);
+    return require('next/dist/compiled/@next/font/dist/google/font-data.json');
+  } catch {
+    return null;
+  }
+}
+
 const CARATTERI = caratteriCaricati();
+const CATALOGO = catalogoDeiCaratteri();
 
 describe('il corsivo del sito', () => {
   it('nel sito ci sono davvero dei punti che chiedono il corsivo', () => {
@@ -83,27 +99,34 @@ describe('il corsivo del sito', () => {
     expect(punti).toContain('app/page.tsx'); // il titolone della home
   });
 
-  it('il layout carica i caratteri dal disco, e sono più di uno', () => {
-    expect(CARATTERI.map((c) => c.nome)).toEqual(expect.arrayContaining(['inter', 'fraunces']));
+  it('il layout carica i caratteri da Google, e sono più di uno', () => {
+    expect(CARATTERI.map((c) => c.nome)).toEqual(expect.arrayContaining(['Inter', 'Fraunces']));
     for (const c of CARATTERI) {
       expect(c.opzioni, `non trovo come viene chiamato ${c.nome}`).not.toBe('');
     }
   });
 
   for (const carattere of CARATTERI) {
-    it(`${carattere.nome} dichiara anche la variante inclinata, non solo quella dritta`, () => {
-      const stili = [...carattere.opzioni.matchAll(/style\s*:\s*'(\w+)'/g)].map((m) => m[1]);
-      expect(stili, `${carattere.nome} non dichiara il corsivo: il browser lo inventa`).toContain('italic');
-      expect(stili, `${carattere.nome} non dichiara più il dritto`).toContain('normal');
+    it(`${carattere.nome} chiede anche la variante inclinata, non solo quella dritta`, () => {
+      const stile = carattere.opzioni.match(/style\s*:\s*\[([^\]]*)\]/);
+      expect(
+        stile,
+        `${carattere.nome} non dichiara nessuno stile: si scarica solo il dritto e il browser inventa il corsivo`,
+      ).not.toBeNull();
+
+      const stiliChiesti = stile![1].split(',').map((s) => s.trim().replace(/['"]/g, ''));
+      expect(stiliChiesti, `${carattere.nome} non chiede il corsivo`).toContain('italic');
+      expect(stiliChiesti, `${carattere.nome} non chiede più il dritto`).toContain('normal');
     });
 
-    it(`${carattere.nome} i file del corsivo e del dritto esistono davvero sul disco`, () => {
-      const percorsi = [...carattere.opzioni.matchAll(/path\s*:\s*'([^']+)'/g)].map((m) => m[1]);
-      expect(percorsi.length).toBeGreaterThanOrEqual(2);
-      for (const rel of percorsi) {
-        expect(existsSync(path.join('app', rel)), `${rel} manca`).toBe(true);
-      }
-    });
+    it.skipIf(CATALOGO === null)(
+      `${carattere.nome} il corsivo ce l'ha davvero: non stiamo chiedendo una variante inesistente`,
+      () => {
+        const scheda = CATALOGO![carattere.nome];
+        expect(scheda, `${carattere.nome} non è nel catalogo di Google`).toBeTruthy();
+        expect(scheda.styles).toContain('italic');
+      },
+    );
   }
 
   it('il dritto resta precaricato: il corsivo non deve rubargli il posto', () => {
