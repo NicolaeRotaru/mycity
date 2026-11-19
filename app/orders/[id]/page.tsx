@@ -867,10 +867,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             </div>
             <div className="mt-2.5 flex items-start gap-2 text-sm text-ink-600">
               <MapPin size={15} strokeWidth={2.2} className="mt-0.5 shrink-0 text-primary-600" aria-hidden />
-              <span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">
                 {order.delivery_full_name && <span className="font-medium text-ink-800">{order.delivery_full_name}<br /></span>}
                 {order.delivery_address}, {order.delivery_zip} {order.delivery_city}
-                {order.delivery_notes && <span className="mt-1 block italic text-ink-500">Note: {order.delivery_notes}</span>}
+                {order.delivery_notes && <span className="mt-1 block break-words italic text-ink-500 [overflow-wrap:anywhere]">Note: {order.delivery_notes}</span>}
               </span>
             </div>
             {fasciaLeggibile(order) && (
