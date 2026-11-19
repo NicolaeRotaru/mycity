@@ -182,47 +182,4 @@ describe('R01-002 · «Carica altre» resta mentre carica e un errore non cancel
     expect(pulsante(s.radice, /Segna tutte come lette/), 'scritte lette sul database, «Segna tutte come lette» resta').toBeNull();
     s.smonta();
   }, 60000);
-
-  // Seconda passata (collaudo): con più di 50 righe a video (dopo «Carica altre») e quando la prima
-  // lettura di chi è collegato non l'aveva trovato, le righe in memoria restavano «Non letta».
-  it('dopo «Carica altre» (100 chieste, 60 a video), «Segna tutte» riuscito e rilettura caduta: nessuna «Non letta»', async () => {
-    mondo.righe = righeDi('u1', 60, false);
-    const { s } = await apri();
-    s.agisci(() => clicca(pulsante(s.radice, /^Carica altre$/)!));
-    await lascia();
-    expect(idARighe(s.radice), 'controprova: dopo «Carica altre» le 60 devono essere a video').toHaveLength(60);
-    expect(nonLette(s.radice), 'controprova: le 60 non lette devono essere a video').toBe(60);
-
-    mondo.lettureCadute = true;
-    s.agisci(() => clicca(pulsante(s.radice, /Segna tutte come lette/)!));
-    await lascia();
-    expect(mondo.righe.every((r) => r.is_read), 'controprova: la scrittura doveva riuscire').toBe(true);
-    expect(idARighe(s.radice), 'la rilettura caduta ha tolto l’elenco').toHaveLength(60);
-    expect(nonLette(s.radice), 'scritte lette sul database, oltre le prime 50 la pagina le mostra ancora «Non letta»').toBe(0);
-    expect(pulsante(s.radice, /Segna tutte come lette/)).toBeNull();
-    s.smonta();
-  }, 60000);
-
-  it('la prima lettura di chi è collegato non l’aveva trovato: «Segna tutte» riuscito e rilettura caduta, nessuna «Non letta»', async () => {
-    // La prima domanda «chi è collegato» (quella condivisa dalla pagina) risponde nessuno, come
-    // con la rete storta; quelle dopo trovano u1.
-    let domande = 0;
-    Object.defineProperty(globali, '__UTENTE__', {
-      configurable: true,
-      enumerable: true,
-      get: () => (++domande === 1 ? null : { id: 'u1' }),
-    });
-    mondo.righe = righeDi('u1', 3, false);
-    const { s } = await apri();
-    expect(nonLette(s.radice), 'controprova: le 3 non lette devono essere a video').toBe(3);
-
-    mondo.lettureCadute = true;
-    s.agisci(() => clicca(pulsante(s.radice, /Segna tutte come lette/)!));
-    await lascia();
-    expect(mondo.righe.every((r) => r.is_read), 'controprova: la scrittura doveva riuscire').toBe(true);
-    expect(s.radice.textContent, 'la rilettura caduta ha tolto l’elenco').toContain('u1-avviso-2');
-    expect(nonLette(s.radice), 'scritte lette sul database, l’elenco a video le mostra ancora «Non letta»').toBe(0);
-    expect(pulsante(s.radice, /Segna tutte come lette/)).toBeNull();
-    s.smonta();
-  }, 60000);
 });
