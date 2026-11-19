@@ -42,7 +42,7 @@ export const ORDER_STATUS_ICON: Record<OrderStatus, LucideIcon> = {
  * cui il ritiro in negozio si riaccende, perche' nasce da quello stesso interruttore.
  */
 export function etichettaPronto(ritiroAttivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
-  return ritiroAttivo ? 'Pronto per il ritiro' : 'Pronto per il rider';
+  return ritiroAttivo ? 'Pronto per il ritiro' : 'Pronto per il fattorino';
 }
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {

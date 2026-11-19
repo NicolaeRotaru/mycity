@@ -69,6 +69,13 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
         onChange={(e) => set({ subheading: e.target.value })}
         placeholder="Una frase breve di accompagnamento"
       />
+      <Input
+        label="Testo alternativo della foto"
+        value={c.alt ?? ''}
+        maxLength={160}
+        onChange={(e) => set({ alt: e.target.value })}
+        placeholder="Descrivi la foto per chi non la vede (vuoto = foto solo di sfondo)"
+      />
       <Select label="Sfondo del testo" value={c.overlay} onChange={(e) => set({ overlay: e.target.value as Cfg['overlay'] })}>
         <option value="dark">Scuro (testo bianco)</option>
         <option value="light">Chiaro (testo scuro)</option>

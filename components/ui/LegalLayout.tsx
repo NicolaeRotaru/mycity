@@ -38,7 +38,7 @@ export function LegalLayout({ title, active, meta, summary, toc, children }: Pro
       <div className="mb-2">
         <Link href="/" className="text-sm text-primary-700 hover:underline">← Home</Link>
       </div>
-      <h1 className="font-serif text-3xl md:text-5xl font-extrabold text-ink-900 mb-2">{title}</h1>
+      <h1 className="font-serif text-3xl md:text-5xl font-extrabold text-ink-900 mb-2 break-words hyphens-auto">{title}</h1>
       {meta && <p className="text-sm text-ink-500 mb-6">{meta}</p>}
 
       {/* Tab bar documenti legali fratelli — attiva = underline primary-600. */}
@@ -50,7 +50,7 @@ export function LegalLayout({ title, active, meta, summary, toc, children }: Pro
               key={doc.href}
               href={doc.href}
               aria-current={isActive ? 'page' : undefined}
-              className={`-mb-px border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+              className={`-mb-px max-w-full min-w-0 [overflow-wrap:anywhere] border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
                 isActive
                   ? 'border-primary-600 text-primary-700'
                   : 'border-transparent text-ink-500 hover:text-ink-800'
@@ -68,7 +68,7 @@ export function LegalLayout({ title, active, meta, summary, toc, children }: Pro
       </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_220px] lg:gap-8 lg:items-start">
-        <div className="max-w-none space-y-6 text-ink-700 leading-relaxed order-1">
+        <div className="max-w-none min-w-0 [overflow-wrap:anywhere] [&_table]:[overflow-wrap:normal] space-y-6 text-ink-700 leading-relaxed order-1">
           {children}
         </div>
 

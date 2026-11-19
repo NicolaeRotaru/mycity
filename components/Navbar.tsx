@@ -362,7 +362,7 @@ export default function Navbar() {
                       </span>
                     </Link>
                   ) : (
-                    <Link href={accediHref} className="shrink-0 text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
+                    <Link href={accediHref} className="min-w-0 [overflow-wrap:anywhere] text-right text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
                   )}
                 </>
               )}
@@ -534,7 +534,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
           </span>
         )}
         <span className="hidden xl:flex flex-col leading-tight text-left">
-          <span className="text-[10px] uppercase tracking-wide opacity-70">
+          <span className="text-[10px] uppercase tracking-label opacity-70">
             {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
           </span>
           <span className="font-semibold text-sm truncate max-w-[120px]">{displayName}</span>
@@ -560,7 +560,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
               </span>
             )}
             <div className="min-w-0">
-              <p className="text-xs text-ink-500 uppercase tracking-wide">
+              <p className="text-xs text-ink-500 uppercase tracking-label">
                 {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
               </p>
               <p className="font-semibold text-ink-900 truncate">{displayName}</p>
