@@ -12,6 +12,12 @@ const invio = vi.hoisted(() => ({ esito: { ok: false, error: 'servizio di posta 
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => invio.esito) }));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), spesa: vi.fn() } }));
 
+const modello = vi.hoisted(() => ({ manca: false }));
+vi.mock('@/lib/email/templates', async (orig) => {
+  const vero = await orig<typeof import('@/lib/email/templates')>();
+  return { ...vero, preparaEmailCicloDiVita: (...a: Parameters<typeof vero.preparaEmailCicloDiVita>) => (modello.manca ? null : vero.preparaEmailCicloDiVita(...a)) };
+});
+
 const stato = vi.hoisted(() => ({
   carrelli: [] as Array<Record<string, unknown>>,
   profili: [] as Array<{ id: string; email_marketing: boolean | null }>,
@@ -59,6 +65,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-17T12:00:00+01:00'));
   stato.scritture = [];
+  modello.manca = false;
   stato.carrelli = [{ user_id: 'u1', email: 'u1@example.it', full_name: 'Anna', cart_data: [], cart_total: 12, last_activity: ULTIMA }];
   stato.profili = [{ id: 'u1', email_marketing: true }];
   invio.esito = { ok: false, error: 'servizio di posta giù' };
@@ -82,5 +89,16 @@ describe('R04-005 — un invio fallito non lascia il segno di un promemoria part
     const res = await (await giro()).json();
     expect(res.sent).toBe(1);
     expect(stato.scritture.find((s) => s.valori.recovery_email_sent_at === ULTIMA)).toBeUndefined();
+  });
+
+  it('modello dell email mancante: nessun invio, il segno torna all ultima attività e non conta come inviato', async () => {
+    modello.manca = true;
+    const res = await (await giro()).json();
+    expect(res.sent).toBe(0);
+    expect(res.errors).toBe(1);
+    const segno = stato.scritture.find((s) => s.valori.recovery_email_sent_at === ULTIMA);
+    expect(segno, 'il carrello senza modello non è stato corretto').toBeDefined();
+    expect(segno?.filtri).toEqual(expect.arrayContaining(['eq:user_id=u1', `eq:last_activity=${ULTIMA}`]));
+    expect(contaRendimentoRecupero([{ recovery_email_sent_at: ULTIMA, last_activity: ULTIMA }]).emailInviate).toBe(0);
   });
 });
