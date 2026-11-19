@@ -63,6 +63,11 @@ function snapshotToInitial(s: Snapshot): ProductInitialValues | undefined {
   };
 }
 
+/** R04-007 — Le taglie riconosciute dagli id: altre taglie, o un numero diverso, danno un'altra firma. */
+function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
+  return taglie.map((t) => t.id ?? '').sort().join('|');
+}
+
 function NewProductInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -79,8 +84,10 @@ function NewProductInner() {
    * Adesso, aperto una volta, il modulo resta. Se si e' aperto senza sapere la
    * consegna del negozio, per lui resta «non letta» (il suo tempo di consegna e'
    * un ripiego): al salvataggio non scrive un «no» indovinato.
+   * In «Duplica» resta aperto finche' le taglie d'origine sono le stesse (`taglie`,
+   * gli id): se ne arrivano altre, si riapre con quelle vere (sotto, prima del modulo).
    */
-  const [moduloAperto, setModuloAperto] = useState<{ consegnaNonLetta: boolean } | null>(null);
+  const [moduloAperto, setModuloAperto] = useState<{ consegnaNonLetta: boolean; taglie: string | null } | null>(null);
 
   // R16-021 — Il ripiego `= []` faceva passare una lettura caduta per «non ci sono categorie»:
   // il modulo chiedeva di sceglierne una che non c'era. Come in «Modifica prodotto», senza
@@ -287,7 +294,14 @@ function NewProductInner() {
           : variantiNonArrivate
             ? 'varianti'
             : 'modulo';
-  if (davanti === 'modulo' && !moduloAperto) setModuloAperto({ consegnaNonLetta });
+  // R04-007 — Il modulo prende le taglie solo quando si monta. Se dopo l'apertura arrivano taglie
+  // d'origine diverse (la copia in memoria era vecchia, aperta senza rete), la copia si riapre con
+  // quelle vere, come prima: nascerebbe con le taglie sbagliate. Con le stesse taglie resta com'e'.
+  // Se si riapre mentre la consegna del negozio e' ancora in lettura, anche per lui resta «non letta».
+  const taglieLette = fromId && !variantiSenzaDati ? firmaDelleTaglie(sourceVariants) : null;
+  if (davanti === 'modulo' && (!moduloAperto || (taglieLette !== null && taglieLette !== moduloAperto.taglie))) {
+    setModuloAperto({ consegnaNonLetta: consegnaNonLetta || offersExpress === undefined, taglie: taglieLette });
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -341,7 +355,7 @@ function NewProductInner() {
         </div>
       ) : (
         <ProductForm
-          key={importNonce}
+          key={`${importNonce}|${moduloAperto?.taglie ?? ''}`}
           mode="create"
           categories={categories}
           initialValues={initialValues}

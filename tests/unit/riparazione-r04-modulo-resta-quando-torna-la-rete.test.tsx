@@ -14,6 +14,11 @@
  * scrive la scorta come se non ne avesse. Quindi il modulo si apre la prima volta solo con le
  * taglie lette, in «Modifica» come in «Duplica».
  *
+ * Il revisore ha trovato la stessa strada con le taglie in memoria ma vecchie (aperto senza rete
+ * entro qualche minuto dalla visita di prima, e intanto un altro telefono ne ha aggiunte): il modulo
+ * si apriva con quelle e restava cosi'. Ora resta aperto solo finche' le taglie sono le stesse; se
+ * ne arrivano altre si riapre con quelle vere, come faceva prima della cura.
+ *
  * React Query vero, Supabase finto, il modulo finto: un campo di testo non controllato (se il
  * modulo si rimonta, quello che c'era scritto sparisce) e il numero di taglie che ha avuto
  * all'apertura.
@@ -32,6 +37,8 @@ const stato = vi.hoisted(() => {
     cerca: '',
     /** Le taglie che il modulo aveva a ogni apertura (una voce per montaggio). */
     aperture: [] as number[],
+    /** Cosa sapeva il modulo della consegna del negozio a ogni apertura (`undefined`: non la sapeva). */
+    consegnaAllApertura: [] as unknown[],
     caricamenti: 0,
     ultimo: {} as Record<string, unknown>,
     ritardoTaglie: 0,
@@ -102,7 +109,8 @@ vi.mock('@/components/seller/ProductForm', async () => {
     default: function ModuloFinto(p: { initialValues?: { name?: string; variants?: unknown[] } } & Record<string, unknown>) {
       // Come il modulo vero: le taglie si prendono all'apertura, poi restano quelle.
       const [taglie] = useState(() => (p.initialValues?.variants ?? []).length);
-      useEffect(() => { stato.aperture.push(taglie); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      const [consegna] = useState(() => p.sellerOffersExpress);
+      useEffect(() => { stato.aperture.push(taglie); stato.consegnaAllApertura.push(consegna); }, []); // eslint-disable-line react-hooks/exhaustive-deps
       stato.ultimo = p;
       return ce('div', null,
         ce('input', { 'aria-label': 'Nome', defaultValue: p.initialValues?.name ?? '' }),
@@ -156,6 +164,7 @@ const tornaLaRete = async () => {
 beforeEach(() => {
   stato.cerca = '';
   stato.aperture = [];
+  stato.consegnaAllApertura = [];
   stato.caricamenti = 0;
   stato.ultimo = {};
   stato.ritardoTaglie = 0;
@@ -209,6 +218,26 @@ describe('R04-007 · «Modifica prodotto»: quando torna la rete il modulo resta
     expect(stato.aperture.every((n) => n === 1), `aperture con queste taglie: ${stato.aperture.join(', ')}`).toBe(true);
     expect(((stato.ultimo.initialValues as { variants?: unknown[] } | undefined)?.variants ?? []).length).toBe(1);
   });
+
+  it('(c) taglie vecchie in memoria (nessuna), senza rete; tornata la rete la banca dati ne ha una: il modulo si riapre con la taglia', async () => {
+    // Le taglie arrivano prima della consegna del negozio: il modulo si riapre senza saperla.
+    stato.ritardoTaglie = 5;
+    stato.ritardoRete = 80;
+    onlineManager.setOnline(false);
+    await monta(ModificaProdotto, { params: { valore: { id: ID } } }, (qc) => {
+      qc.setQueryData(queryKeys.categories.form, CATEGORIE);
+      qc.setQueryData(queryKeys.seller.product(ID), PRODOTTO_IN_MEMORIA);
+      qc.setQueryData([...queryKeys.seller.product(ID), 'variants'], []);
+    });
+    expect(stato.aperture, 'controprova: senza rete si apre con le taglie in memoria, che sono vecchie').toEqual([0]);
+
+    await tornaLaRete();
+    expect(testo()).toContain('MODULO con 1 taglie');
+    expect(stato.aperture, 'tornata la rete il modulo e\' rimasto con 0 taglie: il «Salva» scriverebbe la scorta come senza taglie').toEqual([0, 1]);
+    expect(((stato.ultimo.initialValues as { variants?: unknown[] } | undefined)?.variants ?? []).length).toBe(1);
+    // Riaperto: la consegna del negozio o la sapeva, o per lui resta «non letta».
+    expect(stato.consegnaAllApertura.at(-1) !== undefined || stato.ultimo.consegnaDelNegozioNonLetta === true, 'riaperto senza sapere la consegna del negozio: il «Salva» scriverebbe un «no» indovinato').toBe(true);
+  });
 });
 
 describe('R04-007 · «Nuovo prodotto» e «Duplica»: quando torna la rete il modulo resta, e la copia si apre solo con le taglie', () => {
@@ -244,5 +273,40 @@ describe('R04-007 · «Nuovo prodotto» e «Duplica»: quando torna la rete il m
     expect(stato.aperture[0], 'la copia si e\' aperta con 0 taglie').toBe(1);
     expect(stato.aperture.every((n) => n === 1), `aperture con queste taglie: ${stato.aperture.join(', ')}`).toBe(true);
     expect(((stato.ultimo.initialValues as { variants?: unknown[] } | undefined)?.variants ?? []).length).toBe(1);
+  });
+
+  it('(c) «Duplica» con le taglie d\'origine vecchie in memoria (nessuna), senza rete; tornata la rete ne arriva una: la copia si riapre con la taglia', async () => {
+    stato.cerca = 'from=p-pane';
+    stato.ritardoTaglie = 5;
+    stato.ritardoRete = 80;
+    onlineManager.setOnline(false);
+    await monta(NuovoProdotto, {}, (qc) => {
+      qc.setQueryData(queryKeys.categories.form, CATEGORIE);
+      qc.setQueryData(['duplicate-source', 'p-pane'], { id: 'p-pane', seller_id: 'negozio-1', name: 'Pane', price: 4, images: [], attributes: {} });
+      qc.setQueryData(['duplicate-variants', 'p-pane'], []);
+    });
+    expect(stato.aperture, 'controprova: senza rete la copia si apre con le taglie in memoria, che sono vecchie').toEqual([0]);
+
+    await tornaLaRete();
+    expect(testo()).toContain('MODULO con 1 taglie');
+    expect(stato.aperture, 'tornata la rete la copia e\' rimasta con 0 taglie: nascerebbe senza').toEqual([0, 1]);
+    expect(((stato.ultimo.initialValues as { variants?: unknown[] } | undefined)?.variants ?? []).length).toBe(1);
+    expect(stato.consegnaAllApertura.at(-1) !== undefined || stato.ultimo.consegnaDelNegozioNonLetta === true, 'riaperta senza sapere la consegna del negozio: il «Salva» scriverebbe un «no» indovinato').toBe(true);
+  });
+
+  it('(d) «Duplica» con le stesse taglie in memoria, senza rete, il negoziante scrive; torna la rete: la copia resta, con quello che ha scritto', async () => {
+    stato.cerca = 'from=p-pane';
+    onlineManager.setOnline(false);
+    await monta(NuovoProdotto, {}, (qc) => {
+      qc.setQueryData(queryKeys.categories.form, CATEGORIE);
+      qc.setQueryData(['duplicate-source', 'p-pane'], { id: 'p-pane', seller_id: 'negozio-1', name: 'Pane', price: 4, images: [], attributes: {} });
+      qc.setQueryData(['duplicate-variants', 'p-pane'], TAGLIE_IN_MEMORIA);
+    });
+    expect(stato.aperture, 'controprova: senza rete la copia si apre con le taglie in memoria').toEqual([1]);
+    campoNome()!.value = 'Pane di segale';
+
+    await tornaLaRete();
+    expect(stato.aperture, 'la copia si e\' riaperta con le stesse taglie: le modifiche non salvate sono perse').toEqual([1]);
+    expect(campoNome()?.value, 'quello che il negoziante aveva scritto e\' sparito').toBe('Pane di segale');
   });
 });
