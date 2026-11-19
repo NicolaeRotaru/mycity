@@ -4,7 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
+import { annullaERimborsa, avvisaIlNegozioDellAnnullo, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 
 export const runtime = 'nodejs';
 
@@ -106,6 +106,7 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo
           // torna la merce e la differenza della consegna (COSA_TORNA). La cifra la dice l'email.
           `${primaFrase} Il rimborso sulla carta è partito: l'importo è nell'email «Rimborso emesso».`
         : `${primaFrase} Non devi pagare niente.`;
+  const fraseAlNegozio = `Il cliente dell'ordine #${sigla} non era in casa: la merce torna in negozio.`;
   const { error: nErr } = await admin.from('notifications').insert([
     {
       category: 'order',
@@ -119,12 +120,15 @@ async function handler(user: { id: string }, idGrezzo: string, profilo?: Profilo
           category: 'order',
           user_id: order.seller_id,
           title: '↩️ Ordine annullato: cliente assente',
-          body: `Il cliente dell'ordine #${sigla} non era in casa: la merce torna in negozio.`,
+          body: fraseAlNegozio,
           link: `/seller/orders/${order.id}`,
         }]
       : []),
   ]);
   if (nErr) logger.error('[cliente-assente] notifiche non scritte', { orderId: order.id, message: nErr.message });
+  // R03-007 (cura di R06-006) — Al negozio anche l'email dell'annullo, come nelle altre rotte d'annullo (R31-023): con la sola
+  // campanella il negozio non lo sapeva finché non apriva il pannello. Non lancia: l'annullo è già scritto.
+  await avvisaIlNegozioDellAnnullo(admin, order, fraseAlNegozio);
 
   return NextResponse.json({ ok: true, motivo: MOTIVO_CLIENTE_ASSENTE, refundId: esito.refundId }, { status: 200 });
 }

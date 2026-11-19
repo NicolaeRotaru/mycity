@@ -169,8 +169,10 @@ describe('cliente assente, credito MyCity che non torna', () => {
     const n = allaPersona();
     expect(n.body).toMatch(/Non devi pagare niente/);
     expect(n.body).toMatch(/\(4,00 €\) non è ancora tornato/);
-    expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    const posta = sendEmailMock.mock.calls[0][0];
+    const alCliente = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled');
+    expect(alCliente).toHaveLength(1);
+    expect(sendEmailMock.mock.calls.map(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value).sort()).toEqual(['order_canceled', 'order_canceled_seller']);
+    const posta = alCliente[0][0];
     expect(posta.text + posta.html).not.toMatch(/ti è stato restituito/);
   });
 
@@ -186,7 +188,7 @@ describe('cliente assente, credito MyCity che non torna', () => {
     db.ordine = ordine({ wallet_applied_cents: 400 });
     await tocca();
     expect(allaPersona().body).not.toMatch(/non è ancora tornato/);
-    const posta = sendEmailMock.mock.calls.at(-1)![0];
+    const posta = sendEmailMock.mock.calls.filter(([m]) => (m as { tags?: Array<{ value: string }> }).tags?.[0]?.value === 'order_canceled').at(-1)![0];
     expect(posta.text + posta.html).toMatch(/ti è stato restituito/);
   });
 });
