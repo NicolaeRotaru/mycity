@@ -8,10 +8,7 @@ type Socials = NonNullable<StoreCustomization['socials']>;
 
 interface Props {
   value?: Socials;
-  /** `cambiato` è il campo appena toccato: chi mostra gli errori toglie solo quello. */
-  onChange: (next: Socials, cambiato: keyof Socials) => void;
-  /** Un messaggio per campo, scritto sotto il campo giusto. */
-  errors?: Partial<Record<keyof Socials, string>>;
+  onChange: (next: Socials) => void;
 }
 
 const FIELDS: { key: keyof Socials; label: string; placeholder: string; icon: ReactNode }[] = [
@@ -23,39 +20,27 @@ const FIELDS: { key: keyof Socials; label: string; placeholder: string; icon: Re
 ];
 
 /** Input dei link social — si salva solo handle/numero/URL, gli href li costruisce il sito. */
-export default function SocialLinksFields({ value, onChange, errors }: Props) {
-  const set = (key: keyof Socials, v: string) => onChange({ ...value, [key]: v }, key);
+export default function SocialLinksFields({ value, onChange }: Props) {
+  const set = (key: keyof Socials, v: string) => onChange({ ...value, [key]: v });
   return (
     <div className="space-y-2.5">
-      {FIELDS.map((f) => {
-        const errore = errors?.[f.key];
-        return (
-          <div key={f.key}>
-            <div className="flex items-center gap-2">
-              <span className="w-9 h-9 rounded-lg bg-cream-100 text-ink-500 flex items-center justify-center shrink-0" aria-hidden>
-                {f.icon}
-              </span>
-              <label className="sr-only" htmlFor={`social-${f.key}`}>{f.label}</label>
-              <input
-                id={`social-${f.key}`}
-                type="text"
-                value={value?.[f.key] ?? ''}
-                onChange={(e) => set(f.key, e.target.value)}
-                placeholder={`${f.label} · ${f.placeholder}`}
-                aria-invalid={errore ? true : undefined}
-                aria-describedby={errore ? `social-${f.key}-errore` : undefined}
-                className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
-              />
-            </div>
-            {errore && (
-              <p id={`social-${f.key}-errore`} role="alert" className="text-sm font-medium text-secondary-600 mt-1 ml-11">
-                {f.label}: {errore}
-              </p>
-            )}
-          </div>
-        );
-      })}
-      <p className="text-xs text-ink-500">Scrivi il nome del profilo (senza @) o incolla il link: lo sistemiamo noi. Per il sito basta www.nomesito.it.</p>
+      {FIELDS.map((f) => (
+        <div key={f.key} className="flex items-center gap-2">
+          <span className="w-9 h-9 rounded-lg bg-cream-100 text-ink-500 flex items-center justify-center shrink-0" aria-hidden>
+            {f.icon}
+          </span>
+          <label className="sr-only" htmlFor={`social-${f.key}`}>{f.label}</label>
+          <input
+            id={`social-${f.key}`}
+            type="text"
+            value={value?.[f.key] ?? ''}
+            onChange={(e) => set(f.key, e.target.value)}
+            placeholder={`${f.label} · ${f.placeholder}`}
+            className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
+          />
+        </div>
+      ))}
+      <p className="text-xs text-ink-500">Inserisci solo il nome utente (senza @) o l&apos;URL del sito.</p>
     </div>
   );
 }

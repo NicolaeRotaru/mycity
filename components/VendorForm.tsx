@@ -29,20 +29,6 @@ import StoreHoursEditor from './seller/StoreHoursEditor';
 import { erroreDegliOrari } from './seller/orari-validi';
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
-/**
- * Gli errori dei social, uno per campo (il primo di ciascuno), così il modulo li scrive sotto il
- * campo giusto invece di un solo messaggio in fondo che non dice dove.
- */
-function erroriPerCampoSocial(
-  issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const i of issues) {
-    if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !(i.path[1] in out)) out[i.path[1]] = i.message;
-  }
-  return out;
-}
-
 type SchemaData = { storeName: string; storePhone: string };
 
 /**
@@ -136,8 +122,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
   const [custom, setCustom] = useState<StoreCustomization>(defaultValues?.storeCustomization ?? {});
   const [customError, setCustomError] = useState<string | null>(null);
-  const [erroriSocial, setErroriSocial] = useState<Record<string, string>>({});
-  const [apriSocial, setApriSocial] = useState(0);
 
   const storeName = watch('storeName');
 
@@ -225,16 +209,11 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
         const campo = problema ? campoDellErrore(problema.path) : null;
         // Il messaggio dice quale campo: prima arrivava «Handle non valido» e basta.
         setCustomError(`${campo ? `${campo}: ` : ''}${problema?.message ?? 'Personalizzazione non valida'}`);
-        // Sotto il campo giusto, e la sezione si apre se era chiusa.
-        const perCampo = erroriPerCampoSocial(parsed.error.issues);
-        setErroriSocial(perCampo);
-        if (Object.keys(perCampo).length > 0) setApriSocial((n) => n + 1);
         return;
       }
       customData = parsed.data;
     }
     setCustomError(null);
-    setErroriSocial({});
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
@@ -379,21 +358,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             title="Social e contatti"
             description="Instagram, Facebook, TikTok, WhatsApp, sito"
             icon={<Share2 size={18} />}
-            apriQuando={apriSocial}
           >
-            <SocialLinksFields
-              value={custom.socials}
-              errors={erroriSocial}
-              onChange={(next, cambiato) => {
-                setCustom({ ...custom, socials: next });
-                // Si toglie solo l'errore del campo che si sta correggendo.
-                setErroriSocial((e) => {
-                  if (!(cambiato in e)) return e;
-                  const { [cambiato]: _tolto, ...resto } = e;
-                  return resto;
-                });
-              }}
-            />
+            <SocialLinksFields value={custom.socials} onChange={(next) => setCustom({ ...custom, socials: next })} />
           </CustomizationSection>
 
           <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
