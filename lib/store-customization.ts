@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
+import { giornoPiacenza } from './tempo-piacenza';
 
 /**
  * Personalizzazione vetrina negozio — tipi, validazione (zod), cataloghi curati
@@ -305,8 +306,9 @@ export function announcementActive(c?: StoreCustomization | null, now: Date = ne
   if (!a?.enabled) return false;
   if (!a.text || !a.text.trim()) return false;
   if (a.until) {
-    const d = new Date(`${a.until}T23:59:59`);
-    if (!Number.isNaN(d.getTime()) && d < now) return false;
+    // «Fino al 6/11» vale tutto il 6 a Piacenza, sul server (UTC) come nel browser: si confronta il
+    // giorno di Piacenza di adesso con `until`, non una data costruita nel fuso di chi esegue.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(a.until) && giornoPiacenza(now) > a.until) return false;
   }
   return true;
 }
