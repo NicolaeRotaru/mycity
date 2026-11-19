@@ -37,7 +37,7 @@ describe('R02-003 · la porta «sei pronto» guarda le foto', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('foto ok: pronta', async () => {
-    const f = vi.fn(async (_i: string, _init?: RequestInit) => new Response('x', { status: 200 }));
+    const f = vi.fn(async () => new Response('x', { status: 200 }));
     vi.stubGlobal('fetch', f);
     const r = await chiamata();
     expect(f).toHaveBeenCalledTimes(1);
