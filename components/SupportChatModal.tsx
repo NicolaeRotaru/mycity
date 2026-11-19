@@ -79,9 +79,25 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
   // interruttore delle altre schermate del negozio.
   const canUseAi = role === 'seller' && AI_NEGOZI_ACCESA;
 
+  // 19/11/2026 (R04-017) — Una chiave per invio, come negli altri moduli con chiave
+  // (buoni regalo, sponsorizzazioni): lo stesso testo ritentato (doppio clic, rete
+  // caduta) riusa la chiave; un testo nuovo, o uno dopo un invio riuscito, ne ha una nuova.
+  const invio = useRef<{ chiave: string; body: string } | null>(null);
+
   const start = async (message: string) => {
     const body = message.trim();
     if (!body || sending) return;
+    if (!invio.current || invio.current.body !== body) {
+      // Senza `crypto.randomUUID` (contesto non sicuro, http su rete locale) lo stesso ripiego della cassa.
+      invio.current = {
+        chiave:
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        body,
+      };
+    }
+    const chiaveInvio = invio.current.chiave;
     setSending(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -89,6 +105,7 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
         method: 'POST',
         headers: {
           'content-type': 'application/json',
+          'idempotency-key': chiaveInvio,
           ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({ firstMessage: body }),
@@ -112,6 +129,7 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
         await queryClient.cancelQueries({ queryKey: chiave });
         queryClient.setQueryData(chiave, supportId);
       }
+      invio.current = null;
       navigatingRef.current = true;
       onClose();
       setText('');

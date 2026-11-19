@@ -71,6 +71,19 @@ function oraDiSilenzio(ora: number): boolean {
  * porta l'ultima attività si segna come prima.
  */
 type CarrelloInLista = { user_id: string; last_activity?: string | null };
+// R04-005 — Dopo la rivendicazione, se l'email non parte (invio fallito o modello mancante) il segno
+// «avvisato» c'è ma la posta no: il segno diventa l'ultima attività, come per i carrelli chiusi
+// senza email, così il conto «inviati» non lo prende. Non si riprova (potrebbe essere già uscita).
+async function segnoSenzaEmailPartita(supa: ReturnType<typeof getAdminSupabase>, c: CarrelloInLista): Promise<void> {
+  if (typeof c.last_activity !== 'string' || !c.last_activity) return;
+  const { error } = await supa
+    .from('abandoned_carts')
+    .update({ recovery_email_sent_at: c.last_activity })
+    .eq('user_id', c.user_id)
+    .eq('last_activity', c.last_activity);
+  if (error) logger.error('[abandoned-carts] email non partita e segno non corretto', { user: c.user_id, message: error.message });
+}
+
 async function chiudiSenzaEmail(
   supa: ReturnType<typeof getAdminSupabase>,
   c: CarrelloInLista,
@@ -202,6 +215,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     if (!messaggio) {
       logger.error('[abandoned-carts] template abandoned_cart_4h introvabile, non spedisco');
       errors++;
+      await segnoSenzaEmailPartita(supa, c);
       continue;
     }
     const res = await sendEmail({
@@ -234,6 +248,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       }
     } else {
       errors++;
+      // R04-005 — L'invio è fallito dopo la rivendicazione: il segno torna all'ultima attività.
+      await segnoSenzaEmailPartita(supa, c);
     }
   }
 
