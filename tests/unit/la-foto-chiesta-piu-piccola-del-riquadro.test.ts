@@ -166,15 +166,16 @@ describe('le foto che non passano dal caricatore', () => {
     { encoding: 'utf8' },
   ).trim().split('\n').filter(Boolean).sort();
 
-  it('sono tre, e sono questi: il numero scende e non risale', () => {
+  it('ne resta una, ed è questa: il numero scende e non risale', () => {
     // ⚪ Debito dichiarato, non un verde: questi tre file appartengono a un altro lotto e
     // nessuno di questa squadra può toccarli oggi. Erano DICIASSETTE il 27/8 mattina e
     // QUATTRO fino al 6/9: il carrello è uscito dalla lista, la foto del carrello adesso
     // passa dal caricatore e il suo sizes="96px" è tornato vivo.
+    // 19/11/2026 (R09-007) — Il carrello condiviso, i prodotti del negozio e la miniatura della
+    // riga d'ordine passano ora dal caricatore. Resta il LOGO del negozio nel dettaglio ordine,
+    // già chiesto a doppia densità con `logoNegozio` (il caricatore lo ritaglierebbe a quadrato).
     expect(senzaCaricatore).toEqual([
       'app/orders/[id]/page.tsx',
-      'app/seller/products/page.tsx',
-      'app/shared-cart/page.tsx',
     ]);
   });
 

@@ -9,7 +9,7 @@ import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tansta
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -450,11 +450,11 @@ export default function SellerProductsPage() {
                       <div className="flex items-center gap-3">
                         <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-cream-100">
                           <Image
-                            src={sizedImage(p.images?.[0] ?? FOTO_MANCANTE, 'thumb')}
+                            src={p.images?.[0] ?? FOTO_MANCANTE}
                             alt={p.name}
                             fill
                             sizes="44px"
-                            unoptimized
+                            loader={caricatoreFotoRemote}
                             className="object-cover"
                           />
                         </div>
@@ -555,11 +555,11 @@ export default function SellerProductsPage() {
                 <div className="flex gap-3">
                   <Link href={`/product/${p.id}`} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-cream-100">
                     <Image
-                      src={sizedImage(p.images?.[0] ?? FOTO_MANCANTE, 'thumb')}
+                      src={p.images?.[0] ?? FOTO_MANCANTE}
                       alt={p.name}
                       fill
                       sizes="64px"
-                      unoptimized
+                      loader={caricatoreFotoRemote}
                       className="object-cover"
                     />
                   </Link>
