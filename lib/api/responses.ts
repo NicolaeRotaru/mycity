@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+// R04-006 — Accende il traduttore italiano di Zod in ogni rotta che risponde con ApiErrors: senza,
+// `issues[0].message` arrivava al cliente in inglese («String must contain at most 60 character(s)»).
+import '@/lib/zod-i18n';
 
 /**
  * Helpers per response API uniformi.
