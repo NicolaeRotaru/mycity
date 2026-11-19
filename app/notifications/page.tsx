@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, Inbox, Package, Tag, Gift, Sparkles, MessageCircle, CheckCheck,
   type LucideIcon,
@@ -16,6 +16,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
+import { useUtente } from '@/components/hooks/useUtente';
 
 type Notification = {
   id: string;
@@ -84,6 +85,8 @@ export default function NotificationsPage() {
   // vecchie si raggiungono con «Carica altre».
   const [quante, setQuante] = useState(PER_VOLTA);
   const nonLetteDelCampanello = useNotificationsCount();
+  // R01-varie — Di chi è l'elenco: sta nella chiave, e la domanda parte quando lo si sa.
+  const { userId, caricamento: utenteInLettura } = useUtente();
 
   // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
   // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
@@ -94,9 +97,12 @@ export default function NotificationsPage() {
   const ultimoLetto = useRef<Notification[] | null>(null);
 
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useQuery({
-    queryKey: [...queryKeys.notifications.list, quante],
-    // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa.
-    placeholderData: keepPreviousData,
+    queryKey: [...queryKeys.notifications.list, quante, userId],
+    enabled: !utenteInLettura,
+    // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa. Se cambia chi
+    // guarda, l'elenco si rilegge da capo.
+    placeholderData: (prima, domandaPrima) =>
+      userId !== null && domandaPrima?.queryKey.at(-1) === userId ? prima : undefined,
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user }, error: errUtente } = await supabase.auth.getUser();
       // 5/11/2026 — Con la rete caduta getUser non lancia: risponde user null CON un errore. Quello
@@ -160,7 +166,7 @@ export default function NotificationsPage() {
         const lette = (righe: Notification[] | undefined) =>
           righe?.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
         for (let q = PER_VOLTA; q <= quante; q += PER_VOLTA) {
-          qc.setQueryData<Notification[]>([...queryKeys.notifications.list, q], lette);
+          qc.setQueryData<Notification[]>([...queryKeys.notifications.list, q, chi], lette);
         }
         qc.setQueryData([...queryKeys.notifications.count, chi], 0);
       }
@@ -197,7 +203,7 @@ export default function NotificationsPage() {
     if (serveAccesso) router.push('/sign-in');
   }, [serveAccesso, router]);
 
-  if (isLoading && !ultimoElenco) {
+  if ((isLoading || utenteInLettura) && !ultimoElenco) {
     return <LoadingState />;
   }
 
