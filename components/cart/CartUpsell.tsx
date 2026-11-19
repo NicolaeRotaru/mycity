@@ -102,8 +102,8 @@ export function CartUpsell({ items }: Props) {
                     {p.name}
                   </p>
                 </Link>
-                <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-base font-extrabold text-ink-900">{formatPrice(p.price)}</span>
+                <div className="flex items-center justify-between gap-1 mt-1.5">
+                  <span className="min-w-0 truncate text-base font-extrabold text-ink-900">{formatPrice(p.price)}</span>
                   <button
                     type="button"
                     onClick={() => handleAdd(p)}
