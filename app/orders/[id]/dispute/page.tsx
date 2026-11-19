@@ -79,6 +79,9 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const [sessioneScaduta, setSessioneScaduta] = useState(false);
   // R01-003 — Chi ha aperto il modulo: la bozza porta il suo id.
   const utenteDelModulo = useRef<string | null>(null);
+  // R01-003 — La bozza nata da un 401 segue il modulo finché il reclamo non parte, anche se un nuovo
+  // invio cade (rete, errore del server): se no restava nella scheda il testo di prima.
+  const bozzaInCorso = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -130,12 +133,12 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
     })();
   }, [params.id, router, tentativo]);
 
-  // R01-003 — Finché si aspetta di rientrare la bozza segue il modulo: si ritrova l'ultimo testo,
+  // R01-003 — Dal 401 all'invio riuscito la bozza segue il modulo: si ritrova l'ultimo testo,
   // e un modulo svuotato non lascia una bozza vecchia.
   useEffect(() => {
-    if (!sessioneScaduta || !utenteDelModulo.current) return;
+    if (!bozzaInCorso.current || !utenteDelModulo.current) return;
     scriviBozza(params.id, description.trim() ? { utente: utenteDelModulo.current, reason, description } : null);
-  }, [sessioneScaduta, reason, description, params.id]);
+  }, [reason, description, params.id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +159,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       if (!res.ok) {
         if (res.status === 401) {
           if (utenteDelModulo.current) scriviBozza(params.id, { utente: utenteDelModulo.current, reason, description });
+          bozzaInCorso.current = true;
           setSessioneScaduta(true);
           return;
         }
@@ -163,6 +167,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         toast.error(apiErrorMessage(corpo, 'Non sono riuscito ad aprire il reclamo: riprova fra poco.'));
         return;
       }
+      bozzaInCorso.current = false;
       scriviBozza(params.id, null);
       toast.success('Reclamo aperto: ti abbiamo mandato una ricevuta per email e ti scriviamo noi con la decisione.');
       router.push('/orders');

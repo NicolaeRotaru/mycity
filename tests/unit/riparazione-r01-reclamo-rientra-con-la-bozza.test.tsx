@@ -64,8 +64,13 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     chiamate.push({ url: String(url), corpo: JSON.parse(String(init?.body ?? '{}')) });
     const stato = mondo.risposte.shift() ?? 401;
+    // 0: la rete cade e la richiesta non arriva.
+    if (stato === 0) throw new TypeError('fetch failed');
     if (stato === 401) {
       return new Response(JSON.stringify({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Autenticazione richiesta' } }), { status: 401 });
+    }
+    if (stato >= 400) {
+      return new Response(JSON.stringify({ ok: false, error: { code: 'INTERNAL', message: 'Errore del server' } }), { status: stato });
     }
     return new Response(JSON.stringify({ ok: true, data: { id: 'd-1', status: 'open' } }), { status: 201 });
   }));
@@ -222,6 +227,28 @@ describe('R01-003 · con la sessione scaduta il reclamo chiede di rientrare e il
     expect(area()?.value).toBe('');
     dopo.smonta();
   }, 60000);
+
+  // Terza passata (collaudo): dopo il 401 un nuovo invio che cade per la rete o per un errore del
+  // server lasciava nella scheda il testo di prima, e alla visita dopo quello prendeva il posto
+  // dell'ultimo scritto.
+  for (const [come, stato] of [['la rete cade', 0], ['il server risponde 500', 500], ['il server risponde 400', 400]] as const) {
+    it(`dopo il 401 un nuovo invio fallito (${come}): alla visita dopo c’è l’ultimo testo scritto, non quello di prima`, async () => {
+      const s = await apri();
+      await scegliEScrivi(s, 'damaged', TESTO_A);
+      await invia(s);
+      expect(window.sessionStorage.getItem(chiave('o-1')), 'controprova: dopo il 401 la bozza c’è').not.toBeNull();
+      mondo.risposte = [stato];
+      await invia(s);
+      expect(chiamate, 'controprova: il secondo invio doveva partire').toHaveLength(2);
+      scrivi(s, TESTO_B);
+      for (let i = 0; i < 3; i++) await attendi();
+      s.smonta();
+
+      const dopo = await apri();
+      expect(area()?.value, 'alla visita dopo torna il testo di prima, non l’ultimo scritto').toBe(TESTO_B);
+      dopo.smonta();
+    }, 60000);
+  }
 
   it('la bozza riprende il testo solo per chi l’ha scritto', async () => {
     await scadeMentreScrivo(TESTO_A);
