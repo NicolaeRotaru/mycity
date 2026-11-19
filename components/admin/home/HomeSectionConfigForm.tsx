@@ -10,6 +10,18 @@ import { lunghezzaDelTesto } from '@/lib/testo-visibile';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { chiaveDiRiga, conChiaveEreditata } from '@/lib/liste/chiave-di-riga';
 
+/**
+ * R09-008 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che si
+ * incollava oltre il tetto (lo stesso meccanismo del blocco di testo, R10-014). Il testo resta
+ * intero e, oltre il tetto che lo schema rifiuta al salvataggio, l'errore lo dice sotto il campo.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
 function parseVideo(input: string): { provider: 'youtube' | 'vimeo'; id: string } | null {
   const s = input.trim();
@@ -47,7 +59,7 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
 
   return (
     <div className="space-y-3">
-      <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
+      <Input label="Titolo (opzionale)" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} />
       <Select label="Sorgente video" value={isFile ? 'file' : 'link'} onChange={(e) => switchMode(e.target.value as 'link' | 'file')}>
         <option value="link">Link YouTube o Vimeo</option>
         <option value="file">File MP4 (indirizzo)</option>
@@ -94,10 +106,10 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       return (
         <div className="space-y-3">
           <p className="text-xs text-ink-500">Lascia i campi vuoti per usare il testo della variante A/B dell&apos;esperimento.</p>
-          <Input label="Occhiello" value={c.eyebrow ?? ''} maxLength={160} onChange={(e) => set({ eyebrow: e.target.value })} />
-          <Textarea label="Titolo" value={c.headline ?? ''} rows={2} maxLength={200} onChange={(e) => set({ headline: e.target.value })} />
-          <Textarea label="Sottotitolo" value={c.subhead ?? ''} rows={3} maxLength={320} onChange={(e) => set({ subhead: e.target.value })} />
-          <Input label="Testo pulsante principale" value={c.ctaLabel ?? ''} maxLength={40} onChange={(e) => set({ ctaLabel: e.target.value })} />
+          <Input label="Occhiello" value={c.eyebrow ?? ''} error={sopraIlTetto(c.eyebrow ?? '', 160)} onChange={(e) => set({ eyebrow: e.target.value })} />
+          <Textarea label="Titolo" value={c.headline ?? ''} rows={2} error={sopraIlTetto(c.headline ?? '', 200)} onChange={(e) => set({ headline: e.target.value })} />
+          <Textarea label="Sottotitolo" value={c.subhead ?? ''} rows={3} error={sopraIlTetto(c.subhead ?? '', 320)} onChange={(e) => set({ subhead: e.target.value })} />
+          <Input label="Testo pulsante principale" value={c.ctaLabel ?? ''} error={sopraIlTetto(c.ctaLabel ?? '', 40)} onChange={(e) => set({ ctaLabel: e.target.value })} />
           <Checkbox
             checked={c.showChips !== false}
             onChange={(e) => set({ showChips: e.target.checked })}
@@ -111,8 +123,8 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Cosa cerchi oggi?" />
-          <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} placeholder="Le categorie più cercate" />
+          <Input label="Titolo" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} placeholder="Cosa cerchi oggi?" />
+          <Input label="Sottotitolo" value={c.subheading ?? ''} error={sopraIlTetto(c.subheading ?? '', 200)} onChange={(e) => set({ subheading: e.target.value })} placeholder="Le categorie più cercate" />
         </div>
       );
     }
@@ -121,8 +133,8 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Occhiello" value={c.eyebrow ?? ''} maxLength={60} onChange={(e) => set({ eyebrow: e.target.value })} placeholder="Appena arrivati" />
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Ultimi arrivati dai negozi" />
+          <Input label="Occhiello" value={c.eyebrow ?? ''} error={sopraIlTetto(c.eyebrow ?? '', 60)} onChange={(e) => set({ eyebrow: e.target.value })} placeholder="Appena arrivati" />
+          <Input label="Titolo" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} placeholder="Ultimi arrivati dai negozi" />
           <Select label="Numero di prodotti" value={String(c.limit ?? 12)} onChange={(e) => set({ limit: Number(e.target.value) })}>
             {[4, 8, 12, 16, 20, 24].map((n) => <option key={n} value={n}>{n}</option>)}
           </Select>
@@ -139,7 +151,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
         set({ bullets: bullets.map((b, k) => (k === i ? conChiaveEreditata(b, { ...b, ...patch }) : b)) });
       return (
         <div className="space-y-3">
-          <Input label="Titolo box vantaggi" value={c.trustTitle ?? ''} maxLength={120} onChange={(e) => set({ trustTitle: e.target.value })} placeholder="Perché scegliere MyCity" />
+          <Input label="Titolo box vantaggi" value={c.trustTitle ?? ''} error={sopraIlTetto(c.trustTitle ?? '', 120)} onChange={(e) => set({ trustTitle: e.target.value })} placeholder="Perché scegliere MyCity" />
           <p className="text-xs text-ink-500">Vantaggi: lascia vuoto per usare i 4 di default.</p>
           {bullets.map((b, i) => (
             <div key={chiaveDiRiga(b)} className="rounded-lg border border-cream-200 p-3 space-y-2">
@@ -149,8 +161,8 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
                   <Trash2 size={14} aria-hidden />
                 </button>
               </div>
-              <Input value={b.title} maxLength={80} onChange={(e) => setBullet(i, { title: e.target.value })} placeholder="Titolo vantaggio" />
-              <Textarea value={b.desc} rows={2} maxLength={200} onChange={(e) => setBullet(i, { desc: e.target.value })} placeholder="Descrizione" />
+              <Input value={b.title} error={sopraIlTetto(b.title, 80)} onChange={(e) => setBullet(i, { title: e.target.value })} placeholder="Titolo vantaggio" />
+              <Textarea value={b.desc} rows={2} error={sopraIlTetto(b.desc, 200)} onChange={(e) => setBullet(i, { desc: e.target.value })} placeholder="Descrizione" />
             </div>
           ))}
           {bullets.length < 6 && (
@@ -166,9 +178,9 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Occhiello" value={c.eyebrow ?? ''} maxLength={60} onChange={(e) => set({ eyebrow: e.target.value })} placeholder="Vicino a te" />
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Sostieni i negozi di Piacenza" />
-          <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} />
+          <Input label="Occhiello" value={c.eyebrow ?? ''} error={sopraIlTetto(c.eyebrow ?? '', 60)} onChange={(e) => set({ eyebrow: e.target.value })} placeholder="Vicino a te" />
+          <Input label="Titolo" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} placeholder="Sostieni i negozi di Piacenza" />
+          <Input label="Sottotitolo" value={c.subheading ?? ''} error={sopraIlTetto(c.subheading ?? '', 200)} onChange={(e) => set({ subheading: e.target.value })} />
         </div>
       );
     }
@@ -177,9 +189,9 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Badge" value={c.badge ?? ''} maxLength={40} onChange={(e) => set({ badge: e.target.value })} placeholder="Novità dai negozi" />
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={160} onChange={(e) => set({ heading: e.target.value })} />
-          <Textarea label="Testo" value={c.body ?? ''} rows={3} maxLength={400} onChange={(e) => set({ body: e.target.value })} />
+          <Input label="Badge" value={c.badge ?? ''} error={sopraIlTetto(c.badge ?? '', 40)} onChange={(e) => set({ badge: e.target.value })} placeholder="Novità dai negozi" />
+          <Input label="Titolo" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 160)} onChange={(e) => set({ heading: e.target.value })} />
+          <Textarea label="Testo" value={c.body ?? ''} rows={3} error={sopraIlTetto(c.body ?? '', 400)} onChange={(e) => set({ body: e.target.value })} />
         </div>
       );
     }
@@ -188,9 +200,9 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Hai un negozio a Piacenza?" />
-          <Input label="Sottotesto" value={c.subtext ?? ''} maxLength={200} onChange={(e) => set({ subtext: e.target.value })} placeholder="Porta il tuo negozio online a Piacenza." />
-          <Input label="Testo pulsante" value={c.ctaLabel ?? ''} maxLength={40} onChange={(e) => set({ ctaLabel: e.target.value })} placeholder="Diventa venditore" />
+          <Input label="Titolo" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} placeholder="Hai un negozio a Piacenza?" />
+          <Input label="Sottotesto" value={c.subtext ?? ''} error={sopraIlTetto(c.subtext ?? '', 200)} onChange={(e) => set({ subtext: e.target.value })} placeholder="Porta il tuo negozio online a Piacenza." />
+          <Input label="Testo pulsante" value={c.ctaLabel ?? ''} error={sopraIlTetto(c.ctaLabel ?? '', 40)} onChange={(e) => set({ ctaLabel: e.target.value })} placeholder="Diventa venditore" />
           <Input label="Link pulsante" value={c.href ?? ''} onChange={(e) => set({ href: e.target.value })} placeholder="/sell" />
         </div>
       );
@@ -209,7 +221,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const troppoHtml = !troppoLungo && sanitizeRichText(c.body).length > RICHTEXT_MAX * 4;
       return (
         <div className="space-y-3">
-          <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
+          <Input label="Titolo (opzionale)" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} />
           <Textarea
             label="Testo"
             value={c.body ?? ''}
@@ -235,12 +247,12 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
           <Input
             label="Testo alternativo"
             value={c.alt ?? ''}
-            maxLength={120}
+            error={sopraIlTetto(c.alt, 120)}
             onChange={(e) => set({ alt: e.target.value })}
             hint="Cosa si vede nella foto, per chi non la vede. Lascialo vuoto se l'immagine è solo uno sfondo."
           />
-          <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
-          <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} />
+          <Input label="Titolo" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} />
+          <Input label="Sottotitolo" value={c.subheading ?? ''} error={sopraIlTetto(c.subheading ?? '', 200)} onChange={(e) => set({ subheading: e.target.value })} />
           <Select label="Sovrapposizione" value={c.overlay ?? 'dark'} onChange={(e) => set({ overlay: e.target.value as 'light' | 'dark' | 'none' })}>
             <option value="dark">Scura</option>
             <option value="light">Chiara</option>
@@ -248,7 +260,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
           </Select>
           <div className="rounded-lg border border-cream-200 p-3 space-y-2">
             <span className="text-xs font-medium text-ink-500">Pulsante (opzionale)</span>
-            <Input label="Testo pulsante" value={cta?.label ?? ''} maxLength={40} onChange={(e) => setCta({ label: e.target.value })} />
+            <Input label="Testo pulsante" value={cta?.label ?? ''} error={sopraIlTetto(cta?.label ?? '', 40)} onChange={(e) => setCta({ label: e.target.value })} />
             <Input label="Link" value={cta?.href ?? ''} onChange={(e) => setCta({ href: e.target.value })} placeholder="/categorie oppure https://…" />
           </div>
         </div>
@@ -262,7 +274,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
         set({ items: items.map((it, k) => (k === i ? conChiaveEreditata(it, { ...it, ...patch }) : it)) });
       return (
         <div className="space-y-3">
-          <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
+          <Input label="Titolo (opzionale)" value={c.heading ?? ''} error={sopraIlTetto(c.heading ?? '', 120)} onChange={(e) => set({ heading: e.target.value })} />
           {items.map((it, i) => (
             <div key={chiaveDiRiga(it)} className="rounded-lg border border-cream-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -272,7 +284,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
                 </button>
               </div>
               <ImageUrlField label="" value={it.url} onChange={(url) => setItem(i, { url })} pathPrefix="home" />
-              <Input label="Testo alternativo" value={it.alt ?? ''} maxLength={120} onChange={(e) => setItem(i, { alt: e.target.value })} />
+              <Input label="Testo alternativo" value={it.alt ?? ''} error={sopraIlTetto(it.alt ?? '', 120)} onChange={(e) => setItem(i, { alt: e.target.value })} />
             </div>
           ))}
           {items.length < 12 && (

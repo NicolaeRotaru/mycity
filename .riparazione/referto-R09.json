@@ -1,0 +1,423 @@
+{
+  "sessione": "R09",
+  "aggiornato": "2026-11-19 10:33",
+  "finita": true,
+  "testa": "e6672c3da9c3074f6c8db9da8ee89fd9ca192019",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "e6672c3da9c3074f6c8db9da8ee89fd9ca192019",
+    "nota": "typecheck, lint e 1743 file di prova verdi (11010 casi, 1 saltato già sulla base), dopo i revert di R09-009, R09-010 e R09-011; guardia-ramo verde (una prova esistente comune sospesa da eccezione firmata da Nicola il 18/11)"
+  },
+  "voci": [
+    {
+      "id": "R09-001",
+      "chiave": "frontend-ux|se la rilettura dei reclami cade a finestra aperta, la decisione resta su dati vecchi",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (reclami)"
+    },
+    {
+      "id": "R09-002",
+      "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
+      "esito": "scelta_di_nicola",
+      "domanda": "Le pagine che non esistono rispondono 200 (con il testo «non trovato») invece di 404. Per /u lo causa lo scheletro di caricamento della radice (app/loading.tsx): senza, risponde 404. Per /product, /store e /store/<id>/<pagina> le pagine sono preparate nel browser e nessun layout chiama notFound() (c'è anche app/store/[id]/loading.tsx). Preferisci (a) togliere gli scheletri di radice, store e product e fare il controllo nei layout con una lettura sul server, (b) un controllo nel middleware che manda a 404, oppure (c) lasciare così (i motori di ricerca vedono già noindex)?",
+      "nota": "Il commit bd938055 (canonical nullo sul profilo inesistente) è stato annullato con 13a3a15f: il controllore 3 ha verificato con next dev che non cambiava la pagina che esce (app/layout.tsx non ha più alternates dal 5/11). Prodotto, negozio, pagina del negozio, categoria e il titolo di app/not-found.tsx erano già a posto sulla base. Non dichiarato prima: le pagine «non trovato» portano ancora og:title, description e twitter della home.",
+      "verificato_da": "controllore 3 (opus): next dev con indirizzi finti locali su /u, base contro correzione e senza app/loading.tsx",
+      "commit_annullati": [
+        "bd93805546b5e9759ac2ec40e72d366856f5cb0c",
+        "13a3a15f (revert)"
+      ]
+    },
+    {
+      "id": "R09-003",
+      "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
+      "esito": "non_fatto",
+      "nota": "Il testo non sparisce più (già riparato da R22-003: app/messages/[id]/page.tsx:292, 300, 309-311; tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts verde), ma il secondo Invio mentre il primo è in volo viene ignorato in silenzio: il pulsante resta acceso (riga 478, disabled solo a campo vuoto), nessun avviso, e dopo la risposta del primo il secondo non parte e resta nel campo. La voce chiede di avvisare se non parte: non fatto in questo giro.",
+      "verificato_da": "controllore 3 (opus): prova r22 verde; sonda sulla pagina montata con react-query vero (secondo Invio in volo, poi risposta del primo: inviati resta [\"Ciao\"])"
+    },
+    {
+      "id": "R09-004",
+      "chiave": "frontend-ux|la pagina «sotto i 10 €» mostra prodotti da 10 € e nasconde quelli che in promozione costano meno di 10",
+      "esito": "parziale",
+      "commit": "9a18af532280d5195d5b416549731c7bed7f81d4",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-sotto-i-dieci-totale.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-sotto-i-dieci-totale.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9a18af532280d5195d5b416549731c7bed7f81d4^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r09-sotto-i-dieci-totale.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "insieme_a": [
+        "R09-017"
+      ],
+      "cosa_ho_fatto": "Sulla base c'erano già 'prezzoSotto' (soglia esclusa, R07-016) e il totale vero per la sola pagina Novità. Ho esteso il conteggio del database a «Sotto i N €» e a «I più recensiti»: ora la pagina dice il totale (es. 106) e non 40.",
+      "cosa_resta": "I prodotti che a prezzo pieno costano 10 € o più ma in promozione meno di 10 € restano fuori. Per includerli senza svuotare la pagina serve un filtro sul prezzo scontato nel database: una funzione o vista nuova che esponga il prezzo effettivo (prezzo meno lo sconto attivo), cioè una migrazione, che questo giro non può fare. Inoltre: contaProdottiDellaGriglia (lib/queries/griglia-prodotti.ts:348-376) conta anche i prodotti dei negozi approvati senza insegna, che la lettura scarta a :334 (la vista seller_public_profiles vuole anche store_name), quindi la testa può dire 40 con 30 schede mostrabili, anche per un visitatore; e components/ProductGrid.tsx:279 getNextPageParam guarda ultima.length e non righeLette, quindi «Carica altri» sparisce prima del totale promesso.",
+      "verificato_da": "controllore 3 (opus): prova rilanciata, rimessa uscita 0, sonda sul modulo vero col finto-postgrest con un negozio approvato senza insegna (40 contro 30) e sulla griglia montata con una pagina che perde righe; prezzi non toccati"
+    },
+    {
+      "id": "R09-005",
+      "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
+      "esito": "parziale",
+      "commit": "3651417d99f403a982c4578cdbf7025fec49248c",
+      "file_toccati": [
+        "app/seller/analytics/letture-dell-andamento.ts",
+        "app/seller/analytics/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-tasso-di-conversione.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3651417d99f403a982c4578cdbf7025fec49248c^ --file app/seller/analytics/letture-dell-andamento.ts,app/seller/analytics/page.tsx --prove tests/unit/riparazione-r09-tasso-di-conversione.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Gli ordini sono di tutti e le visite solo di chi accetta i cookie: tassoDiConversione torna null quando gli ordini superano le visite misurate (niente valore oltre il 100%, niente verde). La scheda dice «Campione troppo piccolo: più ordini che visite misurate» e l'etichetta è «Visite che diventano ordini».",
+      "cosa_resta": "app/seller/analytics/page.tsx:356: con 0 visite misurate e ordini > 0 la scheda dice «Serve il conto delle visite per calcolarlo» mentre la scheda Visite mostra 0; il messaggio «campione troppo piccolo» non scatta (è il caso del lancio se nessuno accetta i cookie). Ordini uguali alle visite danno 100,0% in verde.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0, sonda (0,0) (3,0) (x,null) (1,-1) (5,5) (6,5) e griglia 60×62: mai sopra 100, mai NaN, mai verde sopra 100"
+    },
+    {
+      "id": "R09-006",
+      "chiave": "frontend-ux|il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
+      "esito": "parziale",
+      "commit": "8e442b1100aecdcb5b718e5a6115d81bd3de2853",
+      "commit_altri": [
+        "b7c16513df29e9adf00688d5093c84561020e6ae"
+      ],
+      "file_toccati": [
+        "app/seller/stories/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-storie-link-intero.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-storie-link-intero.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8e442b1100aecdcb5b718e5a6115d81bd3de2853^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r09-storie-link-intero.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prima di validare, un indirizzo intero con la stessa origine del sito (window.location.origin) si riduce a percorso, ricerca e #. Un altro dominio resta com'è e la regola esistente lo rifiuta. Aggiornato il testo di aiuto del campo.",
+      "cosa_resta": "La voce nomina anche la migrazione 403 (migrations/403:21-25), che mette NULL anche ai link interi verso il nostro dominio nelle storie vecchie: una migrazione esistente non si tocca e in questo giro non se ne scrivono di nuove; serve una migrazione nuova che riduca a percorso i link interi del nostro dominio invece di cancellarli (la 403 non è applicata al database vero). Minore: un http:// del nostro dominio riceve «I siti esterni non si possono collegare».",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 7/7, rimessa uscita 0, sonda con 21 varianti nella pagina vera (maiuscole, http/https, www, porte, host dentro un altro dominio, sottodomini, javascript:, data:, //altro-sito, /\\, tab, credenziali): tutte gestite"
+    },
+    {
+      "id": "R09-007",
+      "chiave": "frontend-ux|restano tre pagine con le foto sgranate perché `unoptimized` spegne srcset e sizes",
+      "esito": "parziale",
+      "commit": "44e65457b9f41a2cc02aac06fb552582a40527df",
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "app/seller/products/page.tsx",
+        "app/orders/[id]/page.tsx",
+        "tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-foto-con-il-caricatore.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-foto-con-il-caricatore.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 44e65457b9f41a2cc02aac06fb552582a40527df^ --file app/shared-cart/page.tsx,app/seller/products/page.tsx,app/orders/[id]/page.tsx --prove tests/unit/riparazione-r09-foto-con-il-caricatore.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le miniature dei prodotti nelle tre pagine (carrello condiviso, prodotti del negozio, riga d'ordine) usano loader={caricatoreFotoRemote} al posto di unoptimized. Prova esistente modificata e dichiarata: tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts legge per nome i tre file e contava tre file senza caricatore, ora ne conta uno (più stretta, non indebolita).",
+      "cosa_resta": "Il logo del negozio in app/orders/[id]/page.tsx:859 resta unoptimized apposta: il caricatore ritaglia a quadrato le larghezze sotto 200. Serve una variante del caricatore senza ritaglio in lib/image-loader.ts, che non è fra i miei file.",
+      "verificato_da": "controllore 3 (opus): prova rilanciata, rimessa uscita 0, prova esistente modificata più stretta (3→1 file); sonda con getImageProps vero su Supabase pubblico e firmato, Pexels, placehold.co, data:, blob:, /foto-mancante.svg, /icon-192.png, stringa vuota: nessuna foto rotta"
+    },
+    {
+      "id": "R09-008",
+      "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+      "esito": "parziale",
+      "commit": "ba37e217b3d9d84761b67861f2519e1950539528",
+      "file_toccati": [
+        "components/admin/home/HomeSectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-home-campi-brevi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-home-campi-brevi.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ba37e217b3d9d84761b67861f2519e1950539528^ --file components/admin/home/HomeSectionConfigForm.tsx --prove tests/unit/riparazione-r09-home-campi-brevi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Tolti i maxLength dai 27 campi brevi di HomeSectionConfigForm: il testo incollato resta intero e oltre il tetto dello schema il campo mostra «Troppo lungo: N caratteri su M. Accorcialo, così si salva.»",
+      "cosa_resta": "components/seller/site/BannerFields.tsx (file di un'altra sessione) ha ancora tre maxLength; lib/admin/editor-della-home.ts:41 dice «manca il titolo» per un titolo troppo lungo (vedi serve_file_altrui). I maxLength tolti sono 28, non 27.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/site/BannerFields.tsx",
+          "modifica": "Togliere maxLength={120} (riga 60), maxLength={200} (riga 67) e maxLength={40} (riga 91) e aggiungere a ciascuno error={...} quando il testo con trim() (da tutti e due i lati, come lo schema bannerConfig di lib/store-site.ts) supera lo stesso numero: `Troppo lungo: ${n} caratteri su ${max}. Accorcialo, così si salva.`"
+        },
+        {
+          "file": "lib/admin/editor-della-home.ts",
+          "modifica": "riga 41, erroreConIlPosto: un errore too_big su bullets[i].title o bullets[i].desc va tradotto in «vantaggio N: titolo (o descrizione) troppo lungo», non in «manca il titolo/la descrizione» (caso raggiungibile ora che i campi non hanno più maxLength)"
+        }
+      ],
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0, sonda sui 28 campi a tetto e tetto+1 confrontata con homeSectionSchema (spazi, accenti, emoji): identica"
+    },
+    {
+      "id": "R09-009",
+      "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
+      "esito": "non_fatto",
+      "cosa_resta": "Cura da rifare (dal commit annullato cfc9ba89) correggendo il peggioramento trovato dal controllore 1, in components/seller/site/SectionConfigForm.tsx (htmlInACapo e aCapoInHtml, ~:76-91): htmlInACapo decodifica &lt; &gt; &amp; (&amp; per ultimo) e anche &nbsp; (in spazio normale o non separabile); aCapoInHtml ricodifica & e solo i «<» che NON aprono o chiudono un tag ammesso da lib/sanitize-html.ts (strong, b, em, i, ul, ol, li, a, br, p…), così un testo già salvato con tag veri (fino al 5/11 l'aiuto prometteva grassetto, corsivo, elenchi e link) risalvato resta com'era. Varianti da mettere nella prova: «Pane & vino» e «3 < 5» → giro scrivi-pulisci-rileggi identico; «Orari: <strong>lun-sab</strong><br>Vedi <a href=\"https://esempio.it\">il sito</a>» caricato, modificato di una lettera e risalvato → tag intatti; «a\\u00a0b» incollato → mai «&nbsp;» né «&amp;nbsp;» visibile al secondo giro.",
+      "verificato_da": "controllore 1 (opus): tag veri già salvati e &nbsp; rotti al risalvataggio (peggioramento): annullato",
+      "commit_annullati": [
+        "cfc9ba89e3051aab743d25bdf02231df0b521ebd",
+        "916a6405 (revert)"
+      ],
+      "nota": "Riparazione fatta e poi annullata su decisione della regia (strada B del 19/11): i controllori hanno trovato un peggioramento rispetto alla base e il tetto di 6 subagenti non permetteva un giro di correzione. Va al prossimo giro di correzione, con un altro padrone. Cosa faceva la riparazione annullata: il blocco di testo della vetrina rileggeva «&» e «<» com'erano scritti (decodifica in htmlInACapo, ricodifica di & < > in aCapoInHtml)."
+    },
+    {
+      "id": "R09-010",
+      "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
+      "esito": "non_fatto",
+      "cosa_resta": "Cura da rifare (dai commit annullati 347f4d39 e 708646b4) correggendo i due buchi trovati dal controllore 1: (a) components/VendorForm.tsx: la firma «salvata» va calcolata sugli stessi valori del modulo (la versione corretta dei campi), non su parsed.data di zod, che riordina le chiavi e toglie gli spazi in coda; meglio una firma stabile (chiavi ordinate, stringhe con trim) usata da entrambi i lati, così dopo un salvataggio riuscito l'avviso si spegne anche con i social scritti in altro ordine, lo slogan con uno spazio in coda o l'annuncio acceso su un negozio con badge. (b) clicDaFermare in VendorForm deve confrontare anche la parte dopo «?»: in Dettagli negozio (/seller/site?details=1) il link del menu «La tua vetrina» (/seller/site, components/seller/SellerShell.tsx:53) ha lo stesso percorso ma chiude i dettagli, quindi va fermato con la domanda. Fuori dai file di R09: il tasto indietro di components/seller/site/SiteEditor.tsx deve chiedere conferma quando VendorForm segnala modifiche (prop onDirtyChange); il tasto indietro del browser non è intercettabile in Next.",
+      "verificato_da": "controllore 1 (opus): avviso acceso dopo un salvataggio riuscito e menu «La tua vetrina» non fermato: annullato",
+      "commit_annullati": [
+        "347f4d39fcb5c914a35147ed00192c292283ff16",
+        "708646b4abdaeb23d315e093b90fcf2169cbdfb2",
+        "43e969e7 (revert)"
+      ],
+      "nota": "Riparazione fatta e poi annullata su decisione della regia (strada B del 19/11): i controllori hanno trovato un peggioramento rispetto alla base e il tetto di 6 subagenti non permetteva un giro di correzione. Va al prossimo giro di correzione, con un altro padrone. Cosa faceva la riparazione annullata: VendorForm (Dettagli negozio e profilo) avvisava alla chiusura o ricarica della pagina e chiedeva conferma sul clic dei link interni; «Tutte le impostazioni» chiedeva prima di tornare indietro."
+    },
+    {
+      "id": "R09-011",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "non_fatto",
+      "cosa_resta": "Cura da rifare (dai commit annullati 6ef7924e e fed86404) correggendo il peggioramento trovato dal controllore 1: (1) lib/store-customization.ts (~:329 nella versione annullata): non togliere la guardia /\\?/ che sulla base fermava i link con «?»; togliere dalla query solo i parametri di tracciamento noti (igsh, mibextid, lang, utm_*, si) e poi, se resta una query o il primo segmento del percorso non è un nome di profilo, fermare con l'errore. Da fermare almeno i percorsi trovati dal controllore: facebook story.php, permalink.php, photo.php, photo, people; instagram stories, explore; tiktok t (altri percorsi simili da valutare). Varianti da mettere nella prova: facebook.com/story.php?story_fbid=1&id=2, facebook.com/permalink.php?…, facebook.com/photo.php?fbid=1, facebook.com/photo/?fbid=1, instagram.com/stories/nome/123?igsh=x, instagram.com/explore/tags/x?igsh=y, tiktok.com/t/ZM123/?k=1 → tutte fermate con l'errore; instagram.com/nome?igsh=x → «nome». (2) L'errore sotto il campo giusto (SocialLinksFields.tsx, CustomizationSection.tsx, VendorForm.tsx:180-186 e :355) e la sezione «Social e contatti» che si apre da sola: tenerli, ma il riassunto in fondo a VendorForm (:479 nella versione annullata) deve sparire quando il campo è corretto. (3) Facoltativo: it-it.facebook.com e web.facebook.com ridotti al nome come facebook.com.",
+      "verificato_da": "controllore 1 (opus): 7 link non di profilo su 7 salvati come nome sbagliato (peggioramento): annullato",
+      "commit_annullati": [
+        "6ef7924e017a6f114b92ef1155834482df37daf9",
+        "fed864043b61ba470dad0cc80b0c7110733fcd91",
+        "e6672c3d (revert)"
+      ],
+      "nota": "Riparazione fatta e poi annullata su decisione della regia (strada B del 19/11): i controllori hanno trovato un peggioramento rispetto alla base e il tetto di 6 subagenti non permetteva un giro di correzione. Va al prossimo giro di correzione, con un altro padrone. Cosa faceva la riparazione annullata: il link copiato dall'app (?igsh=, ?mibextid=, ?lang=) si riduceva al nome, l'errore compariva sotto il campo giusto, la sezione «Social e contatti» si apriva da sola."
+    },
+    {
+      "id": "R09-012",
+      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (prezzo mostrato)"
+    },
+    {
+      "id": "R09-013",
+      "chiave": "frontend-ux|il dettaglio ordine dell amministrazione mostra il codice grezzo paid_manually",
+      "esito": "riparato",
+      "commit": "a7793b07c7fcdac81872c04ee7756086d3bc0cae",
+      "file_toccati": [
+        "lib/admin/etichette.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a7793b07c7fcdac81872c04ee7756086d3bc0cae^ --file lib/admin/etichette.ts --prove tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunta l'etichetta PAID_MANUALLY («pagato a mano») all'elenco degli stati del bonifico; app/admin/orders/[id]/page.tsx usa già etichettaStatoBonifico e non è cambiato.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 2/2, rimessa uscita 0; app/admin/orders/[id]/page.tsx:254 mostra etichettaStatoBonifico(o.payout_status); tutti gli 11 stati di bonifico hanno un'etichetta"
+    },
+    {
+      "id": "R09-014",
+      "chiave": "frontend-ux|l'annuncio della vetrina scade a mezzanotte nel browser ma all'una nella pagina preparata dal server",
+      "esito": "riparato",
+      "commit": "33472da75000dfb4e60627eda3938fe6203b1604",
+      "file_toccati": [
+        "lib/store-customization.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-annuncio-fuso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-annuncio-fuso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 33472da75000dfb4e60627eda3938fe6203b1604^ --file lib/store-customization.ts --prove tests/unit/riparazione-r09-annuncio-fuso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "announcementActive confronta il giorno di Piacenza di adesso (giornoPiacenza, già in lib/tempo-piacenza.ts) con until, invece di costruire una data nel fuso del processo. Prova con orologio finto e TZ del processo UTC, Rome, Los Angeles e Tokyo, in inverno e in estate.",
+      "verificato_da": "controllore 1 (opus): prova rilanciata 16/16, rimessa uscita 0, sonda con fusi UTC/Kiritimati/Etc/GMT+12/Rome, cambi d'ora, mezzanotte esatta, capodanno, until vuoto o malformato: tutte verdi; vicini verdi"
+    },
+    {
+      "id": "R09-015",
+      "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "nel <ProductGrid> a riga ~223 (griglia «tutti i prodotti» della vetrina, sotto le sezioni del negozio) aggiungere prioritaPrimeFoto={false}: oggi usa il valore di serie e chiede ancora quattro foto urgenti"
+        }
+      ],
+      "nota": "Gli altri punti della voce sono già a posto sulla base: components/ProductGrid.tsx:665 priority={prioritaPrimeFoto && !formaFila && i < 4}; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:89 priority={false} e :147 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4} (solo la prima riga). Prova esistente: tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts.",
+      "verificato_da": "controllore 1 (opus): righe lette sulla base (PromoDeals:71, CollectionSection:89 e :147, promozioni:138, la fila della home passa rail); la modifica chiesta a StoreProductExplorer.tsx:223 è giusta"
+    },
+    {
+      "id": "R09-016",
+      "chiave": "layout-responsive|nelle pagine di dettaglio ordine di cliente, negozio e fattorino una nota con un link lungo fa scorrere la pagina di lato",
+      "esito": "riparato",
+      "commit": "cb46ae5166a8f68fcd0198f6bd25d4f17c774c5d",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "app/seller/orders/[id]/page.tsx",
+        "app/rider/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-note-con-link-lungo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-note-con-link-lungo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cb46ae5166a8f68fcd0198f6bd25d4f17c774c5d^ --file app/orders/[id]/page.tsx,app/seller/orders/[id]/page.tsx,app/rider/orders/[id]/page.tsx --prove tests/unit/riparazione-r09-note-con-link-lungo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla nota di consegna delle tre pagine [overflow-wrap:anywhere] e break-words; min-w-0 sugli elementi dentro i flex (indirizzo del cliente, indirizzo nella pagina del negozio, nota del fattorino). La prova legge il sorgente.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0; Tailwind compilato e misura in Chrome a 360 px con un URL lungo: scrollWidth 809→360 (cliente), 794→360 (negozio), 763→360 (fattorino)"
+    },
+    {
+      "id": "R09-017",
+      "chiave": "microcopy|la pagina dei più recensiti presenta 40 prodotti come «scelti dai clienti» anche quando nessuno ha una recensione",
+      "esito": "parziale",
+      "commit": "7a2e695e190056453b14bfa0457c0692305d7ccc",
+      "file_toccati": [
+        "app/piu-venduti/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-piu-recensiti-occhiello.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-piu-recensiti-occhiello.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7a2e695e190056453b14bfa0457c0692305d7ccc^ --file app/piu-venduti/page.tsx --prove tests/unit/riparazione-r09-piu-recensiti-occhiello.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "insieme_a": [
+        "R09-004"
+      ],
+      "cosa_ho_fatto": "Sulla base soloRecensiti (R15-009) escludeva già i prodotti a zero recensioni, con stato vuoto onesto. Ho tolto l'occhiello «Scelti dai clienti» (ora «Con recensioni»). Il numero vero in testa è nel commit di R09-004 (stesso onCount).",
+      "cosa_resta": "I 40 mostrati sono i 40 più recenti tra i recensiti, non i 40 con più recensioni. L'RPC prodotti_con_voto_almeno restituisce solo product_id, senza conteggio: serve una funzione nuova che dia gli id ordinati per numero di recensioni (migrazione, non in questo giro). Oggi le recensioni sono zero, quindi è latente. Il conteggio dei recensiti ha lo stesso buco di R09-004 (negozi senza insegna, «Carica altri» che sparisce) e nessuna prova lo esegue; le schede non mostrano voto né numero di recensioni mentre la frase sotto il titolo dice «ordinati per numero di recensioni».",
+      "verificato_da": "controllore 3 (opus): prova rilanciata (guarda occhiello e props), rimessa uscita 0, sonda sulla griglia montata con soloRecensiti (onCount riceve il totale) e sul modulo vero col negozio senza insegna"
+    },
+    {
+      "id": "R09-018",
+      "chiave": "mobile-pwa|i tasti «indietro» del fattorino sono cerchi da 36 pixel, piccoli per un pollice in strada",
+      "esito": "riparato",
+      "commit": "b91478cea6467233a1de202b909df2ae44501e68",
+      "file_toccati": [
+        "app/rider/help/page.tsx",
+        "app/rider/onboarding/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b91478cea6467233a1de202b909df2ae44501e68^ --file app/rider/help/page.tsx,app/rider/onboarding/page.tsx --prove tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I tasti indietro della guida e dell'iscrizione del fattorino passano da h-9 w-9 a h-11 w-11 (44 px); quello di app/rider/orders/[id]/page.tsx:494 era già h-11 w-11 sulla base. La prova legge il sorgente delle tre pagine.",
+      "verificato_da": "controllore 2 (opus): prova rilanciata 3/3, rimessa uscita 0; grep su app/rider e components/rider: gli unici tasti indietro sono i tre della voce, tutti h-11 w-11"
+    },
+    {
+      "id": "R09-019",
+      "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: fuori misura: cambia come nascono quasi tutte le pagine"
+    },
+    {
+      "id": "R09-020",
+      "chiave": "qa-flussi|la pagina novità mostra tutto il catalogo, anche un prodotto di tre mesi fa, e il numero in alto conta solo i prodotti già caricati",
+      "esito": "parziale",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun commit in questo giro: la finestra di 14 giorni (inizioFinestraNovita, lib/queries/griglia-prodotti.ts:101, NEW_PRODUCT_DAYS) e il totale dal database c'erano già sulla base (R15).",
+      "cosa_resta": "Il conteggio (contaProdottiDellaGriglia) conta anche i prodotti dei negozi approvati senza insegna che la lettura scarta (40 contro 30 anche per un visitatore), e ProductGrid.tsx:279 (getNextPageParam su ultima.length invece di righeLette) ferma la griglia prima del totale promesso.",
+      "verificato_da": "controllore 3 (opus): prove r15 verdi, righe controllate sulla base, sonda sul modulo vero con creatiDal e un negozio senza insegna (40 contro 30)",
+      "prova_letta": "app/novita/page.tsx:50 soloNovita; lib/queries/griglia-prodotti.ts:101 inizioFinestraNovita; tests/unit/riparazione-r15-novita-conteggio.test.ts e riparazione-r15-novita-finestra.test.ts verdi"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Tre etichette del modulo negozio e una del profilo non sono legate al loro campo",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/VendorForm.tsx:321,464,471 · app/seller/profile/page.tsx:206",
+      "descrizione": "eslint segnala jsx-a11y/label-has-associated-control su queste etichette, già presenti sulla base: un lettore di schermo non le associa al campo."
+    },
+    {
+      "titolo": "Altri percorsi di Facebook non elencati possono essere salvati come nome del profilo",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/store-customization.ts:150",
+      "descrizione": "«people» ora è fra i percorsi che non sono un nome di profilo (dentro R09-011); restano altri percorsi Facebook non elencati che verrebbero salvati come nome."
+    },
+    {
+      "titolo": "La pagina del negozio in cache può mostrare un annuncio già scaduto dopo la mezzanotte",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/store/[id]/layout.tsx:8",
+      "descrizione": "revalidate = 300: una pagina preparata prima della mezzanotte di Piacenza può arrivare con l'annuncio scaduto al primo visitatore dopo, con errore di idratazione, finché non si rigenera. Causa diversa dal fuso di R09-014."
+    },
+    {
+      "titolo": "Il costruttore della vetrina ha ancora campi brevi che tagliano in silenzio",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/seller/site/SectionConfigForm.tsx:54,140,162,171,172 · CollectionFields.tsx:24 · GalleryFields.tsx:99,119 · PageEditor.tsx:89,110,111 · MenuEditor.tsx:61",
+      "descrizione": "Lo stesso meccanismo di R09-008 (maxLength che tronca senza avviso) nei campi brevi del costruttore della vetrina del negozio; non nominati dalla voce."
+    },
+    {
+      "titolo": "«Carica altri» sparisce quando una pagina della griglia perde righe al filtro dei negozi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/ProductGrid.tsx:279 · lib/queries/griglia-prodotti.ts:336",
+      "descrizione": "getNextPageParam usa ultima.length: la metà di R02-012 sulla griglia (righeLette) non è mai stata collegata. Con i totali veri di R09-004 e R09-017 ora si vede, perché il numero in testa supera quello che la griglia carica."
+    }
+  ],
+  "domande_per_nicola": [
+    {
+      "voce": "R09-002",
+      "domanda": "Le pagine che non esistono rispondono 200 (con il testo «non trovato») invece di 404. Per /u lo causa lo scheletro di caricamento della radice (app/loading.tsx): senza, risponde 404. Per /product, /store e /store/<id>/<pagina> le pagine sono preparate nel browser e nessun layout chiama notFound() (c'è anche app/store/[id]/loading.tsx). Preferisci (a) togliere gli scheletri di radice, store e product e fare il controllo nei layout con una lettura sul server, (b) un controllo nel middleware che manda a 404, oppure (c) lasciare così (i motori di ricerca vedono già noindex)?"
+    }
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "nota": "3 riparatori su sonnet (lotti 1-3) e 3 controllori su opus; costo letto con get_session alle 10:26 (23,84 $), prima dei revert e del secondo verify: il valore finale lo legge la regia"
+  },
+  "costo_usd": 23.84
+}

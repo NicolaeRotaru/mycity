@@ -34,6 +34,21 @@ const LINK_NON_VALIDO =
   'Il link deve portare a una pagina di MyCity: scrivi la parte dell\'indirizzo che comincia con «/», per esempio /promozioni. I siti esterni non si possono collegare.';
 
 /**
+ * R09-006 — Chi copia l'indirizzo dalla barra incolla «https://<dominio>/promozioni»: se il dominio
+ * è quello del sito stesso si tiene solo il percorso («/promozioni»), che è ciò che la regola
+ * accetta. Un altro dominio resta com'è, e la regola lo rifiuta.
+ */
+function togliOrigineDelSito(link: string): string {
+  try {
+    const u = new URL(link);
+    if (u.origin === window.location.origin) return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    // non è un indirizzo intero (es. «/promozioni»): resta com'è
+  }
+  return link;
+}
+
+/**
  * Seller: gestione Storie (instagram-like, 24h).
  *
  * Esperti senior consultati:
@@ -96,7 +111,7 @@ export default function SellerStoriesPage() {
       if (!image) throw new Error('Seleziona un\'immagine');
       // R16-011 — prima si salvava qualunque indirizzo, anche un sito esterno. Si controlla prima di
       // caricare la foto, così un link sbagliato non lascia una foto orfana nel magazzino.
-      const link = linkUrl.trim();
+      const link = togliOrigineDelSito(linkUrl.trim());
       const linkInterno = link ? safeInternalPath(link, '') : '';
       if (link && !linkInterno) throw new Error(LINK_NON_VALIDO);
       const { data: { user } } = await supabase.auth.getUser();
@@ -315,7 +330,7 @@ export default function SellerStoriesPage() {
               <Input
                 // R16-007 — l'esempio è un link che la regola del salvataggio accetta (R16-011).
                 label="Pagina del sito (facoltativo)"
-                hint="Il bottone «Scopri di più» porta a una pagina di MyCity: copia il suo indirizzo dal primo «/» dopo il nome del sito, per esempio /promozioni."
+                hint="Il bottone «Scopri di più» porta a una pagina di MyCity: incolla il suo indirizzo dalla barra del browser, oppure scrivi solo la parte che comincia con «/», per esempio /promozioni."
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 placeholder="/promozioni"

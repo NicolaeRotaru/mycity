@@ -40,7 +40,8 @@ import {
 import { queryKeys } from '@/lib/queries/keys';
 import { conFattorinoDellOrdine, conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 // #92 — le miniature si chiedono gia' piccole al server
-import { sizedImage, logoNegozio } from '@/lib/image-url';
+import { logoNegozio } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
@@ -777,7 +778,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                   <div key={it.id} className="flex items-center gap-2.5 py-2">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cream-100">
                       {img ? (
-                        (<Image src={sizedImage(img, 'thumb')} alt="" width={44} height={44} unoptimized className="h-full w-full object-cover" />)
+                        (<Image src={img} alt="" width={44} height={44} loader={caricatoreFotoRemote} className="h-full w-full object-cover" />)
                       ) : <Package size={18} className="text-ink-400" aria-hidden />}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -866,10 +867,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             </div>
             <div className="mt-2.5 flex items-start gap-2 text-sm text-ink-600">
               <MapPin size={15} strokeWidth={2.2} className="mt-0.5 shrink-0 text-primary-600" aria-hidden />
-              <span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">
                 {order.delivery_full_name && <span className="font-medium text-ink-800">{order.delivery_full_name}<br /></span>}
                 {order.delivery_address}, {order.delivery_zip} {order.delivery_city}
-                {order.delivery_notes && <span className="mt-1 block italic text-ink-500">Note: {order.delivery_notes}</span>}
+                {order.delivery_notes && <span className="mt-1 block break-words italic text-ink-500 [overflow-wrap:anywhere]">Note: {order.delivery_notes}</span>}
               </span>
             </div>
             {fasciaLeggibile(order) && (
