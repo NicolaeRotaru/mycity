@@ -1,0 +1,371 @@
+{
+  "sessione": "R05",
+  "aggiornato": "2026-11-19 10:30",
+  "finita": true,
+  "testa": "0cb2424c56754335cb4c4742cde50fa840f67991",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "0cb2424c56754335cb4c4742cde50fa840f67991",
+    "nota": "NODE_OPTIONS=--max-old-space-size=10000 (tsc va in memoria col valore di default); 1737 file di prova passati, 1 saltato; lint 0 errori, 99 avvisi; 6 min 14 s"
+  },
+  "voci": [
+    {
+      "id": "R05-001",
+      "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+      "esito": "parziale",
+      "commit": "6f4a1412dcb17f2281f5ee161baf27bb6dcf0561",
+      "commit_extra": [
+        "56067757b4d466e619aa3daf9b781d3ec4a41654"
+      ],
+      "file_toccati": [
+        ".eslintrc.json"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-regola-tipi-qualunque.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-regola-tipi-qualunque.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6f4a1412^ --file .eslintrc.json --prove tests/unit/riparazione-r05-regola-tipi-qualunque.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base la regola era «warn» solo nell'override .ts/.tsx: ora è «error» per app/components/lib, con «warn» solo per i 16 file che hanno ancora degli any (paletto della regista: lint verde, 0 errori). La prova usa l'API ESLint con la configurazione del deposito. Il commit 56067757 sistema solo un errore di tipo della prova.",
+      "cosa_resta": "36 any in 16 file non miei (elenco in serve_file_altrui); due permessi eslint-disable che ancora non saltano niente perché stanno sulla riga sbagliata (lib/email/avviso-messaggio-negozio.ts:64, app/api/cron/send-emails/route.ts:333); la regola copre solo app, components e lib (tests/, scripts/ e types/ restano fuori da npm run lint). Quando gli any saranno tipizzati, togliere l override «warn» da .eslintrc.json. tsconfig.json:7 è già \"strict\": true, niente da cambiare.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/send-emails/route.ts",
+          "modifica": "tipizzare/togliere l any alle righe 58,184,189,190,194 (x2),228,233,320,335; il eslint-disable-next-line della riga 333 copre la 334, non l any della 335: spostarlo o toglierlo"
+        },
+        {
+          "file": "app/orders/[id]/return/page.tsx",
+          "modifica": "tipizzare l'any alla riga 54"
+        },
+        {
+          "file": "app/rider/orders/[id]/page.tsx",
+          "modifica": "tipizzare l'any alla riga 162"
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "tipizzare l'any alla riga 315"
+        },
+        {
+          "file": "components/ConfettiBurst.tsx",
+          "modifica": "tipizzare l'any alla riga 58"
+        },
+        {
+          "file": "components/DeliveryMap.tsx",
+          "modifica": "tipizzare l'any alle righe 50,51,70"
+        },
+        {
+          "file": "components/NearbyStoresMap.tsx",
+          "modifica": "tipizzare l'any alle righe 41,42,54"
+        },
+        {
+          "file": "components/StoreLocationPicker.tsx",
+          "modifica": "tipizzare l'any alle righe 42,43,91"
+        },
+        {
+          "file": "components/Turnstile.tsx",
+          "modifica": "tipizzare l'any alla riga 8"
+        },
+        {
+          "file": "lib/analytics/riconcilia-consenso.ts",
+          "modifica": "tipizzare l'any alla riga 33"
+        },
+        {
+          "file": "lib/analytics/sentry-config.ts",
+          "modifica": "tipizzare l'any alle righe 57 (x2),60 (x2),71 (x2)"
+        },
+        {
+          "file": "lib/analytics/sentry.tsx",
+          "modifica": "tipizzare l'any alla riga 43"
+        },
+        {
+          "file": "lib/analytics/server.ts",
+          "modifica": "tipizzare l'any alla riga 195"
+        },
+        {
+          "file": "lib/coupons.ts",
+          "modifica": "tipizzare l'any alla riga 13"
+        },
+        {
+          "file": "lib/email/avviso-messaggio-negozio.ts",
+          "modifica": "tipizzare l any alla riga 66; il permesso eslint-disable della riga 64 sta sopra l export e non copre la riga 66: spostarlo o toglierlo"
+        },
+        {
+          "file": "lib/ordini/rivendica-il-codice-sconto.ts",
+          "modifica": "tipizzare l'any alla riga 65"
+        }
+      ],
+      "verificato_da": "revisore generico (sonnet): eslint completo esce 0 con 36 avvisi no-explicit-any tutti nei 16 file dell elenco; il glob con [id] funziona; errore su file nuovi in lib/components/app; con --report-unused-disable-directives trova 2 permessi che ancora non saltano niente (aggiunti a cosa_resta e serve_file_altrui)."
+    },
+    {
+      "id": "R05-002",
+      "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/postgres-usa-e-getta.ts",
+          "modifica": "alla riga 37 (BIN_POSTGRES = cartellaDeiProgrammi()) esportare anche POSTGRES_OBBLIGATORIO = process.env.CI === 'true' || process.env.PROVE_POSTGRES_OBBLIGATORIE === '1' e, se è vero e BIN_POSTGRES è null, lanciare Error('PostgreSQL non installato: le prove col database vero non si possono saltare') all'importazione invece di lasciare che i describe.skipIf le saltino"
+        },
+        {
+          "file": "tests/unit/un-invito-scritto-a-mano-non-paga.test.ts",
+          "modifica": "righe 24-25: non usare il proprio postgresRaggiungibile con skipIf; importare l'aiutante e, se POSTGRES_OBBLIGATORIO e psql non risponde, far fallire il file (un it che lancia), saltare solo quando non è obbligatorio"
+        }
+      ],
+      "nota": "Nessun commit. Il pezzo in ci.yml era già chiuso da R01-011 (installa Postgres, esce rosso se initdb o psql mancano, PROVE_POSTGRES_OBBLIGATORIE=1 nel passo Test), ma quella variabile oggi non la legge nessun file di prova: con le modifiche sopra l'aiutante la leggerà. Resta scoperto il npm run verify locale."
+    },
+    {
+      "id": "R05-003",
+      "chiave": "architettura|il gancio semancalachiave rende morti i catch sulla chiave nelle rotte; senzachiave e sullaporta copiati in due file",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (rotte di esportazione e cancellazione)"
+    },
+    {
+      "id": "R05-004",
+      "chiave": "architettura|migrazione-124 ha dovuto creare un suo client admin, perché la fabbrica del sito porta next/headers",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: migrazioni"
+    },
+    {
+      "id": "R05-005",
+      "chiave": "architettura|email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (annullo)"
+    },
+    {
+      "id": "R05-006",
+      "chiave": "architettura|i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi"
+    },
+    {
+      "id": "R05-007",
+      "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (contanti)"
+    },
+    {
+      "id": "R05-008",
+      "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (carrello)"
+    },
+    {
+      "id": "R05-009",
+      "chiave": "architettura|la frase per l'assistente scrive a mano la soglia dei 10 euro della consegna",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (soglia della consegna)"
+    },
+    {
+      "id": "R05-010",
+      "chiave": "architettura|nella regola della consegna per l'ai la soglia dei 10 € e' scritta a mano",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (soglia della consegna)"
+    },
+    {
+      "id": "R05-011",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "Niente da cambiare in lib/queries/seller-public-profiles.ts: R06-009 ha già unito nel browser le richieste in volo dello stesso negozio (voliDi, voliPerClient), prova tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts. Restano la memoria fra giri successivi e il giro di rete in più delle fasce, che stanno nei componenti. Sul server la mappa è volutamente assente (durerebbe fra richieste di persone diverse).",
+      "serve_file_altrui": [
+        {
+          "file": "components/home/DropOfDay.tsx, components/home/StoriesCarousel.tsx e le altre sezioni della home",
+          "modifica": "leggere il negozio con una query React Query condivisa (stessa chiave per negozio) invece di chiamare conNegozioApprovato dentro ogni useEffect"
+        },
+        {
+          "file": "lib/queries/fasce-prodotti.ts",
+          "modifica": "righe 84, 136, 187: la lettura del negozio parte dopo quella dei prodotti (è lì il giro di rete in più per fascia): unirla alla prima domanda o servirla dalla cache condivisa"
+        }
+      ],
+      "nota": "Una memoria con scadenza dentro il modulo chiede una scelta sulla durata: il modulo non sa quando un negozio sospeso torna visibile.",
+      "verificato_da": "revisore generico (sonnet): lib/queries/seller-public-profiles.ts:82-135 unisce le richieste in volo per negozio solo nel browser (R06-009); fetchSellerPublicMap chiamato una volta per fascia in lib/queries/fasce-prodotti.ts:136, 187, 328; ogni sezione della home ha il suo useQuery (es. components/home/TrendingNow.tsx:43)."
+    },
+    {
+      "id": "R05-012",
+      "chiave": "architettura|la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (spedizione)"
+    },
+    {
+      "id": "R05-013",
+      "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "Niente da cambiare in lib/store-hours.ts: negozioPuoServire, ultimoRitiroDellaFascia e finestraDelRitiro hanno già il parametro propostaIl (R23-005, commit b1e87bbf e 0d499c53, prova tests/unit/riparazione-r23-fascia-domani-dopo-mezzanotte.test.ts). Il difetto resta perché nessun chiamante passa propostaIl: restano sull'ora della richiesta.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "passare a negozioPuoServire (quarto argomento) l'istante in cui la cassa ha proposto la fascia, che oggi non arriva alla rotta"
+        },
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "stessa modifica: passare l'istante di proposta a negozioPuoServire"
+        },
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "mandare alla rotta l'istante in cui la fascia è stata proposta"
+        },
+        {
+          "file": "lib/ordini/scadenza-accettazione.ts",
+          "modifica": "riga 185: ultimoRitiroDellaFascia(orari, ordine.delivery_slot, romeNow(nato)) non passa propostaIl"
+        },
+        {
+          "file": "lib/quando-arriva.ts, lib/ordini/consegna-veloce.ts",
+          "modifica": "fasciaSiPuo e motivoFasciaRifiutata (lib/quando-arriva.ts:213 e :230) e lib/ordini/consegna-veloce.ts:76: inoltrare propostaIl a negozioPuoServire quando la rotta lo riceve"
+        }
+      ],
+      "nota": "Il dato nuovo viene dal browser: la rotta non deve fidarsi, o lo limita a pochi minuti prima di adesso o lo firma il server quando propone la fascia (scelta di progetto). Le rotte toccano ordini e pagamenti, fuori dal giro del 19/11.",
+      "verificato_da": "revisore generico (sonnet): propostaIl c è in lib/store-hours.ts:233, 311, 348; nessun chiamante fuori dal file lo passa (lib/quando-arriva.ts:213 e :230, lib/ordini/consegna-veloce.ts:76, le due rotte); lib/ordini/scadenza-accettazione.ts:185 passa romeNow(nato) come now."
+    },
+    {
+      "id": "R05-014",
+      "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+      "esito": "parziale",
+      "commit": "2b0cdbb645fb1103a4727f2b43116ba482fab6f0",
+      "file_toccati": [
+        "package-lock.json"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-falle-degli-sviluppatori.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-falle-degli-sviluppatori.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2b0cdbb6^ --file package-lock.json --prove tests/unit/riparazione-r05-falle-degli-sviluppatori.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "npm audit fix senza --force: il lock cambia 14 voci, tutte dev:true (@typescript-eslint/* 8.60.0->8.73.0, minimatch, create-ecdh, bn.js). Nessuna libreria del sito toccata. npm audit: prima 23 (5 low, 14 moderate, 4 high), dopo 18 (5 low, 9 moderate, 4 high).",
+      "cosa_resta": "18 avvisi chiedono aggiornamenti che rompono (--force): @storybook/builder-webpack5, @storybook/nextjs, webpack-dev-middleware (high), zod (high), @sentry/nextjs, resend, @react-email/render, glob/minimatch/editorconfig/js-beautify, elliptic, crypto-browserify. Scelta della regista se farli.",
+      "nota": "Il conto di oggi (23) è diverso dai 19 della scheda: la banca degli avvisi si è mossa.",
+      "verificato_da": "revisore generico (sonnet): diff del lock voce per voce, 14 cambiate o aggiunte tutte dev:true; la prova controlla versioni minime vere e che siano dev; npm audit fresco 18 (23->18). create-ecdh resta segnalata senza correzione disponibile."
+    },
+    {
+      "id": "R05-015",
+      "chiave": "architettura|l'elenco delle librerie dichiara una libreria mai usata e ne usa una che non dichiara, e il lint gira con un comando che next 16 toglie",
+      "esito": "riparato",
+      "commit": "67cbd9915ce1c6fd36d614385294ee985e937166",
+      "file_toccati": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-librerie-dichiarate.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-librerie-dichiarate.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 67cbd991^ --file package.json,package-lock.json --prove tests/unit/riparazione-r05-librerie-dichiarate.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto iconv-lite dalle dipendenze (nessun file la importa; resta nel lock come libreria di jsdom) e dichiarato @typescript-eslint/eslint-plugin ^8.60.0 (già nel lock, nessun download), che .eslintrc.json carica per nome. Lo script lint usava già eslint diretto: quel pezzo era già riparato sulla base.",
+      "verificato_da": "revisore generico (sonnet): controllo a mano delle importazioni su tutto il deposito contro package.json; iconv-lite solo in un commento di next.config.js:73; il plugin è caricato da .eslintrc.json:50; prova rilanciata verde. Residuo fuori dal testo della voce: tre librerie usate solo nei test e non dichiarate (in nuovi_difetti_visti)."
+    },
+    {
+      "id": "R05-016",
+      "chiave": "architettura|il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "Correzione pronta nel commit eddf0534 (scripts/gen-db-types.mjs: il controllo dell'array viene prima del tipo base, text[]/uuid[] escono <tipo>[], _text non va più in ricorsione infinita; prova tests/unit/riparazione-r05-tipi-colonne-array.test.ts che fa girare lo script vero su una migrazione campione; prova rimessa: regge, uscita 0). Annullata nel commit 0cb2424c perché fa diventare rosse le prove r11 (riparazione-r11-tipi-che-possono-restare-vuoti, riparazione-r11-viste-nei-tipi) che confrontano lib/database.types.ts con l'uscita del generatore, e quel file non è della sessione.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "riapplicare il commit eddf0534 (git cherry-pick eddf0534) e nello stesso commit rigenerare il file con `node scripts/gen-db-types.mjs` (senza database): cambiano 18 righe da string a string[], colonne kyc_file_da_togliere.percorsi, products.tags, profiles.rider_zones, reviews.photo_urls, seller_promotions.product_ids, ciascuna in Row, Insert e Update"
+        }
+      ],
+      "nota": "Commit della correzione: eddf0534; annullo: 0cb2424c. Il risultato del ramo su questa voce è zero."
+    },
+    {
+      "id": "R05-017",
+      "chiave": "architettura|una quinta copia scritta a mano del finto clienteavvisi nelle prove degli avvisi",
+      "esito": "serve_file_altrui",
+      "cosa_ho_fatto": "tests/unit/minori-s08-avvisi.test.ts importa solo lib/privacy/avvisi-a-chi-aspetta e lib/cron-cancellazioni, nessun file della sessione: non toccato. Il difetto c'è ancora: la copia a mano è la funzione database() alle righe 40-70.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/minori-s08-avvisi.test.ts",
+          "modifica": "togliere la funzione database() (righe 40-70) e usare l'aiutante esistente fintoGiroNotturno di tests/unit/aiuti/finto-giro-notturno.ts, come tests/unit/riparazione-r02-finto-clienteavvisi.test.ts riga 26 (const comeCliente = (f) => f.admin as unknown as ClienteAvvisi). I guasti a mano diventano finto.guasti.push({tabella:'notifications',azione:'insert',seRiga:…}) (pannelloRottoPer) e un Guasto su audit_logs con seRiga (turnoRotto); righe(t) si legge dal finto; rivedere le importazioni di Riga, LetturaAvvisi e registro()."
+        }
+      ]
+    },
+    {
+      "id": "R05-018",
+      "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (esportazione)"
+    },
+    {
+      "id": "R05-019",
+      "chiave": "deploy-sre|la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
+      "esito": "riparato",
+      "commit": "1894c2f34064082fd07ff363baf3f016967ecd24",
+      "file_toccati": [
+        "app/layout.tsx",
+        "app/fonts/inter-latin-wght-normal.woff2",
+        "app/fonts/inter-latin-wght-italic.woff2",
+        "app/fonts/fraunces-latin-wght-normal.woff2",
+        "app/fonts/fraunces-latin-wght-italic.woff2",
+        "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts",
+        "tests/unit/riparazione-r10-manifest-nel-head.test.tsx",
+        "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts"
+      ],
+      "prove_esistenti_modificate": [
+        "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts (legge app/layout.tsx)",
+        "tests/unit/riparazione-r10-manifest-nel-head.test.tsx (importa app/layout.tsx)",
+        "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts (importa app/layout.tsx)"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-caratteri-dal-disco.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-caratteri-dal-disco.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1894c2f3^ --file app/layout.tsx --prove tests/unit/riparazione-r05-caratteri-dal-disco.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "layout.tsx passa da next/font/google a next/font/local con 4 woff2 in app/fonts/ (Inter 100-900 e Fraunces 400-800, latin, dritto e corsivo, solo asse wght come prima: nessun axes c era). Uguale a vista: glifi identici al latin che Google serve oggi (cmap uguali, stesse metriche verticali; accentate, €, «» presenti), stesse variabili --font-inter e --font-serif, stesso display swap, preload di default, riserva Arial / Times New Roman. next build completo passa.",
+      "nota": "Correzione della prima nota: i file NON sono byte per byte uguali alla versione v38 che Google serve oggi (differenze di qualche decina di byte), ma hanno gli stessi glifi e le stesse metriche. La riserva di metriche ora è calcolata da next/font/local sul file (adjustFontFallback esplicito) e può differire di poco da quella che calcolava next/font/google: conta solo nell istante prima che il carattere si carichi. Aggiornate 3 prove esistenti che leggono o importano app/layout.tsx: r10 e r15 (mock di next/font/local al posto di next/font/google), il-corsivo (resta il controllo dritto+corsivo e preload acceso; il controllo «il corsivo esiste nel catalogo di Google» è sostituito da «i file del corsivo ci sono», perché Google non serve più). Nella rimessa --file ha solo layout.tsx: con i woff2 dentro dava uscita 3 perché la prova ne legge l impronta md5.",
+      "verificato_da": "revisore generico (sonnet): confronto layout prima/dopo su famiglie, pesi, stili, subset, variabili, display, preload; assi letti con fontkit (solo wght); cmap confrontate con il latin di Google di oggi; nessun altro next/font/google nel sito; le 3 prove modificate non indebolite in modo grave; prova rilanciata verde (22 test)."
+    },
+    {
+      "id": "R05-020",
+      "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (conto cambiato)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "zod, resend, @sentry/nextjs, minimatch e glob, librerie che vanno nel sito, hanno 10 avvisi pubblici di npm audit (zod alto) che si chiudono solo con aggiornamenti che rompono",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "package.json",
+      "descrizione": "npm audit --omit=dev del 19/11 dà 10 avvisi sulle librerie del sito (zod ^3.22 high; resend, @sentry/nextjs, minimatch, glob moderate); la correzione chiede --force. La voce R05-014 diceva che nessuna falla arrivava al sito: questi ci arrivano. Avvisi pubblici, non una falla nuova."
+    },
+    {
+      "titolo": "tre librerie usate dalle prove non sono dichiarate in package.json",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "tests/unit/la-foto-dell-iphone-entra-nella-vetrina-e-chi-resta-fuori-lo-sa.test.ts:4",
+      "descrizione": "attr-accept (tests/unit/la-foto-dell-iphone-entra-nella-vetrina-e-chi-resta-fuori-lo-sa.test.ts:4), @testing-library/dom (tests/unit/riparazione-r02-interruttore-testo-lungo.test.tsx:18) ed esbuild (tests/unit/aiuti/compila.mjs:19) arrivano solo come dipendenze di altre librerie: un aggiornamento che le toglie rompe le prove. Vanno in devDependencies alla versione già nel lock."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 3,
+    "subagenti": 3,
+    "costo_usd": 4.73,
+    "nota": "2 subagenti che riparano (sonnet, un lotto alla volta) + 1 revisore (sonnet). Costo letto con get_session (usage.cost_usd) alle 09:54 UTC, prima della consegna: 4,73 $."
+  },
+  "costo_usd": 4.73
+}
