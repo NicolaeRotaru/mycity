@@ -346,14 +346,16 @@ export default function SellerAnalyticsPage() {
         <KpiCard icon={ShoppingCart} label="Ordini (30gg)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
         <KpiCard
           icon={TrendingUp}
-          label="Conversion rate"
+          label="Visite che diventano ordini"
           value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1).replace('.', ',')}%`}
           // Il campione, dichiarato: le visite si contano solo su chi accetta i
           // cookie, quindi questo numero e' un indizio, non una misura. E senza
           // le visite il tasso non c'e': un «0,0%» direbbe che nessuno compra.
           delta={
             analytics.conversionRate == null
-              ? 'Serve il conto delle visite per calcolarlo'
+              ? (analytics.views30 != null && analytics.views30 > 0
+                ? 'Campione troppo piccolo: più ordini che visite misurate'
+                : 'Serve il conto delle visite per calcolarlo')
               : `su ${analytics.views30} visite misurate`
           }
           color={
