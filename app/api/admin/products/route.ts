@@ -272,7 +272,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // R02-003 — La traccia «chi ha cambiato cosa» nella stessa forma del modulo del prodotto e delle
   // porte dell'AI (`tracciaDellaModifica`): solo i campi cambiati, col valore di prima e di dopo.
   // Il negozio e i dati esterni li cambia solo l'amministrazione: entrano nella stessa voce.
-  let voce = tracciaDellaModifica({
+  const voce = tracciaDellaModifica({
     prodottoId: id,
     attoreId: user.id,
     origine: 'admin',
@@ -280,26 +280,6 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     dopo: patch,
     altreColonne: ['seller_id', 'external_source_url', 'external_marketplace', 'external_data'],
   });
-  // R04-001 — Le taglie (varianti) non sono colonne del prodotto: se cambiano da sole la voce
-  // non esisteva e il registro restava muto. Entrano nella traccia come campo `variants`.
-  if (variants) {
-    const base = voce ?? {
-      actorId: user.id,
-      action: 'product.update' as const,
-      targetTable: 'products' as const,
-      targetId: id,
-      metadata: { origine: 'admin', campi: [], prima: {}, dopo: {}, daAi: [] },
-    };
-    voce = {
-      ...base,
-      metadata: {
-        ...base.metadata,
-        campi: [...base.metadata.campi, 'variants'],
-        prima: { ...base.metadata.prima, variants: null },
-        dopo: { ...base.metadata.dopo, variants },
-      },
-    };
-  }
   if (voce) await writeAudit(voce);
 
   return apiSuccess({ ok: true });
