@@ -24,7 +24,8 @@ export default function ChipDelleCategorie({ chips, heroVariant }: { chips: read
     },
   });
   const piene = useQuery(domandaCategoriePiene(supabase));
-  const pieneNote = piene.isError ? null : piene.data;
+  // R08-007: una rilettura caduta non butta via le piene già note (react-query le tiene in `data`).
+  const pieneNote = piene.data ?? null;
   const idDi = new Map((categorie ?? []).map((c) => [c.slug, c.id]));
   const visibili = pieneNote
     ? chips.filter((c) => pieneNote.includes(idDi.get(c.slug) ?? ''))

@@ -65,9 +65,10 @@ describe('la veloce della scheda (2260, 2298)', () => {
 });
 
 describe('la riga della consegna non sposta il riquadro sul telefono (2299)', () => {
-  it('la variante in linea riserva due righe sotto sm', async () => {
+  it('la variante in linea riserva due righe a ogni larghezza (R08-002: prima solo sotto sm)', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('components/ui/DeliveryCutoff.tsx', 'utf8');
-    expect(src).toMatch(/inline-flex items-start gap-1\.5 text-sm text-olive-700 font-medium min-h-\[2\.5rem\] sm:min-h-0/);
+    expect(src).toMatch(/inline-flex items-start gap-1\.5 text-sm text-olive-700 font-medium min-h-\[2\.5rem\]/);
+    expect(src).not.toMatch(/sm:min-h-0/);
   });
 });

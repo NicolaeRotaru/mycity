@@ -1,0 +1,364 @@
+{
+  "sessione": "R08",
+  "aggiornato": "2026-11-19 11:40",
+  "finita": true,
+  "testa": "a431ee637d8472097fc63cc377c4b4c738a5597b",
+  "verifica": {
+    "comando": "NODE_OPTIONS=--max-old-space-size=8192 npm run verify",
+    "esito": "verde",
+    "testa": "a431ee637d8472097fc63cc377c4b4c738a5597b",
+    "nota": "typecheck 0, lint 0 errori (99 avvisi già presenti), vitest 1741 file passati e 1 saltato, 11016 prove passate e 1 saltata. Lo SHA è preso con git rev-parse HEAD nello stesso comando. Il primo verify, su 25ee7dee, era rosso per una sola prova (riparazione-r28-conferma-carta:89), sistemata con il giro di correzione su R08-004."
+  },
+  "voci": [
+    {
+      "id": "R08-011",
+      "chiave": "qa-flussi|un capo con più di cento combinazioni di taglia e colore perde le ultime in silenzio, e il cliente che le sceglie non può comprarle",
+      "esito": "parziale",
+      "commit": "a431ee637d8472097fc63cc377c4b4c738a5597b",
+      "commit_precedenti": [
+        "65beb1e49b379675e6be321b133156a241379205",
+        "43a41dfa026f28b44a043008001580e8fe803654"
+      ],
+      "file_toccati": [
+        "lib/products/variants.ts",
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-varianti-oltre-cento.test.ts",
+        "tests/unit/riparazione-r08-varianti-funzioni-pure.test.ts",
+        "tests/unit/riparazione-r08-varianti-scheda.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-varianti-oltre-cento.test.ts tests/unit/riparazione-r08-varianti-funzioni-pure.test.ts tests/unit/riparazione-r08-varianti-scheda.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a431ee637d8472097fc63cc377c4b4c738a5597b^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r08-varianti-scheda.test.ts --json",
+        "comando_variants": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 43a41dfa026f28b44a043008001580e8fe803654^ --file lib/products/variants.ts --prove tests/unit/riparazione-r08-varianti-oltre-cento.test.ts --json",
+        "nota": "due rimesse, una per commit di codice, tutte e due uscita 0"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il tetto di 100 combinazioni resta (MAX_VARIANTS, esportato). Il primo commit l'aveva tolto, ma così si arrivava a 27000 righe, oltre le 1000 che PostgREST espone, con un taglio silenzioso e dei doppioni al salvataggio: il revisore l'ha bocciato. Nuova funzione pura contaCombinazioni(types): dà il conto prima del taglio, così il modulo del negozio lo può mostrare. Nella scheda, con tutte le opzioni scelte e nessuna variante, il cliente legge «Questa combinazione non c'è: prova un'altra opzione.» e non «Scegli taglia e colore». I valori senza variante, con le scelte già fatte, sono spenti con aria-disabled. Non uso disabled: una prova esistente non nostra (R24) clicca la combinazione mancante. La logica sta in funzioni pure in variants.ts, provate da sole e nella pagina vera.",
+      "cosa_resta": "In components/seller/ProductForm.tsx (non di R08) servono tre cose. (1) Mostrare il conto prima di salvare: importare contaCombinazioni e MAX_VARIANTS da '@/lib/products/variants' e mostrare accanto agli assi `contaCombinazioni(types)` (per esempio «110 combinazioni, il massimo è 100»). (2) Quando totale > MAX_VARIANTS: avviso ben visibile, salvataggio bloccato (pulsante spento o errore prima dell'invio) e invito a togliere valori. (3) Smettere di tagliare in silenzio in reconcileVariants (circa :359): sopra il tetto non si salva, si ferma. Oggi sopra 100 il modulo salva in silenzio solo le prime 100, e finché non cambia contaCombinazioni la usano solo le prove.",
+      "verificato_da": "revisore del giro (generico): parziale è l'esito giusto. Con variants.ts alla base cadono 7 prove delle funzioni pure e 1 della scheda (aria-disabled). La parte della scheda era in gran parte già sulla base (R24-018): qui è spostata in funzioni pure, con aria-disabled in più. contaCombinazioni la usano per ora solo le prove, finché ProductForm non cambia. Il primo revisore aveva bocciato il tetto tolto (27000 righe oltre le 1000 di PostgREST)."
+    },
+    {
+      "id": "R08-003",
+      "chiave": "immagini-media|altre foto di prodotto restano senza ripiego quando la foto è stata cancellata",
+      "esito": "riparato",
+      "commit": "7c414b78117dafef4157d0a48b831ea62495b99e",
+      "commit_precedenti": [
+        "86c234c671dcf06ed56b426a1002f565fb330f42"
+      ],
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "components/RecentlyViewed.tsx",
+        "components/cart/CartUpsell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-foto-con-ripiego.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-foto-con-ripiego.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7c414b78117dafef4157d0a48b831ea62495b99e^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r08-foto-con-ripiego.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le tre <Image> nude (le foto delle recensioni nella scheda, RecentlyViewed, CartUpsell) ora passano da FotoConRipiego, il componente che il sito usa già per la foto rotta. Le due foto della galleria (:708 e :772) erano già riparate sulla base. Anche lo zoom a schermo intero della scheda (un <img> nudo) ha ora il ripiego: stesso segnaposto /foto-mancante.svg via onError, senza un giro infinito se manca anche il segnaposto. La prova apre lo zoom nella pagina vera, fa cadere la foto e vede il segnaposto.",
+      "verificato_da": "revisore del giro (generico): REGGE. Con page, RecentlyViewed e CartUpsell alla base cadono 6 prove, anche quelle dello zoom (segnaposto dopo l'evento error)."
+    },
+    {
+      "id": "R08-006",
+      "chiave": "navigazione-gerarchia|nel «completa con» del carrello un prezzo da 5000 € in su spinge fuori il pulsante «+»",
+      "esito": "riparato",
+      "commit": "78e4c02b6b9e51d587a2aaf6470809608ac33830",
+      "commit_precedenti": [
+        "edab34ecd39a58ef9da18c1f5420016eb249938b"
+      ],
+      "file_toccati": [
+        "components/cart/CartUpsell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-completa-con-prezzo-lungo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-completa-con-prezzo-lungo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 78e4c02b6b9e51d587a2aaf6470809608ac33830^ --file components/cart/CartUpsell.tsx --prove tests/unit/riparazione-r08-completa-con-prezzo-lungo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il prezzo resta intero (whitespace-nowrap, niente truncate) e la riga di prezzo e «+» va a capo (flex-wrap): con un prezzo da 5.000 € in su il «+» scende sotto invece di uscire dalla scheda. È la seconda cura indicata dalla voce («il prezzo su una riga sua»). Il primo commit troncava l'importo, e il revisore l'ha bocciato. La prova è di stile, e ogni caso cade senza la correzione.",
+      "verificato_da": "revisore del giro (generico): REGGE. Con CartUpsell.tsx alla base 3 prove su 4 cadono su whitespace-nowrap e flex-wrap. Le prove leggono le classi e non misurano la resa. Il primo revisore aveva bocciato il troncamento dell'importo."
+    },
+    {
+      "id": "R08-002",
+      "chiave": "frontend-ux|sul telefono il riquadro verde della scheda prodotto diventa un muro di testo di 264 caratteri, e dopo il caricamento cresce ancora di una riga",
+      "esito": "parziale",
+      "commit": "090abeb80ccb8968531ea8dc292efe85da5c6cb3",
+      "commit_precedenti": [
+        "9e32206158da01b7c7a692bd6728bc216f4caea2"
+      ],
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "components/ui/DeliveryCutoff.tsx",
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s10-veloce.test.tsx",
+        "tests/unit/la-consegna-da-3-euro-ha-un-nome-solo-e-non-e-mai-gratis.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-riquadro-consegna-corto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-riquadro-consegna-corto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 090abeb80ccb8968531ea8dc292efe85da5c6cb3^ --file lib/promesse-pubbliche.ts,app/product/[id]/page.tsx --prove tests/unit/riparazione-r08-riquadro-consegna-corto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il riquadro verde della scheda mostra ora una riga corta, presa dal titolo già nel codice: «Consegna MyCity da 3,00 € per tutto il carrello · come si calcola» (47 caratteri invece di 264). «come si calcola» porta a /shipping, la pagina che ha già la tariffa intera. Gli importi vengono dalle costanti. La tariffa intera non cambia di una parola, e la cassa la mostra come prima. lib/promesse-pubbliche.ts alla fine non cambia: il primo commit l'accorciava lì, e così cambiava anche la cassa con un «negozio sotto i 10 €» ambiguo; il secondo l'ha rimessa com'era. La riga inline di DeliveryCutoff ora tiene lo spazio di due righe a ogni larghezza, come la banner, così non cresce dopo il caricamento. Prove esistenti cambiate (leggono per nome DeliveryCutoff.tsx e page.tsx), senza indebolirle: tests/unit/minori-s10-veloce.test.tsx (riga 71, la classe senza sm:min-h-0) e tests/unit/la-consegna-da-3-euro-ha-un-nome-solo-e-non-e-mai-gratis.test.tsx (nel riquadro conta {rigaConsegna} invece di {spedizione.dettaglioConsegna}). tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx non è stata toccata, nemmeno la riga 108.",
+      "prova_condivisa_cambiata": {
+        "file": "tests/unit/la-consegna-da-3-euro-ha-un-nome-solo-e-non-e-mai-gratis.test.tsx",
+        "righe": [
+          {
+            "riga": "253",
+            "prima": "const frasi = [...scheda.matchAll(/\\{spedizione\\.dettaglioConsegna\\}/g)];",
+            "dopo": "const frasi = [...scheda.matchAll(/\\{rigaConsegna\\}/g)];  (con due righe di commento sopra: «R08-002 — Nel riquadro della scheda la riga è quella corta (`rigaConsegna`, cioè il `titolo` delle promesse); la tariffa intera (`dettaglioConsegna`) resta alla cassa e non si ripete qui.»)"
+          },
+          {
+            "riga": "257 (nuova)",
+            "prima": "(nessuna)",
+            "dopo": "expect(scheda, 'la tariffa intera è tornata nel riquadro della scheda').not.toMatch(/\\{spedizione\\.dettaglioConsegna\\}/);"
+          }
+        ],
+        "perche": "la prova legge per nome app/product/[id]/page.tsx e contava una volta sola {spedizione.dettaglioConsegna} nel riquadro; ora il riquadro mostra {rigaConsegna} (il titolo corto) e la prova conta quello, più un'asserzione in più che la tariffa intera non torni nel riquadro"
+      },
+      "cosa_resta": "Che la prima riga non cresca più col negozio chiuso non è provato. DeliveryCutoff inline riserva due righe (min-h-[2.5rem], components/ui/DeliveryCutoff.tsx:167). Col negozio chiuso però lib/promessa-consegna.ts:166 e :211-213 (non di R08) scrive «Il negozio è chiuso ora, riapre domani alle 08:00: in cassa scegli l'ora della consegna», circa 86 caratteri: su un telefono da 360 punti sono probabilmente tre righe (stima del revisore, non misurata), quindi il riquadro crescerebbe ancora di una riga. Per chiudere: misurare a 360 punti, poi accorciare quella frase in lib/promessa-consegna.ts (per esempio «Negozio chiuso, riapre domani alle 08:00: scegli l'ora in cassa») oppure riservare tre righe in DeliveryCutoff inline. Non l'ho fatto perché R08 ha raggiunto il tetto di 6 subagenti. La prima metà della voce è chiusa: la riga del costo passa da 264 a 47 caratteri, con il collegamento alla tariffa intera.",
+      "verificato_da": "revisore del giro (generico): PARZIALE. Riga corta e collegamento reggono: con la pagina alla base cadono 4 prove su 8, con DeliveryCutoff alla base cade quella sullo spazio; importi e promesse invariati; le prove esistenti passano da 2 a 3 e da 1 a 2 asserzioni; le-promesse… verde. Resta la frase da negozio chiuso, forse lunga tre righe (vedi cosa_resta). Il primo revisore aveva bocciato la frase breve, ambigua e cambiata anche alla cassa."
+    },
+    {
+      "id": "R08-007",
+      "chiave": "navigazione-gerarchia|la ricerca, la pagina di una categoria e i chip della home buttano via le categorie piene già note quando una rilettura fallisce",
+      "esito": "riparato",
+      "commit": "f6d4f4c1e380865c79ed0354de882186508e044e",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx",
+        "components/home-sections/ChipDelleCategorie.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-piene-rilettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-piene-rilettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f6d4f4c1e380865c79ed0354de882186508e044e^ --file app/category/[slug]/page.tsx,components/home-sections/ChipDelleCategorie.tsx --prove tests/unit/riparazione-r08-piene-rilettura-caduta.test.ts --json"
+      },
+      "insieme_a": [
+        "R08-005"
+      ],
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina categoria e i chip della home usano ora `piene.data ?? null` invece di `isError ? null : data`: una rilettura caduta tiene le categorie piene già note. Il terzo punto, la ricerca (SearchBar.tsx:77), era già riparato sulla base dal commit 3c0e939d (R03-005).",
+      "verificato_da": "revisore generico (lotto B): rilanciata la prova (3 test verdi); togliendo la correzione in una copia cadono 2 su 3 sul comportamento; verificato sulla base che SearchBar.tsx:79 aveva già piene.data ?? null (3c0e939d); nessun altro `isError ? null` rimasto"
+    },
+    {
+      "id": "R08-005",
+      "chiave": "navigazione-gerarchia|la pagina di una categoria madre rimette i bottoni delle sottocategorie vuote quando una rilettura delle categorie piene cade",
+      "esito": "riparato",
+      "commit": "f6d4f4c1e380865c79ed0354de882186508e044e",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-piene-rilettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-piene-rilettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f6d4f4c1e380865c79ed0354de882186508e044e^ --file app/category/[slug]/page.tsx,components/home-sections/ChipDelleCategorie.tsx --prove tests/unit/riparazione-r08-piene-rilettura-caduta.test.ts --json"
+      },
+      "insieme_a": [
+        "R08-007"
+      ],
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa riga e stessa cura di R08-007, quindi un commit solo, dichiarato. Con la rilettura caduta il bottone della sottocategoria vuota non torna.",
+      "verificato_da": "revisore generico (lotto B): stessa riga e stessa prova di R08-007; con la prima lettura caduta tutte le figlie restano visibili; nessun difetto"
+    },
+    {
+      "id": "R08-008",
+      "chiave": "performance|l'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/consegna/veloce/route.ts",
+          "modifica": "Oggi `?negozi=a,b,c` dà UN solo esito per l'insieme (veloceSiPuo fa l'AND su tutti i negozi). Aggiungere un parametro, per esempio `&per=negozio`, che legge i profili con un solo `.in('id', ids)`, conta i fattorini online una volta (contaFattoriniOnline), chiama `veloceSiPuo({adesso, negozi:[quel negozio], fattoriniOnline})` per ogni id e risponde `{ risultati: { [id]: EsitoVeloce } }`. Un id non approvato dà il suo «no» senza far fallire gli altri. Il freno conta una richiesta sola."
+        }
+      ],
+      "nota": "Difetto presente sulla base (DeliveryCutoff.tsx:56-77, una fetch per negozioId; StoreListRow lo usa per ogni riga). Senza la rotta, unire le domande in DeliveryCutoff darebbe a ogni scheda l'AND di tutta la lista, cioè una risposta sbagliata, quindi non ho fatto commit. Dopo la rotta, in DeliveryCutoff (file di R08) `useVeloceDelNegozio` raccoglie a livello di modulo gli id chiesti nella stessa finestra breve in una sola fetch `?negozi=…&per=negozio` e dà a ogni scheda `risultati[id]`. Restano l'anti-raffica dei 5 minuti e `setVeloce(null)` su errore o 429. La prova monta N schede di negozi diversi e conta 1 fetch.",
+      "verificato_da": "revisore generico (lotto B): CONFERMATO, la rotta risponde con un solo EsitoVeloce per l'insieme (AND), senza formato per negozio; route.ts:27-35 indica già la cura per negozio. Una mitigazione solo in DeliveryCutoff (blocchi da 20, ricaduta per negozio sul «no») non chiude la voce"
+    },
+    {
+      "id": "R08-004",
+      "chiave": "microcopy|la conferma al cliente scrive «domani · 9:00–12:00» senza la data: chi la rilegge il giorno dopo capisce il giorno sbagliato",
+      "esito": "riparato",
+      "commit": "bd58ec878fa0cdf5f0878e965c9541f35c474225",
+      "commit_precedenti": [
+        "25ee7dee805958675584c46c9524c24ea5cc4b75"
+      ],
+      "file_toccati": [
+        "lib/email/templates.ts",
+        "tests/unit/minori-s03-email-testi.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-conferma-con-la-data.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-conferma-con-la-data.test.ts tests/unit/minori-s03-email-testi.test.ts tests/unit/riparazione-r28-conferma-carta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bd58ec878fa0cdf5f0878e965c9541f35c474225^ --file lib/email/templates.ts --prove tests/unit/riparazione-r08-conferma-con-la-data.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La conferma al cliente scrive la data DOPO la fascia, «Domani · 9:00–12:00 (sabato 31/10)», sia per Oggi sia per Domani. «Adesso» della veloce resta com'è. Il giorno si conta a Roma da createdAt (argomento opzionale), altrimenti da adesso. L'email al negozio (conLaData) non cambia. Prova esistente aggiornata con orologio finto, senza indebolirla: tests/unit/minori-s03-email-testi.test.ts (importa lib/email/templates). Il primo commit metteva la data prima della fascia e rompeva tests/unit/riparazione-r28-conferma-carta.test.ts:89, una prova non nostra: il secondo commit la sposta dopo, e r28 torna verde senza essere toccata.",
+      "prova_condivisa_cambiata": {
+        "file": "tests/unit/minori-s03-email-testi.test.ts",
+        "righe": [
+          {
+            "riga": "1",
+            "prima": "import { describe, it, expect } from 'vitest';",
+            "dopo": "import { describe, it, expect, vi, afterEach } from 'vitest';"
+          },
+          {
+            "riga": "79 (nuova)",
+            "prima": "(nessuna)",
+            "dopo": "afterEach(() => vi.useRealTimers());"
+          },
+          {
+            "riga": "81-83 (nuove)",
+            "prima": "(nessuna)",
+            "dopo": "// R08-004: «Domani» porta la data vera; orologio finto, giovedì 19/11/2026 sera a Piacenza.\nvi.useFakeTimers();\nvi.setSystemTime(new Date('2026-11-19T21:30:00Z'));"
+          },
+          {
+            "riga": "87",
+            "prima": "expect(t.text.replace(/ /g, ' ')).toMatch(/Consegna: Domani 9:00-12:00\\. In contanti alla consegna: tieni pronti 24,00 €\\./);",
+            "dopo": "expect(t.text.replace(/ /g, ' ')).toMatch(/Consegna: Domani 9:00-12:00 \\(venerdì 20\\/11\\)\\. In contanti alla consegna: tieni pronti 24,00 €\\./);"
+          },
+          {
+            "riga": "88",
+            "prima": "expect(testo(t.html)).toMatch(/Domani 9:00-12:00/);",
+            "dopo": "expect(testo(t.html)).toMatch(/Domani 9:00-12:00 \\(venerdì 20\\/11\\)/);"
+          }
+        ],
+        "perche": "la prova importa lib/email/templates e leggeva la fascia senza data; ora la data segue la fascia, e serve l'orologio finto perché la data dipende dal giorno"
+      },
+      "verificato_da": "revisore del giro (generico): REGGE. Con templates.ts alla base cadono le prove nuove e minori-s03 sul testo «(venerdì 20/11)»; minori-s03 ha 2 asserzioni prima e 2 dopo, più l'orologio finto; r28-conferma-carta verde e non toccata. Limite: i due chiamanti non passano createdAt (in nuovi_difetti_visti)."
+    },
+    {
+      "id": "R08-001",
+      "chiave": "flussi-conversione|la scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (tetto dei contanti)"
+    },
+    {
+      "id": "R08-009",
+      "chiave": "qa-flussi|dalla scheda prodotto il carrello riceve il prezzo pieno anche con una promozione attiva, e il carrello può dire che il prezzo è sceso",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (prezzo al carrello)"
+    },
+    {
+      "id": "R08-010",
+      "chiave": "qa-flussi|la scheda prodotto passa il prezzo pieno alla barra d'acquisto e al carrello con una promozione attiva",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (prezzo al carrello)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la conferma al cliente conta il giorno da quando parte l'email, non da quando è nato l'ordine",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts:1750 · lib/stripe/webhook/ordini.ts:537",
+      "descrizione": "orderConfirmedBuyerTemplate accetta ora createdAt, ma i due chiamanti non lo passano (la mail al negozio nella stessa rotta dei contanti passa c.creatoIl, riga 1734). Oggi l'email parte subito e non cambia niente; con una riconsegna tardiva del webhook di Stripe oltre la mezzanotte la data sarebbe quella della riconsegna."
+    },
+    {
+      "titolo": "col negozio chiuso la prima riga del riquadro verde può prendere tre righe sul telefono",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/promessa-consegna.ts:166 · lib/promessa-consegna.ts:211-213",
+      "descrizione": "La frase «Il negozio è chiuso ora, riapre domani alle 08:00: in cassa scegli l'ora della consegna» ha circa 86 caratteri, e la variante inline di DeliveryCutoff riserva due righe: a 360 punti la riga cresce ancora dopo il caricamento. È il resto di R08-002."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 6,
+    "nota": "2 lotti, 2 revisori, 1 giro di correzione, 1 revisore del giro: tutti subagenti generici, modello piccolo. Tetto (6) raggiunto.",
+    "subagenti": 6
+  },
+  "prove_condivise": [
+    {
+      "voce": "R08-002",
+      "file": "tests/unit/la-consegna-da-3-euro-ha-un-nome-solo-e-non-e-mai-gratis.test.tsx",
+      "righe": [
+        {
+          "riga": "253",
+          "prima": "const frasi = [...scheda.matchAll(/\\{spedizione\\.dettaglioConsegna\\}/g)];",
+          "dopo": "const frasi = [...scheda.matchAll(/\\{rigaConsegna\\}/g)];  (con due righe di commento sopra: «R08-002 — Nel riquadro della scheda la riga è quella corta (`rigaConsegna`, cioè il `titolo` delle promesse); la tariffa intera (`dettaglioConsegna`) resta alla cassa e non si ripete qui.»)"
+        },
+        {
+          "riga": "257 (nuova)",
+          "prima": "(nessuna)",
+          "dopo": "expect(scheda, 'la tariffa intera è tornata nel riquadro della scheda').not.toMatch(/\\{spedizione\\.dettaglioConsegna\\}/);"
+        }
+      ],
+      "perche": "la prova legge per nome app/product/[id]/page.tsx e contava una volta sola {spedizione.dettaglioConsegna} nel riquadro; ora il riquadro mostra {rigaConsegna} (il titolo corto) e la prova conta quello, più un'asserzione in più che la tariffa intera non torni nel riquadro"
+    },
+    {
+      "voce": "R08-004",
+      "file": "tests/unit/minori-s03-email-testi.test.ts",
+      "righe": [
+        {
+          "riga": "1",
+          "prima": "import { describe, it, expect } from 'vitest';",
+          "dopo": "import { describe, it, expect, vi, afterEach } from 'vitest';"
+        },
+        {
+          "riga": "79 (nuova)",
+          "prima": "(nessuna)",
+          "dopo": "afterEach(() => vi.useRealTimers());"
+        },
+        {
+          "riga": "81-83 (nuove)",
+          "prima": "(nessuna)",
+          "dopo": "// R08-004: «Domani» porta la data vera; orologio finto, giovedì 19/11/2026 sera a Piacenza.\nvi.useFakeTimers();\nvi.setSystemTime(new Date('2026-11-19T21:30:00Z'));"
+        },
+        {
+          "riga": "87",
+          "prima": "expect(t.text.replace(/ /g, ' ')).toMatch(/Consegna: Domani 9:00-12:00\\. In contanti alla consegna: tieni pronti 24,00 €\\./);",
+          "dopo": "expect(t.text.replace(/ /g, ' ')).toMatch(/Consegna: Domani 9:00-12:00 \\(venerdì 20\\/11\\)\\. In contanti alla consegna: tieni pronti 24,00 €\\./);"
+        },
+        {
+          "riga": "88",
+          "prima": "expect(testo(t.html)).toMatch(/Domani 9:00-12:00/);",
+          "dopo": "expect(testo(t.html)).toMatch(/Domani 9:00-12:00 \\(venerdì 20\\/11\\)/);"
+        }
+      ],
+      "perche": "la prova importa lib/email/templates e leggeva la fascia senza data; ora la data segue la fascia, e serve l'orologio finto perché la data dipende dal giorno"
+    }
+  ],
+  "costo_usd": 10.37
+}

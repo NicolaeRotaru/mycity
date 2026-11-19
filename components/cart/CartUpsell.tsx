@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Sparkles } from 'lucide-react';
@@ -85,7 +85,7 @@ export function CartUpsell({ items }: Props) {
               <Link href={`/product/${p.id}`} className="block">
                 <div className="relative w-full h-20 bg-cream-100">
                   {img && (
-                    <Image
+                    <FotoConRipiego
                       src={sizedImage(img, 144, { quadrato: true })}
                       alt={p.name}
                       fill
@@ -102,8 +102,8 @@ export function CartUpsell({ items }: Props) {
                     {p.name}
                   </p>
                 </Link>
-                <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-base font-extrabold text-ink-900">{formatPrice(p.price)}</span>
+                <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-1 mt-1.5">
+                  <span className="whitespace-nowrap text-base font-extrabold text-ink-900">{formatPrice(p.price)}</span>
                   <button
                     type="button"
                     onClick={() => handleAdd(p)}
