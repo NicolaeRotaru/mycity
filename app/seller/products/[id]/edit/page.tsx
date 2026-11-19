@@ -44,11 +44,6 @@ function comEraPrima(prima: Record<string, unknown>, payload: Record<string, unk
   return indietro;
 }
 
-/** R04-007 — Le taglie riconosciute dagli id: altre taglie, o un numero diverso, danno un'altra firma. */
-function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
-  return taglie.map((t) => t.id ?? '').sort().join('|');
-}
-
 export default function EditProductPage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const router = useRouter();
@@ -66,10 +61,8 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    * quando si monta, e restando aperto non le riprenderebbe piu'. Se si e' aperto
    * senza sapere la consegna del negozio, per lui resta «non letta»: il suo tempo
    * di consegna e' un ripiego, e non scrive un «no» indovinato.
-   * Resta aperto finche' le taglie sono le stesse (`taglie`, gli id): se ne arrivano
-   * altre, si riapre con quelle vere (sotto, prima del modulo).
    */
-  const [moduloAperto, setModuloAperto] = useState<{ consegnaNonLetta: boolean; taglie: string } | null>(null);
+  const [moduloAperto, setModuloAperto] = useState<{ consegnaNonLetta: boolean } | null>(null);
 
   const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto, fetchStatus: prodottoFetchStatus } = useQuery({
     queryKey: queryKeys.seller.product(id),
@@ -312,15 +305,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     );
   }
 
-  // R04-007 — Il modulo prende le taglie solo quando si monta. Se dopo l'apertura ne arrivano altre
-  // (la copia in memoria era vecchia: aperto senza rete, e intanto un altro telefono ne ha aggiunte),
-  // si riapre con quelle vere, come prima: il «Salva» scriverebbe la scorta e le taglie sbagliate, e
-  // questo vale piu' del testo non salvato. Con le stesse taglie (il caso di sempre) resta com'e'.
-  // Se si riapre mentre la consegna del negozio e' ancora in lettura, anche per lui resta «non letta».
-  const taglieLette = variantiSenzaDati ? null : firmaDelleTaglie(variants);
-  if (!moduloAperto || (taglieLette !== null && taglieLette !== moduloAperto.taglie)) {
-    setModuloAperto({ consegnaNonLetta: consegnaNonLetta || offersExpress === undefined, taglie: taglieLette ?? '' });
-  }
+  if (!moduloAperto) setModuloAperto({ consegnaNonLetta });
 
   const attrs = (product.attributes as Record<string, unknown>) ?? {};
   const legacyStato = typeof attrs.stato === 'string' ? attrs.stato : '';
@@ -367,7 +352,6 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       </div>
 
       <ProductForm
-        key={moduloAperto?.taglie}
         mode="edit"
         categories={categories}
         initialValues={initialValues}
