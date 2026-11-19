@@ -215,6 +215,20 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // scorte siano ancora quelle viste (se no non si scrive niente), e si legge
   // com'era il prodotto: se poi le varianti cadono, il prodotto torna così.
   let prima: Record<string, unknown> | null = null;
+  // R02-003 — Com'era il prodotto si legge anche senza varianti: serve alla traccia, che dice
+  // il valore di prima e quello di dopo di ogni campo cambiato, come le altre porte.
+  if (Object.keys(patch).length > 0) {
+    const { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
+    if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+    prima = data as unknown as Record<string, unknown> | null;
+    // R04-002 — Prodotto che non esiste: 404, niente scritture e niente traccia con «prima» vuoto.
+    if (!prima) return ApiErrors.notFound('Prodotto non trovato');
+  } else {
+    const { data, error } = await admin.from('products').select('id').eq('id', id).maybeSingle();
+    if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+    if (!data) return ApiErrors.notFound('Prodotto non trovato');
+  }
+
   if (variants) {
     try {
       await controllaScorteVarianti(admin, id, variants as ProductVariant[], scorteViste);
@@ -223,14 +237,6 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
       return ApiErrors.internal('Errore nel salvataggio delle varianti');
     }
   }
-  // R02-003 — Com'era il prodotto si legge anche senza varianti: serve alla traccia, che dice
-  // il valore di prima e quello di dopo di ogni campo cambiato, come le altre porte.
-  if (Object.keys(patch).length > 0) {
-    const { data, error } = await admin.from('products').select(Object.keys(patch).join(', ')).eq('id', id).maybeSingle();
-    if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
-    prima = data as unknown as Record<string, unknown> | null;
-  }
-
   if (Object.keys(patch).length > 0) {
     if (condizione === undefined) {
       const { error } = await admin.from('products').update(patch).eq('id', id);
