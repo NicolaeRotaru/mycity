@@ -85,9 +85,7 @@ async function fetchAchievements(userId: string) {
 export async function generateMetadata(props: { params: Promise<{ handle: string }> }) {
   const params = await props.params;
   const profile = await fetchProfileByHandle(params.handle);
-  // 19/11/2026 (R09-002) — canonical nullo: senza, la pagina «non trovato» ereditava quello della
-  // home, e noindex più canonical alla home sono due segnali in contraddizione (come per le altre pagine).
-  if (!profile) return { title: 'Profilo non trovato · MyCity', robots: { index: false }, alternates: { canonical: null } };
+  if (!profile) return { title: 'Profilo non trovato · MyCity', robots: { index: false } };
   const name = profile.full_name?.split(' ')[0] ?? profile.public_handle;
   return {
     title: `@${profile.public_handle} · ${name} · MyCity`,
