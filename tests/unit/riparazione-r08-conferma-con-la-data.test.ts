@@ -13,26 +13,40 @@ const base = { orderId: 'abcdef12', total: 24, storeName: 'Pane', paymentMethod:
 afterEach(() => vi.useRealTimers());
 
 describe('la conferma al cliente porta il giorno vero', () => {
-  it('«Domani · 9:00–12:00» dice anche venerdì 20/11, in HTML e in testo', () => {
+  it('«Domani · 9:00–12:00» dice venerdì 20/11 DOPO la fascia, in HTML e in testo', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-19T21:30:00Z'));
     const t = orderConfirmedBuyerTemplate({ ...base, deliverySlot: 'Domani · 9:00–12:00' });
-    expect(testo(t.html)).toContain('Domani (venerdì 20/11) · 9:00–12:00');
-    expect(t.text).toContain('Domani (venerdì 20/11) · 9:00–12:00');
+    expect(testo(t.html)).toContain('Domani · 9:00–12:00 (venerdì 20/11)');
+    expect(t.text).toContain('Domani · 9:00–12:00 (venerdì 20/11)');
   });
 
   it('il giorno si conta da quando è nato l\'ordine, non da quando si apre la funzione', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-12-30T10:00:00Z'));
     const t = orderConfirmedBuyerTemplate({ ...base, deliverySlot: 'Domani · 9:00–12:00', createdAt: '2026-11-19T21:30:00Z' });
-    expect(t.text).toContain('Domani (venerdì 20/11) · 9:00–12:00');
+    expect(t.text).toContain('Domani · 9:00–12:00 (venerdì 20/11)');
   });
 
   it('col ritiro in negozio la fascia di domani porta la data', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-19T21:30:00Z'));
     const t = orderConfirmedBuyerTemplate({ ...base, pickupInStore: true, deliverySlot: 'Domani · 9:00–12:00' });
-    expect(t.text).toContain('Ritiro in negozio, Domani (venerdì 20/11) · 9:00–12:00');
+    expect(t.text).toContain('Ritiro in negozio, Domani · 9:00–12:00 (venerdì 20/11)');
+  });
+
+  it('«Oggi» porta la data di oggi dopo la fascia', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-19T21:30:00Z'));
+    const t = orderConfirmedBuyerTemplate({ ...base, deliverySlot: 'Oggi · 18:00–20:00' });
+    expect(t.text).toContain('Consegna: Oggi · 18:00–20:00 (giovedì 19/11).');
+  });
+
+  it('la data non viene prima della fascia', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-19T21:30:00Z'));
+    const t = orderConfirmedBuyerTemplate({ ...base, deliverySlot: 'Domani · 9:00–12:00' });
+    expect(t.text).not.toMatch(/Domani \(/);
   });
 
   it('una fascia senza «oggi»/«domani» resta com\'è', () => {

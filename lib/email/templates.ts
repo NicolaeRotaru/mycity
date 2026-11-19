@@ -148,9 +148,9 @@ export function orderConfirmedBuyerTemplate(args: {
 }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   // R08-004 — «Domani · 9:00–12:00» si legge anche il giorno dopo e fa capire il giorno sbagliato:
-  // accanto a «oggi»/«domani» va il giorno vero, come già nell'email al negozio (conLaData).
+  // la fascia porta il giorno vero DOPO l'orario: «Domani · 9:00–12:00 (sabato 31/10)».
   const nato = args.createdAt ? new Date(args.createdAt) : new Date();
-  const fascia = args.deliverySlot?.trim() ? conLaData(args.deliverySlot.trim(), nato) : null;
+  const fascia = args.deliverySlot?.trim() ? conLaDataDopoLaFascia(args.deliverySlot.trim(), nato) : null;
   const quando = args.pickupInStore
     ? `Ritiro in negozio${fascia ? `, ${fascia}` : ''}`
     : fascia;
@@ -192,16 +192,29 @@ export function orderConfirmedBuyerTemplate(args: {
  * dopo capiva un giorno sbagliato. Qui accanto alla parola si scrive il giorno vero, contato
  * sull'orologio di Piacenza a partire da `rispettoA` (quando l'ordine è nato).
  */
+/** «venerdì 20/11»: il giorno di Piacenza di `rispettoA`, spostato di `piu` giorni. */
+function giornoVero(rispettoA: Date, piu: number): string {
+  // Il giorno di Piacenza di `rispettoA`, poi +piu a mezzogiorno UTC: niente scivoloni col cambio d'ora.
+  const [a, m, g] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(rispettoA).split('-').map(Number);
+  const d = new Date(Date.UTC(a, m - 1, g + piu, 12));
+  const nome = d.toLocaleDateString('it-IT', { timeZone: 'UTC', weekday: 'long' });
+  return `${nome} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+}
+
 export function conLaData(testo: string, rispettoA: Date): string {
   if (Number.isNaN(rispettoA.getTime())) return testo;
-  // Il giorno di Piacenza di `rispettoA`, poi +1 a mezzogiorno UTC: niente scivoloni col cambio d'ora.
-  const [a, m, g] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(rispettoA).split('-').map(Number);
-  const giorno = (piu: number) => {
-    const d = new Date(Date.UTC(a, m - 1, g + piu, 12));
-    const nome = d.toLocaleDateString('it-IT', { timeZone: 'UTC', weekday: 'long' });
-    return `${nome} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
-  };
-  return testo.replace(/\b(oggi|domani)\b/gi, (w) => `${w} (${giorno(w.toLowerCase() === 'domani' ? 1 : 0)})`);
+  return testo.replace(/\b(oggi|domani)\b/gi, (w) => `${w} (${giornoVero(rispettoA, w.toLowerCase() === 'domani' ? 1 : 0)})`);
+}
+
+/**
+ * R08-004 — Per il cliente la data va DOPO la fascia: «Domani · 9:00–12:00 (sabato 31/10)».
+ * Se la fascia non dice «oggi» né «domani» (per esempio «Adesso · …») resta com'è.
+ */
+export function conLaDataDopoLaFascia(fascia: string, rispettoA: Date): string {
+  if (Number.isNaN(rispettoA.getTime())) return fascia;
+  const parola = /\b(oggi|domani)\b/i.exec(fascia);
+  if (!parola) return fascia;
+  return `${fascia} (${giornoVero(rispettoA, parola[1].toLowerCase() === 'domani' ? 1 : 0)})`;
 }
 
 export function newOrderSellerTemplate(args: {
