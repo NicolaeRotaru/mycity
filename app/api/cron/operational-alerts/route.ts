@@ -16,7 +16,6 @@ import {
   type LetturaCassa,
   type RichiestaInSospeso,
 } from '@/lib/privacy/cancellazioni-in-sospeso';
-import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa';
 
 export const runtime = 'nodejs';
 
@@ -663,11 +662,6 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       url: '/admin/today',
     });
   }
-
-  // R03-006 — Il tetto di spesa AI che non vale piu' per tutto il sito: l'inizio del guasto si
-  // ricorda nel database (lib/ai/tettoSpesa.ts), non nella memoria di una copia che su Vercel vive
-  // poco. La funzione non lancia: se non sa niente, non aggiunge niente.
-  alerts.push(...(await allarmiTettoSpesaAiPerIlCron()));
 
   /**
    * 5/11/2026 — UN CONTROLLO SALTATO NON BUTTA VIA GLI ALLARMI VERI.

@@ -51,7 +51,7 @@ vi.mock('@/lib/api/middleware', () => ({
   withCronAuth: (g: (req: unknown) => unknown) => (req: unknown) => g(req),
 }));
 vi.mock('@/lib/supabase/server', () => ({
-  getAdminSupabase: () => ({ from: (t: string) => tabella(t), rpc: async () => ({ data: 0, error: null }) }),
+  getAdminSupabase: () => ({ from: (t: string) => tabella(t) }),
 }));
 vi.mock('@/lib/email/client', () => ({
   sendEmail: vi.fn(async () => esitoInvio),
