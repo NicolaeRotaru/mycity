@@ -790,7 +790,7 @@ jobs:
               DISTRUTTIVE=""
               for m in ${MIGRAZIONI_ELENCO:-}; do
                 [ -f "migrations/$m" ] || continue
-                RIGHE="$( { grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m"; grep -niE 'DROP[[:space:]]+(FUNCTION|VIEW|MATERIALIZED[[:space:]]+VIEW|IF[[:space:]]+EXISTS)([^[:alnum:]_]|$)|(ALTER[[:space:]]+TABLE.*[[:space:]]|^[[:space:]]*)DROP[[:space:]]+"?[[:alpha:]_][[:alnum:]_]*"?[[:space:]]*(,|;|CASCADE|RESTRICT|$)' "migrations/$m" | grep -viE 'DROP[[:space:]]+(DEFAULT|IDENTITY|EXPRESSION)[[:space:]]*(,|;|$)'; } | grep -vE '^[0-9]+:[[:space:]]*--' | awk '!visto[$0]++' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
+                RIGHE="$( { grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m"; sed -E 's/DROP[[:space:]]+(DEFAULT|IDENTITY|EXPRESSION)([^[:alnum:]_]|$)/\2/Ig' "migrations/$m" | grep -niE 'DROP[[:space:]]+(FUNCTION|VIEW|MATERIALIZED[[:space:]]+VIEW|IF[[:space:]]+EXISTS)([^[:alnum:]_]|$)|(ALTER[[:space:]]+TABLE.*[[:space:]]|,[[:space:]]*|^[[:space:]]*)DROP[[:space:]]+"?[[:alpha:]_][[:alnum:]_]*"?[[:space:]]*(,|;|CASCADE|RESTRICT|$)' | cut -d: -f1 | while read -r n; do printf '%s:' "$n"; sed -n "${n}p" "migrations/$m"; done; } | grep -vE '^[0-9]+:[[:space:]]*--' | awk '!visto[$0]++' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
                 if [ -n "$RIGHE" ]; then
                   DISTRUTTIVE="${DISTRUTTIVE}"$'\n'"- \`$m\`: ${RIGHE}"
                 fi
