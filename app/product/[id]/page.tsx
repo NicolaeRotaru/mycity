@@ -22,7 +22,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
-import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
+import { statoSceltaVarianti, valoreSenzaVariante } from '@/lib/products/variants';
 import { loadProductVariants } from '@/lib/products/persistVariants';
 import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 import { useFavorites } from '@/components/hooks/useFavorites';
@@ -504,13 +504,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
   // quella della variante selezionata (o del prodotto se non ci sono varianti).
   const hasVariants = Boolean((product as { has_variants?: boolean }).has_variants) || variants.length > 0;
-  const optionGroups = hasVariants ? deriveOptionGroups(variants) : [];
-  const allOptionsChosen = optionGroups.length > 0 && optionGroups.every((g) => selectedOptions[g.name]);
-  const selectedVariant = allOptionsChosen ? findVariant(variants, selectedOptions) : null;
-  // R24-018 — Tutte le opzioni scelte ma nessuna variante con quella coppia (il negozio non l'ha
-  // creata): non è «scegli le opzioni», è una combinazione che non c'è, e la scheda lo dice.
-  const combinazioneMancante = allOptionsChosen && !selectedVariant;
-  const needsVariantChoice = hasVariants && !selectedVariant && !combinazioneMancante;
+  // R08-011 — Dove sta la scelta (tutta fatta, combinazione che non c'è, da fare) lo dice una funzione
+  // pura, provata a parte: tutte le opzioni scelte ma nessuna variante con quella coppia non è «scegli».
+  const {
+    gruppi: optionGroups,
+    variante: selectedVariant,
+    combinazioneMancante,
+    daScegliere: needsVariantChoice,
+  } = statoSceltaVarianti(variants, selectedOptions, hasVariants);
   const COMBINAZIONE_CHE_NON_CE = 'Questa combinazione non c\'è: prova un\'altra opzione.';
 
   const stock: number | undefined = hasVariants
@@ -1042,15 +1043,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       // R24-018 — Con le altre scelte già fatte, questo valore ha una variante? Se no
                       // si spegne (barrato, e lo sente anche il lettore di schermo) prima di sceglierlo.
                       const altreScelte = Object.entries(selectedOptions).filter(([k, s]) => k !== g.name && s);
-                      const senzaVariante = altreScelte.length > 0 && !conQuestoValore.some(
-                        (v) => altreScelte.every(([k, s]) => v.options?.[k] === s),
-                      );
+                      const senzaVariante = valoreSenzaVariante(variants, selectedOptions, g.name, val);
                       return (
                         <button
                           key={val}
                           type="button"
                           onClick={() => setSelectedOptions((prev) => ({ ...prev, [g.name]: val }))}
                           aria-pressed={active}
+                          // R08-011 — Spento per chi legge con lo schermo: aria-disabled, non `disabled`,
+                          // così un tocco non cade nel vuoto ma dice «Questa combinazione non c'è».
+                          aria-disabled={senzaVariante && !active ? true : undefined}
                           aria-label={esaurito ? `${val}, esaurito` : undefined}
                           className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
                             active
