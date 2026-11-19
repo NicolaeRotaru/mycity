@@ -1,6 +1,15 @@
 import { join } from 'node:path';
-import { ESLint } from 'eslint';
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
+
+// eslint 8 non ha i suoi tipi qui: se ne descrive solo la parte che serve.
+type Messaggio = { ruleId: string | null; severity: number; message: string };
+type MotoreEslint = {
+  lintText(testo: string, opzioni: { filePath: string }): Promise<Array<{ messages: Messaggio[] }>>;
+};
+const { ESLint } = createRequire(__filename)('eslint') as {
+  ESLint: new (opzioni: { cwd: string; cache: boolean }) => MotoreEslint;
+};
 
 const ROOT = join(__dirname, '..', '..');
 const CAMPIONE = 'export const x: any = 1;\n';
