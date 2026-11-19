@@ -111,9 +111,9 @@ export default function TermsPage() {
           a pagamento sono separati dai risultati e segnalati come &quot;Sponsorizzato&quot;.
         </p>
         <p>
-          <strong>Importanza relativa dei parametri</strong> (art. 5 P2B): per i risultati
+          <strong>Importanza relativa dei parametri</strong> (art. 5 P2B): per i risultati{' '}
           <em>organici</em> conta la rilevanza rispetto alla ricerca e, senza ricerca, la data di
-          pubblicazione. I contenuti
+          pubblicazione. I contenuti{' '}
           <em>sponsorizzati</em> NON alterano l&apos;ordine dei risultati organici: appaiono in spazi
           separati ed etichettati &quot;Sponsorizzato&quot;, e il pagamento influenza solo quegli
           spazi dedicati, mai il posizionamento organico. Nessun parametro consente a un Venditore di

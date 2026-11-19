@@ -24,7 +24,7 @@ export default function ReturnsPage() {
       {/* Page header — linguaggio dell'hub account: serif + sottotitolo ink-500 */}
       <header className="mb-8">
         <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Assistenza</p>
-        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px] break-words hyphens-auto">
           Resi e rimborsi
         </h1>
         <p className="mt-1 text-sm text-ink-500">Hai 14 giorni di tempo per ripensarci. Ecco come funziona.</p>
@@ -53,8 +53,8 @@ export default function ReturnsPage() {
 
       <div className="space-y-5 text-ink-700">
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
-          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Come restituire un prodotto</h2>
-          <ol className="list-decimal space-y-2 pl-5 leading-relaxed">
+          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Come restituire un prodotto</h2>
+          <ol className="list-decimal space-y-2 pl-5 leading-relaxed [overflow-wrap:anywhere]">
             <li>Vai su <Link href="/orders" className="font-semibold text-primary-700 hover:text-primary-800">&quot;I miei ordini&quot;</Link> e apri l&apos;ordine interessato.</li>
             <li>Clicca su <strong>&quot;Richiedi reso&quot;</strong> e seleziona i prodotti da restituire.</li>
             <li>Specifica il motivo (cambio idea, taglia errata, prodotto difettoso…) e conferma.</li>
@@ -65,8 +65,8 @@ export default function ReturnsPage() {
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
-          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Condizioni del prodotto restituito</h2>
-          <ul className="list-disc space-y-1 pl-5 leading-relaxed">
+          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Condizioni del prodotto restituito</h2>
+          <ul className="list-disc space-y-1 pl-5 leading-relaxed [overflow-wrap:anywhere]">
             <li>Puoi provarlo come faresti in negozio. Se torna rovinato o usato oltre la prova, il rimborso può
             essere ridotto: te lo diciamo per iscritto, con il motivo.</li>
             <li>Non si applica a: prodotti deperibili (alimentari freschi), prodotti igienici sigillati aperti,
@@ -75,8 +75,8 @@ export default function ReturnsPage() {
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
-          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Tempi e modalità di rimborso</h2>
-          <ul className="list-disc space-y-1 pl-5 leading-relaxed">
+          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Tempi e modalità di rimborso</h2>
+          <ul className="list-disc space-y-1 pl-5 leading-relaxed [overflow-wrap:anywhere]">
             {/* 17/10/2026 — I 14 giorni partono da quando ci comunichi il recesso (Codice del
                 Consumo, art. 56), non da quando il negozio riceve la merce: quella è solo la
                 ragione per cui possiamo aspettare (comma 3). Le stesse parole della FAQ. */}
@@ -100,8 +100,8 @@ export default function ReturnsPage() {
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
-          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Chi paga la spedizione del reso?</h2>
-          <ul className="list-disc space-y-1 pl-5 leading-relaxed">
+          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Chi paga la spedizione del reso?</h2>
+          <ul className="list-disc space-y-1 pl-5 leading-relaxed [overflow-wrap:anywhere]">
             <li><strong>Cambio idea:</strong> le spese di restituzione sono a tuo carico.</li>
             <li><strong>Prodotto difettoso o non conforme:</strong> il reso non ti costa niente: ci accordiamo con te su come riaverlo.</li>
             <li><strong>Errore del venditore</strong> (prodotto sbagliato, taglia diversa da quella ordinata): reso gratuito.</li>
@@ -109,17 +109,17 @@ export default function ReturnsPage() {
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
-          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Garanzia legale di conformità</h2>
+          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Garanzia legale di conformità</h2>
           <p className="leading-relaxed">Tutti i prodotti acquistati su MyCity sono coperti dalla garanzia legale di <strong>24 mesi</strong> contro
           i difetti di conformità (art. 128 e seguenti del Codice del Consumo).</p>
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
-          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Hai bisogno di aiuto?</h2>
+          <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Hai bisogno di aiuto?</h2>
           <p className="leading-relaxed">Se hai dubbi o problemi con un reso, scrivici: il nostro team di supporto media tra te e il venditore
           per risolvere ogni situazione.</p>
           <div className="mt-3 flex flex-wrap gap-3">
-            <Button href="/contact"><span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Contatta supporto</span></Button>
+            <Button href="/contact"><span className="inline-flex items-center gap-2 [overflow-wrap:anywhere]"><Mail size={18} aria-hidden className="shrink-0" /> Contatta supporto</span></Button>
             <Link href="/faq" className="inline-flex items-center gap-2 rounded-lg bg-cream-100 px-5 py-2.5 font-semibold text-ink-900 transition-colors hover:bg-cream-200">
               <BookOpen size={18} aria-hidden /> Vai alle FAQ
             </Link>

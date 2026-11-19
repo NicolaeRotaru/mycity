@@ -38,7 +38,7 @@ export function LegalLayout({ title, active, meta, summary, toc, children }: Pro
       <div className="mb-2">
         <Link href="/" className="text-sm text-primary-700 hover:underline">← Home</Link>
       </div>
-      <h1 className="font-serif text-3xl md:text-5xl font-extrabold text-ink-900 mb-2">{title}</h1>
+      <h1 className="font-serif text-3xl md:text-5xl font-extrabold text-ink-900 mb-2 break-words hyphens-auto">{title}</h1>
       {meta && <p className="text-sm text-ink-500 mb-6">{meta}</p>}
 
       {/* Tab bar documenti legali fratelli — attiva = underline primary-600. */}

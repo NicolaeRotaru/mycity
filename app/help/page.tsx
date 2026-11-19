@@ -104,25 +104,25 @@ export default function HelpPage() {
       <div className="bg-cream-50 border border-cream-300 rounded-2xl p-6">
         <h3 className="font-bold text-ink-900 mb-4 text-lg">Parla con noi direttamente</h3>
         <div className="grid sm:grid-cols-3 gap-3">
-          <a href={mailtoContatto('info')} className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
+          <a href={mailtoContatto('info')} className="flex min-w-0 items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
             <Mail size={24} className="text-primary-600 shrink-0" aria-hidden />
-            <div>
+            <div className="min-w-0 [overflow-wrap:anywhere]">
               <div className="font-semibold text-sm">Email</div>
               <div className="text-xs text-ink-500">{indirizzoContatto('info')}</div>
             </div>
           </a>
           {whatsapp && (
-            <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
+            <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
               <MessageCircle size={24} className="text-olive-600 shrink-0" aria-hidden />
-              <div>
+              <div className="min-w-0 [overflow-wrap:anywhere]">
                 <div className="font-semibold text-sm">WhatsApp</div>
                 <div className="text-xs text-ink-500">Lun-Ven 9-18</div>
               </div>
             </a>
           )}
-          <Link href="/contact" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
+          <Link href="/contact" className="flex min-w-0 items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
             <FileText size={24} className="text-primary-600 shrink-0" aria-hidden />
-            <div>
+            <div className="min-w-0 [overflow-wrap:anywhere]">
               <div className="font-semibold text-sm">Form contatti</div>
               <div className="text-xs text-ink-500">Risposta entro 24 ore lavorative</div>
             </div>

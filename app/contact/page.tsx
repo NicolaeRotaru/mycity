@@ -97,7 +97,7 @@ export default function ContactPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-5xl">
       <div className="text-center mb-10">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">Contattaci</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 break-words hyphens-auto">Contattaci</h1>
         <p className="text-ink-600">
           {piuCanali
             ? 'Siamo qui per aiutarti. Scegli il canale più comodo o usa il form qui sotto.'
@@ -140,7 +140,7 @@ export default function ContactPage() {
         )}
       </div>
 
-      <div className="grid md:grid-cols-5 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
         <div className="md:col-span-3 bg-white border border-cream-300 rounded-2xl p-6">
           <h2 className="text-xl font-bold mb-4">Scrivici un messaggio</h2>
           <form onSubmit={submit} className="space-y-4">
