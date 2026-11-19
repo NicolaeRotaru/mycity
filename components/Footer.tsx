@@ -247,7 +247,7 @@ const Footer = () => {
 
         {/* Esplora */}
         <div>
-          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Esplora</h3>
+          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-label">Esplora</h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/" className="text-ink-600 hover:text-primary-700 transition-colors">Home</Link></li>
             <li><Link href="/stores" className="text-ink-600 hover:text-primary-700 transition-colors">Negozi locali</Link></li>
@@ -263,7 +263,7 @@ const Footer = () => {
             del loro mestiere è nella sidebar dedicata, niente duplicati qui. */}
         {!isSellerArea && (
           <div>
-            <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Categorie</h3>
+            <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-label">Categorie</h3>
             <ul className="space-y-2 text-sm">
               {madri.map((c) => {
                 const Icona = iconaDi(c.slug);
@@ -286,7 +286,7 @@ const Footer = () => {
 
         {/* Aiuto */}
         <div>
-          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Aiuto</h3>
+          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-label">Aiuto</h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/help" className="text-ink-600 hover:text-primary-700 transition-colors">Centro assistenza</Link></li>
             <li><Link href="/faq" className="text-ink-600 hover:text-primary-700 transition-colors">Domande frequenti</Link></li>
@@ -319,7 +319,7 @@ const Footer = () => {
 
         {/* Azienda + Legale */}
         <div>
-          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Azienda</h3>
+          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-label">Azienda</h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/about" className="text-ink-600 hover:text-primary-700 transition-colors">Chi siamo</Link></li>
             <li><Link href="/come-funziona" className="text-ink-600 hover:text-primary-700 transition-colors">Come funziona</Link></li>

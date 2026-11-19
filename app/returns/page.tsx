@@ -23,7 +23,7 @@ export default function ReturnsPage() {
     <div className="container mx-auto px-6 py-10 max-w-3xl">
       {/* Page header — linguaggio dell'hub account: serif + sottotitolo ink-500 */}
       <header className="mb-8">
-        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Assistenza</p>
+        <p className="text-xs font-bold uppercase tracking-label text-primary-700">Assistenza</p>
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px] break-words hyphens-auto">
           Resi e rimborsi
         </h1>

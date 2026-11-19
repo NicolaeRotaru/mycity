@@ -167,7 +167,7 @@ export default function AdminSponsoredPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {vista.riquadri.map((r) => (
           <div key={r.chiave} className="bg-white border border-cream-300 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">{r.etichetta}</p>
+            <p className="text-xs uppercase tracking-label text-ink-500 font-semibold">{r.etichetta}</p>
             <p className="text-2xl font-bold text-ink-900">{r.valore}</p>
           </div>
         ))}
