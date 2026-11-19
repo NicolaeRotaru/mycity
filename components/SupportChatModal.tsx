@@ -88,7 +88,14 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
     const body = message.trim();
     if (!body || sending) return;
     if (!invio.current || invio.current.body !== body) {
-      invio.current = { chiave: crypto.randomUUID(), body };
+      // Senza `crypto.randomUUID` (contesto non sicuro, http su rete locale) lo stesso ripiego della cassa.
+      invio.current = {
+        chiave:
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        body,
+      };
     }
     const chiaveInvio = invio.current.chiave;
     setSending(true);

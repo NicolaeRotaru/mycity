@@ -73,4 +73,13 @@ describe('R04-017 — la chiave per invio del modulo dell\'assistenza', () => {
     expect(chiavi[2], 'dopo un invio riuscito, lo stesso testo è un messaggio nuovo').not.toBe(chiavi[1]);
     s.smonta();
   }, 60000);
+
+  it('senza crypto.randomUUID l\'invio parte lo stesso con una chiave non vuota', async () => {
+    const { chiavi, premi, s } = await prepara(['ok']);
+    vi.stubGlobal('crypto', {});
+    await premi('Dov');
+    expect(chiavi, 'l\'invio non è partito').toHaveLength(1);
+    expect(chiavi[0]).toBeTruthy();
+    s.smonta();
+  }, 60000);
 });
