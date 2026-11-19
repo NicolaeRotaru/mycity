@@ -16,9 +16,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
  */
 
 // Il layout radice chiede i caratteri e la lingua a Next: nelle prove non ci sono.
-vi.mock('next/font/google', () => ({
-  Inter: () => ({ variable: 'font-inter', className: '' }),
-  Fraunces: () => ({ variable: 'font-serif', className: '' }),
+vi.mock('next/font/local', () => ({
+  default: (opzioni: { variable?: string }) => ({ variable: opzioni.variable ?? '', className: '' }),
 }));
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'it', getMessages: async () => ({}) }));
 

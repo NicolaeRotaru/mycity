@@ -16,9 +16,8 @@ vi.mock('@/lib/funzioni-al-lancio', async (orig) => ({
   ...(await orig<typeof import('@/lib/funzioni-al-lancio')>()),
   APP_INSTALLABILE_ACCESA: true,
 }));
-vi.mock('next/font/google', () => ({
-  Inter: () => ({ variable: 'font-inter', className: '' }),
-  Fraunces: () => ({ variable: 'font-serif', className: '' }),
+vi.mock('next/font/local', () => ({
+  default: (opzioni: { variable?: string }) => ({ variable: opzioni.variable ?? '', className: '' }),
 }));
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'it', getMessages: async () => ({}) }));
 
