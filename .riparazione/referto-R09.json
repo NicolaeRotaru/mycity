@@ -1,8 +1,8 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-19 09:41",
+  "aggiornato": "2026-11-19 09:52",
   "finita": false,
-  "testa": "44e65457b9f41a2cc02aac06fb552582a40527df",
+  "testa": "b7c16513df29e9adf00688d5093c84561020e6ae",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_eseguito",
@@ -43,6 +43,31 @@
       "cosa_resta": "I prodotti che a prezzo pieno costano 10 € o più ma in promozione meno di 10 € restano fuori. Per includerli senza svuotare la pagina serve un filtro sul prezzo scontato nel database: una funzione o vista nuova che esponga il prezzo effettivo (prezzo meno lo sconto attivo), cioè una migrazione, che questo giro non può fare."
     },
     {
+      "id": "R09-006",
+      "chiave": "frontend-ux|il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
+      "esito": "riparato",
+      "commit": "8e442b1100aecdcb5b718e5a6115d81bd3de2853",
+      "commit_altri": [
+        "b7c16513df29e9adf00688d5093c84561020e6ae"
+      ],
+      "file_toccati": [
+        "app/seller/stories/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-storie-link-intero.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-storie-link-intero.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8e442b1100aecdcb5b718e5a6115d81bd3de2853^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r09-storie-link-intero.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima di validare, un indirizzo intero con la stessa origine del sito (window.location.origin) si riduce a percorso, ricerca e #. Un altro dominio resta com'è e la regola esistente lo rifiuta. Aggiornato il testo di aiuto del campo."
+    },
+    {
       "id": "R09-007",
       "chiave": "frontend-ux|restano tre pagine con le foto sgranate perché `unoptimized` spegne srcset e sizes",
       "esito": "parziale",
@@ -69,10 +94,140 @@
       "cosa_resta": "Il logo del negozio in app/orders/[id]/page.tsx:859 resta unoptimized apposta: il caricatore ritaglia a quadrato le larghezze sotto 200. Serve una variante del caricatore senza ritaglio in lib/image-loader.ts, che non è fra i miei file."
     },
     {
+      "id": "R09-008",
+      "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+      "esito": "parziale",
+      "commit": "ba37e217b3d9d84761b67861f2519e1950539528",
+      "file_toccati": [
+        "components/admin/home/HomeSectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-home-campi-brevi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-home-campi-brevi.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ba37e217b3d9d84761b67861f2519e1950539528^ --file components/admin/home/HomeSectionConfigForm.tsx --prove tests/unit/riparazione-r09-home-campi-brevi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Tolti i maxLength dai 27 campi brevi di HomeSectionConfigForm: il testo incollato resta intero e oltre il tetto dello schema il campo mostra «Troppo lungo: N caratteri su M. Accorcialo, così si salva.»",
+      "cosa_resta": "components/seller/site/BannerFields.tsx ha ancora maxLength={120} (riga 60), maxLength={200} (riga 67) e maxLength={40} (riga 91): file di un'altra sessione.",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/site/BannerFields.tsx",
+          "modifica": "Togliere maxLength={120} (riga 60), maxLength={200} (riga 67) e maxLength={40} (riga 91) dai tre campi, e aggiungere a ciascuno error={...} quando il testo senza spazi in coda supera lo stesso numero, con il messaggio di HomeSectionConfigForm: `Troppo lungo: ${n} caratteri su ${max}. Accorcialo, così si salva.`"
+        }
+      ]
+    },
+    {
+      "id": "R09-009",
+      "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
+      "esito": "riparato",
+      "commit": "cfc9ba89e3051aab743d25bdf02231df0b521ebd",
+      "file_toccati": [
+        "components/seller/site/SectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-testo-vetrina-entita.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-testo-vetrina-entita.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cfc9ba89e3051aab743d25bdf02231df0b521ebd^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r09-testo-vetrina-entita.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "htmlInACapo decodifica &lt; &gt; &amp; (&amp; per ultimo) e aCapoInHtml ricodifica & < >: il giro scrivi, pulisci con sanitizeRichText e rileggi ridà il testo scritto. Il testo senza simboli si salva identico a prima."
+    },
+    {
+      "id": "R09-010",
+      "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
+      "esito": "parziale",
+      "commit": "347f4d39fcb5c914a35147ed00192c292283ff16",
+      "commit_altri": [
+        "708646b4abdaeb23d315e093b90fcf2169cbdfb2"
+      ],
+      "file_toccati": [
+        "components/VendorForm.tsx",
+        "components/seller/site/StoreDetailsEditor.tsx",
+        "app/seller/profile/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-modifiche-non-salvate.test.tsx",
+        "tests/unit/riparazione-r09-tutte-le-impostazioni.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-modifiche-non-salvate.test.tsx tests/unit/riparazione-r09-tutte-le-impostazioni.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 347f4d39fcb5c914a35147ed00192c292283ff16^ --file components/VendorForm.tsx,components/seller/site/StoreDetailsEditor.tsx,app/seller/profile/page.tsx --prove tests/unit/riparazione-r09-modifiche-non-salvate.test.tsx,tests/unit/riparazione-r09-tutte-le-impostazioni.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La guardia sta dentro VendorForm (Dettagli negozio e profilo): firma dei campi, azzerata quando il salvataggio riesce. Avvisa alla chiusura o ricarica della pagina e chiede conferma sul clic dei link interni; «Tutte le impostazioni» chiede prima di tornare indietro.",
+      "cosa_resta": "Il tasto indietro del browser e il tasto indietro dentro SiteEditor (che guarda solo il suo stato) non sono coperti: Next non offre un hook per intercettarli e SiteEditor non è fra i miei file."
+    },
+    {
+      "id": "R09-011",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "riparato",
+      "commit": "6ef7924e017a6f114b92ef1155834482df37daf9",
+      "commit_altri": [
+        "fed864043b61ba470dad0cc80b0c7110733fcd91"
+      ],
+      "file_toccati": [
+        "lib/store-customization.ts",
+        "components/VendorForm.tsx",
+        "components/seller/SocialLinksFields.tsx",
+        "components/seller/CustomizationSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-social-vetrina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-social-vetrina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ef7924e017a6f114b92ef1155834482df37daf9^ --file lib/store-customization.ts,components/VendorForm.tsx,components/seller/SocialLinksFields.tsx,components/seller/CustomizationSection.tsx --prove tests/unit/riparazione-r09-social-vetrina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base il link pulito e il sito senza https si correggevano già. Aggiunto il resto: il link copiato dall'app (?igsh=, ?mibextid=, ?lang=) si riduce al nome; l'errore compare sotto il campo giusto; la sezione «Social e contatti» si apre da sola; scrivendo si toglie solo l'errore di quel campo."
+    },
+    {
       "id": "R09-012",
       "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
       "esito": "non_fatto",
       "nota": "fuori dal giro del 19/11: soldi (prezzo mostrato)"
+    },
+    {
+      "id": "R09-014",
+      "chiave": "frontend-ux|l'annuncio della vetrina scade a mezzanotte nel browser ma all'una nella pagina preparata dal server",
+      "esito": "riparato",
+      "commit": "33472da75000dfb4e60627eda3938fe6203b1604",
+      "file_toccati": [
+        "lib/store-customization.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-annuncio-fuso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-annuncio-fuso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 33472da75000dfb4e60627eda3938fe6203b1604^ --file lib/store-customization.ts --prove tests/unit/riparazione-r09-annuncio-fuso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "announcementActive confronta il giorno di Piacenza di adesso (giornoPiacenza, già in lib/tempo-piacenza.ts) con until, invece di costruire una data nel fuso del processo. Prova con orologio finto e TZ del processo UTC, Rome, Los Angeles e Tokyo, in inverno e in estate."
     },
     {
       "id": "R09-015",
@@ -132,11 +287,25 @@
       "severita": "minore",
       "file": "lib/queries/griglia-prodotti.ts:~340",
       "descrizione": "contaProdottiDellaGriglia non scarta i prodotti di negozi con profiles.is_approved falso, mentre la lettura li scarta dopo il fetch. Per un visitatore la regola del database (migrazione 129) filtra già, quindi il numero coincide; per admin o il venditore stesso il totale può superare le schede mostrabili. Latente."
+    },
+    {
+      "titolo": "Tre etichette del modulo negozio e una del profilo non sono legate al loro campo",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/VendorForm.tsx:321,464,471 · app/seller/profile/page.tsx:206",
+      "descrizione": "eslint segnala jsx-a11y/label-has-associated-control su queste etichette, già presenti sulla base: un lettore di schermo non le associa al campo."
+    },
+    {
+      "titolo": "Altri percorsi di Facebook non elencati possono essere salvati come nome del profilo",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/store-customization.ts:150",
+      "descrizione": "«people» ora è fra i percorsi che non sono un nome di profilo (dentro R09-011); restano altri percorsi Facebook non elencati che verrebbero salvati come nome."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 1,
+    "agenti": 2,
     "nota": ""
   }
 }
