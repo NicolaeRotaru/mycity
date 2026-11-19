@@ -6,7 +6,6 @@ import { writeAudit } from '@/lib/audit';
 import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import { DaCompletare, tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato';
 import { type ProductVariant } from '@/lib/products/variants';
-import { scortaCambiata } from '@/lib/products/schema';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -230,22 +229,6 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     if (!data) return ApiErrors.notFound('Prodotto non trovato');
   }
 
-  // R04-001 — Com'erano le taglie prima di salvare (lette dal database): la traccia delle taglie
-  // si scrive solo se cambiano davvero. Se la lettura non riesce, il confronto non si può fare
-  // e la traccia si scrive lo stesso, con «prima» non noto.
-  let taglieDiPrima: ProductVariant[] | null = null;
-  if (variants) {
-    try {
-      const { data, error } = await admin
-        .from('product_variants')
-        .select('id, options, label, stock, position')
-        .eq('product_id', id);
-      if (!error && Array.isArray(data)) taglieDiPrima = data as unknown as ProductVariant[];
-    } catch {
-      taglieDiPrima = null;
-    }
-  }
-
   if (variants) {
     try {
       await controllaScorteVarianti(admin, id, variants as ProductVariant[], scorteViste);
@@ -300,44 +283,22 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // R04-001 — Le taglie (varianti) non sono colonne del prodotto: se cambiano da sole la voce
   // non esisteva e il registro restava muto. Entrano nella traccia come campo `variants`.
   if (variants) {
-    const ordinate = (v: ProductVariant[]) =>
-      v
-        .map((x, i) => ({ x, i, p: typeof (x as { position?: unknown }).position === 'number' ? (x as unknown as { position: number }).position : i }))
-        .sort((a, b) => a.p - b.p || a.i - b.i)
-        .map((r) => r.x);
-    const forma = (v: ProductVariant) => ({
-      options: Object.fromEntries(Object.entries(v.options ?? {}).sort(([a], [b]) => a.localeCompare(b))),
-      label: v.label,
-      stock: Math.max(0, Math.trunc(Number(v.stock) || 0)),
-    });
-    const prime = taglieDiPrima === null ? null : ordinate(taglieDiPrima).map(forma);
-    // Quelle salvate davvero: come le scrive `saveProductVariantsServer` (scorta non toccata = quella del database).
-    const dopoTaglie = variants.map((v) => {
-      const f = forma(v as ProductVariant);
-      const esistente = v.id ? taglieDiPrima?.find((t) => t.id === v.id) : undefined;
-      const vista = v.id ? scorteViste?.[v.id] : undefined;
-      if (esistente && vista !== undefined && !scortaCambiata(f.stock, vista)) f.stock = forma(esistente).stock;
-      return f;
-    });
-    const cambiate = prime === null || JSON.stringify(prime) !== JSON.stringify(dopoTaglie);
-    if (cambiate) {
-      const base = voce ?? {
-        actorId: user.id,
-        action: 'product.update' as const,
-        targetTable: 'products' as const,
-        targetId: id,
-        metadata: { origine: 'admin', campi: [], prima: {}, dopo: {}, daAi: [] },
-      };
-      voce = {
-        ...base,
-        metadata: {
-          ...base.metadata,
-          campi: [...base.metadata.campi, 'variants'],
-          prima: { ...base.metadata.prima, variants: prime },
-          dopo: { ...base.metadata.dopo, variants: dopoTaglie },
-        },
-      };
-    }
+    const base = voce ?? {
+      actorId: user.id,
+      action: 'product.update' as const,
+      targetTable: 'products' as const,
+      targetId: id,
+      metadata: { origine: 'admin', campi: [], prima: {}, dopo: {}, daAi: [] },
+    };
+    voce = {
+      ...base,
+      metadata: {
+        ...base.metadata,
+        campi: [...base.metadata.campi, 'variants'],
+        prima: { ...base.metadata.prima, variants: null },
+        dopo: { ...base.metadata.dopo, variants },
+      },
+    };
   }
   if (voce) await writeAudit(voce);
 

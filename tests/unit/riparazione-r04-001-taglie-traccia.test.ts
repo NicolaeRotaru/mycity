@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const db = vi.hoisted(() => ({
   prodotti: [] as Record<string, unknown>[],
-  varianti: [] as Record<string, unknown>[],
   audit: [] as Array<Record<string, unknown>>,
 }));
 
@@ -26,7 +25,7 @@ vi.mock('@/lib/products/persistVariantsServer', () => ({
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from(tavola: string) {
-      const righe = () => (tavola === 'products' ? db.prodotti : tavola === 'product_variants' ? db.varianti : []);
+      const righe = () => (tavola === 'products' ? db.prodotti : []);
       return {
         select() {
           const filtri: Array<[string, unknown]> = [];
@@ -34,10 +33,6 @@ vi.mock('@/lib/supabase/server', () => ({
             eq(c: string, v: unknown) {
               filtri.push([c, v]);
               return catena;
-            },
-            then(ok: (r: unknown) => unknown, ko?: (e: unknown) => unknown) {
-              const r = righe().filter((x) => filtri.every(([c, v]) => x[c] === v));
-              return Promise.resolve({ data: r.map((x) => ({ ...x })), error: null }).then(ok, ko);
             },
             async maybeSingle() {
               const r = righe().find((x) => filtri.every(([c, v]) => x[c] === v));
@@ -86,9 +81,6 @@ const salva = (corpo: Record<string, unknown>) =>
     }) as never,
   );
 
-const V1 = '22222222-2222-4222-8222-222222222222';
-const V2 = '33333333-3333-4333-8333-333333333333';
-
 const taglie = [
   { options: { taglia: 'M' }, label: 'M', stock: 3 },
   { options: { taglia: 'L' }, label: 'L', stock: 2 },
@@ -98,7 +90,6 @@ describe('R04-001 — le taglie cambiate entrano nel registro', () => {
   beforeEach(() => {
     db.prodotti.length = 0;
     db.audit.length = 0;
-    db.varianti.length = 0;
     db.prodotti.push({ id: ID, name: 'Maglia', price: '10.00' });
   });
 
@@ -117,55 +108,5 @@ describe('R04-001 — le taglie cambiate entrano nel registro', () => {
     expect(res.status).toBe(200);
     expect(db.audit).toHaveLength(1);
     expect((db.audit[0].metadata as { campi: string[] }).campi).toEqual(['price', 'variants']);
-  });
-
-  const comePrima = () =>
-    db.varianti.push(
-      { id: V1, product_id: ID, options: { taglia: 'M' }, label: 'M', stock: 3, position: 0 },
-      { id: V2, product_id: ID, options: { taglia: 'L' }, label: 'L', stock: 2, position: 1 },
-    );
-
-  it('(a) taglie identiche a quelle di prima: nessuna voce', async () => {
-    comePrima();
-    const res = await salva({ variants: [{ id: V1, ...taglie[0] }, { id: V2, ...taglie[1] }] });
-    expect(res.status).toBe(200);
-    expect(db.audit).toHaveLength(0);
-  });
-
-  it('(b) cambiano solo le taglie: una voce, prima = quelle vere, dopo = quelle salvate', async () => {
-    comePrima();
-    const nuove = [
-      { id: V1, options: { taglia: 'M' }, label: 'M', stock: 7 },
-      { id: V2, options: { taglia: 'L' }, label: 'L', stock: 2 },
-    ];
-    const res = await salva({ variants: nuove });
-    expect(res.status).toBe(200);
-    expect(db.audit).toHaveLength(1);
-    const m = db.audit[0].metadata as { campi: string[]; prima: Record<string, unknown>; dopo: Record<string, unknown> };
-    expect(m.campi).toEqual(['variants']);
-    expect(m.prima.variants).toEqual(taglie);
-    expect(m.dopo.variants).toEqual([
-      { options: { taglia: 'M' }, label: 'M', stock: 7 },
-      { options: { taglia: 'L' }, label: 'L', stock: 2 },
-    ]);
-  });
-
-  it('(c) campi e taglie cambiati: una voce con tutti e due', async () => {
-    comePrima();
-    const res = await salva({
-      price: 12,
-      variants: [{ id: V1, options: { taglia: 'M' }, label: 'M', stock: 1 }],
-    });
-    expect(res.status).toBe(200);
-    expect(db.audit).toHaveLength(1);
-    const m = db.audit[0].metadata as { campi: string[]; prima: Record<string, unknown>; dopo: Record<string, unknown> };
-    expect(m.campi).toEqual(['price', 'variants']);
-    expect(m.prima.price).toBe('10.00');
-    expect(m.dopo.price).toBe(12);
-    expect(m.prima.variants).toEqual([
-      { options: { taglia: 'M' }, label: 'M', stock: 3 },
-      { options: { taglia: 'L' }, label: 'L', stock: 2 },
-    ]);
-    expect(m.dopo.variants).toEqual([{ options: { taglia: 'M' }, label: 'M', stock: 1 }]);
   });
 });
