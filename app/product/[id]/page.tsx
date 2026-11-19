@@ -87,6 +87,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  // R08-003 — L'indirizzo dello zoom che non ha risposto (foto cancellata): al suo posto il segnaposto,
+  // lo stesso di FotoConRipiego. Si ricorda l'indirizzo, non un vero/falso: un'altra foto riprova.
+  const [zoomFallito, setZoomFallito] = useState<string | null>(null);
   /**
    * #135 e #120 — Il visore a schermo intero era un `fixed inset-0` scritto a
    * mano: nessun Esc, nessuna trappola del fuoco, nessun blocco dello
@@ -807,10 +810,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 sito considera sensata. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
+              src={zoomFallito === sizedImage(images[activeImg], LARGHEZZA_MASSIMA) ? FOTO_MANCANTE : sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
               alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}
               className="max-h-[90vh] max-w-[95vw] object-contain"
               onClick={(e) => e.stopPropagation()}
+              onError={() => {
+                const indirizzo = sizedImage(images[activeImg], LARGHEZZA_MASSIMA);
+                if (indirizzo !== FOTO_MANCANTE) setZoomFallito(indirizzo);
+              }}
             />
             {images.length > 1 && (
               <>
