@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as modelli from '@/lib/email/templates';
 
@@ -76,12 +76,16 @@ describe('email al cliente', () => {
 });
 
 describe('conferma d ordine (scheda 394)', () => {
+  afterEach(() => vi.useRealTimers());
   it('dice la fascia e quanto pagare in contanti', () => {
+    // R08-004: «Domani» porta la data vera; orologio finto, giovedì 19/11/2026 sera a Piacenza.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-19T21:30:00Z'));
     const t = modelli.orderConfirmedBuyerTemplate({
       orderId: 'abcdef12', total: 24, storeName: 'Pane', deliverySlot: 'Domani 9:00-12:00', pickupInStore: false, paymentMethod: 'cod',
     });
-    expect(t.text.replace(/ /g, ' ')).toMatch(/Consegna: Domani 9:00-12:00\. In contanti alla consegna: tieni pronti 24,00 €\./);
-    expect(testo(t.html)).toMatch(/Domani 9:00-12:00/);
+    expect(t.text.replace(/ /g, ' ')).toMatch(/Consegna: Domani \(venerdì 20\/11\) 9:00-12:00\. In contanti alla consegna: tieni pronti 24,00 €\./);
+    expect(testo(t.html)).toMatch(/Domani \(venerdì 20\/11\) 9:00-12:00/);
     expect(testo(t.html)).not.toMatch(/rider/);
   });
   it('col ritiro in negozio non parla di consegna né di rider', () => {

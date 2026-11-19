@@ -143,9 +143,14 @@ export function orderConfirmedBuyerTemplate(args: {
   deliverySlot?: string | null;
   pickupInStore?: boolean;
   paymentMethod?: 'cod' | 'card' | null;
+  /** Quando è nato l'ordine. Se manca vale adesso: l'email parte quando l'ordine nasce. */
+  createdAt?: string | Date | null;
 }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
-  const fascia = args.deliverySlot?.trim() || null;
+  // R08-004 — «Domani · 9:00–12:00» si legge anche il giorno dopo e fa capire il giorno sbagliato:
+  // accanto a «oggi»/«domani» va il giorno vero, come già nell'email al negozio (conLaData).
+  const nato = args.createdAt ? new Date(args.createdAt) : new Date();
+  const fascia = args.deliverySlot?.trim() ? conLaData(args.deliverySlot.trim(), nato) : null;
   const quando = args.pickupInStore
     ? `Ritiro in negozio${fascia ? `, ${fascia}` : ''}`
     : fascia;
