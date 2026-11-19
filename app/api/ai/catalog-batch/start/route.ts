@@ -97,12 +97,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
   const aperto = (aperti ?? [])[0] as { id: string; status: string } | undefined;
   if (aperto) {
-    return apiError(
-      409,
-      'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.',
-      'CONFLICT',
-      { jobId: aperto.id, status: aperto.status },
-    );
+    // R03-002 (giro di correzione) — Un lavoro «in invio» non si applica e non
+    // si scarta (cancel accetta solo «pronto»): si aspetta che l'invio si chiarisca.
+    const messaggio = aperto.status === 'submitting'
+      ? 'Hai già un lavoro sul catalogo il cui invio è ancora da verificare. Ricarica la pagina fra qualche minuto prima di avviarne un altro.'
+      : 'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.';
+    return apiError(409, messaggio, 'CONFLICT', { jobId: aperto.id, status: aperto.status });
   }
 
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([
@@ -259,18 +259,29 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
       );
     }
+    // R03-002 (giro di correzione) — Il lavoro non e' partito: la riga, nata
+    // «forse partito», va chiusa. Come l'aggancio, la scrittura si ritenta una
+    // volta: se il database la rifiuta, la riga resterebbe aperta per 24 ore e
+    // il negozio non potrebbe ripartire.
+    const chiudi = async (valori: { status: 'canceled' | 'failed'; error: string | null }) => {
+      const scrivi = () => admin.from('catalog_ai_jobs').update(valori).eq('id', job.id);
+      let { error: errChiudi } = await scrivi();
+      if (errChiudi) ({ error: errChiudi } = await scrivi());
+      if (errChiudi) {
+        logger.error('catalog-batch start: chiusura del lavoro mai partito rifiutata', {
+          jobId: job.id, stato: valori.status, status: errChiudi.code,
+        });
+      }
+    };
     // R03-002 — Il tetto di spesa del giorno non e' un guasto: il lavoro non e'
     // partito e non e' costato niente. Non si segna «fallito» e non si dice
     // «riprova»: si dice che il budget AI del giorno e' finito.
     if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
-      await admin
-        .from('catalog_ai_jobs')
-        .update({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' })
-        .eq('id', job.id);
+      await chiudi({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' });
       return mapAiError(err, 'ai-catalog-batch-start');
     }
     // Fallito davvero: il motivo «forse partito» con cui la riga e' nata va tolto.
-    await admin.from('catalog_ai_jobs').update({ status: 'failed', error: null }).eq('id', job.id);
+    await chiudi({ status: 'failed', error: null });
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
     logger.error('catalog-batch start: submit failed', { sellerId: user.id, jobId: job.id });
     return ApiErrors.badGateway('Non sono riuscito ad avviare il lavoro. Riprova.');
