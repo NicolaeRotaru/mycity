@@ -193,7 +193,13 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         new Promise<never>((_, rifiuta) =>
           setTimeout(() => rifiuta(new Error(TIMEOUT_INVIO)), 10_000)),
       ]);
-      if (!error) return { ok: true, id: data?.id ?? '' };
+      // R04-019 — Senza errore ma anche senza id di invio (una risposta d'errore conservata e
+      // riproposta dal servizio): non è una spedizione, non si conta come partita.
+      if (!error && data?.id) return { ok: true, id: data.id };
+      if (!error) {
+        lastErr = 'risposta senza id di invio';
+        break;
+      }
       // 13/11/2026 (R22-001, R22-011) — Il 409 «stessa chiave, corpo diverso» vuol dire che Resend
       // ha già accettato il messaggio di questa chiave (sulle promozioni il link di disiscrizione
       // cambia a ogni giro): è già spedita, non un errore. Il 409 delle richieste concorrenti resta
