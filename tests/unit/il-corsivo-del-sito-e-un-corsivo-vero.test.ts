@@ -30,6 +30,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { brotliDecompressSync } from 'node:zlib';
 
 const LAYOUT = readFileSync('app/layout.tsx', 'utf8');
 
@@ -72,6 +73,79 @@ function puntiCheChiedonoIlCorsivo(): string[] {
   return trovati;
 }
 
+/** I tag delle tabelle che il formato WOFF2 sa indicare con un numero solo (flags & 63). */
+const TAG_NOTI = [
+  'cmap', 'head', 'hhea', 'hmtx', 'maxp', 'name', 'OS/2', 'post', 'cvt ', 'fpgm', 'glyf', 'loca',
+  'prep', 'CFF ', 'VORG', 'EBDT', 'EBLC', 'gasp', 'hdmx', 'kern', 'LTSH', 'PCLT', 'VDMX', 'vhea',
+  'vmtx', 'BASE', 'GDEF', 'GPOS', 'GSUB', 'EBSC', 'JSTF', 'MATH', 'CBDT', 'CBLC', 'COLR', 'CPAL',
+  'SVG ', 'sbix', 'acnt', 'avar', 'bdat', 'bloc', 'bsln', 'cvar', 'fdsc', 'feat', 'fmtx', 'fvar',
+  'gvar', 'hsty', 'just', 'lcar', 'mort', 'morx', 'opbd', 'prop', 'trak', 'Zapf', 'Silf', 'Glat',
+  'Gloc', 'Feat', 'Sill',
+];
+
+/**
+ * Legge da un file WOFF2 le tre tabelle che dicono se il disegno è inclinato:
+ * `head` (macStyle), `OS/2` (fsSelection) e `post` (italicAngle). Nessuna libreria:
+ * solo `node:zlib`. head, OS/2 e post non sono mai trasformate, quindi dopo la
+ * decompressione Brotli si leggono così come sono.
+ */
+function leggiIlCorsivoDalWoff2(percorso: string) {
+  const file = readFileSync(percorso);
+  expect(file.toString('latin1', 0, 4), `${percorso} non è un WOFF2`).toBe('wOF2');
+  const numTabelle = file.readUInt16BE(12);
+  const compressi = file.readUInt32BE(20);
+
+  let pos = 48;
+  const base128 = () => {
+    let valore = 0;
+    for (let i = 0; i < 5; i++) {
+      const b = file[pos++];
+      valore = valore * 128 + (b & 0x7f);
+      if (!(b & 0x80)) return valore;
+    }
+    throw new Error('UIntBase128 non valido');
+  };
+
+  const tabelle: Array<{ tag: string; lunghezza: number }> = [];
+  for (let i = 0; i < numTabelle; i++) {
+    const flags = file[pos++];
+    let tag: string;
+    if ((flags & 63) === 63) {
+      tag = file.toString('latin1', pos, pos + 4);
+      pos += 4;
+    } else {
+      tag = TAG_NOTI[flags & 63];
+    }
+    const versione = flags >> 6;
+    const lunghezzaOriginale = base128();
+    // glyf e loca sono trasformate con versione 0; tutte le altre con versione diversa da 0.
+    const trasformata = tag === 'glyf' || tag === 'loca' ? versione === 0 : versione !== 0;
+    tabelle.push({ tag, lunghezza: trasformata ? base128() : lunghezzaOriginale });
+  }
+
+  const dati = brotliDecompressSync(file.subarray(pos, pos + compressi));
+  const inizi = new Map<string, number>();
+  let cursore = 0;
+  for (const t of tabelle) {
+    inizi.set(t.tag, cursore);
+    cursore += t.lunghezza;
+  }
+  const tab = (tag: string) => {
+    const inizio = inizi.get(tag);
+    if (inizio === undefined) throw new Error(`${percorso}: manca la tabella ${tag}`);
+    return inizio;
+  };
+
+  const head = tab('head');
+  // Se i conti dei byte non tornano, qui lo si vede subito.
+  expect(dati.readUInt32BE(head + 12), `${percorso}: tabella head non trovata dove dovrebbe`).toBe(0x5f0f3cf5);
+  return {
+    macStyleCorsivo: (dati.readUInt16BE(head + 44) & 0b10) !== 0,
+    fsSelectionCorsivo: (dati.readUInt16BE(tab('OS/2') + 62) & 0b1) !== 0,
+    angoloCorsivo: dati.readInt32BE(tab('post') + 4) / 65536,
+  };
+}
+
 const CARATTERI = caratteriCaricati();
 
 describe('il corsivo del sito', () => {
@@ -103,6 +177,29 @@ describe('il corsivo del sito', () => {
       for (const rel of percorsi) {
         expect(existsSync(path.join('app', rel)), `${rel} manca`).toBe(true);
       }
+    });
+
+    it(`${carattere.nome} il corsivo ce l'ha davvero: non stiamo chiedendo una variante inesistente`, () => {
+      // Ogni file è dichiarato con il suo `style`: leggiamo dentro il woff2 che
+      // quello dichiarato `italic` sia un disegno inclinato vero e non una copia
+      // del dritto, e che quello dichiarato `normal` non lo sia.
+      const voci = [...carattere.opzioni.matchAll(/path\s*:\s*'([^']+)'[^}]*?style\s*:\s*'(\w+)'/g)].map((m) => ({
+        percorso: path.join('app', m[1]),
+        stile: m[2],
+      }));
+      const corsivo = voci.find((v) => v.stile === 'italic');
+      const dritto = voci.find((v) => v.stile === 'normal');
+      expect(corsivo, `${carattere.nome} non dichiara un file italic`).toBeTruthy();
+      expect(dritto, `${carattere.nome} non dichiara un file normal`).toBeTruthy();
+
+      const c = leggiIlCorsivoDalWoff2(corsivo!.percorso);
+      expect(c.macStyleCorsivo || c.fsSelectionCorsivo, `${corsivo!.percorso} non ha il bit del corsivo`).toBe(true);
+      expect(c.angoloCorsivo, `${corsivo!.percorso} ha l'angolo dritto: è una copia del dritto`).toBeLessThan(0);
+
+      const d = leggiIlCorsivoDalWoff2(dritto!.percorso);
+      expect(d.macStyleCorsivo, `${dritto!.percorso} è dichiarato dritto ma ha macStyle corsivo`).toBe(false);
+      expect(d.fsSelectionCorsivo, `${dritto!.percorso} è dichiarato dritto ma ha fsSelection corsivo`).toBe(false);
+      expect(d.angoloCorsivo, `${dritto!.percorso} è dichiarato dritto ma è inclinato`).toBe(0);
     });
   }
 
