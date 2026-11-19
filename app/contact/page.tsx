@@ -106,7 +106,7 @@ export default function ContactPage() {
       </div>
 
       <div className={`grid gap-4 mb-10 ${piuCanali ? 'md:grid-cols-3' : 'max-w-md mx-auto'}`}>
-        <a href={mailtoContatto('info')} className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+        <a href={mailtoContatto('info')} className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
           <div className="mb-2"><Mail size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Email</div>
           <div className="text-sm text-ink-600">{indirizzoContatto('info')}</div>
@@ -118,7 +118,7 @@ export default function ContactPage() {
           carta compare solo se il numero c'è davvero, come i dati legali nel piè di pagina.
         */}
         {whatsapp && (
-          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
             <div className="mb-2"><MessageCircle size={28} className="text-olive-600" aria-hidden /></div>
             <div className="font-bold">WhatsApp</div>
             <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
@@ -131,7 +131,7 @@ export default function ContactPage() {
           risponde davvero.
         */}
         {telefono && (
-          <a href={`tel:${telefono.replace(/[^\d+]/g, '')}`} className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+          <a href={`tel:${telefono.replace(/[^\d+]/g, '')}`} className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
             <div className="mb-2"><Phone size={28} className="text-primary-600" aria-hidden /></div>
             <div className="font-bold">Telefono</div>
             <div className="text-sm text-ink-600">{telefono}</div>
@@ -142,10 +142,10 @@ export default function ContactPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
         <div className="md:col-span-3 bg-white border border-cream-300 rounded-2xl p-6">
-          <h2 className="text-xl font-bold mb-4">Scrivici un messaggio</h2>
+          <h2 className="text-xl font-bold mb-4 [overflow-wrap:anywhere]">Scrivici un messaggio</h2>
           <form onSubmit={submit} className="space-y-4">
             <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="Nome"
                 type="text"
@@ -221,7 +221,7 @@ export default function ContactPage() {
 
         <aside className="md:col-span-2 space-y-4">
           <div className="bg-gradient-to-br from-primary-50 to-secondary-50 border border-primary-100 rounded-2xl p-6">
-            <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Chi gestisce MyCity</h3>
+            <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2 [overflow-wrap:anywhere]"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Chi gestisce MyCity</h3>
             {/* 01/11/2026 (ondata 5) — Il riquadro «Sede» stampava solo «MyCity»:
                 un marchio, senza persona né indirizzo. Chi legge deve sapere a chi
                 risponde (la persona che gestisce, finché manca il nome legale) e,
@@ -244,7 +244,7 @@ export default function ContactPage() {
 
           {piuCanali && (
           <div className="bg-white border border-cream-300 rounded-2xl p-6">
-            <h3 className="font-bold text-ink-900 mb-3 flex items-center gap-2"><Clock size={18} className="text-primary-600 shrink-0" aria-hidden /> Orari assistenza</h3>
+            <h3 className="font-bold text-ink-900 mb-3 flex items-center gap-2 [overflow-wrap:anywhere]"><Clock size={18} className="text-primary-600 shrink-0" aria-hidden /> Orari assistenza</h3>
             <ul className="text-sm text-ink-700 space-y-1">
               <li className="flex justify-between"><span>Lunedì - Venerdì</span><span className="font-semibold">9:00 - 18:00</span></li>
               <li className="flex justify-between"><span>Sabato</span><span className="font-semibold">10:00 - 14:00</span></li>
