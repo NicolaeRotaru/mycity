@@ -2,7 +2,6 @@
 
 import { useState, use, useRef, useEffect } from 'react';
 import { ANELLO, classiBottoneCuore } from '@/lib/design/cuore-preferito';
-import Image from 'next/image';
 import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -1520,7 +1519,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
                         {/* 5/11/2026 — col caricatore: la misura la fa il CDN di Supabase, non una
                             seconda volta l'ottimizzatore di Vercel su una foto già ridotta. */}
-                        <Image
+                        <FotoConRipiego
                           src={url}
                           alt={`Foto ${i + 1} della recensione`}
                           fill
