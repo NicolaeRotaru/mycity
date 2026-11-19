@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { normalizzaSocials, erroriPerCampoSocial, storeCustomizationSchema } from "@/lib/store-customization";
+import { normalizzaSocials, storeCustomizationSchema } from "@/lib/store-customization";
 
 vi.mock("@/components/StoreLocationPickerLazy", () => ({ default: () => null }));
 vi.mock("next/link", async () => {
@@ -46,12 +46,6 @@ describe("R09-011 — il link dell'app si corregge da solo", () => {
     });
     expect(s).toMatchObject({ instagram: "panequotidiano", facebook: "panequotidiano", tiktok: "forno" });
     expect(storeCustomizationSchema.safeParse({ socials: s }).success).toBe(true);
-  });
-  it("erroriPerCampoSocial dà il primo messaggio di ogni campo", () => {
-    const r = storeCustomizationSchema.safeParse({ socials: { facebook: "Pane Quotidiano", website: "x" } });
-    expect(r.success).toBe(false);
-    const e = erroriPerCampoSocial(!r.success ? r.error.issues : []);
-    expect(Object.keys(e).sort()).toEqual(["facebook", "website"]);
   });
 });
 

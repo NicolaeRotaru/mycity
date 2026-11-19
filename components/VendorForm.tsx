@@ -18,7 +18,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { campoDellErrore, erroriPerCampoSocial, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -28,6 +28,20 @@ import BadgePicker from './seller/BadgePicker';
 import StoreHoursEditor from './seller/StoreHoursEditor';
 import { erroreDegliOrari } from './seller/orari-validi';
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
+
+/**
+ * Gli errori dei social, uno per campo (il primo di ciascuno), così il modulo li scrive sotto il
+ * campo giusto invece di un solo messaggio in fondo che non dice dove.
+ */
+function erroriPerCampoSocial(
+  issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const i of issues) {
+    if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !(i.path[1] in out)) out[i.path[1]] = i.message;
+  }
+  return out;
+}
 
 type SchemaData = { storeName: string; storePhone: string };
 

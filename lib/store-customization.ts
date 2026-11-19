@@ -371,20 +371,6 @@ export function campoDellErrore(path: ReadonlyArray<PropertyKey>): string | null
   return null;
 }
 
-/**
- * Gli errori dei social, uno per campo (il primo di ciascuno), così il modulo li scrive sotto il
- * campo giusto invece di un solo messaggio in fondo che non dice dove.
- */
-export function erroriPerCampoSocial(
-  issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const i of issues) {
-    if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !(i.path[1] in out)) out[i.path[1]] = i.message;
-  }
-  return out;
-}
-
 function cleanHandle(v?: string): string | null {
   if (!v) return null;
   const h = v.trim().replace(/^@+/, '');
