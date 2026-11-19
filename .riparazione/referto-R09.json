@@ -1,8 +1,8 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-19 09:52",
+  "aggiornato": "2026-11-19 09:57",
   "finita": false,
-  "testa": "b7c16513df29e9adf00688d5093c84561020e6ae",
+  "testa": "b91478cea6467233a1de202b909df2ae44501e68",
   "verifica": {
     "comando": "npm run verify",
     "esito": "non_eseguito",
@@ -15,6 +15,35 @@
       "chiave": "frontend-ux|se la rilettura dei reclami cade a finestra aperta, la decisione resta su dati vecchi",
       "esito": "non_fatto",
       "nota": "fuori dal giro del 19/11: soldi (reclami)"
+    },
+    {
+      "id": "R09-002",
+      "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
+      "esito": "parziale",
+      "commit": "bd93805546b5e9759ac2ec40e72d366856f5cb0c",
+      "file_toccati": [
+        "app/u/[handle]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-pagine-non-trovate.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-pagine-non-trovate.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bd93805546b5e9759ac2ec40e72d366856f5cb0c^ --file app/u/[handle]/page.tsx --prove tests/unit/riparazione-r09-pagine-non-trovate.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il generateMetadata del profilo pubblico inesistente ora ha canonical nullo (prima ereditava quello della home, in contraddizione col noindex). Prodotto, negozio, pagina del negozio, categoria e il titolo di app/not-found.tsx erano già a posto sulla base.",
+      "cosa_resta": "Il codice HTTP resta 200 invece di 404 su /product, /store, /category, /u e /store/<id>/<pagina> inesistenti: lo tengono app/loading.tsx (radice) e anche app/store/loading.tsx e app/product/[id]/loading.tsx (non miei). Togliere app/loading.tsx toglierebbe lo scheletro a tutte le pagine senza uno proprio (e tests/unit/minori-s09-aspetto.test.ts:219-224 ne sorveglia la scritta). Strade: (a) togliere i loading.tsx di radice, store e product, con notFound() nei layout letto col client di servizio; (b) un controllo in middleware.ts con rewrite a 404; (c, non verificata) notFound() nel generateMetadata più htmlLimitedBots in next.config. Serve una scelta di Nicola (vedi domande_per_nicola)."
+    },
+    {
+      "id": "R09-003",
+      "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
+      "esito": "gia_riparato_prima",
+      "prova": "app/messages/[id]/page.tsx:309-311: handleSend esce se sendMutation.isPending e il testo resta nel campo; il campo si svuota solo all'invio (riga 310), onSuccess (riga 292) non lo cancella più, onError (riga 300) rimette il testo davanti a quello nuovo. Già riparato da R22-003: tests/unit/riparazione-r22-chat-il-secondo-messaggio-resta.test.ts passa (uscita 0)."
     },
     {
       "id": "R09-004",
@@ -41,6 +70,29 @@
       ],
       "cosa_ho_fatto": "Sulla base c'erano già 'prezzoSotto' (soglia esclusa, R07-016) e il totale vero per la sola pagina Novità. Ho esteso il conteggio del database a «Sotto i N €» e a «I più recensiti»: ora la pagina dice il totale (es. 106) e non 40.",
       "cosa_resta": "I prodotti che a prezzo pieno costano 10 € o più ma in promozione meno di 10 € restano fuori. Per includerli senza svuotare la pagina serve un filtro sul prezzo scontato nel database: una funzione o vista nuova che esponga il prezzo effettivo (prezzo meno lo sconto attivo), cioè una migrazione, che questo giro non può fare."
+    },
+    {
+      "id": "R09-005",
+      "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
+      "esito": "riparato",
+      "commit": "3651417d99f403a982c4578cdbf7025fec49248c",
+      "file_toccati": [
+        "app/seller/analytics/letture-dell-andamento.ts",
+        "app/seller/analytics/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-tasso-di-conversione.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3651417d99f403a982c4578cdbf7025fec49248c^ --file app/seller/analytics/letture-dell-andamento.ts,app/seller/analytics/page.tsx --prove tests/unit/riparazione-r09-tasso-di-conversione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Gli ordini sono di tutti e le visite solo di chi accetta i cookie: tassoDiConversione torna null quando gli ordini superano le visite misurate (niente valore oltre il 100%, niente verde). La scheda dice «Campione troppo piccolo: più ordini che visite misurate» e l'etichetta è «Visite che diventano ordini»."
     },
     {
       "id": "R09-006",
@@ -208,6 +260,28 @@
       "nota": "fuori dal giro del 19/11: soldi (prezzo mostrato)"
     },
     {
+      "id": "R09-013",
+      "chiave": "frontend-ux|il dettaglio ordine dell amministrazione mostra il codice grezzo paid_manually",
+      "esito": "riparato",
+      "commit": "a7793b07c7fcdac81872c04ee7756086d3bc0cae",
+      "file_toccati": [
+        "lib/admin/etichette.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a7793b07c7fcdac81872c04ee7756086d3bc0cae^ --file lib/admin/etichette.ts --prove tests/unit/riparazione-r09-etichetta-pagato-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunta l'etichetta PAID_MANUALLY («pagato a mano») all'elenco degli stati del bonifico; app/admin/orders/[id]/page.tsx usa già etichettaStatoBonifico e non è cambiato."
+    },
+    {
       "id": "R09-014",
       "chiave": "frontend-ux|l'annuncio della vetrina scade a mezzanotte nel browser ma all'una nella pagina preparata dal server",
       "esito": "riparato",
@@ -242,6 +316,30 @@
       "nota": "Gli altri punti della voce sono già a posto sulla base: components/ProductGrid.tsx:665 priority={prioritaPrimeFoto && !formaFila && i < 4}; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:89 priority={false} e :147 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4} (solo la prima riga). Prova esistente: tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts."
     },
     {
+      "id": "R09-016",
+      "chiave": "layout-responsive|nelle pagine di dettaglio ordine di cliente, negozio e fattorino una nota con un link lungo fa scorrere la pagina di lato",
+      "esito": "riparato",
+      "commit": "cb46ae5166a8f68fcd0198f6bd25d4f17c774c5d",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "app/seller/orders/[id]/page.tsx",
+        "app/rider/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-note-con-link-lungo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-note-con-link-lungo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cb46ae5166a8f68fcd0198f6bd25d4f17c774c5d^ --file app/orders/[id]/page.tsx,app/seller/orders/[id]/page.tsx,app/rider/orders/[id]/page.tsx --prove tests/unit/riparazione-r09-note-con-link-lungo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla nota di consegna delle tre pagine [overflow-wrap:anywhere] e break-words; min-w-0 sugli elementi dentro i flex (indirizzo del cliente, indirizzo nella pagina del negozio, nota del fattorino). La prova legge il sorgente."
+    },
+    {
       "id": "R09-017",
       "chiave": "microcopy|la pagina dei più recensiti presenta 40 prodotti come «scelti dai clienti» anche quando nessuno ha una recensione",
       "esito": "parziale",
@@ -266,6 +364,29 @@
       ],
       "cosa_ho_fatto": "Sulla base soloRecensiti (R15-009) escludeva già i prodotti a zero recensioni, con stato vuoto onesto. Ho tolto l'occhiello «Scelti dai clienti» (ora «Con recensioni»). Il numero vero in testa è nel commit di R09-004 (stesso onCount).",
       "cosa_resta": "I 40 mostrati sono i 40 più recenti tra i recensiti, non i 40 con più recensioni. L'RPC prodotti_con_voto_almeno restituisce solo product_id, senza conteggio: serve una funzione nuova che dia gli id ordinati per numero di recensioni (migrazione, non in questo giro). Oggi le recensioni sono zero, quindi è latente."
+    },
+    {
+      "id": "R09-018",
+      "chiave": "mobile-pwa|i tasti «indietro» del fattorino sono cerchi da 36 pixel, piccoli per un pollice in strada",
+      "esito": "riparato",
+      "commit": "b91478cea6467233a1de202b909df2ae44501e68",
+      "file_toccati": [
+        "app/rider/help/page.tsx",
+        "app/rider/onboarding/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b91478cea6467233a1de202b909df2ae44501e68^ --file app/rider/help/page.tsx,app/rider/onboarding/page.tsx --prove tests/unit/riparazione-r09-tasti-indietro-del-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I tasti indietro della guida e dell'iscrizione del fattorino passano da h-9 w-9 a h-11 w-11 (44 px); quello di app/rider/orders/[id]/page.tsx:494 era già h-11 w-11 sulla base. La prova legge il sorgente delle tre pagine."
     },
     {
       "id": "R09-019",
@@ -303,9 +424,14 @@
       "descrizione": "«people» ora è fra i percorsi che non sono un nome di profilo (dentro R09-011); restano altri percorsi Facebook non elencati che verrebbero salvati come nome."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    {
+      "voce": "R09-002",
+      "domanda": "Le pagine di prodotti, negozi, categorie e profili che non esistono rispondono 200 (con il testo «non trovato») invece di 404 perché lo scheletro di caricamento (app/loading.tsx, app/store/loading.tsx, app/product/[id]/loading.tsx) fa partire la risposta prima del controllo: preferisci (a) togliere quegli scheletri e fare il controllo nei layout, (b) un controllo nel middleware che manda a 404, oppure (c) lasciare così (i motori di ricerca vedono già noindex)?"
+    }
+  ],
   "conto": {
-    "agenti": 2,
+    "agenti": 3,
     "nota": ""
   }
 }
