@@ -385,6 +385,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 5,
-    "nota": "2 riparatori (lotti A e B), 2 smentitori, 1 giro di correzione; tetto del freno 6"
-  }
+    "subagenti": 5,
+    "nota": "2 riparatori (lotti A e B), 2 smentitori, 1 giro di correzione; nessuno fermato; tetto del freno 6. Costo da get_session usage.cost_usd = 22.555 $ alle 11:45, prima della consegna."
+  },
+  "costo_usd": 22.56
 }
