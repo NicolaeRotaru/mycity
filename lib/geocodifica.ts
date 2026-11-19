@@ -9,19 +9,13 @@ import { rateLimitAsync } from '@/lib/rate-limit';
  * Qui c'era solo il freno per indirizzo IP della rotta /api/geocode: cento persone con cento
  * IP diversi, più gli ordini, superavano il secondo senza che nulla li fermasse. Il contatore
  * è quello del sito (`rateLimitAsync`: Upstash, condiviso fra le istanze; in memoria solo se
- * Upstash non c'è o non risponde), con una chiave globale. Lo usano la rotta e
- * `coordinateDiUnIndirizzo`.
+ * Upstash non c'è o non risponde), con una chiave globale. La rotta /api/geocode usa la
+ * stessa chiave (stessi numeri) e `coordinateDiUnIndirizzo` la usa qui sotto.
  */
-export const FRENO_NOMINATIM = { key: 'nominatim:globale', max: 1, windowMs: 1_000 } as const;
+const FRENO_NOMINATIM = { key: 'nominatim:globale', max: 1, windowMs: 1_000 } as const;
 
 /** Quanto, al massimo, il percorso d'ordine aspetta il freno prima di rinunciare alle coordinate. */
-export const ATTESA_MASSIMA_ORDINE_MS = 300;
-
-/** Chiede il turno per una chiamata a Nominatim. `true` = si può chiamare adesso. */
-export async function turnoNominatim(): Promise<{ ok: true } | { ok: false; retryAfterSec: number }> {
-  const r = await rateLimitAsync(FRENO_NOMINATIM);
-  return r.allowed ? { ok: true } : { ok: false, retryAfterSec: r.retryAfterSec };
-}
+const ATTESA_MASSIMA_ORDINE_MS = 300;
 
 /**
  * Il turno per il percorso d'ordine: non fa mai aspettare più di ATTESA_MASSIMA_ORDINE_MS.
@@ -34,7 +28,7 @@ async function turnoPerOrdine(): Promise<boolean> {
   const tentativi = (async () => {
     for (let i = 0; i < 2; i++) {
       if (i > 0) await new Promise((ok) => setTimeout(ok, 150));
-      if ((await turnoNominatim()).ok) return true;
+      if ((await rateLimitAsync(FRENO_NOMINATIM)).allowed) return true;
     }
     return false;
   })().catch(() => false);

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { turnoNominatim } from '@/lib/geocodifica';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -34,8 +33,9 @@ export async function POST(req: Request) {
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
 
   // R04-009 — un freno unico per tutto il sito (≈1 chiamata/s), oltre a quello per IP.
-  const turno = await turnoNominatim();
-  if (!turno.ok) {
+  // Stessa chiave e stessi numeri di coordinateDiUnIndirizzo (lib/geocodifica.ts).
+  const turno = await rateLimitAsync({ key: 'nominatim:globale', max: 1, windowMs: 1_000 });
+  if (!turno.allowed) {
     return NextResponse.json(
       { lat: null, lng: null, error: 'rate_limited' },
       { status: 429, headers: { 'Retry-After': String(turno.retryAfterSec) } },
