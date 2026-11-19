@@ -250,7 +250,10 @@ describe('la scheda prodotto dice la consegna una volta, col nome di carrello e 
   it('sotto il riquadro della consegna non torna una seconda riga con la stessa cifra', () => {
     const scheda = sorgente('app/product/[id]/page.tsx');
     expect(scheda, 'la riga di FreeShippingProgress ripete la consegna sotto il riquadro').not.toMatch(/<FreeShippingProgress\b/);
-    const frasi = [...scheda.matchAll(/\{spedizione\.dettaglioConsegna\}/g)];
+    // R08-002 — Nel riquadro della scheda la riga è quella corta (`rigaConsegna`, cioè il `titolo`
+    // delle promesse); la tariffa intera (`dettaglioConsegna`) resta alla cassa e non si ripete qui.
+    const frasi = [...scheda.matchAll(/\{rigaConsegna\}/g)];
     expect(frasi, 'la frase del costo di consegna compare più di una volta').toHaveLength(1);
+    expect(scheda, 'la tariffa intera è tornata nel riquadro della scheda').not.toMatch(/\{spedizione\.dettaglioConsegna\}/);
   });
 });

@@ -556,6 +556,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // risposta. La pastiglia «gratis» si accende solo se la consegna davvero non si paga.
   const spedizione = promessaSpedizione();
   const consegnaSenzaCosto = spedizione.dettaglioConsegna === null;
+  // R08-002 — Nel riquadro verde la consegna è una riga corta + il rimando alla tariffa intera. La riga
+  // è la frase principale delle promesse (`titolo`, «Consegna MyCity da 3,00 € per tutto il carrello»):
+  // niente frase nuova, gli importi vengono dalle costanti. La tariffa intera, `dettaglioConsegna`,
+  // la legge la cassa e la dice la pagina Spedizioni.
+  const rigaConsegna = spedizione.titolo;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
   // 29/10/2026 — Qui c'era `expressEligible` (interruttore Express del prodotto e del negozio): decideva
@@ -967,7 +972,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {spedizione.dettaglioConsegna && (
                 <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                   <Bike size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                  <span>{spedizione.dettaglioConsegna}</span>
+                  <span>
+                    {rigaConsegna}
+                    {' · '}
+                    <Link href="/shipping" className="underline underline-offset-2 hover:text-olive-950">come si calcola</Link>
+                  </span>
                 </span>
               )}
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">

@@ -457,7 +457,7 @@ export function promessaSpedizione(consegnaCents: number = PLATFORM_DELIVERY_FEE
         ? `${VOCE_CONSEGNA} da ${formatPrice(costoConsegna)} per tutto il carrello`
         : `${VOCE_CONSEGNA} senza costo di base: paghi solo gli euro in più, li vedi in cassa`,
     breve: !siPaga ? 'Consegna gratuita' : conBase ? `Consegna da ${formatPrice(costoConsegna)}` : 'Consegna: il costo in cassa',
-    dettaglioConsegna: siPaga ? `${VOCE_CONSEGNA} ${fraseTariffaConsegnaBreve(consegnaCents)}` : null,
+    dettaglioConsegna: siPaga ? `${VOCE_CONSEGNA} ${fraseTariffaConsegna(consegnaCents)}` : null,
   };
 }
 
@@ -481,23 +481,6 @@ export function fraseTariffaConsegna(baseCents: number = PLATFORM_DELIVERY_FEE_C
     base
     + `${euro(CONSEGNA_NEGOZIO_IN_PIU_CENTS)} in più per ogni negozio in più e ${euro(SUPPLEMENTO_CONSEGNA_CENTS)} in più per ogni negozio dove spendi meno di ${soglia}; `
     + `la consegna veloce ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, compresa se un negozio è sotto i ${soglia}`
-  ).trim();
-}
-
-/**
- * R08-002 — La stessa tariffa, con gli stessi importi e le stesse condizioni di `fraseTariffaConsegna`,
- * in meno parole: per il riquadro stretto della scheda prodotto sul telefono (la frase intera, 264
- * caratteri, era un muro di testo). La frase intera resta nella pagina Spedizioni.
- */
-export function fraseTariffaConsegnaBreve(baseCents: number = PLATFORM_DELIVERY_FEE_CENTS): string {
-  const soglia = euro(SPESA_SENZA_SUPPLEMENTO_CENTS);
-  const base = baseCents > 0
-    ? `${euro(baseCents)} per tutto il carrello, all’ora che scegli; `
-    : 'nessun costo di base, all’ora che scegli; ';
-  return (
-    base
-    + `+${euro(CONSEGNA_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più e +${euro(SUPPLEMENTO_CONSEGNA_CENTS)} per ogni negozio sotto i ${soglia}; `
-    + `veloce +${euro(SUPPLEMENTO_VELOCE_CENTS)}, compresa se un negozio è sotto i ${soglia}`
   ).trim();
 }
 
