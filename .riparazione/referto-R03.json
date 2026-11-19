@@ -1,13 +1,13 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-19 11:05",
-  "finita": false,
-  "testa": "3bba8949bfb210165426e738f7f082f6f7375f65",
+  "aggiornato": "2026-11-19 11:40",
+  "finita": true,
+  "testa": "17e99ba760c9bc9c37ba9fcee67cf25702736a68",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "non_lanciato",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "17e99ba760c9bc9c37ba9fcee67cf25702736a68",
+    "nota": "typecheck 0 errori; lint 0 errori (98 avvisi già presenti); vitest 1778 file passati, 1 saltato; 11202 prove passate, 1 saltata. SHA preso con git rev-parse HEAD prima e dopo, uguale."
   },
   "voci": [
     {
@@ -98,7 +98,8 @@
           "riga_dopo": "33: vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));",
           "perche": "la prova importa una rotta di R03 e la prova con l'AI accesa"
         }
-      ]
+      ],
+      "verificato_da": "smentitore B: rilanciate 16 prove sulle rotte e sugli interruttori (188/188); tolto il controllo da catalog-apply-bulk la prova nuova è rossa; le 9 prove ritoccate cambiano solo la riga vi.mock. Regge."
     },
     {
       "id": "R03-002",
@@ -106,16 +107,19 @@
       "esito": "riparato",
       "commit": "fa420ddadd45f30b7956b3a98fae85fba8f7e2a9",
       "commit_aggiuntivi": [
-        "154f87e4185b937e96a30fc5793870464d6167df"
+        "154f87e4185b937e96a30fc5793870464d6167df",
+        "7e32fbc1c6fa71408b86e88bf4accadcfb3cec71"
       ],
       "file_toccati": [
         "app/api/ai/catalog-batch/start/route.ts",
+        "tests/unit/riparazione-r03-lotto-chiusura-ritentata.test.ts",
         "tests/unit/riparazione-r03-lotto-motivo-rifiutato.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r03-lotto-motivo-rifiutato.test.ts"
+        "tests/unit/riparazione-r03-lotto-motivo-rifiutato.test.ts",
+        "tests/unit/riparazione-r03-lotto-chiusura-ritentata.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-motivo-rifiutato.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-lotto-motivo-rifiutato.test.ts tests/unit/riparazione-r03-lotto-chiusura-ritentata.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -125,7 +129,18 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Cura solo in start/route.ts: la riga nasce già nell'insert col motivo INVIO_SENZA_RISPOSTA (che status tiene aperto 24 ore); aggancio e fallimento netto tolgono il motivo; le due scritture del motivo leggono error e lo registrano. Se il database le rifiuta la riga resta «forse partito», non si chiude dopo 15 minuti e il secondo avvio riceve 409.",
-      "nota": "Costo dalla parte prudente: se la funzione muore fra l'insert e l'invio, o se anche la scrittura «failed» è rifiutata, la riga resta aperta 24 ore invece di 15 minuti. Se anche il motivo con l'id è rifiutato, il lotto non si aggancia da solo: l'id resta nel registro e dopo 24 ore status chiude dicendo di chiedere all'assistenza. status/route.ts non toccato."
+      "nota": "Costo residuo dalla parte prudente: se la funzione muore fra l'insert e l'invio, o se la scrittura di chiusura è rifiutata due volte, la riga resta aperta 24 ore invece di 15 minuti (il 409 ora dice di ricaricare). Se anche il motivo con l'id è rifiutato, il lotto non si aggancia da solo: l'id resta nel registro e dopo 24 ore status chiude dicendo di chiedere all'assistenza. status/route.ts non toccato.",
+      "verificato_da": "smentitore A: grep di ogni lettore di INVIO_SENZA_RISPOSTA/error (status, cancel, apply, pagina, statoLavoroCatalogo, cron): nessuna rotella da 24 ore su un invio normale; 4 varianti tolte (motivo nell'insert, error:null nell'aggancio/fallimento, rotta della base) fanno cadere la prova. Regge; difetto minore sulle scritture failed/canceled senza controllo → giro di correzione. Giro di correzione 7e32fbc1: la cura è quella proposta dallo smentitore A; diff controllato dal capo squadra, rimessa regge (uscita 0).",
+      "giro_di_correzione": {
+        "commit": "7e32fbc1c6fa71408b86e88bf4accadcfb3cec71",
+        "difetto": "smentitore A: le scritture «failed» (rifiuto netto) e «canceled» (tetto) non controllavano error: un rifiuto del database lasciava un lavoro mai partito «forse partito» per 24 ore",
+        "cura": "le due scritture si ritentano una volta (come l'aggancio) e, se rifiutate ancora, logger.error con jobId e codice; il 409 su un lavoro «in invio» dice di ricaricare fra qualche minuto invece di «applicalo o scartalo»",
+        "rimessa": {
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7e32fbc1c6fa71408b86e88bf4accadcfb3cec71^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r03-lotto-chiusura-ritentata.test.ts --json"
+        }
+      }
     },
     {
       "id": "R03-003",
@@ -150,7 +165,8 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "extract-product regge già dall'onda 9 (riga 433 policy_ok !== true, riga 339 verifica sul web solo con === true). In extract-products policy_ok: p.policy_ok !== false diventa p.policy_ok === true, la stessa regola. La prova copre per extract-products 'false', 'False', ' false ', 'no', '0', 0, null, campo assente e 'true' testo → false, true → true; per extract-product quattro varianti (400) e la controprova (200).",
       "nota": "BulkPhotoCreate.tsx (righe 147 e 275) già blocca la creazione con policy_ok false: ora anche col testo «false» e col campo mancante.",
-      "prove_esistenti_ritoccate": []
+      "prove_esistenti_ritoccate": [],
+      "verificato_da": "smentitore B: nessun'altra lettura larga nella rotta e in extract-product; catalog-create-bulk ricontrolla allowed === true; 16 prove sulle foto verdi (182/182); rimesso !== false la prova nuova ha 9 casi rossi. Regge."
     },
     {
       "id": "R03-004",
@@ -194,7 +210,8 @@
           "riga_dopo": "  it.each([503, 522, 529, 400])('%i: rifiuto prima dell\\'invio, resta «fallito»', async (status) => {",
           "perche": "il 520 ora vale «forse partito» (verdetto del collaudo K01); la prova importa lib/ai/batch.ts, file di R03"
         }
-      ]
+      ],
+      "verificato_da": "smentitore A: 5 varianti tolte (signal, clearTimeout, 520, controllo dell'id) fanno cadere la prova; con undici vero su server locale un 2xx col corpo fermo si interrompe a 70,0 s e vale «forse partito», nessun timer resta acceso; solo start/route.ts chiama submitBatch. Regge (nota: il ramo aborted per un non-2xx col corpo fermo non ha prova)."
     },
     {
       "id": "R03-005",
@@ -228,7 +245,8 @@
           "modifica": "aGruppi (righe 44-54) chiama il filtro 5 alla volta in gruppi uno dopo l'altro: fino a 200 prodotti sono 40 gruppi, oltre i 120 s. Dare un tempo complessivo: const fine = Date.now() + 80_000; nel ciclo, prima di ogni gruppo: if (Date.now() > fine) { esiti.push(...voci.slice(i).map(() => ({ status: 'rejected', reason: new Error('filtro non arrivato in tempo') }) as PromiseSettledResult<R>)); break; }. I rifiutati sono già trattati come «non si scrive» (righe ~236-240)."
         }
       ],
-      "cosa_resta": "catalog-batch/apply con Anthropic che non risponde supera ancora i 120 s e Vercel la spegne prima della risposta: la cura sta nelle due modifiche altrui."
+      "cosa_resta": "catalog-batch/apply con Anthropic che non risponde supera ancora i 120 s e Vercel la spegne prima della risposta: la cura sta nelle due modifiche altrui.",
+      "verificato_da": "smentitore A: con minimatch, picomatch e micromatch ogni schema di vercel.json corrisponde a esattamente un file (products/*/external-refresh prende [id]); le 26 rotte che arrivano a getAnthropic sono coperte; con il vercel.json della base la prova cade su 4 casi. Parziale onesto; le due modifiche altrui sono esatte."
     },
     {
       "id": "R03-006",
@@ -238,12 +256,15 @@
       "file_toccati": [
         "app/api/cron/operational-alerts/route.ts",
         "tests/unit/riparazione-r03-allarme-tetto-nel-cron.test.ts",
-        "tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts"
+        "tests/unit/l-allarme-che-non-parte-non-si-spaccia-per-spedito.test.ts",
+        "lib/ai/tettoSpesa.ts",
+        "tests/unit/riparazione-r03-tetto-senza-tetto.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r03-allarme-tetto-nel-cron.test.ts"
+        "tests/unit/riparazione-r03-allarme-tetto-nel-cron.test.ts",
+        "tests/unit/riparazione-r03-tetto-senza-tetto.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r03-allarme-tetto-nel-cron.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-allarme-tetto-nel-cron.test.ts tests/unit/riparazione-r03-tetto-senza-tetto.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -260,7 +281,21 @@
           "riga_dopo": "54:   getAdminSupabase: () => ({ from: (t: string) => tabella(t), rpc: async () => ({ data: 0, error: null }) }),",
           "perche": "la prova chiama la rotta del cron (file di R03); il database finto non aveva rpc e la sonda scriveva la riga ripiego-da, scambiata per un'attesa di sei ore. Nessuna asserzione cambiata."
         }
-      ]
+      ],
+      "verificato_da": "smentitore B: ritocco della riga 54 onesto; 16 prove sul tetto e sul cron verdi (192/192); tolta la chiamata la prova nuova ha 4 casi rossi. Parziale: regressione (sonda rpc e scrittura ogni 5 minuti anche senza tetto) → giro di correzione. Giro di correzione 17e99ba7: la cura è quella proposta e provata dallo smentitore B (192/192 prove vicine e suite intera verdi); diff controllato dal capo squadra, rimessa regge (uscita 0).",
+      "commit_aggiuntivi": [
+        "17e99ba760c9bc9c37ba9fcee67cf25702736a68"
+      ],
+      "giro_di_correzione": {
+        "commit": "17e99ba760c9bc9c37ba9fcee67cf25702736a68",
+        "difetto": "smentitore B: regressione della riparazione: il cron ogni 5 minuti faceva la sonda rpc spesa_ai_di_oggi e una scrittura in operational_alert_log anche senza AI_GLOBAL_DAILY_BUDGET_EUR, e un logger.error se la funzione del database manca",
+        "cura": "in allarmiTettoSpesaAiPerIlCron `if (!(tettoEur > 0)) return [];` prima della sonda (nessun tetto = nessun allarme possibile, come controllaTettoSpesaAi in run.ts)",
+        "rimessa": {
+          "esito": "regge",
+          "uscita": 0,
+          "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 17e99ba760c9bc9c37ba9fcee67cf25702736a68^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r03-tetto-senza-tetto.test.ts --json"
+        }
+      }
     },
     {
       "id": "R03-007",
@@ -306,7 +341,8 @@
           "riga_dopo": "39:   avvisaIlNegozioDellAnnullo: vi.fn(async () => true),",
           "perche": "la prova importa la rotta del cliente assente (file di R03); il mock di annulla non esportava la funzione nuova"
         }
-      ]
+      ],
+      "verificato_da": "smentitore B: getUserById e sendEmail che lanciano o rispondono ok:false → 200, annullo e campanella scritti; seconda richiesta 409 prima dell'email; nessun altro percorso manda già l'email al negozio; 11 prove vicine verdi (60/60); tolta la chiamata 2 casi rossi. Regge."
     }
   ],
   "nuovi_difetti_visti": [
@@ -325,16 +361,30 @@
       "descrizione": "La riga incerta si restituisce come 'submitting' e la pagina mostra la rotella. La modifica esatta (flag incerto con il limite dei 3 minuti) è nel serve_file_altrui di R03-004."
     },
     {
-      "titolo": "il sorvegliante interroga il conto della spesa AI a ogni giro anche senza tetto impostato, e con la migrazione del conto mancante scrive un errore all'ora",
+      "titolo": "il freno «un errore all'ora» del tetto di spesa AI vive nella memoria della copia: con il tetto impostato e la migrazione del conto assente l'errore può arrivare a ogni giro del cron",
       "dimensione": "ai-endpoints",
       "severita": "minore",
-      "file": "lib/ai/tettoSpesa.ts:407",
-      "descrizione": "allarmiTettoSpesaAiPerIlCron fa la sonda rpc spesa_ai_di_oggi e la scrittura in operational_alert_log prima di guardare il tetto. Ora il cron la chiama ogni 5 minuti: senza AI_GLOBAL_DAILY_BUDGET_EUR è un giro di rete e una scrittura inutili, e senza la funzione spesa_ai_di_oggi segnalaRipiego scrive un logger.error orario. Cura possibile: se !(tettoEur > 0) uscire con [] prima della sonda."
+      "file": "lib/ai/tettoSpesa.ts:185",
+      "descrizione": "Su Vercel ogni giro del cron può nascere su una copia nuova, quindi il logger.error di segnalaRipiego non è frenato a uno all'ora (l'email resta frenata a 6 ore da operational_alert_log). Visto dallo smentitore B; non riparato in questo giro."
+    },
+    {
+      "titolo": "due avvii insieme di un lavoro sul catalogo superano entrambi il controllo dei lavori aperti",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-batch/start/route.ts:87-106",
+      "descrizione": "Il controllo «c'è già un lavoro aperto» è una lettura seguita da un insert, senza indice unico per negozio: due richieste contemporanee partono tutte e due e pagano due lotti. C'era già prima di R03-002; la cura vera è un indice unico parziale (migrazione), non fatta in questo giro senza migrazioni."
+    },
+    {
+      "titolo": "il sorvegliante dei prezzi esterni può superare i suoi 300 s con 10 chiamate al modello in fila",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/cron/external-price-alerts/route.ts:101-106",
+      "descrizione": "Fino a 10 chiamate al modello una dopo l'altra, 60 s l'una, contro una durata di 300 s. Nessun negozio legge la risposta; visto dallo smentitore A."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 2,
-    "nota": "lotto A e lotto B: 2 subagenti riparatori"
+    "agenti": 5,
+    "nota": "2 riparatori (lotti A e B), 2 smentitori, 1 giro di correzione; tetto del freno 6"
   }
 }
