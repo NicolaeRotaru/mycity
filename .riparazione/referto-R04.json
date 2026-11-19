@@ -290,6 +290,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "2 riparatori (sonnet), 1 giro di correzione (sonnet), 3 smentitori (modello grande). Tetto di 6 raggiunto a fine lavoro."
-  }
+    "nota": "2 riparatori (sonnet), 1 giro di correzione (sonnet), 3 smentitori (modello grande). Tetto di 6 raggiunto a fine lavoro. Costo letto con get_session senza id alle 11:25: usage.cost_usd 12,63 $.",
+    "subagenti": 6
+  },
+  "costo_usd": 12.63
 }
