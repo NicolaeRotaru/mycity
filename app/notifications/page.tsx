@@ -161,14 +161,15 @@ export default function NotificationsPage() {
       }
       // R01-002 — E lo diventano anche gli elenchi in memoria e il conto del campanello: se la
       // rilettura cade, react-query tiene i dati di prima, e la pagina mostrava ancora «Non letta» col
-      // pulsante «Segna tutte come lette» al suo posto.
+      // pulsante «Segna tutte come lette» al suo posto. Le chiavi sono quelle a video (con l'utente
+      // della pagina, lo stesso del campanello), anche se la sua prima lettura non l'aveva trovato.
       if (chi) {
         const lette = (righe: Notification[] | undefined) =>
           righe?.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
         for (let q = PER_VOLTA; q <= quante; q += PER_VOLTA) {
-          qc.setQueryData<Notification[]>([...queryKeys.notifications.list, q, chi], lette);
+          qc.setQueryData<Notification[]>([...queryKeys.notifications.list, q, userId], lette);
         }
-        qc.setQueryData([...queryKeys.notifications.count, chi], 0);
+        qc.setQueryData([...queryKeys.notifications.count, userId], 0);
       }
       qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
       qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
