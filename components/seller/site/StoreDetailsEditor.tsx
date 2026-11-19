@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,8 +31,6 @@ type ProfileRow = {
   store_customization: unknown;
 };
 
-const MESSAGGIO_USCITA = 'Hai modifiche non salvate: se esci le perdi. Uscire lo stesso?';
-
 export default function StoreDetailsEditor({ profile, onBack }: { profile: ProfileRow; onBack: () => void }) {
   const qc = useQueryClient();
 
@@ -60,18 +57,11 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  // R09-010 — «Tutte le impostazioni» smonta il modulo: con modifiche non salvate chiede prima.
-  const [dirty, setDirty] = useState(false);
-  const tornaIndietro = () => {
-    if (dirty && !window.confirm(MESSAGGIO_USCITA)) return;
-    onBack();
-  };
-
   return (
     <div className="space-y-4">
       <button
         type="button"
-        onClick={tornaIndietro}
+        onClick={onBack}
         className="inline-flex items-center gap-1.5 -ml-1 text-sm font-semibold text-ink-600 hover:text-ink-900"
       >
         <ArrowLeft size={16} aria-hidden /> Tutte le impostazioni
@@ -101,8 +91,6 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
           }}
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}
-          saved={update.isSuccess}
-          onDirtyChange={setDirty}
         />
       </div>
     </div>

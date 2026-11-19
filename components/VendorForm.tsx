@@ -1,7 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,7 +20,6 @@ import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
 import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
-import { clicDaFermare } from './seller/site/dove-e-l-errore';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
 import SocialLinksFields from './seller/SocialLinksFields';
@@ -43,40 +41,6 @@ function erroriPerCampoSocial(
     if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !(i.path[1] in out)) out[i.path[1]] = i.message;
   }
   return out;
-}
-
-const MESSAGGIO_USCITA = 'Hai modifiche non salvate: se esci le perdi. Uscire lo stesso?';
-
-/**
- * R09-010 — Con modifiche non salvate: il browser avvisa se si chiude o ricarica la pagina
- * (beforeunload), e un clic su un collegamento interno (il menu del pannello) chiede conferma,
- * perché beforeunload i collegamenti di Next non li vede.
- */
-function useAvvisoUscita(dirty: boolean) {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    if (!dirty) return;
-    const alRicarico = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', alRicarico);
-    return () => window.removeEventListener('beforeunload', alRicarico);
-  }, [dirty]);
-
-  useEffect(() => {
-    if (!dirty) return;
-    const alClic = (e: MouseEvent) => {
-      // clicDaFermare decide se è un collegamento interno verso un'altra pagina; il testo è nostro.
-      if (clicDaFermare(e, dirty, pathname ?? '', () => window.confirm(MESSAGGIO_USCITA))) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-    document.addEventListener('click', alClic, true);
-    return () => document.removeEventListener('click', alClic, true);
-  }, [dirty, pathname]);
 }
 
 type SchemaData = { storeName: string; storePhone: string };
@@ -118,13 +82,9 @@ interface Props {
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
   mode?: VendorFormMode;
-  /** Vero dopo che il salvataggio è riuscito: da lì in poi non ci sono più modifiche da perdere. */
-  saved?: boolean;
-  /** Dice a chi sta intorno al modulo se ci sono modifiche non salvate (es. per «Tutte le impostazioni»). */
-  onDirtyChange?: (dirty: boolean) => void;
 }
 
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', saved = false, onDirtyChange }: Props) => {
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
@@ -180,27 +140,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   const [apriSocial, setApriSocial] = useState(0);
 
   const storeName = watch('storeName');
-  const storePhone = watch('storePhone');
-
-  // R09-010 — modifiche non salvate: la firma di quello che si vede nel modulo, confrontata con
-  // quella di quando è stato aperto (o dell'ultimo salvataggio riuscito).
-  const firmaCon = (c: StoreCustomization) => JSON.stringify([
-    storeName, storePhone, location.address.trim(),
-    Math.round(location.lat * 1e5), Math.round(location.lng * 1e5),
-    logoUrl, media, description, hours, c,
-  ]);
-  const firma = firmaCon(custom);
-  const [firmaBase, setFirmaBase] = useState<string>(firma);
-  const firmaInviata = useRef<string | null>(null);
-  const dirty = firma !== firmaBase;
-  useEffect(() => {
-    if (saved && firmaInviata.current !== null) {
-      setFirmaBase(firmaInviata.current);
-      firmaInviata.current = null;
-    }
-  }, [saved]);
-  useAvvisoUscita(dirty);
-  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
@@ -296,8 +235,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     }
     setCustomError(null);
     setErroriSocial({});
-    // Quello che parte è quello che, a salvataggio riuscito, non si perde più.
-    firmaInviata.current = firmaCon(customData);
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
