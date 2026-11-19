@@ -162,8 +162,9 @@ export function DeliveryCutoff({
     // S10 (5/11/2026, 2299) — Come il banner, anche la riga riserva lo spazio di
     // due righe sul telefono: dopo la risposta della cassa la frase si allunga
     // («…oppure veloce in 30-60 minuti») e spingeva giù il riquadro mentre si
-    // leggeva. Da sm in su ci sta in una riga.
-    <span className={cn('inline-flex items-start gap-1.5 text-sm text-olive-700 font-medium min-h-[2.5rem] sm:min-h-0 sm:items-center', className)}>
+    // leggeva. R08-002 — Lo spazio di due righe si tiene a ogni larghezza, come la banner: fra 768 e
+    // 1023 pixel la colonna è stretta quanto un telefono e «da sm in su ci sta in una riga» era falso.
+    <span className={cn('inline-flex items-start gap-1.5 text-sm text-olive-700 font-medium min-h-[2.5rem]', className)}>
       <Bike size={15} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
       <span>{riga}</span>
     </span>
