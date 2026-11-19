@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { turnoNominatim } from '@/lib/geocodifica';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -31,6 +32,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ lat: null, lng: null }, { status: 400 });
   }
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
+
+  // R04-009 — un freno unico per tutto il sito (≈1 chiamata/s), oltre a quello per IP.
+  const turno = await turnoNominatim();
+  if (!turno.ok) {
+    return NextResponse.json(
+      { lat: null, lng: null, error: 'rate_limited' },
+      { status: 429, headers: { 'Retry-After': String(turno.retryAfterSec) } },
+    );
+  }
 
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
