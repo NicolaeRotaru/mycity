@@ -16,6 +16,10 @@ const COLLECTION_SORTS: SortOption[] = ['rating', 'relevance', 'newest', 'price_
  * prodotti con più recensioni. Il titolo ora dice quello che la griglia fa. Il
  * giorno che ci saranno vendite vere da contare, la classifica per venduto
  * della settimana è una funzione nuova, e il titolo potrà tornare.
+ *
+ * 19/11/2026 (R09-017) — L'occhiello «Scelti dai clienti» prometteva una scelta che non c'è
+ * (con zero recensioni la pagina mostrava gli ultimi pubblicati): ora dice solo che i prodotti
+ * qui hanno recensioni, e la griglia mostra solo quelli (`soloRecensiti`).
  */
 export default function PiuVendutiPage() {
   const t = useTranslations('search');
@@ -26,7 +30,7 @@ export default function PiuVendutiPage() {
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <CollectionHeader
         icon={Flame}
-        eyebrow="Scelti dai clienti"
+        eyebrow="Con recensioni"
         title="I più recensiti"
         blurb="I prodotti ordinati per numero di recensioni dei clienti."
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Più recensiti' }]}
