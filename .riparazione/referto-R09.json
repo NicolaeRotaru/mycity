@@ -1,0 +1,142 @@
+{
+  "sessione": "R09",
+  "aggiornato": "2026-11-19 09:41",
+  "finita": false,
+  "testa": "44e65457b9f41a2cc02aac06fb552582a40527df",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_eseguito",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R09-001",
+      "chiave": "frontend-ux|se la rilettura dei reclami cade a finestra aperta, la decisione resta su dati vecchi",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (reclami)"
+    },
+    {
+      "id": "R09-004",
+      "chiave": "frontend-ux|la pagina «sotto i 10 €» mostra prodotti da 10 € e nasconde quelli che in promozione costano meno di 10",
+      "esito": "parziale",
+      "commit": "9a18af532280d5195d5b416549731c7bed7f81d4",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-sotto-i-dieci-totale.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-sotto-i-dieci-totale.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9a18af532280d5195d5b416549731c7bed7f81d4^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r09-sotto-i-dieci-totale.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "insieme_a": [
+        "R09-017"
+      ],
+      "cosa_ho_fatto": "Sulla base c'erano già 'prezzoSotto' (soglia esclusa, R07-016) e il totale vero per la sola pagina Novità. Ho esteso il conteggio del database a «Sotto i N €» e a «I più recensiti»: ora la pagina dice il totale (es. 106) e non 40.",
+      "cosa_resta": "I prodotti che a prezzo pieno costano 10 € o più ma in promozione meno di 10 € restano fuori. Per includerli senza svuotare la pagina serve un filtro sul prezzo scontato nel database: una funzione o vista nuova che esponga il prezzo effettivo (prezzo meno lo sconto attivo), cioè una migrazione, che questo giro non può fare."
+    },
+    {
+      "id": "R09-007",
+      "chiave": "frontend-ux|restano tre pagine con le foto sgranate perché `unoptimized` spegne srcset e sizes",
+      "esito": "parziale",
+      "commit": "44e65457b9f41a2cc02aac06fb552582a40527df",
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "app/seller/products/page.tsx",
+        "app/orders/[id]/page.tsx",
+        "tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-foto-con-il-caricatore.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-foto-con-il-caricatore.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 44e65457b9f41a2cc02aac06fb552582a40527df^ --file app/shared-cart/page.tsx,app/seller/products/page.tsx,app/orders/[id]/page.tsx --prove tests/unit/riparazione-r09-foto-con-il-caricatore.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le miniature dei prodotti nelle tre pagine (carrello condiviso, prodotti del negozio, riga d'ordine) usano loader={caricatoreFotoRemote} al posto di unoptimized. Prova esistente modificata e dichiarata: tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts legge per nome i tre file e contava tre file senza caricatore, ora ne conta uno (più stretta, non indebolita).",
+      "cosa_resta": "Il logo del negozio in app/orders/[id]/page.tsx:859 resta unoptimized apposta: il caricatore ritaglia a quadrato le larghezze sotto 200. Serve una variante del caricatore senza ritaglio in lib/image-loader.ts, che non è fra i miei file."
+    },
+    {
+      "id": "R09-012",
+      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (prezzo mostrato)"
+    },
+    {
+      "id": "R09-015",
+      "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "nel <ProductGrid> a riga ~223 (griglia «tutti i prodotti» della vetrina, sotto le sezioni del negozio) aggiungere prioritaPrimeFoto={false}: oggi usa il valore di serie e chiede ancora quattro foto urgenti"
+        }
+      ],
+      "nota": "Gli altri punti della voce sono già a posto sulla base: components/ProductGrid.tsx:665 priority={prioritaPrimeFoto && !formaFila && i < 4}; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:89 priority={false} e :147 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4} (solo la prima riga). Prova esistente: tests/unit/riparazione-r15-foto-urgenti-solo-sopra-la-piega.test.ts."
+    },
+    {
+      "id": "R09-017",
+      "chiave": "microcopy|la pagina dei più recensiti presenta 40 prodotti come «scelti dai clienti» anche quando nessuno ha una recensione",
+      "esito": "parziale",
+      "commit": "7a2e695e190056453b14bfa0457c0692305d7ccc",
+      "file_toccati": [
+        "app/piu-venduti/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-piu-recensiti-occhiello.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-piu-recensiti-occhiello.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7a2e695e190056453b14bfa0457c0692305d7ccc^ --file app/piu-venduti/page.tsx --prove tests/unit/riparazione-r09-piu-recensiti-occhiello.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "insieme_a": [
+        "R09-004"
+      ],
+      "cosa_ho_fatto": "Sulla base soloRecensiti (R15-009) escludeva già i prodotti a zero recensioni, con stato vuoto onesto. Ho tolto l'occhiello «Scelti dai clienti» (ora «Con recensioni»). Il numero vero in testa è nel commit di R09-004 (stesso onCount).",
+      "cosa_resta": "I 40 mostrati sono i 40 più recenti tra i recensiti, non i 40 con più recensioni. L'RPC prodotti_con_voto_almeno restituisce solo product_id, senza conteggio: serve una funzione nuova che dia gli id ordinati per numero di recensioni (migrazione, non in questo giro). Oggi le recensioni sono zero, quindi è latente."
+    },
+    {
+      "id": "R09-019",
+      "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: fuori misura: cambia come nascono quasi tutte le pagine"
+    },
+    {
+      "id": "R09-020",
+      "chiave": "qa-flussi|la pagina novità mostra tutto il catalogo, anche un prodotto di tre mesi fa, e il numero in alto conta solo i prodotti già caricati",
+      "esito": "gia_riparato_prima",
+      "prova": "app/novita/page.tsx:50 passa soloNovita; components/ProductGrid.tsx:248 creatiDal = inizioFinestraNovita(); lib/queries/griglia-prodotti.ts:~107 inizioFinestraNovita usa NEW_PRODUCT_DAYS (14, lib/constants.ts:2, la soglia del badge «Nuovo»); ProductGrid.tsx:285-293 il totale viene da contaProdottiDellaGriglia. Prove verdi: tests/unit/riparazione-r15-novita-conteggio.test.ts e tests/unit/riparazione-r15-novita-finestra.test.ts."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il conteggio del database per le griglie non filtra i negozi non approvati",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/queries/griglia-prodotti.ts:~340",
+      "descrizione": "contaProdottiDellaGriglia non scarta i prodotti di negozi con profiles.is_approved falso, mentre la lettura li scarta dopo il fetch. Per un visitatore la regola del database (migrazione 129) filtra già, quindi il numero coincide; per admin o il venditore stesso il totale può superare le schede mostrabili. Latente."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": ""
+  }
+}
