@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 interface Props {
@@ -8,13 +8,19 @@ interface Props {
   description?: string;
   icon?: ReactNode;
   defaultOpen?: boolean;
+  /** Un numero che sale: a ogni salita la sezione si apre (una volta sola, senza richiuderla dopo). */
+  apriQuando?: number;
   children: ReactNode;
 }
 
 /** Sezione collassabile per l'editor vetrina (native <details> = accessibile). */
-export default function CustomizationSection({ title, description, icon, defaultOpen = false, children }: Props) {
+export default function CustomizationSection({ title, description, icon, defaultOpen = false, apriQuando = 0, children }: Props) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (apriQuando > 0 && ref.current) ref.current.open = true;
+  }, [apriQuando]);
   return (
-    <details open={defaultOpen} className="group border border-cream-300 rounded-xl bg-white overflow-hidden">
+    <details ref={ref} open={defaultOpen} className="group border border-cream-300 rounded-xl bg-white overflow-hidden">
       <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:bg-cream-50">
         {icon && <span className="text-primary-600 shrink-0">{icon}</span>}
         <span className="flex-1 min-w-0">

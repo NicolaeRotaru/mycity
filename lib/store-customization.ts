@@ -323,7 +323,8 @@ function handleDaLink(v: string | undefined, dominio: RegExp): string | undefine
   const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i'));
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
-  if (m && (/^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1]) || /\?/.test(t))) return t;
+  // Il resto dopo il nome (?igsh=… dell'app, #…, altro percorso) si scarta: il nome è già quello giusto.
+  if (m && /^(profile\.php|p|reel|reels|share|groups|pages|people|watch)$/i.test(m[1])) return t;
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
@@ -368,6 +369,20 @@ export function campoDellErrore(path: ReadonlyArray<PropertyKey>): string | null
   };
   if (path[0] === 'socials' && typeof path[1] === 'string') return nomi[path[1]] ?? path[1];
   return null;
+}
+
+/**
+ * Gli errori dei social, uno per campo (il primo di ciascuno), così il modulo li scrive sotto il
+ * campo giusto invece di un solo messaggio in fondo che non dice dove.
+ */
+export function erroriPerCampoSocial(
+  issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const i of issues) {
+    if (i.path[0] === 'socials' && typeof i.path[1] === 'string' && !(i.path[1] in out)) out[i.path[1]] = i.message;
+  }
+  return out;
 }
 
 function cleanHandle(v?: string): string | null {
