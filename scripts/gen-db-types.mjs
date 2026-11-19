@@ -32,14 +32,14 @@ const OUT = join(ROOT, 'lib', 'database.types.ts');
 /** Mappa tipo SQL → tipo TS. */
 function sqlTypeToTs(sqlType) {
   const t = sqlType.toLowerCase().trim();
-  // R05-016 — L'array si riconosce PRIMA del tipo base: `text[]` e `uuid[]` cominciano per «text» e
-  // «uuid» e uscivano come `string` invece di `string[]`. `_text` (il nome interno di Postgres) vale `text[]`.
-  if (/\[\]$/.test(t)) return `${sqlTypeToTs(t.replace(/\[\]$/, ''))}[]`;
-  if (/^_/.test(t)) return `${sqlTypeToTs(t.slice(1))}[]`;
   if (/^(uuid|text|varchar|char|citext|bpchar|name|date|timestamptz|timestamp|time|inet|interval)/.test(t)) return 'string';
   if (/^(numeric|decimal|real|double|float|int|integer|bigint|smallint|serial|bigserial)/.test(t)) return 'number';
   if (/^bool/.test(t)) return 'boolean';
   if (/^(jsonb|json)/.test(t)) return 'Json';
+  if (/\[\]$/.test(t) || /^_/.test(t)) {
+    const base = sqlTypeToTs(t.replace(/\[\]$/, ''));
+    return `${base}[]`;
+  }
   return 'Json'; // fallback sicuro per tipi custom (enum, ecc)
 }
 
