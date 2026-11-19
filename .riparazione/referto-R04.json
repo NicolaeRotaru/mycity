@@ -1,12 +1,12 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-19 11:45",
+  "aggiornato": "2026-11-19 11:55",
   "finita": true,
-  "testa": "fe6b3b0532b8d32f75a24d4e912c8aae2502a2ec",
+  "testa": "be90b6d3e3966191fac92a7b0b7e2768113245ef",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "fe6b3b0532b8d32f75a24d4e912c8aae2502a2ec",
+    "testa": "be90b6d3e3966191fac92a7b0b7e2768113245ef",
     "nota": "lanciato con NODE_OPTIONS=--max-old-space-size=6144: tsc con la memoria di default finisce la memoria su questa macchina (uscita 134), anche sulla base. Risultato: typecheck pulito; lint 0 errori, 98 avvisi; vitest 1774 file passati e 1 saltato (11157 prove passate e 1 saltata)."
   },
   "voci": [
@@ -91,7 +91,7 @@
       "id": "R04-005",
       "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
       "esito": "parziale",
-      "commit": "c9bf7172bf2b0f153e49ccdf252bcb7236c1e7ae",
+      "commit": "be90b6d3e3966191fac92a7b0b7e2768113245ef",
       "file_toccati": [
         "components/LiveActivityFeed.tsx",
         "components/home/HowItWorks.tsx",
@@ -109,8 +109,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b5afcaefce6fae1f0efd191e03fce8c0b423038^ --file components/LiveActivityFeed.tsx,components/home/HowItWorks.tsx,components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Misurata in Chromium col Fraunces ExtraBold del deposito, la home a 360 px col testo al 200% passa da 422 a 360 px. Ora si stringono la riga «Live» e il titolo del feed, il titolo «Ricevi e paghi alla consegna» e il testo accanto all'icona di «Perché scegliere MyCity». «Diventa venditore» resta su una riga a 640, 1024, 1280, 1366 e 1440 px. La prova misura, non cerca classi; se manca Chromium si salta dichiarandolo, come le prove col database (secondo commit c9bf7172).",
-      "cosa_resta": "/come-funziona (438-450 px) e /privacy (414 px) stanno in file non miei, con le modifiche esatte qui sotto. Nella CI la prova si salta finché il lavoro unit-tests non installa Chromium (modifica di ci.yml qui sotto). /about non è nella prova (pagina server asincrona): il collaudo la misurava già a 360 px. Osservato dal revisore, fuori dal dichiarato (360 px): a 320 px col testo al 200% la home misura 324 px (sulla base 422).",
+      "cosa_ho_fatto": "Misurata in Chromium col Fraunces ExtraBold del deposito, la home a 360 px col testo al 200% passa da 422 a 360 px. Ora si stringono la riga «Live» e il titolo del feed, il titolo «Ricevi e paghi alla consegna» e il testo accanto all'icona di «Perché scegliere MyCity». «Diventa venditore» resta su una riga a 640, 1024, 1280, 1366 e 1440 px. La prova misura, non cerca classi, e senza Chromium esce rossa col motivo. Un salto dichiarato (c9bf7172) l'ho tolto con be90b6d3, perché guardia-ramo non accetta prove spente.",
+      "cosa_resta": "/come-funziona (438-450 px) e /privacy (414 px) stanno in file non miei: le modifiche esatte sono qui sotto. ⚠️ Nella CI il lavoro unit-tests non ha Chromium: finché .github/workflows/ci.yml non lo installa (modifica qui sotto, da fare PRIMA dell'unione), lì questa prova è rossa. /about non è nella prova (pagina server asincrona); il collaudo e il revisore la misurano già a 360 px. Osservato dal revisore, fuori dal dichiarato (360 px): a 320 px col testo al 200% la home misura 324 px (sulla base 422).",
       "serve_file_altrui": [
         {
           "file": "app/come-funziona/page.tsx",
@@ -122,7 +122,7 @@
         },
         {
           "file": ".github/workflows/ci.yml",
-          "modifica": "Nel lavoro unit-tests: runs-on da ubuntu-latest a ubuntu-24.04 (su 26.04 Playwright non installa Chromium: commenti del file alle righe ~368, ~650, ~809). Dopo «Install deps» aggiungere il passo «npx playwright install --with-deps chromium» e un passo che si ferma rosso se Chromium non si lancia (come quello di PostgreSQL), così tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx non si salta in silenzio."
+          "modifica": "Nel lavoro unit-tests: runs-on da ubuntu-latest a ubuntu-24.04, perché su 26.04 Playwright non installa Chromium (lo dicono i commenti del file alle righe ~368, ~650 e ~809). Dopo «Install deps» aggiungere il passo «npx playwright install --with-deps chromium». Senza questo passo tests/unit/riparazione-r04-home-non-scorre-di-lato-misurata.test.tsx è rossa nella CI: misura in un browser vero e non si salta."
         }
       ],
       "verificato_da": "revisore B (sonnet): misurata in Chromium con più larghezze e zoom e 5 mutazioni; 360@200% = 360 px (base 422); «Diventa venditore» su una riga da 640 a 1540 px; desktop come la base; /about regge a 320-1280 px"
@@ -212,7 +212,7 @@
     "agenti": 6,
     "subagenti": 6,
     "nota": "3 per riparare (lotto 1 opus, lotto 2 opus, lotto 3 sonnet), 2 revisori (A opus su R04-007, B sonnet sulle altre sei), 1 giro di correzione (opus) su R04-007. Tetto 6 raggiunto: la correzione l'ho verificata io (prove del revisore 12/12, casi nuovi rossi sulla prima versione, prova rimessa 0).",
-    "costo_usd": 18.63
+    "costo_usd": 19.35
   },
-  "costo_usd": 18.63
+  "costo_usd": 19.35
 }
