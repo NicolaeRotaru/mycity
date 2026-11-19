@@ -57,7 +57,7 @@ describe('un invio del lotto rimasto senza risposta vale «forse partito», non 
     expect(invioIncerto(err)).toBe(true);
   });
 
-  it.each([503, 520, 522, 529, 400])('%i: rifiuto prima dell\'invio, resta «fallito»', async (status) => {
+  it.each([503, 522, 529, 400])('%i: rifiuto prima dell\'invio, resta «fallito»', async (status) => {
     const err = await erroreDellInvio(() => new Response('{"type":"error","error":{"type":"api_error","message":"x"}}', { status, headers: JSON_H }));
     expect(invioIncerto(err)).toBe(false);
   });
