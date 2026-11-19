@@ -362,7 +362,7 @@ export default function Navbar() {
                       </span>
                     </Link>
                   ) : (
-                    <Link href={accediHref} className="shrink-0 text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
+                    <Link href={accediHref} className="min-w-0 [overflow-wrap:anywhere] text-right text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
                   )}
                 </>
               )}
