@@ -83,7 +83,9 @@ export default function NotificationsPage() {
   // 50 righe lette, nessun pulsante, nessun modo di arrivare alle più vecchie, e un numero fisso
   // sul campanello. Ora il pulsante guarda il conteggio vero (lo stesso del campanello) e le più
   // vecchie si raggiungono con «Carica altre».
-  const [quante, setQuante] = useState(PER_VOLTA);
+  // R01-varie — Dentro un oggetto: quando cambia la sessione si riparte dalle prime con un oggetto
+  // nuovo, e la pagina si ridisegna anche se erano già le prime.
+  const [{ quante }, setElenco] = useState({ quante: PER_VOLTA });
   const nonLetteDelCampanello = useNotificationsCount();
   // R01-varie — Di chi è l'elenco: sta nella chiave, e la domanda parte quando lo si sa.
   const { userId, caricamento: utenteInLettura } = useUtente();
@@ -93,8 +95,9 @@ export default function NotificationsPage() {
   // pagina cancellando le notifiche già a video. Con questo restano, e l'errore sta accanto al tasto.
   // Un riferimento, non uno stato: tenerlo da parte non deve ridisegnare la pagina.
   // Vale solo per la sessione che l'ha letto (le righe dicono di chi sono): se la sessione finisce o
-  // cambia si butta, e una lettura caduta torna a dare la pagina d'errore.
-  const ultimoLetto = useRef<Notification[] | null>(null);
+  // cambia si butta, e una lettura caduta torna a dare la pagina d'errore. R01-varie — Porta anche
+  // l'utente della chiave con cui è stato letto, e si usa solo con quello.
+  const ultimoLetto = useRef<{ utente: string | null; righe: Notification[] } | null>(null);
 
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useQuery({
     queryKey: [...queryKeys.notifications.list, quante, userId],
@@ -109,7 +112,7 @@ export default function NotificationsPage() {
       // non è «non sei collegato»: si mostra l'errore con «Riprova», non la pagina di accesso.
       // All'accesso si va solo se la sessione manca davvero (nessun utente, o un errore di sessione).
       if (!user && errUtente && !sessioneMancante(errUtente)) throw errUtente;
-      if (!user || ultimoLetto.current?.some((n) => n.user_id !== user.id)) ultimoLetto.current = null;
+      if (!user || ultimoLetto.current?.righe.some((n) => n.user_id !== user.id)) ultimoLetto.current = null;
       // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
       // distinguerli su un testo libero e' come non distinguerli.
       if (!user) throw new Error(AUTH_RICHIESTA);
@@ -126,17 +129,25 @@ export default function NotificationsPage() {
 
   // Un elenco vuoto non ha niente da tenere, e non dice di chi è.
   useEffect(() => {
-    if (data && !isPlaceholderData) ultimoLetto.current = data.length > 0 ? data : null;
-  }, [data, isPlaceholderData]);
-  // Se la sessione finisce o cambia, l'elenco tenuto si butta subito, anche con la rete giù.
+    if (data && !isPlaceholderData) ultimoLetto.current = data.length > 0 ? { utente: userId, righe: data } : null;
+  }, [data, isPlaceholderData, userId]);
+  // R01-varie — Quando cambia la sessione a pagina aperta, QueryProvider svuota la memoria delle
+  // domande senza ridisegnare chi la guarda: la pagina restava ferma e la lettura nuova non partiva.
+  // Qui la pagina riparte dalle prime e si ridisegna, così le domande ripartono dalla memoria svuotata.
+  const sessioneVista = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const { data: ascolto } = supabase.auth.onAuthStateChange((evento, sessione) => {
-      const chi = sessione?.user?.id;
-      if (evento === 'SIGNED_OUT' || !chi || ultimoLetto.current?.some((n) => n.user_id !== chi)) ultimoLetto.current = null;
+      const chi = evento === 'SIGNED_OUT' ? null : (sessione?.user?.id ?? null);
+      // Se la sessione finisce o cambia, l'elenco tenuto si butta subito, anche con la rete giù.
+      if (!chi || ultimoLetto.current?.righe.some((n) => n.user_id !== chi)) ultimoLetto.current = null;
+      if (evento !== 'SIGNED_OUT' && chi === sessioneVista.current) return;
+      sessioneVista.current = chi;
+      setElenco({ quante: PER_VOLTA });
     });
     return () => ascolto?.subscription?.unsubscribe();
   }, []);
-  const ultimoElenco = ultimoLetto.current;
+  const tenuto = ultimoLetto.current;
+  const ultimoElenco = tenuto && tenuto.utente === userId ? tenuto.righe : null;
 
   // Segna tutte come lette — su azione esplicita dell'utente (bottone), NON
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
@@ -157,7 +168,8 @@ export default function NotificationsPage() {
     onSuccess: (chi) => {
       // R10-012 — Scritte lette davvero: lo diventa anche l'elenco tenuto, se la rilettura cade.
       if (chi && ultimoLetto.current) {
-        ultimoLetto.current = ultimoLetto.current.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
+        const { utente, righe } = ultimoLetto.current;
+        ultimoLetto.current = { utente, righe: righe.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)) };
       }
       // R01-002 — E lo diventano anche gli elenchi in memoria e il conto del campanello: se la
       // rilettura cade, react-query tiene i dati di prima, e la pagina mostrava ancora «Non letta» col
@@ -348,7 +360,7 @@ export default function NotificationsPage() {
         <div className="mt-4 flex justify-center">
           <button
             type="button"
-            onClick={() => setQuante((q) => q + PER_VOLTA)}
+            onClick={() => setElenco((prima) => ({ quante: prima.quante + PER_VOLTA }))}
             disabled={isFetching}
             aria-busy={caricaAltre}
             className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
