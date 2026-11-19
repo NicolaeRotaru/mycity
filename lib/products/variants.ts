@@ -21,7 +21,6 @@ export type ProductVariant = {
 /** Un asse di variazione: es. { name: "Taglia", values: ["S","M","L"] }. */
 export type VariantOptionType = { name: string; values: string[] };
 
-export const MAX_VARIANTS = 100;
 export const MAX_OPTION_TYPES = 3;
 export const MAX_OPTION_VALUES = 30;
 
@@ -85,7 +84,9 @@ export function buildCombinations(types: VariantOptionType[]): Record<string, st
     }
     combos = next;
   }
-  return combos.slice(0, MAX_VARIANTS);
+  // Nessun taglio sul totale (prima 100): le ultime combinazioni sparivano in silenzio e il cliente
+  // che le sceglieva non poteva comprarle. Il tetto resta per asse (tipi e valori), che si vede.
+  return combos;
 }
 
 /**
