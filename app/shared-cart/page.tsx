@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { formatPrice } from '@/lib/format';
-import caricatoreFotoRemote from '@/lib/image-loader';
+import { sizedImage } from '@/lib/image-url';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
@@ -273,12 +273,12 @@ function SharedCartInner() {
               <div className="w-16 h-16 rounded-lg bg-cream-100 flex-shrink-0 overflow-hidden">
                 {img ? (
                   <Image
-                    src={img}
+                    src={sizedImage(img, 'thumb')}
                     alt={p.name}
                     width={64}
                     height={64}
                     className="object-cover w-full h-full"
-                    loader={caricatoreFotoRemote}
+                    unoptimized
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
