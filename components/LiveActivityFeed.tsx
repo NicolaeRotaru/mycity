@@ -52,12 +52,12 @@ export function quandoNellaFascia(inizioOra: string, now: number): { testo: stri
  */
 const ScheletroAttivita = () => (
   <section className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm" aria-busy="true">
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5">
+    <div className="flex items-center justify-between gap-3 mb-4">
+      <h2 className="min-w-0 break-words font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5">
         <span className="inline-block w-2.5 h-2.5 rounded-full bg-olive-500 animate-pulse-soft" />
         Cosa sta succedendo a Piacenza
       </h2>
-      <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
+      <span className="shrink-0 text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
     </div>
     <ul className="space-y-1">
       {[0, 1, 2, 3, 4].map((i) => (
@@ -147,15 +147,15 @@ const LiveActivityFeed = () => {
 
   return (
     <section className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h2 className="min-w-0 break-words font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5">
           <span className="relative inline-flex">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-olive-500" />
             <span className={`absolute inset-0 inline-block w-2.5 h-2.5 rounded-full bg-olive-500 ${pulse ? 'animate-ping' : 'animate-pulse-soft'}`} />
           </span>
           Cosa sta succedendo a Piacenza
         </h2>
-        <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
+        <span className="shrink-0 text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
       </div>
       <ul className="space-y-1">
         {activities.map((a, i) => {
