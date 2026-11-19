@@ -1011,19 +1011,19 @@ export interface Database {
         Row: {
           id: number;
           profilo: string;
-          percorsi: string;
+          percorsi: string[];
           messo_at: string;
         };
         Insert: {
           id: number;
           profilo: string;
-          percorsi: string;
+          percorsi: string[];
           messo_at?: string;
         };
         Update: {
           id?: number;
           profilo?: string;
-          percorsi?: string;
+          percorsi?: string[];
           messo_at?: string;
         };
         Relationships: [];
@@ -1879,7 +1879,7 @@ export interface Database {
           unit: string | null;
           compare_at_price: number | null;
           condition: string | null;
-          tags: string;
+          tags: string[];
           express_enabled: boolean | null;
           has_variants: boolean;
           external_source_url: string | null;
@@ -1905,7 +1905,7 @@ export interface Database {
           unit?: string | null;
           compare_at_price?: number | null;
           condition?: string | null;
-          tags?: string;
+          tags?: string[];
           express_enabled?: boolean | null;
           has_variants?: boolean;
           external_source_url?: string | null;
@@ -1931,7 +1931,7 @@ export interface Database {
           unit?: string | null;
           compare_at_price?: number | null;
           condition?: string | null;
-          tags?: string;
+          tags?: string[];
           express_enabled?: boolean | null;
           has_variants?: boolean;
           external_source_url?: string | null;
@@ -2019,7 +2019,7 @@ export interface Database {
           store_customization: Json;
           rider_is_online: boolean;
           rider_schedule: Json | null;
-          rider_zones: string;
+          rider_zones: string[];
           notif_order_updates: boolean;
           notif_promos: boolean;
           notif_groups: boolean;
@@ -2108,7 +2108,7 @@ export interface Database {
           store_customization?: Json;
           rider_is_online?: boolean;
           rider_schedule?: Json | null;
-          rider_zones?: string;
+          rider_zones?: string[];
           notif_order_updates?: boolean;
           notif_promos?: boolean;
           notif_groups?: boolean;
@@ -2197,7 +2197,7 @@ export interface Database {
           store_customization?: Json;
           rider_is_online?: boolean;
           rider_schedule?: Json | null;
-          rider_zones?: string;
+          rider_zones?: string[];
           notif_order_updates?: boolean;
           notif_promos?: boolean;
           notif_groups?: boolean;
@@ -2395,7 +2395,7 @@ export interface Database {
           rating: number;
           comment: string | null;
           created_at: string | null;
-          photo_urls: string | null;
+          photo_urls: string[] | null;
           verified_purchase: boolean | null;
         };
         Insert: {
@@ -2405,7 +2405,7 @@ export interface Database {
           rating: number;
           comment?: string | null;
           created_at?: string | null;
-          photo_urls?: string | null;
+          photo_urls?: string[] | null;
           verified_purchase?: boolean | null;
         };
         Update: {
@@ -2415,7 +2415,7 @@ export interface Database {
           rating?: number;
           comment?: string | null;
           created_at?: string | null;
-          photo_urls?: string | null;
+          photo_urls?: string[] | null;
           verified_purchase?: boolean | null;
         };
         Relationships: [];
@@ -2539,7 +2539,7 @@ export interface Database {
           discount_percent: number;
           scope: string;
           category_id: string | null;
-          product_ids: string | null;
+          product_ids: string[] | null;
           starts_at: string;
           ends_at: string;
           status: string;
@@ -2552,7 +2552,7 @@ export interface Database {
           discount_percent: number;
           scope: string;
           category_id?: string | null;
-          product_ids?: string | null;
+          product_ids?: string[] | null;
           starts_at?: string;
           ends_at: string;
           status?: string;
@@ -2565,7 +2565,7 @@ export interface Database {
           discount_percent?: number;
           scope?: string;
           category_id?: string | null;
-          product_ids?: string | null;
+          product_ids?: string[] | null;
           starts_at?: string;
           ends_at?: string;
           status?: string;
@@ -2797,7 +2797,7 @@ export interface Database {
           created_at: string | null;
           seller_reply: string | null;
           seller_reply_at: string | null;
-          photo_urls: string;
+          photo_urls: string[];
           helpful_count: number;
         };
         Insert: {
@@ -2810,7 +2810,7 @@ export interface Database {
           created_at?: string | null;
           seller_reply?: string | null;
           seller_reply_at?: string | null;
-          photo_urls?: string;
+          photo_urls?: string[];
           helpful_count?: number;
         };
         Update: {
@@ -2823,7 +2823,7 @@ export interface Database {
           created_at?: string | null;
           seller_reply?: string | null;
           seller_reply_at?: string | null;
-          photo_urls?: string;
+          photo_urls?: string[];
           helpful_count?: number;
         };
         Relationships: [];
