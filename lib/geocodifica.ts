@@ -1,43 +1,5 @@
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { rateLimitAsync } from '@/lib/rate-limit';
-
-/**
- * 19/11/2026 (R04-009) — UN FRENO SOLO PER TUTTO IL SITO SU NOMINATIM.
- *
- * La regola d'uso di Nominatim è circa una chiamata al secondo, per tutta l'applicazione.
- * Qui c'era solo il freno per indirizzo IP della rotta /api/geocode: cento persone con cento
- * IP diversi, più gli ordini, superavano il secondo senza che nulla li fermasse. Il contatore
- * è quello del sito (`rateLimitAsync`: Upstash, condiviso fra le istanze; in memoria solo se
- * Upstash non c'è o non risponde), con una chiave globale. La rotta /api/geocode usa la
- * stessa chiave (stessi numeri) e `coordinateDiUnIndirizzo` la usa qui sotto.
- */
-const FRENO_NOMINATIM = { key: 'nominatim:globale', max: 1, windowMs: 1_000 } as const;
-
-/** Quanto, al massimo, il percorso d'ordine aspetta il freno prima di rinunciare alle coordinate. */
-const ATTESA_MASSIMA_ORDINE_MS = 300;
-
-/**
- * Il turno per il percorso d'ordine: non fa mai aspettare più di ATTESA_MASSIMA_ORDINE_MS.
- * Una sola ripresa dopo 150 ms; se il turno non arriva (o il contatore non risponde in tempo)
- * si torna al comportamento di sempre quando Nominatim non risponde: niente coordinate.
- */
-async function turnoPerOrdine(): Promise<boolean> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const scaduto = new Promise<false>((ok) => { timer = setTimeout(() => ok(false), ATTESA_MASSIMA_ORDINE_MS); });
-  const tentativi = (async () => {
-    for (let i = 0; i < 2; i++) {
-      if (i > 0) await new Promise((ok) => setTimeout(ok, 150));
-      if ((await rateLimitAsync(FRENO_NOMINATIM)).allowed) return true;
-    }
-    return false;
-  })().catch(() => false);
-  try {
-    return await Promise.race([tentativi, scaduto]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /**
  * Trovare le coordinate di un indirizzo, dal server.
@@ -67,10 +29,6 @@ export async function coordinateDiUnIndirizzo(indirizzo: {
   if (q.length < 3) return null;
 
   try {
-    if (!(await turnoPerOrdine())) {
-      logger.warn('[geocodifica] freno di Nominatim pieno: ordine senza coordinate');
-      return null;
-    }
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
     const res = await fetch(url, {
       headers: {

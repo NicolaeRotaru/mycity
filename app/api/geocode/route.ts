@@ -32,16 +32,6 @@ export async function POST(req: Request) {
   }
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
 
-  // R04-009 — un freno unico per tutto il sito (≈1 chiamata/s), oltre a quello per IP.
-  // Stessa chiave e stessi numeri di coordinateDiUnIndirizzo (lib/geocodifica.ts).
-  const turno = await rateLimitAsync({ key: 'nominatim:globale', max: 1, windowMs: 1_000 });
-  if (!turno.allowed) {
-    return NextResponse.json(
-      { lat: null, lng: null, error: 'rate_limited' },
-      { status: 429, headers: { 'Retry-After': String(turno.retryAfterSec) } },
-    );
-  }
-
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
     const appUrl = env.appUrl();
