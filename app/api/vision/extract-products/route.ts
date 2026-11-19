@@ -301,7 +301,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         attributes,
         tags,
         alt_text: typeof p.alt_text === 'string' ? p.alt_text.trim() : null,
-        policy_ok: p.policy_ok !== false,
+        // R03-003 — Come extract-product: ammesso solo con un sì scritto bene.
+        // Un «"false"» scritto come testo, o un campo mancante, non lo è.
+        policy_ok: p.policy_ok === true,
         policy_reason: typeof p.policy_reason === 'string' ? p.policy_reason.trim() : null,
       };
     })

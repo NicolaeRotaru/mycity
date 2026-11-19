@@ -3,6 +3,7 @@ import { AiCallError, mapAiError } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -58,6 +59,7 @@ type BulkBody = { changes?: Change[] };
 type Esito = { productId: string; ok: boolean; motivo?: string; nonApplicato?: string; rifiutati?: string[] };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   // Una chiamata porta fino a duecento modifiche: dieci all'ora sono duemila
   // modifiche, cioe' molto piu' di quante il copilot possa proporne in un'ora.
   const rl = await rateLimitAsync({ key: `ai-catalog-apply-bulk:${user.id}`, max: 10, windowMs: 60 * 60_000 });
