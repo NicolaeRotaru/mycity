@@ -413,8 +413,6 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   const copie = copieDaAmbiente;
   const tettoEur = opzioni.tettoEur ?? Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
   const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
-  // R03-006 — Nessun tetto = nessun allarme possibile: niente sonda, scritture ed errori ogni 5 minuti.
-  if (!(tettoEur > 0)) return [];
   const primo = await sondaContoCondiviso(opzioni.quando);
   try {
     const admin = getAdminSupabase();
