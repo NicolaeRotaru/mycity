@@ -1,6 +1,6 @@
 {
   "sessione": "R08",
-  "aggiornato": "2026-11-19 11:35",
+  "aggiornato": "2026-11-19 11:40",
   "finita": true,
   "testa": "a431ee637d8472097fc63cc377c4b4c738a5597b",
   "verifica": {
@@ -86,7 +86,7 @@
         "tests/unit/riparazione-r08-completa-con-prezzo-lungo.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r08-completa-con-prezzo-lungo.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -306,7 +306,8 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 6,
-    "nota": "2 lotti, 2 revisori, 1 giro di correzione, 1 revisore del giro: tutti subagenti generici, modello piccolo. Tetto (6) raggiunto."
+    "nota": "2 lotti, 2 revisori, 1 giro di correzione, 1 revisore del giro: tutti subagenti generici, modello piccolo. Tetto (6) raggiunto.",
+    "subagenti": 6
   },
   "prove_condivise": [
     {
@@ -358,5 +359,6 @@
       ],
       "perche": "la prova importa lib/email/templates e leggeva la fascia senza data; ora la data segue la fascia, e serve l'orologio finto perché la data dipende dal giorno"
     }
-  ]
+  ],
+  "costo_usd": 10.37
 }
