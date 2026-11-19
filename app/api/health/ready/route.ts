@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { segretiCombaciano, gettoneBearer } from '@/lib/api/segreti';
+import { controllaTrasformazioneFoto } from '@/lib/image-url';
 import {
   esitoBattiti,
   battitiNonLetti,
@@ -127,6 +128,57 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  /**
+   * R02-003 — LE FOTO DEL SITO ARRIVANO ANCORA? (stessa domanda del Check 4 di /api/health)
+   *
+   * Se l'abbonamento Supabase scade, la trasformazione delle foto risponde 403 e la vetrina resta
+   * senza foto con tutto il resto verde. Questa è la rotta che guarda il monitor esterno: se le
+   * foto non arrivano risponde come per il database non pronto (503), col motivo nel corpo.
+   *
+   * SOLO UN «NO» NETTO TOGLIE LA PRONTEZZA. `controllaTrasformazioneFoto` dice `degradato` anche per
+   * un timeout o un errore di rete, che non sono una risposta del fornitore: lì il controllo non sa
+   * niente, e un controllo che non sa non deve far suonare il monitor. Per questo si guarda la
+   * risposta vera: contano solo i codici 4xx (il 403 del piano scaduto), esclusi 408 e 429. Senza
+   * una foto dello Storage da chiedere, o se la lettura dei prodotti non va, il controllo si salta.
+   */
+  let fotoNo: string | undefined;
+  if (dbOk && admin) {
+    try {
+      const lettura = admin
+        .from('products')
+        .select('images')
+        .eq('status', 'available')
+        .not('images', 'is', null)
+        .limit(20);
+      const righe = await Promise.race([
+        Promise.resolve(lettura).then(({ data }: { data: unknown }) => data),
+        new Promise<null>((r) => setTimeout(() => r(null), TETTO_MS)),
+      ]);
+      const urlFoto = ((righe ?? []) as { images?: unknown }[])
+        .flatMap((p) => (Array.isArray(p.images) ? p.images : []))
+        .find((u): u is string => typeof u === 'string' && u.includes('/storage/v1/object/public/'));
+      let codiceRisposta: number | null = null;
+      const foto = await controllaTrasformazioneFoto({
+        fetch: async (indirizzo, init) => {
+          const risposta = await fetch(indirizzo, init);
+          codiceRisposta = risposta.status;
+          return risposta;
+        },
+        timeoutMs: 2000,
+        urlFoto,
+      });
+      if (foto === 'degradato' && codiceRisposta !== null) {
+        const codice: number = codiceRisposta;
+        if (codice >= 400 && codice < 500 && codice !== 408 && codice !== 429) {
+          fotoNo = `la trasformazione delle foto di Supabase risponde ${codice}: le foto del sito non arrivano`;
+        }
+      }
+    } catch {
+      // Una lettura che non va non dice niente sulle foto: il controllo si salta e la rotta resta pronta.
+    }
+  }
+  const pronto = dbOk && !fotoNo;
+
   // I battiti si misurano con lo STESSO metro del gemello — stesse soglie,
   // stesso verdetto, stessa funzione — perché due porte dello stesso sito che
   // rispondono in modo diverso alla stessa domanda non si possono usare per
@@ -172,13 +224,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json(
     {
-      status: dbOk ? 'ready' : 'not_ready',
+      status: pronto ? 'ready' : 'not_ready',
+      ...(fotoNo ? { foto: { ok: false, error: fotoNo } } : {}),
       // L'avviso che non fa cadere la prontezza: 200 sopra, il motivo qui.
       ...(cron.ok ? {} : { degraded: true }),
       cron: autorizzato && dettaglioBattiti ? { ...cron, dettaglio: dettaglioBattiti } : cron,
       ...(autorizzato ? { db: { ok: dbOk, latencyMs: Date.now() - t0, error: dettaglio } } : {}),
       timestamp: new Date().toISOString(),
     },
-    { status: dbOk ? 200 : 503, headers: { 'cache-control': 'no-store' } },
+    { status: pronto ? 200 : 503, headers: { 'cache-control': 'no-store' } },
   );
 }
