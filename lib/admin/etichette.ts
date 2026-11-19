@@ -45,6 +45,8 @@ const STATO_BONIFICO: Record<string, string> = {
   REVERSAL_FAILED: 'ripresa fallita: da recuperare a mano',
   AWAITING_REMITTANCE: 'in attesa dei contanti dal fattorino',
   CASH_IN_STORE: 'incassato in negozio',
+  // R09-013 — migrazione 350 (`segna_bonifico_manuale`): il bonifico del lunedì fatto a mano.
+  PAID_MANUALLY: 'pagato a mano',
 };
 // Il reclamo interno (internal_dispute_status) e il chargeback bancario (dispute_status).
 const STATO_CONTESTAZIONE: Record<string, string> = {
