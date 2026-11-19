@@ -1,0 +1,207 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-19 09:45",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R04-001",
+      "chiave": "api-backend|quando l'amministrazione cambia solo le taglie di un prodotto, il registro delle azioni non scrive più niente",
+      "esito": "riparato",
+      "commit": "885efa0c21e541b5318f8f957dcdc30f64160224",
+      "file_toccati": [
+        "app/api/admin/products/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-001-taglie-traccia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-001-taglie-traccia.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 885efa0c21e541b5318f8f957dcdc30f64160224^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r04-001-taglie-traccia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando arrivano le varianti la voce di traccia si scrive sempre, con il campo variants (da solo o insieme agli altri campi cambiati)."
+    },
+    {
+      "id": "R04-002",
+      "chiave": "api-backend|un patch dell'amministrazione su un prodotto che non esiste risponde 200 e lascia una traccia con «prima» vuoto",
+      "esito": "riparato",
+      "commit": "fd6db8a9d5618950aca9b241e821d9a4c0c25d62",
+      "file_toccati": [
+        "app/api/admin/products/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-002-prodotto-inesistente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-002-prodotto-inesistente.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd6db8a9d5618950aca9b241e821d9a4c0c25d62^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r04-002-prodotto-inesistente.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La lettura di com'era il prodotto ora viene prima di tutto (anche con solo le taglie): se non esiste risponde 404 e non salva varianti né scrive la traccia."
+    },
+    {
+      "id": "R04-003",
+      "chiave": "api-backend|nelle azioni dell'amministrazione un guasto del database diventa «non trovato», e nei dati del negozio un trattino",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: permessi e dati personali (moderazione e cancellazione utenti)"
+    },
+    {
+      "id": "R04-004",
+      "chiave": "api-backend|se la lettura dei ruoli cade, all'assistenza arriva l'email «un cliente ti ha scritto» pensata per un negozio",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: permessi (lettura dei ruoli) e dati personali"
+    },
+    {
+      "id": "R04-005",
+      "chiave": "api-backend|il conteggio dei promemoria «inviati» include carrelli segnati senza nessuna email",
+      "esito": "riparato",
+      "commit": "cd07e425a37bcf7a35a53ae6f2cab9fbd99511c6",
+      "file_toccati": [
+        "app/api/cron/abandoned-carts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cd07e425a37bcf7a35a53ae6f2cab9fbd99511c6^ --file app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il ramo senza consenso era già a posto sulla base (R30-003: il segno diventa l'ultima attività). Restava il carrello rivendicato il cui invio fallisce: teneva il segno «avvisato» e il conto lo contava come inviato. Ora su invio fallito il segno torna all'ultima attività (update condizionato a last_activity), che chiusoSenzaEmail riconosce; nessun nuovo invio."
+    },
+    {
+      "id": "R04-006",
+      "chiave": "api-backend|il giro notturno delle cancellazioni non ha un tetto di tempo nemmeno sul ciclo degli account scaduti",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (cancellazioni)"
+    },
+    {
+      "id": "R04-007",
+      "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (cancellazioni)"
+    },
+    {
+      "id": "R04-008",
+      "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (cancellazioni)"
+    },
+    {
+      "id": "R04-009",
+      "chiave": "api-backend|la ricerca degli indirizzi chiama il servizio pubblico delle mappe più volte al secondo, senza un freno per tutto il sito"
+    },
+    {
+      "id": "R04-010",
+      "chiave": "api-backend|dopo il tetto dei contanti o il rollback di un ordine in contanti il benvenuto resta bloccato fino a 2 ore",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (contanti)"
+    },
+    {
+      "id": "R04-011",
+      "chiave": "api-backend|ogni tappa del reso cancella la nota del negozio, anche quando la tappa la fa il cliente",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi (resi)"
+    },
+    {
+      "id": "R04-012",
+      "chiave": "api-backend|se il database non risponde, chi decide un reso legge «ordine non trovato» o «non autorizzato»",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: soldi e permessi (resi)"
+    },
+    {
+      "id": "R04-013",
+      "chiave": "api-backend|comunicare l esito di una segnalazione: se il processo muore tra «prendo il canale» e l invio, quel canale resta preso e non riparte piu",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base f93d246a il meccanismo della voce non esiste: app/api/segnalazioni/esito/comunica.ts (comunicaEsito, righe 88-168) legge la segnalazione e spedisce senza nessun passo «prendo il canale» (nessun update o rpc di rivendicazione), e la migrazione 385_l_esito_della_segnalazione_si_comunica_una_volta_per_canale.sql non c'è in migrations/ (ls migrations | grep -E '^385|esito|segnalaz' vuoto). Un canale non può restare preso. Se quel meccanismo arriva da un altro ramo, la voce va rivalutata allora."
+    },
+    {
+      "id": "R04-014",
+      "chiave": "api-backend|se la domanda per diventare negozio parte due volte insieme, viene registrata due volte e gli amministratori ricevono l'avviso due volte",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: permessi (diventare negozio)"
+    },
+    {
+      "id": "R04-015",
+      "chiave": "api-backend|due invii uguali all'assistenza nello stesso istante creano due messaggi e due avvisi"
+    },
+    {
+      "id": "R04-016",
+      "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (errori mandati al registratore)"
+    },
+    {
+      "id": "R04-017",
+      "chiave": "api-backend|il modulo dell'assistenza non manda nessuna chiave per invio"
+    },
+    {
+      "id": "R04-018",
+      "chiave": "api-backend|la cancellazione legge un 404 qualsiasi come «account già chiuso»: un 404 di un gateway sbagliato verrebbe scambiato per un account già cancellato",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (cancellazione account)"
+    },
+    {
+      "id": "R04-019",
+      "chiave": "api-backend|se il servizio di posta conserva anche le risposte d'errore, una promozione mai partita risulta spedita",
+      "esito": "parziale",
+      "commit": "bf341cdea232996cd91c20dc836762363ce3ff1c",
+      "file_toccati": [
+        "lib/email/client.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-019-posta-senza-id.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-019-posta-senza-id.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf341cdea232996cd91c20dc836762363ce3ff1c^ --file lib/email/client.ts --prove tests/unit/riparazione-r04-019-posta-senza-id.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Una risposta senza errore ma senza id di invio (anche una risposta d'errore conservata e riproposta con stato 200) ora è ok:false e non conta come spedita.",
+      "cosa_resta": "Il ramo 409 invalid_idempotent_request (lib/email/client.ts, circa riga 201) resta ok:true con id vuoto: la prova esistente riparazione-r22-coda-email-timeout.test.ts lo richiede (stessa chiave, corpo diverso = già accettata). Se il servizio ha conservato una risposta d'errore sotto quella chiave, il 409 non si distingue da un invio riuscito. Chiuderlo chiede una scelta di Nicola (ritentare con chiave nuova o accettare il rischio di doppio invio) e un cambio della prova r22, che non è di R04."
+    },
+    {
+      "id": "R04-020",
+      "chiave": "api-backend|oltre 20.000 iscritti la ricerca utenti risulta sempre caduta e l'esportazione dell'elenco intero non esce, con un «riprova fra poco» che non serve",
+      "esito": "non_fatto",
+      "nota": "fuori dal giro del 19/11: dati personali (ricerca ed esportazione utenti)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Se un promemoria del carrello viene saltato, il rilascio del segno può cancellare anche il segno di un carrello cambiato nel frattempo",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/abandoned-carts/route.ts:212-222",
+      "descrizione": "Nel ramo «skipped» il rilascio del segno aggiorna solo per user_id, senza condizione su last_activity: se nel frattempo il cliente ha cambiato il carrello, il segno del carrello nuovo si perde. Visto dal subagente del lotto 1, fuori dalla voce R04-005."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": ""
+  }
+}
