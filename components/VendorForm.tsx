@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,6 +20,7 @@ import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
 import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
+import { useAvvisoUscita } from './seller/useAvvisoUscita';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
 import SocialLinksFields from './seller/SocialLinksFields';
@@ -82,9 +83,13 @@ interface Props {
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
   mode?: VendorFormMode;
+  /** Vero dopo che il salvataggio è riuscito: da lì in poi non ci sono più modifiche da perdere. */
+  saved?: boolean;
+  /** Dice a chi sta intorno al modulo se ci sono modifiche non salvate (es. per «Tutte le impostazioni»). */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', saved = false, onDirtyChange }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
@@ -140,6 +145,27 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [apriSocial, setApriSocial] = useState(0);
 
   const storeName = watch('storeName');
+  const storePhone = watch('storePhone');
+
+  // R09-010 — modifiche non salvate: la firma di quello che si vede nel modulo, confrontata con
+  // quella di quando è stato aperto (o dell'ultimo salvataggio riuscito).
+  const firmaCon = (c: StoreCustomization) => JSON.stringify([
+    storeName, storePhone, location.address.trim(),
+    Math.round(location.lat * 1e5), Math.round(location.lng * 1e5),
+    logoUrl, media, description, hours, c,
+  ]);
+  const firma = firmaCon(custom);
+  const [firmaBase, setFirmaBase] = useState<string>(firma);
+  const firmaInviata = useRef<string | null>(null);
+  const dirty = firma !== firmaBase;
+  useEffect(() => {
+    if (saved && firmaInviata.current !== null) {
+      setFirmaBase(firmaInviata.current);
+      firmaInviata.current = null;
+    }
+  }, [saved]);
+  useAvvisoUscita(dirty);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
@@ -235,6 +261,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     }
     setCustomError(null);
     setErroriSocial({});
+    // Quello che parte è quello che, a salvataggio riuscito, non si perde più.
+    firmaInviata.current = firmaCon(customData);
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),

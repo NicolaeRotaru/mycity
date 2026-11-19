@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,6 +11,7 @@ import { normalizeCustomization } from '@/lib/store-customization';
 import type { StoreHours } from '@/lib/store-hours';
 import type { StoreMediaItem } from '@/components/StoreMediaCarousel';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
+import { MESSAGGIO_USCITA } from '@/components/seller/useAvvisoUscita';
 
 /**
  * Schermata "Dettagli negozio" del site builder: logo, nome, copertina, descrizione,
@@ -57,11 +59,18 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // R09-010 — «Tutte le impostazioni» smonta il modulo: con modifiche non salvate chiede prima.
+  const [dirty, setDirty] = useState(false);
+  const tornaIndietro = () => {
+    if (dirty && !window.confirm(MESSAGGIO_USCITA)) return;
+    onBack();
+  };
+
   return (
     <div className="space-y-4">
       <button
         type="button"
-        onClick={onBack}
+        onClick={tornaIndietro}
         className="inline-flex items-center gap-1.5 -ml-1 text-sm font-semibold text-ink-600 hover:text-ink-900"
       >
         <ArrowLeft size={16} aria-hidden /> Tutte le impostazioni
@@ -91,6 +100,8 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
           }}
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}
+          saved={update.isSuccess}
+          onDirtyChange={setDirty}
         />
       </div>
     </div>
