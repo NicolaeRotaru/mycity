@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, Inbox, Package, Tag, Gift, Sparkles, MessageCircle, CheckCheck,
   type LucideIcon,
@@ -16,6 +16,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
+import { useUtente } from '@/components/hooks/useUtente';
 
 type Notification = {
   id: string;
@@ -82,28 +83,36 @@ export default function NotificationsPage() {
   // 50 righe lette, nessun pulsante, nessun modo di arrivare alle più vecchie, e un numero fisso
   // sul campanello. Ora il pulsante guarda il conteggio vero (lo stesso del campanello) e le più
   // vecchie si raggiungono con «Carica altre».
-  const [quante, setQuante] = useState(PER_VOLTA);
+  // R01-varie — Dentro un oggetto: quando cambia la sessione si riparte dalle prime con un oggetto
+  // nuovo, e la pagina si ridisegna anche se erano già le prime.
+  const [{ quante }, setElenco] = useState({ quante: PER_VOLTA });
   const nonLetteDelCampanello = useNotificationsCount();
+  // R01-varie — Di chi è l'elenco: sta nella chiave, e la domanda parte quando lo si sa.
+  const { userId, caricamento: utenteInLettura } = useUtente();
 
   // R10-012 — L'ultimo elenco letto davvero. Il segnaposto di «Carica altre» vale solo mentre la
   // lettura è in corso: se cade, la domanda nuova non ha dati suoi, e l'errore prendeva tutta la
   // pagina cancellando le notifiche già a video. Con questo restano, e l'errore sta accanto al tasto.
   // Un riferimento, non uno stato: tenerlo da parte non deve ridisegnare la pagina.
   // Vale solo per la sessione che l'ha letto (le righe dicono di chi sono): se la sessione finisce o
-  // cambia si butta, e una lettura caduta torna a dare la pagina d'errore.
-  const ultimoLetto = useRef<Notification[] | null>(null);
+  // cambia si butta, e una lettura caduta torna a dare la pagina d'errore. R01-varie — Porta anche
+  // l'utente della chiave con cui è stato letto, e si usa solo con quello.
+  const ultimoLetto = useRef<{ utente: string | null; righe: Notification[] } | null>(null);
 
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useQuery({
-    queryKey: [...queryKeys.notifications.list, quante],
-    // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa.
-    placeholderData: keepPreviousData,
+    queryKey: [...queryKeys.notifications.list, quante, userId],
+    enabled: !utenteInLettura,
+    // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa. Se cambia chi
+    // guarda, l'elenco si rilegge da capo.
+    placeholderData: (prima, domandaPrima) =>
+      userId !== null && domandaPrima?.queryKey.at(-1) === userId ? prima : undefined,
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user }, error: errUtente } = await supabase.auth.getUser();
       // 5/11/2026 — Con la rete caduta getUser non lancia: risponde user null CON un errore. Quello
       // non è «non sei collegato»: si mostra l'errore con «Riprova», non la pagina di accesso.
       // All'accesso si va solo se la sessione manca davvero (nessun utente, o un errore di sessione).
       if (!user && errUtente && !sessioneMancante(errUtente)) throw errUtente;
-      if (!user || ultimoLetto.current?.some((n) => n.user_id !== user.id)) ultimoLetto.current = null;
+      if (!user || ultimoLetto.current?.righe.some((n) => n.user_id !== user.id)) ultimoLetto.current = null;
       // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
       // distinguerli su un testo libero e' come non distinguerli.
       if (!user) throw new Error(AUTH_RICHIESTA);
@@ -120,17 +129,25 @@ export default function NotificationsPage() {
 
   // Un elenco vuoto non ha niente da tenere, e non dice di chi è.
   useEffect(() => {
-    if (data && !isPlaceholderData) ultimoLetto.current = data.length > 0 ? data : null;
-  }, [data, isPlaceholderData]);
-  // Se la sessione finisce o cambia, l'elenco tenuto si butta subito, anche con la rete giù.
+    if (data && !isPlaceholderData) ultimoLetto.current = data.length > 0 ? { utente: userId, righe: data } : null;
+  }, [data, isPlaceholderData, userId]);
+  // R01-varie — Quando cambia la sessione a pagina aperta, QueryProvider svuota la memoria delle
+  // domande senza ridisegnare chi la guarda: la pagina restava ferma e la lettura nuova non partiva.
+  // Qui la pagina riparte dalle prime e si ridisegna, così le domande ripartono dalla memoria svuotata.
+  const sessioneVista = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const { data: ascolto } = supabase.auth.onAuthStateChange((evento, sessione) => {
-      const chi = sessione?.user?.id;
-      if (evento === 'SIGNED_OUT' || !chi || ultimoLetto.current?.some((n) => n.user_id !== chi)) ultimoLetto.current = null;
+      const chi = evento === 'SIGNED_OUT' ? null : (sessione?.user?.id ?? null);
+      // Se la sessione finisce o cambia, l'elenco tenuto si butta subito, anche con la rete giù.
+      if (!chi || ultimoLetto.current?.righe.some((n) => n.user_id !== chi)) ultimoLetto.current = null;
+      if (evento !== 'SIGNED_OUT' && chi === sessioneVista.current) return;
+      sessioneVista.current = chi;
+      setElenco({ quante: PER_VOLTA });
     });
     return () => ascolto?.subscription?.unsubscribe();
   }, []);
-  const ultimoElenco = ultimoLetto.current;
+  const tenuto = ultimoLetto.current;
+  const ultimoElenco = tenuto && tenuto.utente === userId ? tenuto.righe : null;
 
   // Segna tutte come lette — su azione esplicita dell'utente (bottone), NON
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
@@ -151,7 +168,20 @@ export default function NotificationsPage() {
     onSuccess: (chi) => {
       // R10-012 — Scritte lette davvero: lo diventa anche l'elenco tenuto, se la rilettura cade.
       if (chi && ultimoLetto.current) {
-        ultimoLetto.current = ultimoLetto.current.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
+        const { utente, righe } = ultimoLetto.current;
+        ultimoLetto.current = { utente, righe: righe.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)) };
+      }
+      // R01-002 — E lo diventano anche gli elenchi in memoria e il conto del campanello: se la
+      // rilettura cade, react-query tiene i dati di prima, e la pagina mostrava ancora «Non letta» col
+      // pulsante «Segna tutte come lette» al suo posto. Le chiavi sono quelle a video (con l'utente
+      // della pagina, lo stesso del campanello), anche se la sua prima lettura non l'aveva trovato.
+      if (chi) {
+        const lette = (righe: Notification[] | undefined) =>
+          righe?.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n));
+        for (let q = PER_VOLTA; q <= quante; q += PER_VOLTA) {
+          qc.setQueryData<Notification[]>([...queryKeys.notifications.list, q, userId], lette);
+        }
+        qc.setQueryData([...queryKeys.notifications.count, userId], 0);
       }
       qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
       qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
@@ -186,18 +216,32 @@ export default function NotificationsPage() {
     if (serveAccesso) router.push('/sign-in');
   }, [serveAccesso, router]);
 
-  if (isLoading && !ultimoElenco) {
+  if ((isLoading || utenteInLettura) && !ultimoElenco) {
     return <LoadingState />;
   }
+
+  // R01-001 — Il titolo della pagina, anche nello stato d'errore: l'h2 dell'errore viene dopo l'h1.
+  const intestazione = (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-label text-primary-700">Attività</p>
+      <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+        Notifiche
+      </h1>
+      <p className="mt-1 text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
+    </div>
+  );
 
   // La pagina intera di errore solo se non c'è niente di già letto da mostrare.
   if (error && !serveAccesso && !data && !ultimoElenco) {
     return (
-      <ErrorState
-        title="Non riusciamo a caricare le notifiche"
-        description="Abbiamo provato a leggerle e non ci siamo riusciti. Riprova fra un attimo."
-        onRetry={() => refetch()}
-      />
+      <div className="max-w-3xl">
+        <div className="mb-6">{intestazione}</div>
+        <ErrorState
+          title="Non riusciamo a caricare le notifiche"
+          description="Abbiamo provato a leggerle e non ci siamo riusciti. Riprova fra un attimo."
+          onRetry={() => refetch()}
+        />
+      </div>
     );
   }
 
@@ -218,13 +262,7 @@ export default function NotificationsPage() {
   return (
     <div className="max-w-3xl">
       <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-label text-primary-700">Attività</p>
-          <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
-            Notifiche
-          </h1>
-          <p className="mt-1 text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
-        </div>
+        {intestazione}
         {hasUnread && (
           <button
             type="button"
@@ -241,7 +279,10 @@ export default function NotificationsPage() {
       {notifications.length === 0 ? (
         <div className="rounded-xl border border-cream-300 bg-white p-12 text-center">
           <Inbox size={48} className="mx-auto mb-3 text-ink-500" aria-hidden />
-          <p className="mb-1 font-semibold text-ink-600">Nessuna notifica</p>
+          {/* R01-001 — Anche vuota, dopo l'h1 viene un h2 (se no il titolo seguente è l'h3 del piede).
+              Stesso aspetto del paragrafo di prima: le regole di elemento di h2 (serif, 20px, spaziatura
+              stretta) sono rimesse a posto dalle classi. */}
+          <h2 className="mb-1 font-sans text-base font-semibold tracking-normal text-ink-600">Nessuna notifica</h2>
           <p className="text-sm text-ink-400">Quando ci saranno aggiornamenti, li vedrai qui.</p>
         </div>
       ) : (
@@ -319,7 +360,7 @@ export default function NotificationsPage() {
         <div className="mt-4 flex justify-center">
           <button
             type="button"
-            onClick={() => setQuante((q) => q + PER_VOLTA)}
+            onClick={() => setElenco((prima) => ({ quante: prima.quante + PER_VOLTA }))}
             disabled={isFetching}
             aria-busy={caricaAltre}
             className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
