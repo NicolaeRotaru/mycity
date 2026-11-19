@@ -234,6 +234,17 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       }
     } else {
       errors++;
+      // R04-005 — L'invio è fallito dopo la rivendicazione: il segno «avvisato» c'è ma l'email non è
+      // partita. Non si riprova (potrebbe essere già uscita), ma il segno diventa quello dei
+      // carrelli chiusi senza email (l'ultima attività), così il conto «inviati» non lo prende.
+      if (typeof c.last_activity === 'string' && c.last_activity) {
+        const { error: errSegno } = await supa
+          .from('abandoned_carts')
+          .update({ recovery_email_sent_at: c.last_activity })
+          .eq('user_id', c.user_id)
+          .eq('last_activity', c.last_activity);
+        if (errSegno) logger.error('[abandoned-carts] invio fallito e segno non corretto', { user: c.user_id, message: errSegno.message });
+      }
     }
   }
 
