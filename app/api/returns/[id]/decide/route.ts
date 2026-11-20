@@ -55,9 +55,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .single();
 
   // 20/11/2026 (R04-009) — Un database che non risponde non è un reso che non c'è: «riprova», non 404.
-  // PGRST116 («nessuna riga») resta la sola risposta che vuol dire davvero «non c'è».
-  if (error && (error as { code?: string }).code !== 'PGRST116') {
-    logger.error('[returns/decide] reso non letto', { returnId: params.id, code: (error as { code?: string }).code });
+  // «Non c'è» davvero: PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessun reso può averlo).
+  const codiceReso = (error as { code?: string } | null)?.code;
+  if (error && codiceReso !== 'PGRST116' && codiceReso !== '22P02') {
+    logger.error('[returns/decide] reso non letto', { returnId: params.id, code: codiceReso });
     return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
   }
   if (!ret) return ApiErrors.notFound('Reso non trovato');
