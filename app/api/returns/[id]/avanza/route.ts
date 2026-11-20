@@ -108,8 +108,13 @@ const PARTENZE_AMMESSE: Record<string, string[]> = {
  */
 const PARTENZE_DEL_RITIRO = ['REQUESTED', 'APPROVED'];
 
-async function eIlClienteDellOrdine(orderId: string, utenteId: string): Promise<{ sellerId: string | null } | null> {
-  const { data } = await getAdminSupabase().from('orders').select('user_id, seller_id').eq('id', orderId).single();
+async function eIlClienteDellOrdine(
+  orderId: string,
+  utenteId: string,
+): Promise<{ sellerId: string | null } | 'guasto' | null> {
+  const { data, error } = await getAdminSupabase().from('orders').select('user_id, seller_id').eq('id', orderId).single();
+  // 20/11/2026 (R04-009) — Una lettura caduta non è «non sei il cliente»: chi chiama la dice «riprova».
+  if (error && (error as { code?: string }).code !== 'PGRST116') return 'guasto';
   const ordine = data as { user_id?: string | null; seller_id?: string | null } | null;
   return ordine?.user_id && ordine.user_id === utenteId ? { sellerId: ordine.seller_id ?? null } : null;
 }
@@ -169,7 +174,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .eq('id', params.id)
     .single();
 
-  if (error || !ret) return ApiErrors.notFound('Reso non trovato');
+  // 20/11/2026 (R04-009) — Un database che non risponde non è un reso che non c'è: «riprova», non 404.
+  // «Non c'è» davvero: PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessun reso può averlo).
+  const codiceReso = (error as { code?: string } | null)?.code;
+  if (error && codiceReso !== 'PGRST116' && codiceReso !== '22P02') {
+    logger.error('[returns/avanza] reso non letto', { returnId: params.id, code: codiceReso });
+    return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
+  }
+  if (!ret) return ApiErrors.notFound('Reso non trovato');
 
   /**
    * 3/9/2026 — IL NEGOZIO LO DICE L'ORDINE, NON IL RESO.
@@ -185,7 +197,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (!comando.autorizzato) {
     if (comando.motivo === 'guasto') return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
     if (comando.motivo === 'ordine-mancante') return ApiErrors.notFound('Ordine del reso non trovato');
-    if (body.stato === 'CANCELED') ritiro = await eIlClienteDellOrdine(ret.order_id, user.id);
+    if (body.stato === 'CANCELED') {
+      const cliente = await eIlClienteDellOrdine(ret.order_id, user.id);
+      if (cliente === 'guasto') return ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.");
+      ritiro = cliente;
+    }
     if (!ritiro) return ApiErrors.forbidden();
     if (!PARTENZE_DEL_RITIRO.includes(ret.status)) {
       return ApiErrors.conflict(
@@ -241,7 +257,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     );
     ordine = (data ?? null) as OrdineDaRimborsare | null;
     if (!ordine) {
-      return body.stato === 'CANCELED' && errOrdine
+      // R04-009 — Lettura caduta: «riprova» anche per il rimborso, non solo per il ritiro.
+      return errOrdine && (body.stato === 'CANCELED' || (errOrdine as { code?: string }).code !== 'PGRST116')
         ? ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.")
         : ApiErrors.notFound('Ordine del reso non trovato');
     }
@@ -346,7 +363,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         .from('returns')
         .update({
           status: body.stato,
-          decision_notes: body.note ?? null,
+          // 20/11/2026 (R04-008) — La nota del negozio la scrive solo il negozio (o chi amministra), e solo
+          // quando ne porta una: il ritiro del cliente, o una tappa senza nota, la lasciava vuota.
+          ...(comando.autorizzato && body.note !== undefined ? { decision_notes: body.note } : {}),
           ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
         })
         .eq('id', params.id)

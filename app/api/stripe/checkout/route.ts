@@ -32,6 +32,7 @@ import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/r
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -598,7 +599,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * lascerebbe il buono bruciato senza che nessuno abbia comprato niente.
    *
    * Coordinate mancanti = non si blocca: passa come prima.
+   *
+   * 20/11/2026 (R04-011) — ...ma non più in silenzio, come i contanti (R31-018,
+   * app/api/orders/cod/route.ts): chi non si può misurare si annota qui e, a
+   * pagamento aperto, gli amministratori ricevono la campanella per guardare la
+   * distanza a mano.
    */
+  const nonMisurati = new Map<string, string>();
   if (!body.pickupInStore) {
     for (const s of sellers ?? []) {
       const fuori = fuoriZonaDiConsegna({
@@ -611,6 +618,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         logger.info('[stripe] consegna fuori zona: pagamento non aperto', { sellerId: s.id });
         return ApiErrors.invalidRequest(motivoFuoriZona(s.store_name));
       }
+      if (!s.store_lat || !s.store_lng) nonMisurati.set(s.id, 'il negozio non ha la posizione sulla mappa');
+      else if (!coordPerLaMappa?.lat || !coordPerLaMappa?.lng) nonMisurati.set(s.id, 'l’indirizzo non si trova sulla mappa');
     }
   }
 
@@ -1022,6 +1031,25 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       () => collegaConsensiAnonimi(admin, user.id, identificativiAnonimi(req.headers.get('cookie'))),
       'consensi anonimi da collegare alla persona',
     );
+
+    // R04-011 — Il segno del pagamento aperto senza la misura del confine (vedi il controllo della
+    // zona): la stessa campanella dei contanti (R31-018). L'ordine nasce dal webhook a pagamento
+    // fatto, quindi il segno porta il carrello, non ancora il numero dell'ordine.
+    if (nonMisurati.size > 0) {
+      dopoLaRisposta(async () => {
+        for (const [sellerId, perche] of nonMisurati) {
+          try {
+            await notifyAdmins(
+              'Pagamento con carta con la distanza non misurata',
+              `Il pagamento con carta ${pending.id.slice(0, 8)} (${sellerNameMap.get(sellerId) ?? 'Negozio'}) è stato aperto senza il controllo della distanza dal negozio: ${perche}. Se viene pagato, guarda a mano se l'indirizzo è dentro il confine.`,
+              '/admin/orders',
+            );
+          } catch (e) {
+            logger.error('[stripe] allarme agli amministratori non partito', { sellerId, message: e instanceof Error ? e.message : String(e) });
+          }
+        }
+      }, 'campanella della distanza non misurata');
+    }
 
     // 22/8/2026 — al contratto del progetto, `{ ok: true, data: { … } }`. Qui
     // rispondeva un oggetto nudo, come la rotta dei contanti prima di ieri.

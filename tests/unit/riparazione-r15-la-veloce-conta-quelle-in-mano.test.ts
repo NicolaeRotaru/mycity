@@ -10,6 +10,7 @@ import { veloceSiPuo } from '@/lib/ordini/consegna-veloce';
  *
  * Quante veloci può portare un fattorino non è deciso (scelta di Nicola): qui il numero si passa a
  * mano, e l'ultima prova dice che senza quel numero la veloce si decide come prima.
+ * 20/11/2026 (R04-021) — Deciso il 19/11: una per fattorino. L'ultima prova ora dice quello.
  */
 
 const MEZZOGIORNO = new Date(2026, 10, 13, 12, 0);
@@ -62,8 +63,12 @@ describe('R15-015 — la veloce conta quelle che i fattorini hanno già in mano'
     if (!esito.possibile) expect(esito.perche).toContain('non riesco a confermare');
   });
 
-  it('finché Nicola non sceglie quante veloci porta un fattorino, il conteggio non decide', () => {
+  // 20/11/2026 (R04-021) — Nicola ha scelto (19/11): una veloce alla volta per fattorino. Senza un
+  // numero passato a mano vale quello: il conteggio decide. Solo un `null` esplicito lo spegne ancora.
+  it('Nicola ha scelto una veloce per fattorino: senza numero passato a mano il conteggio decide', () => {
     const esito = veloceSiPuo({ adesso: MEZZOGIORNO, negozi: NEGOZI, fattoriniOnline: 1, velociInCorso: 50 });
-    expect(esito.possibile).toBe(true);
+    expect(esito.possibile).toBe(false);
+    const senzaTetto = veloceSiPuo({ adesso: MEZZOGIORNO, negozi: NEGOZI, fattoriniOnline: 1, velociInCorso: 50, velociPerFattorino: null });
+    expect(senzaTetto.possibile).toBe(true);
   });
 });

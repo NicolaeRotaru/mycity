@@ -1,0 +1,415 @@
+{
+ "sessione": "R04",
+ "aggiornato": "2026-11-20 20:22",
+ "finita": true,
+ "testa": "728a956a7cf36d7345be05c7e375c37cc23dce5c",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "728a956a7cf36d7345be05c7e375c37cc23dce5c",
+  "nota": "typecheck, lint e vitest: 1826 file passati, 1 saltato (già saltato sulla base); 11443 prove passate, 1 saltata. git rev-parse HEAD nello stesso comando."
+ },
+ "voci": [
+  {
+   "id": "R04-001",
+   "chiave": "api-backend|quando l'amministrazione cambia solo le taglie di un prodotto, il registro delle azioni non scrive più niente",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-002",
+   "chiave": "api-backend|nelle azioni dell'amministrazione un guasto del database diventa «non trovato», e nei dati del negozio un trattino",
+   "esito": "riparato",
+   "commit": "8b4992273c842d43fcc8f8c801f0778cf319eefa",
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts",
+    "app/api/admin/users/[id]/delete/route.ts",
+    "app/api/admin/orders/[id]/cancel/route.ts",
+    "app/api/admin/disputes/[id]/resolve/route.ts",
+    "app/admin/users/page.tsx",
+    "tests/unit/riparazione-r04-admin-guasto-non-e-non-trovato.test.ts",
+    "tests/unit/riparazione-r04-admin-dati-negozio-non-disponibili.test.ts",
+    "tests/unit/riparazione-r04-id-storto-admin.test.ts",
+    "tests/unit/riparazione-r04-reclamo-ordine-non-letto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-admin-guasto-non-e-non-trovato.test.ts",
+    "tests/unit/riparazione-r04-admin-dati-negozio-non-disponibili.test.ts",
+    "tests/unit/riparazione-r04-id-storto-admin.test.ts",
+    "tests/unit/riparazione-r04-reclamo-ordine-non-letto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-admin-guasto-non-e-non-trovato.test.ts tests/unit/riparazione-r04-admin-dati-negozio-non-disponibili.test.ts tests/unit/riparazione-r04-id-storto-admin.test.ts tests/unit/riparazione-r04-reclamo-ordine-non-letto.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8b499227^ --file \"app/api/admin/users/[id]/moderate/route.ts,app/api/admin/users/[id]/delete/route.ts,app/api/admin/orders/[id]/cancel/route.ts,app/api/admin/disputes/[id]/resolve/route.ts,app/admin/users/page.tsx\" --prove tests/unit/riparazione-r04-admin-guasto-non-e-non-trovato.test.ts,tests/unit/riparazione-r04-admin-dati-negozio-non-disponibili.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nelle quattro rotte (moderate:205, delete:46, cancel:38, resolve:113) un errore del database dà 500 «riprova» senza scrivere niente; 404 solo per PGRST116; permessi identici. Pagina Utenti: se la domanda kyc fallisce (page.tsx:480) la scheda scrive «non disponibile: riprova» invece di «—» (datoIdentita, page.tsx:1050). Dopo la revisione: (1) un id non uuid (22P02) torna 404 nelle quattro rotte, come lib/supabase/lettura-per-metadati.ts:64 (99011728); (2) in resolve la lettura dell'ordine caduta (non PGRST116/22P02) dà 500 «riprova» prima di ogni scrittura, rimborso o avviso: prima un guasto faceva saltare il tetto R84 e il controllo «Stripe non configurato» (resolve/route.ts:139-152, 728a956a).",
+   "verificato_da": "revisore R04-G2 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi; esito della revisione: parziale (lettura dell'ordine caduta in resolve, regressione 22P02), entrambi chiusi dalla correzione. Correzione dopo la revisione (subagente di correzione, modello grande, 20/11); la revisione della correzione la fa il collaudatore, per decisione della regista",
+   "commit_correzione": [
+    "99011728fb07a347434c9cdd2ec19a9848e8cded",
+    "728a956a7cf36d7345be05c7e375c37cc23dce5c"
+   ],
+   "rimessa_correzione": [
+    {
+     "commit": "99011728",
+     "esito": "regge",
+     "uscita": 0,
+     "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 99011728^ --file 'app/api/admin/users/[id]/moderate/route.ts,app/api/admin/users/[id]/delete/route.ts,app/api/admin/orders/[id]/cancel/route.ts,app/api/admin/disputes/[id]/resolve/route.ts' --prove tests/unit/riparazione-r04-id-storto-admin.test.ts --json"
+    },
+    {
+     "commit": "728a956a",
+     "esito": "regge",
+     "uscita": 0,
+     "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 728a956a^ --file 'app/api/admin/disputes/[id]/resolve/route.ts' --prove tests/unit/riparazione-r04-reclamo-ordine-non-letto.test.ts --json"
+    }
+   ]
+  },
+  {
+   "id": "R04-003",
+   "chiave": "api-backend|se la lettura dei ruoli cade, all'assistenza arriva l'email «un cliente ti ha scritto» pensata per un negozio",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-004",
+   "chiave": "api-backend|il giro notturno delle cancellazioni non ha un tetto di tempo nemmeno sul ciclo degli account scaduti",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-005",
+   "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-006",
+   "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-007",
+   "chiave": "api-backend|dopo il tetto dei contanti o il rollback di un ordine in contanti il benvenuto resta bloccato fino a 2 ore",
+   "esito": "riparato",
+   "commit": "1c8385773c46ffa70112697b225d4baa05a32558",
+   "file_toccati": [
+    "app/api/orders/cod/route.ts",
+    "tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1c838577^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "release_coupon(p_code) rimetteva l'uso nel contatore ma lasciava aperta la rivendicazione in coupon_redemptions (migrazione 361), che blocca il codice «solo primo ordine». Nuovo chiudiLaRivendicazione (route.ts:1150), chiamato dopo un rilascio riuscito sia al tetto dei contanti (:1171) sia nel rollback (:1296). Nella 361 di oggi il lucchetto dura 2 minuti dalla rivendicazione, non 2 ore. Prova con orologio finto che emula la 361.",
+   "verificato_da": "revisore R04-G1 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi"
+  },
+  {
+   "id": "R04-008",
+   "chiave": "api-backend|ogni tappa del reso cancella la nota del negozio, anche quando la tappa la fa il cliente",
+   "esito": "riparato",
+   "commit": "1a4e5d78d3c380cf1ca7d05c3c07ce6ec283e677",
+   "file_toccati": [
+    "app/api/returns/[id]/avanza/route.ts",
+    "tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a4e5d78^ --file \"app/api/returns/[id]/avanza/route.ts\" --prove tests/unit/riparazione-r04-reso-nota-del-negozio.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "avanza.ts:365: decision_notes si scrive solo con comando.autorizzato (negozio o amministratore) e una nota nel corpo; prima era `decision_notes: body.note ?? null` a ogni tappa. Prove: ritiro del cliente con o senza nota e tappa del negozio senza nota non toccano decision_notes; quella del negozio con nota lo aggiorna.",
+   "verificato_da": "revisore R04-G1 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi"
+  },
+  {
+   "id": "R04-009",
+   "chiave": "api-backend|se il database non risponde, chi decide un reso legge «ordine non trovato» o «non autorizzato»",
+   "esito": "riparato",
+   "commit": "6a0dc3af9c4b3bd486f6f8736c61dc06c0acf6c5",
+   "file_toccati": [
+    "app/api/returns/[id]/decide/route.ts",
+    "app/api/returns/[id]/avanza/route.ts",
+    "tests/unit/riparazione-r04-reso-database-giu.test.ts",
+    "tests/unit/riparazione-r04-id-storto-reso.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-reso-database-giu.test.ts",
+    "tests/unit/riparazione-r04-id-storto-reso.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-reso-database-giu.test.ts tests/unit/riparazione-r04-id-storto-reso.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a0dc3af^ --file \"app/api/returns/[id]/decide/route.ts,app/api/returns/[id]/avanza/route.ts\" --prove tests/unit/riparazione-r04-reso-database-giu.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "chi-comanda-il-reso.ts distingueva già il guasto (5/11): non toccato. Nelle rotte la lettura caduta del reso (decide.ts:57, avanza.ts:177), la rilettura caduta dell'ordine prima del rimborso (decide.ts:129, avanza.ts:259) e il controllo caduto «sei il cliente?» del ritiro (avanza.ts:116, :201) ora danno 503 «riprova» invece di 404/403. PGRST116 resta 404; chi non è né negozio né cliente resta 403. Dopo la revisione: un id di reso non uuid (22P02) torna 404 «Reso non trovato» in decide:59-61 e avanza:179-181; un guasto vero resta 503 (ba17ffc8).",
+   "verificato_da": "revisore R04-G1 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi; esito della revisione: parziale (regressione 22P02), chiusa dalla correzione. Correzione dopo la revisione (subagente di correzione, modello grande, 20/11); la revisione della correzione la fa il collaudatore, per decisione della regista",
+   "commit_correzione": [
+    "ba17ffc82f47a3d9452d02d06bdec01b4034e70e"
+   ],
+   "rimessa_correzione": [
+    {
+     "commit": "ba17ffc8",
+     "esito": "regge",
+     "uscita": 0,
+     "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ba17ffc8^ --file 'app/api/returns/[id]/decide/route.ts,app/api/returns/[id]/avanza/route.ts' --prove tests/unit/riparazione-r04-id-storto-reso.test.ts --json"
+    }
+   ]
+  },
+  {
+   "id": "R04-010",
+   "chiave": "api-backend|se la domanda per diventare negozio parte due volte insieme, viene registrata due volte e gli amministratori ricevono l'avviso due volte",
+   "esito": "gia_riparato_prima",
+   "prova": "app/api/seller/apply/route.ts:208-212 (R11-008, 12/11): l'update vale solo se approval_requested_at è ancora quello letto, e .select('id') dice se questa richiesta ha scritto; a :218-228 chi perde esce con 200 prima di consent_log (:238) e di notifyAdmins (:257). La prova esistente tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts (due invii con Promise.all → 1 consenso, 1 avviso) è verde 3/3 sulla base b2c62f34.",
+   "prova_file": [
+    "tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts --reporter=dot",
+   "prova_eseguita": true,
+   "cosa_ho_fatto": "Nessuna modifica; migrazione 611 non scritta.",
+   "verificato_da": "revisore R04-G2 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi"
+  },
+  {
+   "id": "R04-011",
+   "chiave": "api-backend|un ordine con carta senza coordinate passa senza controllo della zona e senza avviso agli amministratori",
+   "esito": "parziale",
+   "commit": "97b57cd9a086a1ecc48f71461ff627dd26004bcc",
+   "file_toccati": [
+    "app/api/stripe/checkout/route.ts",
+    "tests/unit/riparazione-r04-carta-senza-coordinate.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-carta-senza-coordinate.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-carta-senza-coordinate.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 97b57cd9a086a1ecc48f71461ff627dd26004bcc^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r04-carta-senza-coordinate.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Regola dei contanti in app/api/orders/cod/route.ts:1060-1077 e :1772-1783: chi non si può misurare passa, ma con la campanella agli amministratori. La carta misurava già (rubrica, poi geocodifica): ora se la misura non riesce (indirizzo non trovato o negozio senza posizione) annota il caso come i contanti e, a pagina Stripe aperta, manda con dopoLaRisposta la campanella «Pagamento con carta con la distanza non misurata» tramite lo stesso notifyAdmins. Nota: l'avviso parte all'apertura della pagina di pagamento (id del carrello), non al pagamento, perché l'ordine lo crea il webhook (non mio file).",
+   "verificato_da": "revisore R04-G1 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi",
+   "cosa_resta": "Il passaggio in silenzio è chiuso (le due strade «non misurato» portano all'avviso; con la geocodifica riuscita il controllo della zona resta), ma l'avviso non porta all'ordine pagato: porta l'id del carrello (pending.id) che l'amministrazione non mostra, il link è generico (/admin/orders), suona anche per pagine di pagamento mai pagate e a ogni apertura, senza filtro dei doppioni (stripe/checkout/route.ts:1038-1050). Da fare: id della sessione Stripe (l'ordine porta stripe_session_id) e unaVoltaPer nel mio file, oppure annotare il segno in pending.delivery e far suonare la campanella nel webhook con l'id dell'ordine (lib/stripe/webhook, non mio). Carta spenta al lancio (CARTA_ACCESA=false)."
+  },
+  {
+   "id": "R04-012",
+   "chiave": "api-backend|due invii uguali all'assistenza nello stesso istante creano due messaggi e due avvisi",
+   "esito": "riparato",
+   "commit": "5aa465c69b147e1453c8e48e2e1cf38de98a355f",
+   "file_toccati": [
+    "app/api/support/conversation/route.ts",
+    "tests/unit/riparazione-r04-assistenza-doppione.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-assistenza-doppione.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-assistenza-doppione.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5aa465c6^ --file app/api/support/conversation/route.ts --prove tests/unit/riparazione-r04-assistenza-doppione.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il corpo accetta idempotency_key (forma /^[A-Za-z0-9_-]{8,100}$/, route.ts:17, altrimenti 400). L'id del messaggio nasce da persona + chiave (SHA-256 in forma di UUID, idDelMessaggio :34), come idOrdiniDelTentativo dei contanti: la chiave primaria di messages rifiuta il secondo invio (23505) e chi arriva secondo riceve 200 {giaRicevuto:true} senza un altro avviso (:169). Senza chiave tutto come prima. Migrazione 610 non scritta: una colonna nuova avrebbe sfasato lib/database.types.ts (controllato in CI); la chiave primaria dà lo stesso vincolo atomico.",
+   "verificato_da": "revisore R04-G2 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi",
+   "nota": "Revisore: messages.id è uuid PRIMARY KEY (migrations/026_chat_messaging.sql:47), unico vincolo unico; il primo messaggio con due invii insieme dà una sola conversazione (conversations_buyer_seller_unique). Consiglio del revisore non fatto: leggere la chiave anche dall'intestazione idempotency-key come ripiego, per le schede aperte con il modulo del 19/11."
+  },
+  {
+   "id": "R04-013",
+   "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-015",
+   "chiave": "api-backend|il modulo dell'assistenza non manda nessuna chiave per invio",
+   "esito": "riparato",
+   "commit": "d1e96612c037af01db30dd55be46e2adf5866fe4",
+   "file_toccati": [
+    "components/SupportChatModal.tsx",
+    "tests/unit/riparazione-r04-assistenza-chiave-nel-corpo.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-assistenza-chiave-nel-corpo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-assistenza-chiave-nel-corpo.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d1e96612^ --file components/SupportChatModal.tsx --prove tests/unit/riparazione-r04-assistenza-chiave-nel-corpo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il 19/11 la chiave partiva solo nell'intestazione idempotency-key, che la rotta non legge. Ora va anche nel corpo come idempotency_key (SupportChatModal.tsx:113), lo stesso campo che usa la rotta (R04-012); l'intestazione resta. Prove: il corpo porta la chiave; il doppio clic ne porta una sola; il ritentativo dopo rete caduta la riusa; dopo un invio riuscito la chiave è nuova.",
+   "verificato_da": "revisore R04-G2 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi"
+  },
+  {
+   "id": "R04-016",
+   "chiave": "api-backend|la cancellazione legge un 404 qualsiasi come «account già chiuso»: un 404 di un gateway sbagliato verrebbe scambiato per un account già cancellato",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-017",
+   "chiave": "api-backend|se il servizio di posta conserva anche le risposte d'errore, una promozione mai partita risulta spedita",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-018",
+   "chiave": "api-backend|oltre 20.000 iscritti la ricerca utenti risulta sempre caduta e l'esportazione dell'elenco intero non esce, con un «riprova fra poco» che non serve",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-019",
+   "chiave": "qa-flussi|un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-020",
+   "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  },
+  {
+   "id": "R04-021",
+   "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+   "esito": "parziale",
+   "commit": "a88b03eb679e2635a1bc01e476e9d63b2819db53",
+   "file_toccati": [
+    "lib/ordini/consegna-veloce.ts",
+    "app/api/orders/cod/route.ts",
+    "tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts",
+    "tests/unit/riparazione-r15-la-veloce-conta-quelle-in-mano.test.ts",
+    "tests/unit/l-email-nuovo-ordine-dalla-rotta-dei-contanti-dice-la-scadenza-vera.test.ts",
+    "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts",
+    "tests/unit/riparazione-r31-campanella-quando-contanti.test.ts",
+    "tests/unit/le-rotte-fanno-pagare-la-veloce-in-centesimi.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a88b03eb^ --file lib/ordini/consegna-veloce.ts,app/api/orders/cod/route.ts --prove tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "VELOCI_PER_FATTORINO = 1 (consegna-veloce.ts:40, scelta di Nicola del 19/11); la rotta dei contanti passa a veloceSiPuo velociInCorso = await contaVelociInCorso(admin) (route.ts:943). Prova sulla rotta vera: 1 fattorino con 1 veloce in mano → 409; 2 fattorini → 200. Secondo commit b3c6329e (solo una costante inutile tolta dalla prova). Prove esistenti modificate e dichiarate perché importano i miei file: riparazione-r15-la-veloce-conta-quelle-in-mano (l'ultimo caso diceva «finché Nicola non sceglie»: ora dice la scelta presa) e quattro prove della rotta dei contanti (fingono contaVelociInCorso → 0 accanto a contaFattoriniOnline).",
+   "cosa_resta": "Manca velociInCorso nella rotta della carta (mio file, non fatto per il tetto di spesa): app/api/stripe/checkout/route.ts riga 21 aggiungere contaVelociInCorso all'import; righe 333 e 532 (vicino a `fattoriniOnline: await contaFattoriniOnline(admin),`) aggiungere `velociInCorso: await contaVelociInCorso(admin),`; le prove che fingono contaFattoriniOnline per la carta (es. tests/unit/minori-s01-veloce-carta.test.ts) devono fingere anche contaVelociInCorso. Manca anche /api/consegna/veloce (non mio, vedi serve_file_altrui): senza, la cassa può mostrare «Adesso» e poi i contanti rispondono 409. Con il conteggio caduto la vendita si ferma (409), verificato dal revisore.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/consegna/veloce/route.ts",
+     "modifica": "riga 6: aggiungere contaVelociInCorso all'import da '@/lib/ordini/consegna-veloce'. Righe 93-98: dopo `const fattoriniOnline = await contaFattoriniOnline(admin);` aggiungere `const velociInCorso = await contaVelociInCorso(admin); if (velociInCorso === null) logger.error('consegna veloce: veloci in corso non contate');`; aggiungere `|| velociInCorso === null` alla condizione del 503 NON_RIESCO; passare `velociInCorso` a veloceSiPuo({ adesso: romeNow(), negozi, fattoriniOnline, velociInCorso }). Il database finto di tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts deve rispondere anche al conteggio su orders."
+    }
+   ],
+   "verificato_da": "revisore R04-G1 (subagente generico, modello grande, 20/11): rilancio della prova, prova senza correzione in un worktree separato (morde), prove esistenti dei file toccati verdi"
+  },
+  {
+   "id": "R04-022",
+   "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+   "esito": "non_fatto",
+   "nota": "Non lavorata in questo giro: tetto di spesa della regista (35 $, consegna al 70%) raggiunto dopo il lotto 2 (16,84 $ a fine lotto 2). Ordine seguito: R04-011, poi soldi, poi dati e permessi."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Con la carta, se la cassa cade dopo la rivendicazione del benvenuto, il codice resta bloccato fino a 2 minuti",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/stripe/checkout/route.ts:879",
+   "descrizione": "Stesso difetto di R04-007 sulla rotta della carta: release_coupon(p_code) senza chiudere coupon_redemptions. Carta spenta al lancio."
+  },
+  {
+   "titolo": "Due veloci vendute nello stesso istante con un solo fattorino passano tutte e due",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "app/api/orders/cod/route.ts:943",
+   "descrizione": "Il conteggio delle veloci in corso si legge prima dell'inserimento: due richieste insieme leggono 0 e nascono entrambe. Per chiuderlo servirebbe un vincolo nel database."
+  },
+  {
+   "titolo": "Il conteggio delle veloci in corso non ha una finestra di tempo: con il tetto a 1 una veloce dimenticata spegne la veloce",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/ordini/consegna-veloce.ts:43",
+   "descrizione": "contaVelociInCorso (anche :140-158) conta gli ordini veloci in ASSIGNED/PICKED_UP/OUT_FOR_DELIVERY senza limite di tempo; il cron della veloce non confermata muove solo i NEW. Con un fattorino solo, un ordine rimasto aperto blocca la veloce finché qualcuno non lo sistema a mano. Nato con la R15, reso decisivo da R04-021."
+  },
+  {
+   "titolo": "La chiusura della rivendicazione del benvenuto non è limitata al tentativo in corso",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/orders/cod/route.ts:1157",
+   "descrizione": "chiudiLaRivendicazione chiude tutte le rivendicazioni aperte di (codice, cliente), come release_coupon della 361; claim_coupon blocca comunque su prove vive, quindi il rischio è teorico (richiesta più lunga di 2 minuti)."
+  },
+  {
+   "titolo": "Cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/admin/users/[id]/delete/route.ts:48",
+   "descrizione": "Anche app/api/admin/orders/[id]/cancel/route.ts:40: il ramo «guasto del database» risponde con ApiErrors.internal senza logger.error, quindi il guasto non lascia traccia."
+  },
+  {
+   "titolo": "Nella scheda utente dell'amministrazione i dati del negozio mostrano «—» mentre si caricano",
+   "dimensione": "frontend",
+   "severita": "minore",
+   "file": "app/admin/users/page.tsx:1053",
+   "descrizione": "Durante il caricamento della domanda kyc la scheda mostra ancora il trattino, che sembra «nessun dato»."
+  },
+  {
+   "titolo": "Un profilo in attesa con approval_requested_at rimasto valorizzato non riceve mai consenso né avviso",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/seller/apply/route.ts:236",
+   "descrizione": "Fuori dalla concorrenza (R04-010 regge): un profilo buyer in stato pending con approval_requested_at già valorizzato salta consent_log (:236) e notifyAdmins (:255)."
+  },
+  {
+   "titolo": "All'assistenza la stessa chiave con un testo diverso fa perdere il secondo testo in silenzio",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/support/conversation/route.ts:169",
+   "descrizione": "Il secondo invio riceve 200 giaRicevuto anche se il testo è diverso; il modulo non lo fa mai (chiave nuova a testo diverso), capita solo con un client scritto a mano."
+  }
+ ],
+ "domande_per_nicola": [
+  "R04-011: l'avviso «carta con la distanza non misurata» deve suonare al pagamento, con l'id dell'ordine (si tocca il webhook, non di R04), o basta all'apertura della pagina Stripe con l'id della sessione?"
+ ],
+ "conto": {
+  "agenti": 5,
+  "nota": "5 subagenti su 6: lotto 1, lotto 2, 2 revisori, 1 correzione (modello grande). Lotti 3 e 4 non lanciati per il tetto di spesa (16,84 $ a fine lotto 2, 25,49 $ dopo i revisori); costo_usd 28,24 $ letto con get_session (senza id) alle 20:23, prima della consegna; il commit e il push del referto aggiungono pochi centesimi.",
+  "subagenti": 5
+ },
+ "costo_usd": 28.24
+}
