@@ -32,8 +32,12 @@ const REASONS: Array<{ value: string; label: string; hint: string }> = [
  * subito: da lì in poi il testo vero è quello del modulo, e una bozza vecchia non torna più.
  * La bozza riprende il testo solo per chi l'ha scritto.
  * I controlli restano tutti nel server (/api/disputes).
+ *
+ * R01-002 — La bozza nata dal 401 porta il segno `perIlRientro`: all'uscita non chiesta (la
+ * sessione scaduta) il fornitore delle domande (components/providers/QueryProvider.tsx) la lascia
+ * per il rientro, mentre all'uscita voluta e all'ingresso di un altro account la toglie.
  */
-type BozzaReclamo = { utente: string; reason: string; description: string };
+type BozzaReclamo = { utente: string; reason: string; description: string; perIlRientro?: boolean };
 const chiaveBozza = (orderId: string) => `mycity:bozza-reclamo:${orderId}`;
 
 /** Legge la bozza di questo ordine e la toglie dalla scheda: quello che serve passa nel modulo. */
@@ -135,10 +139,12 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
 
   // R01-003 — Dal 401 all'invio riuscito la bozza segue il modulo: si ritrova l'ultimo testo,
   // e un modulo svuotato non lascia una bozza vecchia.
+  // R01-002 — Si riscrive anche quando arriva il 401 (`sessioneScaduta`): il testo cambiato fra il
+  // clic e la risposta del server è quello che si ritrova, non quello del momento del clic.
   useEffect(() => {
     if (!bozzaInCorso.current || !utenteDelModulo.current) return;
-    scriviBozza(params.id, description.trim() ? { utente: utenteDelModulo.current, reason, description } : null);
-  }, [reason, description, params.id]);
+    scriviBozza(params.id, description.trim() ? { utente: utenteDelModulo.current, reason, description, perIlRientro: true } : null);
+  }, [sessioneScaduta, reason, description, params.id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +164,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       });
       if (!res.ok) {
         if (res.status === 401) {
-          if (utenteDelModulo.current) scriviBozza(params.id, { utente: utenteDelModulo.current, reason, description });
+          if (utenteDelModulo.current) scriviBozza(params.id, { utente: utenteDelModulo.current, reason, description, perIlRientro: true });
           bozzaInCorso.current = true;
           setSessioneScaduta(true);
           return;
