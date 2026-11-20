@@ -109,4 +109,115 @@ describe('R03-021 — il logger oscura anche il testo, non solo le chiavi', () =
     // Senza niente da togliere, a Sentry arriva lo stesso errore, non una copia.
     await vi.waitFor(() => expect(finti.captureException).toHaveBeenCalledWith(err, { extra: { orderId: 'ord_1' } }));
   });
+
+  it('limite di lunghezza del testo ripulito: 200 KB senza «@» si ripuliscono in meno di 200 ms', async () => {
+    const { logger } = await import('@/lib/logger');
+    const lungo = 'a1B2c3D4e5'.repeat(20_000); // 200 KB di lettere e cifre, nessuna «@», nessuno spazio
+    const prima = performance.now();
+    logger.warn(lungo, lungo);
+    logger.error(new Error(lungo), { nota: lungo });
+    const durata = performance.now() - prima;
+    expect(durata).toBeLessThan(200);
+    const riga = JSON.parse(scritto[0]);
+    expect(riga.msg.startsWith('a1B2c3D4e5')).toBe(true);
+    expect(riga.msg.endsWith('…[troncato]')).toBe(true);
+    expect(riga.msg.length).toBeLessThan(10_000);
+    expect(riga.detail.endsWith('…[troncato]')).toBe(true);
+    await vi.waitFor(() => expect(finti.captureException).toHaveBeenCalledTimes(1));
+    const [errore, opzioni] = finti.captureException.mock.calls[0] as [Error, { extra: { nota: string } }];
+    expect(errore.message.endsWith('…[troncato]')).toBe(true);
+    expect(errore.message.length).toBeLessThan(10_000);
+    expect(opzioni.extra.nota.length).toBeLessThan(10_000);
+  });
+
+  it('il taglio non lascia mezza email in chiaro', async () => {
+    const { logger } = await import('@/lib/logger');
+    // L'email sta a cavallo del taglio: senza la parola intera non si riconoscerebbe più.
+    const testo = 'x '.repeat(3_995) + `${EMAIL} ` + 'y '.repeat(5_000);
+    logger.warn(testo);
+    const msg: string = JSON.parse(scritto[0]).msg;
+    expect(msg.endsWith('…[troncato]')).toBe(true);
+    expect(msg).not.toContain('maria');
+    expect(msg).not.toContain('example');
+  });
+
+  it('numeri d’ordine, importi, durate e timestamp escono identici', async () => {
+    const { logger } = await import('@/lib/logger');
+    const msg =
+      'ordine #30012345 e #00012345678: 35000000 centesimi, durata 312345678 ns, lotto 312345678901, ' +
+      'ts 1763650800008 e 1763650800016, µs 1763650800000009, ns 1763650800000000008, ' +
+      'ORDINE AB12 CONFERMATO PER IL RITIRO, alle 18:30 del 20.11.2026, prezzo 314.15';
+    const err = new Error(`rimborso fallito: ordine #30012345, 35000000 centesimi, ts 1763650800008`);
+    logger.warn(msg, { ordine: '#30012345', quando: '1763650800008', nota: 'durata 312345678 ns' });
+    logger.error(err, { orderId: 'ord_1' });
+    const riga = JSON.parse(scritto[0]);
+    expect(riga.msg).toBe(msg);
+    expect(riga).toMatchObject({ ordine: '#30012345', quando: '1763650800008', nota: 'durata 312345678 ns' });
+    // Senza niente da togliere, a Sentry arriva lo stesso errore, non una copia.
+    await vi.waitFor(() => expect(finti.captureException).toHaveBeenCalledWith(err, { extra: { orderId: 'ord_1' } }));
+  });
+
+  it('email, telefoni veri, IBAN veri, carte vere e credenziali restano oscurati', async () => {
+    const { logger } = await import('@/lib/logger');
+    const veri = [
+      EMAIL,
+      '+39 333 123 4567',
+      '+393331234567',
+      '0039 02 1234 5678',
+      '333-1234567',
+      '3331234567',
+      '(02) 12345678',
+      '0532/123456',
+      IBAN,
+      'IT60 X054 2811 1010 0000 0123 456',
+      'DE89370400440532013000',
+      '4111 1111 1111 1111',
+      '4242424242424242',
+      '378282246310005',
+      '5555-5555-5555-4444',
+      'dXNlcjpwYXNzd29yZA==',
+      'chiaveApi12345678',
+      'gettoneCsrf12345678',
+    ];
+    logger.warn(
+      `recapiti: ${veri.slice(0, 8).join(', ')}; conti: ${veri.slice(8, 11).join(', ')}; carte: ${veri.slice(11, 15).join(', ')}; ` +
+        `Authorization: Basic ${veri[15]} x-api-key: ${veri[16]} csrf_token=${veri[17]}`,
+      { 'x-api-key': 'chiaveApi12345678' },
+    );
+    // Un errore-oggetto semplice (come quelli di Supabase) va a Sentry ripulito anche lui.
+    logger.error({ message: 'duplicate key', details: `Key (email)=(${EMAIL}) already exists`, code: '23505' });
+    await vi.waitFor(() => expect(finti.captureException).toHaveBeenCalledTimes(1));
+    const tutto = uscita();
+    for (const v of veri) expect(tutto, `«${v}» è uscito in chiaro`).not.toContain(v);
+    expect(JSON.parse(scritto[0]).msg).toContain('recapiti:');
+    expect(finti.captureException.mock.calls[0][0]).toMatchObject({ message: 'duplicate key', code: '23505' });
+  });
+
+  it('il logger non lancia mai: messaggio che non è un testo, pila che non è un testo', async () => {
+    const { logger } = await import('@/lib/logger');
+    const pilaStrana = new Error('pila strana');
+    Object.defineProperty(pilaStrana, 'stack', { value: 42, configurable: true });
+    const messaggioStrano = new Error('x');
+    Object.defineProperty(messaggioStrano, 'message', { value: { codice: 7 }, configurable: true });
+    const circolare: Record<string, unknown> = {};
+    circolare.a = { b: { c: { d: { e: { giro: circolare } } } } };
+
+    expect(() => logger.warn(123 as unknown as string)).not.toThrow();
+    expect(() => logger.warn(new Error('passato come messaggio') as unknown as string)).not.toThrow();
+    expect(() => logger.warn(Object.create(null) as string)).not.toThrow();
+    expect(() => logger.error(pilaStrana)).not.toThrow();
+    expect(JSON.parse(scritto[0]).msg).toBe('123');
+    expect(JSON.parse(scritto[1]).msg).toContain('passato come messaggio');
+    expect(JSON.parse(scritto[3]).msg).toBe('pila strana');
+    // L'errore con la pila strana arriva lo stesso a Sentry.
+    await vi.waitFor(() => expect(finti.captureException).toHaveBeenCalledTimes(1));
+    expect((finti.captureException.mock.calls[0][0] as Error).message).toBe('pila strana');
+
+    expect(() => logger.warn('con pila strana', pilaStrana)).not.toThrow();
+    expect(() => logger.error('frase prima', pilaStrana)).not.toThrow();
+    expect(() => logger.error(messaggioStrano)).not.toThrow();
+    expect(() => logger.info('contesto circolare', circolare)).not.toThrow();
+    expect(() => logger.spesa('contesto con BigInt', { n: BigInt(1) })).not.toThrow();
+    expect(scritto.length).toBe(9);
+  });
 });
