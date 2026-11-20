@@ -22,7 +22,11 @@ import { prezziDelCarrello, consegnaDopoLAnnullo, type IngressiPrezzo } from '@/
 import { annullaERimborsa, COLONNE_ANNULLO } from '@/lib/ordini/annulla';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
-import { finto } from './carrello-finto';
+import { finto as fintoSenzaLa620 } from './carrello-finto';
+import { conLaFunzioneDelGiro } from './riparazione-r05-giro-in-transazione';
+// R05-006 — Le scritture del giro passano dalla funzione del database (migrations/620): il finto la fa.
+const finto = (...a: Parameters<typeof fintoSenzaLa620>) =>
+  conLaFunzioneDelGiro(fintoSenzaLa620(...a), { applicata: !a[1]?.prima124 });
 
 // 5/11/2026 (S04, scheda 2226) — Qui c'era una copia del database finto: la stessa di
 // tests/unit/carrello-finto.ts, senza la simulazione della 124 e del cliente. Se ne tiene una sola.

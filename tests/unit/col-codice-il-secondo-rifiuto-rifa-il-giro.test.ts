@@ -26,6 +26,7 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 
 import { prezziDelCarrello, consegnaDopoLAnnullo, type IngressiPrezzo } from '@/lib/ordini/prezzi';
 import { annullaERimborsa } from '@/lib/ordini/annulla';
+import { conLaFunzioneDelGiro } from './riparazione-r05-giro-in-transazione';
 
 type Riga = Record<string, unknown>;
 function finto(tabelle: Record<string, Riga[]>) {
@@ -64,7 +65,8 @@ function finto(tabelle: Record<string, Riga[]>) {
     });
     return q;
   };
-  return { from, rpc: async () => ({ data: null, error: null }), tabelle };
+  // R05-006 — Le scritture del giro passano dalla funzione del database (migrations/620): il finto la fa.
+  return conLaFunzioneDelGiro({ from, rpc: async () => ({ data: null, error: null }), tabelle });
 }
 
 const ingressi = (merci: number[], codice: boolean, veloce = false): IngressiPrezzo => ({

@@ -29,7 +29,11 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 import { prezziDelCarrello, consegnaDopoLAnnullo, type IngressiPrezzo } from '@/lib/ordini/prezzi';
 import { annullaERimborsa } from '@/lib/ordini/annulla';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
-import { finto } from './carrello-finto';
+import { finto as fintoSenzaLa620 } from './carrello-finto';
+import { conLaFunzioneDelGiro, FUNZIONE_DEL_GIRO } from './riparazione-r05-giro-in-transazione';
+// R05-006 — Le scritture del giro passano dalla funzione del database (migrations/620): il finto la fa.
+const finto = (...a: Parameters<typeof fintoSenzaLa620>) =>
+  conLaFunzioneDelGiro(fintoSenzaLa620(...a), { applicata: !a[1]?.prima124 });
 
 const ing = (merci: number[], veloce: boolean, codice: boolean): IngressiPrezzo => ({
   gruppi: merci.map((s, i) => ({ sellerId: `s${i}`, subtotalCents: s })),
@@ -166,27 +170,28 @@ describe('il ricalcolo dopo un annullo regge la veloce, il rimborso caduto e due
     expect(1600 + 1500).toBe(addebito);
   });
 
-  it('V7 carta, l altro verso: il forno ha già scritto la sua consegna, la frutta annulla per intero prima che il forno passi a lei → 18 + 13 = 31 €', async () => {
+  it('V7 carta, l altro verso: il forno ha letto il carrello, la frutta annulla per intero prima che il forno scriva → 18 + 13 = 31 €', async () => {
     const ordini = righe([1500, 1200], false, 'card');
     db = finto({ orders: ordini });
     refundOrder.mockImplementation(async (a: { orderId: string }) => {
       Object.assign(riga(a.orderId), { delivery_status: 'CANCELED' });
       return { refundId: `re_${a.orderId}` };
     });
-    const vero = db.from;
-    let letture = 0;
+    // R05-006 — Prima il forno scriveva la sua riga da sola e la frutta arrivava prima che passasse a
+    // lei (quinta istruzione sugli ordini). Con la transazione (migrations/620) quel «a metà» non c'è
+    // più: la frutta annulla per intero fra la lettura del carrello del forno e la sua scrittura, che
+    // trova il carrello cambiato, non scrive niente e rilegge.
+    const vera = db.rpc as unknown as (nome: string, args?: Record<string, unknown>) => Promise<unknown>;
     let colpo: (() => Promise<unknown>) | null = () =>
       annullaERimborsa(db as never, { ...riga('o1') } as never, { reason: 'Annullato dal cliente' });
-    db.from = (t: string) => {
-      const q = vero(t) as Record<string, unknown> & { then: (ok: (x: unknown) => unknown, ko: (e: unknown) => unknown) => unknown };
-      if (t === 'orders' && ++letture === 5 && colpo) {
+    db.rpc = (async (nome: string, args?: Record<string, unknown>) => {
+      if (nome === FUNZIONE_DEL_GIRO && colpo) {
         const c = colpo;
         colpo = null;
-        const avanti = q.then;
-        q.then = (ok, ko) => avanti((x) => c().then(() => ok(x)), ko);
+        await c();
       }
-      return q;
-    };
+      return vera(nome, args);
+    }) as never;
     let resi: Array<[string, number]> = [];
     try {
       await annullaERimborsa(db as never, { ...riga('o0') } as never, { reason: 'Rifiutato dal negozio' });

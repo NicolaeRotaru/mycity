@@ -39,7 +39,11 @@ vi.mock('@/lib/supabase/server', () => ({
   },
 }));
 
-import { finto, carrello, tentativoDiCassa } from './carrello-finto';
+import { finto as fintoSenzaLa620, carrello, tentativoDiCassa } from './carrello-finto';
+import { conLaFunzioneDelGiro, FUNZIONE_DEL_GIRO } from './riparazione-r05-giro-in-transazione';
+// R05-006 — Le scritture del giro passano dalla funzione del database (migrations/620): il finto la fa.
+const finto = (...a: Parameters<typeof fintoSenzaLa620>) =>
+  conLaFunzioneDelGiro(fintoSenzaLa620(...a), { applicata: !a[1]?.prima124 });
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 const scaduto = '2026-10-20T08:00:00Z';
@@ -52,7 +56,10 @@ async function giro() {
 const avvisi = () => vi.mocked(notifyAdmins).mock.calls.map((c) => `${c[0]} ${c[1]}`);
 const rpcChiamate: Array<{ nome: string; args: Record<string, unknown> }> = [];
 function conRpc(errori: Record<string, string> = {}) {
+  // R05-006 — La scrittura del giro resta alla funzione finta della 620.
+  const giro = db.rpc as unknown as (nome: string, args: Record<string, unknown>) => Promise<unknown>;
   db.rpc = (async (nome: string, args: Record<string, unknown>) => {
+    if (nome === FUNZIONE_DEL_GIRO) return giro(nome, args);
     rpcChiamate.push({ nome, args });
     return errori[nome] ? { data: null, error: { message: errori[nome] } } : { data: null, error: null };
   }) as never;
