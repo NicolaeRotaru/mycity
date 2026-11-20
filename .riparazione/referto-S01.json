@@ -1,20 +1,20 @@
 {
   "sessione": "S01",
-  "aggiornato": "2026-11-20 20:00",
+  "aggiornato": "2026-11-20 20:53",
   "finita": true,
-  "testa": "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
+  "testa": "7c4c0b6932a9943850b9af87eb95508c8eb6f2ac",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
-    "nota": "typecheck e lint senza errori, vitest 11399 passate e 1 saltata; prima anche su bf5338f5, verde"
+    "testa": "7c4c0b6932a9943850b9af87eb95508c8eb6f2ac",
+    "nota": "typecheck senza errori, lint 0 errori (98 avvisi, nessuno nei file della sessione), vitest 11408 passate e 1 saltata su 1817 file; prima verde anche su 6d72dc20 (11404 passate)"
   },
   "voci": [
     {
       "id": "S01-001",
       "chiave": "stati-ui|quando la rete torna, le pagine prodotto del negoziante rimettono il caricamento al posto del modulo e le modifiche non salvate si perdono",
       "esito": "riparato",
-      "commit": "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
+      "commit": "7c4c0b6932a9943850b9af87eb95508c8eb6f2ac",
       "file_toccati": [
         "app/seller/products/[id]/edit/page.tsx",
         "app/seller/products/new/page.tsx",
@@ -29,17 +29,21 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b2c62f34e26f6ff86eab45ccf39fa456ed3767bb --file app/seller/products/[id]/edit/page.tsx,app/seller/products/new/page.tsx,components/seller/ProductForm.tsx --prove tests/unit/riparazione-s01-scorta-taglie-non-lette.test.tsx --json",
-        "nota": "regge anche per commit: --base 47ff5ad6b3342c56d93e7e1cdd09f90a54c5d924^ sui tre file (uscita 0) e --base c5147aae6c5c977e843161f0e9c21ef51bf8f3ee^ su new/page.tsx (uscita 0)"
+        "comando": "timeout 540 node ../nicolaerotaru/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6dc1280dc42cb9d74ecdb63d42654445ea829827^ --file app/seller/products/[id]/edit/page.tsx --prove tests/unit/riparazione-s01-scorta-taglie-non-lette.test.tsx --json",
+        "nota": "giro 3, una corsa per commit, tutte uscita 0 («rossa, sul comportamento» togliendo il file): 6dc1280d --base 6dc1280d^ su edit/page.tsx; 6d72dc20 --base 6d72dc20^ su edit/page.tsx; f28a17f5 --base f28a17f5^ su edit/page.tsx; 7c4c0b69 --base 7c4c0b69^ su components/seller/ProductForm.tsx. Prima (giro 2): b2c62f34 sui tre file, 47ff5ad6^ sui tre file, c5147aae^ su new/page.tsx, tutte uscita 0. Strumento: ad-mycity a 33a5ed84."
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Su main le cure R03-019 e R04-007 erano annullate: la voce era intera. In Modifica, Nuovo e Duplica il modulo, aperto una volta, resta quando torna la rete (in Duplica per quella copia: da Nuovo a Duplica si rimonta pieno). Il modulo ricorda con quali taglie si è aperto: se la rilettura cade, manca la rete o la banca dati ne ha altre, il Salva si ferma con un avviso accanto al pulsante e il testo resta (regola di Nicola); il negoziante può riaprire con le taglie vere. In Duplica le taglie della sorgente si rileggono a ogni apertura (c5147aae, dopo il controllo indipendente). La consegna non letta all'apertura resta non letta per quel modulo. Prova rossa su b2c62f34 (10 su 13; E4, D3, D4b verdi da tenere).",
-      "verificato_da": "subagente general-purpose con mandato di smentire, due giri. Su bf5338f5: prove 15/15, 55 file vicini 300/300. E2 e D2 anche con staleTime 30s, Invio implicito e «Salva come bozza»: 0 scritture e testo intatto. D4b, K2, E4, D3 reggono. Togliendo erroreVarianti, salvataggioFermo, la guardia del modulo o variantiNonLette, le prove cadono. Ha trovato la strada della memoria fresca in Duplica, riparata in c5147aae. Su c5147aae: REGGE. D5 regge anche sul percorso Duplica→Modifica→Duplica; 13/13, 302/302; copia senza rete ferma; nessun ciclo né caricamento al posto del modulo. Nota: togliendo solo l'attesa della rilettura in Duplica le prove restano verdi, ma il Salva resta fermo per la firma delle taglie.",
+      "cosa_ho_fatto": "Su main le cure R03-019 e R04-007 erano annullate: la voce era intera. In Modifica, Nuovo e Duplica il modulo, aperto una volta, resta quando torna la rete (in Duplica per quella copia: da Nuovo a Duplica si rimonta pieno). Il modulo ricorda con quali taglie si è aperto: se la rilettura cade, manca la rete o la banca dati ne ha altre, il Salva si ferma con un avviso accanto al pulsante e il testo resta (regola di Nicola); il negoziante può riaprire con le taglie vere. In Duplica le taglie della sorgente si rileggono a ogni apertura (c5147aae, dopo il controllo indipendente). La consegna non letta all'apertura resta non letta per quel modulo. Prova rossa su b2c62f34 (10 su 13; E4, D3, D4b verdi da tenere). GIRO 3 (collaudo K01): (a) in Modifica le taglie fresche in memoria non contano più come lette: il Salva resta fermo finché una rilettura delle taglie è in volo o in pausa (6dc1280d, prova E6, rossa su c5147aae). (b) il modulo rimasto aperto non riscrive la riga com'era: il modulo ricorda la riga con cui si è aperto (le colonne che il Salva rimanda sempre: nome, descrizione, prezzi, unità, condizione, categoria, foto, attributi, tag, consegna, stato; fuori la scorta, che ha stock_visto); il Salva aspetta la riga riletta (in volo, ferma per la rete o caduta: fermo) e, se è un'altra, si ferma con l'avviso e «Riapri con i dati aggiornati» (6d72dc20, prove K3 stato, K4 prezzo, K5 riga in volo, K6 controprova vendita; K3-K5 rosse su c5147aae). products non ha updated_at e le migrazioni sono vietate: la firma è sui valori, più piccola di «solo i campi toccati». Dal controllo indipendente: la firma delle taglie ora è id+opzioni+nome+posizione nell'ordine letto (prima solo gli id: una taglia rinominata o spostata da un altro telefono tornava com'era) (f28a17f5, K7, K8), più due prove per le guardie della riga non coperte (K9 rilettura caduta, K10 nuovo tentativo fermo senza rete); il messaggio del Salva fermo rimanda all'avviso invece di dire sempre «le taglie» (7c4c0b69, K3). 22 prove nel file, le 13 di prima verdi.",
+      "verificato_da": "subagente general-purpose con mandato di smentire, due giri. Su bf5338f5: prove 15/15, 55 file vicini 300/300. E2 e D2 anche con staleTime 30s, Invio implicito e «Salva come bozza»: 0 scritture e testo intatto. D4b, K2, E4, D3 reggono. Togliendo erroreVarianti, salvataggioFermo, la guardia del modulo o variantiNonLette, le prove cadono. Ha trovato la strada della memoria fresca in Duplica, riparata in c5147aae. Su c5147aae: REGGE. D5 regge anche sul percorso Duplica→Modifica→Duplica; 13/13, 302/302; copia senza rete ferma; nessun ciclo né caricamento al posto del modulo. Nota: togliendo solo l'attesa della rilettura in Duplica le prove restano verdi, ma il Salva resta fermo per la firma delle taglie. GIRO 3: subagente general-purpose con mandato di smentire, in un worktree suo, con le opzioni del sito (staleTime 30s e 0, retry 1, retryDelay del sito, refetchOnWindowFocus false). (a) REGGE nell'app: E6 anche con la rilettura che cade una volta e il nuovo tentativo porta 2 taglie, Invio implicito, Duplica (Pubblica e Salva come bozza fermi; in Duplica staleTime 0 rende (a) irraggiungibile). Riga del prodotto REGGE: retry, Riprova, staleTime 0, Invio, invalidazione dopo l'apertura, riga diversa scritta in memoria, riga in pausa, rilettura caduta; ordine delle chiavi degli attributi non dà falsi blocchi. NON REGGE trovato sulle taglie (firma solo sugli id: nome e ordine tornavano vecchi) → riparato in f28a17f5 e riprovato (K7, K8 rosse su 6d72dc20, verdi dopo). Prova del morso: togliendo !varianteInLettura cade E6; il ramo !rigaLetta cade K5; la firma della riga cadono K3 K4 K5; !prodottoInLettura cade K5; la guardia dell'errore della riga e lo stato in pausa non erano coperti → ora K9 e K10 (verificato: togliendo ciascuna cade la sua). 17 file vicini 100/100; i 54 file che montano le pagine prodotto o il modulo 294/294 su f28a17f5 e su 7c4c0b69.",
       "commit_della_voce": [
         "47ff5ad6b3342c56d93e7e1cdd09f90a54c5d924",
-        "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee"
+        "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
+        "6dc1280dc42cb9d74ecdb63d42654445ea829827",
+        "6d72dc20344dd036b46233ca8114c1775e9a4d26",
+        "f28a17f5f25eb41b1a439f6393c941933dad07f1",
+        "7c4c0b6932a9943850b9af87eb95508c8eb6f2ac"
       ],
-      "nota": "Firma delle taglie sugli id e non sulle scorte, scelta: in Modifica la scorta non toccata non si scrive e il server ferma i conflitti (stock_visto, controllaScorteVarianti); in Duplica la scorta della copia è la somma delle taglie che il modulo le mostra."
+      "nota": "Firma delle taglie: id, opzioni, nome e posizione nell'ordine letto, senza la scorta (giro 3; prima solo gli id). In Modifica la scorta non toccata non si scrive e il server ferma i conflitti (stock_visto, controllaScorteVarianti); in Duplica la scorta della copia è la somma delle taglie che il modulo le mostra. (a): il collaudo indicava di togliere «|| !variantiVecchie»; alla lettera fa cadere due prove non della sessione (la-pagina-di-modifica-salva-le-varianti-senza-rimettere-in-magazzino-il-venduto, chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta) che usano il finto di React Query senza isFetchedAfterMount. La guardia messa è «nessuna rilettura in volo né in pausa»: con refetchOnMount 'always' la rilettura parte a ogni montaggio, quindi nel sito «fresche ma non rilette» esiste solo mentre è in volo o in pausa (vedi nuovi_difetti_visti per l'unico caso latente). new/page.tsx:318 ha lo stesso «|| !variantiVecchie» ma con staleTime 0 non vale mai: non toccato (la prova rimessa non lo avrebbe potuto provare)."
     },
     {
       "id": "S01-002",
@@ -72,11 +76,32 @@
       "severita": "minore",
       "file": "app/seller/products/new/page.tsx:150",
       "descrizione": "La lettura ['duplicate-source', id] non viene invalidata da «Modifica» (che invalida solo ['seller','product',id]) e il modulo della copia si apre subito con la sorgente in memoria, senza riprendere la rilettura. Percorso: Duplica X (in memoria non_recedibile false), Modifica X mettendo la spunta, di nuovo Duplica X entro 5 minuti: la copia nasce recedibile, senza spunta e senza avviso. C'era già su b2c62f34; non è la voce S01-002 (che parla della colonna non ancora nota). Cura possibile nello stesso file: staleTime 0 sulla sorgente e prima apertura dopo la rilettura, come per le taglie (c5147aae), più il Salva fermo se dopo la rilettura il recesso è cambiato."
+    },
+    {
+      "titolo": "«Modifica»: se la stessa istanza della pagina passa a un altro id con riga e taglie fresche in memoria, il Salva parte senza rileggerle",
+      "dimensione": "stati-ui",
+      "severita": "minore (latente)",
+      "file": "app/seller/products/[id]/edit/page.tsx:348",
+      "descrizione": "refetchOnMount 'always' vale al primo montaggio; cambiando id nella stessa istanza React Query rilegge solo se la memoria è vecchia. Il controllo indipendente lo riproduce rendendo la pagina con l'id A e poi con B (riga e taglie di B fresche in memoria): stock 8 con stock_visto 5, status e taglie della memoria. Non raggiungibile da Next: layout-router dà una chiave per segmento, e [id] rimonta la pagina. Cura possibile: togliere «|| !variantiVecchie» e richiedere isFetchedAfterMount anche per la riga, aggiungendo isFetchedAfterMount: true al finto di React Query (tests/unit/aiuti/finti/react-query.mjs) o alle due prove che lo usano: file non della sessione."
+    },
+    {
+      "titolo": "«Modifica»: con la scorta vista a illimitata (null) un numero battuto si scrive senza stock_visto",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "components/seller/ProductForm.tsx:881",
+      "descrizione": "stock_visto parte solo se la scorta vista all'apertura è un numero: aperto con «illimitata», se nel frattempo un altro telefono ha messo una scorta, quella battuta dal negoziante la sovrascrive senza controllo del server. C'era già prima di S01; non è la voce."
+    },
+    {
+      "titolo": "«Modifica»: dopo un Salva riuscito, finché la pagina non se ne va, può comparire «Questo prodotto è cambiato…»",
+      "dimensione": "stati-ui",
+      "severita": "minore (cosmetico)",
+      "file": "app/seller/products/[id]/edit/page.tsx:252",
+      "descrizione": "onSuccess invalida la riga e porta a /seller/products: se la rilettura arriva prima del cambio di pagina, la riga letta (quella appena salvata) è diversa da quella dell'apertura e l'avviso compare per un attimo. Lo stesso valeva già per le taglie. Il trigger trg_auto_republish (migrations/032) può cambiare lo stato quando la scorta torna da 0: lì il blocco con «Riapri» è giusto."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
     "agenti": 1,
-    "nota": "un subagente general-purpose per smentire (due giri: bf5338f5 e c5147aae)"
+    "nota": "giro 3: un subagente general-purpose per smentire (a) e (b), in un worktree suo. Giro 2: un subagente (due giri). Niente Workflow."
   }
 }
