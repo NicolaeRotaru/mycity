@@ -123,7 +123,9 @@ afterEach(() => {
 describe('R01-varie · al primo ingresso dopo un tempo senza sessione le domande si rileggono', () => {
   it('esce un negozio, ne entra un altro con la pagina aperta: lo stato dei pagamenti è il suo', async () => {
     const { s, avviso } = await apri();
+    const lettureAllApertura = mondo.letture.length;
     await avviso('INITIAL_SESSION', 'negozio-a');
+    expect(mondo.letture.length, 'all’apertura con la sessione già presente si rilegge tutto').toBe(lettureAllApertura);
     expect(statoPagamenti(s.radice), 'controprova: il negozio A ha i pagamenti attivi').toMatch(ATTIVI);
     const lettureDiA = mondo.letture.length;
     await avviso('TOKEN_REFRESHED', 'negozio-a');
