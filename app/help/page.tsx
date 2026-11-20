@@ -66,7 +66,7 @@ export default function HelpPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-5xl">
       <div className="text-center mb-10">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">Centro assistenza</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 break-words [overflow-wrap:anywhere]">Centro assistenza</h1>
         <p className="text-ink-600">Come possiamo aiutarti?</p>
       </div>
 
@@ -77,7 +77,7 @@ export default function HelpPage() {
       >
         <div className="text-center">
           <div className="mb-2 flex justify-center"><Search size={32} className="text-white" aria-hidden /></div>
-          <h2 className="text-2xl font-bold mb-1">Cerca tra le domande frequenti</h2>
+          <h2 className="text-2xl font-bold mb-1 [overflow-wrap:anywhere]">Cerca tra le domande frequenti</h2>
           <p className="text-primary-100">Le risposte alle domande più comuni →</p>
         </div>
       </Link>
@@ -90,7 +90,7 @@ export default function HelpPage() {
           <Link
             key={t.title}
             href={t.href}
-            className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all"
+            className="min-w-0 [overflow-wrap:anywhere] bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all"
           >
             <div className="mb-2"><Icon size={28} className="text-primary-600" aria-hidden /></div>
             <div className="font-bold text-ink-900 mb-1">{t.title}</div>
@@ -102,27 +102,27 @@ export default function HelpPage() {
 
       {/* Contact options */}
       <div className="bg-cream-50 border border-cream-300 rounded-2xl p-6">
-        <h3 className="font-bold text-ink-900 mb-4 text-lg">Parla con noi direttamente</h3>
+        <h3 className="font-bold text-ink-900 mb-4 text-lg [overflow-wrap:anywhere]">Parla con noi direttamente</h3>
         <div className="grid sm:grid-cols-3 gap-3">
-          <a href={mailtoContatto('info')} className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
+          <a href={mailtoContatto('info')} className="flex min-w-0 items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
             <Mail size={24} className="text-primary-600 shrink-0" aria-hidden />
-            <div>
+            <div className="min-w-0 [overflow-wrap:anywhere]">
               <div className="font-semibold text-sm">Email</div>
               <div className="text-xs text-ink-500">{indirizzoContatto('info')}</div>
             </div>
           </a>
           {whatsapp && (
-            <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
+            <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
               <MessageCircle size={24} className="text-olive-600 shrink-0" aria-hidden />
-              <div>
+              <div className="min-w-0 [overflow-wrap:anywhere]">
                 <div className="font-semibold text-sm">WhatsApp</div>
                 <div className="text-xs text-ink-500">Lun-Ven 9-18</div>
               </div>
             </a>
           )}
-          <Link href="/contact" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
+          <Link href="/contact" className="flex min-w-0 items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
             <FileText size={24} className="text-primary-600 shrink-0" aria-hidden />
-            <div>
+            <div className="min-w-0 [overflow-wrap:anywhere]">
               <div className="font-semibold text-sm">Form contatti</div>
               <div className="text-xs text-ink-500">Risposta entro 24 ore lavorative</div>
             </div>

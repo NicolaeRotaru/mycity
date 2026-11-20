@@ -216,7 +216,7 @@ export default function FaqPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-4xl">
       <div className="text-center mb-10">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">Domande frequenti</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 break-words hyphens-auto">Domande frequenti</h1>
         <p className="text-ink-600">Tutto quello che devi sapere su MyCity. Non trovi la risposta? <Link href="/contact" className="text-primary-700 underline">Scrivici</Link>.</p>
       </div>
 
@@ -229,7 +229,7 @@ export default function FaqPage() {
           // R02-007 — Da md in su la distanza dalla testata la dà già lo scroll-padding di html
           // (globals.css): sommarci scroll-mt-24 fermava la sezione più in basso. Come LegalLayout.
           <section key={section.title} id={section.id} className="scroll-mt-24 md:scroll-mt-0">
-            <h2 className="text-xl font-bold text-ink-900 mb-4 flex items-center gap-2">
+            <h2 className="text-xl font-bold text-ink-900 mb-4 flex items-center gap-2 [overflow-wrap:anywhere]">
               <Icon size={24} className="text-primary-600 shrink-0" aria-hidden /> {section.title}
             </h2>
             <div className="space-y-2">
@@ -244,7 +244,7 @@ export default function FaqPage() {
                       aria-expanded={isOpen}
                       className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-cream-50 transition-colors"
                     >
-                      <span className="font-semibold text-ink-900">{item.q}</span>
+                      <span className="min-w-0 font-semibold text-ink-900 [overflow-wrap:anywhere]">{item.q}</span>
                       <span className={`text-ink-400 text-xl transition-transform ${isOpen ? 'rotate-45' : ''}`}>+</span>
                     </button>
                     {isOpen && (

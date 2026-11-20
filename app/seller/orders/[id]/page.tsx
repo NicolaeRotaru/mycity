@@ -637,8 +637,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <div className="text-sm space-y-1 text-ink-700">
           <p className="font-medium text-ink-900">{order.delivery_full_name}</p>
           <p className="flex items-center gap-1.5"><Phone size={14} aria-hidden className="shrink-0 text-ink-400" /> <a href={`tel:${order.delivery_phone}`} className="text-primary-700 hover:underline">{order.delivery_phone}</a></p>
-          <p className="flex items-start gap-1.5"><MapPin size={14} aria-hidden className="shrink-0 text-ink-400 mt-0.5" /> <span>{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</span></p>
-          {order.delivery_notes && <p className="text-ink-500 italic mt-2">Note: {order.delivery_notes}</p>}
+          <p className="flex items-start gap-1.5"><MapPin size={14} aria-hidden className="shrink-0 text-ink-400 mt-0.5" /> <span className="min-w-0 [overflow-wrap:anywhere]">{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</span></p>
+          {order.delivery_notes && <p className="text-ink-500 italic mt-2 break-words [overflow-wrap:anywhere]">Note: {order.delivery_notes}</p>}
         </div>
       </div>
       {/* PRODOTTI */}

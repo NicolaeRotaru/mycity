@@ -102,6 +102,6 @@ describe('2376 — la rilettura dell\'ordine cade', () => {
     stato.ordineInErrore = true;
     const html = disegna();
     expect(html).toContain('Non riesco ad aggiornare l&#x27;ordine');
-    expect(html).toContain('Pronto per il rider');
+    expect(html).toContain('Pronto per il fattorino');
   });
 });

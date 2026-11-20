@@ -43,6 +43,7 @@ vi.mock('@/lib/rate-limit', () => ({
   rateLimitAsync: vi.fn(async () => ({ allowed: true, retryAfterSec: 0 })),
   getClientIp: () => '1.2.3.4',
 }));
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth:
     (h: (ctx: { user: { id: string }; req: Request }) => unknown) =>

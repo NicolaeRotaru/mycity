@@ -91,13 +91,15 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
    * prodotto: un clic e si arrivava a «non ci sono ancora prodotti». Home, piede e indice delle
    * categorie le toglievano già, con la stessa lettura e la stessa chiave: qui si fa lo stesso. Si
    * aspetta la risposta per non far comparire e poi sparire un bottone; se la lettura fallisce si
-   * mostrano tutte, come prima. Le file dei prodotti restano su tutte le figlie: si nascondono da
-   * sole quando sono vuote.
+   * mostrano tutte, come prima. Una rilettura caduta, però, non butta via le piene già note
+   * (R08-007/R08-005): react-query le tiene in `data` anche in stato
+   * d'errore. Le file dei prodotti restano su tutte le figlie: si nascondono da sole quando sono
+   * vuote.
    */
   const piene = useQuery(domandaCategoriePiene(supabase));
   const sottocategoriePiene: SubcatRow[] = piene.isLoading
     ? []
-    : soloLePiene(subcategories, piene.isError ? null : piene.data);
+    : soloLePiene(subcategories, piene.data ?? null);
 
   /**
    * 17/11/2026 — CON LA LETTURA DEI PRODOTTI CADUTA, LA CATEGORIA MADRE RESTAVA BIANCA.

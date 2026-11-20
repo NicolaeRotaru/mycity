@@ -50,7 +50,7 @@
         "@typescript-eslint"
       ],
       "rules": {
-        "@typescript-eslint/no-explicit-any": "warn",
+        "@typescript-eslint/no-explicit-any": "error",
         "@typescript-eslint/no-unused-vars": [
           "error",
           {
@@ -59,6 +59,29 @@
             "caughtErrorsIgnorePattern": "^_"
           }
         ]
+      }
+    },
+    {
+      "files": [
+        "app/api/cron/send-emails/route.ts",
+        "app/orders/\\[id\\]/return/page.tsx",
+        "app/rider/orders/\\[id\\]/page.tsx",
+        "app/seller/orders/\\[id\\]/page.tsx",
+        "components/ConfettiBurst.tsx",
+        "components/DeliveryMap.tsx",
+        "components/NearbyStoresMap.tsx",
+        "components/StoreLocationPicker.tsx",
+        "components/Turnstile.tsx",
+        "lib/analytics/riconcilia-consenso.ts",
+        "lib/analytics/sentry-config.ts",
+        "lib/analytics/sentry.tsx",
+        "lib/analytics/server.ts",
+        "lib/coupons.ts",
+        "lib/email/avviso-messaggio-negozio.ts",
+        "lib/ordini/rivendica-il-codice-sconto.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "warn"
       }
     },
     {

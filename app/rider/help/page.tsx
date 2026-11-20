@@ -102,7 +102,7 @@ export default function RiderHelpPage() {
         <Link
           href="/rider/profile"
           aria-label="Indietro"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-700 hover:bg-cream-100"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-700 hover:bg-cream-100"
         >
           <ArrowLeft size={20} aria-hidden />
         </Link>

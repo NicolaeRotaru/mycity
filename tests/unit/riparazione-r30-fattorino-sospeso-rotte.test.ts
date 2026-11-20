@@ -36,6 +36,7 @@ vi.mock('@/lib/rider/prova-del-fattorino', () => ({
 }));
 vi.mock('@/lib/ordini/annulla', () => ({
   COLONNE_ANNULLO: 'id, user_id, seller_id, total_price, payment_method, delivery_status',
+  avvisaIlNegozioDellAnnullo: vi.fn(async () => true),
   annullaERimborsa: vi.fn(async (_admin: unknown, ordine: unknown) => {
     stato.annulli.push(ordine);
     return { ok: true, refundId: null, creditoNonTornatoCents: 0 };

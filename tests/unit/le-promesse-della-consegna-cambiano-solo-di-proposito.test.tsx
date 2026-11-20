@@ -105,7 +105,7 @@ const PAGINA_SPEDIZIONI = [
   'In attesa di conferma',
   'In preparazione presso il venditore',
   // 5/11/2026 (S07, scheda 2032) — la stessa etichetta di «I miei ordini» (`etichettaPronto`).
-  'Pronto per il rider',
+  'Pronto per il fattorino',
   'In consegna (con nome del rider)',
   'Consegnato',
   'Aree servite',

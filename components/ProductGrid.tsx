@@ -282,15 +282,22 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const { isLoading, isError, refetch, isFetching } = domanda;
 
   // 13/11/2026 (R15-011) — Quanti sono davvero, non quante schede sono arrivate. Solo per le
-  // griglie che lo chiedono (`soloNovita`): le altre continuano a contare le schede a schermo.
+  // griglie che lo chiedono: le altre continuano a contare le schede a schermo.
+  // 19/11/2026 (R09-004, R09-017) — Lo stesso vale per «Sotto i N €» e per «I più recensiti»: la
+  // pagina scriveva «40 prodotti» con 106 in catalogo. Per i recensiti il conteggio parte con
+  // l'elenco degli id col voto, gli stessi della lettura.
+  const contaVero = !!soloNovita || prezzoSotto !== undefined || !!soloRecensiti;
   const domandaTotale = useQuery<number | null>({
-    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal }),
-    enabled: !!soloNovita,
+    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal, soloRecensiti }),
+    enabled: contaVero && (!vistaPerVoto || idsColVoto !== undefined),
     staleTime: 60_000,
-    queryFn: () => contaProdottiDellaGriglia(supabase, { categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal }),
+    queryFn: () => contaProdottiDellaGriglia(supabase, {
+      categoryId, categoryIds, sellerId, search, maxPrice, minPrice, onlyInStock, creatiDal,
+      idsColVoto: vistaPerVoto ? idsColVoto ?? [] : undefined,
+    }),
   });
-  const totaleVero = soloNovita ? domandaTotale.data : null;
-  const totaleInAttesa = !!soloNovita && domandaTotale.isLoading;
+  const totaleVero = contaVero ? domandaTotale.data : null;
+  const totaleInAttesa = contaVero && domandaTotale.isLoading;
 
   /**
    * 6/9/2026 — CAMBIANDO UN FILTRO LA GRIGLIA RESTAVA IDENTICA, SENZA UN SEGNO.

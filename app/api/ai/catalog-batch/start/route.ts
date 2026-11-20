@@ -97,12 +97,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
   const aperto = (aperti ?? [])[0] as { id: string; status: string } | undefined;
   if (aperto) {
-    return apiError(
-      409,
-      'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.',
-      'CONFLICT',
-      { jobId: aperto.id, status: aperto.status },
-    );
+    // R03-002 (giro di correzione) — Un lavoro «in invio» non si applica e non
+    // si scarta (cancel accetta solo «pronto»): si aspetta che l'invio si chiarisca.
+    const messaggio = aperto.status === 'submitting'
+      ? 'Hai già un lavoro sul catalogo il cui invio è ancora da verificare. Ricarica la pagina fra qualche minuto prima di avviarne un altro.'
+      : 'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.';
+    return apiError(409, messaggio, 'CONFLICT', { jobId: aperto.id, status: aperto.status });
   }
 
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([
@@ -143,6 +143,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // noi. Ora la riga nasce prima, in stato «in invio»; l'identificativo del
   // lotto ci si aggiunge dopo. Se qualcosa va storto resta una traccia con
   // scritto cosa è successo, e il lotto si recupera a mano.
+  // 19/11/2026 (R03-002, giro 2) — La riga nasce col motivo «invio senza
+  // risposta»: finche' il lotto non e' agganciato (o l'invio non e' fallito
+  // davvero) vale «forse partito», e lo stato la tiene aperta quanto un lotto
+  // (24 ore) invece di chiuderla dopo 15 minuti. Cosi' anche se il database
+  // rifiuta le scritture dopo l'invio, non se ne paga un secondo.
   const { data: job, error: errJob } = await admin
     .from('catalog_ai_jobs')
     .insert({
@@ -151,6 +156,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       status: 'submitting',
       target_lang: targetLang ?? null,
       total: products.length,
+      error: INVIO_SENZA_RISPOSTA,
     })
     .select('id')
     .single();
@@ -212,7 +218,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // R04-005 — Agganciare il lotto alla riga si ritenta una volta: se non
     // riesce, la risposta dice lo stato VERO («in invio»), non «in corso».
     const aggancia = () =>
-      admin.from('catalog_ai_jobs').update({ status: 'processing', batch_id: handle.id }).eq('id', job.id);
+      admin.from('catalog_ai_jobs').update({ status: 'processing', batch_id: handle.id, error: null }).eq('id', job.id);
     let { error: errUpd } = await aggancia();
     if (errUpd) ({ error: errUpd } = await aggancia());
 
@@ -225,7 +231,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       // R03-003 — Il lotto e' partito ed e' pagato: la riga lo dice nel motivo,
       // con il suo id. Lo stato (status/route.ts) lo aggancia da li' invece di
       // chiudere la riga come fallita dopo 15 minuti e lasciarne pagare un altro.
-      await admin.from('catalog_ai_jobs').update({ error: `lotto partito ma non agganciato: ${handle.id}` }).eq('id', job.id);
+      // Se anche questa scrittura e' rifiutata la riga resta «forse partito»
+      // (il motivo con cui e' nata): aperta, e niente secondo lotto pagato.
+      const { error: errMotivo } = await admin
+        .from('catalog_ai_jobs')
+        .update({ error: `lotto partito ma non agganciato: ${handle.id}` })
+        .eq('id', job.id);
+      if (errMotivo) logger.error('catalog-batch start: motivo del lotto non agganciato rifiutato', { jobId: job.id, batchId: handle.id, status: errMotivo.code });
       return NextResponse.json({ jobId: job.id, total: products.length, status: 'submitting', ...esclusi });
     }
 
@@ -235,26 +247,41 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // dichiara fallito (e non si rimanda). La riga resta «in invio» con il
     // motivo, cosi' il lavoro aperto blocca un secondo avvio e si verifica.
     if (invioIncerto(err)) {
-      await admin
+      // R03-002 (giro 2) — Se il database la rifiuta, la riga ha gia' questo
+      // motivo dalla nascita: resta aperta come «forse partito».
+      const { error: errMotivo } = await admin
         .from('catalog_ai_jobs')
         .update({ error: INVIO_SENZA_RISPOSTA })
         .eq('id', job.id);
+      if (errMotivo) logger.error('catalog-batch start: motivo dell\'invio senza risposta rifiutato', { jobId: job.id, status: errMotivo.code });
       logger.error('catalog-batch start: invio del lotto senza risposta, da verificare', { sellerId: user.id, jobId: job.id });
       return ApiErrors.unavailable(
         'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
       );
     }
+    // R03-002 (giro di correzione) — Il lavoro non e' partito: la riga, nata
+    // «forse partito», va chiusa. Come l'aggancio, la scrittura si ritenta una
+    // volta: se il database la rifiuta, la riga resterebbe aperta per 24 ore e
+    // il negozio non potrebbe ripartire.
+    const chiudi = async (valori: { status: 'canceled' | 'failed'; error: string | null }) => {
+      const scrivi = () => admin.from('catalog_ai_jobs').update(valori).eq('id', job.id);
+      let { error: errChiudi } = await scrivi();
+      if (errChiudi) ({ error: errChiudi } = await scrivi());
+      if (errChiudi) {
+        logger.error('catalog-batch start: chiusura del lavoro mai partito rifiutata', {
+          jobId: job.id, stato: valori.status, status: errChiudi.code,
+        });
+      }
+    };
     // R03-002 — Il tetto di spesa del giorno non e' un guasto: il lavoro non e'
     // partito e non e' costato niente. Non si segna «fallito» e non si dice
     // «riprova»: si dice che il budget AI del giorno e' finito.
     if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
-      await admin
-        .from('catalog_ai_jobs')
-        .update({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' })
-        .eq('id', job.id);
+      await chiudi({ status: 'canceled', error: 'tetto di spesa AI del giorno raggiunto: il lavoro non è partito' });
       return mapAiError(err, 'ai-catalog-batch-start');
     }
-    await admin.from('catalog_ai_jobs').update({ status: 'failed' }).eq('id', job.id);
+    // Fallito davvero: il motivo «forse partito» con cui la riga e' nata va tolto.
+    await chiudi({ status: 'failed', error: null });
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
     logger.error('catalog-batch start: submit failed', { sellerId: user.id, jobId: job.id });
     return ApiErrors.badGateway('Non sono riuscito ad avviare il lavoro. Riprova.');

@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  */
 
 const FAKE_USER = { id: 'seller-1', email: 's@x.com' };
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth:
     (h: (ctx: { user: typeof FAKE_USER; req: Request }) => unknown) => (req: Request) =>

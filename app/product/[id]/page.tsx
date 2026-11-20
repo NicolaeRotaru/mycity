@@ -2,7 +2,6 @@
 
 import { useState, use, useRef, useEffect } from 'react';
 import { ANELLO, classiBottoneCuore } from '@/lib/design/cuore-preferito';
-import Image from 'next/image';
 import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -23,7 +22,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
-import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
+import { statoSceltaVarianti, valoreSenzaVariante } from '@/lib/products/variants';
 import { loadProductVariants } from '@/lib/products/persistVariants';
 import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 import { useFavorites } from '@/components/hooks/useFavorites';
@@ -88,6 +87,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  // R08-003 — L'indirizzo dello zoom che non ha risposto (foto cancellata): al suo posto il segnaposto,
+  // lo stesso di FotoConRipiego. Si ricorda l'indirizzo, non un vero/falso: un'altra foto riprova.
+  const [zoomFallito, setZoomFallito] = useState<string | null>(null);
   /**
    * #135 e #120 — Il visore a schermo intero era un `fixed inset-0` scritto a
    * mano: nessun Esc, nessuna trappola del fuoco, nessun blocco dello
@@ -502,13 +504,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
   // quella della variante selezionata (o del prodotto se non ci sono varianti).
   const hasVariants = Boolean((product as { has_variants?: boolean }).has_variants) || variants.length > 0;
-  const optionGroups = hasVariants ? deriveOptionGroups(variants) : [];
-  const allOptionsChosen = optionGroups.length > 0 && optionGroups.every((g) => selectedOptions[g.name]);
-  const selectedVariant = allOptionsChosen ? findVariant(variants, selectedOptions) : null;
-  // R24-018 — Tutte le opzioni scelte ma nessuna variante con quella coppia (il negozio non l'ha
-  // creata): non è «scegli le opzioni», è una combinazione che non c'è, e la scheda lo dice.
-  const combinazioneMancante = allOptionsChosen && !selectedVariant;
-  const needsVariantChoice = hasVariants && !selectedVariant && !combinazioneMancante;
+  // R08-011 — Dove sta la scelta (tutta fatta, combinazione che non c'è, da fare) lo dice una funzione
+  // pura, provata a parte: tutte le opzioni scelte ma nessuna variante con quella coppia non è «scegli».
+  const {
+    gruppi: optionGroups,
+    variante: selectedVariant,
+    combinazioneMancante,
+    daScegliere: needsVariantChoice,
+  } = statoSceltaVarianti(variants, selectedOptions, hasVariants);
   const COMBINAZIONE_CHE_NON_CE = 'Questa combinazione non c\'è: prova un\'altra opzione.';
 
   const stock: number | undefined = hasVariants
@@ -554,6 +557,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // risposta. La pastiglia «gratis» si accende solo se la consegna davvero non si paga.
   const spedizione = promessaSpedizione();
   const consegnaSenzaCosto = spedizione.dettaglioConsegna === null;
+  // R08-002 — Nel riquadro verde la consegna è una riga corta + il rimando alla tariffa intera. La riga
+  // è la frase principale delle promesse (`titolo`, «Consegna MyCity da 3,00 € per tutto il carrello»):
+  // niente frase nuova, gli importi vengono dalle costanti. La tariffa intera, `dettaglioConsegna`,
+  // la legge la cassa e la dice la pagina Spedizioni.
+  const rigaConsegna = spedizione.titolo;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
   // 29/10/2026 — Qui c'era `expressEligible` (interruttore Express del prodotto e del negozio): decideva
@@ -808,10 +816,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 sito considera sensata. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
+              src={zoomFallito === sizedImage(images[activeImg], LARGHEZZA_MASSIMA) ? FOTO_MANCANTE : sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
               alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}
               className="max-h-[90vh] max-w-[95vw] object-contain"
               onClick={(e) => e.stopPropagation()}
+              onError={() => {
+                const indirizzo = sizedImage(images[activeImg], LARGHEZZA_MASSIMA);
+                if (indirizzo !== FOTO_MANCANTE) setZoomFallito(indirizzo);
+              }}
             />
             {images.length > 1 && (
               <>
@@ -961,7 +973,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {spedizione.dettaglioConsegna && (
                 <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                   <Bike size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                  <span>{spedizione.dettaglioConsegna}</span>
+                  <span>
+                    {rigaConsegna}
+                    {' · '}
+                    <Link href="/shipping" className="underline underline-offset-2 hover:text-olive-950">come si calcola</Link>
+                  </span>
                 </span>
               )}
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
@@ -1027,15 +1043,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       // R24-018 — Con le altre scelte già fatte, questo valore ha una variante? Se no
                       // si spegne (barrato, e lo sente anche il lettore di schermo) prima di sceglierlo.
                       const altreScelte = Object.entries(selectedOptions).filter(([k, s]) => k !== g.name && s);
-                      const senzaVariante = altreScelte.length > 0 && !conQuestoValore.some(
-                        (v) => altreScelte.every(([k, s]) => v.options?.[k] === s),
-                      );
+                      const senzaVariante = valoreSenzaVariante(variants, selectedOptions, g.name, val);
                       return (
                         <button
                           key={val}
                           type="button"
                           onClick={() => setSelectedOptions((prev) => ({ ...prev, [g.name]: val }))}
                           aria-pressed={active}
+                          // R08-011 — Spento per chi legge con lo schermo: aria-disabled, non `disabled`,
+                          // così un tocco non cade nel vuoto ma dice «Questa combinazione non c'è».
+                          aria-disabled={senzaVariante && !active ? true : undefined}
                           aria-label={esaurito ? `${val}, esaurito` : undefined}
                           className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
                             active
@@ -1520,7 +1537,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
                         {/* 5/11/2026 — col caricatore: la misura la fa il CDN di Supabase, non una
                             seconda volta l'ottimizzatore di Vercel su una foto già ridotta. */}
-                        <Image
+                        <FotoConRipiego
                           src={url}
                           alt={`Foto ${i + 1} della recensione`}
                           fill

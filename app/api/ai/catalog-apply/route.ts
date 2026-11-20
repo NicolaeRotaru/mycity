@@ -3,6 +3,7 @@ import { AiCallError, mapAiError } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -42,6 +43,7 @@ export const runtime = 'nodejs';
 type ApplyBody = { productId?: string; patch?: AiProductPatch };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   const rl = await rateLimitAsync({ key: `ai-catalog-apply:${user.id}`, max: 60, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 

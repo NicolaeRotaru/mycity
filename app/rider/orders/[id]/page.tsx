@@ -597,7 +597,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             </div>
             {!targetIsStore && order.delivery_notes && (
               <p className="mt-3 flex items-start gap-1.5 rounded-md bg-accent-50 p-2.5 text-[13px] italic text-ink-700">
-                <StickyNote size={14} className="mt-0.5 shrink-0" aria-hidden /> {order.delivery_notes}
+                <StickyNote size={14} className="mt-0.5 shrink-0" aria-hidden /> <span className="min-w-0 [overflow-wrap:anywhere]">{order.delivery_notes}</span>
               </p>
             )}
           </div>

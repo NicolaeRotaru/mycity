@@ -41,10 +41,15 @@ export function letturaDellAndamento(erroreOrdini: unknown, erroreVisite: unknow
 /**
  * Ordini ogni cento visite. Torna `null` — non zero — quando la divisione non
  * si può fare: senza le visite non c'è tasso, e senza NESSUNA visita misurata
- * un negozio che ha venduto tre volte non ha convertito «lo 0,0%».
+ * un negozio che ha venduto tre volte non ha convertito «lo 0,0%». Torna `null`
+ * anche quando gli ordini superano le visite misurate (campione troppo piccolo).
  */
 export function tassoDiConversione(ordini: number, visite: number | null): number | null {
   if (visite == null || visite <= 0) return null;
+  // 19/11/2026 (R09-005) — Gli ordini sono di tutti, le visite solo di chi accetta i cookie: con
+  // più ordini che visite misurate il campione è troppo piccolo, e il conto darebbe oltre il 100%
+  // (un dato impossibile, che per di più la scheda colorava di verde). Non c'è tasso.
+  if (ordini > visite) return null;
   return (ordini / visite) * 100;
 }
 

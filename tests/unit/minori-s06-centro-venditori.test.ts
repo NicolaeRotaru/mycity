@@ -26,7 +26,7 @@ describe('275 — risposte che il sito mantiene', () => {
   it('i pulsanti si chiamano come nel pannello', () => {
     expect(testo).toContain('"Accetta ordine"');
     expect(testo).toContain('"Ordine ricevuto"');
-    expect(testo).toContain('"Pronto per il rider"');
+    expect(testo).toContain('"Pronto per il fattorino"');
     expect(testo).not.toMatch(/Pronto per la consegna|I miei prodotti|"Nuovo"/);
   });
 });

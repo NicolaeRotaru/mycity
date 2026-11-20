@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import FotoConRipiego from '@/components/ui/FotoConRipiego';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Clock } from 'lucide-react';
@@ -94,7 +94,7 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
             >
               <div className="relative w-full aspect-square bg-cream-100">
                 {img && (
-                  <Image
+                  <FotoConRipiego
                     src={sizedImage(img, 160, { quadrato: true })}
                     alt={p.name}
                     fill

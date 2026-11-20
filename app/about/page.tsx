@@ -120,7 +120,7 @@ export default async function AboutPage() {
 
       {/* Stats row, overlapping the hero */}
       <div className="container mx-auto px-6 max-w-5xl -mt-10 relative z-10">
-        <div className={`grid ${COLONNE_DEI_NUMERI} gap-4 ${stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+        <div className={`grid ${COLONNE_DEI_NUMERI} max-[300px]:grid-cols-1 gap-4 ${stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
           {stats.map((s) => (
             <div
               key={s.label}
@@ -230,13 +230,13 @@ export default async function AboutPage() {
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/lavora-con-noi"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
               >
                 <Briefcase size={18} strokeWidth={2.2} aria-hidden /> Lavora con noi
               </Link>
               <Link
                 href="/sell"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 font-bold text-[15px] bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-[15px] bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
               >
                 <Store size={18} strokeWidth={2.2} aria-hidden /> Apri un negozio
                 <ArrowRight size={16} strokeWidth={2.2} aria-hidden />

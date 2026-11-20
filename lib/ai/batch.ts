@@ -60,9 +60,19 @@ function toHandle(b: Anthropic.Messages.MessageBatch): BatchHandle {
   };
 }
 
+/**
+ * 19/11/2026 (R03-004, giro 2) — Il tempo di tutto l'invio, risposta E corpo.
+ * Il timeout del client (60 s) vale solo fino alle intestazioni: dopo un 2xx un
+ * corpo che si ferma teneva l'invio appeso fino ai 120 s di Vercel, che
+ * spegneva la funzione con la riga senza motivo. Allo scadere l'invio si
+ * interrompe e vale «forse partito».
+ */
+const TEMPO_INVIO_LOTTO_MS = 70_000;
+
 /** Invia un batch. Mappa BatchRequest → shape SDK { custom_id, params }. */
 export async function submitBatch(requests: BatchRequest[]): Promise<BatchHandle> {
   const client = getAnthropic();
+  const scadenza = new AbortController();
   // 12/11/2026 (R04-014) — NIENTE SECONDO INVIO AUTOMATICO.
   // Il client unico ritenta una volta dopo un timeout, e la creazione del lotto
   // non ha una chiave anti-doppione: se il primo invio era arrivato, presso
@@ -80,24 +90,37 @@ export async function submitBatch(requests: BatchRequest[]): Promise<BatchHandle
         ...(r.tool_choice ? { tool_choice: r.tool_choice } : {}),
       },
     })),
-  }, { maxRetries: 0 });
+  }, { maxRetries: 0, signal: scadenza.signal });
+  const orologio = setTimeout(() => scadenza.abort(), TEMPO_INVIO_LOTTO_MS);
   // 17/11/2026 (R03-009, ripresa) — Prima la risposta, poi il corpo. Una risposta
   // senza 2xx o una connessione caduta arrivano qui come sempre (vedi
   // `invioIncerto`). Dopo un 2xx il lotto c'e': se il corpo non si legge
-  // (troncato, vuoto) l'errore lo dice, e non diventa un «fallito, riprova».
-  const rispostaArrivata = typeof invio.asResponse === 'function' ? (await invio.asResponse(), true) : false;
+  // (troncato, vuoto, fermo oltre il tempo) l'errore lo dice, e non diventa un
+  // «fallito, riprova».
+  let rispostaArrivata = false;
+  let lotto: Anthropic.Messages.MessageBatch | undefined;
   try {
-    return toHandle(await invio);
+    if (typeof invio.asResponse === 'function') rispostaArrivata = (await invio.asResponse(), true);
+    lotto = await invio;
   } catch (err) {
-    if (rispostaArrivata) throw new RispostaDelLottoIlleggibile(err);
+    if (rispostaArrivata || scadenza.signal.aborted) throw new RispostaDelLottoIlleggibile(err);
     throw err;
+  } finally {
+    clearTimeout(orologio);
   }
+  // R03-004 (giro 2) — Un 2xx con un corpo che non e' un lotto (una pagina HTML,
+  // del testo, un JSON senza id) usciva come lotto senza id: la riga restava
+  // «in corso» senza niente da interrogare. Il lotto c'e', ma non si sa quale.
+  if (!lotto || typeof lotto !== 'object' || typeof lotto.id !== 'string' || !lotto.id) {
+    throw new RispostaDelLottoIlleggibile(lotto);
+  }
+  return toHandle(lotto);
 }
 
-/** Il fornitore ha risposto 2xx (il lotto e' creato) ma la sua risposta non si legge. */
+/** Il lotto puo' essere creato, ma la risposta del fornitore non e' arrivata intera o non si legge. */
 class RispostaDelLottoIlleggibile extends Error {
   constructor(readonly causa: unknown) {
-    super('lotto creato, ma la risposta del fornitore non si legge');
+    super('lotto forse creato, ma la risposta del fornitore non e\' arrivata intera o non si legge');
     this.name = 'RispostaDelLottoIlleggibile';
   }
 }
@@ -164,10 +187,12 @@ export const INVIO_SENZA_RISPOSTA = 'invio senza risposta: il lotto potrebbe ess
  *
  * Ripresa: anche il 524 di Cloudflare («l'origine non ha risposto in tempo»),
  * che e' proprio un invio rimasto senza risposta, e un 2xx col corpo
- * illeggibile. Non il 503, il 520, il 522 o il 529: sono rifiuti prima
- * dell'invio.
+ * illeggibile. Giro 2: anche il 520 di Cloudflare (l'origine ha chiuso la
+ * connessione o ha risposto in modo incomprensibile), che puo' arrivare DOPO
+ * che l'origine ha preso la richiesta. Non il 503, il 522 o il 529: sono
+ * rifiuti prima dell'invio.
  */
-const STATUS_FORSE_PARTITO: ReadonlySet<number> = new Set([500, 502, 504, 524]);
+const STATUS_FORSE_PARTITO: ReadonlySet<number> = new Set([500, 502, 504, 520, 524]);
 
 export function invioIncerto(err: unknown): boolean {
   if (err instanceof APIConnectionError) return true;
