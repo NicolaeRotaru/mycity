@@ -47,6 +47,8 @@ const stato = vi.hoisted(() => {
     cerca: '',
     /** Se c'è, la rilettura della riga del prodotto aspetta questa promessa: la rilettura resta in volo. */
     rigaInVolo: null as Promise<unknown> | null,
+    /** Quante letture della riga del prodotto cadono ancora (errore di rete). */
+    rigaCade: 0,
     client: null as unknown,
   };
   const catena = (tavola: string) => {
@@ -60,6 +62,7 @@ const stato = vi.hoisted(() => {
     const riga = (): Esito => {
       if (tavola === 'profiles') return { data: { offers_express: true }, error: null };
       if (conLimite) return s.colonna;
+      if (id === ID && s.rigaCade > 0) { s.rigaCade -= 1; return { data: null, error: { message: 'TypeError: Failed to fetch' } }; }
       if (id === ID) return s.prodotto ? { data: s.prodotto, error: null } : { data: null, error: { code: 'PGRST116', message: 'nessuna riga' } };
       if (id === SORGENTE) return s.sorgente ? { data: s.sorgente, error: null } : { data: null, error: { message: 'TypeError: Failed to fetch' } };
       return { data: null, error: { code: 'PGRST116', message: 'nessuna riga' } };
@@ -244,6 +247,7 @@ beforeEach(() => {
   stato.inserimenti = [];
   stato.cerca = '';
   stato.rigaInVolo = null;
+  stato.rigaCade = 0;
   try { localStorage.clear(); } catch { /* niente */ }
 });
 
@@ -446,6 +450,80 @@ describe('S01-001 · «Modifica prodotto»: il modulo rimasto aperto non riscriv
     expect(nessunaScrittura()).toEqual({ prodotto: 0, taglie: 0, copie: 0 });
     expect(pulsante(radice, 'Riapri con i dati aggiornati'), 'controprova: il modulo offre di riaprire con la riga vera').toBeTruthy();
     expect(campoNome(radice)?.value).toBe('Lampada con dedica');
+  });
+
+  it('K7 · un altro telefono ha rinominato una taglia (stesso id): tornata la rete il Salva non rimette il nome vecchio', async () => {
+    // Controllo indipendente (giro 3): la firma delle taglie guardava solo gli id, ma il Salva rimanda
+    // nome, opzioni e posizione di ogni taglia: «Bordeaux» tornava «Rosso».
+    const BORDEAUX: Taglia = { ...ROSSO, label: 'Bordeaux', options: { colore: 'Bordeaux' } };
+    stato.taglie[ID] = async () => [BORDEAUX, BLU];
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]), COME_IL_SITO);
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    await clic(radice, 'Salva modifiche');
+    expect(((stato.variantiSalvate.at(-1)?.varianti ?? []) as Taglia[]).map((t) => t.label), 'il Salva ha rimesso il nome vecchio della taglia').not.toContain('Rosso');
+    expect(nessunaScrittura()).toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+
+    await clic(radice, 'Riapri con le taglie aggiornate');
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi).toHaveLength(1);
+    expect((stato.variantiSalvate.at(-1)?.varianti as Taglia[]).map((t) => t.label)).toEqual(['Bordeaux', 'Blu']);
+  });
+
+  it('K8 · un altro telefono ha cambiato l\'ordine delle taglie: tornata la rete il Salva non rimette l\'ordine vecchio', async () => {
+    stato.taglie[ID] = async () => [{ ...BLU, position: 0 }, { ...ROSSO, position: 1 }];
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]));
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    await clic(radice, 'Salva modifiche');
+    expect((stato.variantiSalvate.at(-1)?.varianti as Taglia[] | undefined)?.map((t) => t.id), 'il Salva ha rimesso l\'ordine vecchio delle taglie').not.toEqual(['v-rosso', 'v-blu']);
+    expect(nessunaScrittura()).toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+  });
+
+  it('K9 · tornata la rete la rilettura del prodotto cade: il Salva resta fermo con «Riprova», poi riparte', async () => {
+    stato.taglie[ID] = async () => [ROSSO, BLU];
+    stato.rigaCade = 1;
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]));
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    expect(stato.rigaCade, 'controprova: la rilettura del prodotto è caduta').toBe(0);
+    await clic(radice, 'Salva modifiche');
+    expect(nessunaScrittura(), 'con la riga non riletta il Salva ha rimandato i valori della memoria').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+    expect(campoNome(radice)?.value, 'la rilettura caduta ha chiuso il modulo').toBe('Lampada con dedica');
+
+    await clic(radice, 'Riprova');
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi).toHaveLength(1);
+    expect(payloadDi(0)?.name).toBe('Lampada con dedica');
+  });
+
+  it('K10 · la rilettura del prodotto cade e il nuovo tentativo resta fermo senza rete: il Salva aspetta', async () => {
+    stato.taglie[ID] = async () => [ROSSO, BLU];
+    stato.rigaCade = 1;
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => {
+      // Come il sito: un nuovo tentativo dopo un errore di rete (qui dopo 300 ms).
+      qc.setDefaultOptions({ queries: { retry: 1, retryDelay: 300, staleTime: 0 }, mutations: { retry: false } });
+      inMemoriaModifica(qc, [ROSSO, BLU]);
+    });
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    expect(stato.rigaCade, 'controprova: il primo tentativo è caduto').toBe(0);
+    await rete(false);
+    await aspetta(250);
+    await clic(radice, 'Salva modifiche');
+    expect(nessunaScrittura(), 'con la rilettura del prodotto ferma senza rete il Salva ha rimandato i valori della memoria').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+
+    await rete(true);
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi).toHaveLength(1);
   });
 
   it('K6 · una vendita cambia solo la scorta mentre il modulo è aperto: il Salva non si ferma (la scorta ha la sua guardia)', async () => {

@@ -44,9 +44,14 @@ function comEraPrima(prima: Record<string, unknown>, payload: Record<string, unk
   return indietro;
 }
 
-/** S01-001 — Le taglie riconosciute dagli id: altre taglie, o un numero diverso, danno un'altra firma. */
-function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
-  return taglie.map((t) => t.id ?? '').sort().join('|');
+/**
+ * S01-001 — Le taglie come le rimanda il Salva: id, opzioni, nome e posizione, nell'ordine letto.
+ * Altre taglie, un numero diverso, una taglia rinominata o spostata da un altro telefono danno
+ * un'altra firma (controllo indipendente del giro 3: guardando solo gli id, «Bordeaux» tornava
+ * «Rosso»). Fuori la scorta di ogni taglia: ha la sua guardia (`scorteViste`).
+ */
+function firmaDelleTaglie(taglie: ProductVariant[]): string {
+  return JSON.stringify(taglie.map((t) => [t.id ?? '', inOrdine(t.options), t.label, t.position ?? null]));
 }
 
 /**
@@ -58,7 +63,7 @@ function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
  */
 const COLONNE_RISCRITTE = ['name', 'description', 'price', 'compare_at_price', 'unit', 'condition', 'category_id', 'images', 'attributes', 'tags', 'express_enabled', 'status'] as const;
 
-/** Lo stesso valore da la stessa firma, in qualunque ordine arrivino le chiavi degli oggetti. */
+/** Lo stesso valore da' la stessa firma, in qualunque ordine arrivino le chiavi degli oggetti. */
 function inOrdine(valore: unknown): unknown {
   if (Array.isArray(valore)) return valore.map(inOrdine);
   if (valore && typeof valore === 'object') {
@@ -68,7 +73,7 @@ function inOrdine(valore: unknown): unknown {
   return valore;
 }
 
-/** S01-001 — La riga del prodotto come la riscrive il Salva: un'altra riga da un'altra firma. */
+/** S01-001 — La riga del prodotto come la riscrive il Salva: un'altra riga da' un'altra firma. */
 function firmaDellaRiga(riga: Record<string, unknown>): string {
   return JSON.stringify(COLONNE_RISCRITTE.map((colonna) => inOrdine(riga[colonna] ?? null)));
 }
