@@ -14,6 +14,7 @@ import { ORE_DELLA_VELOCE, QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 import { formatPrice } from './format';
 import { CARTA_ACCESA, CODICI_SCONTO_IN_CASSA } from './funzioni-al-lancio';
 import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents, vociDellaConsegna, type VociDellaConsegna } from './ordini/prezzi';
+import { TETTO_CONTANTI_CENTS, sopraIlTettoDeiContanti } from './ordini/tetto-dei-contanti';
 
 /**
  * IL NOME DELLA VOCE DA 3 EURO — uno solo, in ogni schermata.
@@ -280,9 +281,23 @@ export function metodiAlCheckout(
 /** I metodi che la cassa offre in questa build (la chiave pubblica è fissata al momento della build). */
 export const METODI_AL_CHECKOUT: readonly MetodoPagamento[] = Object.freeze([...metodiAlCheckout()]);
 
-export function frasePagamento(metodi: readonly MetodoPagamento[] = metodiAlCheckout()): string {
+/*
+ * 20/11/2026 (R02-007) — I CONTANTI HANNO UN TETTO, E LA FRASE LO SA.
+ *
+ * La scheda prodotto diceva «Paghi in contanti alla consegna» anche su un acquisto da 5.200 €, che la
+ * cassa e la rotta dei contanti rifiutano (lib/ordini/tetto-dei-contanti.ts, sul lordo: merce più
+ * consegna). Con `lordoCents` la frase guarda quel tetto: sopra, i contanti non si promettono. Senza
+ * `lordoCents` (pagine che non parlano di un importo) la frase resta quella di sempre.
+ */
+export function frasePagamento(metodi: readonly MetodoPagamento[] = metodiAlCheckout(), lordoCents?: number): string {
   const contanti = metodi.includes('contanti-alla-consegna');
   const carta = metodi.includes('carta-adesso');
+  if (contanti && lordoCents !== undefined && sopraIlTettoDeiContanti(lordoCents)) {
+    const tetto = formatPrice(TETTO_CONTANTI_CENTS / 100);
+    return carta
+      ? `Sopra ${tetto} non si paga in contanti: paghi con carta adesso`
+      : `Sopra ${tetto} non si può pagare in contanti, e il pagamento con carta oggi non è attivo`;
+  }
   if (contanti && carta) return 'Paghi in contanti alla consegna, oppure con carta adesso';
   if (contanti) return 'Paghi in contanti alla consegna';
   if (carta) return 'Paghi con carta adesso';
