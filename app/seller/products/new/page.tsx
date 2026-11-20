@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { AlertTriangle, Trash2 } from 'lucide-react';
@@ -63,33 +63,12 @@ function snapshotToInitial(s: Snapshot): ProductInitialValues | undefined {
   };
 }
 
-/** S01-001 — Le taglie riconosciute dagli id: altre taglie, o un numero diverso, danno un'altra firma. */
-function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
-  return taglie.map((t) => t.id ?? '').sort().join('|');
-}
-
 function NewProductInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromId = searchParams.get('from');
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
-  /**
-   * 20/11/2026 (S01-001) — QUANDO TORNA LA RETE IL MODULO RESTA DOV'E', E SENZA TAGLIE LETTE NON SALVA.
-   *
-   * Senza rete una lettura senza dati (la consegna del negozio) resta «in pausa» e il modulo si
-   * apre lo stesso: il negoziante ci lavora. Tornata la rete la lettura ripartiva e la pagina
-   * rimetteva il caricamento al posto del modulo: smontato, con le modifiche non salvate. Adesso,
-   * aperto una volta per questa pagina (`chiave`: «Nuovo», o la copia di quel prodotto), il modulo
-   * resta. In «Duplica» il modulo prende le taglie della sorgente quando si apre: se le ha prese da
-   * una copia vecchia in memoria e la rilettura cade, o porta altre taglie, la copia nascerebbe
-   * senza taglie o con la scorta della vecchia somma. Per questo il Salva resta fermo, con un
-   * avviso, finche' le taglie lette non sono quelle del modulo (sotto, `salvataggioFermo`). Se si e'
-   * aperto senza sapere la consegna del negozio, per lui resta «non letta». `giro` riapre il modulo
-   * da capo, quando lo chiede il negoziante.
-   */
-  const [aperto, setAperto] = useState<{ chiave: string; taglie: string; consegnaNonLetta: boolean; giro: number } | null>(null);
-  const chiaveModulo = fromId ?? '';
 
   // R16-021 — Il ripiego `= []` faceva passare una lettura caduta per «non ci sono categorie»:
   // il modulo chiedeva di sceglierne una che non c'era. Come in «Modifica prodotto», senza
@@ -169,14 +148,10 @@ function NewProductInner() {
 
   // Duplica: carica anche le varianti del prodotto sorgente (id azzerati → nuove).
   // Senza le taglie lette la copia non si apre: nascerebbe senza, e nessuno lo direbbe.
-  const { data: sourceVariants = [], isLoading: loadingVariants, isFetching: variantiInLettura, isError: variantiNonLette, isPending: variantiSenzaDati, isFetchedAfterMount: variantiRilette, isStale: variantiVecchie, fetchStatus: variantiFetchStatus, refetch: rileggiVarianti } = useQuery({
+  const { data: sourceVariants = [], isLoading: loadingVariants, isError: variantiNonLette, refetch: rileggiVarianti } = useQuery({
     queryKey: ['duplicate-variants', fromId],
     enabled: !!fromId,
     queryFn: () => loadProductVariants(fromId!),
-    // S01-001 — Le taglie della copia si rileggono a ogni apertura, come in «Modifica»: una copia in
-    // memoria, anche di pochi secondi prima, puo' non avere quelle vere (aggiunte dalla modifica nel
-    // frattempo), e la copia nascerebbe senza taglie e con la scorta della vecchia somma.
-    staleTime: 0,
   });
   // Senza il prodotto da duplicare (lettura caduta, o in pausa senza rete) il modulo non si apre
   // vuoto come un prodotto nuovo: si dice, con «Riprova», e si apre pieno quando la lettura riesce.
@@ -190,8 +165,6 @@ function NewProductInner() {
    * apre solo con la sorgente arrivata, quindi quando si apre lo sa sempre.
    */
   const recessoSegnabileQui = recessoSegnabile || (!!fromId && colonnaDelRecessoPresente(source));
-  // S01-001 — Anche le taglie in pausa senza dati: la copia non si apre senza (nascerebbe senza taglie).
-  const variantiNonArrivate = !!fromId && (variantiNonLette || (variantiSenzaDati && variantiFetchStatus === 'paused'));
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
     if (imported) {
@@ -296,66 +269,6 @@ function NewProductInner() {
     },
   });
 
-  // S01-001 — Cosa sta al posto del modulo; aperto una volta per questa pagina, resta il modulo.
-  const restaAperto = aperto !== null && aperto.chiave === chiaveModulo;
-  const davanti = restaAperto
-    ? 'modulo'
-    : (fromId && (loadingSource || loadingVariants || (variantiInLettura && !variantiRilette))) || consegnaInLettura || categorieInLettura
-      ? 'caricamento'
-      : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0
-        ? 'categorie'
-        : sorgenteNonArrivata
-          ? 'sorgente'
-          : variantiNonArrivate
-            ? 'varianti'
-            : 'modulo';
-  /**
-   * S01-001 — LE TAGLIE DELLA COPIA E QUELLE LETTE.
-   * Lette vuol dire arrivate dalla banca dati in questa apertura (o lette da poco, ancora fresche),
-   * senza errore e non ferme per la rete. Se non lo sono, o sono altre rispetto a quelle con cui il
-   * modulo si e' aperto, il Salva aspetta: la copia non nasce su una somma di taglie non letta.
-   */
-  const taglieLette = !fromId || (!variantiSenzaDati && !variantiNonLette && variantiFetchStatus !== 'paused' && (variantiRilette || !variantiVecchie));
-  const firmaLetta = fromId ? firmaDelleTaglie(sourceVariants) : '';
-  const consegnaNonLettaAdesso = consegnaNonLetta || offersExpress === undefined;
-  if (davanti === 'modulo' && !restaAperto) {
-    setAperto({ chiave: chiaveModulo, taglie: firmaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: 0 });
-  }
-  const taglieDelModulo = restaAperto ? aperto.taglie : firmaLetta;
-  const giro = restaAperto ? aperto.giro : 0;
-  const riapriConLeTaglieAggiornate = async () => {
-    const ok = await confirmDialog({
-      title: 'Riaprire la copia con le taglie aggiornate?',
-      message: 'La copia riparte dal prodotto da duplicare com\'è in banca dati, con le sue taglie: le modifiche che non hai salvato si perdono.',
-      confirmLabel: 'Sì, riapri',
-      danger: true,
-      icon: AlertTriangle,
-    });
-    if (ok) setAperto({ chiave: chiaveModulo, taglie: firmaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: giro + 1 });
-  };
-  let salvataggioFermo: ReactNode = null;
-  if (fromId && variantiNonLette) {
-    salvataggioFermo = (
-      <>
-        <p className="font-semibold">Non riesco a rileggere le taglie del prodotto da duplicare.</p>
-        <p>La copia nascerebbe senza le sue taglie: finché non le leggo il salvataggio è fermo. Quello che hai scritto resta qui.</p>
-        <button type="button" onClick={() => { void rileggiVarianti(); }} className="mt-1 font-semibold text-rose-700 underline">Riprova</button>
-      </>
-    );
-  } else if (!taglieLette) {
-    salvataggioFermo = (
-      <p>Sto aspettando di rileggere le taglie del prodotto da duplicare (senza rete non arrivano): il salvataggio riparte appena le leggo. Quello che hai scritto resta qui.</p>
-    );
-  } else if (firmaLetta !== taglieDelModulo) {
-    salvataggioFermo = (
-      <>
-        <p className="font-semibold">Le taglie del prodotto da duplicare sono cambiate da quando hai aperto la copia.</p>
-        <p>Salvando adesso la copia nascerebbe con le taglie sbagliate, quindi il salvataggio è fermo.</p>
-        <button type="button" onClick={() => { void riapriConLeTaglieAggiornate(); }} className="mt-1 font-semibold text-rose-700 underline">Riapri con le taglie aggiornate</button>
-      </>
-    );
-  }
-
   return (
     <div className="max-w-2xl space-y-6">
       <SellerPageTitle
@@ -382,9 +295,9 @@ function NewProductInner() {
         </>
       )}
 
-      {davanti === 'caricamento' ? (
+      {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura ? (
         <LoadingState />
-      ) : davanti === 'categorie' ? (
+      ) : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0 ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
           <p className="text-sm mb-3">
@@ -394,13 +307,13 @@ function NewProductInner() {
             Riprova
           </button>
         </div>
-      ) : davanti === 'sorgente' ? (
+      ) : sorgenteNonArrivata ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1">Non riesco a caricare il prodotto da duplicare</p>
           <p className="text-sm mb-3">Senza il prodotto la copia partirebbe vuota. Riprova fra un momento.</p>
           <button type="button" onClick={() => { void rileggiSorgente(); }} className="text-sm font-semibold text-rose-700 underline">Riprova</button>
         </div>
-      ) : davanti === 'varianti' ? (
+      ) : fromId && variantiNonLette ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1">Non riesco a leggere le taglie del prodotto da duplicare</p>
           <p className="text-sm mb-3">La copia nascerebbe senza taglie. Riprova fra un momento.</p>
@@ -408,15 +321,14 @@ function NewProductInner() {
         </div>
       ) : (
         <ProductForm
-          key={`${importNonce}-${chiaveModulo}-${giro}`}
+          key={importNonce}
           mode="create"
           categories={categories}
           initialValues={initialValues}
           submitting={create.isPending || creato}
           sellerOffersExpress={offersExpress}
-          consegnaDelNegozioNonLetta={consegnaNonLetta || (restaAperto && aperto.consegnaNonLetta)}
+          consegnaDelNegozioNonLetta={consegnaNonLetta}
           recessoSegnabile={recessoSegnabileQui}
-          salvataggioFermo={salvataggioFermo}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           // R01-012 — l'invio finisce quando finisce l'inserimento: fino ad allora il modulo
           // non ne fa partire un altro (l'errore lo dice già `onError` della mutazione).
