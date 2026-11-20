@@ -1,39 +1,45 @@
 {
  "sessione": "R01",
  "costo_usd": 10.4,
- "aggiornato": "2026-11-20 20:41",
+ "aggiornato": "2026-11-20 21:43",
  "finita": true,
- "testa": "162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb",
+ "testa": "b2487f94cd5209881258693bda45458f58853b25",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
-  "testa": "162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb",
-  "nota": "git rev-parse HEAD nello stesso comando = 162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb. typecheck pulito; lint 0 errori (98 avvisi già presenti); vitest 1818 file passati, 1 saltato (11402 casi). Prova rimessa fatta a mano: ad-mycity non clonabile da questa sessione (add_repo negato), valida-referto lo lancia la regista."
+  "testa": "b2487f94cd5209881258693bda45458f58853b25",
+  "nota": "git rev-parse HEAD nello stesso comando, prima e dopo = b2487f94cd5209881258693bda45458f58853b25, banco pulito. typecheck pulito; lint 0 errori (98 avvisi già presenti); vitest 1821 file passati, 1 saltato (11414 casi). Giro di correzione chiesto dal collaudatore K01 (R01 secondo). Prove rimesse fatte a mano: il deposito delle regole non è raggiungibile da questa sessione."
  },
  "voci": [
   {
    "id": "R01-001",
    "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
    "esito": "riparato",
-   "commit": "42ebc8186899bdbf98d6fdd33959afcd1ac7ff51",
+   "commit": "7e70f8603f8cc70aa04b0ad7bc4b97c08cc8bf1a",
    "file_toccati": [
     "app/notifications/page.tsx"
    ],
    "prova_file": [
-    "tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx"
+    "tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx",
+    "tests/unit/riparazione-r01-notifiche-segna-tutte.test.tsx"
    ],
-   "prova_comando": "npx vitest run tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-notifiche-segna-tutte.test.tsx tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot",
    "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
-    "esito": "regge",
+    "esito": "regge (manuale)",
     "uscita": 0,
-    "comando": "git status --porcelain && git checkout 42ebc818^ -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot && git checkout 42ebc818 -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot && git status --porcelain",
-    "nota": "prova rimessa a mano (prova-rimessa.mjs non disponibile). Senza la cura falliscono 3 casi su 6, tutti su asserzioni di comportamento: 3a (restano 3 «Non letta»), 3b (il pulsante «Segna tutte» resta a video), 4b (il clic di u1 segna lette sul database le notifiche di u2). I casi 1, 2 e 4a sono verdi anche sulla base: 1 e 2 erano già riparati, 4a fa da guardia contro le cure del giro 2."
+    "comando": "git status --porcelain && git checkout cf52a649^ -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-segna-tutte.test.tsx --reporter=dot ; git checkout 7e70f860^ -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-segna-tutte.test.tsx --reporter=dot ; git checkout 7e70f860 -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-segna-tutte.test.tsx tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot && git checkout HEAD -- app/notifications/page.tsx && git status --porcelain",
+    "nota": "Senza la cura (cf52a649^) cadono 4 casi su 4, tutti su asserzioni di comportamento: A (durante il nuovo tentativo tornano 50 «Non letta»), A-memoria (idem con l'elenco delle prime 50 uscito dalla memoria), B (con «Carica altre» in volo restano 50 «Non letta» mentre si rilegge; senza il solo annullamento delle letture in volo, a fine corsa 60 «Non letta»), C (l'elenco da 50 di u1 resta non letto in memoria). Con cf52a649 cade solo A-memoria; con 7e70f860 4/4 verdi e la prova di prima 6/6. Le chiavi e il campanello di u2 restano com'erano in tutti i casi."
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Punti 1 e 2 già a posto sulla base b2c62f34: page.tsx:241 `const caricaAltre = isFetching && (isPlaceholderData || !data);` con :356 «Caricamento…» e `disabled={isFetching}`; page.tsx:223 `if (error && !serveAccesso && !data && !ultimoElenco)` con :238 `data ?? ultimoElenco` e il messaggio in linea con «Riprova» (:331-346). Punto 3 riparato: in onSuccess la lista [notifications,list,quante,chi] viene segnata letta e il conto [notifications,count,chi] messo a 0, poi l'invalidazione; gli updater non creano voci nuove in memoria. Punto 4 (bocciatura del giro 2): il clic passa l'utente di quel momento (`mutate(userId)`); mutationFn non scrive se la sessione è già di un altro, e le scritture in memoria toccano solo le chiavi di chi ha premuto. Il caso 4a, verde sulla base, diventa rosso con le due cure ingenue del giro 2 (chiavi dello userId corrente, o setQueriesData sul prefisso).",
-   "verificato_da": "revisore indipendente (subagente 3, sola lettura, non ha riparato): confermato"
+   "cosa_ho_fatto": "Giro di correzione (K01: parziale con le impostazioni di produzione). Causa: onSuccess segnava letta solo la chiave [list,quante,chi], mentre il segnaposto durante la rilettura viene dall'elenco più corto [list,50,chi]; e una lettura di «Carica altre» partita prima della scrittura, senza dati suoi, non veniva fermata dall'invalidazione e arrivava dopo con le non lette. Cura (cf52a649): in onSuccess si fermano le letture in volo delle chiavi di chi ha premuto (cancelQueries, filtro sull'ultimo pezzo della chiave), poi setQueriesData segna lette tutte le sue chiavi elenco e azzera tutti i suoi conti del campanello (anche quello del negozio), poi l'invalidazione rilegge. Un revisore indipendente in sola lettura ha trovato un caso residuo: con l'elenco delle prime 50 uscito dalla memoria (gcTime) il segnaposto tornava non letto; cura (7e70f860): il segnaposto è l'elenco tenuto di quell'utente quando c'è, già segnato letto. Prova nuova con QueryProvider vero (retry 1 e attesa fra i tentativi) e orologio finto, compreso «Carica altre» in volo, e il caso a due utenti con chiavi di u2 in memoria.",
+   "verificato_da": "correzione non rivista",
+   "commit_del_giro": [
+    "42ebc8186899bdbf98d6fdd33959afcd1ac7ff51",
+    "cf52a649",
+    "7e70f860"
+   ]
   },
   {
    "id": "R01-002",
@@ -78,8 +84,8 @@
  ],
  "domande_per_nicola": [],
  "conto": {
-  "agenti": 3,
-  "subagenti": 3,
-  "nota": "3 subagenti su 4 (2 riparatori, 1 revisore); nessun giro di correzione."
+  "agenti": 4,
+  "subagenti": 4,
+  "nota": "Primo giro: 3 subagenti (2 riparatori, 1 revisore). Giro di correzione (R01 secondo): 1 subagente, revisore indipendente in sola lettura sul commit cf52a649; il suo rilievo è curato in 7e70f860."
  }
 }
