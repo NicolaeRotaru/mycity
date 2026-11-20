@@ -362,7 +362,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         .from('returns')
         .update({
           status: body.stato,
-          decision_notes: body.note ?? null,
+          // 20/11/2026 (R04-008) — La nota del negozio la scrive solo il negozio (o chi amministra), e solo
+          // quando ne porta una: il ritiro del cliente, o una tappa senza nota, la lasciava vuota.
+          ...(comando.autorizzato && body.note !== undefined ? { decision_notes: body.note } : {}),
           ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
         })
         .eq('id', params.id)
