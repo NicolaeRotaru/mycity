@@ -104,8 +104,13 @@ export default function NotificationsPage() {
     enabled: !utenteInLettura,
     // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa. Se cambia chi
     // guarda, l'elenco si rilegge da capo.
-    placeholderData: (prima, domandaPrima) =>
-      userId !== null && domandaPrima?.queryKey.at(-1) === userId ? prima : undefined,
+    // R01-001 — Se c'è, l'elenco tenuto di questo utente: è lo stesso elenco di prima, e dopo
+    // «Segna tutte» è già segnato letto anche quando la domanda da cui veniva è uscita dalla memoria.
+    placeholderData: (prima, domandaPrima) => {
+      if (userId === null || domandaPrima?.queryKey.at(-1) !== userId) return undefined;
+      const tenuto = ultimoLetto.current;
+      return tenuto && tenuto.utente === userId ? tenuto.righe : prima;
+    },
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user }, error: errUtente } = await supabase.auth.getUser();
       // 5/11/2026 — Con la rete caduta getUser non lancia: risponde user null CON un errore. Quello
@@ -153,9 +158,11 @@ export default function NotificationsPage() {
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
   // senza azzerare il badge appena la apri.
   const markAllRead = useMutation({
-    mutationFn: async (): Promise<string | null> => {
+    // R01-001 — Chi ha premuto lo si sa al clic: se prima della scrittura è entrato un altro account,
+    // non si scrive niente a nome suo.
+    mutationFn: async (chiHaPremuto: string | null): Promise<string | null> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      if (!user || (chiHaPremuto !== null && user.id !== chiHaPremuto)) return null;
       // 5/11/2026 — L'esito si legge: se la scrittura cade, i pallini restano e lo si dice.
       const { error: errAggiorna } = await supabase
         .from('notifications')
@@ -165,14 +172,38 @@ export default function NotificationsPage() {
       if (errAggiorna) throw errAggiorna;
       return user.id;
     },
-    onSuccess: (chi) => {
+    onSuccess: async (chi) => {
       // R10-012 — Scritte lette davvero: lo diventa anche l'elenco tenuto, se la rilettura cade.
       if (chi && ultimoLetto.current) {
         const { utente, righe } = ultimoLetto.current;
         ultimoLetto.current = { utente, righe: righe.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)) };
       }
-      qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
-      qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
+      // R01-001 — E lo diventano gli elenchi e i conti del campanello in memoria: react-query, se la
+      // rilettura cade, tiene i dati di prima, e restavano «Non letta» col pulsante a video. Solo le
+      // chiavi di chi ha premuto (l'ultimo pezzo della chiave è l'utente; la risposta può arrivare
+      // dopo l'ingresso di un altro account), e solo quelle che ci sono già: niente di nuovo in
+      // memoria a nome di chi magari è uscito.
+      // Tutti gli elenchi, non solo quello di adesso: mentre si rilegge, a video c'è il segnaposto,
+      // che viene dall'elenco più corto (prima di «Carica altre»).
+      // Prima si fermano le letture in volo di quelle chiavi: partite prima della scrittura, porterebbero
+      // ancora «Non letta» (per esempio «Carica altre» premuto subito prima). L'invalidazione qui sotto
+      // le fa ripartire.
+      if (chi) {
+        const diChi = (prefisso: readonly string[]) => ({
+          queryKey: prefisso,
+          predicate: (q: { queryKey: readonly unknown[] }) => q.queryKey.at(-1) === chi,
+        });
+        await Promise.all([
+          qc.cancelQueries(diChi(queryKeys.notifications.list)),
+          qc.cancelQueries(diChi(queryKeys.notifications.count)),
+        ]);
+        qc.setQueriesData<Notification[]>(diChi(queryKeys.notifications.list), (prima) =>
+          prima?.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)),
+        );
+        qc.setQueriesData<number>(diChi(queryKeys.notifications.count), (prima) => (prima === undefined ? prima : 0));
+      }
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
     },
     onError: (e) => toast.error(friendlyError(e)),
   });
@@ -254,7 +285,7 @@ export default function NotificationsPage() {
         {hasUnread && (
           <button
             type="button"
-            onClick={() => markAllRead.mutate()}
+            onClick={() => markAllRead.mutate(userId)}
             disabled={markAllRead.isPending}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
           >
