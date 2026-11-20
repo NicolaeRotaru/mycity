@@ -1,7 +1,7 @@
 'use client';
 
 import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -205,6 +205,15 @@ interface ProductFormProps {
    * salvate». Una spunta che non si salva e' una promessa falsa, sul recesso.
    */
   recessoSegnabile?: boolean;
+  /**
+   * 20/11/2026 (S01-001) — SE LE TAGLIE NON SONO ARRIVATE, IL SALVA SI FERMA.
+   * La pagina lo passa quando le taglie del prodotto non sono lette: la lettura e' caduta, manca
+   * la rete, o in banca dati ce ne sono altre rispetto a quelle con cui il modulo si e' aperto. Il
+   * modulo resta aperto con quello che il negoziante ha scritto, l'avviso sta accanto al pulsante
+   * e l'invio non parte: la scorta non si scrive mai su una somma di taglie che non e' stata letta
+   * (regola di Nicola del 20/11).
+   */
+  salvataggioFermo?: ReactNode;
 }
 
 export default function ProductForm({
@@ -223,6 +232,7 @@ export default function ProductForm({
   consegnaDelNegozioNonLetta = false,
   autosaveKey,
   aiAccesa = AI_NEGOZI_ACCESA,
+  salvataggioFermo,
 }: ProductFormProps) {
   const schema = useMemo(
     () => createProductSchema({ minDescription: mode === 'create' ? 30 : 10 }),
@@ -780,6 +790,7 @@ export default function ProductForm({
    * LA PROVA: tests/unit/riparazione-r01-doppio-clic-pubblica.test.tsx
    */
   const invioInCorso = useRef(false);
+  const idSalvataggioFermo = useId();
   const makeSubmit = (intent: 'publish' | 'draft' | 'save') => {
     const invia = handleSubmit(async (values) => {
       if (imageUrls.length === 0) {
@@ -900,6 +911,14 @@ export default function ProductForm({
       });
     });
     return async (e?: React.BaseSyntheticEvent) => {
+      // S01-001 — Con le taglie non lette non parte niente (neanche messo in coda per quando torna
+      // la rete): l'avviso resta accanto al pulsante e quello che e' scritto resta nel modulo.
+      if (salvataggioFermo) {
+        e?.preventDefault();
+        toast.error('Il salvataggio è fermo finché non leggo le taglie di questo prodotto. Quello che hai scritto resta qui.');
+        document.getElementById(idSalvataggioFermo)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        return;
+      }
       if (invioInCorso.current) { e?.preventDefault(); return; }
       invioInCorso.current = true;
       try {
@@ -1361,6 +1380,12 @@ export default function ProductForm({
             </div>
           </div>
         </div>
+
+        {salvataggioFermo && (
+          <div id={idSalvataggioFermo} role="alert" className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-900">
+            {salvataggioFermo}
+          </div>
+        )}
 
         {/* AZIONI */}
         {mode === 'create' ? (
