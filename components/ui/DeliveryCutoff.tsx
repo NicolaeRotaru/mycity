@@ -164,7 +164,12 @@ export function DeliveryCutoff({
     // («…oppure veloce in 30-60 minuti») e spingeva giù il riquadro mentre si
     // leggeva. R08-002 — Lo spazio di due righe si tiene a ogni larghezza, come la banner: fra 768 e
     // 1023 pixel la colonna è stretta quanto un telefono e «da sm in su ci sta in una riga» era falso.
-    <span className={cn('inline-flex items-start gap-1.5 text-sm text-olive-700 font-medium min-h-[2.5rem]', className)}>
+    // 20/11/2026 (R02-009) — Due righe non bastavano: col negozio chiuso, dopo il caricamento, la
+    // frase diventa «Il negozio è chiuso ora, riapre domani alle 08:00: in cassa scegli l'ora della
+    // consegna» (87 caratteri), tre righe nella colonna di un telefono da 360 punti e in quella della
+    // scheda fra 1024 e 1279 (la più stretta: 1fr di tre colonne). Sotto i 1280 se ne tengono tre
+    // (3 × 1,25rem); da 1280, dove la colonna è larga, ne bastano due.
+    <span className={cn('inline-flex items-start gap-1.5 text-sm text-olive-700 font-medium min-h-[2.5rem] max-xl:min-h-[3.75rem]', className)}>
       <Bike size={15} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
       <span>{riga}</span>
     </span>
