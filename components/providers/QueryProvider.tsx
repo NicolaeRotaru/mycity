@@ -43,6 +43,19 @@ function togliBozze(daTogliere: (bozza: Bozza) => boolean) {
 
 const AVVOLTO = Symbol.for('mycity.uscita-voluta');
 
+/**
+ * R01-varie — Quante uscite volute sono passate da questa scheda: chi sta aspettando una risposta
+ * (il modulo di reclamo) guarda se il numero è cambiato prima di riscrivere una bozza. Sta su
+ * `globalThis` con una chiave condivisa (la legge anche app/orders/[id]/dispute/page.tsx), così
+ * vale anche se il modulo è caricato due volte.
+ */
+const USCITE_VOLUTE = Symbol.for('mycity.uscite-volute');
+function contaUscitaVoluta() {
+  const g = globalThis as unknown as Record<PropertyKey, unknown>;
+  const prima = g[USCITE_VOLUTE];
+  g[USCITE_VOLUTE] = (typeof prima === 'number' ? prima : 0) + 1;
+}
+
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -127,6 +140,7 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
       if (evento === 'SIGNED_OUT') {
         const voluta = uscitaVoluta;
         uscitaVoluta = false;
+        if (voluta) contaUscitaVoluta();
         togliBozze((b) => voluta || b?.perIlRientro !== true);
       } else if (chi) {
         togliBozze((b) => b?.utente !== chi);
