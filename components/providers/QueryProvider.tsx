@@ -42,9 +42,20 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     // Difensivo: dove il client non ha l'ascolto dell'accesso (prove, ambienti ridotti) non si
     // fa niente invece di far cadere tutta l'applicazione.
     if (typeof supabase?.auth?.onAuthStateChange !== 'function') return;
+    /**
+     * R01-varie — Si riparte da zero senza lasciare indietro chi sta guardando. Le domande che
+     * nessuno guarda escono dalla memoria; quelle a video tornano allo stato iniziale, chi le guarda
+     * se ne accorge subito (senza aspettare un ridisegno) e quelle accese si rileggono con la
+     * sessione nuova. Le scritture tenute in memoria si buttano come prima.
+     */
+    const ricomincia = () => {
+      queryClient.getMutationCache().clear();
+      queryClient.removeQueries({ predicate: (q) => q.getObserversCount() === 0 });
+      void queryClient.resetQueries({ predicate: (q) => q.getObserversCount() > 0 });
+    };
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
       const chi = sessione?.user?.id ?? null;
-      if (evento === 'SIGNED_OUT' || (chi && ultimo && chi !== ultimo)) queryClient.clear();
+      if (evento === 'SIGNED_OUT' || (chi && ultimo && chi !== ultimo)) ricomincia();
       if (chi) ultimo = chi;
       if (evento === 'SIGNED_OUT') ultimo = null;
     });
