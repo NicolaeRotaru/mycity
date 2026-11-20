@@ -153,9 +153,11 @@ export default function NotificationsPage() {
   // automaticamente al montaggio: così la pagina resta consultabile come elenco
   // senza azzerare il badge appena la apri.
   const markAllRead = useMutation({
-    mutationFn: async (): Promise<string | null> => {
+    // R01-001 — Chi ha premuto lo si sa al clic: se prima della scrittura è entrato un altro account,
+    // non si scrive niente a nome suo.
+    mutationFn: async (chiHaPremuto: string | null): Promise<string | null> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      if (!user || (chiHaPremuto !== null && user.id !== chiHaPremuto)) return null;
       // 5/11/2026 — L'esito si legge: se la scrittura cade, i pallini restano e lo si dice.
       const { error: errAggiorna } = await supabase
         .from('notifications')
@@ -170,6 +172,16 @@ export default function NotificationsPage() {
       if (chi && ultimoLetto.current) {
         const { utente, righe } = ultimoLetto.current;
         ultimoLetto.current = { utente, righe: righe.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)) };
+      }
+      // R01-001 — E lo diventano l'elenco e il conto del campanello in memoria: react-query, se la
+      // rilettura cade, tiene i dati di prima, e restavano «Non letta» col pulsante a video. Solo le
+      // chiavi di chi ha premuto (la risposta può arrivare dopo l'ingresso di un altro account), e
+      // solo quelle che ci sono già: niente di nuovo in memoria a nome di chi magari è uscito.
+      if (chi) {
+        qc.setQueryData<Notification[]>([...queryKeys.notifications.list, quante, chi], (prima) =>
+          prima?.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)),
+        );
+        qc.setQueryData<number>([...queryKeys.notifications.count, chi], (prima) => (prima === undefined ? prima : 0));
       }
       qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
       qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
@@ -254,7 +266,7 @@ export default function NotificationsPage() {
         {hasUnread && (
           <button
             type="button"
-            onClick={() => markAllRead.mutate()}
+            onClick={() => markAllRead.mutate(userId)}
             disabled={markAllRead.isPending}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 disabled:opacity-60"
           >
