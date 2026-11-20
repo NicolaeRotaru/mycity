@@ -139,4 +139,16 @@ describe('R05-006 · il conto del carrello passa tutto insieme o niente', () => 
     expect(comEScritto()).toEqual(DOPO);
     expect(refundOrder.mock.calls[0][0].amountCents).toBe(1600);
   });
+
+  // Un client senza la funzione che risponde {data:null, error:null} (o senza `rpc`): la 620 risponde
+  // solo true o false, quindi non è lei, e il giro resta sul percorso di prima con le stesse cifre.
+  it.each([
+    ['risponde {data:null, error:null}', (d: Riga) => d],
+    ['non ha rpc', (d: Riga) => (delete d.rpc, d)],
+  ])('un client senza la funzione (%s): il conto si scrive una riga alla volta, stesse cifre', async (_n, togli) => {
+    db = togli(finto({ orders: carrello(['pane', 'frutta'], [1500, 1200], 'card') }) as unknown as Riga) as never;
+    await rifiutaIlForno();
+    expect(comEScritto()).toEqual(DOPO);
+    expect(refundOrder.mock.calls[0][0].amountCents).toBe(1600);
+  });
 });

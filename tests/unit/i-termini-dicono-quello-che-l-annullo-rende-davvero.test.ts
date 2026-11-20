@@ -30,11 +30,7 @@ vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true 
 let db: ReturnType<typeof finto>;
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 
-import { finto as fintoSenzaLa620, carrello, tentativoDiCassa } from './carrello-finto';
-import { conLaFunzioneDelGiro } from './riparazione-r05-giro-in-transazione';
-// R05-006 — Le scritture del giro passano dalla funzione del database (migrations/620): il finto la fa.
-const finto = (...a: Parameters<typeof fintoSenzaLa620>) =>
-  conLaFunzioneDelGiro(fintoSenzaLa620(...a), { applicata: !a[1]?.prima124 });
+import { finto, carrello, tentativoDiCassa } from './carrello-finto';
 import { annullaERimborsa } from '@/lib/ordini/annulla';
 import TermsPage from '@/app/terms/page';
 import {

@@ -891,16 +891,19 @@ function funzioneDelGiroMancante(e: { code?: string; message?: string }): boolea
  * non era più com'era letta, oppure la chiamata non è andata (un paletto sui soldi, la rete). Su una
  * risposta persa la scrittura può anche esserci stata: per questo chi riceve 'CAMBIATO' rilegge e
  * decide da quello che il database ha davvero, e non rifà mai i conti sulla lettura vecchia.
- * 'SENZA_FUNZIONE' = la 620 non è applicata.
+ * 'SENZA_FUNZIONE' = la 620 non è applicata, o il client non ha `rpc`, o la risposta non è un
+ * booleano (la funzione vera risponde solo true o false: un NULL vuol dire che non è lei).
  */
 async function scriviInsieme(
   admin: SupabaseClient,
   orderId: string,
   righe: RigaDellaTransazione[],
 ): Promise<'SCRITTO' | 'CAMBIATO' | 'SENZA_FUNZIONE'> {
+  if (typeof (admin as { rpc?: unknown }).rpc !== 'function') return 'SENZA_FUNZIONE';
   try {
     const { data, error } = await admin.rpc(FUNZIONE_DEL_GIRO, { p_righe: righe });
-    if (!error) return data === true ? 'SCRITTO' : 'CAMBIATO';
+    // La 620 ha solo RETURN true / RETURN false (o un errore): non può mai rispondere NULL.
+    if (!error) return data === true ? 'SCRITTO' : data === false ? 'CAMBIATO' : 'SENZA_FUNZIONE';
     if (funzioneDelGiroMancante(error)) return 'SENZA_FUNZIONE';
     logger.error('[ricalcolaLaConsegnaDelGiro] scrittura del carrello non passata: niente a metà, si rilegge', {
       orderId, code: error.code, err: error.message,
