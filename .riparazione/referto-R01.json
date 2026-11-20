@@ -1,5 +1,6 @@
 {
  "sessione": "R01",
+ "costo_usd": 10.4,
  "aggiornato": "2026-11-20 20:41",
  "finita": true,
  "testa": "162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb",
@@ -61,12 +62,11 @@
  ],
  "nuovi_difetti_visti": [
   {
-   "titolo": "sistemazioni di sessione lato client",
-   "dimensione": "stati-ui",
-   "severita": "minore",
    "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (dati): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
    "file": "(nel referto privato)",
-   "descrizione": "dettagli solo alla regista"
+   "severita": "minore",
+   "dimensione": "stati-ui"
   },
   {
    "titolo": "campanello del negozio non azzerato se la rilettura dopo «Segna tutte come lette» cade",
@@ -79,6 +79,7 @@
  "domande_per_nicola": [],
  "conto": {
   "agenti": 3,
-  "nota": "3 subagenti su 4 (2 riparatori, 1 revisore); nessun giro di correzione. Costo letto dalla regista."
+  "subagenti": 3,
+  "nota": "3 subagenti su 4 (2 riparatori, 1 revisore); nessun giro di correzione."
  }
 }
