@@ -679,12 +679,16 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     const registratoreServer = !!dsnDelBrowser || !!process.env.SENTRY_DSN?.trim();
     if (!registratoreServer || !dsnDelBrowser) {
       alerts.push({
-        key: `REGISTRATORE_ERRORI_SPENTO|${new Date().toISOString().slice(0, 10)}`,
+        // Chiave stabile, una per caso (spento del tutto / spento nel browser), e l'attesa di un giorno.
+        // Con la data UTC dentro, la chiave cambiava alla mezzanotte UTC e non a quella italiana, e
+        // valeva l'attesa di sei ore: fino a quattro avvisi al giorno.
+        key: `REGISTRATORE_ERRORI_SPENTO|${!registratoreServer ? 'ovunque' : 'browser'}`,
         type: 'REGISTRATORE_ERRORI_SPENTO',
         detail: !registratoreServer
           ? 'Il registratore degli errori (Sentry) è spento: un errore del sito non lo vede nessuno. Metti su Vercel NEXT_PUBLIC_SENTRY_DSN e rifai il deploy (runbook, «Registratore degli errori»).'
           : 'Il registratore degli errori (Sentry) è acceso solo sul server: gli errori nelle pagine dei clienti non arrivano. Metti su Vercel NEXT_PUBLIC_SENTRY_DSN (lo stesso valore di SENTRY_DSN) e rifai il deploy.',
         url: '/admin/today',
+        unaVoltaAlGiorno: true,
       });
     }
   }

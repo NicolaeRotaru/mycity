@@ -25,6 +25,45 @@ vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true,
 
 /** Un database finto che risponde «niente da segnalare» e tiene la memoria degli allarmi. */
 type Chiamata = { m: string; a: unknown[] };
+type Riga = { alert_key: string; last_sent_at: string };
+
+/**
+ * La memoria degli allarmi (`operational_alert_log`: chiave → ultimo invio) con le regole del
+ * database che il sorvegliante usa: leggere le chiavi inviate da una certa ora in poi, prendere il
+ * turno (rinfrescare le vecchie, inserire le nuove: una chiave già scritta dà 23505), restituirlo,
+ * riscrivere l'attesa dopo l'invio.
+ */
+function memoriaDegliAllarmi(chiamate: Chiamata[]): { data: unknown; error: unknown } {
+  const argomenti = (m: string) => chiamate.find((x) => x.m === m)?.a;
+  const chiavi = (argomenti('in')?.[1] as string[] | undefined) ?? [];
+  const memoria = finti.memoria;
+  const upsert = argomenti('upsert');
+  if (upsert) {
+    for (const r of ([] as Riga[]).concat(upsert[0] as Riga | Riga[])) memoria.set(r.alert_key, r.last_sent_at);
+    return { data: null, error: null };
+  }
+  const insert = argomenti('insert');
+  if (insert) {
+    const righe = ([] as Riga[]).concat(insert[0] as Riga | Riga[]);
+    if (righe.some((r) => memoria.has(r.alert_key))) return { data: null, error: { code: '23505', message: 'duplicate key' } };
+    for (const r of righe) memoria.set(r.alert_key, r.last_sent_at);
+    return { data: null, error: null };
+  }
+  if (argomenti('delete')) {
+    for (const k of chiavi) memoria.delete(k);
+    return { data: null, error: null };
+  }
+  const update = argomenti('update');
+  if (update) {
+    const primaDi = argomenti('lt')![1] as string;
+    const prese = chiavi.filter((k) => memoria.has(k) && memoria.get(k)! < primaDi);
+    for (const k of prese) memoria.set(k, (update[0] as Riga).last_sent_at);
+    return { data: prese.map((k) => ({ alert_key: k })), error: null };
+  }
+  const daQuando = argomenti('gte')?.[1] as string | undefined;
+  return { data: chiavi.filter((k) => memoria.has(k) && (!daQuando || memoria.get(k)! >= daQuando)).map((k) => ({ alert_key: k })), error: null };
+}
+
 function tabella(nome: string): unknown {
   const chiamate: Chiamata[] = [];
   const c: unknown = new Proxy({}, {
@@ -35,8 +74,8 @@ function tabella(nome: string): unknown {
         if (nome === 'notifications' && su('insert')) {
           finti.campanelle.push(...([] as Array<Record<string, unknown>>).concat(chiamate.find((x) => x.m === 'insert')!.a[0] as never));
           esito = { data: null, error: null };
-        } else if (nome === 'operational_alert_log' && (su('upsert') || su('insert'))) {
-          esito = { data: null, error: null };
+        } else if (nome === 'operational_alert_log') {
+          esito = memoriaDegliAllarmi(chiamate);
         } else if (nome === 'profiles' && chiamate.some((x) => x.m === 'eq' && x.a[1] === 'admin')) {
           esito = { data: [{ id: 'admin-1' }], error: null };
         } else if (nome === 'categories') {
@@ -69,10 +108,12 @@ beforeEach(() => {
   finti.captureException.mockClear();
   finti.captureMessage.mockClear();
   finti.campanelle = [];
+  finti.memoria.clear();
   vi.mocked(sendEmail).mockClear();
   for (const k of ['log', 'warn', 'error'] as const) vi.spyOn(console, k).mockImplementation(() => {});
 });
 afterEach(() => {
+  vi.useRealTimers();
   process.env = { ...salvato };
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -155,6 +196,25 @@ describe('R03-004 · il sorvegliante avvisa col registratore spento', () => {
     process.env.SENTRY_DSN = DSN;
     const corpo = await giro();
     expect(corpo.details?.find((d) => d.type === 'REGISTRATORE_ERRORI_SPENTO')?.detail).toMatch(/solo sul server/);
+  });
+
+  it('due giri nello stesso giorno italiano: campanella ed email una volta sola; il giorno dopo, di nuovo', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    process.env.VERCEL_ENV = 'production';
+    const avvisi = () => ({
+      email: vi.mocked(sendEmail).mock.calls.filter((c) => String((c[0] as { html?: string }).html).includes('REGISTRATORE_ERRORI_SPENTO')).length,
+      campanelle: finti.campanelle.filter((n) => /registratore degli errori/i.test(String(n.body))).length,
+    });
+    // Il 20 novembre, ora italiana: alle 0:30 (in UTC è ancora il 19), alle 7 e alle 23:30.
+    for (const ora of ['2026-11-19T23:30:00Z', '2026-11-20T06:00:00Z', '2026-11-20T22:30:00Z']) {
+      vi.setSystemTime(new Date(ora));
+      expect(tipi(await giro()).filter((t) => t !== 'REGISTRATORE_ERRORI_SPENTO'), 'controprova: nessun altro allarme').toEqual([]);
+    }
+    expect(avvisi(), 'nello stesso giorno l’avviso è partito più di una volta').toEqual({ email: 1, campanelle: 1 });
+    // Il 21 alle 8 italiane è passato più di un giorno dal primo: finché resta spento, torna.
+    vi.setSystemTime(new Date('2026-11-21T07:00:00Z'));
+    await giro();
+    expect(avvisi(), 'il giorno dopo l’avviso non è tornato').toEqual({ email: 2, campanelle: 2 });
   });
 
   it('col DSN, o fuori dal sito vero, nessun allarme sul registratore', async () => {
