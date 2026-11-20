@@ -56,6 +56,68 @@ export function useOraDiPiacenza(attivo: boolean = true): Date | null {
 /** Dopo quanto una risposta sulla veloce si richiede, al ritorno sulla scheda. */
 const RICHIEDI_VELOCE_MS = 5 * 60_000;
 
+/**
+ * 20/11/2026 (R02-018) — UNA DOMANDA PER TUTTA LA LISTA, E A OGNI SCHEDA IL SUO ESITO.
+ *
+ * Ogni scheda dell'elenco dei negozi chiedeva la veloce del suo negozio per conto suo: duecento
+ * schede, duecento domande, contro il freno per indirizzo che usa anche il carrello. Adesso le schede
+ * che chiedono nello stesso giro (lo stesso disegno, lo stesso ritorno sulla pagina) si raccolgono qui
+ * e partono insieme verso /api/consegna/veloce/negozi, che risponde una mappa negozio → esito: ogni
+ * scheda legge il SUO. Non /api/consegna/veloce con più negozi: quella risponde un sì o no per tutti
+ * insieme (la domanda del carrello), e ogni scheda avrebbe avuto il verdetto della lista.
+ * Una scheda sola nel giro (la scheda prodotto, la vetrina di un negozio) chiede come prima.
+ */
+const NEGOZI_PER_DOMANDA = 100;
+type AttesaVeloce = (esito: boolean | null) => void;
+const veloceInAttesa = new Map<string, AttesaVeloce[]>();
+let giroVeloceProgrammato = false;
+
+function rispondiVeloce(giro: Map<string, AttesaVeloce[]>, id: string, esito: boolean | null) {
+  for (const risolvi of giro.get(id) ?? []) risolvi(esito);
+}
+
+function partiVeloce() {
+  giroVeloceProgrammato = false;
+  const giro = new Map(veloceInAttesa);
+  veloceInAttesa.clear();
+  const ids = [...giro.keys()];
+  if (ids.length === 1) {
+    const [id] = ids;
+    fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((esito: { possibile?: boolean } | null) => rispondiVeloce(giro, id, esito ? esito.possibile === true : null))
+      .catch(() => rispondiVeloce(giro, id, null));
+    return;
+  }
+  for (let i = 0; i < ids.length; i += NEGOZI_PER_DOMANDA) {
+    const blocco = ids.slice(i, i + NEGOZI_PER_DOMANDA);
+    fetch(`/api/consegna/veloce/negozi?negozi=${blocco.map(encodeURIComponent).join(',')}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((risposta: { esiti?: Record<string, { possibile?: boolean } | undefined> } | null) => {
+        for (const id of blocco) {
+          const suo = risposta?.esiti?.[id];
+          // Un negozio senza la sua riga nella risposta è «non so», non «no».
+          rispondiVeloce(giro, id, suo ? suo.possibile === true : null);
+        }
+      })
+      .catch(() => { for (const id of blocco) rispondiVeloce(giro, id, null); });
+  }
+}
+
+/** La veloce di un negozio, chiesta insieme a quelle delle altre schede dello stesso giro. */
+function chiediVeloce(negozioId: string): Promise<boolean | null> {
+  return new Promise((risolvi) => {
+    const attese = veloceInAttesa.get(negozioId) ?? [];
+    attese.push(risolvi);
+    veloceInAttesa.set(negozioId, attese);
+    if (!giroVeloceProgrammato) {
+      giroVeloceProgrammato = true;
+      // Dopo gli effetti di tutto il disegno (girano uno dopo l'altro, nello stesso turno).
+      queueMicrotask(partiVeloce);
+    }
+  });
+}
+
 export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
   const [veloce, setVeloce] = useState<boolean | null>(null);
   useEffect(() => {
@@ -67,21 +129,16 @@ export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boole
     let ultimaDomanda = 0;
     const domanda = () => {
       ultimaDomanda = Date.now();
-      fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(negozioId)}`, { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((esito: { possibile?: boolean } | null) => {
-          if (vivo) setVeloce(esito ? esito.possibile === true : null);
-        })
-        .catch(() => {
-          if (vivo) setVeloce(null);
-        });
+      void chiediVeloce(negozioId).then((esito) => {
+        if (vivo) setVeloce(esito);
+      });
     };
     domanda();
     // S10 (5/11/2026, 2298) — La risposta si chiedeva una volta sola: se il
     // fattorino smetteva il servizio, la scheda rimasta aperta continuava a
     // dire «oggi». Si richiede quando la scheda torna visibile, se la risposta
     // ha piu' di 5 minuti (revisione S10: niente raffiche sulla lista dei
-    // negozi, dove ogni riga chiede per conto suo e la rotta ha un freno).
+    // negozi, dove le righe chiedono insieme ma la rotta ha un freno).
     const suVisibilita = () => {
       if (document.visibilityState === 'visible' && Date.now() - ultimaDomanda >= RICHIEDI_VELOCE_MS) domanda();
     };
