@@ -507,36 +507,29 @@ else
   # 6/9/2026 — LO STORICO E' UN SECCHIO A PARTE, E NESSUNO L'AVEVA MAI CREATO.
   #
   # `--backup-dir` scrive in un secchio DIVERSO da quello di destinazione:
-  # qualcuno deve averlo creato e la chiave deve poterci scrivere. Se non c'e',
-  # la copia delle foto puo' fallire per intero, e la notte in cui serve non
-  # c'e' nessuna copia nuova.
+  # qualcuno deve averlo creato e la chiave deve poterci scrivere. Qui si prova
+  # a crearlo: `mkdir` su un remote non fa danno se esiste gia'.
   #
-  # Qui si prova a crearlo: `mkdir` su un remote non fa danno se esiste gia'. Se
-  # non si riesce — chiave senza permesso, fornitore che vuole il secchio creato
-  # a mano — NON si esce: si dice e basta, e a decidere resta la copia vera qui
-  # sotto. Spegnere una copia che magari funziona sarebbe lo stesso errore di
-  # prima, al contrario.
+  # 20/11/2026 (R02-005) — SCELTA DI NICOLA: SENZA IL SECCHIO DELLO STORICO LA NOTTE E' ROSSA.
+  #
+  # Se il secchio non c'era e non si riusciva a crearlo, lo script ripiegava su una cartella
+  # DENTRO il secchio della copia ("${DEST_PULITA}/_storico", R15-003) e la notte restava verde
+  # (R07-009 aggiungeva solo un avviso). Ma lo storico nello stesso secchio della copia sparisce con
+  # lei — cancellazione, chiave rubata, guasto del fornitore — cioe' proprio quando serve. Adesso:
+  #  - lo storico non finisce MAI nel secchio della copia: nessun ripiego;
+  #  - senza storico la copia delle foto non parte (una `sync` senza storico funzionante
+  #    toglierebbe dalla copia le foto sparite dall'origine): la copia della notte prima resta com'e';
+  #  - la notte e' rossa (uscita 5, come ogni copia delle foto fallita), con il motivo nel registro
+  #    e nel riepilogo, finche' qualcuno non crea il secchio o imposta STORAGE_SYNC_STORICO.
+  # Vale anche per uno STORAGE_SYNC_STORICO scritto a mano che non esiste e non si crea.
   if ! rclone lsd "$STORICO_FOTO" >/dev/null 2>&1; then
     echo "[backup] Lo storico delle foto ($STORICO_FOTO) non risponde: provo a crearlo."
     if rclone mkdir "$STORICO_FOTO" >/dev/null 2>&1; then
       echo "[backup] Storico delle foto pronto: $STORICO_FOTO"
     else
-      if [[ -z "${STORAGE_SYNC_STORICO:-}" ]]; then
-        # R15-003 — Il secchio «-storico» era un valore predefinito mai verificato: se non esiste e
-        # la chiave non puo' crearlo, `--backup-dir` fa fallire la prima copia in cui una foto sparisce
-        # dall'origine. Qui si ripiega su una cartella DENTRO la destinazione (accanto ai secchi, non
-        # dentro uno di loro: rclone non vede sovrapposizione). Protegge meno di un secchio a parte,
-        # ma protegge: meglio uno storico nello stesso posto che nessuna copia nuova. Dirlo forte.
-        STORICO_FOTO="${DEST_PULITA}/_storico"
-        echo "[backup] ATTENZIONE: il secchio dello storico non esiste e non sono riuscito a crearlo: uso la cartella ${STORICO_FOTO} dentro la destinazione. Per uno storico fuori dal secchio della copia: crea il secchio presso il fornitore oppure imposta STORAGE_SYNC_STORICO." >&2
-        # R07-009 — Il ripiego non rende rossa la notte (resta una scelta di Nicola), ma non deve
-        # nemmeno passare in silenzio: la riga qui sopra finiva solo nel registro, e il riepilogo del
-        # lavoro restava pulito. Adesso lo dicono l'avviso del lavoro e il riepilogo.
-        echo "::warning::Lo storico delle foto e' nello stesso secchio della copia (${STORICO_FOTO}): il secchio ${DEST_PULITA}-storico non esiste e non si e' potuto creare. Se il secchio della copia sparisce, sparisce anche lo storico." >&2
-        riepilogo_lavoro "⚠️ **Lo storico delle foto e' nello stesso secchio della copia** (\`${STORICO_FOTO}\`): il secchio \`${DEST_PULITA}-storico\` non esiste e non si e' potuto creare. Crealo presso il fornitore oppure imposta \`STORAGE_SYNC_STORICO\`."
-      else
-        echo "[backup] ATTENZIONE: lo storico $STORICO_FOTO non esiste e non sono riuscito a crearlo. Se la copia qui sotto fallisce, e' questo: serve il secchio gia' creato presso il fornitore con una chiave che possa scriverci, oppure STORAGE_SYNC_STORICO che punti a uno che esiste." >&2
-      fi
+      echo "[backup] esito-foto: fallita — lo storico delle foto (${STORICO_FOTO}) non esiste e non sono riuscito a crearlo: stanotte la copia delle foto non parte, per non togliere dalla copia le foto sparite dall'origine e per non mettere lo storico nello stesso secchio della copia. La copia della notte prima resta com'era. Crea il secchio presso il fornitore, con una chiave che possa scriverci, oppure imposta STORAGE_SYNC_STORICO su un secchio che esiste." >&2
+      riepilogo_lavoro "❌ **Le foto non sono state copiate: manca il secchio dello storico** (\`${STORICO_FOTO}\`): non esiste e non si e' potuto creare. Lo storico non va nel secchio della copia, e senza storico la copia non parte. Crea il secchio presso il fornitore oppure imposta \`STORAGE_SYNC_STORICO\`."
+      exit 5
     fi
   fi
 
