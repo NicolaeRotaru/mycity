@@ -5,7 +5,10 @@ import { mondoFinto } from './riparazione-r15-rclone-finto'
 
 describe('R15-003 · storico delle foto senza secchio dedicato', () => {
   for (const dest of ['b2:mycity-foto', 'b2:mycity-foto/']) {
-    it(`una foto sparita dall'origine non fa rossa la copia (destinazione "${dest}")`, () => {
+    // 20/11/2026 (R02-005) — Scelta di Nicola: senza il secchio dello storico la notte è rossa, e lo
+    // storico non va mai nel secchio della copia (prima si ripiegava su "<destinazione>/_storico", verde).
+    // La prova di comportamento è tests/unit/riparazione-r02-backup-storico-rosso.test.ts.
+    it(`senza secchio dello storico la notte è rossa e la copia non si tocca (destinazione "${dest}")`, () => {
       const m = mondoFinto()
       m.file('src:products', 'a.jpg')
       m.file('b2:mycity-foto/products', 'a.jpg')
@@ -16,8 +19,8 @@ describe('R15-003 · storico delle foto senza secchio dedicato', () => {
         STORAGE_SYNC_BUCKETS: 'products',
         FAKE_MKDIR_FAIL: '1',
       })
-      expect(r.out).toContain('copiate e riaperte')
-      expect(r.uscita).toBe(0)
+      expect(r.out).not.toContain('copiate e riaperte')
+      expect(r.uscita).toBe(5)
     })
   }
 

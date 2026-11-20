@@ -1,0 +1,325 @@
+{
+ "sessione": "R02",
+ "aggiornato": "2026-11-20 20:25",
+ "finita": true,
+ "testa": "8113442680df2dafb9e06350b57f469686729c86",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "8113442680df2dafb9e06350b57f469686729c86",
+  "nota": "git rev-parse HEAD nello stesso comando; typecheck ok, lint 0 errori (98 avvisi), 1820 file di prova verdi + 1 saltato (11425 prove). Verde anche su e3231f8e prima del revert di R02-022."
+ },
+ "voci": [
+  {
+   "id": "R02-001",
+   "chiave": "accessibilita|tra 768 e 1023 px i tasti ordini, consegne e admin della testata sono solo un'icona senza nome per chi vede",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-002",
+   "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-003",
+   "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-004",
+   "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+   "esito": "parziale",
+   "commit": "d65247a89e36ded238e2a2a303043f4e9fe710c4",
+   "file_toccati": [
+    "lib/push/subito.ts",
+    "app/api/cron/send-push/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-push-nuovo-ordine-subito.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-push-nuovo-ordine-subito.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (manuale)",
+    "uscita": 3,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d65247a8^ --file lib/push/subito.ts --prove tests/unit/riparazione-r02-push-nuovo-ordine-subito.test.ts --json  → uscita 3 rosso_strutturale (file nuovo importato dalla prova); rimessa a mano per mutazione di lib/push/subito.ts, poi git checkout HEAD -- lib/push/subito.ts: M1 il difetto (nessun invio subito) 4 prove rosse su asserzione; M2 manda senza segnare pushed_at → «doppio invio: il giro rimanda» rossa; M3 non ridà al giro → 2 rosse; M4 lancia sul guasto → «promise rejected instead of resolving» rossa; file rimesso → 8/8 verdi"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Aiutante nuovo lib/push/subito.ts, mandaSubitoLaPushDelNuovoOrdine(supa, orderIds): prende con una scrittura sola le campanelle del negozio (link /seller/orders/<id>, pushed_at vuoto, ultima ora) mettendo pushed_at = adesso, così il giro non le rimanda e una seconda chiamata (webhook ripetuto) non manda due volte; preferenze come il giro (spente → non manda, resta presa); iscrizioni una lettura; manda (TTL 1h, urgenza alta, tag = link); quelle non arrivate tornano a pushed_at vuoto e le riprende il giro; senza chiavi VAPID non prende niente; non lancia mai (anche un guasto a metà ridà le prese al giro). Le regole comuni CONSEGNA_PER_CATEGORIA e contrassegno passano dal giro all'aiutante (il giro le importa, comportamento invariato; 16 file di prova del giro e di push verdi). La campanella del cliente resta al giro. Prova: push subito con link/tag dell'ordine e pushed_at segnato; il giro VERO 5' dopo non la rimanda (e manda quella del cliente); doppia chiamata = un invio; preferenza spenta; servizio push giù → niente eccezione, ridata al giro, il giro dopo la manda; presa caduta e guasto inatteso → niente eccezione, resta al giro.",
+   "cosa_resta": "Le chiamate nei due punti che creano l'ordine (non di R02): app/api/orders/cod/route.ts dopo l'insert delle campanelle, lib/stripe/webhook/comune.ts in fondo a suonaLaCampanellaAiNegozi (non in ordini.ts: è a 598 righe e la prova webhook-diviso-per-mestiere vuole < 600). Diff provate applicate: tsc ok, eslint 0 errori, 176 file di prova di rotta COD e webhook Stripe verdi (1164 prove). Rischio residuo dichiarato: se il giro legge la campanella nei pochi millisecondi fra l'insert e la presa, può mandarla anche lui (stesso tag: il telefono sostituisce, ma suona due volte); chiuderlo del tutto vorrebbe la presa atomica anche nel giro, che cambierebbe le scritture viste da 10 prove del giro di altre sessioni. Dal collaudo: la finestra di doppio invio è più larga di quanto scritto (il giro legge senza prendere a app/api/cron/send-push/route.ts:57-64 e segna solo alla fine; il commento di lib/push/subito.ts:16 «Senza doppio invio» promette troppo), e `orderIds.filter` sta fuori dal try (lib/push/subito.ts:113): con un valore non array lancia. L'aiutante oggi non è chiamato da nessuna parte (serve la diff altrui), quindi nessun effetto in produzione finché non si applica.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "diff --git a/app/api/orders/cod/route.ts b/app/api/orders/cod/route.ts\nindex 817e0574..604392da 100644\n--- a/app/api/orders/cod/route.ts\n+++ b/app/api/orders/cod/route.ts\n@@ -39,6 +39,7 @@ import { formatPriceFromCents } from '@/lib/format';\n import { notifyAdmins } from '@/lib/stripe/webhook/comune';\n import { avvisaSeLaPostaNonParte } from '@/lib/stripe/webhook/posta-non-partita';\n import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';\n+import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito';\n \n // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre\n // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`\n@@ -1659,6 +1660,12 @@ export const POST = withAuthRateLimit(\n       const { error: errCampanelle } = await admin.from('notifications').insert(campanelle);\n       if (errCampanelle) {\n         logger.warn('[cod] campanelle non scritte', { message: errCampanelle.message });\n+      } else {\n+        // R02-004 — La push «Nuovo ordine!» al negozio parte adesso, non al giro dei 5 minuti\n+        // (lib/push/subito.ts: segna pushed_at, così il giro non la rimanda; non lancia mai).\n+        dopoLaRisposta(async () => {\n+          await mandaSubitoLaPushDelNuovoOrdine(admin, comunicazioni.map((c) => c.orderId));\n+        }, 'push del nuovo ordine');\n       }\n     }\n \n"
+    },
+    {
+     "file": "lib/stripe/webhook/comune.ts",
+     "modifica": "diff --git a/lib/stripe/webhook/comune.ts b/lib/stripe/webhook/comune.ts\nindex 842e55e3..51355eba 100644\n--- a/lib/stripe/webhook/comune.ts\n+++ b/lib/stripe/webhook/comune.ts\n@@ -25,6 +25,8 @@ import { leggiAGradini } from '@/lib/db/ripiego-a-gradini';\n import { formatPriceFromCents } from '@/lib/format';\n import { scritturaFacoltativa } from './esito';\n import { avvisaSeLaPostaNonParte } from './posta-non-partita';\n+import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';\n+import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito';\n \n export type DisputeOrderRow = {\n   id: string;\n@@ -335,5 +337,12 @@ export async function suonaLaCampanellaAiNegozi(\n     }\n     daAvvisare.add(created.orderId);\n   }\n+  // R02-004 — La push «Nuovo ordine ricevuto» al negozio parte adesso, non al giro dei 5 minuti\n+  // (lib/push/subito.ts: segna pushed_at, così il giro non la rimanda; non lancia mai).\n+  if (daAvvisare.size > 0) {\n+    dopoLaRisposta(async () => {\n+      await mandaSubitoLaPushDelNuovoOrdine(admin, [...daAvvisare]);\n+    }, 'push del nuovo ordine');\n+  }\n   return daAvvisare;\n }\n"
+    }
+   ],
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)"
+  },
+  {
+   "id": "R02-005",
+   "chiave": "deploy-sre|se il secchio dello storico delle foto non si crea, lo storico finisce nello stesso secchio della copia e la notte resta verde",
+   "esito": "riparato",
+   "commit": "19291cd47c91dfac1a4b465e434e608850f8e658",
+   "file_toccati": [
+    "scripts/backup-db.sh"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-backup-storico-rosso.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-backup-storico-rosso.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19291cd4^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r02-backup-storico-rosso.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tolto il ripiego su «<destinazione>/_storico» (R15-003/R07-009). Se il secchio dello storico non risponde e rclone mkdir fallisce (predefinito «-storico» o STORAGE_SYNC_STORICO scritto a mano): «esito-foto: fallita» nel registro, riepilogo rosso «manca il secchio dello storico», nessuna sync delle foto (la copia della notte prima resta com'era: una sync senza storico toglierebbe dalla copia le foto sparite) ed exit 5 come le altre copie delle foto fallite. Prova come quelle esistenti: blocco foto di backup-db.sh lanciato da vitest con bash e rclone finto nel PATH (aiutante riparazione-r15-rclone-finto, solo importato, non modificato): destinazione con e senza barra finale e storico a mano → uscita diversa da 0, nel secchio della copia solo products/a.jpg e products/cancellata.jpg, nessun _storico; caso normale (secchio -storico esistente o creabile) verde, foto sparita in b2:mycity-foto-storico/T1/products.",
+   "nota": "Le prove R15-003 (tests/unit/riparazione-r15-backup-storico.test.ts) e R07-009 (tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts) codificavano il ripiego verde scartato da Nicola; leggono solo scripts/backup-db.sh (file di R02) tramite l'aiutante R15, non modificato: aggiornate e DICHIARATE nel commit e3231f8e.",
+   "prova_comune_aggiornata": {
+    "file": [
+     "tests/unit/riparazione-r15-backup-storico.test.ts",
+     "tests/unit/riparazione-r07-storico-nello-stesso-secchio.test.ts"
+    ],
+    "commit": "e3231f8e"
+   },
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)"
+  },
+  {
+   "id": "R02-006",
+   "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-007",
+   "chiave": "flussi-conversione|la scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
+   "esito": "parziale",
+   "commit": "07593c058cfefeb27b3a15b00df627ce703da5d2",
+   "file_toccati": [
+    "app/product/[id]/page.tsx",
+    "lib/promesse-pubbliche.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 07593c05^ --file app/product/[id]/page.tsx,lib/promesse-pubbliche.ts --prove tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Tetto usato senza cambiarlo: TETTO_CONTANTI_CENTS/sopraIlTettoDeiContanti (lib/ordini/tetto-dei-contanti.ts, 4.999,99 € sul lordo come cassa e rotta COD). La scheda calcola il lordo = prezzo che si paga (promo compresa) × quantità + consegna minima (tariffaConsegnaCents). Sopra il tetto: il riquadro verde dice «Sopra 4999,99 € non si può pagare in contanti…» (frasePagamento ha un secondo argomento facoltativo lordoCents; senza importo la frase resta quella di sempre), il pulsante dice solo «Compra ora», la barra in fondo non ha la riga «Paghi alla consegna», sparisce «Compri sicuro: paghi solo quando arriva» e «Compra ora» non ricorda 'cod'. Prova: frase con 499998/499999/500000 cent, scheda vera a 2.600 € (sì), 5.200 € (no), 5.200 € con promo -20% = 4.160 € (sì), 4.996,99 € + 3 € = tetto esatto (sì) e 4.997 € (no), 2 × 2.600 € (no).",
+   "nota": "La nota della barra resta scritta come attributo letterale (la misura la prova comune da-ogni-larghezza a 360 px) e sopra il tetto viene tolta con uno spread {...(contantiQui ? {} : { note: undefined })}.",
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)",
+   "cosa_resta": "Il collaudo: il lordo conta solo questo prodotto. «Compra ora» aggiunge al carrello esistente e apre la cassa su tutto il carrello, quindi con altra merce già nel carrello la scheda promette ancora i contanti e ricorda 'cod' sopra il tetto (app/product/[id]/page.tsx:558 contro :663-684; la rotta COD controlla grandTotalCents di tutto il carrello in app/api/orders/cod/route.ts:1138, che resta il presidio). Cura indicata: sommare al lordo le righe di getCart() già lette a :663. Nessun peggioramento: sulla base la promessa c'era sempre."
+  },
+  {
+   "id": "R02-008",
+   "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-009",
+   "chiave": "frontend-ux|sul telefono il riquadro verde della scheda prodotto diventa un muro di testo di 264 caratteri, e dopo il caricamento cresce ancora di una riga",
+   "esito": "riparato",
+   "commit": "fa5dd0fa691631fe62b69a0117b99a5759c1adc0",
+   "file_toccati": [
+    "components/ui/DeliveryCutoff.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-riga-consegna-non-cresce.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-riga-consegna-non-cresce.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa5dd0fa^ --file components/ui/DeliveryCutoff.tsx --prove tests/unit/riparazione-r02-riga-consegna-non-cresce.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Prima metà già sulla base (R08-002): nel riquadro la tariffa da 264 caratteri è diventata la riga corta «Consegna MyCity da 3,00 € per tutto il carrello · come si calcola» (prova riparazione-r08-riquadro-consegna-corto). Restava la crescita col negozio chiuso: dopo il caricamento la frase di rigaConsegnaDellaScheda (lib/promessa-consegna.ts, non toccata) diventa «Il negozio è chiuso ora, riapre domani alle 08:00: in cassa scegli l'ora della consegna» (87 caratteri) = 3 righe a 360 px e nella colonna lg 1024-1279 (la più stretta, ~253 px), contro 2 righe riservate. DeliveryCutoff inline ora riserva 3 righe sotto i 1280 (max-xl:min-h-[3.75rem]) e 2 da 1280 (min-h-[2.5rem] invariata, le prove comuni minori-s10/R08 restano verdi). Prova: tutte le frasi della regola in una settimana (4 orari, ogni 15', veloce sì/no/non so) misurate con la stima della prova della barra (0,58 em, a capo per parole) contro le righe riservate dal componente vero a 360/1023/1024/1280 px, più il componente vero montato col forno chiuso giovedì 21:30 (orologio finto): frase lunga, stessa classe prima e dopo, entra nelle righe tenute.",
+   "nota": "Per non far crescere il riquadro non serve toccare lib/promessa-consegna.ts; accorciare là la frase del negozio chiuso (es. «Chiuso ora, riapre domani alle 08:00: scegli l'ora in cassa») permetterebbe di tornare a 2 righe, ma è una scelta di testo di un'altra sessione, non necessaria a chiudere la voce.",
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)"
+  },
+  {
+   "id": "R02-010",
+   "chiave": "frontend-ux|il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-011",
+   "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-012",
+   "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-013",
+   "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-014",
+   "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-015",
+   "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-016",
+   "chiave": "mobile-pwa|quando la sessione scade da sola, il telefono perde le notifiche in silenzio e al nuovo accesso nessuno le riaccende",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-017",
+   "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-018",
+   "chiave": "performance|l'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
+   "esito": "parziale",
+   "commit": "27bd25a9c04acd31f71b169d25a0c6d80638bfbd",
+   "file_toccati": [
+    "components/ui/DeliveryCutoff.tsx",
+    "app/api/consegna/veloce/negozi/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-veloce-una-domanda-per-la-lista.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-veloce-una-domanda-per-la-lista.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 27bd25a9^ --file components/ui/DeliveryCutoff.tsx --prove tests/unit/riparazione-r02-veloce-una-domanda-per-la-lista.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "useVeloceDelNegozio raccoglie le schede che chiedono nello stesso giro (queueMicrotask dopo gli effetti dello stesso disegno o dello stesso ritorno sulla pagina) e manda UNA richiesta alla rotta nuova GET /api/consegna/veloce/negozi?negozi=a,b,… che risponde {esiti:{id:{possibile,perche}}}: per ogni negozio veloceSiPuo col solo suo negozio, stesse letture (negozi approvati, fattorini online una volta per tutti), 503 «non so» se una lettura cade, freno suo per indirizzo (30/min, separato da quello del carrello), max 100 negozi per richiesta (200 schede = 2 richieste). Ogni scheda legge il SUO esito; un negozio assente dalla risposta resta null. Una scheda sola nel giro (scheda prodotto, vetrina) chiede come prima la rotta esistente. I chiamanti (StoreListRow, StorePreviewCard, HeroStoreCard, HeroSection) non cambiano: niente serve_file_altrui. Prova: 5 schede → 1 richiesta con i 5 id; due negozi con esiti diversi → true/false ognuno il suo; ritorno dopo 5' → ancora 1 richiesta; scheda sola → rotta vecchia; la rotta nuova con DB finto e orologio finto (forno aperto sì, fioraio chiuso no col suo perché, non approvato no solo lui, lettura caduta 503 senza esiti, id non validi o 101 negozi 400).",
+   "nota": "La rimessa ha in --file solo DeliveryCutoff.tsx: la rotta nuova è importata direttamente dalla prova (la macchina non decide sui file nuovi importati dalle prove); il suo comportamento lo provano i 4 casi della rotta nello stesso file.",
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)",
+   "cosa_resta": "Il collaudo: al primo disegno una domanda sola (regge), ma al ritorno sulla pagina dopo 5' nei browser veri visibilitychange esegue i microtask fra un ascoltatore e l'altro: queueMicrotask (components/ui/DeliveryCutoff.tsx:116) fa un giro per scheda e ognuna va alla rotta vecchia (:84), come sulla base. La prova passa perché usa document.dispatchEvent (tests/unit/riparazione-r02-veloce-una-domanda-per-la-lista.test.tsx:134). Cura indicata: raccogliere a task (setTimeout 0), non a microtask. Rotta nuova giudicata a posto (stessa chiave della vecchia, UUID validati, tetto 100 id, freno 30/min, nessun dato in più)."
+  },
+  {
+   "id": "R02-019",
+   "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 20,38 $ su 35 (lotti B e C non partiti)."
+  },
+  {
+   "id": "R02-020",
+   "chiave": "qa-flussi|dalla scheda prodotto il carrello riceve il prezzo pieno anche con una promozione attiva, e il carrello può dire che il prezzo è sceso",
+   "esito": "riparato",
+   "insieme_a": [
+    "R02-021"
+   ],
+   "commit": "96c07a9056bb408ec2dba157de498d641d2319a9",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 96c07a90^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "«Aggiungi al carrello» e «Compra ora» passano a addToCart `price` (scontato con discountedUnitCents, non toccata) invece di prezzoPieno. Carrello e cassa non scontano di nuovo: sostituiscono il prezzo salvato col pieno del database meno la promo (app/cart/page.tsx:323, app/checkout/page.tsx:225), quindi il «Buona notizia: il prezzo è sceso» non scatta più; lib/cart.ts e la pagina carrello non servono cambiati. Prova con promo del negozio ATTIVA sull'orologio finto (regola di product_active_discount: starts_at ≤ adesso ≤ ends_at): 34,90 € al -15% → riga a 29,67 €, condizione del carrello «cambiato» falsa, barra e suo onAdd allo stesso prezzo, «Compra ora» uguale; fuori finestra (prima e dopo) tutto a prezzo pieno.",
+   "nota": "La prova comune tests/unit/minori-s09-scheda-prodotto.test.ts (310) codificava il difetto (al carrello il prezzo pieno; motivo del revert di R24-013). Legge app/product/[id]/page.tsx (file di R02) e file di nessuna sessione del giro: aggiornata e DICHIARATA nel commit e401a7d7 (stessa forza: niente 'price: prezzoPieno', due 'price,').",
+   "prova_comune_aggiornata": {
+    "file": "tests/unit/minori-s09-scheda-prodotto.test.ts",
+    "commit": "e401a7d7"
+   },
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)"
+  },
+  {
+   "id": "R02-021",
+   "chiave": "qa-flussi|la scheda prodotto passa il prezzo pieno alla barra d'acquisto e al carrello con una promozione attiva",
+   "esito": "riparato",
+   "insieme_a": [
+    "R02-020"
+   ],
+   "commit": "96c07a9056bb408ec2dba157de498d641d2319a9",
+   "file_toccati": [
+    "app/product/[id]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 96c07a90^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Stessa cura di R02-020: sulla base la barra mostrava già `price` (scontato), ma il suo onAdd (handleAdd) e «Compra ora» salvavano il pieno; ora barra, scheda e carrello hanno lo stesso prezzo promozionale. Prova: la barra riceve 29,67 € e il suo onAdd mette in carrello 29,67 €; fuori finestra 34,90 €.",
+   "nota": "La prova comune tests/unit/minori-s09-scheda-prodotto.test.ts (310) codificava il difetto (al carrello il prezzo pieno; motivo del revert di R24-013). Legge app/product/[id]/page.tsx (file di R02) e file di nessuna sessione del giro: aggiornata e DICHIARATA nel commit e401a7d7 (stessa forza: niente 'price: prezzoPieno', due 'price,').",
+   "prova_comune_aggiornata": {
+    "file": "tests/unit/minori-s09-scheda-prodotto.test.ts",
+    "commit": "e401a7d7"
+   },
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)"
+  },
+  {
+   "id": "R02-022",
+   "chiave": "qa-flussi|un capo con più di cento combinazioni di taglia e colore perde le ultime in silenzio, e il cliente che le sceglie non può comprarle",
+   "esito": "non_fatto",
+   "verificato_da": "revisore R02 lotto A (subagente 2, gruppo 1 soldi: 007/020/021/022; gruppo 2: 009/018/004/005)",
+   "nota": "Riparata in 62c6bc7f e ANNULLATA in 81134426: il collaudo ha misurato che, tolti i tetti per asse (MAX_OPTION_TYPES/MAX_OPTION_VALUES), buildCombinations calcola tutto il prodotto cartesiano e taglia a 100 solo alla fine (lib/products/variants.ts:115-122): 4x40 = 2,56 milioni di oggetti, 5x30 esaurisce la memoria. Peggioramento rispetto alla base, quindi tolta; poi tetto di spesa. Per il prossimo giro: tagliare a MAX_VARIANTS dentro il ciclo di buildCombinations (i primi 100 restano uguali) prima di togliere i tetti per asse, e in components/seller/ProductForm.tsx (non di R02) non applicare gli assi sopra MAX_VARIANTS con un avviso (applyAxes guarda contaCombinazioni) e mostrare «N di 100»."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "cambiando categoria gli assi delle varianti della categoria vecchia restano",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "components/seller/ProductForm.tsx:356-361",
+   "descrizione": "applyAxes/toggleVariantAxis non tolgono le chiavi di variantAxes fuori dagli attrFields della categoria nuova: le combinazioni possono superare i tetti pensati per la categoria (visto dal collaudo R02)."
+  }
+ ],
+ "domande_per_nicola": [],
+ "conto": {
+  "agenti": 2,
+  "nota": "1 riparatore (lotto A, modello grande) + 1 revisore (lotto A, due gruppi). Nessun giro di correzione: R02-022 annullata a mano con git revert invece del 7° subagente, per il tetto di spesa. Costo letto con get_session (usage.cost_usd) prima della consegna: 25,72 $.",
+  "subagenti": 2
+ },
+ "costo_usd": 25.72
+}

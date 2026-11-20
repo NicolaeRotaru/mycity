@@ -31,7 +31,10 @@ function lanciaColRiepilogo(radice: string, env: Record<string, string>) {
 }
 
 describe('R07-009 · lo storico nello stesso secchio della copia non passa in silenzio', () => {
-  it('secchio -storico assente e non creabile: notte verde ma riepilogo e avviso lo dicono', () => {
+  // 20/11/2026 (R02-005) — La scelta di Nicola è arrivata: senza il secchio dello storico la notte è
+  // rossa e lo storico non va mai nel secchio della copia (niente più ripiego su «/_storico»). Il
+  // riepilogo del lavoro dice perché. Prova di comportamento: riparazione-r02-backup-storico-rosso.
+  it('secchio -storico assente e non creabile: notte rossa, niente ripiego, il riepilogo lo dice', () => {
     const m = mondoFinto()
     m.file('src:products', 'p.jpg')
     m.cartella('b2:mycity-foto')
@@ -41,13 +44,11 @@ describe('R07-009 · lo storico nello stesso secchio della copia non passa in si
       STORAGE_SYNC_BUCKETS: 'products',
       FAKE_MKDIR_FAIL: '1',
     })
-    // Il comportamento della copia non cambia: stesso ripiego, stessa uscita.
-    expect(r.uscita, r.out).toBe(0)
-    expect(r.out).toContain('b2:mycity-foto/_storico')
-    // Quello che mancava: il riepilogo del lavoro e l'avviso.
-    expect(r.riepilogo).toContain('stesso secchio della copia')
-    expect(r.riepilogo).toContain('b2:mycity-foto/_storico')
-    expect(r.out).toMatch(/::warning::Lo storico delle foto e' nello stesso secchio della copia/)
+    expect(r.uscita, r.out).toBe(5)
+    expect(r.out).not.toContain('b2:mycity-foto/_storico')
+    expect(existsSync(join(m.radice, 'b2', 'mycity-foto', '_storico'))).toBe(false)
+    expect(r.riepilogo).toContain('manca il secchio dello storico')
+    expect(r.riepilogo).toContain('b2:mycity-foto-storico')
   })
 
   it('secchio -storico che esiste: nessun avviso di ripiego nel riepilogo', () => {

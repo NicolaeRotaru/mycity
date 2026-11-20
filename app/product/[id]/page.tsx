@@ -18,6 +18,8 @@ import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { fraseResoDelProdotto, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
+import { tariffaConsegnaCents } from '@/lib/ordini/prezzi';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
@@ -548,6 +550,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const maxQty = stock === undefined ? Infinity : Math.max(1, stock);
   const qty = Math.min(quantity, maxQty);
 
+  // R02-007 — «Paghi alla consegna» solo dove la cassa accetta davvero i contanti. Il tetto della legge
+  // (lib/ordini/tetto-dei-contanti.ts) vale sul lordo, merce più consegna, come in cassa e nella rotta
+  // dei contanti: qui la merce è QUESTO prodotto, al prezzo che si paga (promo compresa) e nella
+  // quantità scelta, più la consegna minima che la cassa gli aggiunge. Sopra il tetto la scheda non
+  // promette i contanti: né nel riquadro verde, né sul pulsante, né nella barra in fondo.
+  const merceCents = Math.round(price * 100) * qty;
+  const lordoContantiCents = merceCents + tariffaConsegnaCents({ pickupInStore: false, merceCents, consegnaVeloce: false });
+  const contantiQui = !sopraIlTettoDeiContanti(lordoContantiCents);
+
   // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
   // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
   // «Spedizione gratuita» e non nominava da nessuna parte i 3 € di consegna che partono comunque:
@@ -608,8 +619,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     addToCart({
       id: product.id,
       name: product.name,
-      // Al carrello il prezzo pieno: lo sconto della promo lo applica lui, come la cassa.
-      price: prezzoPieno,
+      // R02-020 / R02-021 — Al carrello il prezzo che la scheda e la barra in fondo mostrano: con la
+      // promo attiva quello scontato, al centesimo come la cassa (`discountedUnitCents`). Carrello e
+      // cassa non lo scontano di nuovo: rileggono il prezzo pieno e la promo dal database e lo
+      // sostituiscono. Col pieno qui, il carrello scriveva «il prezzo è sceso» a ogni promo.
+      price,
       image: images[0],
       quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -655,7 +669,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       addToCart({
         id: product.id,
         name: product.name,
-        price: prezzoPieno,
+        price,
         image: images[0],
         quantity: qty,
         sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -666,7 +680,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     }
     // Il pulsante promette «paghi alla consegna»: la promessa viaggia fino alla
     // cassa, che senza questa riga si apriva sempre con la carta selezionata.
-    ricordaMetodoScelto('cod');
+    // R02-007 — Sopra il tetto dei contanti il pulsante non lo promette, e la cassa non riparte da lì.
+    if (contantiQui) ricordaMetodoScelto('cod');
     router.push('/checkout');
   };
 
@@ -965,7 +980,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
                     non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
                     cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
-                <span>{frasePagamento()}</span>
+                <span>{frasePagamento(undefined, lordoContantiCents)}</span>
               </span>
               {/* Il costo di consegna: fin qui non compariva da nessuna parte, e il primo posto
                   dove si vedeva era il carrello. Chi legge la promessa qui sopra deve leggere
@@ -1259,7 +1274,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   : 'bg-ink-900 hover:bg-ink-800 text-white'
               }`}
             >
-              {inPartenza ? 'Apro la cassa…' : 'Compra ora · paghi alla consegna'}
+              {inPartenza ? 'Apro la cassa…' : contantiQui ? 'Compra ora · paghi alla consegna' : 'Compra ora'}
             </button>
 
             {(sellerProfile?.id ?? product.seller_id) && (
@@ -1272,7 +1287,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
               <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
-              <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
+              {contantiQui && (
+                <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
+              )}
             </div>
           </div>
         </div>
@@ -1596,6 +1613,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         available={canAdd}
         onAdd={handleAdd}
         note="Paghi alla consegna"
+        // R02-007 — Sopra il tetto dei contanti la riga non si passa. La frase resta scritta qui sopra:
+        // è quella che la prova della barra misura a 360 pixel.
+        {...(contantiQui ? {} : { note: undefined })}
         qty={qty}
         onDec={() => setQuantity(Math.max(1, qty - 1))}
         onInc={() => setQuantity(Math.min(maxQty, qty + 1))}

@@ -4,52 +4,12 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo, segnaGiroNonFatto } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
-import {
-  isPushConfigured, iscrizioniPerUtenti, sendPushToUser, type PushDeliveryOptions,
-} from '@/lib/push/send';
+import { isPushConfigured, iscrizioniPerUtenti, sendPushToUser } from '@/lib/push/send';
+import { CONSEGNA_PER_CATEGORIA, contrassegno } from '@/lib/push/subito';
 
-/**
- * 6/9/2026 — QUANTO A LUNGO VALE UN AVVISO, A SECONDA DI COSA DICE.
- *
- * Il servizio push di Apple/Google/Mozilla tiene in coda il messaggio se il
- * telefono e' spento: senza istruzioni per quattro settimane. «Il tuo ordine e'
- * in consegna» che arriva lunedi' per una consegna di sabato non e' un avviso,
- * e' un motivo per spegnere le notifiche. Un'ora per ordini e avvisi di
- * servizio, un giorno per promozioni, gruppi e newsletter (quelle possono
- * aspettare la prossima volta che lo schermo si accende).
- */
-const UNORA = 3_600;
-const UNGIORNO = 86_400;
-const CONSEGNA_PER_CATEGORIA: Record<string, PushDeliveryOptions> = {
-  order:      { TTL: UNORA,    urgency: 'high' },
-  system:     { TTL: UNORA,    urgency: 'high' },
-  promo:      { TTL: UNGIORNO, urgency: 'normal' },
-  group:      { TTL: UNGIORNO, urgency: 'normal' },
-  newsletter: { TTL: UNGIORNO, urgency: 'low' },
-};
-
-/**
- * 6/9/2026 — UN AVVISO PER ORDINE, NON UNO PER MESSAGGIO.
- *
- * Il contrassegno (`tag`) dice al telefono quale notifica sostituire. Era
- * l'identificativo della notifica, cioe' sempre diverso: «confermato», «in
- * preparazione», «pronto», «in consegna» dello stesso ordine si impilavano in
- * quattro avvisi. Con il collegamento all'ordine l'ultimo stato prende il posto
- * del precedente e `renotify` fa comunque suonare il telefono.
- *
- * Se il collegamento e' generico ('/' o assente) si torna all'identificativo:
- * altrimenti due promozioni diverse si mangerebbero a vicenda.
- */
-/*
- * 5/11/2026 — Il link fa da contrassegno solo se porta un id (un ordine, un reclamo). I link di
- * sezione ('/rider', '/admin/sos') valgono per tanti avvisi diversi: col link come contrassegno
- * «Ordine pronto» di un ordine cancellava sul telefono del fattorino quello di un altro ordine.
- */
-// Un id è un pezzo del percorso, dopo il primo, che contiene una cifra (un uuid, un numero).
-const ID_NEL_LINK = /^\/[^/?#]+\/[^?#]*\d/;
-function contrassegno(n: { id: string; link: string | null }): string {
-  return n.link && ID_NEL_LINK.test(n.link) ? n.link : n.id;
-}
+// 20/11/2026 (R02-004) — Quanto vale un avviso (`CONSEGNA_PER_CATEGORIA`) e quale sostituisce sul
+// telefono (`contrassegno`) stanno in lib/push/subito.ts: le usa anche l'invio subito della push del
+// nuovo ordine, e devono restare uguali.
 
 /** Le categorie che possono aspettare: senza la preferenza letta non partono. */
 const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
@@ -61,6 +21,10 @@ const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
  * rimosse dal sender.
  *
  * Cadenza: ogni 5 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
+ * 20/11/2026 (R02-004) — Per il nuovo ordine non si aspetta questo giro: la push al negozio parte
+ * subito, alla creazione dell'ordine (`mandaSubitoLaPushDelNuovoOrdine`, lib/push/subito.ts), e
+ * segna `pushed_at`, così qui non torna. Questo giro resta la rete di sicurezza: riprende quelle
+ * che l'invio subito non è riuscito a mandare (e ha lasciato con `pushed_at` vuoto).
  * A mano si chiama così:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://yoursite/api/cron/send-push
  */
