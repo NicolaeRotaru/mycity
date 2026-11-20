@@ -49,6 +49,30 @@ function firmaDelleTaglie(taglie: Array<{ id?: string }>): string {
   return taglie.map((t) => t.id ?? '').sort().join('|');
 }
 
+/**
+ * S01-001 (collaudo K01, giro 3) — LE COLONNE CHE IL SALVA RIMANDA SEMPRE, COI VALORI DELL'APERTURA.
+ * Se nel frattempo la banca dati ne ha altri (prodotto nascosto, prezzo cambiato da un altro
+ * telefono), salvando tornerebbero quelli di prima. Fuori la scorta, che ha la sua guardia
+ * (stock_visto) e cambia a ogni vendita, ed «escluso dal recesso», che parte solo se il negoziante
+ * lo cambia.
+ */
+const COLONNE_RISCRITTE = ['name', 'description', 'price', 'compare_at_price', 'unit', 'condition', 'category_id', 'images', 'attributes', 'tags', 'express_enabled', 'status'] as const;
+
+/** Lo stesso valore da la stessa firma, in qualunque ordine arrivino le chiavi degli oggetti. */
+function inOrdine(valore: unknown): unknown {
+  if (Array.isArray(valore)) return valore.map(inOrdine);
+  if (valore && typeof valore === 'object') {
+    const oggetto = valore as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(oggetto).sort().map((chiave) => [chiave, inOrdine(oggetto[chiave])]));
+  }
+  return valore;
+}
+
+/** S01-001 — La riga del prodotto come la riscrive il Salva: un'altra riga da un'altra firma. */
+function firmaDellaRiga(riga: Record<string, unknown>): string {
+  return JSON.stringify(COLONNE_RISCRITTE.map((colonna) => inOrdine(riga[colonna] ?? null)));
+}
+
 export default function EditProductPage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const router = useRouter();
@@ -65,9 +89,11 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    * avviso, finche' le taglie lette dalla banca dati non sono quelle (sotto, `salvataggioFermo`).
    * Se si e' aperto senza sapere la consegna del negozio, per lui resta «non letta»: il suo tempo
    * di consegna e' un ripiego, e non scrive un «no» indovinato. `giro` riapre il modulo da capo,
-   * quando lo chiede il negoziante.
+   * quando lo chiede il negoziante. Lo stesso per la riga del prodotto (`riga`, collaudo K01): il
+   * Salva rimanda prezzo, stato e il resto com'erano all'apertura, quindi aspetta la riga riletta e
+   * si ferma se e' un'altra.
    */
-  const [aperto, setAperto] = useState<{ id: string; taglie: string; consegnaNonLetta: boolean; giro: number } | null>(null);
+  const [aperto, setAperto] = useState<{ id: string; taglie: string; riga: string; consegnaNonLetta: boolean; giro: number } | null>(null);
 
   const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto, refetch: rileggiProdotto, fetchStatus: prodottoFetchStatus } = useQuery({
     queryKey: queryKeys.seller.product(id),
@@ -321,19 +347,30 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    */
   const taglieLette = !variantiSenzaDati && !erroreVarianti && variantiFetchStatus !== 'paused' && !varianteInLettura && (variantiRilette || !variantiVecchie);
   const firmaLetta = firmaDelleTaglie(variants);
+  /**
+   * S01-001 (collaudo K01, giro 3) — E LA RIGA DEL PRODOTTO.
+   * Il modulo resta aperto anche dopo la rilettura (sopra, `restaAperto`) e tiene i valori con cui si
+   * e' aperto, magari presi dalla memoria senza rete: il Salva li rimandava tutti, e un prodotto
+   * nascosto da un altro telefono tornava in vendita, un prezzo portato da 40 a 45 € tornava a 40.
+   * Come le taglie: la riga si rilegge a ogni apertura, e finche' quella rilettura e' in volo, ferma
+   * per la rete o caduta il Salva aspetta; se la riga letta e' un'altra, si ferma e offre «Riapri».
+   */
+  const rigaLetta = !error && prodottoFetchStatus !== 'paused' && !prodottoInLettura;
+  const firmaRigaLetta = firmaDellaRiga(product);
   const consegnaNonLettaAdesso = consegnaNonLetta || offersExpress === undefined;
-  if (!restaAperto) setAperto({ id, taglie: firmaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: aperto?.id === id ? aperto.giro : 0 });
+  if (!restaAperto) setAperto({ id, taglie: firmaLetta, riga: firmaRigaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: aperto?.id === id ? aperto.giro : 0 });
   const taglieDelModulo = restaAperto ? aperto.taglie : firmaLetta;
+  const rigaDelModulo = restaAperto ? aperto.riga : firmaRigaLetta;
   const giro = restaAperto ? aperto.giro : 0;
-  const riapriConLeTaglieAggiornate = async () => {
+  const riapri = async (title: string) => {
     const ok = await confirmDialog({
-      title: 'Riaprire il modulo con le taglie aggiornate?',
+      title,
       message: 'Il modulo riparte dal prodotto com\'è in banca dati, con le sue taglie: le modifiche che non hai salvato si perdono.',
       confirmLabel: 'Sì, riapri',
       danger: true,
       icon: AlertTriangle,
     });
-    if (ok) setAperto({ id, taglie: firmaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: giro + 1 });
+    if (ok) setAperto({ id, taglie: firmaLetta, riga: firmaRigaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: giro + 1 });
   };
   let salvataggioFermo: ReactNode = null;
   if (erroreVarianti) {
@@ -344,16 +381,36 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         <button type="button" onClick={() => { void rileggiVarianti(); }} className="mt-1 font-semibold text-rose-700 underline">Riprova</button>
       </>
     );
+  } else if (error) {
+    salvataggioFermo = (
+      <>
+        <p className="font-semibold">Non riesco a rileggere questo prodotto.</p>
+        <p>Il salvataggio rimanda prezzo, stato e il resto della scheda: finché non lo rileggo è fermo. Quello che hai scritto resta qui.</p>
+        <button type="button" onClick={() => { void rileggiProdotto(); }} className="mt-1 font-semibold text-rose-700 underline">Riprova</button>
+      </>
+    );
   } else if (!taglieLette) {
     salvataggioFermo = (
       <p>Sto aspettando di rileggere le taglie di questo prodotto (senza rete non arrivano): il salvataggio riparte appena le leggo. Quello che hai scritto resta qui.</p>
+    );
+  } else if (!rigaLetta) {
+    salvataggioFermo = (
+      <p>Sto aspettando di rileggere questo prodotto (senza rete non arriva): il salvataggio riparte appena lo leggo. Quello che hai scritto resta qui.</p>
     );
   } else if (firmaLetta !== taglieDelModulo) {
     salvataggioFermo = (
       <>
         <p className="font-semibold">Le taglie di questo prodotto sono cambiate da quando hai aperto il modulo.</p>
         <p>Salvando adesso la scorta non tornerebbe con le taglie vere, quindi il salvataggio è fermo.</p>
-        <button type="button" onClick={() => { void riapriConLeTaglieAggiornate(); }} className="mt-1 font-semibold text-rose-700 underline">Riapri con le taglie aggiornate</button>
+        <button type="button" onClick={() => { void riapri('Riaprire il modulo con le taglie aggiornate?'); }} className="mt-1 font-semibold text-rose-700 underline">Riapri con le taglie aggiornate</button>
+      </>
+    );
+  } else if (firmaRigaLetta !== rigaDelModulo) {
+    salvataggioFermo = (
+      <>
+        <p className="font-semibold">Questo prodotto è cambiato da quando hai aperto il modulo (per esempio da un altro telefono).</p>
+        <p>Salvando adesso prezzo, stato e il resto tornerebbero com&apos;erano quando l&apos;hai aperto, quindi il salvataggio è fermo.</p>
+        <button type="button" onClick={() => { void riapri('Riaprire il modulo con i dati aggiornati?'); }} className="mt-1 font-semibold text-rose-700 underline">Riapri con i dati aggiornati</button>
       </>
     );
   }

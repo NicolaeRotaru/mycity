@@ -45,6 +45,8 @@ const stato = vi.hoisted(() => {
     controlliScorte: 0,
     inserimenti: [] as Array<Record<string, unknown>>,
     cerca: '',
+    /** Se c'è, la rilettura della riga del prodotto aspetta questa promessa: la rilettura resta in volo. */
+    rigaInVolo: null as Promise<unknown> | null,
     client: null as unknown,
   };
   const catena = (tavola: string) => {
@@ -63,8 +65,12 @@ const stato = vi.hoisted(() => {
       return { data: null, error: { code: 'PGRST116', message: 'nessuna riga' } };
     };
     // Una lettura vera richiede tempo: la pagina fa in tempo a disegnarsi «in lettura».
-    c.single = async () => { await new Promise((r) => setTimeout(r, 20)); return riga(); };
-    c.maybeSingle = async () => { await new Promise((r) => setTimeout(r, 20)); return riga(); };
+    const attendi = async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      if (tavola === 'products' && id === ID && s.rigaInVolo) await s.rigaInVolo;
+    };
+    c.single = async () => { await attendi(); return riga(); };
+    c.maybeSingle = async () => { await attendi(); return riga(); };
     c.insert = (payload: Record<string, unknown>) => {
       s.inserimenti.push(payload);
       return { select: () => ({ single: async () => ({ data: { id: 'copia-1' }, error: null }) }) };
@@ -237,6 +243,7 @@ beforeEach(() => {
   stato.controlliScorte = 0;
   stato.inserimenti = [];
   stato.cerca = '';
+  stato.rigaInVolo = null;
   try { localStorage.clear(); } catch { /* niente */ }
 });
 
@@ -369,6 +376,90 @@ describe('S01-001 · «Modifica prodotto»: torna la rete, il modulo resta', () 
     await act(async () => { qc.setQueryData(chiaveTaglie, [ROSSO, BLU]); });
     await aspetta(60);
     expect(campoNome(radice)?.value, 'le taglie cambiate hanno rimontato il modulo: il testo è sparito').toBe('Lampada con dedica');
+  });
+});
+
+describe('S01-001 · «Modifica prodotto»: il modulo rimasto aperto non riscrive la riga com\'era in memoria', () => {
+  // Collaudo K01 (giro 3): il modulo resta aperto con la riga del prodotto presa dalla memoria anche
+  // dopo la rilettura (key id-giro), e il Salva riscrive `status` e `price` com'erano all'apertura.
+  const payloadDi = (i: number) => stato.salvataggi[i]?.payload as Record<string, unknown> | undefined;
+
+  it('K3 · aperta senza rete, un altro telefono ha nascosto il prodotto: tornata la rete il Salva non lo rimette in vendita', async () => {
+    stato.taglie[ID] = async () => [ROSSO, BLU];
+    stato.prodotto = { ...PRODOTTO, status: 'draft' };
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]), COME_IL_SITO);
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    await clic(radice, 'Salva modifiche');
+    expect(payloadDi(0)?.status, 'il Salva ha rimesso in vendita il prodotto nascosto da un altro telefono').not.toBe('available');
+    expect(nessunaScrittura(), 'la riga del prodotto è cambiata dopo l\'apertura: il Salva doveva fermarsi').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+    expect(campoNome(radice)?.value, 'il Salva fermo ha perso il testo').toBe('Lampada con dedica');
+
+    // Il negoziante riapre con i dati aggiornati: il modulo riparte dalla riga vera, e si salva.
+    await clic(radice, 'Riapri con i dati aggiornati');
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi).toHaveLength(1);
+    expect(payloadDi(0)?.status).toBe('draft');
+    expect(payloadDi(0)?.name).toBe('Lampada con dedica');
+  });
+
+  it('K4 · aperta senza rete, il prezzo è passato da 40 a 45 € da un altro telefono: tornata la rete il Salva non lo riporta a 40', async () => {
+    stato.taglie[ID] = async () => [ROSSO, BLU];
+    stato.prodotto = { ...PRODOTTO, price: 45 };
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]));
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    await clic(radice, 'Salva modifiche');
+    expect(payloadDi(0)?.price, 'il Salva ha riportato il prezzo a 40 €').not.toBe(40);
+    expect(nessunaScrittura()).toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+
+    await clic(radice, 'Riapri con i dati aggiornati');
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi).toHaveLength(1);
+    expect(payloadDi(0)?.price).toBe(45);
+  });
+
+  it('K5 · tornata la rete, le taglie sono arrivate ma la rilettura del prodotto è ancora in volo: il Salva aspetta la riga vera', async () => {
+    stato.taglie[ID] = async () => [ROSSO, BLU];
+    stato.prodotto = { ...PRODOTTO, status: 'draft' };
+    let arriva: () => void = () => undefined;
+    stato.rigaInVolo = new Promise<void>((ok) => { arriva = ok; });
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]), COME_IL_SITO);
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    expect(stato.letturePerTaglie, 'controprova: le taglie si sono rilette').toBeGreaterThan(0);
+    await clic(radice, 'Salva modifiche');
+    expect(payloadDi(0)?.status, 'con la rilettura del prodotto in volo il Salva ha riscritto lo stato della memoria').not.toBe('available');
+    expect(nessunaScrittura()).toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+
+    // La riga arriva, ed è un'altra: il Salva resta fermo e offre di riaprire.
+    await act(async () => { arriva(); });
+    await aspetta(80);
+    await clic(radice, 'Salva modifiche');
+    expect(nessunaScrittura()).toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+    expect(pulsante(radice, 'Riapri con i dati aggiornati'), 'controprova: il modulo offre di riaprire con la riga vera').toBeTruthy();
+    expect(campoNome(radice)?.value).toBe('Lampada con dedica');
+  });
+
+  it('K6 · una vendita cambia solo la scorta mentre il modulo è aperto: il Salva non si ferma (la scorta ha la sua guardia)', async () => {
+    stato.taglie[ID] = async () => [];
+    stato.prodotto = { ...PRODOTTO, stock: 4 };
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, []));
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+
+    await rete(true);
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi, 'una vendita arrivata nel frattempo ha fermato il Salva di un nome').toHaveLength(1);
+    expect(payloadDi(0)?.name).toBe('Lampada con dedica');
+    expect(payloadDi(0), 'la scorta non toccata non si scrive').not.toHaveProperty('stock');
   });
 });
 
