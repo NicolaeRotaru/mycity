@@ -167,24 +167,38 @@ export default function NotificationsPage() {
       if (errAggiorna) throw errAggiorna;
       return user.id;
     },
-    onSuccess: (chi) => {
+    onSuccess: async (chi) => {
       // R10-012 — Scritte lette davvero: lo diventa anche l'elenco tenuto, se la rilettura cade.
       if (chi && ultimoLetto.current) {
         const { utente, righe } = ultimoLetto.current;
         ultimoLetto.current = { utente, righe: righe.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)) };
       }
-      // R01-001 — E lo diventano l'elenco e il conto del campanello in memoria: react-query, se la
+      // R01-001 — E lo diventano gli elenchi e i conti del campanello in memoria: react-query, se la
       // rilettura cade, tiene i dati di prima, e restavano «Non letta» col pulsante a video. Solo le
-      // chiavi di chi ha premuto (la risposta può arrivare dopo l'ingresso di un altro account), e
-      // solo quelle che ci sono già: niente di nuovo in memoria a nome di chi magari è uscito.
+      // chiavi di chi ha premuto (l'ultimo pezzo della chiave è l'utente; la risposta può arrivare
+      // dopo l'ingresso di un altro account), e solo quelle che ci sono già: niente di nuovo in
+      // memoria a nome di chi magari è uscito.
+      // Tutti gli elenchi, non solo quello di adesso: mentre si rilegge, a video c'è il segnaposto,
+      // che viene dall'elenco più corto (prima di «Carica altre»).
+      // Prima si fermano le letture in volo di quelle chiavi: partite prima della scrittura, porterebbero
+      // ancora «Non letta» (per esempio «Carica altre» premuto subito prima). L'invalidazione qui sotto
+      // le fa ripartire.
       if (chi) {
-        qc.setQueryData<Notification[]>([...queryKeys.notifications.list, quante, chi], (prima) =>
+        const diChi = (prefisso: readonly string[]) => ({
+          queryKey: prefisso,
+          predicate: (q: { queryKey: readonly unknown[] }) => q.queryKey.at(-1) === chi,
+        });
+        await Promise.all([
+          qc.cancelQueries(diChi(queryKeys.notifications.list)),
+          qc.cancelQueries(diChi(queryKeys.notifications.count)),
+        ]);
+        qc.setQueriesData<Notification[]>(diChi(queryKeys.notifications.list), (prima) =>
           prima?.map((n) => (n.user_id === chi ? { ...n, is_read: true } : n)),
         );
-        qc.setQueryData<number>([...queryKeys.notifications.count, chi], (prima) => (prima === undefined ? prima : 0));
+        qc.setQueriesData<number>(diChi(queryKeys.notifications.count), (prima) => (prima === undefined ? prima : 0));
       }
-      qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
-      qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
     },
     onError: (e) => toast.error(friendlyError(e)),
   });
