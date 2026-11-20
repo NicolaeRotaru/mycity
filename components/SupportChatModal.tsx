@@ -108,7 +108,9 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
           'idempotency-key': chiaveInvio,
           ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ firstMessage: body }),
+        // 20/11/2026 (R04-015) — La chiave va anche nel corpo, nel campo che la rotta legge
+        // (`idempotency_key`, R04-012): è lì che il secondo invio uguale diventa «già ricevuto».
+        body: JSON.stringify({ firstMessage: body, idempotency_key: chiaveInvio }),
       });
       if (!res.ok) {
         // `error` nel corpo di ApiErrors e' un OGGETTO `{ code, message }`, non una stringa:
