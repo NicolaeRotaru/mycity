@@ -26,18 +26,13 @@ import { negozioPuoServire } from '@/lib/store-hours';
  * accesi: fattorini × `VELOCI_PER_FATTORINO`. Quel numero è una scelta di Nicola: finché non c'è, il
  * conteggio non decide e la veloce si vende come prima.
  * Prova: tests/unit/riparazione-r15-la-veloce-conta-quelle-in-mano.test.ts.
- *
- * 20/11/2026 (R04-021) — NICOLA HA SCELTO (19/11, fatto `consegna.veloce-per-fattorino`): UNA VELOCE
- * ALLA VOLTA PER FATTORINO. La veloce si vende solo se le veloci in corso sono meno dei fattorini
- * accesi. Le rotte che creano l'ordine passano il conteggio (`contaVelociInCorso`).
- * Prova: tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts.
  */
 
 /**
- * Quante consegne veloci può avere in mano un fattorino nello stesso momento. Scelta di Nicola del
- * 19/11/2026 (fatto `consegna.veloce-per-fattorino`): una alla volta.
+ * Quante consegne veloci può avere in mano un fattorino nello stesso momento. `null` = non ancora
+ * deciso: lo sceglie Nicola (domanda nel referto R15), qui non si inventa.
  */
-const VELOCI_PER_FATTORINO: number | null = 1;
+const VELOCI_PER_FATTORINO: number | null = null;
 
 /** Gli stati di una consegna venduta e non ancora finita: dal «nuovo» al «in strada». */
 const STATI_DELLA_CONSEGNA_IN_CORSO = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
