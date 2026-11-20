@@ -619,8 +619,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     addToCart({
       id: product.id,
       name: product.name,
-      // Al carrello il prezzo pieno: lo sconto della promo lo applica lui, come la cassa.
-      price: prezzoPieno,
+      // R02-020 / R02-021 — Al carrello il prezzo che la scheda e la barra in fondo mostrano: con la
+      // promo attiva quello scontato, al centesimo come la cassa (`discountedUnitCents`). Carrello e
+      // cassa non lo scontano di nuovo: rileggono il prezzo pieno e la promo dal database e lo
+      // sostituiscono. Col pieno qui, il carrello scriveva «il prezzo è sceso» a ogni promo.
+      price,
       image: images[0],
       quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -666,7 +669,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       addToCart({
         id: product.id,
         name: product.name,
-        price: prezzoPieno,
+        price,
         image: images[0],
         quantity: qty,
         sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
