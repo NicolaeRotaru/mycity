@@ -12,7 +12,7 @@ import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
-import { righePerChiChiudeAMano, type AvvisoDelCarrello, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
+import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
 
 /**
@@ -123,16 +123,6 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   let inAttesaDellaDivisione = 0;
   /** Annullati, ma la merce o il credito non sono tornati: lo sanno gli amministratori. */
   let ripristiniFalliti = 0;
-  /** R05-020 — Gli annullati di questo giro che hanno rifatto il conto del carrello: si avvisano a fine giro. */
-  const conIlCarrello: Array<{
-    o: Parameters<typeof avvisaIlClienteDellAnnullo>[1];
-    carrello: { avviso: AvvisoDelCarrello; come: ComeHaPagato };
-    isCardPaid: boolean;
-    /** Quanti annullati del giro c'erano quando il suo conto è stato rifatto. */
-    dopo: number;
-  }> = [];
-  /** R05-020 — Gli ordini annullati in questo giro (e non rimessi in coda), nell'ordine del giro. */
-  const annullatiNelGiro: string[] = [];
 
   for (const o of candidates ?? []) {
     // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
@@ -198,7 +188,6 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       continue;
     }
     if (!claimed || claimed.length === 0) continue;
-    annullatiNelGiro.push(o.id);
 
     // 30/10/2026 — Il negozio che non conferma in tempo esce dal giro: la consegna dei negozi rimasti
     // dello stesso carrello si rifà (consegna.negozio-che-rifiuta), e il rimborso rende il totale nuovo.
@@ -303,7 +292,6 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
             daChiudereAMano++;
           } else {
             logger.warn('[cron] expire-stale-orders: rimborso fallito, ordine rimesso in coda', { id: o.id });
-            annullatiNelGiro.splice(annullatiNelGiro.indexOf(o.id), 1);
             failed++;
           }
           continue;
@@ -387,15 +375,12 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         isCardPaid || (o.payment_method === 'card' && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(String(o.payment_status)));
       const come: ComeHaPagato = pagatoConLaCarta ? 'carta' : o.payment_method === 'cod' ? 'contanti' : 'da-pagare';
       const carrello = giro?.avviso ? { avviso: giro.avviso, come } : null;
-      // 5/11/2026 — Se lo storno del credito è fallito l'email non dice «credito restituito».
-      const perLEmail = creditoTornato ? o : { ...o, wallet_applied_cents: 0 };
-      if (carrello) {
-        // R05-020 — Le cifre del carrello si dicono a fine giro: un altro ordine dello stesso carrello
-        // può scadere più avanti in questo stesso giro, e allora queste sono già superate.
-        conIlCarrello.push({ o: perLEmail, carrello, isCardPaid, dopo: annullatiNelGiro.length });
-      } else if (!isCardPaid) {
-        await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", null);
+      if (!isCardPaid || carrello) {
+        // 5/11/2026 — Se lo storno del credito è fallito l'email non dice «credito restituito».
+        const perLEmail = creditoTornato ? o : { ...o, wallet_applied_cents: 0 };
+        await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
       }
+      await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
       // R31-023 — Al negozio anche l'email, come per il «Nuovo ordine»: non lancia, l'annullo è già scritto.
       if (sellerId) {
         await avvisaIlNegozioDellAnnullo(admin, { id: o.id, seller_id: sellerId }, `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: non è stato accettato in tempo.`);
@@ -409,20 +394,6 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         error: e instanceof Error ? e.message : String(e),
       });
     }
-  }
-
-  // R05-020 — Il conto del carrello si dice una volta, con le cifre finali. Un avviso è superato se un
-  // ordine che dava per rimasto è scaduto più avanti in questo giro: il suo annullo porta le cifre nuove
-  // (o nessuna, se il carrello è scaduto tutto). L'email dell'annullo parte lo stesso, senza le cifre
-  // vecchie; con la carta non parte (il «Rimborso emesso» l'ha già mandato refundOrder).
-  for (const a of conIlCarrello) {
-    const superato = annullatiNelGiro.slice(a.dopo).some((id) => a.carrello.avviso.rimasti.some((r) => r.ordineId === id));
-    if (superato) {
-      if (!a.isCardPaid) await avvisaIlClienteDellAnnullo(admin, a.o, "Il negozio non ha accettato l'ordine in tempo", null);
-      continue;
-    }
-    await avvisaIlClienteDellAnnullo(admin, a.o, "Il negozio non ha accettato l'ordine in tempo", a.carrello);
-    await avvisaLaCampanellaDelCarrello(admin, a.o.user_id, a.carrello.avviso, a.carrello.come);
   }
 
   if (canceled > 0 || failed > 0 || daChiudereAMano > 0 || inAttesaDellaDivisione > 0) {
