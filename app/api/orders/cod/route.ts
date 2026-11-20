@@ -15,7 +15,7 @@ import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-conse
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
-import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
+import { contaFattoriniOnline, contaVelociInCorso, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -933,11 +933,14 @@ export const POST = withAuthRateLimit(
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
     // fattorino approvato e online. La stessa decisione della cassa (`veloceSiPuo`).
+    // 20/11/2026 (R04-021) — E le veloci già in mano contano: una alla volta per fattorino
+    // (`VELOCI_PER_FATTORINO`, scelta di Nicola del 19/11). Un conteggio caduto non vende la veloce.
     if (consegnaVeloce) {
       const veloce = veloceSiPuo({
         adesso: romeNow(),
         negozi: (sellers ?? []).map((s) => ({ nome: s.store_name ?? 'Il negozio', orari: s.store_hours })),
         fattoriniOnline: await contaFattoriniOnline(admin),
+        velociInCorso: await contaVelociInCorso(admin),
       });
       if (!veloce.possibile) return esciERilascia(ApiErrors.conflict(veloce.perche));
     }

@@ -37,6 +37,8 @@ vi.mock('@/lib/store-hours', async (o) => ({
 vi.mock('@/lib/ordini/consegna-veloce', async (o) => ({
   ...((await o()) as object),
   contaFattoriniOnline: vi.fn(async () => 3),
+  // R04-021 — liberi: nessuna veloce già in mano (una alla volta per fattorino).
+  contaVelociInCorso: vi.fn(async () => 0),
 }));
 vi.mock('@/lib/promotions', () => ({
   fetchActiveDiscounts: vi.fn(async () => new Map()),

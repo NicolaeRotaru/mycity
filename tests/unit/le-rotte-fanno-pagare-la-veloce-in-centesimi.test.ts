@@ -25,7 +25,8 @@ vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
 }));
 vi.mock('@/lib/ordini/consegna-veloce', async (importOriginal) => {
   const vero = await importOriginal<typeof import('@/lib/ordini/consegna-veloce')>();
-  return { ...vero, contaFattoriniOnline: vi.fn(async () => stato.fattorini) };
+  // R04-021 — nessuna veloce già in mano: i fattorini accesi sono liberi (una alla volta per fattorino).
+  return { ...vero, contaFattoriniOnline: vi.fn(async () => stato.fattorini), contaVelociInCorso: vi.fn(async () => 0) };
 });
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', async (importOriginal) => {
