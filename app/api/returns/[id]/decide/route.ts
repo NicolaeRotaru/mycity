@@ -54,7 +54,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .eq('id', params.id)
     .single();
 
-  if (error || !ret) return ApiErrors.notFound('Reso non trovato');
+  // 20/11/2026 (R04-009) — Un database che non risponde non è un reso che non c'è: «riprova», non 404.
+  // PGRST116 («nessuna riga») resta la sola risposta che vuol dire davvero «non c'è».
+  if (error && (error as { code?: string }).code !== 'PGRST116') {
+    logger.error('[returns/decide] reso non letto', { returnId: params.id, code: (error as { code?: string }).code });
+    return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
+  }
+  if (!ret) return ApiErrors.notFound('Reso non trovato');
 
   /**
    * 3/9/2026 — IL NEGOZIO LO DICE L'ORDINE, NON IL RESO.
@@ -114,12 +120,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let ordine: OrdineDaRimborsare | null = null;
 
   if (chiedeRimborso) {
-    const { data } = await conRipiegoSchema(
+    const { data, error: errOrdine } = await conRipiegoSchema(
       'orders.select (decisione sul reso)',
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', ret.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', ret.order_id).single(),
     );
     ordine = (data ?? null) as OrdineDaRimborsare | null;
+    // R04-009 — Lettura caduta: «riprova», non «ordine non trovato».
+    if (!ordine && errOrdine && (errOrdine as { code?: string }).code !== 'PGRST116') {
+      return ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.");
+    }
     if (!ordine) return ApiErrors.notFound('Ordine del reso non trovato');
 
     const rimborsabile = quantoSiPuoRestituire(ordine);
