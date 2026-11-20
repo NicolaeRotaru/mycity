@@ -1,6 +1,7 @@
 {
+ "costo_usd": 23.11,
  "sessione": "R05",
- "aggiornato": "2026-11-20 20:45",
+ "aggiornato": "2026-11-20 21:20",
  "finita": true,
  "testa": "71c24880",
  "verifica": {
@@ -12,31 +13,31 @@
  "voci": [
   {
    "id": "R05-001",
-   "chiave": "la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+   "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-002",
-   "chiave": "se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
+   "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-003",
-   "chiave": "il gancio semancalachiave rende morti i catch sulla chiave nelle rotte; senzachiave e sullaporta copiati in due file",
+   "chiave": "architettura|il gancio semancalachiave rende morti i catch sulla chiave nelle rotte; senzachiave e sullaporta copiati in due file",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-004",
-   "chiave": "migrazione-124 ha dovuto creare un suo client admin, perché la fabbrica del sito porta next/headers",
+   "chiave": "architettura|migrazione-124 ha dovuto creare un suo client admin, perché la fabbrica del sito porta next/headers",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-005",
-   "chiave": "email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+   "chiave": "architettura|email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
    "esito": "parziale",
    "commit": "beb8e4ec",
    "file_toccati": [
@@ -61,7 +62,7 @@
   },
   {
    "id": "R05-006",
-   "chiave": "i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
+   "chiave": "architettura|i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
    "esito": "riparato",
    "commit": "41a60e5f",
    "file_toccati": [
@@ -88,7 +89,7 @@
   },
   {
    "id": "R05-007",
-   "chiave": "il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+   "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
    "esito": "parziale",
    "commit": "52c5225a",
    "file_toccati": [
@@ -113,7 +114,7 @@
   },
   {
    "id": "R05-008",
-   "chiave": "carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+   "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
    "esito": "scelta_di_nicola",
    "domanda": "Se cade la scrittura del secondo ordine del carrello veloce, il primo deve tornare «Adesso» (R05-008) o restare nella fascia con negozio e fattorino avvisati, come ha scelto R09-008 e come prova tests/unit/riparazione-r09-carrello-spostato-a-meta.test.ts:134-136?",
    "nota": "Sulla base il silenzio non c'è più: logger.error + notifyAdmins «Freno della veloce fermo a metà» (lib/ordini/veloce-non-confermata.ts:842-874) + 500 della rotta; rimettere il primo «Adesso» romperebbe la prova comune di R09-008. Nessun codice cambiato.",
@@ -121,7 +122,7 @@
   },
   {
    "id": "R05-009",
-   "chiave": "la frase per l'assistente scrive a mano la soglia dei 10 euro della consegna",
+   "chiave": "architettura|la frase per l'assistente scrive a mano la soglia dei 10 euro della consegna",
    "esito": "riparato",
    "commit": "c5531abf",
    "file_toccati": [
@@ -145,7 +146,7 @@
   },
   {
    "id": "R05-010",
-   "chiave": "nella regola della consegna per l'ai la soglia dei 10 € e' scritta a mano",
+   "chiave": "architettura|nella regola della consegna per l'ai la soglia dei 10 € e' scritta a mano",
    "esito": "riparato",
    "commit": "c5531abf",
    "file_toccati": [
@@ -169,13 +170,13 @@
   },
   {
    "id": "R05-011",
-   "chiave": "in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+   "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-012",
-   "chiave": "la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+   "chiave": "architettura|la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
    "esito": "serve_file_altrui",
    "serve_file_altrui": [
     {
@@ -200,49 +201,49 @@
   },
   {
    "id": "R05-013",
-   "chiave": "una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-014",
-   "chiave": "gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+   "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-015",
-   "chiave": "l'elenco delle librerie dichiara una libreria mai usata e ne usa una che non dichiara, e il lint gira con un comando che next 16 toglie",
+   "chiave": "architettura|l'elenco delle librerie dichiara una libreria mai usata e ne usa una che non dichiara, e il lint gira con un comando che next 16 toglie",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-016",
-   "chiave": "il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
+   "chiave": "architettura|il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-017",
-   "chiave": "una quinta copia scritta a mano del finto clienteavvisi nelle prove degli avvisi",
+   "chiave": "architettura|una quinta copia scritta a mano del finto clienteavvisi nelle prove degli avvisi",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-018",
-   "chiave": "la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+   "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-019",
-   "chiave": "la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
+   "chiave": "deploy-sre|la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   },
   {
    "id": "R05-020",
-   "chiave": "se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+   "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
    "esito": "non_fatto",
    "commit": "71c24880",
    "nota": "Riparazione 22f76c4e tolta con 71c24880 (la rotta è identica alla base) perché il revisore ha visto che rompeva altro: (1) rimandando tutti gli avvisi del carrello a fine giro (route.ts:395, 418-426; fino a 100 ordini, 300 s), un giro interrotto perdeva anche l'unica email di annullo degli ordini in contanti, che non vengono più ripresi; (2) route.ts:419 saltava un avviso con cifre ancora giuste se il giro dell'ordine dopo falliva. Da rifare: mandare subito ogni avviso e saltare solo quelli superati da un avviso successivo già partito, oppure ricalcolare le cifre al momento dell'invio.",
@@ -250,7 +251,7 @@
   },
   {
    "id": "R05-021",
-   "chiave": "la scadenza del recesso non si sposta quando l'ultimo giorno cade di sabato, domenica o in un festivo",
+   "chiave": "qa-flussi|la scadenza del recesso non si sposta quando l'ultimo giorno cade di sabato, domenica o in un festivo",
    "esito": "non_fatto",
    "nota": "tetto di spesa"
   }
@@ -262,6 +263,7 @@
  ],
  "conto": {
   "agenti": 4,
+  "subagenti": 4,
   "nota": "2 riparatori (lotti 1-2) + 2 revisori. Lotti 3-4 non partiti per il tetto di spesa: 13 voci non_fatto «tetto di spesa». Senza clone di ad-mycity: rimessa a mano, valida-referto lo lancia la regista."
  }
 }
