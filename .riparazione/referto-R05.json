@@ -1,0 +1,267 @@
+{
+ "sessione": "R05",
+ "aggiornato": "2026-11-20 20:45",
+ "finita": true,
+ "testa": "71c24880",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "71c24880f0dc648bcc93a976bc6638a0df9cf1f4",
+  "nota": "typecheck 0 errori; lint 0 errori (98 avvisi già presenti); vitest 1818 file verdi, 1 saltato, 11396 test"
+ },
+ "voci": [
+  {
+   "id": "R05-001",
+   "chiave": "la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-002",
+   "chiave": "se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-003",
+   "chiave": "il gancio semancalachiave rende morti i catch sulla chiave nelle rotte; senzachiave e sullaporta copiati in due file",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-004",
+   "chiave": "migrazione-124 ha dovuto creare un suo client admin, perché la fabbrica del sito porta next/headers",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-005",
+   "chiave": "email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+   "esito": "parziale",
+   "commit": "beb8e4ec",
+   "file_toccati": [
+    "lib/ordini/annulla.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r05-email-annullo-dopo-la-risposta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r05-email-annullo-dopo-la-risposta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (manuale)",
+    "uscita": 0,
+    "comando": "git checkout beb8e4ec^ -- lib/ordini/annulla.ts && npx vitest run … → rossa su expect(esito).not.toBe(ASPETTA) (r.44) e sull'avviso agli amministratori; git checkout beb8e4ec -- lib/ordini/annulla.ts → verde"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "avvisaIlClienteDellAnnullo usa after() di next/server (come lib/api/dopo-la-risposta.ts): dentro una richiesta l'email parte dopo la risposta; fuori (prove, script) si aspetta come prima. Copre anche expire-stale-orders (stessa funzione). Un invio caduto → notifyAdmins «Email di annullo non partita», una volta per ordine.",
+   "nota": "Il nuovo invio è a mano (avviso agli amministratori), non automatico: per la coda email_queue servirebbe registrare 'order_canceled' in lib/email/templates.ts (non di R05). Nessuna migrazione.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): parziale",
+   "cosa_resta": "Un invio caduto diventa solo un avviso agli amministratori, una volta: nessun nuovo invio automatico (la coda email_queue e il cron send-emails esistono, ma serve registrare 'order_canceled' in lib/email/templates.ts, file non di R05). Se getUserById fallisce anche solo per un errore passeggero (annulla.ts:505-520 → 'senza-indirizzo') non si avvisa nessuno (annulla.ts:480). Se la funzione muore dopo la risposta, email e avviso si perdono insieme (stesso compito after())."
+  },
+  {
+   "id": "R05-006",
+   "chiave": "i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
+   "esito": "riparato",
+   "commit": "41a60e5f",
+   "file_toccati": [
+    "lib/ordini/annulla.ts",
+    "migrations/620_i_soldi_fra_gli_ordini_del_carrello_passano_in_una_transazione.sql",
+    "tests/unit/riparazione-r05-giro-in-transazione.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r05-soldi-in-transazione.test.ts",
+    "tests/sql/rls/riparazione-r05-soldi-in-transazione.test.sql"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r05-soldi-in-transazione.test.ts --reporter=dot ; prova SQL con tests/sql/harness (Postgres locale usa e getta)",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (manuale)",
+    "uscita": 0,
+    "comando": "git checkout b2c62f34 -- lib/ordini/annulla.ts && npx vitest run tests/unit/riparazione-r05-soldi-in-transazione.test.ts → rossa su expect([PRIMA, DOPO]).toContainEqual(comEScritto()) (r.100/118/126, carrello a metà); git checkout 41a60e5f^ -- lib/ordini/annulla.ts → rossi i 2 casi del ripiego su expect(comEScritto()).toEqual(DOPO) (r.151); git checkout 41a60e5f -- lib/ordini/annulla.ts → verde 7/7. SQL: senza la 620 cade (42883), con la 620 14/14"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Commit 32ea8e9c + 41a60e5f. Migrazione 620 (non applicata): funzione sposta_la_consegna_nel_carrello(p_righe jsonb) returns boolean, tutte le scritture del giro in una transazione, FOR UPDATE in ordine di id, controllo delle righe lette (consegna, fattorino, stato, rimborsato, contanti), altrimenti false senza scrivere; risponde solo true/false (mai NULL); SECURITY INVOKER, search_path fisso, revoke da PUBLIC/anon/authenticated, grant solo a service_role. annulla.ts: stesso conto e stesse cifre; giro e rimetti in una sola rpc ciascuno; su false/errore rilegge e rifà il conto (max 3). Ripiego sul percorso riga per riga di prima (invariato) se rpc assente, PGRST202/42883 o risposta non booleana: è il percorso finché Nicola non applica la 620. Le 8 prove comuni sono identiche alla base.",
+   "nota": "Chiude la voce quando Nicola applica la 620. Residui visti dal revisore (non peggiorano la base): risposta della rpc persa dopo il commit e poi rimborso caduto → rimetti non torna indietro e non avvisa (annulla.ts:1002/1071, raro); avviso agli amministratori con testo sbagliato se rimetti perde la risposta dopo il commit (annulla.ts:1066); la 620 non confronta total_price/gross_total_cents (come la base; commento r.102-106 promette di più); su ordini vecchi con rider_fee_cents NULL (prima della 111) la 620 sposta dove la base non trovava la riga. Il percorso della 620 è provato in unit solo sul carrello pane+frutta con carta.",
+   "verificato_da": "revisore R05 G1 (subagente distinto da chi ha riparato): regge"
+  },
+  {
+   "id": "R05-007",
+   "chiave": "il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+   "esito": "parziale",
+   "commit": "52c5225a",
+   "file_toccati": [
+    "lib/ordini/annulla.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r05-carrello-contanti-senza-tentativo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r05-carrello-contanti-senza-tentativo.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (manuale)",
+    "uscita": 0,
+    "comando": "git checkout 52c5225a^ -- lib/ordini/annulla.ts && npx vitest run … → rossa su expect(frutta()).toEqual([300, 300, 1500]) (r.46, ricevuto [100,100,1300]); git checkout 52c5225a -- lib/ordini/annulla.ts → verde"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Se la riga di cod_checkout_attempts manca o non si legge, ordiniDelCarrello ritrova il carrello dagli ordini stessi (contanti, stesso cliente, senza sessione Stripe, nati entro 2 minuti, in ordine di nascita); la mancanza va nel registro (logger.warn). Se nel gruppo entra un altro carrello il conto non torna con la regola e non si sposta niente; ogni errore → null come prima.",
+   "nota": "Stesso limite in lib/ordini/veloce-non-confermata.ts:198 (file di R05, fuori da questa voce): ritrova il carrello in contanti solo da cod_checkout_attempts.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): parziale",
+   "cosa_resta": "(1) annulla.ts:778-787 il raggruppamento entro 2 minuti può prendere ordini di un altro carrello che ha la sua riga in cod_checkout_attempts (manca il controllo incrociato con quella tabella): se l'altro carrello ha vivi solo ordini «negozio in più», l'insieme passa la regola e consegna/compenso del fattorino finiscono sull'ordine e sul giro sbagliati (totale del cliente uguale; raro, serve uno stato già incoerente). (2) Con due carrelli in contanti distinti nella stessa finestra il registro dice «ritrovato dagli ordini» ma poi conto è null e annulla.ts:1071/1135 escono senza traccia: in quel caso la regola non scatta e nessuno lo sa."
+  },
+  {
+   "id": "R05-008",
+   "chiave": "carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+   "esito": "scelta_di_nicola",
+   "domanda": "Se cade la scrittura del secondo ordine del carrello veloce, il primo deve tornare «Adesso» (R05-008) o restare nella fascia con negozio e fattorino avvisati, come ha scelto R09-008 e come prova tests/unit/riparazione-r09-carrello-spostato-a-meta.test.ts:134-136?",
+   "nota": "Sulla base il silenzio non c'è più: logger.error + notifyAdmins «Freno della veloce fermo a metà» (lib/ordini/veloce-non-confermata.ts:842-874) + 500 della rotta; rimettere il primo «Adesso» romperebbe la prova comune di R09-008. Nessun codice cambiato.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): esito giusto"
+  },
+  {
+   "id": "R05-009",
+   "chiave": "la frase per l'assistente scrive a mano la soglia dei 10 euro della consegna",
+   "esito": "riparato",
+   "commit": "c5531abf",
+   "file_toccati": [
+    "lib/products/economics.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r05-soglia-della-consegna-per-l-ai.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r05-soglia-della-consegna-per-l-ai.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (manuale)",
+    "uscita": 0,
+    "comando": "git checkout c5531abf^ -- lib/products/economics.ts && npx vitest run … → rossa su expect(testo).toContain('€3.00 per una spesa da 15 € in su') (r.20); git checkout c5531abf -- … → verde"
+   },
+   "copre_tutta_la_voce": true,
+   "insieme_a": "R05-010",
+   "cosa_ho_fatto": "In regolaConsegnaPerAi la soglia (999/1000 centesimi e il testo «10 €») viene da SPESA_SENZA_SUPPLEMENTO_CENTS; valore invariato. La prova finge la costante a 15 € e la frase la segue.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): regge"
+  },
+  {
+   "id": "R05-010",
+   "chiave": "nella regola della consegna per l'ai la soglia dei 10 € e' scritta a mano",
+   "esito": "riparato",
+   "commit": "c5531abf",
+   "file_toccati": [
+    "lib/products/economics.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r05-soglia-della-consegna-per-l-ai.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r05-soglia-della-consegna-per-l-ai.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (manuale)",
+    "uscita": 0,
+    "comando": "come R05-009 (stesso commit, stessa riga)"
+   },
+   "copre_tutta_la_voce": true,
+   "insieme_a": "R05-009",
+   "cosa_ho_fatto": "Stesso punto di R05-009 (regolaConsegnaPerAi): un solo commit con i due id.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): regge"
+  },
+  {
+   "id": "R05-011",
+   "chiave": "in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-012",
+   "chiave": "la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "lib/ordini/prezzi.ts",
+     "modifica": "r.263-271: `const shippingPerGruppo = ing.gruppi.map((g, i) => { const coord = ing.coordinateNegozio(g.sellerId); return shippingCentsFor({ subtotal: …, storeLat: coord.lat, storeLng: coord.lng, deliveryLat: ing.consegnaLat, deliveryLng: ing.consegnaLng, pickupInStore: ing.pickupInStore, freeShipping: ing.couponSpedizioneGratis }); });` → `const shippingPerGruppo = ing.gruppi.map(() => shippingCentsFor());`"
+    },
+    {
+     "file": "tests/unit/soldi-storni-sconti-e-compensi.test.ts",
+     "modifica": "r.139 e r.175: `shippingCentsFor({ subtotal, …, pickupInStore: false })` → `shippingCentsFor()`, nessuna asserzione cambiata"
+    },
+    {
+     "file": "tests/unit/una-sola-regola-per-la-spedizione.test.ts",
+     "modifica": "r.27-70: le chiamate shippingCentsFor({ … }) → shippingCentsFor(), nessuna asserzione cambiata"
+    },
+    {
+     "file": "lib/shipping.ts (R05, dopo i due sopra)",
+     "modifica": "togliere il tipo IngressiSpedizione (r.3-12); r.43 → `export function shippingCentsFor(): number {`; aggiornare il commento r.31-33"
+    }
+   ],
+   "nota": "Difetto ancora presente: lib/shipping.ts:43 shippingCentsFor(_opts?: IngressiSpedizione); togliere il parametro rompe tsc su un chiamante e una prova non di R05. Nessun codice cambiato.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): esito giusto (righe corrette, terzo chiamante aggiunto)"
+  },
+  {
+   "id": "R05-013",
+   "chiave": "una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-014",
+   "chiave": "gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-015",
+   "chiave": "l'elenco delle librerie dichiara una libreria mai usata e ne usa una che non dichiara, e il lint gira con un comando che next 16 toglie",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-016",
+   "chiave": "il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-017",
+   "chiave": "una quinta copia scritta a mano del finto clienteavvisi nelle prove degli avvisi",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-018",
+   "chiave": "la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-019",
+   "chiave": "la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  },
+  {
+   "id": "R05-020",
+   "chiave": "se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+   "esito": "non_fatto",
+   "commit": "71c24880",
+   "nota": "Riparazione 22f76c4e tolta con 71c24880 (la rotta è identica alla base) perché il revisore ha visto che rompeva altro: (1) rimandando tutti gli avvisi del carrello a fine giro (route.ts:395, 418-426; fino a 100 ordini, 300 s), un giro interrotto perdeva anche l'unica email di annullo degli ordini in contanti, che non vengono più ripresi; (2) route.ts:419 saltava un avviso con cifre ancora giuste se il giro dell'ordine dopo falliva. Da rifare: mandare subito ogni avviso e saltare solo quelli superati da un avviso successivo già partito, oppure ricalcolare le cifre al momento dell'invio.",
+   "verificato_da": "revisore R05 G2 (subagente distinto da chi ha riparato): parziale con regressione → tolta"
+  },
+  {
+   "id": "R05-021",
+   "chiave": "la scadenza del recesso non si sposta quando l'ultimo giorno cade di sabato, domenica o in un festivo",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa"
+  }
+ ],
+ "nuovi_difetti_visti": [],
+ "domande_per_nicola": [
+  "Applicare la migrazione 620 (funzione sposta_la_consegna_nel_carrello): finché manca, R05-006 resta sul percorso riga per riga di prima.",
+  "R05-008: se cade la scrittura del secondo ordine del carrello veloce, il primo torna «Adesso» o resta nella fascia con negozio e fattorino avvisati (scelta di R09-008)?"
+ ],
+ "conto": {
+  "agenti": 4,
+  "nota": "2 riparatori (lotti 1-2) + 2 revisori. Lotti 3-4 non partiti per il tetto di spesa: 13 voci non_fatto «tetto di spesa». Senza clone di ad-mycity: rimessa a mano, valida-referto lo lancia la regista."
+ }
+}
