@@ -1,0 +1,84 @@
+{
+ "sessione": "R01",
+ "aggiornato": "2026-11-20 20:41",
+ "finita": true,
+ "testa": "162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb",
+  "nota": "git rev-parse HEAD nello stesso comando = 162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb. typecheck pulito; lint 0 errori (98 avvisi già presenti); vitest 1818 file passati, 1 saltato (11402 casi). Prova rimessa fatta a mano: ad-mycity non clonabile da questa sessione (add_repo negato), valida-referto lo lancia la regista."
+ },
+ "voci": [
+  {
+   "id": "R01-001",
+   "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
+   "esito": "riparato",
+   "commit": "42ebc8186899bdbf98d6fdd33959afcd1ac7ff51",
+   "file_toccati": [
+    "app/notifications/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git status --porcelain && git checkout 42ebc818^ -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot && git checkout 42ebc818 -- app/notifications/page.tsx && npx vitest run tests/unit/riparazione-r01-notifiche-carica-altre.test.tsx --reporter=dot && git status --porcelain",
+    "nota": "prova rimessa a mano (prova-rimessa.mjs non disponibile). Senza la cura falliscono 3 casi su 6, tutti su asserzioni di comportamento: 3a (restano 3 «Non letta»), 3b (il pulsante «Segna tutte» resta a video), 4b (il clic di u1 segna lette sul database le notifiche di u2). I casi 1, 2 e 4a sono verdi anche sulla base: 1 e 2 erano già riparati, 4a fa da guardia contro le cure del giro 2."
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Punti 1 e 2 già a posto sulla base b2c62f34: page.tsx:241 `const caricaAltre = isFetching && (isPlaceholderData || !data);` con :356 «Caricamento…» e `disabled={isFetching}`; page.tsx:223 `if (error && !serveAccesso && !data && !ultimoElenco)` con :238 `data ?? ultimoElenco` e il messaggio in linea con «Riprova» (:331-346). Punto 3 riparato: in onSuccess la lista [notifications,list,quante,chi] viene segnata letta e il conto [notifications,count,chi] messo a 0, poi l'invalidazione; gli updater non creano voci nuove in memoria. Punto 4 (bocciatura del giro 2): il clic passa l'utente di quel momento (`mutate(userId)`); mutationFn non scrive se la sessione è già di un altro, e le scritture in memoria toccano solo le chiavi di chi ha premuto. Il caso 4a, verde sulla base, diventa rosso con le due cure ingenue del giro 2 (chiavi dello userId corrente, o setQueriesData sul prefisso).",
+   "verificato_da": "revisore indipendente (subagente 3, sola lettura, non ha riparato): confermato"
+  },
+  {
+   "id": "R01-002",
+   "chiave": "stati-ui|con la sessione scaduta il pulsante «apri reclamo» non fa niente, non chiede di rientrare e il testo scritto si perde",
+   "esito": "riparato",
+   "commit": "162d7a97ffcc2a5c16ba021479b0e55f5fcdb6eb",
+   "file_toccati": [
+    "app/orders/[id]/dispute/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git status --porcelain && git checkout 162d7a97^ -- 'app/orders/[id]/dispute/page.tsx' && npx vitest run tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --reporter=dot && git checkout 162d7a97 -- 'app/orders/[id]/dispute/page.tsx' && npx vitest run tests/unit/riparazione-r01-reclamo-sessione-scaduta.test.tsx --reporter=dot && git status --porcelain",
+    "nota": "prova rimessa a mano (prova-rimessa.mjs non disponibile). Senza la cura falliscono 4 casi su 4, tutti su asserzioni di comportamento: manca il segno perIlRientro (4) e nella bozza resta il testo del momento del clic invece di quello scritto dopo (1). Togliendo solo sessioneScaduta dalle dipendenze cade il caso del testo scritto dopo il clic. Con la cura 4/4."
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Sulla base c'erano già l'avviso con il link /sign-in?returnTo=… e il pulsante che resta usabile. Rimesso sessioneScaduta fra le dipendenze dell'effetto che copia il modulo nella bozza (resta legato a bozzaInCorso, come voleva 8993adc8): al 401 la bozza prende il testo cambiato dopo il clic. La bozza scritta al 401 e quella che segue il modulo portano perIlRientro:true, così sopravvive a un SIGNED_OUT non chiesto (sessione scaduta) e torna al rientro dello stesso utente; un altro utente non la vede; l'invio riuscito la toglie.",
+   "verificato_da": "revisore indipendente (subagente 3, sola lettura, non ha riparato): confermato"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "sistemazioni di sessione lato client",
+   "dimensione": "stati-ui",
+   "severita": "minore",
+   "riservato": true,
+   "file": "(nel referto privato)",
+   "descrizione": "dettagli solo alla regista"
+  },
+  {
+   "titolo": "campanello del negozio non azzerato se la rilettura dopo «Segna tutte come lette» cade",
+   "dimensione": "stati-ui",
+   "severita": "minore",
+   "file": "components/seller/SellerShell.tsx:107",
+   "descrizione": "la chiave [notifications,count,seller-bell,userId] viene solo invalidata, non aggiornata con setQueryData: se la rilettura cade il negozio vede ancora il numero vecchio di non lette. File non mio."
+  }
+ ],
+ "domande_per_nicola": [],
+ "conto": {
+  "agenti": 3,
+  "nota": "3 subagenti su 4 (2 riparatori, 1 revisore); nessun giro di correzione. Costo letto dalla regista."
+ }
+}
