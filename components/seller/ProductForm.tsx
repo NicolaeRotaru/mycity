@@ -911,11 +911,12 @@ export default function ProductForm({
       });
     });
     return async (e?: React.BaseSyntheticEvent) => {
-      // S01-001 — Con le taglie non lette non parte niente (neanche messo in coda per quando torna
-      // la rete): l'avviso resta accanto al pulsante e quello che e' scritto resta nel modulo.
+      // S01-001 — Con le taglie (o la riga del prodotto) non lette non parte niente (neanche messo in
+      // coda per quando torna la rete): l'avviso resta accanto al pulsante e quello che e' scritto resta
+      // nel modulo. Il motivo lo dice l'avviso, che lo sa: il messaggio non lo indovina.
       if (salvataggioFermo) {
         e?.preventDefault();
-        toast.error('Il salvataggio è fermo finché non leggo le taglie di questo prodotto. Quello che hai scritto resta qui.');
+        toast.error('Il salvataggio è fermo: il motivo è nell\'avviso accanto al pulsante. Quello che hai scritto resta qui.');
         document.getElementById(idSalvataggioFermo)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
         return;
       }

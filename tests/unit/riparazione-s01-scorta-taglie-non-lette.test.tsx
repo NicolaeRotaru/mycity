@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -396,8 +397,11 @@ describe('S01-001 · «Modifica prodotto»: il modulo rimasto aperto non riscriv
     await scrivi(campoNome(radice), 'Lampada con dedica');
 
     await rete(true);
+    vi.mocked(toast.error).mockClear();
     await clic(radice, 'Salva modifiche');
     expect(payloadDi(0)?.status, 'il Salva ha rimesso in vendita il prodotto nascosto da un altro telefono').not.toBe('available');
+    expect(toast.error, 'controprova: il Salva fermo lo dice anche con un messaggio').toHaveBeenCalled();
+    expect(String(vi.mocked(toast.error).mock.calls.at(-1)?.[0]), 'il messaggio del Salva fermo parla delle taglie, ma a essere cambiata è la riga del prodotto').not.toMatch(/taglie/i);
     expect(nessunaScrittura(), 'la riga del prodotto è cambiata dopo l\'apertura: il Salva doveva fermarsi').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
     expect(campoNome(radice)?.value, 'il Salva fermo ha perso il testo').toBe('Lampada con dedica');
 
