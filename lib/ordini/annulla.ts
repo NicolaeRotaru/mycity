@@ -745,7 +745,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .eq('user_id', o.user_id)
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
-  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return carrelloDagliOrdini(admin, o, errT);
+  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return null;
   const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
   const ids = Array.isArray(elenco)
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
@@ -755,44 +755,6 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
-}
-
-/**
- * 20/11/2026 (R05-007) — IL CARRELLO IN CONTANTI SI RITROVA ANCHE DAGLI ORDINI. La riga di
- * `cod_checkout_attempts` può mancare (la cassa la scrive dopo gli ordini e, se non passa, lo dice
- * solo nel registro): senza, la regola del negozio che rifiuta non scattava e nessuno lo sapeva.
- * Allora il carrello sono gli ordini in contanti dello stesso cliente nati nella stessa cassa (entro
- * due minuti dall'ordine), nell'ordine in cui sono nati. Se dentro finisce un altro carrello, il conto
- * scritto non è quello della regola e `consegnaDopoLAnnullo` non sposta niente. La mancanza della
- * riga resta nel registro. Prova: tests/unit/riparazione-r05-carrello-contanti-senza-tentativo.test.ts.
- */
-const STESSA_CASSA_MS = 2 * 60_000;
-async function carrelloDagliOrdini(admin: SupabaseClient, o: RigaDelGiro, errT: unknown): Promise<RigaDelGiro[] | null> {
-  try {
-    const nato = Date.parse(String(o.created_at ?? ''));
-    if (!Number.isFinite(nato)) return null;
-    const { data, error } = await leggiIlGiro('carrello-contanti-dagli-ordini', (c) =>
-      admin
-        .from('orders')
-        .select(c)
-        .eq('user_id', o.user_id)
-        .eq('payment_method', 'cod')
-        .lt('created_at', new Date(nato + STESSA_CASSA_MS).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(20));
-    if (error || !Array.isArray(data)) return null;
-    const righe = (data as unknown as RigaDelGiro[])
-      .filter((r) => !r.stripe_session_id && Date.parse(String(r.created_at ?? '')) >= nato - STESSA_CASSA_MS)
-      .sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
-    if (righe.length < 2 || !righe.some((r) => r.id === o.id)) return null;
-    logger.warn('[ricalcolaLaConsegnaDelGiro] carrello in contanti senza la riga del tentativo: ritrovato dagli ordini', {
-      orderId: o.id, ordini: righe.map((r) => r.id), errTentativo: (errT as { message?: string } | null)?.message ?? null,
-    });
-    return righe;
-  } catch (err) {
-    logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti non ritrovato dagli ordini', { orderId: o.id, err });
-    return null;
-  }
 }
 
 /** Quello che `ricalcolaLaConsegnaDelGiro` consegna a chi annulla. */
