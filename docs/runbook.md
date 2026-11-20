@@ -500,6 +500,54 @@ scavalcare dal giro dopo, e la stessa persona riceve il messaggio due volte.
 | Resend | resend.com/contact | business hours |
 | Anthropic | support@anthropic.com | business hours |
 | Netsons (DNS) | netsons.com/area-clienti | business hours |
+| Sentry (errori) | sentry.io → Help | business hours |
+
+---
+
+## 13. Registratore degli errori (Sentry): accenderlo prima del lancio
+
+**Perché**: senza, un errore del sito finisce solo nei log di Vercel e non lo vede nessuno. Scelta
+del 19/11: si accende prima del lancio, piano gratuito (Developer: 5.000 errori al mese). Il codice
+è già pronto: parte da solo appena su Vercel c'è la chiave pubblica (DSN). Non serve toccare niente
+nel codice.
+
+**Come capire se è acceso**: apri `https://<sito>/api/health` e guarda `registratoreErrori`:
+`acceso`, `acceso solo sul server` (manca la chiave del browser) o `spento`. Finché non è `acceso`,
+il sorvegliante (operational-alerts) manda ogni giorno l'allarme `REGISTRATORE_ERRORI_SPENTO`
+(campanella in `/admin/today` ed email a `SUPPORT_EMAIL`).
+
+### Accenderlo (15 minuti, una volta sola)
+
+1. **Account**: su sentry.io crea l'account e l'organizzazione. Alla domanda sulla regione dei dati
+   scegli **European Union (Frankfurt)**: gli errori possono contenere pezzi di dati dei clienti, e
+   così restano in Europa (il logger li ripulisce comunque, ma meglio due cinture).
+2. **Progetto**: «Create project» → piattaforma **Next.js** → nome `mycity`. Salta la procedura
+   guidata (il wizard vuole modificare il codice: non serve, è già fatto).
+3. **Chiave**: Settings → Projects → mycity → Client Keys (DSN) → copia il DSN
+   (`https://…@o….ingest.de.sentry.io/…`). È pubblica per natura: finisce nelle pagine.
+4. **Vercel**: progetto → Settings → Environment Variables → aggiungi
+   `NEXT_PUBLIC_SENTRY_DSN` = il DSN, ambiente **Production** (Preview solo se vuoi gli errori delle
+   anteprime, che arrivano separati come `preview`). Basta questa: il server la legge anche lui.
+   `SENTRY_DSN` serve solo se un giorno vuoi una chiave diversa per il server.
+5. **Rifai il deploy**: Deployments → l'ultimo di Production → «Redeploy». Serve: la chiave del
+   browser si stampa nelle pagine quando il sito si costruisce, e senza un deploy nuovo il browser
+   non la vede.
+6. **Verifica**: `/api/health` deve dire `registratoreErrori: "acceso"`. Poi in Sentry → Issues:
+   al primo errore vero arriva lì (e per email, regola di avviso predefinita «nuovo problema»).
+
+### Facoltativo: le mappe del codice
+
+Senza, gli errori arrivano lo stesso ma con i nomi delle funzioni accorciati. Per averli leggibili
+aggiungi su Vercel anche `SENTRY_AUTH_TOKEN` (Sentry → Settings → Auth Tokens, permesso
+«project:releases»), `SENTRY_ORG` e `SENTRY_PROJECT` (gli slug di organizzazione e progetto), e
+rifai il deploy. Se ne manca uno, il deploy parte lo stesso e le mappe semplicemente non si caricano.
+
+### Se si spegne o si riempie
+
+- Quota finita (5.000 errori nel mese): Sentry smette di registrare fino al mese dopo. Guarda in
+  Issues quale errore si ripete e sistemalo, non alzare il piano per abitudine.
+- Allarme `REGISTRATORE_ERRORI_SPENTO` dopo averlo acceso: la chiave è sparita da Vercel o è stata
+  messa solo su Preview. Rimettila su Production e rifai il deploy.
 
 ---
 

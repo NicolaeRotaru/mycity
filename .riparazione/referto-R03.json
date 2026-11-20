@@ -1,0 +1,361 @@
+{
+ "sessione": "R03",
+ "aggiornato": "2026-11-20 22:05",
+ "finita": true,
+ "testa": "e4bcd5aecc48eb90dcc76b4d63ef3d334ef45474",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "e4bcd5aecc48eb90dcc76b4d63ef3d334ef45474",
+  "nota": "typecheck + lint (0 errori, 98 avvisi) + vitest: 1820 file passati, 1 saltato; 11422 prove passate. git rev-parse HEAD nello stesso comando."
+ },
+ "voci": [
+  {
+   "id": "R03-001",
+   "chiave": "ai-endpoints|quando anthropic non risponde, vercel spegne la funzione ai prima che il negozio legga un errore chiaro",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-002",
+   "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+   "esito": "scelta_di_nicola",
+   "domanda": "Upstash o colonna nuova nel database per l'allarme del tetto di spesa AI?",
+   "nota": "rimandata da Nicola il 19/11: IA spenta al lancio. Quando si riaccende: la colonna nel database."
+  },
+  {
+   "id": "R03-003",
+   "chiave": "ai-endpoints|il freno di sei ore sui prodotti importati in errore regge solo con upstash: senza, ogni copia del sito ripaga le chiamate ai",
+   "esito": "scelta_di_nicola",
+   "domanda": "Upstash o colonna nuova nel database per il freno di sei ore sui prodotti importati in errore?",
+   "nota": "rimandata da Nicola il 19/11: IA spenta al lancio. Quando si riaccende: la colonna nel database."
+  },
+  {
+   "id": "R03-004",
+   "chiave": "deploy-sre|il giorno del lancio un errore del sito non lo vede nessuno: il registratore degli errori è spento e l'unico allarme dipende dalla chiave che manca",
+   "esito": "parziale",
+   "commit": "e4bcd5aecc48eb90dcc76b4d63ef3d334ef45474",
+   "commit_precedenti": [
+    "16e307758e199536e17c11f22d46297604cc5b2e"
+   ],
+   "file_toccati": [
+    "app/api/health/route.ts",
+    "app/api/cron/operational-alerts/route.ts",
+    "next.config.js",
+    "docs/runbook.md",
+    "tests/unit/riparazione-r03-registratore-errori.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-registratore-errori.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r03-registratore-errori.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 16e30775^ --file app/api/health/route.ts,app/api/cron/operational-alerts/route.ts,next.config.js,docs/runbook.md --prove tests/unit/riparazione-r03-registratore-errori.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Originale: logger e sentry.server.config già pronti col DSN (provato), next.config.js accende Sentry col solo DSN (mappe solo con token, org e progetto), /api/health dice registratoreErrori (acceso / acceso solo sul server / spento), sul sito vero il sorvegliante manda REGISTRATORE_ERRORI_SPENTO, runbook §13. Correzione: l'allarme ha ora chiave stabile (una per caso: spento ovunque o solo nel browser, senza la data UTC che cambiava a giorno italiano in corso) e unaVoltaAlGiorno: true, quindi una volta al giorno e non ogni sei ore; la prova, con orologio finto e una memoria degli allarmi finta con le regole del database, fa tre giri nello stesso giorno italiano (0:30, 7:00, 23:30) e vuole una sola email e una sola campanella, e il giorno dopo di nuovo.",
+   "cosa_resta": "Consigliata la diff su instrumentation-client.ts (file di altri): il file stesso dice che il giorno che il DSN si accende va chiusa la finestra prima dell'SDK; senza, un errore che rompe la pagina nei primi istanti non arriva. Parte non_codice per Nicola: creare l'account Sentry (regione dati UE, piano gratuito), progetto Next.js, mettere NEXT_PUBLIC_SENTRY_DSN su Vercel (Production) e rifare il deploy; facoltativi SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT per le mappe. Passi in docs/runbook.md §13.",
+   "serve_file_altrui": [
+    {
+     "file": "instrumentation-client.ts",
+     "modifica": "--- a/instrumentation-client.ts\n+++ b/instrumentation-client.ts\n@@ -65,9 +65,34 @@\n const inAttesa: Parameters<AvvioNavigazione>[] = [];\n const MAX_IN_ATTESA = 20;\n \n+/**\n+ * 20/11/2026 (R03-004) — LA FINESTRA PRIMA DELL'SDK, CHIUSA ORA CHE IL DSN SI ACCENDE.\n+ *\n+ * Due ascoltatori nativi, messi subito e in modo sincrono, tengono da parte gli errori che\n+ * scoppiano mentre il pezzo con l'SDK sta arrivando, e li consegnano a Sentry appena c'è. Poi si\n+ * tolgono: da lì in avanti ascolta Sentry. Il tetto è basso come quello delle navigazioni.\n+ */\n+const erroriInAttesa: unknown[] = [];\n+const MAX_ERRORI_IN_ATTESA = 10;\n+function tieniDaParte(evento: Event): void {\n+  if (erroriInAttesa.length >= MAX_ERRORI_IN_ATTESA) return;\n+  erroriInAttesa.push(\n+    'reason' in evento ? (evento as PromiseRejectionEvent).reason : ((evento as ErrorEvent).error ?? (evento as ErrorEvent).message),\n+  );\n+}\n+\n if (SENTRY_DSN) {\n+  if (typeof window !== 'undefined') {\n+    window.addEventListener('error', tieniDaParte);\n+    window.addEventListener('unhandledrejection', tieniDaParte);\n+  }\n   void import('@sentry/nextjs').then((S) => {\n     S.init(opzioniSentry() as Parameters<typeof S.init>[0]);\n+    if (typeof window !== 'undefined') {\n+      window.removeEventListener('error', tieniDaParte);\n+      window.removeEventListener('unhandledrejection', tieniDaParte);\n+    }\n+    for (const errore of erroriInAttesa.splice(0)) S.captureException(errore);\n     avvioNavigazione = S.captureRouterTransitionStart;\n     for (const argomenti of inAttesa.splice(0)) avvioNavigazione(...argomenti);\n   });\n"
+    }
+   ],
+   "nota": "non_codice: Nicola crea l'account Sentry (regione European Union), progetto Next.js, mette NEXT_PUBLIC_SENTRY_DSN su Vercel Production e fa Redeploy; poi /api/health deve dire registratoreErrori: acceso. Se manca la chiave di servizio Supabase il sorvegliante non parte (503), ma /api/health la conta già tra le vitali (503 unhealthy), quindi il monitor esterno se ne accorge.",
+   "verificato_da": "revisore avversario del lotto A: parziale confermato. Unico difetto, l allarme fino a 4 volte al giorno, chiuso dal giro di correzione e4bcd5ae (prova con orologio finto: tre giri nello stesso giorno italiano danno un solo avviso)."
+  },
+  {
+   "id": "R03-005",
+   "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-006",
+   "chiave": "deploy-sre|un'ultima prova ordina ancora le migrazioni con l'ordine vecchio",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-007",
+   "chiave": "frontend-ux|se la rilettura dei reclami cade a finestra aperta, la decisione resta su dati vecchi",
+   "esito": "riparato",
+   "commit": "19e4d5572dee5612b1427187016f093ec5bca629",
+   "file_toccati": [
+    "app/admin/disputes/page.tsx",
+    "tests/unit/riparazione-r03-reclami-rilettura-caduta.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-reclami-rilettura-caduta.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r03-reclami-rilettura-caduta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19e4d5572dee5612b1427187016f093ec5bca629^ --file app/admin/disputes/page.tsx --prove tests/unit/riparazione-r03-reclami-rilettura-caduta.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Con la rilettura dei reclami caduta (React Query tiene i dati vecchi) la finestra «Risolvi reclamo» mostra un avviso in italiano con «Riprova» e i tre pulsanti di decisione restano spenti finché una rilettura non riesce. Prova sulla pagina vera, stesso Supabase finto delle prove S05/R09: rilettura al ritorno sulla scheda che cade -> pulsanti spenti e avviso; «Riprova» riuscito -> di nuovo accesi.",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso dal riparatore, modello grande), 20/11 — regge: copre rilettura dopo decisione, cambio reclamo, riapertura; la prova morde. Resta verde il mutante isError && !isFetching; refetchOnWindowFocus è spento in produzione."
+  },
+  {
+   "id": "R03-008",
+   "chiave": "frontend-ux|la pagina «sotto i 10 €» mostra prodotti da 10 € e nasconde quelli che in promozione costano meno di 10",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-009",
+   "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-010",
+   "chiave": "frontend-ux|restano tre pagine con le foto sgranate perché `unoptimized` spegne srcset e sizes",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-011",
+   "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-012",
+   "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+   "esito": "parziale",
+   "commit": "4d8a00614c42b5c66c48a990191ca0790b3f2f19",
+   "file_toccati": [
+    "components/StickyAddToCart.tsx",
+    "tests/unit/riparazione-r03-barra-prezzo-promozione.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-barra-prezzo-promozione.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r03-barra-prezzo-promozione.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4d8a00614c42b5c66c48a990191ca0790b3f2f19^ --file components/StickyAddToCart.tsx --prove tests/unit/riparazione-r03-barra-prezzo-promozione.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Il prezzo della barra era già quello scontato: la scheda lo calcola con discountedUnitCents (come la cassa) e lo passa (app/product/[id]/page.tsx:494 e :1594). Mancava il pieno barrato che la scheda mostra accanto: StickyAddToCart ha ora il prop facoltativo prezzoPieno e, se più alto, lo stampa barrato in coda alla riga (il truncate taglia lui, non il prezzo). Prova: barra montata con 19,99 € e 15% -> 16,99 € per pezzo, 33,98 € per due, pieno barrato; senza promozione niente barrato.",
+   "cosa_resta": "La scheda deve passare prezzoPieno alla barra (finché no, la barra resta come oggi: prezzo scontato senza barrato). I caroselli SimilarProducts, RecentlyViewed, SponsoredCarousel, SearchBar e TrendingNow stampano ancora il prezzo pieno (FrequentlyBoughtTogether e CartUpsell applicano già lo sconto): sono file di altri. Diff provate in una copia isolata: tsc verde e 51 file di prova che li toccano verdi. Il revisore ha trovato un sesto carosello col prezzo pieno: components/home/HeroStoreCard.tsx:232 (file di altri, diff non ancora scritta).",
+   "serve_file_altrui": [
+    {
+     "file": "app/product/[id]/page.tsx",
+     "modifica": "--- a/app/product/[id]/page.tsx\n+++ b/app/product/[id]/page.tsx\n@@ -1592,6 +1592,7 @@\n       {/* Sticky CTA mobile — con stepper quantità, \"{qty}×{price}\" e totale */}\n       <StickyAddToCart\n         price={price}\n+        prezzoPieno={prezzoPieno}\n         bersaglio=\"acquisto-principale\"\n         available={canAdd}\n         onAdd={handleAdd}\n"
+    },
+    {
+     "file": "components/SimilarProducts.tsx",
+     "modifica": "--- a/components/SimilarProducts.tsx\n+++ b/components/SimilarProducts.tsx\n@@ -10,6 +10,7 @@\n import { PROPORZIONE_FOTO } from '@/lib/griglia-prodotti';\n import { queryKeys } from '@/lib/queries/keys';\n import { leggiSimili, type ProdottoSimile } from '@/lib/queries/fasce-prodotti';\n+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';\n import caricatoreFotoRemote from '@/lib/image-loader';\n \n /** Le colonne di questa fila, in un posto solo: lo scheletro e le schede vere devono coincidere. */\n@@ -36,7 +37,13 @@\n     queryKey: queryKeys.products.similar(productId, categoryId, sellerId),\n     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il\n     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'.\n-    queryFn: (): Promise<Item[]> => leggiSimili(supabase, { productId, categoryId, sellerId }),\n+    // Col prezzo di oggi, promozione compresa, come la scheda e la cassa (vedi CartUpsell).\n+    queryFn: async (): Promise<Item[]> => {\n+      const righe = await leggiSimili(supabase, { productId, categoryId, sellerId });\n+      if (righe.length === 0) return righe;\n+      const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());\n+      return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));\n+    },\n     enabled: !!productId,\n   });\n \n"
+    },
+    {
+     "file": "components/RecentlyViewed.tsx",
+     "modifica": "--- a/components/RecentlyViewed.tsx\n+++ b/components/RecentlyViewed.tsx\n@@ -10,6 +10,7 @@\n import { sizedImage } from '@/lib/image-url';\n import { queryKeys } from '@/lib/queries/keys';\n import { leggiVistiDiRecente, type VistoDiRecente } from '@/lib/queries/fasce-prodotti';\n+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';\n import { useUtente } from '@/components/hooks/useUtente';\n import { useEffect, useState } from 'react';\n import { hasConsent, readConsent } from '@/lib/consent';\n@@ -69,7 +70,13 @@\n     // l'esclusione dentro la lettura, con una chiave senza il prodotto, faceva vedere dalla memoria\n     // il prodotto che si sta guardando, e mancava quello appena lasciato. Si rilegge a ogni\n     // apertura (si mostra intanto quella di prima), perché una visita nuova si scrive di continuo.\n-    queryFn: (): Promise<Item[]> => leggiVistiDiRecente(supabase, { userId: userId! }),\n+    // Col prezzo di oggi, promozione compresa, come la scheda e la cassa (vedi CartUpsell).\n+    queryFn: async (): Promise<Item[]> => {\n+      const righe = await leggiVistiDiRecente(supabase, { userId: userId! });\n+      if (righe.length === 0) return righe;\n+      const sconti = await fetchActiveDiscounts(supabase, righe.map((it) => it.product.id)).catch(() => new Map<string, number>());\n+      return righe.map((it) => ({ ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } }));\n+    },\n     staleTime: 0,\n   });\n   const visibili = items.filter((it) => it.product.id !== excludeId);\n"
+    },
+    {
+     "file": "components/SponsoredCarousel.tsx",
+     "modifica": "--- a/components/SponsoredCarousel.tsx\n+++ b/components/SponsoredCarousel.tsx\n@@ -11,6 +11,7 @@\n import { sizedImage } from '@/lib/image-url';\n import { queryKeys } from '@/lib/queries/keys';\n import { leggiSponsorizzati, type Sponsorizzato } from '@/lib/queries/fasce-prodotti';\n+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';\n import { giornoPiacenza } from '@/lib/tempo-piacenza';\n \n type Props = {\n@@ -46,8 +47,14 @@\n     // 17/11/2026 — «Oggi» è il giorno di Piacenza, non quello di Greenwich: fra\n     // mezzanotte e l'una (le due d'estate) un annuncio che parte oggi restava\n     // nascosto, e uno scaduto ieri restava in vetrina.\n-    queryFn: (): Promise<SponsoredItem[]> =>\n-      leggiSponsorizzati(supabase, { placement, categorySlug, oggi: giornoPiacenza() }),\n+    // Col prezzo di oggi, promozione compresa, come la scheda e la cassa (vedi CartUpsell).\n+    queryFn: async (): Promise<SponsoredItem[]> => {\n+      const righe = await leggiSponsorizzati(supabase, { placement, categorySlug, oggi: giornoPiacenza() });\n+      const ids = righe.flatMap((it) => (it.product ? [it.product.id] : []));\n+      if (ids.length === 0) return righe;\n+      const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>());\n+      return righe.map((it) => (it.product ? { ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } } : it));\n+    },\n   });\n \n   /**\n"
+    },
+    {
+     "file": "components/SearchBar.tsx",
+     "modifica": "--- a/components/SearchBar.tsx\n+++ b/components/SearchBar.tsx\n@@ -13,6 +13,7 @@\n import { queryKeys } from '@/lib/queries/keys';\n import { riquadroSuggerimenti } from '@/lib/ricerca/riquadro-suggerimenti';\n import { leggiSuggerimentiRicerca, type Suggerimento } from '@/lib/queries/suggerimenti-ricerca';\n+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';\n import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';\n \n type Suggestion = Suggerimento;\n@@ -54,7 +55,14 @@\n     // 15/10/2026 (R3) — La lettura vive in lib/queries/suggerimenti-ricerca.ts: il\n     // ripiego per le parole a meta' agganciava il negozio a `profiles`, che dopo la\n     // migrazione 161 un cliente non legge piu', e la tendina restava vuota.\n-    queryFn: (): Promise<Suggestion[]> => leggiSuggerimentiRicerca(supabase, debounced),\n+    // Col prezzo di oggi, promozione compresa, come la scheda e la cassa (vedi CartUpsell).\n+    queryFn: async (): Promise<Suggestion[]> => {\n+      const righe = await leggiSuggerimentiRicerca(supabase, debounced);\n+      const ids = righe.flatMap((s) => (s.kind === 'product' ? [s.id] : []));\n+      if (ids.length === 0) return righe;\n+      const sconti = await fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>());\n+      return righe.map((s) => (s.kind === 'product' ? { ...s, price: discountedUnitCents(s.price, sconti.get(s.id) ?? 0) / 100 } : s));\n+    },\n   });\n \n   // Stato-vuoto (zero-state): categorie principali per i suggerimenti rapidi\n"
+    },
+    {
+     "file": "components/home/TrendingNow.tsx",
+     "modifica": "--- a/components/home/TrendingNow.tsx\n+++ b/components/home/TrendingNow.tsx\n@@ -8,6 +8,7 @@\n import { sizedImage } from '@/lib/image-url';\n import { queryKeys } from '@/lib/queries/keys';\n import { leggiTendenze, type Tendenza } from '@/lib/queries/fasce-prodotti';\n+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';\n import caricatoreFotoRemote from '@/lib/image-loader';\n import FotoConRipiego from '@/components/ui/FotoConRipiego';\n \n@@ -45,7 +46,13 @@\n     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il\n     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu', e la\n     // fascia restava vuota per tutti tranne il negoziante e l'amministratore.\n-    queryFn: (): Promise<Trending[]> => leggiTendenze(supabase),\n+    // Col prezzo di oggi, promozione compresa, come la scheda e la cassa (vedi CartUpsell).\n+    queryFn: async (): Promise<Trending[]> => {\n+      const righe = await leggiTendenze(supabase);\n+      if (righe.length === 0) return righe;\n+      const sconti = await fetchActiveDiscounts(supabase, righe.map((it) => it.product.id)).catch(() => new Map<string, number>());\n+      return righe.map((it) => ({ ...it, product: { ...it.product, price: discountedUnitCents(it.product.price, sconti.get(it.product.id) ?? 0) / 100 } }));\n+    },\n     refetchInterval: 5 * 60_000, // ogni 5 minuti\n   });\n \n"
+    }
+   ],
+   "verificato_da": "revisore avversario del lotto A (subagente diverso dal riparatore, modello grande), 20/11 — parziale confermato: le 6 diff altrui si applicano pulite, tsc 0 errori, 56 file di prova verdi. Manca anche components/home/HeroStoreCard.tsx:232."
+  },
+  {
+   "id": "R03-013",
+   "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-014",
+   "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-015",
+   "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-016",
+   "chiave": "microcopy|la pagina dei più recensiti presenta 40 prodotti come «scelti dai clienti» anche quando nessuno ha una recensione",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-017",
+   "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-018",
+   "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
+   "esito": "riparato",
+   "commit": "7017ffc9d2a6d57e88ff7d4b768dd2e23cd6dfa7",
+   "commit_precedenti": [
+    "77d198dbfa0052795f6029e1fdd66821cccaf00d"
+   ],
+   "file_toccati": [
+    "tests/unit/riparazione-r03-carrello-consegna.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-carrello-consegna.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r03-carrello-consegna.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge (mutanti a mano)",
+    "uscita": 0,
+    "comando": "dopo il commit 7017ffc9, albero pulito: node /tmp/claude-0/r03/mut/run.mjs /tmp/claude-0/r03/mut/tutti.json \"tests/unit/riparazione-r03-carrello-consegna.test.ts\" K04 K11 K18 K24 K26 K32 K35 K42 K43 K45 → tutti e 10 ROSSI, ognuno su un'asserzione (nessun tempo scaduto), esiti in /tmp/claude-0/r03/mut/esiti-1795210497643.json; poi git checkout -- app/cart/page.tsx, albero pulito. Stabilità: 15 corse di fila verdi + 20 corse a coppie in parallelo con due processi che caricano la CPU (4 core) verdi: 35/35."
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Originale: prova nuova che monta il carrello vero con la spedizione a distanza accesa per finta e pretende consegna e totale della cassa (riepilogoDaMostrare) più i casi di presentazione: i 10 mutanti rimasti verdi diventano rossi, nessuna modifica al carrello. Correzione: al posto dei 12 giri fissi ogni caso gira finché la rete finta non ha risposto all'ultima lettura del carrello e quello che il caso guarda (la consegna della cassa, le voci attese, l'avviso, la frase) non è fermo per tre giri, con un tetto di 8 secondi veri; le asserzioni sono le stesse di prima.",
+   "verificato_da": "revisore avversario del lotto A: regge (10 mutanti del riparatore + 8 nuovi). Unico difetto, la prova instabile per i 12 giri fissi, chiuso dal giro di correzione 7017ffc9 (35 corse su 35 verdi, anche sotto carico; i 10 mutanti restano rossi)."
+  },
+  {
+   "id": "R03-019",
+   "chiave": "qa-flussi|la pagina novità mostra tutto il catalogo, anche un prodotto di tre mesi fa, e il numero in alto conta solo i prodotti già caricati",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  },
+  {
+   "id": "R03-020",
+   "chiave": "qa-flussi|anche chi sceglie «venditore» nell'iscrizione vede il pulsante google, che probabilmente crea un cliente",
+   "esito": "riparato",
+   "commit": "1c99f8d195a3e5c421deaeb0d64723e9494d8bb4",
+   "file_toccati": [
+    "app/sign-up/page.tsx",
+    "tests/unit/riparazione-r03-iscrizione-venditore-senza-google.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-iscrizione-venditore-senza-google.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r03-iscrizione-venditore-senza-google.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1c99f8d195a3e5c421deaeb0d64723e9494d8bb4^ --file app/sign-up/page.tsx --prove tests/unit/riparazione-r03-iscrizione-venditore-senza-google.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Verificato in sola lettura: il pulsante Google (AuthShell, signInWithOAuth senza data) non porta il ruolo, /auth/callback non lo tocca e handle_new_user (migrations/421) crea 'buyer'. Quindi crea davvero un cliente: con «Venditore» scelto il pulsante non si mostra, una riga dice «Con Google si crea un account cliente: i negozi si iscrivono con email e password.» e col controllo anti-bot rotto la pagina non consiglia Google (come per il fattorino, R02-009). Prova sulla pagina vera: cliente -> Google c'è, venditore (dal link o dalla mattonella) -> non c'è.",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso dal riparatore, modello grande), 20/11 — regge: Google crea davvero un cliente (handle_new_user mette buyer); la prova morde (3 rosse col file di prima)."
+  },
+  {
+   "id": "R03-021",
+   "chiave": "qa-flussi|il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
+   "esito": "riparato",
+   "commit": "5e181dcf3e58fd776483f74d591fa89ca24ef27f",
+   "commit_precedenti": [
+    "7ad5d14ff338a29cae70903dd6882c93720d323c"
+   ],
+   "file_toccati": [
+    "lib/logger.ts",
+    "tests/unit/riparazione-r03-logger-testo-oscurato.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-logger-testo-oscurato.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r03-logger-testo-oscurato.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7ad5d14f^ --file lib/logger.ts --prove tests/unit/riparazione-r03-logger-testo-oscurato.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Originale: ogni testo che esce dal logger (messaggio, contesto stringa, valori di chiavi innocue, messaggio e pila di un Error, avviso del browser) si ripulisce per contenuto, e a Sentry va una copia solo se c'era da togliere. Correzione: limite di lunghezza del testo ripulito (oltre 8000 caratteri si tronca prima delle regole, «…[troncato]», la parola tagliata a metà si toglie); regole più strette e proprie del logger (telefono solo con prefisso o separatori o cellulare di 10 cifre attaccato, carta che comincia come una carta + Luhn, IBAN compatto o a gruppi di quattro col controllo modulo 97), così numeri d'ordine, centesimi, durate e timestamp escono identici; oscurati anche «Authorization: Basic …», x-api-key, csrf_token e l'errore-oggetto semplice che va a Sentry. Messaggio o pila non stringa si convertono, ogni metodo è protetto e il lavoro verso Sentry non lascia rifiuti non gestiti: il logger non lancia mai. Prove nuove: 200 KB ripuliti in meno di 200 ms, taglio senza mezza email, numeri identici, veri oscurati, warn(123) ed Error con pila non stringa senza eccezioni; suite intera verde.",
+   "cosa_resta": "Scelte fatte, da sapere: un fisso scritto tutto attaccato senza prefisso («0532123456») non si oscura più (prima sì, come ogni fila 8–12 cifre con 0/3); il cellulare attaccato di 10 cifre (3[1-9]…) sì, quindi un numero di 10 cifre che comincia con 31–39 esce oscurato. Al taglio un IBAN o un telefono a gruppi può lasciare in chiaro i primi gruppi.",
+   "verificato_da": "revisore avversario del lotto A sul commit 7ad5d14f (verdetto: parziale, 5 difetti). Il giro di correzione 5e181dcf li chiude con 5 prove nuove rosse sul logger di prima. Ricontrollo del capo squadra, non di un secondo revisore (tetto agenti): prove rilanciate verdi, misura del tempo su 5 forme da 200 KB sotto 500 ms, npm run verify verde su e4bcd5ae."
+  },
+  {
+   "id": "R03-022",
+   "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: la regista ha fermato i lotti nuovi a 16,14 $ su 35 (20/11); la voce non è stata aperta in questo giro."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Nelle collezioni scelte a mano dal negozio i prodotti in promozione hanno il prezzo pieno",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/store-sections/CollectionSection.tsx:73",
+   "descrizione": "ManualCollection passa ProductCard senza discountPercent, quindi nella vetrina del negozio un prodotto in promozione mostra il prezzo pieno."
+  },
+  {
+   "titolo": "La scheda prodotto delle griglie calcola il prezzo scontato con una formula sua",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/ProductCard.tsx:56",
+   "descrizione": "Usa price*(1-pct/100) invece di discountedUnitCents: possibile differenza di 1 centesimo con la cassa su alcuni prezzi."
+  },
+  {
+   "titolo": "Nella finestra dei reclami, i dati del pagamento vecchi non danno avviso",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/admin/disputes/page.tsx:376",
+   "descrizione": "L avviso c è solo se il pagamento non è mai stato letto (pagamentiNonLetti && !pagamento). Se una rilettura dei pagamenti cade, «Rimborsabile al massimo» resta quello vecchio senza dirlo; il server controlla comunque il tetto."
+  },
+  {
+   "titolo": "L etichetta «Rimborso (€)» non è collegata al suo campo",
+   "dimensione": "a11y",
+   "severita": "minore",
+   "file": "app/admin/disputes/page.tsx:413",
+   "descrizione": "Avviso eslint label-has-associated-control, c era già prima di questo giro."
+  },
+  {
+   "titolo": "Un componente della home mostra il prezzo pieno con una promozione attiva",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "components/home/HeroStoreCard.tsx:232",
+   "descrizione": "Sesto carosello trovato dal revisore (vedi R03-012): i prodotti del negozio in vetrina sulla home stampano il prezzo pieno."
+  },
+  {
+   "titolo": "Nei log la spesa dell AI non mostra i token",
+   "dimensione": "deploy-sre",
+   "severita": "minore",
+   "file": "lib/ai/run.ts:584",
+   "descrizione": "logger.spesa(ai_usage) esce con inputTokens, outputTokens e cacheReadTokens oscurati, perché lib/logger.ts oscura sempre le chiavi che contengono «token». C era già prima di questo giro."
+  },
+  {
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (altro): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "file": "(nel referto privato)",
+   "severita": "minore",
+   "dimensione": "sicurezza"
+  }
+ ],
+ "domande_per_nicola": [],
+ "conto": {
+  "agenti": 3,
+  "subagenti": 3,
+  "nota": "1 riparatore del lotto A, 1 revisore avversario, 1 giro di correzione (approvato dalla regista). Tutti sul modello grande. Lotti B e C non partiti per il tetto di spesa. Workflow mai."
+ },
+ "costo_usd": 33.22
+}
