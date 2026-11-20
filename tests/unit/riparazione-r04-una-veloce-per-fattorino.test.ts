@@ -17,7 +17,6 @@ import { veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 
 const NEGOZIO = 'aaaaaaaa-0000-4000-8000-000000000001';
 const PANE = '11111111-1111-4111-8111-111111111111';
-const PIACENZA = { lat: 45.0526, lng: 9.6929 };
 
 type Riga = Record<string, unknown>;
 const stato = vi.hoisted(() => ({
