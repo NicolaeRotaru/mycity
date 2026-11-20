@@ -169,10 +169,14 @@ function NewProductInner() {
 
   // Duplica: carica anche le varianti del prodotto sorgente (id azzerati → nuove).
   // Senza le taglie lette la copia non si apre: nascerebbe senza, e nessuno lo direbbe.
-  const { data: sourceVariants = [], isLoading: loadingVariants, isError: variantiNonLette, isPending: variantiSenzaDati, isFetchedAfterMount: variantiRilette, isStale: variantiVecchie, fetchStatus: variantiFetchStatus, refetch: rileggiVarianti } = useQuery({
+  const { data: sourceVariants = [], isLoading: loadingVariants, isFetching: variantiInLettura, isError: variantiNonLette, isPending: variantiSenzaDati, isFetchedAfterMount: variantiRilette, isStale: variantiVecchie, fetchStatus: variantiFetchStatus, refetch: rileggiVarianti } = useQuery({
     queryKey: ['duplicate-variants', fromId],
     enabled: !!fromId,
     queryFn: () => loadProductVariants(fromId!),
+    // S01-001 — Le taglie della copia si rileggono a ogni apertura, come in «Modifica»: una copia in
+    // memoria, anche di pochi secondi prima, puo' non avere quelle vere (aggiunte dalla modifica nel
+    // frattempo), e la copia nascerebbe senza taglie e con la scorta della vecchia somma.
+    staleTime: 0,
   });
   // Senza il prodotto da duplicare (lettura caduta, o in pausa senza rete) il modulo non si apre
   // vuoto come un prodotto nuovo: si dice, con «Riprova», e si apre pieno quando la lettura riesce.
@@ -296,7 +300,7 @@ function NewProductInner() {
   const restaAperto = aperto !== null && aperto.chiave === chiaveModulo;
   const davanti = restaAperto
     ? 'modulo'
-    : (fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura
+    : (fromId && (loadingSource || loadingVariants || (variantiInLettura && !variantiRilette))) || consegnaInLettura || categorieInLettura
       ? 'caricamento'
       : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0
         ? 'categorie'

@@ -165,16 +165,18 @@ async function rete(accesa: boolean) {
   await aspetta(120);
 }
 
-function nuovoClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+/** `staleTime`: 0 come React Query di serie; 30 secondi come il sito (components/providers/QueryProvider.tsx). */
+function nuovoClient(staleTime = 0) {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime }, mutations: { retry: false } } });
 }
+const COME_IL_SITO = 30 * 1000;
 
-async function monta(elemento: () => ReturnType<typeof createElement>, prepara?: (qc: QueryClient) => void) {
+async function monta(elemento: () => ReturnType<typeof createElement>, prepara?: (qc: QueryClient) => void, staleTime = 0) {
   const radice = document.createElement('div');
   document.body.appendChild(radice);
   const root = createRoot(radice);
   accesi.push(root);
-  const qc = nuovoClient();
+  const qc = nuovoClient(staleTime);
   prepara?.(qc);
   const disegna = () => act(async () => {
     root.render(createElement(QueryClientProvider, { client: qc }, elemento()));
@@ -184,9 +186,9 @@ async function monta(elemento: () => ReturnType<typeof createElement>, prepara?:
   return { radice, qc, disegna };
 }
 
-const apriModifica = (prepara?: (qc: QueryClient) => void) =>
-  monta(() => createElement(PaginaModifica as never, { params: { valore: { id: ID } } }), prepara);
-const apriNuovo = (prepara?: (qc: QueryClient) => void) => monta(() => createElement(PaginaNuovo), prepara);
+const apriModifica = (prepara?: (qc: QueryClient) => void, staleTime = 0) =>
+  monta(() => createElement(PaginaModifica as never, { params: { valore: { id: ID } } }), prepara, staleTime);
+const apriNuovo = (prepara?: (qc: QueryClient) => void, staleTime = 0) => monta(() => createElement(PaginaNuovo), prepara, staleTime);
 
 const chiaveTaglie = [...queryKeys.seller.product(ID), 'variants'];
 
@@ -320,6 +322,20 @@ describe('S01-001 · «Modifica prodotto»: torna la rete, il modulo resta', () 
     expect(stato.salvataggi).toHaveLength(1);
   });
 
+  it('E5 · come il sito (copia in memoria fresca, 30 secondi): senza rete il Salva aspetta lo stesso le taglie rilette', async () => {
+    stato.taglie[ID] = async () => [ROSSO, BLU];
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, [ROSSO, BLU]), COME_IL_SITO);
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+    await clic(radice, 'Salva modifiche');
+    expect(radice.textContent).toMatch(/taglie/i);
+
+    await rete(true);
+    expect(nessunaScrittura(), 'il Salva premuto senza rete è partito da solo al ritorno, prima di rileggere le taglie').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+    await clic(radice, 'Salva modifiche');
+    expect(stato.salvataggi).toHaveLength(1);
+  });
+
   it('E4 · le taglie in memoria cambiano mentre non c\'è rete: il testo non salvato non si perde', async () => {
     onlineManager.setOnline(false);
     const { radice, qc } = await apriModifica((q) => inMemoriaModifica(q, [ROSSO]));
@@ -401,6 +417,20 @@ describe('S01-001 · «Nuovo prodotto» e «Duplica»: torna la rete, il modulo 
     expect(stato.inserimenti).toHaveLength(1);
     expect(stato.inserimenti[0].stock).toBe(5);
     expect(stato.variantiSalvate.at(-1)?.varianti).toHaveLength(2);
+  });
+
+  it('D5 · come il sito: le taglie della sorgente in memoria da pochi secondi sono 0, in banca dati 2: la copia nasce con le 2', async () => {
+    // Il percorso vero: «Duplica» di un prodotto senza taglie, poi in «Modifica» se ne aggiungono due,
+    // poi di nuovo «Duplica» entro 30 secondi. La memoria dice 0 taglie, ed è «fresca».
+    stato.cerca = `from=${SORGENTE}`;
+    stato.taglie[SORGENTE] = async () => [ROSSO, BLU];
+    const { radice } = await apriNuovo((qc) => inMemoriaDuplica(qc, []), COME_IL_SITO);
+    await aspetta(80);
+    expect(campoNome(radice)?.value).toBe('Lampada da tavolo (copia)');
+    await clic(radice, 'Pubblica prodotto');
+    expect(stato.inserimenti, 'la copia non è partita').toHaveLength(1);
+    expect(stato.variantiSalvate.at(-1)?.varianti, 'la copia è nata senza taglie, sulle 0 della memoria').toHaveLength(2);
+    expect(stato.inserimenti[0].stock).toBe(5);
   });
 
   it('D3 · Duplica: le taglie in memoria cambiano mentre non c\'è rete, il testo non si perde', async () => {
