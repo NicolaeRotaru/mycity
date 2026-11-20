@@ -1,4 +1,5 @@
 import { captureError } from '@/lib/analytics/sentry';
+import { testoSenzaRecapiti } from '@/lib/analytics/filmato-senza-dati-personali';
 
 /**
  * Logger wrapper — strutturato, integrato con Sentry.
@@ -36,8 +37,74 @@ type LogContext = Record<string, unknown> | unknown;
 const PII_KEYS =
   /(email|password|passwd|\bpass\b|token|authorization|\bauth\b|cookie|phone|tel|iban|card|cvv|secret|api_?key|ssn|fiscal|codice_?fiscale|\bcf\b|vat|partita_?iva|pec|address|indirizzo|name|nome|cognome|surname|birth|nascita)/i;
 
+/**
+ * 20/11/2026 (R03-021) — IL FILTRO GUARDAVA SOLO I NOMI DELLE CHIAVI.
+ *
+ * `{ customer_email: … }` usciva oscurato, ma la stessa email scritta nel testo del messaggio
+ * («invio fallito a maria@example.it»), in un contesto passato come stringa (finiva in chiaro sotto
+ * `detail`) o nel valore di una chiave innocua (`{ errore: '… Bearer eyJ…' }`) passava intera, sulla
+ * console e su Sentry. Adesso ogni testo si ripulisce per CONTENUTO, con le famiglie della lista
+ * qui sopra che si riconoscono dalla forma: email e telefoni con la regola che il sito usa già per
+ * il filmato e gli eventi (`testoSenzaRecapiti`), più gettoni e chiavi, IBAN, carte e codice
+ * fiscale. Nomi e indirizzi in un testo libero non hanno una forma: restano affidati alle chiavi.
+ */
+const NEL_TESTO: ReadonlyArray<readonly [RegExp, string | ((trovato: string) => string)]> = [
+  // Gettoni e chiavi: «Bearer …», i JWT (anche la chiave di servizio di Supabase), le chiavi
+  // segrete di Stripe, dei webhook, di Supabase e di Anthropic.
+  [/\b[Bb]earer\s+[A-Za-z0-9._~+/=-]{8,}/g, 'Bearer [redacted]'],
+  [/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}(?:\.[A-Za-z0-9_-]+)?/g, '[redacted]'],
+  [/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{8,}/g, '[redacted]'],
+  [/\b(?:whsec|sb_secret)_[A-Za-z0-9_-]{8,}/g, '[redacted]'],
+  [/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted]'],
+  // «password=…», «token: …», «"api_key":"…»: il nome resta, il valore no.
+  [/\b(password|passwd|access_token|refresh_token|token|secret|api_?key|apikey|authorization)("?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"',;&]+)/gi, '$1$2[redacted]'],
+  // IBAN (anche a gruppi di quattro) e codice fiscale.
+  [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b/g, '[redacted]'],
+  [/\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/gi, '[redacted]'],
+  // Carte: da 13 a 19 cifre, anche a gruppi, che passano il controllo di Luhn. I confini non
+  // toccano gli identificativi (uuid, codici con lettere o trattini attaccati).
+  [/(?<![\w-])\d(?:[ -]?\d){12,18}(?![\w-])/g, (trovato) => (passaLuhn(trovato.replace(/\D/g, '')) ? '[redacted]' : trovato)],
+];
+
+function passaLuhn(cifre: string): boolean {
+  let somma = 0;
+  for (let i = 0; i < cifre.length; i++) {
+    let d = Number(cifre[cifre.length - 1 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    somma += d;
+  }
+  return somma % 10 === 0;
+}
+
+function ripulisciTesto(testo: string): string {
+  if (!testo) return testo;
+  let pulito = testo;
+  for (const [forma, alPosto] of NEL_TESTO) {
+    // I due rami sono la stessa chiamata: servono a TypeScript per scegliere la firma di `replace`.
+    pulito = typeof alPosto === 'string' ? pulito.replace(forma, alPosto) : pulito.replace(forma, alPosto);
+  }
+  return testoSenzaRecapiti(pulito);
+}
+
+/** L'errore che va a Sentry, col testo ripulito. Se non c'è niente da togliere resta lo stesso oggetto. */
+function erroreRipulito(err: unknown): unknown {
+  if (typeof err === 'string') return ripulisciTesto(err);
+  if (!(err instanceof Error)) return err;
+  const messaggio = ripulisciTesto(err.message);
+  const pila = err.stack === undefined ? undefined : ripulisciTesto(err.stack);
+  if (messaggio === err.message && pila === err.stack) return err;
+  const copia = new Error(messaggio);
+  copia.name = err.name;
+  copia.stack = pila;
+  return copia;
+}
+
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 4 || value == null) return value;
+  if (typeof value === 'string') return ripulisciTesto(value);
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   // #232 — Un Error va trattato per quello che è, PRIMA del ramo «oggetto».
   // Un Error non ha proprietà enumerabili: Object.entries() su di lui torna
@@ -46,7 +113,11 @@ function redact(value: unknown, depth = 0): unknown {
   // restava la frase («rimborso fallito») e spariva il motivo. Chi apriva il
   // log dopo un rimborso fallito leggeva: rimborso fallito, {}.
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, stack: value.stack };
+    return {
+      name: value.name,
+      message: ripulisciTesto(value.message),
+      stack: value.stack === undefined ? undefined : ripulisciTesto(value.stack),
+    };
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
@@ -101,7 +172,7 @@ async function captureClientWarning(msg: string, ctx?: Record<string, unknown>):
 
 // Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
-  return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
+  return JSON.stringify({ level, msg: ripulisciTesto(msg), ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
 }
 
 /**
@@ -137,7 +208,7 @@ export const logger = {
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
     console.warn(line('warn', msg, ctx));
-    if (!eServer) void captureClientWarning(msg, toCtx(ctx));
+    if (!eServer) void captureClientWarning(ripulisciTesto(msg), toCtx(ctx));
   },
 
   error: (err: unknown, ctx?: LogContext) => {
@@ -158,12 +229,13 @@ export const logger = {
       console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
     }
     const c = toCtx(contesto);
+    const perSentry = erroreRipulito(errore);
     if (typeof window === 'undefined') {
       // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
-      void captureServerError(errore, c);
+      void captureServerError(perSentry, c);
     } else {
       // Client: wrapper lazy esistente (init Sentry browser al primo errore).
-      void captureError(errore, c);
+      void captureError(perSentry, c);
     }
   },
 };
