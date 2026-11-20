@@ -207,6 +207,34 @@ describe('R01-001 · con le impostazioni del sito, dopo «Segna tutte come lette
     s.smonta();
   }, 60000);
 
+  it('A · come A, ma l’elenco delle prime 50 è già uscito dalla memoria (minuti dopo): il segnaposto non rimette «Non letta»', async () => {
+    mondo.righe = righeDi('u1', 60, false);
+    const { s, avviso, client } = await apriComeNelSito();
+    await avviso('INITIAL_SESSION', 'u1');
+    expect(nonLette(s.radice), 'controprova: le prime 50 non lette devono essere a video').toBe(50);
+
+    mondo.lettureCadute = true;
+    s.agisci(() => clicca(pulsante(s.radice, /^Carica altre$/)!));
+    await passa(10_000);
+    expect(s.radice.textContent, 'controprova: qui a cadere è «Carica altre»').toContain('Non riusciamo a caricare altre notifiche');
+
+    // Passano sei minuti: l'elenco delle prime 50, che nessuno guarda più, esce dalla memoria.
+    await passa(6 * 60_000);
+    expect(client().getQueryData(['notifications', 'list', 50, 'u1']), 'controprova: l’elenco delle prime 50 doveva uscire dalla memoria').toBeUndefined();
+    expect(righeAVideo(s.radice), 'controprova: le notifiche già lette restano a video').toBe(50);
+
+    s.agisci(() => clicca(pulsante(s.radice, /Segna tutte come lette/)!));
+    await passa();
+    expect(mondo.righe.every((r) => r.is_read), 'controprova: la scrittura doveva riuscire').toBe(true);
+    expect(nonLette(s.radice), 'durante il nuovo tentativo tornano «Non letta» dall’elenco uscito dalla memoria').toBe(0);
+    expect(pulsante(s.radice, /Segna tutte come lette/), 'durante il nuovo tentativo torna il pulsante').toBeNull();
+
+    await passa(10_000);
+    expect(nonLette(s.radice)).toBe(0);
+    expect(pulsante(s.radice, /Segna tutte come lette/)).toBeNull();
+    s.smonta();
+  }, 60000);
+
   it('B · «Carica altre» in volo e «Segna tutte» riuscito: la lettura partita prima non rimette «Non letta»', async () => {
     mondo.righe = righeDi('u1', 60, false);
     const { s, avviso } = await apriComeNelSito();

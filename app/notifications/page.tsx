@@ -104,8 +104,13 @@ export default function NotificationsPage() {
     enabled: !utenteInLettura,
     // Caricandone altre resta a video l'elenco di prima, non la pagina di attesa. Se cambia chi
     // guarda, l'elenco si rilegge da capo.
-    placeholderData: (prima, domandaPrima) =>
-      userId !== null && domandaPrima?.queryKey.at(-1) === userId ? prima : undefined,
+    // R01-001 — Se c'è, l'elenco tenuto di questo utente: è lo stesso elenco di prima, e dopo
+    // «Segna tutte» è già segnato letto anche quando la domanda da cui veniva è uscita dalla memoria.
+    placeholderData: (prima, domandaPrima) => {
+      if (userId === null || domandaPrima?.queryKey.at(-1) !== userId) return undefined;
+      const tenuto = ultimoLetto.current;
+      return tenuto && tenuto.utente === userId ? tenuto.righe : prima;
+    },
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user }, error: errUtente } = await supabase.auth.getUser();
       // 5/11/2026 — Con la rete caduta getUser non lancia: risponde user null CON un errore. Quello
