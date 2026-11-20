@@ -34,6 +34,8 @@ const stato = vi.hoisted(() => ({
   casa: null as null | { lat: number; lng: number },
   /** false = la spedizione vera del lancio (zero); true = una tariffa a distanza, per finta. */
   spedizioneADistanza: false,
+  /** Gli indirizzi a cui la rete finta ha già risposto. */
+  servite: [] as string[],
 }));
 
 // La spedizione a distanza, com'era prima del lancio: tariffa fissa senza coordinate, altrimenti
@@ -79,6 +81,7 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'chiave-finta';
 const json = (dati: unknown) => new Response(JSON.stringify(dati), { status: 200, headers: { 'content-type': 'application/json' } });
 globalThis.fetch = (async (input: unknown) => {
   const url = String(typeof input === 'object' && input !== null && 'url' in input ? (input as { url: unknown }).url : input);
+  stato.servite.push(url);
   if (url.includes('/api/consegna/veloce')) return json({ possibile: true });
   if (url.includes('/rest/v1/products')) return json(Object.entries(stato.prezzi).map(([id, price]) => ({ id, stock: 50, price })));
   if (url.includes('/rest/v1/user_addresses')) return json(stato.casa ? [stato.casa] : []);
@@ -106,12 +109,34 @@ afterEach(() => {
   stato.negozi = new Map();
   stato.casa = null;
   stato.spedizioneADistanza = false;
+  stato.servite = [];
 });
 
 /** `negozio` = venditore (null = articolo del formato vecchio, senza venditore). */
 type Riga = { id: string; prezzo: number; pezzi?: number; negozio: string | null; nome?: string };
 
-async function carrello(righe: Riga[]) {
+/**
+ * La lettura del carrello è finita: la rete finta ha risposto all'ultima che fa (i prodotti con
+ * `*`, per il recesso), e subito dopo il carrello mette a posto coordinate, indirizzo e scorte.
+ */
+const letturaFinita = () => stato.servite.some((u) => u.includes('/rest/v1/products') && /select=\*(&|$)/.test(u));
+
+/**
+ * Gira finché la lettura del carrello non è finita E `pronto` non dice di sì per tre giri di fila
+ * (lo stato che si guarda è quello fermo, non uno di passaggio). Non conta i giri: sotto carico
+ * le risposte arrivano tardi, e un numero fisso di giri le perdeva. Se in 8 secondi veri non ci
+ * arriva, smette e le asserzioni dicono cosa manca.
+ */
+async function finoA(pronto: () => boolean) {
+  const fine = performance.now() + 8_000;
+  let fermi = 0;
+  while (fermi < 3 && performance.now() < fine) {
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    fermi = letturaFinita() && pronto() ? fermi + 1 : 0;
+  }
+}
+
+async function carrello(righe: Riga[], pronto: (c: Vista) => boolean) {
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   vi.setSystemTime(new Date(2026, 9, 30, 14, 0));
   for (const r of righe) stato.prezzi[r.id] = r.prezzo;
@@ -122,13 +147,17 @@ async function carrello(righe: Riga[]) {
     storeName: r.nome ?? `Negozio ${r.negozio}`,
   }))));
   schermo = accendi(CartPage);
-  for (let i = 0; i < 12; i++) {
-    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-  }
-  const s = schermo;
+  const c = vista(schermo);
+  await finoA(() => pronto(c));
+  return c;
+}
+
+type Vista = ReturnType<typeof vista>;
+
+function vista(s: NonNullable<typeof schermo>) {
   return {
     radice: s.radice,
-    testo: s.radice.textContent ?? '',
+    get testo() { return s.radice.textContent ?? ''; },
     /** Le cifre che si VEDONO accanto a un'etichetta (riepilogo e barra in fondo). */
     cifreAccantoA: (etichetta: string) =>
       [...s.radice.querySelectorAll('span, div')]
@@ -193,11 +222,12 @@ describe('R03-018 — il conto della consegna nel carrello, coi casi che le prov
       { id: 'p-pane', prezzo: 12, negozio: 'neg-a' },
       { id: 'p-frutta', prezzo: 2.5, pezzi: 3, negozio: 'neg-b' },
     ];
-    const c = await carrello(righe);
     const { riepilogo } = laCassa(righe);
+    const consegna = riepilogo.totale - riepilogo.subtotale;
+    // Si aspetta l'arrivo delle coordinate (negozi e casa): finché mancano, la consegna è quella senza distanza.
+    const c = await carrello(righe, (v) => v.cifreAccantoA(VOCE_CONSEGNA)[0] === formatPrice(consegna));
     expect(riepilogo.spedizione, 'controprova: la spedizione finta deve valere qualcosa').toBeGreaterThan(0);
     expect(c.testo, 'controprova: il carrello si deve disegnare').toContain('Prodotto p-frutta');
-    const consegna = riepilogo.totale - riepilogo.subtotale;
     expect(c.cifreAccantoA(VOCE_CONSEGNA), 'la consegna a video non è quella della cassa (spedizione tolta, doppia, o calcolata su altre coordinate)')
       .toEqual([formatPrice(consegna)]);
     expect(c.cifreAccantoA('Totale'), 'il totale a video non è quello della cassa').toEqual([formatPrice(riepilogo.totale), formatPrice(riepilogo.totale)]);
@@ -214,21 +244,24 @@ describe('R03-018 — il conto della consegna nel carrello, coi casi che le prov
       { id: 'p-pane', prezzo: 12, negozio: 'neg-a' },
       { id: 'p-frutta', prezzo: 2.5, pezzi: 3, negozio: 'neg-b' },
     ];
-    const c = await carrello(righe);
     const { riepilogo, voci } = laCassa(righe);
-    expect(riepilogo.spedizione).toBe(0);
     const attese = righeDellaConsegna(voci);
+    const c = await carrello(righe, (v) => JSON.stringify(v.vociDellaConsegna()) === JSON.stringify(attese));
+    expect(riepilogo.spedizione).toBe(0);
     expect(attese.length, 'controprova: base, negozio in più e spesa piccola').toBe(3);
     expect(c.vociDellaConsegna(), 'le voci della consegna non si vedono').toEqual(attese);
     expect(c.vociDellaConsegna().reduce((s, v) => s + centesimi(v), 0)).toBe(centesimi(c.cifreAccantoA(VOCE_CONSEGNA)[0]));
   });
 
   it('l’avviso «spesa sotto i 10 €» sta nel riquadro del negozio piccolo, non in quello dell’altro', async () => {
-    const c = await carrello([
-      { id: 'p-grande', prezzo: 12, negozio: 'neg-a' },
-      { id: 'p-piccolo', prezzo: 1.15, negozio: 'neg-b' },
-    ]);
     const giusto = avvisoSpesaPiccola(115)!;
+    const c = await carrello(
+      [
+        { id: 'p-grande', prezzo: 12, negozio: 'neg-a' },
+        { id: 'p-piccolo', prezzo: 1.15, negozio: 'neg-b' },
+      ],
+      (v) => [...v.radice.querySelectorAll('p')].some((p) => (p.textContent ?? '').trim() === giusto),
+    );
     const avvisi = [...c.radice.querySelectorAll('p')].filter((p) => (p.textContent ?? '').trim() === giusto);
     expect(avvisi.length, 'l’avviso del negozio piccolo manca').toBe(1);
     const riquadro = avvisi[0].parentElement?.textContent ?? '';
@@ -238,17 +271,23 @@ describe('R03-018 — il conto della consegna nel carrello, coi casi che le prov
   });
 
   it('con un negozio solo, accanto al nome non si ripete la spesa', async () => {
-    const c = await carrello([{ id: 'p-pane', prezzo: 12, negozio: 'neg-a' }]);
+    const c = await carrello(
+      [{ id: 'p-pane', prezzo: 12, negozio: 'neg-a' }],
+      (v) => v.testo.includes('Prodotto p-pane') && v.cifreAccantoA(VOCE_CONSEGNA).length > 0,
+    );
     expect(c.testo).toContain('Negozio neg-a');
     expect(c.testo, 'con un negozio solo la spesa compare accanto al nome').not.toContain('Negozio neg-a · ');
   });
 
   it('con tre negozi, la frase della consegna unica dice tre negozi', async () => {
-    const c = await carrello([
-      { id: 'p-1', prezzo: 12, negozio: 'neg-a' },
-      { id: 'p-2', prezzo: 13, negozio: 'neg-b' },
-      { id: 'p-3', prezzo: 14, negozio: 'neg-c' },
-    ]);
+    const c = await carrello(
+      [
+        { id: 'p-1', prezzo: 12, negozio: 'neg-a' },
+        { id: 'p-2', prezzo: 13, negozio: 'neg-b' },
+        { id: 'p-3', prezzo: 14, negozio: 'neg-c' },
+      ],
+      (v) => v.testo.includes(fraseGiroUnico(3)),
+    );
     expect(c.testo).toContain(fraseGiroUnico(3));
   });
 
@@ -257,10 +296,14 @@ describe('R03-018 — il conto della consegna nel carrello, coi casi che le prov
       { id: 'p-1', prezzo: 2, negozio: null, nome: 'Forno Rossi' },
       { id: 'p-2', prezzo: 3, negozio: null, nome: 'Frutta Bianchi' },
     ];
-    const c = await carrello(righe);
+    const { riepilogo } = laCassa(righe);
+    const consegna = formatPrice(riepilogo.totale - riepilogo.subtotale);
+    const c = await carrello(
+      righe,
+      (v) => v.testo.includes(avvisoSpesaPiccola(200)!) && v.testo.includes(avvisoSpesaPiccola(300)!) && v.cifreAccantoA(VOCE_CONSEGNA)[0] === consegna,
+    );
     expect(c.testo, 'i due negozi senza venditore sono stati fusi in uno').toContain(avvisoSpesaPiccola(200)!);
     expect(c.testo).toContain(avvisoSpesaPiccola(300)!);
-    const { riepilogo } = laCassa(righe);
-    expect(c.cifreAccantoA(VOCE_CONSEGNA)).toEqual([formatPrice(riepilogo.totale - riepilogo.subtotale)]);
+    expect(c.cifreAccantoA(VOCE_CONSEGNA)).toEqual([consegna]);
   });
 });
