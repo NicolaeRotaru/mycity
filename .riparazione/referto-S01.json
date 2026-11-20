@@ -1,0 +1,82 @@
+{
+  "sessione": "S01",
+  "aggiornato": "2026-11-20 20:00",
+  "finita": true,
+  "testa": "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
+    "nota": "typecheck e lint senza errori, vitest 11399 passate e 1 saltata; prima anche su bf5338f5, verde"
+  },
+  "voci": [
+    {
+      "id": "S01-001",
+      "chiave": "stati-ui|quando la rete torna, le pagine prodotto del negoziante rimettono il caricamento al posto del modulo e le modifiche non salvate si perdono",
+      "esito": "riparato",
+      "commit": "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee",
+      "file_toccati": [
+        "app/seller/products/[id]/edit/page.tsx",
+        "app/seller/products/new/page.tsx",
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-s01-scorta-taglie-non-lette.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-s01-scorta-taglie-non-lette.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b2c62f34e26f6ff86eab45ccf39fa456ed3767bb --file app/seller/products/[id]/edit/page.tsx,app/seller/products/new/page.tsx,components/seller/ProductForm.tsx --prove tests/unit/riparazione-s01-scorta-taglie-non-lette.test.tsx --json",
+        "nota": "regge anche per commit: --base 47ff5ad6b3342c56d93e7e1cdd09f90a54c5d924^ sui tre file (uscita 0) e --base c5147aae6c5c977e843161f0e9c21ef51bf8f3ee^ su new/page.tsx (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Su main le cure R03-019 e R04-007 erano annullate: la voce era intera. In Modifica, Nuovo e Duplica il modulo, aperto una volta, resta quando torna la rete (in Duplica per quella copia: da Nuovo a Duplica si rimonta pieno). Il modulo ricorda con quali taglie si è aperto: se la rilettura cade, manca la rete o la banca dati ne ha altre, il Salva si ferma con un avviso accanto al pulsante e il testo resta (regola di Nicola); il negoziante può riaprire con le taglie vere. In Duplica le taglie della sorgente si rileggono a ogni apertura (c5147aae, dopo il controllo indipendente). La consegna non letta all'apertura resta non letta per quel modulo. Prova rossa su b2c62f34 (10 su 13; E4, D3, D4b verdi da tenere).",
+      "verificato_da": "subagente general-purpose con mandato di smentire, due giri. Su bf5338f5: prove 15/15, 55 file vicini 300/300. E2 e D2 anche con staleTime 30s, Invio implicito e «Salva come bozza»: 0 scritture e testo intatto. D4b, K2, E4, D3 reggono. Togliendo erroreVarianti, salvataggioFermo, la guardia del modulo o variantiNonLette, le prove cadono. Ha trovato la strada della memoria fresca in Duplica, riparata in c5147aae. Su c5147aae: REGGE. D5 regge anche sul percorso Duplica→Modifica→Duplica; 13/13, 302/302; copia senza rete ferma; nessun ciclo né caricamento al posto del modulo. Nota: togliendo solo l'attesa della rilettura in Duplica le prove restano verdi, ma il Salva resta fermo per la firma delle taglie.",
+      "commit_della_voce": [
+        "47ff5ad6b3342c56d93e7e1cdd09f90a54c5d924",
+        "c5147aae6c5c977e843161f0e9c21ef51bf8f3ee"
+      ],
+      "nota": "Firma delle taglie sugli id e non sulle scorte, scelta: in Modifica la scorta non toccata non si scrive e il server ferma i conflitti (stock_visto, controllaScorteVarianti); in Duplica la scorta della copia è la somma delle taglie che il modulo le mostra."
+    },
+    {
+      "id": "S01-002",
+      "chiave": "api-backend|«duplica» di un prodotto escluso dal recesso: finché non si sa se la colonna c'è, la copia si salva recedibile senza avviso",
+      "esito": "riparato",
+      "commit": "bf5338f5848d431908a13092016b05bd059e04bd",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-s01-duplica-recesso.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-s01-duplica-recesso.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf5338f5848d431908a13092016b05bd059e04bd^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-s01-duplica-recesso.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In Duplica la presenza della colonna non_recedibile si ricava anche dalla riga sorgente, già letta con `*`: il modulo si apre solo con la sorgente, quindi lo sa sempre e la copia di un prodotto escluso nasce esclusa, con la spunta a video, anche se la lettura a parte della colonna è caduta o non ha ancora risposto. Senza colonna (prima della 180) la copia si salva come prima. Prova rossa su b2c62f34 (2 su 4; le 2 controprove verdi).",
+      "verificato_da": "subagente general-purpose con mandato di smentire: prova 4/4; rimettendo recessoSegnabile al posto di recessoSegnabileQui cadono 2 prove su 4. Ha segnalato il cugino «sorgente vecchia in memoria» (in nuovi_difetti_visti)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "«Duplica» parte dalla sorgente in memoria anche se è vecchia: la spunta «escluso dal recesso» (e gli altri campi) possono essere quelli di prima",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/products/new/page.tsx:150",
+      "descrizione": "La lettura ['duplicate-source', id] non viene invalidata da «Modifica» (che invalida solo ['seller','product',id]) e il modulo della copia si apre subito con la sorgente in memoria, senza riprendere la rilettura. Percorso: Duplica X (in memoria non_recedibile false), Modifica X mettendo la spunta, di nuovo Duplica X entro 5 minuti: la copia nasce recedibile, senza spunta e senza avviso. C'era già su b2c62f34; non è la voce S01-002 (che parla della colonna non ancora nota). Cura possibile nello stesso file: staleTime 0 sulla sorgente e prima apertura dopo la rilettura, come per le taglie (c5147aae), più il Salva fermo se dopo la rilettura il recesso è cambiato."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": "un subagente general-purpose per smentire (due giri: bf5338f5 e c5147aae)"
+  }
+}
