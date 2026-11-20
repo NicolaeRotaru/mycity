@@ -77,6 +77,13 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
    */
   useEffect(() => {
     let ultimo: string | null = null;
+    /**
+     * R01-varie — Senza sessione le domande a video si rileggono, ma quello che leggono vale solo
+     * finché nessuno entra: più d'una ha la chiave senza l'utente e senza sessione risponde «niente»
+     * (per esempio lo stato dei pagamenti del negozio). Al primo ingresso dopo un'uscita, o dopo un
+     * avvio senza sessione, si riparte da zero anche se `ultimo` è già vuoto.
+     */
+    let senzaSessione = false;
     // Difensivo: dove il client non ha l'ascolto dell'accesso (prove, ambienti ridotti) non si
     // fa niente invece di far cadere tutta l'applicazione.
     if (typeof supabase?.auth?.onAuthStateChange !== 'function') return;
@@ -115,7 +122,8 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     }
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
       const chi = sessione?.user?.id ?? null;
-      if (evento === 'SIGNED_OUT' || (chi && ultimo && chi !== ultimo)) ricomincia();
+      const entrato = chi !== null && (ultimo !== null ? chi !== ultimo : senzaSessione);
+      if (evento === 'SIGNED_OUT' || entrato) ricomincia();
       if (evento === 'SIGNED_OUT') {
         const voluta = uscitaVoluta;
         uscitaVoluta = false;
@@ -123,7 +131,12 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
       } else if (chi) {
         togliBozze((b) => b?.utente !== chi);
       }
-      if (chi) ultimo = chi;
+      if (chi) {
+        ultimo = chi;
+        senzaSessione = false;
+      } else if (evento === 'SIGNED_OUT' || evento === 'INITIAL_SESSION') {
+        senzaSessione = true;
+      }
       if (evento === 'SIGNED_OUT') ultimo = null;
     });
     return () => {
