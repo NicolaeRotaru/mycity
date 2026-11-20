@@ -1,5 +1,5 @@
 // lib/products/economics.ts
-import { MARKETPLACE_FEE_BPS, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { MARKETPLACE_FEE_BPS, PLATFORM_DELIVERY_FEE_CENTS, SPESA_SENZA_SUPPLEMENTO_CENTS } from '@/lib/constants';
 import { tariffaConsegnaCents } from '@/lib/ordini/prezzi';
 
 /**
@@ -77,11 +77,14 @@ export function netToSeller(price: number | null | undefined): number {
  * regola, con le cifre prese dalla stessa tariffa del carrello.
  */
 export function regolaConsegnaPerAi(): string {
-  const sotto = tariffaConsegnaCents({ pickupInStore: false, merceCents: 999, consegnaVeloce: false }) / 100;
-  const sopra = tariffaConsegnaCents({ pickupInStore: false, merceCents: 1000, consegnaVeloce: false }) / 100;
+  // 20/11/2026 (R05-009, R05-010) — La soglia viene dalla costante della tariffa, non scritta a mano.
+  const soglia = SPESA_SENZA_SUPPLEMENTO_CENTS;
+  const sotto = tariffaConsegnaCents({ pickupInStore: false, merceCents: soglia - 1, consegnaVeloce: false }) / 100;
+  const sopra = tariffaConsegnaCents({ pickupInStore: false, merceCents: soglia, consegnaVeloce: false }) / 100;
+  const sogliaEuro = `${soglia % 100 === 0 ? soglia / 100 : (soglia / 100).toFixed(2).replace('.', ',')} €`;
   return (
     `la consegna a domicilio si paga sul CARRELLO intero, non sul singolo prodotto: ` +
-    `€${sopra.toFixed(2)} per una spesa da 10 € in su in questo negozio, €${sotto.toFixed(2)} sotto i 10 €; ` +
+    `€${sopra.toFixed(2)} per una spesa da ${sogliaEuro} in su in questo negozio, €${sotto.toFixed(2)} sotto i ${sogliaEuro}; ` +
     `la paga l'acquirente e non incide sul netto venditore`
   );
 }
