@@ -37,8 +37,10 @@ describe('R08-011 il conto delle combinazioni, prima del taglio', () => {
     expect(contaCombinazioni([])).toBe(0);
     expect(contaCombinazioni([{ name: 'Taglia', values: [] }])).toBe(0);
   });
-  it('il conto rispetta i tetti per asse: 3 assi da 40 valori contano 30 × 30 × 30', () => {
-    expect(contaCombinazioni([0, 1, 2, 3].map((i) => ({ name: `Asse${i}`, values: valoriN(40) })))).toBe(27000);
+  // 20/11/2026 (R02-022) — Il conto non taglia più per asse: i tetti di 3 assi e 30 valori facevano
+  // sparire in silenzio i valori in più, e il conto restava sotto il tetto. Il solo tetto è MAX_VARIANTS.
+  it('il conto non taglia per asse: 4 assi da 40 valori contano 40 × 40 × 40 × 40', () => {
+    expect(contaCombinazioni([0, 1, 2, 3].map((i) => ({ name: `Asse${i}`, values: valoriN(40) })))).toBe(40 ** 4);
   });
   it('il conto è sempre quello che buildCombinations farebbe senza il tetto', () => {
     expect(contaCombinazioni([{ name: 'Taglia', values: valoriN(9) }, { name: 'Colore', values: valoriN(11) }])).toBe(99);
