@@ -110,9 +110,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .eq('id', params.id)
     .single();
 
-  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». PGRST116
-  // («nessuna riga») resta il solo «non c'è».
-  if (error && error.code !== 'PGRST116') {
+  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». «Non c'è»
+  // restano PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessuna riga può averlo).
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') {
     logger.error('[admin/disputes] reclamo non letto', { disputeId: params.id, code: error.code, message: error.message });
     return ApiErrors.internal('Non riesco a leggere il reclamo adesso: riprova fra poco.');
   }

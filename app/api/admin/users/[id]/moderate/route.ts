@@ -202,9 +202,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .select(`id, role, store_name, full_name, legal_birth_date, ${COLONNE_PER_APPROVARE}`)
     .eq('id', params.id)
     .single();
-  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». PGRST116
-  // («nessuna riga») resta il solo «non c'è».
-  if (errTarget && errTarget.code !== 'PGRST116') {
+  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». «Non c'è»
+  // restano PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessuna riga può averlo).
+  if (errTarget && errTarget.code !== 'PGRST116' && errTarget.code !== '22P02') {
     logger.error('[moderate] utente non letto', { target: params.id, code: errTarget.code, err: errTarget.message });
     return ApiErrors.internal('Non riesco a leggere l’utente adesso: riprova fra poco.');
   }

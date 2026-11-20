@@ -43,9 +43,9 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     .select('id, role, full_name, store_name')
     .eq('id', targetId)
     .single();
-  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». PGRST116
-  // («nessuna riga») resta il solo «non c'è».
-  if (errTarget && errTarget.code !== 'PGRST116') {
+  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». «Non c'è»
+  // restano PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessuna riga può averlo).
+  if (errTarget && errTarget.code !== 'PGRST116' && errTarget.code !== '22P02') {
     return ApiErrors.internal('Non riesco a leggere l’utente adesso: riprova fra poco.');
   }
   if (!targetProfile) return ApiErrors.notFound('Utente non trovato.');
