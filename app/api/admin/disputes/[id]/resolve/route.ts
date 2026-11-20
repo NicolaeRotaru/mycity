@@ -136,11 +136,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id, seller_id, dispute_status';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
-    const { data } = await conRipiegoSchema(
+    const { data, error: errOrdine } = await conRipiegoSchema(
       'orders.select (risoluzione del reclamo)',
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', dispute.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', dispute.order_id).single(),
     );
+    // 20/11/2026 (R04-002) — Una lettura caduta non è un ordine senza dati: con `ord` vuoto saltavano il
+    // tetto R84 e il controllo «Stripe non configurato», e partivano lo stesso la chiusura col rimborso,
+    // il rimborso e gli avvisi. 500 «riprova» prima di ogni scrittura. «Non c'è» (PGRST116, 22P02) resta com'era.
+    const codiceOrdine = (errOrdine as { code?: string } | null)?.code;
+    if (errOrdine && codiceOrdine !== 'PGRST116' && codiceOrdine !== '22P02') {
+      logger.error('[admin/disputes] ordine del reclamo non letto', { disputeId: dispute.id, orderId: dispute.order_id, code: codiceOrdine });
+      return ApiErrors.internal('Non riesco a leggere l’ordine del reclamo adesso: riprova fra poco.');
+    }
     ord = (data ?? null) as OrdineDaRimborsare | null;
   }
 
