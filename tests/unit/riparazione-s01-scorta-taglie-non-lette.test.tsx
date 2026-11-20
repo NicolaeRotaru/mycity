@@ -336,6 +336,32 @@ describe('S01-001 · «Modifica prodotto»: torna la rete, il modulo resta', () 
     expect(stato.salvataggi).toHaveLength(1);
   });
 
+  it('E6 · come il sito, copia fresca a 0 taglie: tornata la rete, con la rilettura delle taglie ancora in volo il Salva resta fermo', async () => {
+    // Collaudo K01 (giro 3): le taglie fresche in memoria (meno di 30 s) contavano come lette. Tornata
+    // la rete il Salva si sbloccava con la rilettura ancora in volo e scriveva stock 8 con stock_visto 5
+    // e taglie []: la scorta si staccava dalla somma delle due taglie che la banca dati ha davvero.
+    let arrivano: (taglie: Taglia[]) => void = () => undefined;
+    stato.taglie[ID] = () => new Promise<Taglia[]>((ok) => { arrivano = ok; });
+    onlineManager.setOnline(false);
+    const { radice } = await apriModifica((qc) => inMemoriaModifica(qc, []), COME_IL_SITO);
+    await scrivi(campoNome(radice), 'Lampada con dedica');
+    await scrivi(radice.querySelector<HTMLInputElement>('input[name="stock"]'), '8');
+
+    await rete(true);
+    expect(stato.letturePerTaglie, 'controprova: tornata la rete le taglie si rileggono (e la lettura è ancora in volo)').toBeGreaterThan(0);
+    await clic(radice, 'Salva modifiche');
+    expect(nessunaScrittura(), 'con la rilettura delle taglie in volo il Salva ha scritto la scorta sulle 0 taglie della memoria').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+    expect(stato.controlliScorte).toBe(0);
+    expect(campoNome(radice)?.value, 'il Salva fermo ha perso il testo').toBe('Lampada con dedica');
+
+    // Le taglie arrivano, e sono due: il modulo ne ha 0, quindi resta fermo finché non lo si riapre.
+    await act(async () => { arrivano([ROSSO, BLU]); });
+    await aspetta(60);
+    await clic(radice, 'Salva modifiche');
+    expect(nessunaScrittura(), 'il modulo ha 0 taglie, la banca dati 2: il Salva ha scritto sulla somma sbagliata').toEqual({ prodotto: 0, taglie: 0, copie: 0 });
+    expect(pulsante(radice, 'Riapri con le taglie aggiornate'), 'controprova: il modulo offre di riaprire con le taglie vere').toBeTruthy();
+  });
+
   it('E4 · le taglie in memoria cambiano mentre non c\'è rete: il testo non salvato non si perde', async () => {
     onlineManager.setOnline(false);
     const { radice, qc } = await apriModifica((q) => inMemoriaModifica(q, [ROSSO]));

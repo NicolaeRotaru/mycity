@@ -311,11 +311,15 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
 
   /**
    * S01-001 — LE TAGLIE DEL MODULO E QUELLE LETTE.
-   * Lette vuol dire arrivate dalla banca dati in questa apertura (o lette da poco, ancora fresche),
-   * senza errore e non ferme per la rete. Il modulo le prende quando si apre: se poi la banca dati
-   * ne ha altre, o non si riesce a rileggerle, il Salva aspetta. Mai la scorta su una somma non letta.
+   * Lette vuol dire arrivate dalla banca dati, senza errore, e nessuna rilettura in volo o ferma per
+   * la rete. Una copia in memoria, anche fresca, non basta: tornata la rete il Salva partiva con la
+   * rilettura ancora in volo, sulle taglie della memoria (collaudo K01, giro 3). La rilettura parte a
+   * ogni apertura (`refetchOnMount: 'always'`), quindi «fresche ma non rilette» c'e' solo finche'
+   * quella rilettura e' in volo o in pausa: e li' il Salva aspetta. Il modulo prende le taglie quando
+   * si apre: se poi la banca dati ne ha altre, o non si riesce a rileggerle, il Salva aspetta. Mai la
+   * scorta su una somma non letta.
    */
-  const taglieLette = !variantiSenzaDati && !erroreVarianti && variantiFetchStatus !== 'paused' && (variantiRilette || !variantiVecchie);
+  const taglieLette = !variantiSenzaDati && !erroreVarianti && variantiFetchStatus !== 'paused' && !varianteInLettura && (variantiRilette || !variantiVecchie);
   const firmaLetta = firmaDelleTaglie(variants);
   const consegnaNonLettaAdesso = consegnaNonLetta || offersExpress === undefined;
   if (!restaAperto) setAperto({ id, taglie: firmaLetta, consegnaNonLetta: consegnaNonLettaAdesso, giro: aperto?.id === id ? aperto.giro : 0 });
