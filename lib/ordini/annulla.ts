@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { after } from 'next/server';
 import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
@@ -455,23 +456,70 @@ export async function annullaERimborsa(
  * email non parte, lo scrive nel registro degli errori col motivo.
  * La usano `annullaERimborsa` e il giro degli ordini scaduti.
  */
+type OrdineDellEmail = { id: string; user_id: string | null; seller_id?: string | null; wallet_applied_cents?: number | null };
+type CarrelloDellEmail = { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null;
+
+/**
+ * 20/11/2026 (R05-005) — L'EMAIL DELL'ANNULLO NON FA ASPETTARE LA RICHIESTA, E SE NON PARTE RESTA DA
+ * RIPROVARE. Prima la richiesta (il cliente che annulla, il negozio che rifiuta, il giro degli scaduti)
+ * aspettava l'invio: fino a due tentativi da dieci secondi. Ora, dentro una richiesta, l'email parte
+ * con `after()` di Next, dopo la risposta (la piattaforma tiene viva l'esecuzione finché non ha
+ * finito); fuori da una richiesta (script, prove) si aspetta come prima. Un invio fallito non resta
+ * solo nel registro: gli amministratori lo ricevono nella campanella, una volta per ordine, per
+ * riprovarlo (avvisare il cliente). Prova: tests/unit/riparazione-r05-email-annullo-dopo-la-risposta.test.ts.
+ */
 export async function avvisaIlClienteDellAnnullo(
   admin: SupabaseClient,
-  ordine: { id: string; user_id: string | null; seller_id?: string | null; wallet_applied_cents?: number | null },
+  ordine: OrdineDellEmail,
   motivo: string | null | undefined,
-  carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
+  carrello?: CarrelloDellEmail,
   opzioni?: { annullatoDalCliente?: boolean },
-): Promise<boolean> {
+): Promise<void> {
+  const lavoro = async () => {
+    // Solo l'invio caduto: un indirizzo che non si legge resta nel registro, come prima.
+    if ((await spedisciLEmailDellAnnullo(admin, ordine, motivo, carrello, opzioni)) !== 'invio-fallito') return;
+    await notifyAdmins(
+      '⚠️ Email di annullo non partita',
+      `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è annullato, ma l'email che lo dice al cliente non è partita ` +
+        '(il motivo è nel registro). Avvisa tu il cliente che l\'ordine è annullato e cosa gli torna.',
+      '/admin/orders',
+      { unaVoltaPer: `email-annullo-${ordine.id}` },
+    ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
+  };
   try {
-    if (!ordine.user_id) return false;
+    after(lavoro);
+    return;
+  } catch {
+    // Fuori da una richiesta `after()` lancia: si aspetta l'invio, come prima.
+  }
+  await lavoro();
+}
+
+async function spedisciLEmailDellAnnullo(
+  admin: SupabaseClient,
+  ordine: OrdineDellEmail,
+  motivo: string | null | undefined,
+  carrello?: CarrelloDellEmail,
+  opzioni?: { annullatoDalCliente?: boolean },
+): Promise<'partita' | 'senza-indirizzo' | 'invio-fallito'> {
+  if (!ordine.user_id) return 'senza-indirizzo';
+  let email: string | null | undefined;
+  try {
     const { data, error } = await admin.auth.admin.getUserById(ordine.user_id);
-    const email = data?.user?.email;
+    email = data?.user?.email;
     if (error || !email) {
       logger.error('[annullo] email di annullo non spedita: indirizzo non letto', {
         orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
       });
-      return false;
+      return 'senza-indirizzo';
     }
+  } catch (e) {
+    logger.error('[annullo] email di annullo non spedita: indirizzo non letto', {
+      orderId: ordine.id, message: e instanceof Error ? e.message : String(e),
+    });
+    return 'senza-indirizzo';
+  }
+  try {
     // 5/11/2026 — Il nome del negozio: in un carrello con più negozi dice quale ordine se ne va.
     // Se la lettura non riesce l'email parte lo stesso, senza nome.
     let storeName: string | null = null;
@@ -515,14 +563,14 @@ export async function avvisaIlClienteDellAnnullo(
         orderId: ordine.id,
         motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
       });
-      return false;
+      return 'invio-fallito';
     }
-    return true;
+    return 'partita';
   } catch (e) {
     logger.error('[annullo] email di annullo NON partita', {
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return 'invio-fallito';
   }
 }
 
@@ -633,10 +681,19 @@ export async function avvisaLaCampanellaDelCarrello(
  * giro degli scaduti rendeva 13 € invece di 15). Se poi il rimborso non parte, `rimetti` riporta il
  * carrello com'era: l'ordine resta vivo con la sua consegna e il suo fattorino.
  *
- * LIMITE DICHIARATO: le scritture sono una per riga, non una transazione. Se il database cade a metà
- * e non si riesce a tornare indietro, parte un avviso agli amministratori con l'ordine da sistemare.
- * La chiusura completa è una funzione nel database che fa tutto il carrello insieme (migrazione,
- * da firmare a parte).
+ * 20/11/2026 (R05-006) — I SOLDI FRA GLI ORDINI DEL CARRELLO PASSANO IN UNA TRANSAZIONE.
+ * Qui c'era il «limite dichiarato»: le scritture erano una per riga, e se una cadeva una
+ * compensazione scritta a mano riscriveva quelle già fatte. Se cadeva anche lei (il database giù) o
+ * il processo si fermava fra due scritture, il carrello restava a metà: il forno a 1 € di consegna,
+ * la frutta ancora a 1 €, 2 € spariti, e la carta rendeva 18 € su un ordine che ne diceva 16.
+ * Ora il conto si fa sul carrello letto e TUTTE le scritture (il segno e il conto dell'ordine che se
+ * ne va, gli ordini rimasti) passano dalla funzione del database `sposta_la_consegna_nel_carrello`
+ * (migrations/620): una transazione sola, che blocca le righe e scrive solo se ognuna — anche quelle
+ * che il conto ha letto senza cambiarle — è ancora com'era. Se no, niente scritto e si rilegge
+ * (regole ① e ② qui sopra, dentro il database). Anche `rimetti` è una chiamata sola. Le cifre sono
+ * quelle di prima: cambia solo che non c'è più un «a metà». Finché la 620 non è applicata
+ * (PGRST202) restano le scritture una per riga (`rifaiIlGiroRigaPerRiga`).
+ * Prova: tests/unit/riparazione-r05-soldi-in-transazione.test.ts.
  */
 const COLONNE_GIRO =
   'id, user_id, delivery_status, total_price, gross_total_cents, wallet_applied_cents, shipping_cost, ' +
@@ -688,7 +745,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .eq('user_id', o.user_id)
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
-  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return null;
+  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return carrelloDagliOrdini(admin, o, errT);
   const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
   const ids = Array.isArray(elenco)
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
@@ -698,6 +755,44 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+/**
+ * 20/11/2026 (R05-007) — IL CARRELLO IN CONTANTI SI RITROVA ANCHE DAGLI ORDINI. La riga di
+ * `cod_checkout_attempts` può mancare (la cassa la scrive dopo gli ordini e, se non passa, lo dice
+ * solo nel registro): senza, la regola del negozio che rifiuta non scattava e nessuno lo sapeva.
+ * Allora il carrello sono gli ordini in contanti dello stesso cliente nati nella stessa cassa (entro
+ * due minuti dall'ordine), nell'ordine in cui sono nati. Se dentro finisce un altro carrello, il conto
+ * scritto non è quello della regola e `consegnaDopoLAnnullo` non sposta niente. La mancanza della
+ * riga resta nel registro. Prova: tests/unit/riparazione-r05-carrello-contanti-senza-tentativo.test.ts.
+ */
+const STESSA_CASSA_MS = 2 * 60_000;
+async function carrelloDagliOrdini(admin: SupabaseClient, o: RigaDelGiro, errT: unknown): Promise<RigaDelGiro[] | null> {
+  try {
+    const nato = Date.parse(String(o.created_at ?? ''));
+    if (!Number.isFinite(nato)) return null;
+    const { data, error } = await leggiIlGiro('carrello-contanti-dagli-ordini', (c) =>
+      admin
+        .from('orders')
+        .select(c)
+        .eq('user_id', o.user_id)
+        .eq('payment_method', 'cod')
+        .lt('created_at', new Date(nato + STESSA_CASSA_MS).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(20));
+    if (error || !Array.isArray(data)) return null;
+    const righe = (data as unknown as RigaDelGiro[])
+      .filter((r) => !r.stripe_session_id && Date.parse(String(r.created_at ?? '')) >= nato - STESSA_CASSA_MS)
+      .sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
+    if (righe.length < 2 || !righe.some((r) => r.id === o.id)) return null;
+    logger.warn('[ricalcolaLaConsegnaDelGiro] carrello in contanti senza la riga del tentativo: ritrovato dagli ordini', {
+      orderId: o.id, ordini: righe.map((r) => r.id), errTentativo: (errT as { message?: string } | null)?.message ?? null,
+    });
+    return righe;
+  } catch (err) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti non ritrovato dagli ordini', { orderId: o.id, err });
+    return null;
+  }
 }
 
 /** Quello che `ricalcolaLaConsegnaDelGiro` consegna a chi annulla. */
@@ -756,22 +851,240 @@ async function scriviSeUguale(
   return Array.isArray(data) && data.length > 0;
 }
 
-/** Un giro solo: 'CAMBIATO' se un'altra scrittura è arrivata prima (niente resta scritto). */
-async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null | 'CAMBIATO'> {
+/**
+ * Il carrello si rifà solo se ha almeno due ordini, c'è dentro quello che se ne va e niente è chiuso.
+ * 5/11/2026 — Chiuso vuol dire anche «contanti gia' incassati»: il fattorino
+ * dichiara l'incasso gia' in strada, e il suo compenso trattenuto e l'atteso
+ * della cassa si fissano li'. Riscrivere il totale di quell'ordine dopo
+ * l'incasso mandava la cassa del fattorino in ammanco.
+ */
+const nelCarrello = (c: RigaDelGiro[] | null, orderId: string): c is RigaDelGiro[] =>
+  !!c && c.length >= 2 && c.some((r) => r.id === orderId) &&
+  !c.some((r) => r.delivery_status === 'DELIVERED' || (r.id !== orderId && !!r.cash_confirmed_at));
+
+/** Il conto sul carrello letto; l'ordine che se ne va col conto di prima del segno. */
+function contoDelCarrello(ordine: RigaDelGiro, carrello: RigaDelGiro[], orderId: string) {
+  return consegnaDopoLAnnullo({
+    ordini: carrello.map((c) => {
+      const r = c.id === orderId ? ordine : c;
+      const consegna = Number(r.delivery_fee_cents ?? 0);
+      const spedizione = centesimi(r.shipping_cost);
+      const merce = lordoDi(r) - consegna - spedizione;
+      return {
+        id: r.id,
+        spesaCents: merce + centesimi(r.discount_amount),
+        merceCents: merce,
+        shippingCents: spedizione,
+        deliveryFeeCents: consegna,
+        riderFeeCents: Number(r.rider_fee_cents ?? 0),
+        giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+      };
+    }),
+    annullaId: orderId,
+    consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
+    pickupInStore: false,
+  });
+}
+type ContoDelGiro = NonNullable<ReturnType<typeof consegnaDopoLAnnullo>>;
+
+/** La riga col conto nuovo: consegna e fattorino della regola, totale e lordo spostati della differenza. */
+const verso = (r: RigaDelGiro, da: ConsegnaScritta, riga: RigaRicalcolata): ConsegnaScritta => ({
+  delivery_fee_cents: riga.deliveryFeeCents,
+  rider_fee_cents: riga.riderFeeCents,
+  gross_total_cents: da.gross_total_cents + riga.deltaCents,
+  total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents) / 100,
+});
+
+/** A giro scritto: il totale nuovo dell'ordine che se ne va (`lui`) e le cifre per il cliente. */
+function giroRifatto(
+  ordine: RigaDelGiro,
+  conto: ContoDelGiro,
+  carrello: RigaDelGiro[] | null,
+  lui: ConsegnaScritta,
+  dopoDi: (id: string) => ConsegnaScritta | undefined,
+  rimetti: () => Promise<boolean>,
+): GiroDelCarrello {
+  const orderId = ordine.id;
+  logger.info('[ricalcolaLaConsegnaDelGiro] consegna rifatta sui negozi rimasti', {
+    orderId, differenzaCents: conto.differenzaCents, rimasti: conto.rimasti.length,
+  });
+  const tornaCents = Math.round(lui.total_price * 100);
+  const rimasti = conto.rimasti
+    .map((riga) => carrello?.find((c) => c.id === riga.id))
+    .filter((r): r is RigaDelGiro => !!r)
+    .map((r) => {
+      const prima = consegnaDi(r);
+      const dopo = dopoDi(r.id) ?? prima;
+      return {
+        ordineId: r.id,
+        consegnaPrimaCents: prima.delivery_fee_cents,
+        consegnaCents: dopo.delivery_fee_cents,
+        totalePrimaCents: Math.round(prima.total_price * 100),
+        totaleCents: Math.round(dopo.total_price * 100),
+      };
+    });
+  const consegnaCents = lui.delivery_fee_cents;
+  // La spesa si dice pulita solo senza credito né spedizione: con quelli il totale non è merce + consegna.
+  const pulita = Number(ordine.wallet_applied_cents ?? 0) === 0 && centesimi(ordine.shipping_cost) === 0;
+  return {
+    totaleCents: tornaCents,
+    differenzaCents: conto.differenzaCents,
+    rimetti,
+    avviso: {
+      ordineId: orderId,
+      pagatoCents: centesimi(ordine.total_price),
+      tornaCents,
+      consegnaCents,
+      spesaCents: pulita ? tornaCents - consegnaCents : null,
+      negoziRimasti: conto.rimasti.length,
+      rimasti,
+    },
+  };
+}
+
+/** La funzione del database che scrive il giro in una transazione sola (migrations/620). */
+const FUNZIONE_DEL_GIRO = 'sposta_la_consegna_nel_carrello';
+
+/** Una riga per la funzione: com'era letta (`da`) e, se va scritta, come diventa (`a`). */
+type RigaDellaTransazione = {
+  id: string;
+  da: {
+    delivery_fee_cents: number | null;
+    rider_fee_cents: number | null;
+    delivery_status: string | null;
+    refunded_amount_cents: number | null;
+    incassato: boolean;
+  };
+  a?: ConsegnaScritta;
+};
+
+/** La riga come l'ha letta il conto: la funzione scrive solo se è ancora così. */
+const letta = (r: RigaDelGiro): RigaDellaTransazione['da'] => ({
+  delivery_fee_cents: r.delivery_fee_cents ?? null,
+  rider_fee_cents: r.rider_fee_cents ?? null,
+  delivery_status: r.delivery_status ?? null,
+  refunded_amount_cents: r.refunded_amount_cents ?? null,
+  incassato: !!r.cash_confirmed_at,
+});
+
+/** La funzione non c'è (ancora): PostgREST risponde PGRST202, PostgreSQL 42883 col suo nome. */
+function funzioneDelGiroMancante(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST202' || (e.code === '42883' && (e.message ?? '').includes(FUNZIONE_DEL_GIRO));
+}
+
+/**
+ * Tutte le righe insieme, o nessuna. 'SCRITTO' = scritte tutte. 'CAMBIATO' = niente scritto: una riga
+ * non era più com'era letta, oppure la chiamata non è andata (un paletto sui soldi, la rete). Su una
+ * risposta persa la scrittura può anche esserci stata: per questo chi riceve 'CAMBIATO' rilegge e
+ * decide da quello che il database ha davvero, e non rifà mai i conti sulla lettura vecchia.
+ * 'SENZA_FUNZIONE' = la 620 non è applicata, o il client non ha `rpc`, o la risposta non è un
+ * booleano (la funzione vera risponde solo true o false: un NULL vuol dire che non è lei).
+ */
+async function scriviInsieme(
+  admin: SupabaseClient,
+  orderId: string,
+  righe: RigaDellaTransazione[],
+): Promise<'SCRITTO' | 'CAMBIATO' | 'SENZA_FUNZIONE'> {
+  if (typeof (admin as { rpc?: unknown }).rpc !== 'function') return 'SENZA_FUNZIONE';
+  try {
+    const { data, error } = await admin.rpc(FUNZIONE_DEL_GIRO, { p_righe: righe });
+    // La 620 ha solo RETURN true / RETURN false (o un errore): non può mai rispondere NULL.
+    if (!error) return data === true ? 'SCRITTO' : data === false ? 'CAMBIATO' : 'SENZA_FUNZIONE';
+    if (funzioneDelGiroMancante(error)) return 'SENZA_FUNZIONE';
+    logger.error('[ricalcolaLaConsegnaDelGiro] scrittura del carrello non passata: niente a metà, si rilegge', {
+      orderId, code: error.code, err: error.message,
+    });
+  } catch (err) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] scrittura del carrello non passata: niente a metà, si rilegge', {
+      orderId, err: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return 'CAMBIATO';
+}
+
+/**
+ * Un giro solo, in una transazione: 'CAMBIATO' se un'altra scrittura è arrivata prima o la
+ * scrittura non è passata (niente resta scritto); 'SENZA_FUNZIONE' se la 620 non c'è ancora.
+ */
+async function rifaiIlGiro(
+  admin: SupabaseClient,
+  orderId: string,
+): Promise<GiroDelCarrello | null | 'CAMBIATO' | 'SENZA_FUNZIONE'> {
   const { data: lui, error } = await leggiIlGiro('ordine', (c) => admin.from('orders').select(c).eq('id', orderId).maybeSingle());
   if (error || !lui || typeof lui !== 'object') return null;
   const ordine = lui as unknown as RigaDelGiro;
   // Niente da rifare: si rende il totale letto adesso, non quello che il chiamante aveva in mano.
   const comE: GiroDelCarrello = { totaleCents: centesimi(ordine.total_price), differenzaCents: 0, rimetti: async () => true, avviso: null };
   if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return comE;
-  // 5/11/2026 — Chiuso vuol dire anche «contanti gia' incassati»: il fattorino
-  // dichiara l'incasso gia' in strada, e il suo compenso trattenuto e l'atteso
-  // della cassa si fissano li'. Riscrivere il totale di quell'ordine dopo
-  // l'incasso mandava la cassa del fattorino in ammanco.
-  const nelCarrello = (c: RigaDelGiro[] | null): c is RigaDelGiro[] =>
-    !!c && c.length >= 2 && c.some((r) => r.id === orderId) &&
-    !c.some((r) => r.delivery_status === 'DELIVERED' || (r.id !== orderId && !!r.cash_confirmed_at));
-  if (!nelCarrello(await ordiniDelCarrello(admin, ordine))) return comE;
+  const carrello = await ordiniDelCarrello(admin, ordine);
+  if (!nelCarrello(carrello, orderId)) return comE;
+
+  // Il segno (fattorino a 0) e il conto dell'ordine che se ne va, poi i rimasti che cambiano.
+  // Niente da spostare: resta il segno (l'ordine se ne va comunque), che `rimetti` toglie.
+  const comEra = consegnaDi(ordine);
+  const segno: ConsegnaScritta = { ...comEra, rider_fee_cents: 0 };
+  const conto = contoDelCarrello(ordine, carrello, orderId);
+  const passi: Array<{ r: RigaDelGiro; prima: ConsegnaScritta; dopo: ConsegnaScritta }> = [
+    { r: ordine, prima: comEra, dopo: conto ? verso(ordine, segno, conto.annullato) : segno },
+  ];
+  for (const riga of conto?.rimasti ?? []) {
+    const r = carrello.find((c) => c.id === riga.id);
+    if (r && (riga.deltaCents !== 0 || riga.riderFeeCents !== Number(r.rider_fee_cents ?? 0))) {
+      passi.push({ r, prima: consegnaDi(r), dopo: verso(r, consegnaDi(r), riga) });
+    }
+  }
+  // Le righe che il conto ha letto senza cambiarle si controllano soltanto: se una è cambiata, il
+  // conto non vale più e non si scrive niente.
+  const avanti = await scriviInsieme(admin, orderId, [
+    ...passi.map((p) => ({ id: p.r.id, da: letta(p.r), a: p.dopo })),
+    ...carrello.filter((c) => !passi.some((p) => p.r.id === c.id)).map((c) => ({ id: c.id, da: letta(c) })),
+  ]);
+  if (avanti !== 'SCRITTO') return avanti;
+
+  // All'indietro, sempre in una chiamata sola: o il carrello torna tutto com'era o resta tutto col
+  // conto nuovo, mai a metà.
+  const rimetti = async (): Promise<boolean> => {
+    if (passi.length === 0) return true;
+    const tornato = await scriviInsieme(
+      admin,
+      orderId,
+      passi.map((p) => ({
+        id: p.r.id,
+        da: { ...letta(p.r), delivery_fee_cents: p.dopo.delivery_fee_cents, rider_fee_cents: p.dopo.rider_fee_cents },
+        a: p.prima,
+      })),
+    );
+    if (tornato === 'SCRITTO') {
+      passi.length = 0;
+      return true;
+    }
+    logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rimessa com era', { orderId, esito: tornato });
+    await notifyAdmins(
+      '⚠️ Carrello da sistemare a mano',
+      `L'annullo dell'ordine #${orderId.slice(0, 6).toUpperCase()} non è andato a buon fine, ma la consegna degli altri ordini dello stesso carrello ` +
+        "era già stata spostata e non si è potuta rimettere com'era (un ordine del carrello è cambiato nel frattempo, o la scrittura non è passata). " +
+        'Il carrello è tutto col conto nuovo, niente a metà: controlla consegna, fattorino e totale degli ordini del carrello prima che il negozio li accetti.',
+      '/admin/orders',
+    ).catch((err) => logger.error('[ricalcolaLaConsegnaDelGiro] avviso agli amministratori non partito', { orderId, err }));
+    return false;
+  };
+  if (!conto) return { ...comE, rimetti };
+  return giroRifatto(ordine, conto, carrello, passi[0].dopo, (id) => passi.find((p) => p.r.id === id)?.dopo, rimetti);
+}
+
+/**
+ * Il giro di prima della 620, una scrittura per riga con la compensazione a mano: resta solo come
+ * ripiego finché la funzione del database non è applicata. Qui un database che cade a metà, anche
+ * durante la compensazione, lascia il carrello a metà (lo dice l'avviso agli amministratori).
+ */
+async function rifaiIlGiroRigaPerRiga(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null | 'CAMBIATO'> {
+  const { data: lui, error } = await leggiIlGiro('ordine', (c) => admin.from('orders').select(c).eq('id', orderId).maybeSingle());
+  if (error || !lui || typeof lui !== 'object') return null;
+  const ordine = lui as unknown as RigaDelGiro;
+  // Niente da rifare: si rende il totale letto adesso, non quello che il chiamante aveva in mano.
+  const comE: GiroDelCarrello = { totaleCents: centesimi(ordine.total_price), differenzaCents: 0, rimetti: async () => true, avviso: null };
+  if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return comE;
+  if (!nelCarrello(await ordiniDelCarrello(admin, ordine), orderId)) return comE;
 
   const scritte: Array<{ r: RigaDelGiro; prima: ConsegnaScritta; dopo: ConsegnaScritta }> = [];
   // Per primo il conto dell'ordine che se ne va: se il suo rimborso è già scritto
@@ -817,38 +1130,11 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
 
     // 2. Il conto sul carrello letto DOPO il segno; l'ordine che se ne va col conto di prima.
     carrello = await ordiniDelCarrello(admin, ordine);
-    if (nelCarrello(carrello)) {
-      conto = consegnaDopoLAnnullo({
-        ordini: carrello.map((c) => {
-          const r = c.id === orderId ? ordine : c;
-          const consegna = Number(r.delivery_fee_cents ?? 0);
-          const spedizione = centesimi(r.shipping_cost);
-          const merce = lordoDi(r) - consegna - spedizione;
-          return {
-            id: r.id,
-            spesaCents: merce + centesimi(r.discount_amount),
-            merceCents: merce,
-            shippingCents: spedizione,
-            deliveryFeeCents: consegna,
-            riderFeeCents: Number(r.rider_fee_cents ?? 0),
-            giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
-          };
-        }),
-        annullaId: orderId,
-        consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
-        pickupInStore: false,
-      });
-    }
+    if (nelCarrello(carrello, orderId)) conto = contoDelCarrello(ordine, carrello, orderId);
     // Niente da spostare: resta il segno (l'ordine se ne va comunque), che `rimetti` toglie.
     if (!conto) return { ...comE, rimetti };
 
     // 3. Prima l'ordine che se ne va (il rimborso scende), poi quelli che restano.
-    const verso = (r: RigaDelGiro, da: ConsegnaScritta, riga: RigaRicalcolata): ConsegnaScritta => ({
-      delivery_fee_cents: riga.deliveryFeeCents,
-      rider_fee_cents: riga.riderFeeCents,
-      gross_total_cents: da.gross_total_cents + riga.deltaCents,
-      total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents) / 100,
-    });
     tutto = await passo(ordine, segno, verso(ordine, segno, conto.annullato));
     for (const riga of conto.rimasti) {
       if (!tutto) break;
@@ -863,52 +1149,26 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
     return (await rimetti()) ? comE : null;
   }
   if (!tutto || !conto) return (await rimetti()) ? 'CAMBIATO' : null;
-
-  logger.info('[ricalcolaLaConsegnaDelGiro] consegna rifatta sui negozi rimasti', {
-    orderId, differenzaCents: conto.differenzaCents, rimasti: conto.rimasti.length,
-  });
-  const tornaCents = Math.round(scritte[1].dopo.total_price * 100);
-  const rimasti = conto.rimasti
-    .map((riga) => carrello?.find((c) => c.id === riga.id))
-    .filter((r): r is RigaDelGiro => !!r)
-    .map((r) => {
-      const prima = consegnaDi(r);
-      const dopo = scritte.find((s) => s.r.id === r.id)?.dopo ?? prima;
-      return {
-        ordineId: r.id,
-        consegnaPrimaCents: prima.delivery_fee_cents,
-        consegnaCents: dopo.delivery_fee_cents,
-        totalePrimaCents: Math.round(prima.total_price * 100),
-        totaleCents: Math.round(dopo.total_price * 100),
-      };
-    });
-  const consegnaCents = scritte[1].dopo.delivery_fee_cents;
-  // La spesa si dice pulita solo senza credito né spedizione: con quelli il totale non è merce + consegna.
-  const pulita = Number(ordine.wallet_applied_cents ?? 0) === 0 && centesimi(ordine.shipping_cost) === 0;
-  return {
-    totaleCents: tornaCents,
-    differenzaCents: conto.differenzaCents,
-    rimetti,
-    avviso: {
-      ordineId: orderId,
-      pagatoCents: centesimi(ordine.total_price),
-      tornaCents,
-      consegnaCents,
-      spesaCents: pulita ? tornaCents - consegnaCents : null,
-      negoziRimasti: conto.rimasti.length,
-      rimasti,
-    },
-  };
+  return giroRifatto(ordine, conto, carrello, scritte[1].dopo, (id) => scritte.find((s) => s.r.id === id)?.dopo, rimetti);
 }
 
 export async function ricalcolaLaConsegnaDelGiro(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null> {
   try {
     // Se un altro annullo dello stesso carrello scrive fra la lettura e la scrittura, si rilegge.
+    let rigaPerRiga = false;
     for (let volta = 0; volta < 3; volta++) {
-      const esito = await rifaiIlGiro(admin, orderId);
+      let esito: GiroDelCarrello | null | 'CAMBIATO' | 'SENZA_FUNZIONE' = 'SENZA_FUNZIONE';
+      if (!rigaPerRiga) esito = await rifaiIlGiro(admin, orderId);
+      if (esito === 'SENZA_FUNZIONE') {
+        if (!rigaPerRiga) {
+          logger.warn('[ricalcolaLaConsegnaDelGiro] migrazione 620 non ancora applicata: il carrello si scrive una riga alla volta', { orderId });
+        }
+        rigaPerRiga = true;
+        esito = await rifaiIlGiroRigaPerRiga(admin, orderId);
+      }
       if (esito !== 'CAMBIATO') return esito;
     }
-    logger.error('[ricalcolaLaConsegnaDelGiro] il carrello cambia a ogni lettura: consegna NON rifatta', { orderId });
+    logger.error('[ricalcolaLaConsegnaDelGiro] il carrello cambia a ogni lettura (o la scrittura non passa): consegna NON rifatta', { orderId });
     const { data } = await admin.from('orders').select('total_price').eq('id', orderId).maybeSingle();
     if (!data) return null;
     return {
