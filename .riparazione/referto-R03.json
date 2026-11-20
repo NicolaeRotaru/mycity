@@ -1,6 +1,6 @@
 {
  "sessione": "R03",
- "aggiornato": "2026-11-20 22:00",
+ "aggiornato": "2026-11-20 22:05",
  "finita": true,
  "testa": "e4bcd5aecc48eb90dcc76b4d63ef3d334ef45474",
  "verifica": {
@@ -344,17 +344,18 @@
    "descrizione": "logger.spesa(ai_usage) esce con inputTokens, outputTokens e cacheReadTokens oscurati, perché lib/logger.ts oscura sempre le chiavi che contengono «token». C era già prima di questo giro."
   },
   {
-   "titolo": "Una regola di ripulitura dei dati dell analisi va resa più robusta",
-   "dimensione": "sicurezza",
-   "severita": "minore",
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (altro): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
    "file": "(nel referto privato)",
-   "descrizione": "Dettagli inviati solo alla regista.",
-   "riservato": true
+   "severita": "minore",
+   "dimensione": "sicurezza"
   }
  ],
  "domande_per_nicola": [],
  "conto": {
   "agenti": 3,
+  "subagenti": 3,
   "nota": "1 riparatore del lotto A, 1 revisore avversario, 1 giro di correzione (approvato dalla regista). Tutti sul modello grande. Lotti B e C non partiti per il tetto di spesa. Workflow mai."
- }
+ },
+ "costo_usd": 33.22
 }
