@@ -110,7 +110,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .eq('id', params.id)
     .single();
 
-  if (error || !dispute) return ApiErrors.notFound('Reclamo non trovato');
+  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». PGRST116
+  // («nessuna riga») resta il solo «non c'è».
+  if (error && error.code !== 'PGRST116') {
+    logger.error('[admin/disputes] reclamo non letto', { disputeId: params.id, code: error.code, message: error.message });
+    return ApiErrors.internal('Non riesco a leggere il reclamo adesso: riprova fra poco.');
+  }
+  if (!dispute) return ApiErrors.notFound('Reclamo non trovato');
 
   let refundId: string | null = null;
 

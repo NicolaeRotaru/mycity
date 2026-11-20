@@ -197,11 +197,17 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   const admin = getAdminSupabase();
-  const { data: target } = await admin
+  const { data: target, error: errTarget } = await admin
     .from('profiles')
     .select(`id, role, store_name, full_name, legal_birth_date, ${COLONNE_PER_APPROVARE}`)
     .eq('id', params.id)
     .single();
+  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». PGRST116
+  // («nessuna riga») resta il solo «non c'è».
+  if (errTarget && errTarget.code !== 'PGRST116') {
+    logger.error('[moderate] utente non letto', { target: params.id, code: errTarget.code, err: errTarget.message });
+    return ApiErrors.internal('Non riesco a leggere l’utente adesso: riprova fra poco.');
+  }
   if (!target) return ApiErrors.notFound('Utente non trovato.');
 
   /**
