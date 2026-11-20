@@ -26,15 +26,11 @@ export type VariantOptionType = { name: string; values: string[] };
  * massimo 1000 righe per richiesta (`max_rows`, supabase/config.toml), e chi legge le varianti
  * (`loadProductVariants`, `saveProductVariantsServer`) non pagina. Sopra quel numero il taglio
  * tornerebbe silenzioso e il salvataggio creerebbe duplicati. Chi crea le varianti vede il conto
- * prima di salvare: `contaCombinazioni`, e sopra il tetto il modulo non applica gli assi.
- *
- * 20/11/2026 (R02-022) — È l'UNICO tetto. C'erano anche 3 assi al massimo e 30 valori per asse
- * (`MAX_OPTION_TYPES`, `MAX_OPTION_VALUES`), tagliati in silenzio prima ancora di contare: 35 colori
- * per 3 taglie diventavano 90 combinazioni, `contaCombinazioni` rispondeva 90 (sotto il tetto, quindi
- * nessun avviso) e i colori dal 31 al 35 sparivano dal negozio e dalla scheda. Il modulo non limita i
- * valori per asse, e il colore è testo libero: quei tetti li vedeva solo chi perdeva le varianti.
+ * prima di salvare: `contaCombinazioni`.
  */
 export const MAX_VARIANTS = 100;
+export const MAX_OPTION_TYPES = 3;
+export const MAX_OPTION_VALUES = 30;
 
 /** Nomi di opzione suggeriti per categoria (solo come scorciatoia in UI). */
 const SUGGESTED_OPTION_NAMES: Record<string, string[]> = {
@@ -81,21 +77,19 @@ function dedupe(arr: string[]): string[] {
   return out;
 }
 
-/**
- * Gli assi come li usa il prodotto cartesiano: puliti e senza doppioni. Tutti gli assi e tutti i
- * valori: nessun taglio per asse (R02-022, vedi `MAX_VARIANTS`).
- */
+/** Gli assi come li usa il prodotto cartesiano: puliti, senza doppioni, nei tetti per asse. */
 function assiPuliti(types: VariantOptionType[]): VariantOptionType[] {
   return types
     .map((t) => ({ name: t.name.trim(), values: dedupe(t.values.map((v) => v.trim()).filter(Boolean)) }))
-    .filter((t) => t.name && t.values.length > 0);
+    .filter((t) => t.name && t.values.length > 0)
+    .slice(0, MAX_OPTION_TYPES)
+    .map((t) => ({ name: t.name, values: t.values.slice(0, MAX_OPTION_VALUES) }));
 }
 
 /**
- * Quante combinazioni nascerebbero dagli assi, PRIMA del tetto `MAX_VARIANTS` e senza nessun altro
- * taglio: è il conto che il modulo del negozio mostra, e sopra `MAX_VARIANTS` il modulo non applica
- * gli assi. `buildCombinations` ne terrebbe solo le prime `MAX_VARIANTS` (il paracadute contro le
- * 1000 righe di PostgREST): chi crea deve saperlo prima, non scoprirlo dalle varianti che mancano.
+ * Quante combinazioni nascerebbero dagli assi, PRIMA del tetto `MAX_VARIANTS`: è il conto che il
+ * modulo del negozio mostra prima di salvare. Sopra `MAX_VARIANTS`, `buildCombinations` ne tiene
+ * solo le prime `MAX_VARIANTS`: chi crea deve saperlo, non scoprirlo dalle varianti che mancano.
  */
 export function contaCombinazioni(types: VariantOptionType[]): number {
   const assi = assiPuliti(types);
@@ -103,11 +97,7 @@ export function contaCombinazioni(types: VariantOptionType[]): number {
   return assi.reduce((n, t) => n * t.values.length, 1);
 }
 
-/**
- * Prodotto cartesiano dei valori → combinazioni di opzioni. Fino a `MAX_VARIANTS` ci sono tutte;
- * sopra, solo le prime `MAX_VARIANTS`: un paracadute, perché il modulo controlla prima
- * `contaCombinazioni` e sopra il tetto non arriva fin qui.
- */
+/** Prodotto cartesiano dei valori → combinazioni di opzioni (al massimo `MAX_VARIANTS`). */
 export function buildCombinations(types: VariantOptionType[]): Record<string, string>[] {
   const clean = assiPuliti(types);
   if (clean.length === 0) return [];
