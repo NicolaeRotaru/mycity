@@ -1134,12 +1134,38 @@ export const POST = withAuthRateLimit(
       consegnaVeloce,
     });
     const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
+
+    /**
+     * 20/11/2026 (R04-007) — IL BENVENUTO RESTITUITO SI RIUSA SUBITO.
+     *
+     * `release_coupon(p_code)` rimette l'uso nel contatore, ma non chiude la rivendicazione del
+     * cliente (`coupon_redemptions`, migrazione 361): il lucchetto del codice «solo primo ordine»
+     * restava acceso e il tentativo dopo il tetto dei contanti o dopo un annullamento leggeva
+     * «Coupon non disponibile» senza che nessun ordine fosse nato. Si chiude qui, solo dopo un
+     * rilascio riuscito: se il contatore non è tornato, la rivendicazione resta com'era.
+     */
+    const chiudiLaRivendicazione = async (codice: string) => {
+      const { data: buono, error: errBuono } = await admin.from('coupons').select('id').eq('code', codice).maybeSingle();
+      if (errBuono || !buono) {
+        logger.warn('[cod] rivendicazione del codice non chiusa: codice non riletto', { code: codice, message: errBuono?.message });
+        return;
+      }
+      const { error: errChiusa } = await admin
+        .from('coupon_redemptions')
+        .update({ released_at: new Date().toISOString() })
+        .eq('coupon_id', (buono as { id: string }).id)
+        .eq('user_id', user.id)
+        .is('released_at', null);
+      if (errChiusa) logger.warn('[cod] rivendicazione del codice non chiusa', { code: codice, message: errChiusa.message });
+    };
+
     // 5/11/2026 — Il tetto della legge sui contanti (lib/ordini/tetto-dei-contanti.ts), sul lordo.
     if (sopraIlTettoDeiContanti(prezzi.grandTotalCents)) {
       // Il codice sconto è già stato rivendicato qui sopra: torna disponibile, nessun ordine è nato.
       if (validatedCouponCode) {
         const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
         if (relErr) logger.warn('[cod] codice sconto non restituito (tetto dei contanti)', { code: validatedCouponCode, message: relErr.message });
+        else await chiudiLaRivendicazione(validatedCouponCode);
       }
       return esciERilascia(ApiErrors.conflict(MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI));
     }
@@ -1264,6 +1290,7 @@ export const POST = withAuthRateLimit(
       if (validatedCouponCode) {
         const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
         if (relErr) logger.warn('[cod] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+        else await chiudiLaRivendicazione(validatedCouponCode);
       }
       createdOrderIds.length = 0;
       ordiniCreati.length = 0;
