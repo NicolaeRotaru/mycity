@@ -28,7 +28,7 @@ function dbFinto(ordini: Riga[]) {
         select: () => q,
         eq: (c: keyof Riga, v: unknown) => (filtri.push((r) => r[c] === v), q),
         in: (c: keyof Riga, v: unknown[]) => (filtri.push((r) => v.includes(r[c])), q),
-        gte: (c: keyof Riga, v: string) => (filtri.push((r) => r[c] >= v), q),
+        gte: (c: keyof Riga, v: string) => (filtri.push((r) => String(r[c] ?? '') >= v), q),
         then: (ok: (r: unknown) => unknown, ko?: (e: unknown) => unknown) => {
           const righe = ordini.filter((r) => filtri.every((f) => f(r)));
           return Promise.resolve({ data: righe, count: righe.length, error: null }).then(ok, ko);
