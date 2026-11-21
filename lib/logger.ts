@@ -127,25 +127,77 @@ function chiaveErroriDellOra(ms: number): string {
   return `mc:errori-del-sito:${ambiente}:${new Date(ms).toISOString().slice(0, 13)}`;
 }
 
-function chiamaUpstash(u: { url: string; token: string }, comandi: unknown[][]): Promise<Response> {
-  return fetch(`${u.url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${u.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(comandi),
-    cache: 'no-store',
-  });
+/**
+ * 21/11/2026 — IL CONTO DEGLI ERRORI HA UN TEMPO MASSIMO E NON FA UNA RICHIESTA PER ERRORE.
+ *
+ * Prima ogni `logger.error` del server faceva la sua chiamata a Upstash, senza tempo massimo: in una
+ * tempesta di errori partiva una richiesta per errore, senza limite, e una chiamata che non
+ * rispondeva restava appesa quanto voleva. Adesso:
+ * - la chiamata si interrompe dopo `ERRORI_TEMPO_MASSIMO_MS`;
+ * - gli errori si sommano in memoria e partono al più UNA volta per finestra (`ERRORI_FINESTRA_MS`):
+ *   il primo errore dopo una finestra quieta parte subito (insieme a quelli dello stesso giro), gli
+ *   altri della finestra partono tutti insieme, con INCRBY, quando la finestra si chiude.
+ * Il primo errore non aspetta: l'allarme del sorvegliante scatta già con uno. Se la funzione si
+ * chiude prima della fine della finestra, si perde solo il numero esatto, non l'allarme.
+ */
+const ERRORI_FINESTRA_MS = 10_000;
+const ERRORI_TEMPO_MASSIMO_MS = 3_000;
+const erroriDaMandare = new Map<string, number>();
+let finestraDegliErrori: ReturnType<typeof setTimeout> | null = null;
+
+function chiamaUpstash(u: { url: string; token: string }, comandi: unknown[][]): Promise<void> {
+  const freno = new AbortController();
+  const tempo = setTimeout(() => freno.abort(), ERRORI_TEMPO_MASSIMO_MS);
+  try {
+    return fetch(`${u.url}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${u.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(comandi),
+      cache: 'no-store',
+      signal: freno.signal,
+    }).then(() => clearTimeout(tempo), () => clearTimeout(tempo));
+  } catch {
+    clearTimeout(tempo);
+    return Promise.resolve();
+  }
+}
+
+/** Manda in una richiesta sola tutti gli errori sommati finora. Non lancia mai. */
+function mandaErroriSommati(): void {
+  const u = upstashDegliErrori();
+  if (!u || erroriDaMandare.size === 0) {
+    erroriDaMandare.clear();
+    return;
+  }
+  const comandi: unknown[][] = [];
+  for (const [chiave, quanti] of erroriDaMandare) comandi.push(['INCRBY', chiave, quanti], ['EXPIRE', chiave, ERRORI_DURATA_SECONDI]);
+  erroriDaMandare.clear();
+  void chiamaUpstash(u, comandi);
+}
+
+/** A fine finestra: se nel frattempo sono arrivati errori partono insieme e si apre la finestra dopo. */
+function apriFinestraDegliErrori(): void {
+  finestraDegliErrori = setTimeout(() => {
+    finestraDegliErrori = null;
+    if (erroriDaMandare.size === 0) return;
+    apriFinestraDegliErrori();
+    mandaErroriSommati();
+  }, ERRORI_FINESTRA_MS);
+  (finestraDegliErrori as { unref?: () => void }).unref?.();
 }
 
 /** Conta un errore del server. Nel browser e senza Upstash non fa niente; non lancia mai. */
-function contaErroreDelSito(adesso: number = Date.now()): Promise<void> {
-  if (typeof window !== 'undefined') return Promise.resolve();
-  const u = upstashDegliErrori();
-  if (!u) return Promise.resolve();
-  const chiave = chiaveErroriDellOra(adesso);
+function contaErroreDelSito(adesso: number = Date.now()): void {
+  if (typeof window !== 'undefined') return;
+  if (!upstashDegliErrori()) return;
   try {
-    return chiamaUpstash(u, [['INCR', chiave], ['EXPIRE', chiave, ERRORI_DURATA_SECONDI]]).then(() => undefined, () => undefined);
+    const chiave = chiaveErroriDellOra(adesso);
+    erroriDaMandare.set(chiave, (erroriDaMandare.get(chiave) ?? 0) + 1);
+    if (finestraDegliErrori) return;
+    apriFinestraDegliErrori();
+    queueMicrotask(mandaErroriSommati);
   } catch {
-    return Promise.resolve();
+    // Un conteggio perso non ferma il logger.
   }
 }
 
