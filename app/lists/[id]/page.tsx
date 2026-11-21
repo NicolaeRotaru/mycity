@@ -144,6 +144,8 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
       // R10-007, R10-008 — anche /lists mostra titolo e descrizione: prima restavano i vecchi.
       rileggiLeListeDiLists();
+      // R08-004 — e il menu «Aggiungi a lista» della scheda prodotto, che legge i titoli da questa chiave.
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
