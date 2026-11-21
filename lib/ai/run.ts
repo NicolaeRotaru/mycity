@@ -581,13 +581,20 @@ async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessage
 
   // Telemetria aggregabile (feature, model, token, € stimati). Esce sempre:
   // #195 — con logger.info in produzione non usciva affatto.
+  //
+  // 21/11/2026 (R01-004) — I TOKEN NEI LOG SI VEDONO.
+  // Il logger oscura ogni chiave che contiene «token» (PII_KEYS in lib/logger.ts: protegge i
+  // gettoni d'accesso), quindi `inputTokens` e gli altri uscivano «[redacted]» e nei log la spesa
+  // dell'AI non diceva quanti token. I numeri escono con chiavi che non contengono quella parola;
+  // `unita` dice che sono token.
   logger.spesa('ai_usage', {
     feature: args.feature,
     model: args.model,
-    inputTokens: usageTokens.inputTokens,
-    outputTokens: usageTokens.outputTokens,
-    cacheWriteTokens: usageTokens.cacheWriteTokens,
-    cacheReadTokens: usageTokens.cacheReadTokens,
+    unita: 'token',
+    ingresso: usageTokens.inputTokens,
+    uscita: usageTokens.outputTokens,
+    cacheScritta: usageTokens.cacheWriteTokens,
+    cacheLetta: usageTokens.cacheReadTokens,
     webSearchRequests: usageTokens.webSearchRequests,
     estCostEur: Number(estCostEur.toFixed(6)),
   });
@@ -601,11 +608,13 @@ async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessage
   // vedere la spesa che cresce di piu'.
   const tagliata = response.stop_reason === 'max_tokens';
   if (tagliata && args.seTagliata !== 'accetta') {
+    // R01-004 — Anche qui chiavi senza «token»: il logger le oscurerebbe.
     logger.warn('ai_risposta_tagliata', {
       feature: args.feature,
       model: args.model,
-      maxTokens: args.max_tokens,
-      outputTokens: usageTokens.outputTokens,
+      unita: 'token',
+      tettoUscita: args.max_tokens,
+      uscita: usageTokens.outputTokens,
     });
     throw new AiRispostaTagliataError(args.feature, args.max_tokens);
   }
