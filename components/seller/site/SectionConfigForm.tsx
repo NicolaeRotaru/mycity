@@ -80,9 +80,20 @@ export function aCapoInHtml(testo: string): string {
     .replace(/\r?\n/g, '<br>');
 }
 export function htmlInACapo(html: string): string {
-  // Il testo salvato è già pulito dal server («&» → «&amp;», «<» → «&lt;»): nel campo si rilegge com'è stato scritto.
-  const ENTITA: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&amp;': '&' };
-  return html.replace(/<br\s*\/?>/gi, '\n').replace(/&(?:lt|gt|amp);/g, (m) => ENTITA[m]);
+  // Il testo salvato è già pulito dal server («&» → «&amp;», «<» → «&lt;», spazio non separabile →
+  // «&nbsp;»): nel campo si rilegge com'è stato scritto. Un solo passaggio, così «&amp;nbsp;»
+  // torna «&nbsp;» scritto a lettere e non diventa uno spazio.
+  const NOMI: Record<string, string> = {
+    lt: '<', gt: '>', amp: '&', quot: '"', apos: "'", nbsp: '\u00a0',
+  };
+  return html.replace(/<br\s*\/?>/gi, '\n').replace(
+    /&(?:(lt|gt|amp|quot|apos|nbsp)|#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6}));/g,
+    (m, nome, dec, hex) => {
+      if (nome) return NOMI[nome];
+      const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16);
+      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : m;
+    },
+  );
 }
 
 function StructuralNote({ type }: { type: string }) {
