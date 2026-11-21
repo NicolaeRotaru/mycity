@@ -379,6 +379,9 @@
  ],
  "conto": {
   "agenti": 3,
-  "nota": "3 subagenti su 6: riparatore del lotto A (opus), riparatore del lotto B (opus), revisore avversario del lotto A (opus, in worktree). Il lotto C e il revisore del lotto B non sono partiti per il tetto (24,50 $). Nessuno strumento Workflow."
- }
+  "nota": "3 subagenti su 6: riparatore del lotto A (opus), riparatore del lotto B (opus), revisore avversario del lotto A (opus, in worktree). Il lotto C e il revisore del lotto B non sono partiti per il tetto (24,50 $). Nessuno strumento Workflow.",
+  "subagenti": 3,
+  "costo_usd": 25.71
+ },
+ "costo_usd": 25.71
 }
