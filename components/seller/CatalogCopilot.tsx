@@ -161,7 +161,7 @@ export default function CatalogCopilot() {
           <Sparkles size={18} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-ink-900">Catalog Copilot</p>
+          <p className="font-bold text-ink-900">Copilot del catalogo</p>
           <p className="flex items-center gap-1 text-xs text-olive-600">
             <span className="h-1.5 w-1.5 rounded-full bg-olive-500" aria-hidden /> Online · vede il tuo catalogo
           </p>

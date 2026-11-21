@@ -35,6 +35,16 @@ const DOCS: DocDef[] = [
   { kind: 'rider_haccp',    label: 'Attestato HACCP (se food)',      required: false, hint: 'Solo se consegnerai alimenti.' },
 ];
 
+/** Il messaggio dopo un caricamento riuscito: in italiano, non col nome interno del documento («id_front»). */
+const CARICATO: Record<DocKind, string> = {
+  id_front: 'Documento d’identità (fronte) caricato',
+  id_back: 'Documento d’identità (retro) caricato',
+  selfie: 'Selfie con documento caricato',
+  rider_license: 'Patente caricata',
+  rider_insurance: 'Polizza RC caricata',
+  rider_haccp: 'Attestato HACCP caricato',
+};
+
 export default function RiderOnboardingPage() {
   const router = useRouter();
   const tForms = useTranslations('forms');
@@ -125,7 +135,7 @@ export default function RiderOnboardingPage() {
       const data = await r.json().catch(() => null);
       if (r.status === 413) throw new Error(FILE_TROPPO_GRANDE);
       if (!r.ok || !data) throw new Error(apiErrorMessage(data, 'Upload fallito'));
-      toast.success(`${kind} caricato`);
+      toast.success(CARICATO[kind]);
       setProfile((p) => ({ ...(p ?? {}), [columnForKind(kind)]: data.url }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Errore upload');

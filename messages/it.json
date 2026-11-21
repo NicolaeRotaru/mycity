@@ -80,7 +80,7 @@
     "price": "Prezzo",
     "minPrice": "Prezzo minimo",
     "maxPrice": "Prezzo massimo",
-    "minRating": "Rating minimo",
+    "minRating": "Valutazione minima",
     "ratingAll": "Tutti",
     "freeShipping": "Prodotti da 30 € in su",
     "openNow": "Solo negozi aperti ora",
@@ -111,7 +111,7 @@
       "promotion": "In promozione",
       "inStock": "Disponibili",
       "openNow": "Aperti ora",
-      "minRating": "Rating {rating}+"
+      "minRating": "Valutazione {rating}+"
     },
     "sort": {
       "relevance": "Rilevanza",
