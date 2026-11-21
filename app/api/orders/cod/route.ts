@@ -15,7 +15,7 @@ import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-conse
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
-import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
+import { contaFattoriniOnline, contaVelociInCorso, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -933,6 +933,7 @@ export const POST = withAuthRateLimit(
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
     // fattorino approvato e online. La stessa decisione della cassa (`veloceSiPuo`).
+    // 21/11/2026 (R03-019) — Non basta: a ordini nati la stessa decisione si richiede con le veloci contate.
     if (consegnaVeloce) {
       const veloce = veloceSiPuo({
         adesso: romeNow(),
@@ -1661,6 +1662,34 @@ export const POST = withAuthRateLimit(
 
       createdOrderIds.push(order.id);
       ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
+    }
+
+    /**
+     * 21/11/2026 (R03-019) — LA VELOCE SI RICONTA A ORDINI NATI.
+     *
+     * Il controllo della veloce (sopra) e la scrittura degli ordini non sono un passo solo: due
+     * veloci nello stesso istante con un fattorino solo leggevano tutte e due «c'è posto» e
+     * nascevano tutte e due. Adesso, a ordini scritti e prima di ogni avviso, si contano le veloci
+     * in corso (queste comprese) e si richiede la stessa decisione con quelle degli altri: se non
+     * c'è più posto, questi ordini si annullano come in ogni altra uscita d'errore. Fra due invii
+     * insieme almeno uno vede l'altro, quindi non passano mai tutti e due; se si vedono a vicenda
+     * si fermano tutti e due (nel dubbio la veloce non si promette: il cliente sceglie una fascia).
+     * Quante veloci per fattorino lo dice lib/ordini/consegna-veloce.ts: senza quel tetto il
+     * conteggio non decide, come nel controllo di sopra.
+     */
+    if (consegnaVeloce && createdOrderIds.length > 0) {
+      const inCorso = await contaVelociInCorso(admin);
+      const ancora = veloceSiPuo({
+        adesso: romeNow(),
+        negozi: (sellers ?? []).map((s) => ({ nome: s.store_name ?? 'Il negozio', orari: s.store_hours })),
+        fattoriniOnline: await contaFattoriniOnline(admin),
+        velociInCorso: inCorso === null ? null : Math.max(0, inCorso - createdOrderIds.length),
+      });
+      if (!ancora.possibile) {
+        logger.warn('[cod] veloce fermata a ordini nati: i fattorini sono già impegnati', { userId: user.id, chiave: chiaveTentativo });
+        await rollbackCreatedCodOrders();
+        return esciERilascia(ApiErrors.conflict(ancora.perche));
+      }
     }
 
     // --- 6. Adesso che TUTTI gli ordini esistono, si avvisa. (#159)
