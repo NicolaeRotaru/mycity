@@ -615,6 +615,8 @@ async function spostaIlCarrello(
   let creditoResoCents = 0;
   let sulCreditoCents = 0;
   const scritti: RigaVeloce[] = [];
+  // 21/11/2026 (R02-003) — Le scritture che hanno risposto errore: cosa avevano chiesto, per la rilettura.
+  const scrittureIncerte = new Map<string, { delta: number; dalCredito: number; consegna: number | null }>();
   for (const [i, c] of daSpostare.entries()) {
     const conCredito = sulCreditoConLaCarta.has(c.id);
     const riga = euro === 'tolto-contanti' || conCredito ? conto?.righe.find((r) => r.id === c.id) : undefined;
@@ -655,6 +657,7 @@ async function spostaIlCarrello(
       // 21/11/2026 (R04-008) — Su un ordine dopo il primo non si lancia più qui: si provano anche gli
       // altri, e alla fine si decide chi lo riprende (il giro dopo, o gli amministratori).
       primoErrore ??= `ordine ${c.id}: ${error.message}`;
+      scrittureIncerte.set(c.id, { delta, dalCredito, consegna: riga && delta !== 0 ? riga.deliveryFeeCents : null });
       nonSpostati.push(c);
       continue;
     }
@@ -751,10 +754,29 @@ async function spostaIlCarrello(
   let rimastiIndietro: RigaVeloce[] = [];
   if (nonSpostati.length > 0) {
     const { data: ora, error: errOra } = await admin
-      .from('orders').select('id, delivery_slot, delivery_status').in('id', nonSpostati.map((c) => c.id));
+      .from('orders').select('id, delivery_slot, delivery_status, delivery_fee_cents').in('id', nonSpostati.map((c) => c.id));
     const riletti = !errOra && Array.isArray(ora)
-      ? (ora as Array<{ id: string; delivery_slot: string | null; delivery_status: string | null }>)
+      ? (ora as Array<{ id: string; delivery_slot: string | null; delivery_status: string | null; delivery_fee_cents: number | null }>)
       : [];
+    // 21/11/2026 (R02-003) — Una scrittura che ha risposto errore può essere passata davvero (timeout dopo
+    // il salvataggio): l'ordine riletto nella fascia di questo giro è scritto come gli altri. I suoi negozio
+    // e fattorino lo sanno, conta fra i già confermati, e l'euro entra nel conto solo se la sua consegna è
+    // già scesa all'importo nuovo (se no resta «a mano», come prima). Il credito era già reso prima della
+    // scrittura, con la sua chiave: qui si conta soltanto, una volta.
+    for (const r of riletti) {
+      const t = scrittureIncerte.get(r.id);
+      const c = nonSpostati.find((x) => x.id === r.id);
+      if (!t || !c || r.delivery_slot !== fascia) continue;
+      const scesa = t.consegna === null || Number(r.delivery_fee_cents) === t.consegna;
+      fatto.push(`ordine ${codiceDi(c.id)} già passato alla fascia ${fascia}${scesa && t.delta !== 0 ? ', con l’euro della veloce già tolto dalla sua consegna' : ''}`);
+      scritti.push(c);
+      if (!scesa) continue;
+      deltaScritti.set(c.id, t.delta);
+      if (t.delta !== 0) {
+        contantiScritti.set(c.id, t.delta + t.dalCredito);
+        if (t.dalCredito > 0) sulCreditoCents += t.dalCredito;
+      }
+    }
     rimastiIndietro = nonSpostati
       .map((c) => {
         const r = riletti.find((x) => x.id === c.id);

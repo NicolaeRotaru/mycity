@@ -100,8 +100,10 @@ describe('POST /api/cron/expire-stale-orders', () => {
     ];
     const res = await run();
     expect(await res.json()).toMatchObject({ ok: true, canceled: 1, refunded: 1 });
+    // 21/11/2026 (R02-001) — «Rimborso emesso» non lo manda più refundOrder dentro il giro: parte dopo la
+    // risposta (tests/unit/riparazione-r02-email-rimborso-dopo-la-risposta.test.ts).
     expect(refundOrderMock).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: 'o1', amountCents: 5000, notifyBuyer: true }),
+      expect.objectContaining({ orderId: 'o1', amountCents: 5000, notifyBuyer: false }),
     );
     // Sul percorso carta lo stock lo ripristina refundOrder, non il cron.
     expect(rpcCalls.some((c) => c.name === 'restore_stock_for_order')).toBe(false);

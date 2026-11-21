@@ -8,7 +8,8 @@ import { contantiIncassati } from '@/lib/rimborsi/regole-del-rimborso';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
-import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate } from '@/lib/email/templates';
+import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate, refundIssuedTemplate } from '@/lib/email/templates';
+import { formatPriceFromCents } from '@/lib/format';
 import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
@@ -314,14 +315,17 @@ export async function annullaERimborsa(
       const totaleCent = giro ? giro.totaleCents : Math.round(Number(order.total_price) * 100);
       const giaRimborsato = Number(order.refunded_amount_cents ?? 0);
       const residuoCent = Math.max(0, totaleCent - giaRimborsato);
+      // 21/11/2026 (R02-001) — «Rimborso emesso» non lo manda più `refundOrder` dentro la richiesta:
+      // parte dopo la risposta (`avvisaIlClienteDelRimborso`), con l'importo che è tornato davvero.
       const res = await refundOrder({
         orderId: order.id,
         amountCents: residuoCent,
         reason: opts.reason,
         metadata: opts.metadata,
-        notifyBuyer: true,
+        notifyBuyer: false,
         ...(merceUscita ? { merceNonTorna: true } : {}),
       });
+      await avvisaIlClienteDelRimborso(admin, order, res.importoCents, opts.reason);
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
       // 28/8/2026 — IL CREDITO TORNA ANCHE QUI. Il rimborso sulla carta copre
@@ -502,6 +506,79 @@ function dopoLaRisposta(lavoro: () => Promise<void>): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * 21/11/2026 (R02-001) — «RIMBORSO EMESSO» DOPO LA RISPOSTA, E SE NON PARTE LO SA UNA PERSONA.
+ *
+ * Con la carta l'email dell'annullo è «Rimborso emesso». La mandava `refundOrder` (lib/stripe/payout.ts)
+ * dentro la richiesta: il negozio che rifiuta, il cliente che annulla e il giro degli scaduti (cento
+ * ordini a giro) aspettavano l'invio, fino a circa venti secondi per ordine, e un invio caduto restava
+ * solo nel registro. Ora chi annulla chiede il rimborso con `notifyBuyer: false` e l'email (lo stesso
+ * modello, sulla carta, con l'importo che `refundOrder` dice tornato) parte dopo la risposta con
+ * `after()` di Next; fuori da una richiesta si aspetta come prima. Se l'invio cade, o l'indirizzo del
+ * cliente non si legge per un guasto, gli amministratori lo ricevono nella campanella, una volta per
+ * ordine. Solo l'email: i soldi restano tutti in `refundOrder`. I contanti non passano di qui.
+ */
+export async function avvisaIlClienteDelRimborso(
+  admin: SupabaseClient,
+  ordine: { id: string; user_id: string | null },
+  importoCents: number | null | undefined,
+  motivo: string | null | undefined,
+): Promise<void> {
+  const importo = Number(importoCents ?? 0);
+  if (!Number.isFinite(importo) || importo <= 0) return;
+  const lavoro = async () => {
+    const esito = await spedisciLEmailDelRimborso(admin, ordine, importo, motivo);
+    if (esito !== 'invio-fallito' && esito !== 'indirizzo-non-letto') return;
+    await notifyAdmins(
+      '⚠️ Email del rimborso non partita',
+      `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è annullato e il rimborso di ${formatPriceFromCents(importo)} sulla carta è partito, ` +
+        `ma l'email «Rimborso emesso» al cliente non è partita (${esito === 'indirizzo-non-letto' ? "l'indirizzo del cliente non si è potuto leggere" : 'il motivo è nel registro'}). ` +
+        'Avvisa tu il cliente che il rimborso arriva sulla carta.',
+      '/admin/orders',
+      { unaVoltaPer: `email-rimborso-${ordine.id}` },
+    ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
+  };
+  if (!dopoLaRisposta(lavoro)) await lavoro();
+}
+
+async function spedisciLEmailDelRimborso(
+  admin: SupabaseClient,
+  ordine: { id: string; user_id: string | null },
+  importoCents: number,
+  motivo: string | null | undefined,
+): Promise<'partita' | 'senza-indirizzo' | 'indirizzo-non-letto' | 'invio-fallito'> {
+  if (!ordine.user_id) return 'senza-indirizzo';
+  let email: string | null | undefined;
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(ordine.user_id);
+    if (error) throw new Error(error.message);
+    email = data?.user?.email;
+  } catch (e) {
+    logger.error('[annullo] email del rimborso non spedita: indirizzo non letto', {
+      orderId: ordine.id, message: e instanceof Error ? e.message : String(e),
+    });
+    return 'indirizzo-non-letto';
+  }
+  if (!email) {
+    logger.warn('[annullo] email del rimborso non spedita: il cliente non ha un indirizzo', { orderId: ordine.id });
+    return 'senza-indirizzo';
+  }
+  try {
+    const t = refundIssuedTemplate({ orderId: ordine.id, amount: importoCents / 100, reason: motivo ?? null, modo: 'carta' });
+    const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text });
+    if (!res.ok) {
+      logger.error('[annullo] email del rimborso NON partita', { orderId: ordine.id });
+      return 'invio-fallito';
+    }
+    return 'partita';
+  } catch (e) {
+    logger.error('[annullo] email del rimborso NON partita', {
+      orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
+    });
+    return 'invio-fallito';
   }
 }
 
