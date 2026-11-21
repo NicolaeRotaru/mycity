@@ -1,13 +1,13 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-21 05:35",
+  "aggiornato": "2026-11-21 05:58",
   "finita": true,
-  "testa": "170b6bc8100b13d362d4496d43322af23c2166a4",
+  "testa": "91a1bef110eae5d2def906328089b8d3c9424be3",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "170b6bc8100b13d362d4496d43322af23c2166a4",
-    "nota": "typecheck pulito; lint 0 errori (97 avvisi); vitest 1896 file passati e 1 saltato, 11770 prove passate e 1 saltata (la base aveva 1890 file e 11722 prove)."
+    "testa": "91a1bef110eae5d2def906328089b8d3c9424be3",
+    "nota": "typecheck pulito; lint 0 errori (97 avvisi); vitest 1897 file passati e 1 saltato, 11770 prove passate e 1 saltata (la base aveva 1890 file e 11722 prove)."
   },
   "voci": [
     {
@@ -131,30 +131,31 @@
       "id": "R02-005",
       "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
       "esito": "riparato",
-      "commit": "b3dde4b7af8f565b6ba8aae43d9a2d4a340b5a75",
+      "commit": "91a1bef110eae5d2def906328089b8d3c9424be3",
       "file_toccati": [
         "components/seller/site/SectionConfigForm.tsx",
-        "tests/unit/riparazione-r02-testo-vetrina.test.ts"
+        "tests/unit/riparazione-r02-testo-vetrina-entita.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r02-testo-vetrina.test.ts"
+        "tests/unit/riparazione-r02-testo-vetrina-entita.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-testo-vetrina.test.ts --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-testo-vetrina-entita.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 06bfab08^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r02-testo-vetrina.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 06bfab08^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r02-testo-vetrina-entita.test.ts --json"
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "aCapoInHtml codifica & < > prima degli a-capo, così il formato salvato è sempre codificato e htmlInACapo decodifica una volta sola; con il sanitizeRichText vero tre giri salva-rileggi tornano identici anche su «a &amp; b» e «&lt;b&gt;», senza entità doppie. lib/sanitize-html.ts non serve toccarlo. Giro di correzione: htmlInACapo decodifica in un solo passaggio anche &nbsp; (U+00A0), &quot;, &apos;/&#39; e le entità numeriche, così uno spazio non separabile incollato da Word non diventa «&amp;nbsp;» e «&nbsp;» scritto a lettere torna letterale.",
-      "prova_esistente_modificata": {
-        "file": "tests/unit/riparazione-r02-testo-vetrina.test.ts",
-        "perche": "prova di R02 che importa SectionConfigForm, estesa coi casi letterali"
-      },
       "commit_iniziale": "06bfab080aca0a268398ce26b322585465ab7368",
-      "verificato_da": "qa-sonnet smentB: rimessa 0, giri salva-rileggi stabili su «a & b», «a &amp; b», «&quot; &#39;», «x < y & z», testi vecchi riletti giusti; ha trovato il caso &nbsp;, corretto in b3dde4b7. Io: rimessa sull'intera voce (base 06bfab08^) uscita 0 e 91 file di prove r02 verdi."
+      "verificato_da": "qa-sonnet smentB: rimessa 0, giri salva-rileggi stabili su «a & b», «a &amp; b», «&quot; &#39;», «x < y & z», testi vecchi riletti giusti; ha trovato il caso &nbsp;, corretto in b3dde4b7. Io: rimessa sull'intera voce (base 06bfab08^) uscita 0 e 91 file di prove r02 verdi.",
+      "commit_correzione": [
+        "b3dde4b7af8f565b6ba8aae43d9a2d4a340b5a75",
+        "91a1bef110eae5d2def906328089b8d3c9424be3"
+      ],
+      "nota": "tests/unit/riparazione-r02-testo-vetrina.test.ts (nata nel giro 4) importa anche lib/sanitize-html.ts, che è di un'altra sessione dell'onda: per la guardia è comune. Su scelta della regia è tornata com'era alla base (91a1bef1) e i casi nuovi stanno nella prova nuova riparazione-r02-testo-vetrina-entita.test.ts; la prova di prima resta verde con la correzione."
     },
     {
       "id": "R02-003",
@@ -295,8 +296,8 @@
   "conto": {
     "agenti": 6,
     "subagenti": 6,
-    "costo_usd": 10.73,
+    "costo_usd": 11.86,
     "nota": "tutti sonnet: lotto A riparatore + smentitore, lotto B riparatore + smentitore, giro di correzione del lotto B. Tetto 6 raggiunto: la verifica del giro di correzione l'ho fatta io (prove r02 91 file verdi, rimesse sull'intera voce di 005, 007, 006 uscita 0). Costo da usage.cost_usd di get_session, letto prima del commit del referto."
   },
-  "costo_usd": 10.73
+  "costo_usd": 11.86
 }
