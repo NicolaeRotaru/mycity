@@ -16,10 +16,10 @@ import {
   corpoDellEmail,
   TENTATIVI_EMAIL_MASSIMI,
   type ClienteAvvisi,
-  type LetturaAvvisi,
   type PostaAvvisi,
   type RegistroAvvisi,
 } from '@/lib/privacy/avvisi-a-chi-aspetta';
+import { fintoGiroNotturno, type Guasto } from './aiuti/finto-giro-notturno';
 import { verdettoDelGiro, type TentativoCancellazione } from '@/lib/cron-cancellazioni';
 
 const ADESSO = new Date('2026-10-27T04:00:00.000Z').getTime();
@@ -37,36 +37,20 @@ const dovuti = (...t: TentativoCancellazione[]) => verdettoDelGiro(t, ADESSO, 'p
 const registro = (): RegistroAvvisi => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
 type Riga = Record<string, unknown>;
+/** Il finto unico del giro notturno (aiuti/finto-giro-notturno): chiavi uniche e guasti a richiesta, non una copia scritta qui. */
 function database(o: { pannelloRottoPer?: string; turnoRotto?: (riga: Riga) => boolean } = {}) {
-  const tabelle: Record<string, Riga[]> = {};
-  const righe = (t: string) => (tabelle[t] ??= []);
-  const cliente: ClienteAvvisi = {
-    from: (t) => ({
-      select: () => {
-        const filtri: Array<[string, unknown]> = [];
-        const lettura: LetturaAvvisi = {
-          eq: (c, v) => { filtri.push([c, v]); return lettura; },
-          then: (ok, ko) =>
-            Promise.resolve({ data: righe(t).filter((r) => filtri.every(([c, v]) => r[c] === v)), error: null }).then(ok, ko),
-        };
-        return lettura;
-      },
-      insert: async (nuove) => {
-        if (t === 'notifications' && nuove.some((n) => n.user_id === o.pannelloRottoPer)) {
-          return { data: null, error: { message: 'permission denied for table notifications' } };
-        }
-        if (t === 'audit_logs' && o.turnoRotto && nuove.some(o.turnoRotto)) {
-          return { data: null, error: { message: 'connessione persa' } };
-        }
-        if (nuove.some((n) => righe(t).some((r) => r.id === n.id))) {
-          return { data: null, error: { message: `duplicate key value violates unique constraint "${t}_pkey"` } };
-        }
-        righe(t).push(...nuove);
-        return { data: nuove, error: null };
-      },
-    }),
-  };
-  return { cliente, righe };
+  const guasti: Guasto[] = [];
+  if (o.pannelloRottoPer !== undefined) {
+    guasti.push({
+      tabella: 'notifications', azione: 'insert', messaggio: 'permission denied for table notifications',
+      seRiga: (n) => n.user_id === o.pannelloRottoPer,
+    });
+  }
+  if (o.turnoRotto) {
+    guasti.push({ tabella: 'audit_logs', azione: 'insert', messaggio: 'connessione persa', seRiga: o.turnoRotto });
+  }
+  const finto = fintoGiroNotturno({ chiaviUniche: true, guasti });
+  return { cliente: finto.admin as unknown as ClienteAvvisi, righe: finto.righe };
 }
 
 function posta(risponde = true) {
