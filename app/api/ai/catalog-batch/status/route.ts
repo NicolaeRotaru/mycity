@@ -77,6 +77,13 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
 const INVIO_SCADUTO_MS = 15 * 60_000;
 /** Un invio senza risposta (forse partito) resta aperto quanto dura al massimo un lotto. */
 const INVIO_INCERTO_SCADUTO_MS = 24 * 60 * 60_000;
+/**
+ * 21/11/2026 (R02-005) — Oltre questo tempo un invio senza risposta non e' piu'
+ * «in invio»: la rotta di avvio vive al massimo 120 secondi (vercel.json) e
+ * nessuno aggancera' piu' il lotto. Lo stesso limite con cui cancel/route.ts
+ * lo lascia scartare.
+ */
+const INVIO_INCERTO_SCARTABILE_DOPO_MS = 3 * 60_000;
 
 const COLONNE = 'id, seller_id, operation, status, batch_id, target_lang, total, results, created_at, error';
 
@@ -128,7 +135,11 @@ async function rispondiPerLavoro(
       logger.error('catalog-batch status: lavoro in invio scaduto, chiuso come fallito', { jobId: job.id });
       return NextResponse.json(serialize({ ...job, status: 'failed', error: motivo }));
     }
-    return NextResponse.json(serialize(job));
+    // R02-005 — La riga incerta tornava come un «in invio» qualunque, e la pagina
+    // mostrava la rotella «tra poco lo vedi partire» per 24 ore. Passati i 3
+    // minuti la pagina sa che l'invio e' rimasto senza risposta (`incerto`).
+    const daVerificare = incerto && Number.isFinite(nato) && Date.now() - nato > INVIO_INCERTO_SCARTABILE_DOPO_MS;
+    return NextResponse.json(serialize(job, daVerificare));
   }
 
   // Già pronto/applicato/fallito: ritorna lo stato salvato. Un lavoro «in
@@ -237,7 +248,7 @@ async function chiudiSeScaduto(
   return NextResponse.json(serialize({ ...job, status: 'failed', error: motivo }));
 }
 
-function serialize(job: JobRow) {
+function serialize(job: JobRow, incerto = false) {
   const results = Array.isArray(job.results) ? job.results : [];
   const changed = results.filter((r) => (r.patch && Object.keys(r.patch).length > 0) || r.flagged).length;
   return {
@@ -249,5 +260,6 @@ function serialize(job: JobRow) {
     results,
     counts: { total: results.length, withChanges: changed },
     error: job.error ?? null,
+    incerto,
   };
 }

@@ -55,6 +55,8 @@ type Job = {
   status: StatoLavoroCatalogo;
   total: number;
   error?: string | null;
+  /** R02-005 — In invio, ma rimasto senza risposta da qualche minuto (lo dice /status). */
+  incerto?: boolean;
   targetLang: string | null;
   results: JobResult[];
   counts: { total: number; withChanges: number };
@@ -518,10 +520,22 @@ function CatalogTab() {
       )}
 
       {/* Stato job */}
-      {job && lavoroInCorso(job.status) && (
+      {job && lavoroInCorso(job.status) && !job.incerto && (
         <div className="flex items-center gap-3 rounded-xl border border-cream-200 bg-cream-50 p-4 text-sm text-ink-600">
           <Loader2 size={18} className="animate-spin" aria-hidden />
           <span>{testoStatoLavoro(job)}</span>
+        </div>
+      )}
+
+      {/* 21/11/2026 (R02-005) — Un invio rimasto senza risposta non e' «tra poco lo
+          vedi partire»: la rotella restava per 24 ore. Niente rotella, si dice com'e'. */}
+      {job && job.status === 'submitting' && job.incerto && (
+        <div role="status" className="flex items-start gap-3 rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-ink-700">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-secondary-600" aria-hidden />
+          <span>
+            L&apos;invio del lavoro su {job.total} prodotti non ha avuto risposta: potrebbe essere partito.
+            Se parte lo vedi qui; se resta così, si chiude da solo entro 24 ore.
+          </span>
         </div>
       )}
 
