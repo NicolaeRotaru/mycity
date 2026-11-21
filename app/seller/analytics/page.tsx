@@ -386,7 +386,7 @@ export default function SellerAnalyticsPage() {
 
       {/* Revenue grande */}
       <div className="mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-primary-700 to-secondary-700 p-6 text-white shadow-warm-lg">
-        <p className="text-xs uppercase tracking-wider opacity-80">Il tuo netto (30 giorni)</p>
+        <p className="text-xs uppercase tracking-label opacity-80">Il tuo netto (30 giorni)</p>
         <p className="mt-2 font-serif text-4xl font-extrabold sm:text-5xl">{formatPrice(analytics.revenue30)}</p>
         <p className="mt-2 text-sm opacity-90">Ultimi 7 giorni: <strong>{formatPrice(analytics.revenue7)}</strong></p>
       </div>
@@ -534,7 +534,7 @@ function KpiCard({ icon: Icon, label, value, delta, color }: { icon: LucideIcon;
       <div className={`mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl ${bg}`}>
         <Icon size={20} strokeWidth={2.2} aria-hidden />
       </div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-label text-ink-500">{label}</p>
       <p className="mt-1 font-serif text-2xl font-bold text-ink-900">{value}</p>
       {delta && <p className="mt-1 text-xs text-ink-500">{delta}</p>}
     </Card>

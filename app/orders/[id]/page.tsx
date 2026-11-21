@@ -621,7 +621,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-600 to-olive-700 p-6 text-white shadow-warm-lg">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-olive-100">{ritiroInNegozio ? 'Codice da mostrare in negozio' : 'Codice consegna'}</p>
+              <p className="text-xs font-semibold uppercase tracking-label text-olive-100">{ritiroInNegozio ? 'Codice da mostrare in negozio' : 'Codice consegna'}</p>
               {/* Il design system ammette due caratteri, Inter e Fraunces: `font-mono` ne portava
                   dentro un terzo, mai dichiarato, proprio sull'elemento piu' grande della pagina.
                   `tabular-nums` da' alle cifre la stessa larghezza — che e' il motivo per cui qui

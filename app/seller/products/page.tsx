@@ -435,7 +435,7 @@ export default function SellerProductsPage() {
                   {(['Prodotto', 'Prezzo', 'Stock', 'Venduti da sempre', 'Stato', ''] as const).map((h, i) => (
                     <th
                       key={h || i}
-                      className={`px-4 py-3 text-[11px] font-bold uppercase tracking-[0.03em] text-ink-500 ${
+                      className={`px-4 py-3 text-[11px] font-bold uppercase tracking-label text-ink-500 ${
                         i > 0 && i < 5 ? 'text-right' : 'text-left'
                       }`}
                     >

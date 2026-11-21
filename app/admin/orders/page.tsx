@@ -244,7 +244,7 @@ export default function AdminOrdersPage() {
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[800px]">
-          <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
+          <thead className="bg-cream-50 border-b text-xs uppercase tracking-label text-ink-500">
             <tr>
               <th className="p-3 text-left">Ordine</th>
               <th className="p-3 text-left">Data</th>
