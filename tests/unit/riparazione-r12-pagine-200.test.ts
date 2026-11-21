@@ -43,3 +43,17 @@ describe('R12-002 · /stores, i filtri a 280 px col testo al 200%', () => {
     expect(sel).toContain('max-w-full');
   });
 });
+
+describe('R12-004 · /lavora-con-noi, le righe delle posizioni a 280 px col testo al 200%', () => {
+  const src = leggi('app/lavora-con-noi/page.tsx');
+  it('i margini della pagina si stringono sotto i 300 px, così il titolo di una riga non va una lettera per riga', () => {
+    const cornice = tagPrima(src, '{/* Posizioni aperte */}', 'div');
+    expect(cornice).toContain('px-6');
+    expect(cornice).toContain('max-[300px]:px-3');
+  });
+  it('«Candidati» ha meno margine interno e la freccia può andare sotto invece di spezzare la parola', () => {
+    const link = tagPrima(src, 'Candidati', 'a');
+    expect(link).toContain('max-[300px]:px-3');
+    expect(link).toContain('max-[300px]:flex-wrap');
+  });
+});

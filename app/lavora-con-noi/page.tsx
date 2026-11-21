@@ -176,7 +176,7 @@ export default function LavoraConNoiPage() {
         </div>
       </section>
 
-      <div className="container mx-auto px-6 max-w-5xl">
+      <div className="container mx-auto px-6 max-[300px]:px-3 max-w-5xl">
         {/* Posizioni aperte */}
         <section id="posizioni" className="py-14 scroll-mt-24 md:scroll-mt-0">
           <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-1.5 break-words hyphens-auto">
@@ -205,7 +205,7 @@ export default function LavoraConNoiPage() {
                 </span>
                 <a
                   href={job.mailto}
-                  className="inline-flex max-w-full items-center gap-1.5 border border-cream-300 text-primary-700 font-bold text-sm px-4 py-2.5 rounded-full hover:bg-cream-50 transition-colors [overflow-wrap:anywhere]"
+                  className="inline-flex max-w-full items-center gap-1.5 border border-cream-300 text-primary-700 font-bold text-sm px-4 max-[300px]:px-3 max-[300px]:flex-wrap py-2.5 rounded-full hover:bg-cream-50 transition-colors [overflow-wrap:anywhere]"
                 >
                   Candidati <ArrowRight size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />
                 </a>
