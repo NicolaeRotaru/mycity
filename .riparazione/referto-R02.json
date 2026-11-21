@@ -320,10 +320,8 @@
  ],
  "conto": {
   "agenti": 4,
-  "nota": "lotto A: 1 riparatore (ripreso una volta per salvare il JSON) + 1 revisore; lotto B: 1 riparatore, senza revisore (tetto di spesa, d'accordo con la regia: lo guarda il collaudo). Nessun giro di correzione."
+  "nota": "lotto A: 1 riparatore (ripreso una volta per salvare il JSON) + 1 revisore; lotto B: 1 riparatore, senza revisore (tetto di spesa, d'accordo con la regia: lo guarda il collaudo). Nessun giro di correzione. Costo 29,92 $ letto dalla regia alle 06:07.",
+  "subagenti": 4
  },
- "costo_usd": {
-  "valore": 21.48,
-  "nota": "ultima lettura della regia alle 05:42 (indietro di qualche minuto); il conto finale lo legge la regia"
- }
+ "costo_usd": 29.92
 }
