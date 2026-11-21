@@ -1,4 +1,5 @@
 import { captureError } from '@/lib/analytics/sentry';
+import { testoSenzaEmail } from '@/lib/analytics/filmato-senza-dati-personali';
 
 /**
  * Logger wrapper — strutturato, integrato con Sentry.
@@ -36,9 +37,83 @@ type LogContext = Record<string, unknown> | unknown;
 const PII_KEYS =
   /(email|password|passwd|\bpass\b|token|authorization|\bauth\b|cookie|phone|tel|iban|card|cvv|secret|api_?key|ssn|fiscal|codice_?fiscale|\bcf\b|vat|partita_?iva|pec|address|indirizzo|name|nome|cognome|surname|birth|nascita)/i;
 
-function redact(value: unknown, depth = 0): unknown {
-  if (depth > 4 || value == null) return value;
-  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+/**
+ * 21/11/2026 — OSCURA ANCHE IL TESTO, NON SOLO LE CHIAVI.
+ *
+ * Il messaggio e ogni valore stringa del contesto, a qualunque profondita',
+ * passano per le stesse regole: email, JWT, IBAN e chiavi sensibili fra apici
+ * dentro un testo. Ogni testo si guarda fino a TAGLIO_PER_TESTO caratteri, e in
+ * una chiamata al massimo TETTO_PER_CHIAMATA in tutto: il resto si tronca con un
+ * segno, non passa in chiaro. Niente lookbehind: il logger gira anche nel browser.
+ */
+const OSCURATO = '[redacted]';
+const TRONCATO = '[troncato]';
+const TAGLIO_PER_TESTO = 8_000;
+const TETTO_PER_CHIAMATA = 100_000;
+
+type Conto = { resto: number };
+const nuovoConto = (): Conto => ({ resto: TETTO_PER_CHIAMATA });
+
+/** Un pezzo che il taglio non deve lasciare a meta' (un'email, un JWT). */
+const UN_CARATTERE_DI_UN_PEZZO = /[\w.+@-]/;
+/** Un JWT: tre pezzi base64url, il primo comincia con `eyJ`. */
+const UN_JWT = /(^|[^\w-])eyJ[\w-]{5,}\.[\w-]*(?:\.[\w-]*)?/g;
+/** `"password":"x"`, `'token': 'x'`, `"cvv": 123`: la chiave si confronta con PII_KEYS. */
+const UNA_CHIAVE_FRA_APICI =
+  /(["'])([\w$.-]{1,64})\1(\s{0,10}:\s{0,10})(?:(["'])(?:(?!\4)[^\\\n]|\\.)*(?:\4|$)|[^\s,;{}[\]"']{1,200})/g;
+/** Un IBAN, anche minuscolo o a gruppi di quattro: lo conferma il codice di controllo. */
+const UN_IBAN = /(^|[^A-Za-z0-9])([A-Za-z]{2}\d{2}(?: ?[A-Za-z0-9]){11,30})(?![A-Za-z0-9])/g;
+
+function ibanValido(testo: string): boolean {
+  const c = testo.replace(/ /g, '').toUpperCase();
+  if (c.length < 15 || c.length > 34) return false;
+  let resto = 0;
+  for (const ch of c.slice(4) + c.slice(0, 4)) {
+    const v = parseInt(ch, 36);
+    resto = (v < 10 ? resto * 10 + v : resto * 100 + v) % 97;
+  }
+  return resto === 1;
+}
+
+/** Nasconde l'IBAN valido piu' lungo in testa al pezzo, finito a fine parola. */
+function senzaIban(pezzo: string): string {
+  for (let fine = pezzo.length; fine >= 15; fine = pezzo.lastIndexOf(' ', fine - 1)) {
+    if (ibanValido(pezzo.slice(0, fine))) return OSCURATO + pezzo.slice(fine);
+  }
+  return pezzo;
+}
+
+function testoPulito(testo: string, conto: Conto): string {
+  if (!testo) return testo;
+  if (conto.resto <= 0) return TRONCATO;
+  const massimo = Math.min(TAGLIO_PER_TESTO, conto.resto);
+  let t = testo;
+  let coda = '';
+  if (testo.length > massimo) {
+    let fine = massimo;
+    if (UN_CARATTERE_DI_UN_PEZZO.test(testo[fine])) {
+      while (fine > 0 && UN_CARATTERE_DI_UN_PEZZO.test(testo[fine - 1])) fine--;
+    }
+    t = testo.slice(0, fine);
+    coda = `…${TRONCATO}`;
+  }
+  conto.resto -= Math.min(testo.length, massimo);
+  t = t
+    .replace(UNA_CHIAVE_FRA_APICI, (intero: string, apice: string, chiave: string, inMezzo: string, apiceDelValore?: string) =>
+      PII_KEYS.test(chiave)
+        ? `${apice}${chiave}${apice}${inMezzo}${apiceDelValore ? `${apiceDelValore}${OSCURATO}${apiceDelValore}` : OSCURATO}`
+        : intero)
+    .replace(UN_JWT, (_: string, prima: string) => `${prima}${OSCURATO}`);
+  t = testoSenzaEmail(t, OSCURATO).replace(UN_IBAN, (_: string, prima: string, pezzo: string) => `${prima}${senzaIban(pezzo)}`);
+  return t + coda;
+}
+
+function redact(value: unknown, depth: number, conto: Conto): unknown {
+  if (value == null) return value;
+  if (typeof value === 'string') return testoPulito(value, conto);
+  // Oltre la profondita' un oggetto non passa intero: si tronca con un segno.
+  if (depth > 4) return typeof value === 'object' ? TRONCATO : value;
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1, conto));
   // #232 — Un Error va trattato per quello che è, PRIMA del ramo «oggetto».
   // Un Error non ha proprietà enumerabili: Object.entries() su di lui torna
   // una lista vuota, quindi finiva nel log come `{}`. In settantuno chiamate
@@ -46,25 +121,54 @@ function redact(value: unknown, depth = 0): unknown {
   // restava la frase («rimborso fallito») e spariva il motivo. Chi apriva il
   // log dopo un rimborso fallito leggeva: rimborso fallito, {}.
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, stack: value.stack };
+    return {
+      name: value.name,
+      message: testoPulito(value.message, conto),
+      stack: typeof value.stack === 'string' ? testoPulito(value.stack, conto) : value.stack,
+    };
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = PII_KEYS.test(k) ? '[redacted]' : redact(v, depth + 1);
+      out[k] = PII_KEYS.test(k) ? '[redacted]' : redact(v, depth + 1, conto);
     }
     return out;
   }
   return value;
 }
 
-function toCtx(ctx: unknown): Record<string, unknown> | undefined {
+function toCtx(ctx: unknown, conto: Conto): Record<string, unknown> | undefined {
   if (ctx === undefined || ctx === null) return undefined;
   let obj: Record<string, unknown>;
   if (typeof ctx === 'string') obj = { detail: ctx };
   else if (typeof ctx === 'object') obj = ctx as Record<string, unknown>;
   else obj = { value: ctx };
-  return redact(obj) as Record<string, unknown>;
+  return redact(obj, 0, conto) as Record<string, unknown>;
+}
+
+/**
+ * L'errore che va a Sentry: messaggio, pila e causa passano per le stesse regole.
+ * Se non c'e' niente da oscurare parte l'errore com'e'.
+ */
+function erroreSenzaDati(err: unknown, conto: Conto, giro = 0): unknown {
+  if (typeof err === 'string') return testoPulito(err, conto);
+  if (!(err instanceof Error)) return err !== null && typeof err === 'object' ? redact(err, 0, conto) : err;
+  const messaggio = testoPulito(err.message, conto);
+  const pila = typeof err.stack === 'string' ? testoPulito(err.stack, conto) : err.stack;
+  const haCausa = 'cause' in err;
+  const causa = haCausa ? (giro < 3 ? erroreSenzaDati(err.cause, conto, giro + 1) : TRONCATO) : undefined;
+  if (messaggio === err.message && pila === err.stack && causa === err.cause) return err;
+  const copia = new Error(messaggio);
+  try {
+    Object.setPrototypeOf(copia, Object.getPrototypeOf(err));
+    const proprio = (valore: unknown) => ({ value: valore, writable: true, configurable: true });
+    Object.defineProperty(copia, 'name', proprio(err.name));
+    Object.defineProperty(copia, 'stack', proprio(pila));
+    if (haCausa) Object.defineProperty(copia, 'cause', proprio(causa));
+  } catch {
+    // Un errore dalla forma strana parte col solo messaggio oscurato: il logger non lancia.
+  }
+  return copia;
 }
 
 /**
@@ -149,9 +253,18 @@ function contaErroreDelSito(adesso: number = Date.now()): Promise<void> {
   }
 }
 
-// Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
+// Emette una riga di log strutturata (JSON) con messaggio e contesto redatti (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
-  return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
+  const conto = nuovoConto();
+  return lineaPulita(level, messaggioPulito(msg, conto), toCtx(ctx, conto));
+}
+
+function lineaPulita(level: string, msg: string, ctx?: Record<string, unknown>): string {
+  return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(ctx ?? {}) });
+}
+
+function messaggioPulito(msg: string, conto: Conto): string {
+  return typeof msg === 'string' ? testoPulito(msg, conto) : msg;
 }
 
 /**
@@ -186,8 +299,11 @@ export const logger = {
 
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
-    console.warn(line('warn', msg, ctx));
-    if (!eServer) void captureClientWarning(msg, toCtx(ctx));
+    const conto = nuovoConto();
+    const m = messaggioPulito(msg, conto);
+    const c = toCtx(ctx, conto);
+    console.warn(lineaPulita('warn', m, c));
+    if (!eServer) void captureClientWarning(m, c);
   },
 
   error: (err: unknown, ctx?: LogContext) => {
@@ -204,18 +320,20 @@ export const logger = {
       errore = ctx;
       contesto = { messaggio: err };
     }
+    const conto = nuovoConto();
+    const pulito = erroreSenzaDati(errore, conto);
+    const c = toCtx(contesto, conto);
     if (eServer || process.env.NODE_ENV !== 'production') {
-      console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
+      console.error(lineaPulita('error', pulito instanceof Error ? pulito.message : String(pulito), c));
     }
-    const c = toCtx(contesto);
     if (typeof window === 'undefined') {
       // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
-      void captureServerError(errore, c);
+      void captureServerError(pulito, c);
       // R01-005 — E si conta, anche col registratore spento: il sorvegliante lo dice (vedi contaErroreDelSito).
       void contaErroreDelSito();
     } else {
       // Client: wrapper lazy esistente (init Sentry browser al primo errore).
-      void captureError(errore, c);
+      void captureError(pulito, c);
     }
   },
 };
