@@ -50,6 +50,34 @@ export const runtime = 'nodejs';
 /** Lo stesso tetto che il copilot usa per proporre (copilot/route.ts). */
 const MAX_CHANGES = 200;
 
+/** Quante chiamate al filtro di conformita' sono in volo insieme (come in catalog-batch/apply). */
+const FILTRI_INSIEME = 5;
+
+/**
+ * Come Promise.allSettled, ma al massimo `quanti` lavori in volo alla volta: i
+ * risultati restano nello stesso ordine delle voci.
+ */
+async function conTetto<T, R>(
+  voci: T[],
+  quanti: number,
+  lavoro: (v: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const esiti: PromiseSettledResult<R>[] = new Array(voci.length);
+  let prossima = 0;
+  const operaio = async () => {
+    while (prossima < voci.length) {
+      const i = prossima++;
+      try {
+        esiti[i] = { status: 'fulfilled', value: await lavoro(voci[i]) };
+      } catch (reason) {
+        esiti[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(quanti, voci.length) }, operaio));
+  return esiti;
+}
+
 type Change = { productId?: string; patch?: AiProductPatch };
 type BulkBody = { changes?: Change[] };
 /**
@@ -189,16 +217,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let erroreDelFiltro: unknown = null;
   const bloccati = new Map<string, string>();
   if (daFiltrare.length > 0) {
-    const verdetti = await Promise.allSettled(
-      daFiltrare.map((r) =>
-        classifyProductPolicy(
-          {
-            name: typeof r.update.name === 'string' ? r.update.name : (r.row.name ?? ''),
-            description:
-              typeof r.update.description === 'string' ? r.update.description : (r.row.description ?? ''),
-          },
-          'catalog-apply-bulk-policy',
-        ),
+    const verdetti = await conTetto(daFiltrare, FILTRI_INSIEME, (r) =>
+      classifyProductPolicy(
+        {
+          name: typeof r.update.name === 'string' ? r.update.name : (r.row.name ?? ''),
+          description:
+            typeof r.update.description === 'string' ? r.update.description : (r.row.description ?? ''),
+        },
+        'catalog-apply-bulk-policy',
       ),
     );
     daFiltrare.forEach((r, i) => {
