@@ -529,13 +529,21 @@ function CatalogTab() {
 
       {/* 21/11/2026 (R02-005) — Un invio rimasto senza risposta non e' «tra poco lo
           vedi partire»: la rotella restava per 24 ore. Niente rotella, si dice com'e'. */}
+      {/* 21/11/2026 (R02-007) — E si puo' scartare (cancel/route.ts): prima
+          «Scarta» c'era solo per un lavoro pronto, e il negozio restava fermo. */}
       {job && job.status === 'submitting' && job.incerto && (
-        <div role="status" className="flex items-start gap-3 rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-ink-700">
-          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-secondary-600" aria-hidden />
-          <span>
-            L&apos;invio del lavoro su {job.total} prodotti non ha avuto risposta: potrebbe essere partito.
-            Se parte lo vedi qui; se resta così, si chiude da solo entro 24 ore.
-          </span>
+        <div role="status" className="space-y-3 rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-ink-700">
+          <p className="flex items-start gap-3">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-secondary-600" aria-hidden />
+            <span>
+              L&apos;invio del lavoro su {job.total} prodotti non ha avuto risposta: potrebbe essere partito.
+              Se parte lo vedi qui; se resta così, si chiude da solo entro 24 ore. Se non vuoi aspettare,
+              scartalo e avviane un altro: se era partito, i suoi risultati si recuperano solo con l&apos;assistenza.
+            </span>
+          </p>
+          <Button variant="secondary" loading={scartando} onClick={() => void scarta()}>
+            Scarta
+          </Button>
         </div>
       )}
 
