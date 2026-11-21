@@ -211,6 +211,10 @@ const Footer = () => {
       <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${COLONNE_DEL_PIEDE_MD} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-full md:col-span-1">
+          {/* R12-010 — I titoli delle colonne sono h3: su una pagina il cui contenuto non ha un h2 i
+              lettori di schermo passavano dal titolo principale al terzo livello. Un h2 nascosto li
+              precede, e l'aspetto non cambia (un h2 prenderebbe le regole di elemento di globals.css). */}
+          <h2 className="sr-only">Informazioni sul sito</h2>
           {/*
             6/9/2026 — IL MARCHIO ERA DISEGNATO IN QUATTRO MODI DIVERSI.
             Il marchio vero (docs/mockup/assets) è in Fraunces peso 800 con la
