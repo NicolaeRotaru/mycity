@@ -1,8 +1,8 @@
 {
  "sessione": "R01",
- "aggiornato": "2026-11-21 04:30",
+ "aggiornato": "2026-11-21 04:50",
  "finita": false,
- "testa": "62896089ea25fee61441b50443b0b0b75d657355",
+ "testa": "2befc63942ff1cde0c9232cecde4c589af669144",
  "verifica": {
   "comando": "npm run verify",
   "esito": "",
@@ -15,21 +15,24 @@
    "chiave": "api-backend|la chiusura della rivendicazione del benvenuto non è limitata al tentativo in corso",
    "esito": "gia_riparato_prima",
    "prova": "Già sulla base 0f98fb8a col commit 155d11a4 (app/api/orders/cod/route.ts: la rotta legge l'id della riga di coupon_redemptions subito dopo la rivendicazione e al rilascio chiude solo quella riga per id). Prova: npx vitest run tests/unit/riparazione-r03-benvenuto-del-tentativo.test.ts --reporter=dot → verde sulla base (2/2). Rossa senza la correzione: prova-rimessa.mjs --repo . --base 155d11a4^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r03-benvenuto-del-tentativo.test.ts → uscita 0 (collaudo K02 del giro 4: rossa 1 fallita, «chiusa la rivendicazione dell'altra scheda»).",
-   "nota": "Giudicata «regge» dal collaudo K02 del giro 4 con le due lenti; nessun codice toccato in questo giro."
+   "nota": "Giudicata «regge» dal collaudo K02 del giro 4 con le due lenti; nessun codice toccato in questo giro.",
+   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): prova verde; le 27 righe di 155d11a4 sono tutte ancora in app/api/orders/cod/route.ts. Regge."
   },
   {
    "id": "R01-005",
    "chiave": "api-backend|con la carta, se la cassa cade dopo la rivendicazione del benvenuto, il codice resta bloccato fino a 2 minuti",
    "esito": "gia_riparato_prima",
    "prova": "Già sulla base 0f98fb8a col commit 8842b08b (app/api/stripe/checkout/route.ts: subito dopo la rivendicazione la rotta rilegge l'id della riga in try/catch e, dopo un release_coupon riuscito, rilasciaCoupon chiude quella riga; tutte le uscite dopo l'aggancio passano da lì). Prova: npx vitest run tests/unit/riparazione-r03-benvenuto-carta-cassa-caduta.test.ts --reporter=dot → verde sulla base (2/2). Rossa senza la correzione: prova-rimessa.mjs --repo . --base 8842b08b^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r03-benvenuto-carta-cassa-caduta.test.ts → uscita 0 (collaudo K02: rossa, «rivendicazione rimasta aperta dopo Stripe caduto»).",
-   "nota": "Giudicata «regge» dal collaudo K02 del giro 4 con le due lenti; nessun codice toccato in questo giro."
+   "nota": "Giudicata «regge» dal collaudo K02 del giro 4 con le due lenti; nessun codice toccato in questo giro.",
+   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): prova verde; le 38 righe di 8842b08b sono tutte ancora in app/api/stripe/checkout/route.ts, non toccato. Regge."
   },
   {
    "id": "R01-007",
    "chiave": "api-backend|all'assistenza la stessa chiave con un testo diverso fa perdere il secondo testo in silenzio",
    "esito": "gia_riparato_prima",
    "prova": "Già sulla base 0f98fb8a col commit 82d3d4c4 (app/api/support/conversation/route.ts: con l'id già usato, 23505, la rotta rilegge il messaggio salvato: stesso testo 200 giaRicevuto, testo diverso 409, rilettura caduta 503). Prova: npx vitest run tests/unit/riparazione-r03-assistenza-stessa-chiave.test.ts --reporter=dot → verde sulla base (3/3). Rossa senza la correzione: prova-rimessa.mjs --repo . --base 82d3d4c4^ --file app/api/support/conversation/route.ts --prove tests/unit/riparazione-r03-assistenza-stessa-chiave.test.ts → uscita 0 (collaudo K02: rossa 2 falliti, «200 giaRicevuto col testo diverso»).",
-   "nota": "Giudicata «regge» dal collaudo K02 del giro 4 con le due lenti; nessun codice toccato in questo giro."
+   "nota": "Giudicata «regge» dal collaudo K02 del giro 4 con le due lenti; nessun codice toccato in questo giro.",
+   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): prova verde; le 18 righe di 82d3d4c4 sono tutte ancora in app/api/support/conversation/route.ts, non toccato. Regge."
   },
   {
    "id": "R01-006",
@@ -59,7 +62,8 @@
      "modifica": "Righe 289-292: sostituire `if (riga.coupon_code) { const { error: errCodice } = await admin.rpc('release_coupon', { p_code: riga.coupon_code }); if (errCodice) logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message }); }` con: `if (riga.coupon_code) { const { error: errCodice } = await admin.rpc('release_coupon', { p_code: riga.coupon_code }); if (errCodice) { logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message }); } else { /* il codice è tornato: si chiude la rivendicazione di QUESTO tentativo (coupon_redemptions, migr. 361), scritta dalla rotta della carta in delivery.rivendicazione; mai dopo un rilascio fallito */ const sua = (riga.delivery as { rivendicazione?: unknown } | null | undefined)?.rivendicazione; if (typeof sua === 'string' && sua !== '') { const { error: errChiusa } = await admin.from('coupon_redemptions').update({ released_at: new Date().toISOString() }).eq('id', sua).is('released_at', null); if (errChiusa) logger.warn('[riserve] rivendicazione del codice non chiusa', { id: riga.id, message: errChiusa.message }); } } }` (delivery è già nella select di riga 176; nessun cambio di tipo, basta il cast). INSIEME vanno tolti i due blocchi che oggi chiudono anche dopo un rilascio fallito, nei file di R01: app/api/stripe/checkout/route.ts:635-665 (commento «R03-011 IL BENVENUTO RESTITUITO DAL TENTATIVO ABBANDONATO…» e il suo if) e app/api/orders/cod/route.ts:762-793 (commento «R01-006 CARTA RIFIUTATA…» e il suo if). Provato in una copia fuori dal ramo: con la modifica e i due blocchi tolti, r01-benvenuto-carta-rifiutata-poi-contanti, r03-benvenuto-carta-rifiutata e le 8 prove che importano riserve-abbandonate verdi (10 file, 51 prove); una prova al volo con release_coupon che cade: la rivendicazione resta aperta (oggi, con i blocchi, si chiude)."
     }
    ],
-   "nota": "Il minore accanto (la rivendicazione si chiude anche se release_coupon è fallito) NON è chiuso nei miei file: la rotta non può sapere per quale cassa liberata il rilascio è riuscito (RiserveLiberate dice solo liberati/ancoraPagabili; riserve-abbandonate.ts:291 libera la cassa anche col rilascio caduto). L'unico modo senza file altrui sarebbe intercettare l'rpc del client passato alla pulizia: fragile, non fatto. Quindi il blocco nuovo dei contanti ha lo stesso minore del blocco della carta (contatore +1, un uso globale perso solo se release_coupon cade; nessun uso doppio): scelto perché tenere aperto il lucchetto in quel caso raro non deve costare il caso comune. La cura vera è in serve_file_altrui, con la rimozione dei due blocchi delle rotte."
+   "nota": "Il minore accanto (la rivendicazione si chiude anche se release_coupon è fallito) NON è chiuso nei miei file: la rotta non può sapere per quale cassa liberata il rilascio è riuscito (RiserveLiberate dice solo liberati/ancoraPagabili; riserve-abbandonate.ts:291 libera la cassa anche col rilascio caduto). L'unico modo senza file altrui sarebbe intercettare l'rpc del client passato alla pulizia: fragile, non fatto. Quindi il blocco nuovo dei contanti ha lo stesso minore del blocco della carta (contatore +1, un uso globale perso solo se release_coupon cade; nessun uso doppio): scelto perché tenere aperto il lucchetto in quel caso raro non deve costare il caso comune. La cura vera è in serve_file_altrui, con la rimozione dei due blocchi delle rotte.",
+   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): prova verde 2/2, rossa 2/2 per il comportamento con cod/route.ts a 99502c06^ (rimessa rifatta a mano); un mutante «chiudi tutte quelle del cliente» lo prende la seconda prova; la chiusura (cod/route.ts:773) viene prima di claim_coupon (:1129) e non tocca il tentativo in corso; rilettura caduta o delivery senza rivendicazione = non chiude niente (attesa di 2 minuti come prima); nessun uso doppio (una cassa entra in liberati solo con la pagina Stripe chiusa o morta; un'altra scheda PENDING col codice blocca comunque). Il minore dichiarato è vero e non peggio: l'uso perso nasce dal release_coupon fallito, la chiusura toglie solo l'attesa. Proposta per riserve-abbandonate.ts esatta (righe 289-292, delivery nella select a :176, colonne id e released_at della 361), applicata nella copia: tsc 0 errori, 10 file / 51 prove verdi. Regge."
   },
   {
    "id": "R01-009",
@@ -84,7 +88,8 @@
    "copre_tutta_la_voce": false,
    "cosa_ho_fatto": "Parte (a): il riquadro verde (frasePagamento, page.tsx:1023) riceve il lordo più alto delle due strade e «Compri sicuro» (page.tsx:1330) compare solo con contantiSuTutteEDue = contantiQui && contantiAggiungendo (page.tsx:593-600); il testo «Compra ora · paghi alla consegna» e ricordaMetodoScelto('cod') restano su contantiQui; tetto non toccato. Prova sulla scheda vera col carrello in localStorage: 2.600 € già nel carrello = niente riquadro verde né «Compri sicuro», «Compra ora» li promette ancora; premo «Aggiungi» → carrello 5.200 €, ancora niente promessa; «Compra ora» riporta la riga a 2.600 € e ricorda 'cod'; controprove 1.000 € in carrello e carrello vuoto = promesse tutte. Le due prove r02-contanti-col-carrello e r02-contanti-sopra-il-tetto verdi senza toccarle; 40 file che leggono la scheda verdi (418).",
    "cosa_resta": "Parte (b): il lordo usa ancora c.price salvato nel carrello (page.tsx:583-594) mentre la cassa rilegge prezzo e promo (lib/ordini/valida-carrello.ts:170). Non esiste un aiutante lato client esportato che rilegge i prezzi delle righe: la pagina del carrello lo fa dentro il suo effetto (app/cart/page.tsx:272-325: products.price + fetchActiveDiscounts + discountedUnitCents → prezzoDiOggi) e la cassa idem (app/checkout/page.tsx:~194-225). Per chiuderla serve prima estrarre quella lettura in un aiutante condiviso (file nuovo in lib, o app/cart/page.tsx: non miei), poi la scheda lo usa per altreRighe in lordoDelCarrelloCents. Non ho inventato una lettura nuova, come da mandato.",
-   "nota": "Quando solo «Aggiungi» supera il tetto, il riquadro verde dice «Sopra 4.999,99 € non si paga in contanti: paghi con carta adesso» mentre il pulsante dice «Compra ora · paghi alla consegna»: vere tutte e due, ognuna per la sua strada (come chiesto). Lint: 0 errori, i 4 avvisi jsx-a11y della pagina ci sono uguali sulla base."
+   "nota": "Quando solo «Aggiungi» supera il tetto, il riquadro verde dice «Sopra 4.999,99 € non si paga in contanti: paghi con carta adesso» mentre il pulsante dice «Compra ora · paghi alla consegna»: vere tutte e due, ognuna per la sua strada (come chiesto). Lint: 0 errori, i 4 avvisi jsx-a11y della pagina ci sono uguali sulla base.",
+   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): prova verde 5/5, rossa 2/5 per il comportamento con 62896089^; con 2.600 € nel carrello, prima e dopo «Aggiungi», spariscono riquadro verde (:1023), «Compri sicuro» (:1330) e nota della barra (:1662), nessun altro «alla consegna» sulla scheda; «Compra ora · paghi alla consegna» e il ricordo di 'cod' restano veri per la loro strada; r02-contanti-col-carrello e r02-contanti-sopra-il-tetto verdi. Regge come parziale. Visto: con la carta spenta il riquadro, nel caso in cui solo «Aggiungi» supera il tetto, dice che non si può pagare né in contanti né con carta mentre il pulsante dice «paghi alla consegna» (contraddizione nata da questo commit); e la parte (b) si può chiudere nel file della scheda con fetchActiveDiscounts e discountedUnitCents (lib/promotions.ts:22, :77) più il prezzo da products."
   },
   {
    "id": "R01-008",
@@ -97,7 +102,112 @@
      "modifica": "(1) Dopo chiaveDiCifratura() (riga 61) aggiungere: `function chiaveDellIv(): Buffer { return Buffer.from(crypto.hkdfSync('sha256', segreto(), Buffer.alloc(0), 'mycity-disiscrizione-iv-v1', 32)); }`. (2) In firmaDisiscrizione, riga 65, sostituire `const iv = crypto.randomBytes(12);` con `const iv = crypto.createHmac('sha256', chiaveDellIv()).update(dato, 'utf8').digest().subarray(0, 12);`. Nient'altro: formato del gettone invariato. NOTA per chi la applica (da mettere anche come commento sopra chiaveDellIv): la proposta del giro 4 usava chiaveDiCifratura() sia come chiave AES-256-GCM sia come chiave HMAC per l'IV: una chiave in due primitive diverse esce dalle ipotesi con cui ognuna è sicura (chiavi indipendenti), e un difetto o una fuga su un uso tocca anche l'altro. Con una chiave derivata apposta le due chiavi sono indipendenti: chi ricavasse la chiave dell'IV non impara niente su quella di cifratura. HKDF e non HMAC(segreto, etichetta) perché il file verifica ancora i gettoni v1 come HMAC(segreto, dato) (apriFirmato, riga 102) e quei valori sono nelle email già spedite: HKDF (estrai+espandi) è una costruzione diversa, separata per forma e non solo per etichetta. IV deterministico in GCM: il guasto grave di GCM è la stessa coppia (chiave, IV) su due testi DIVERSI (si legge lo XOR dei testi e si possono falsificare etichette); qui lo stesso IV nasce solo dallo stesso testo, quindi dà lo stesso gettone e niente di nuovo; due testi diversi hanno lo stesso IV solo per una collisione a 96 bit (circa n²/2^97: trascurabile anche con milioni di indirizzi). È l'idea del «synthetic IV» (SIV). Cosa si perde: due link uguali dicono che sono lo stesso indirizzo + ambito (niente sicurezza semantica sui messaggi ripetuti); accettabile per un link di disiscrizione, che è già legato a quell'indirizzo. Controlli (copia delle funzioni e copia di lavoro fuori dal ramo): stessa email (anche con maiuscole/spazi) + stesso ambito = stesso gettone; ambito o email diversi = gettone e IV diversi; il gettone con IV casuale di oggi si apre ancora (l'IV viaggia nel gettone: v2.<iv|cifrato|etichetta>, apriCifrato riga 76 lo legge da lì); un gettone manomesso non si apre; le 6 prove della disiscrizione + r22-coda-email-timeout verdi (28/28). Prova da aggiungere con la modifica: stessa email + ambito = stesso gettone, e un gettone v2 con IV casuale si apre."
     }
    ],
-   "nota": "Diagnosi ricontrollata sul codice: firmaDisiscrizione usa crypto.randomBytes(12) (lib/email/unsubscribe.ts:65); sendEmail firma il link a ogni invio (lib/email/client.ts:142) e per le promozioni lo mette nel corpo e in List-Unsubscribe (client.ts:157-171); la coda rimanda la riga con la stessa chiave `email-queue/${row.id}` (app/api/cron/send-emails/route.ts:533), quindi il corpo cambia, Resend dà 409 invalid_idempotent_request e client.ts:207-209 risponde { ok: true, id: '' } → la coda scrive sent_at anche se la prima risposta conservata era un errore. Nei modelli delle promozioni non ho trovato altro di casuale. client.ts NON toccato. Modifica per il GIRO DOPO, solo dopo quella di unsubscribe.ts (testo, non applicata): in lib/email/client.ts togliere le righe 203-210 (commento «13/11/2026 (R22-001, R22-011) — Il 409…» e l'if `opzioni && String(error.name) === 'invalid_idempotent_request'` che ritorna { ok: true, id: '' }); così il 409 cade nel ramo d'errore normale (lastErr = error.message, non ritentabile) e sendEmail risponde { ok: false, error }. Provato in copia: con le due modifiche i 27 file che usano il client vero + r22 verdi (241 prove); con la sola modifica di client.ts r22 «anche una promozione … non esce due volte» diventa rossa, che è il motivo dell'ordine."
+   "nota": "Diagnosi ricontrollata sul codice: firmaDisiscrizione usa crypto.randomBytes(12) (lib/email/unsubscribe.ts:65); sendEmail firma il link a ogni invio (lib/email/client.ts:142) e per le promozioni lo mette nel corpo e in List-Unsubscribe (client.ts:157-171); la coda rimanda la riga con la stessa chiave `email-queue/${row.id}` (app/api/cron/send-emails/route.ts:533), quindi il corpo cambia, Resend dà 409 invalid_idempotent_request e client.ts:207-209 risponde { ok: true, id: '' } → la coda scrive sent_at anche se la prima risposta conservata era un errore. Nei modelli delle promozioni non ho trovato altro di casuale. client.ts NON toccato. Modifica per il GIRO DOPO, solo dopo quella di unsubscribe.ts (testo, non applicata): in lib/email/client.ts togliere le righe 203-210 (commento «13/11/2026 (R22-001, R22-011) — Il 409…» e l'if `opzioni && String(error.name) === 'invalid_idempotent_request'` che ritorna { ok: true, id: '' }); così il 409 cade nel ramo d'errore normale (lastErr = error.message, non ritentabile) e sendEmail risponde { ok: false, error }. Provato in copia: con le due modifiche i 27 file che usano il client vero + r22 verdi (241 prove); con la sola modifica di client.ts r22 «anche una promozione … non esce due volte» diventa rossa, che è il motivo dell'ordine.",
+   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): diagnosi confermata sul codice (unsubscribe.ts:65, client.ts:142 e :161-169, send-emails:533, client.ts:207-209); modifica applicata nella copia: tsc 0 errori, hkdfSync = HKDF-SHA256 (RFC 5869) ricalcolato a mano, stessa email (maiuscole/spazi) + ambito = stesso gettone, email o ambito diversi = IV diversi, gettoni v2 con IV casuale e v1 si aprono ancora, gettone manomesso (anche nell'IV) no; nota crittografica corretta. Regge come serve_file_altrui."
+  },
+  {
+   "id": "R01-002",
+   "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+   "esito": "riparato",
+   "commit": "79bbcb28ccb2ffdddac4b7264a0f7e6736e67e05",
+   "file_toccati": [
+    "app/api/cron/process-deletions/route.ts",
+    "tests/unit/riparazione-r01-email-della-notte-col-loro-tempo.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-email-della-notte-col-loro-tempo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-email-della-notte-col-loro-tempo.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout 79bbcb28^ -- app/api/cron/process-deletions/route.ts && npx vitest run <prova> --reporter=dot → rossa per il comportamento (4 fallite su 5: email tentata a 280 s, nessun allarme senza tempo, allarme dell'email ferma scritto dopo l'email dopo, avviso del tetto riscritto la seconda notte; la controprova resta verde); git checkout 79bbcb28 -- … → verde 5/5; git status pulito"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tetto delle email a 240 s dall'inizio del giro (TETTO_EMAIL_MS): le spiegazioni partono una alla volta (rispondiAChiAspetta con un avviso per chiamata, tutto nel file della rotta, lib non toccata); passato il tetto, le rimaste si dicono subito con un allarme agli amministratori (chiave per stato dagli identificativi degli avvisi), si scrivono solo nel pannello della persona (recapitaAvvisi senza posta, nessun tentativo consumato), si contano in avvisiEmailSenzaTempo e la notte è 500. L'allarme di un'email ferma (avvisaUnaVoltaPerAvviso) si scrive subito dopo quella spiegazione, non più dopo tutte le email. avvisaDelTettoDiTempo passa ad avvisaAmministratori una chiave 'tetto-cancellazioni:<id rimandati ordinati>': stesso arretrato la notte dopo, nessun avviso nuovo.",
+   "nota": "Il tetto si guarda prima di ogni spiegazione: un'email già partita può ancora aspettare la posta fino a circa 20 s (lib/email/client.ts, 2 tentativi da 10 s), quindi l'ultima finisce entro circa 262 s; dopo il tetto restano solo scritture veloci nel database. Il tetto email di un altro ramo non è usato. Numeri tecnici scelti da me (240 s), non regole di business."
+  },
+  {
+   "id": "R01-003",
+   "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
+   "esito": "riparato",
+   "commit": "2befc63942ff1cde0c9232cecde4c589af669144",
+   "file_toccati": [
+    "app/api/cron/process-deletions/route.ts",
+    "tests/unit/riparazione-r01-rinviate-oltre-duecento.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r01-rinviate-oltre-duecento.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-rinviate-oltre-duecento.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout 2befc639^ -- app/api/cron/process-deletions/route.ts && npx vitest run <prova> --reporter=dot → rossa per il comportamento (4 fallite su 4: negozio dopo 200 prese mai segnalato, pari merito sul confine perso, tetto di pagine non detto, avvisi che si mangiano il tempo del ciclo); git checkout 2befc639 -- … → verde 4/4; git status pulito (C^ contiene già R01-002)"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "segnalaLeCancellazioniRinviate legge a pagine da 200 in ordine di deletion_requested_at e poi id, a chiave (gt sulla data, e per il pari merito sul confine eq sulla data + gt su id), finché finiscono; i presi in carico si tolgono pagina per pagina. Tetto di 25 pagine e di 45 s dal proprio inizio, ognuno detto nel registro (logger.warn) quando scatta. Un errore di lettura a metà restituisce quante ne ha già segnalate.",
+   "nota": "La voce sbaglia il nome della funzione: non è la chiusura dell'allarme «scrivile tu» (chiudiGliAllarmiDelleEmailPartite non ha limiti), l'unico limit(200) era in segnalaLeCancellazioniRinviate (route.ts:466-473 sulla base). Paginazione a chiave e non con range(): il finto database comune (tests/unit/aiuti/finto-giro-notturno.ts, usato dalla prova r33) non ha range e non va toccato. Ordine del finto ignorato: la prova scrive le righe già in ordine."
+  },
+  {
+   "id": "R01-001",
+   "chiave": "api-backend|cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+   "esito": "serve_file_altrui",
+   "file_toccati": [],
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nessun codice nel ramo. Parte mia già sulla base (cb6ac6b0, app/api/admin/users/[id]/delete/route.ts). Righe dell'annullo ricontrollate sul codice di oggi e modifica provata in una copia staccata (poi tolta): 36 file di prova che usano la rotta o lib/ordini/annulla verdi (241 casi), tsc ed eslint verdi; una prova di passaggio nella copia (non nel ramo) è rossa senza la modifica e verde con.",
+   "cosa_resta": "Le tre righe qui sotto, in file non miei.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/admin/orders/[id]/cancel/route.ts",
+     "modifica": "(1) Dopo la riga 9 `import { scriviCampanella } from '@/lib/ordini/campanella';` aggiungere `import { logger } from '@/lib/logger';`. (2) Nel ramo delle righe 40-42 `if (error && error.code !== 'PGRST116' && error.code !== '22P02') {`, prima di `return ApiErrors.internal('Non riesco a leggere l’ordine adesso: riprova fra poco.');`, inserire `logger.error('[admin-cancel] lettura dell ordine fallita', { orderId: params.id, code: error.code, message: error.message });`. (3) Prima della riga 98 `return ApiErrors.internal('Annullamento fallito');` inserire `logger.error('[admin-cancel] annullo non riuscito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio ?? null });`."
+    },
+    {
+     "file": "lib/ordini/annulla.ts",
+     "modifica": "Riga 396: sostituire `if (updErr) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message };` con `if (updErr) { logger.error('[annullaERimborsa] annullo non scritto: l ordine resta com era', { orderId: order.id, code: updErr.code, message: updErr.message }); return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message }; }` (logger è già importato a riga 5). Copre anche gli altri tre chiamanti che oggi rispondono 500 in silenzio (app/api/orders/[id]/cancel/route.ts:80, app/api/seller/orders/[id]/reject/route.ts:91, app/api/rider/orders/[id]/cliente-assente/route.ts:89)."
+    }
+   ],
+   "nota": "Nessun dato personale nelle righe: id ordine, codice e messaggio del database, motivo. Per l'annullo dell'amministrazione con ANNULLAMENTO_FALLITO escono due righe (lib e rotta, etichette diverse): se si vuole una riga sola, basta quella di lib più il punto (2) della rotta; il punto (3) resta la rete per motivi futuri. Diff provato: /tmp/claude-0/-home-user-mycity/16cc4363-c500-54cf-8466-1c5214c91507/scratchpad/r01-lotto2/r001-proposta.diff."
+  },
+  {
+   "id": "R01-010",
+   "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+   "esito": "serve_file_altrui",
+   "file_toccati": [],
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nessun codice. Guardato come nasce oggi un fattorino: sign-up con role=rider → handle_new_user (migrations/421) crea role 'rider', is_approved false, approval_status 'pending'; role non è fra le colonne che la persona può cambiare (enforce_profile_update_rules, migrations/400), quindi serve una rotta server con la chiave di servizio, come app/api/seller/apply/route.ts per i negozi. La regola dell'area sta in lib/auth/decisione-portiere.ts:265-282 (decidiAccessoArea, chiamata da middleware.ts:720): oggi resta fuori da /rider anche il fattorino NON approvato, per la decisione 1 del 26/10 (reclutamento dal sito chiuso), fissata dalla prova tests/unit/il-portiere-non-chiude-fuori-chi-aspetta-e-non-perde-il-rinnovo.test.ts:107-112. app/sign-up/page.tsx non rimbalza: mostra il modulo anche a chi è collegato, e iscriversi con la propria email finisce in «controlla la tua email» senza effetto.",
+   "cosa_resta": "Tutta la strada, in file non miei, e prima il sì di Nicola: riapre la decisione 1 del 26/10.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/auth/decisione-portiere.ts",
+     "modifica": "Aggiungere `export const PAGINA_ISCRIZIONE_FATTORINO = '/rider/onboarding';`. In decidiAccessoArea spostare `const percorso = pathname.length > 1 ? pathname.replace(/\\/+$/, '') : pathname;` (riga 278) sopra la riga 276 `if (!role || !allowed.includes(role)) return fuori;` e subito prima di quella riga inserire `if (percorso === PAGINA_ISCRIZIONE_FATTORINO && (role === 'buyer' || role === 'rider')) return { azione: 'entra' };`. Aggiornare il commento «Fattorino non approvato: resta fuori» (righe 262-263): resta fuori dal resto di /rider, entra solo nell'iscrizione. middleware.ts non cambia (ROLE_PROTECTED a riga 70 resta)."
+    },
+    {
+     "file": "app/api/rider/candidatura/route.ts (nuovo)",
+     "modifica": "POST con withAuthRateLimit({ name: 'rider-candidatura', max: 5, windowMs: 60_000 }), sul modello di app/api/seller/apply/route.ts. Legge con getAdminSupabase il profilo (role, approval_status, deletion_requested_at): errore → logger.error + 500; suspended → 403; cancellazione chiesta → 409; seller/admin → 409 «questo account ha già un altro ruolo»; rider → 200 { ok: true } (nessuna scrittura). Rifiuta con 409 se il cliente ha ordini aperti (orders con user_id = lui e delivery_status non in DELIVERED/CANCELED): da fattorino non potrebbe più gestirli da cliente. Poi update({ role: 'rider', is_approved: false, approval_status: 'pending', approval_requested_at: <ora> }).eq('id', user.id).eq('role', 'buyer').or('approval_status.is.null,approval_status.neq.suspended').is('deletion_requested_at', null).select('id'); zero righe → rilegge: se ora è rider 200, se no 409 «lo stato del tuo account è appena cambiato: ricarica». Dopo: notifyAdmins (lib/stripe/webhook/comune) «Nuova candidatura fattorino da un cliente già iscritto» senza dati personali, e writeAudit({ actorId: user.id, action: 'rider.candidatura', targetTable: 'profiles', targetId: user.id }). Nessuna migrazione: la chiave di servizio passa la guardia sui profili."
+    },
+    {
+     "file": "app/rider/onboarding/page.tsx",
+     "modifica": "In salvaAnagrafica (riga 147) e saveAndStartCheck (riga 180), subito dopo aver letto la sessione: se profile?.role === 'buyer', chiamare fetch('/api/rider/candidatura', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } }); se !r.ok mostrare apiErrorMessage(data, 'Candidatura non inviata') e fermarsi; se ok setProfile((p) => ({ ...(p ?? {}), role: 'rider' })). Sopra il pulsante del passo 1, solo per role 'buyer', una riga: «Salvando diventi fattorino in attesa di approvazione: con questo account non potrai più fare ordini come cliente.» (serve prima di caricare documenti: /api/kyc/upload-document accetta patente e polizza solo dal ruolo rider, TIPI_PER_RUOLO riga 26)."
+    },
+    {
+     "file": "app/sign-up/page.tsx",
+     "modifica": "Dopo la riga 83 (initialRole) aggiungere un useEffect: se initialRole === 'rider', supabase.auth.getUser() e, se c'è un utente, router.replace('/rider/onboarding'). Così /sign-up?role=rider (link di app/lavora-con-noi/page.tsx:36) porta il cliente già collegato all'iscrizione invece del modulo di registrazione."
+    },
+    {
+     "file": "tests/unit/il-portiere-non-chiude-fuori-chi-aspetta-e-non-perde-il-rinnovo.test.ts",
+     "modifica": "Prova comune da cambiare con la firma di Nicola (righe 107-112): oggi chiede che il fattorino non approvato su /rider/onboarding vada a '/'. Con la strada: su /rider/onboarding entrano rider non approvato e buyer (status 200, nessun location); su /rider (o /rider/orders) il rider non approvato e il buyer vanno ancora a '/'."
+    },
+    {
+     "file": "app/help/page.tsx (mio, DOPO che la strada esiste)",
+     "modifica": "Righe 58-60: `href: '/contact'` diventa `href: '/sign-up?role=rider'` (chi è collegato va all'iscrizione, chi non lo è si registra come fattorino). Oggi non si cambia: porterebbe a un vicolo cieco."
+    }
+   ],
+   "nota": "Per Nicola: oggi il reclutamento dal sito è chiuso per tua decisione del 26/10, anche per i fattorini nuovi; questa strada lo riapre e serve il tuo sì. Per un cliente: da «Diventa rider» compila i suoi dati e, al primo salvataggio, il suo account diventa fattorino in attesa; poi carica documento, selfie, patente e polizza; finché non è approvato non vede le consegne, e da quel momento con quell'account non può più fare ordini (gli ordini già fatti restano visibili; se ne ha uno in corso, deve aspettare che arrivi prima di candidarsi). Per l'amministrazione: riceve un avviso, controlla i documenti in Utenti e approva o respinge come per i fattorini nuovi; se respinge, l'account resta fattorino respinto e per farlo tornare cliente serve l'amministrazione."
   }
  ],
  "nuovi_difetti_visti": [
@@ -107,11 +217,48 @@
    "severita": "minore",
    "file": "lib/email/unsubscribe.ts:58-61",
    "descrizione": "chiaveDiCifratura() è HMAC(segreto, 'disiscrizione:cifratura:v2'), lo stesso calcolo di apriFirmato (riga 102) per i gettoni v1: oggi regge solo perché «cifratura» non è un ambito valido. Meglio una derivazione separata (HKDF) quando si tocca il file."
+  },
+  {
+   "titolo": "il webhook della sessione scaduta restituisce il codice di benvenuto senza chiudere la rivendicazione",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "lib/stripe/webhook/carrello-scaduto.ts:70-74",
+   "descrizione": "Se il webhook vince la gara con la pulizia che ha appena chiamato expire, la cassa non entra fra le liberate e il benvenuto resta bloccato 2 minuti. Gara rara, nessun uso doppio."
+  },
+  {
+   "titolo": "l'annullo dal sito, il rifiuto del negozio e il cliente assente rispondono 500 senza riga nel registro quando l'annullo fallisce",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/orders/[id]/cancel/route.ts:80",
+   "descrizione": "Stesso ANNULLAMENTO_FALLITO senza logger in app/api/orders/[id]/cancel/route.ts:80, app/api/seller/orders/[id]/reject/route.ts:91 e app/api/rider/orders/[id]/cliente-assente/route.ts:89. La riga proposta in lib/ordini/annulla.ts (serve_file_altrui di R01-001) li copre tutti."
+  },
+  {
+   "titolo": "il fattorino nuovo non può finire l'iscrizione: la pagina dei documenti lo tiene fuori finché non è approvato",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/auth/decisione-portiere.ts:276-281",
+   "descrizione": "Il link «Candidati come rider» (app/lavora-con-noi/page.tsx:36) porta a una registrazione che non si chiude: il fattorino non approvato non entra in /rider/onboarding, non carica i documenti, e senza documenti l'amministrazione non può approvarlo (lib/admin/regole-approvazione.ts, motivoPerNonApprovare)."
+  },
+  {
+   "titolo": "due allarmi del giro notturno delle cancellazioni si ripetono ogni notte a ogni amministratore",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/cron/process-deletions/route.ts:297",
+   "descrizione": "«Persone non avvisate del rinvio della cancellazione» (:297) e «Dati vecchi non cancellati» (:545) chiamano avvisaAmministratori senza chiave, contro la regola «un allarme per stato, non per notte»."
+  },
+  {
+   "titolo": "un account preso poco prima del tetto del ciclo non ha un tempo suo",
+   "dimensione": "api-backend",
+   "severita": "minore",
+   "file": "app/api/cron/process-deletions/route.ts:241",
+   "descrizione": "Se la cancellazione di un account preso poco prima dei 150 s dura più di circa 150 s, la funzione sfora i 300 s prima della risposta e il tetto delle email non può aiutare."
   }
  ],
- "domande_per_nicola": [],
+ "domande_per_nicola": [
+  "R01-010: vuoi riaprire una strada dal sito per far diventare fattorino un cliente già registrato? Oggi il reclutamento dei fattorini dal sito è chiuso per la tua decisione del 26/10; la modifica scritta in serve_file_altrui lo riaprirebbe (il cliente diventa fattorino in attesa e non può più ordinare con quell'account; l'amministrazione approva o respinge)."
+ ],
  "conto": {
-  "agenti": 1,
-  "nota": "lotto 1 (modello grande)"
+  "agenti": 4,
+  "nota": "lotto 1 (modello grande), revisore 1 lente soldi (modello grande), lotto 2 (modello grande), revisore 2 lente dati e permessi (modello grande, in corso)"
  }
 }
