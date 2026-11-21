@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { cn } from '@/lib/cn';
 
 /**
@@ -58,20 +59,26 @@ type Props = {
   hover?: boolean;
   /** R10-010 — 'xl' (contenuto, di base), '2xl' (prodotto/negozio), 'lg' (riquadro interno). */
   radius?: Radius;
+  /** Con `href` la card è un link (`<a>` di Next): le card cliccabili non si scrivono più a mano. */
+  href?: string;
+  /** Solo con `href`: etichetta per chi legge con lo screen reader. */
+  'aria-label'?: string;
 };
 
-export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl' }: Props) {
-  return (
-    <Tag
-      className={cn(
-        RADIUS[radius],
-        VARIANTS[variant],
-        PADDINGS[padding],
-        hover && 'transition-transform hover:-translate-y-[3px] hover:shadow-[var(--shadow-hover)]',
-        className,
-      )}
-    >
-      {children}
-    </Tag>
+export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl', href, 'aria-label': ariaLabel }: Props) {
+  const classi = cn(
+    RADIUS[radius],
+    VARIANTS[variant],
+    PADDINGS[padding],
+    hover && 'transition-transform hover:-translate-y-[3px] hover:shadow-[var(--shadow-hover)]',
+    className,
   );
+  if (href) {
+    return (
+      <Link href={href} aria-label={ariaLabel} className={cn('block', classi)}>
+        {children}
+      </Link>
+    );
+  }
+  return <Tag className={classi}>{children}</Tag>;
 }
