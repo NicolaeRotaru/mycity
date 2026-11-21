@@ -380,12 +380,15 @@ export default function ProductForm({
   // R02-021 — Sopra i tetti (100 combinazioni, 30 valori per asse) reconcileVariants ne teneva una
   // parte in silenzio: il capo si salvava senza le ultime combinazioni, e il cliente che le sceglieva
   // non poteva comprarle. Adesso gli assi oltre un tetto non si applicano e il modulo dice perché.
-  const applyAxes = (next: Record<string, string[]>): boolean => {
+  const tipiDegliAssi = (next: Record<string, string[]>): VariantOptionType[] => {
     const order = attrFields.map((f) => f.key);
-    const types = Object.entries(next)
+    return Object.entries(next)
       .filter(([, vals]) => vals.length > 0)
       .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
       .map(([name, values]) => ({ name, values }));
+  };
+  const applyAxes = (next: Record<string, string[]>): boolean => {
+    const types = tipiDegliAssi(next);
     const oltre = assiOltreITetti(types, (k) => attrFields.find((f) => f.key === k)?.label ?? k);
     if (oltre) {
       toast.error(oltre, { id: 'varianti-oltre-il-tetto' });
@@ -406,6 +409,24 @@ export default function ProductForm({
     applyAxes(next);
   };
   const setAxisValues = (key: string, values: string[]) => applyAxes({ ...variantAxes, [key]: values });
+  // R02-020 — Cambiando categoria gli assi della vecchia restavano: un capo passato da Abbigliamento a
+  // Casa teneva la «Taglia» fra le varianti, che il modulo non mostra più (il campo non c'è) e che
+  // nessuno poteva togliere, e le combinazioni si moltiplicavano per un asse invisibile. Al cambio di
+  // categoria restano solo gli assi che la categoria nuova fa variare. Si aggiusta lo stato durante il
+  // disegno (niente effetto): la categoria che gli assi conoscono si ricorda, e si guarda solo quando
+  // la categoria cambia davvero e le categorie sono lette.
+  const [categoriaDegliAssi, setCategoriaDegliAssi] = useState(currentCategoryId);
+  if (categoriaDegliAssi !== currentCategoryId) {
+    setCategoriaDegliAssi(currentCategoryId);
+    if (currentCategoryId && categories.length > 0) {
+      const ammessi = new Set(attrFields.filter((f) => f.variantable).map((f) => f.key));
+      if (Object.keys(variantAxes).some((k) => !ammessi.has(k))) {
+        const tenuti = Object.fromEntries(Object.entries(variantAxes).filter(([k]) => ammessi.has(k)));
+        setVariantAxes(tenuti);
+        setVariants((cur) => reconcileVariants(tipiDegliAssi(tenuti), cur));
+      }
+    }
+  }
   const setVariantStock = (idx: number, stock: number) =>
     setVariants((prev) =>
       prev.map((v, i) => (i === idx ? { ...v, stock: Math.max(0, Math.trunc(stock || 0)) } : v)),
