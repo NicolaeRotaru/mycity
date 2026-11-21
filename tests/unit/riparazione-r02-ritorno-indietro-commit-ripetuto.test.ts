@@ -37,7 +37,8 @@ const DOMINI_NON_LETTI: Array<[string, unknown]> = [
 function rilascioDiAdesso(elenco: unknown, env: Record<string, string>) {
   return spawnSync(process.execPath, [join(process.cwd(), 'scripts/prova-di-fumo.mjs'), '--rilascio-di-adesso'], {
     input: JSON.stringify(elenco),
-    env: { PATH: process.env.PATH ?? '', ...env },
+    // Le due variabili del lavoro di rilascio partono vuote: le dice solo il caso.
+    env: { ...process.env, COMMIT_CHE_ESCE: '', RILASCIO_SUL_DOMINIO: '', ...env },
     encoding: 'utf8',
   });
 }
