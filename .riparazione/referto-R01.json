@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-21 05:45",
-  "finita": false,
-  "testa": "b856771f68765cc6a012fca6cc31407cd7df1735",
+  "aggiornato": "2026-11-21 06:25",
+  "finita": true,
+  "testa": "9ea41313a9cf7ea02d90b712f8e42b747ba257ce",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "b856771f68765cc6a012fca6cc31407cd7df1735",
-    "nota": "fine lotto B: 1890 file + 1 saltato, 11723 prove + 1 saltata"
+    "testa": "9ea41313a9cf7ea02d90b712f8e42b747ba257ce",
+    "nota": "1892 file passati + 1 saltato, 11727 prove passate + 1 saltata; git rev-parse HEAD preso nello stesso comando"
   },
   "voci": [
     {
@@ -65,7 +65,8 @@
       "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
       "esito": "gia_riparato_prima",
       "prova": ".github/workflows/ci.yml:90-109 (job unit-tests): passo che installa e accende PostgreSQL e passo «Le prove col database vero non si possono saltare» (esce 1 se /usr/lib/postgresql/*/bin/initdb manca o se psql -d postgres select 1 non risponde), prima del passo Test; cerca negli stessi percorsi e con lo stesso psql di tests/unit/postgres-usa-e-getta.ts:37 e un-invito-scritto-a-mano-non-paga.test.ts:24-25. Prova già alla base: tests/unit/riparazione-r01-prove-col-database-in-ci.test.ts, 3 su 3 verdi.",
-      "nota": "PROVE_POSTGRES_OBBLIGATORIE=1 in ci.yml non è letta da nessun file: oggi non fa danno perché il controllo vero è il passo guardia; vedi nuovi_difetti_visti."
+      "nota": "PROVE_POSTGRES_OBBLIGATORIE=1 in ci.yml non è letta da nessun file: oggi non fa danno perché il controllo vero è il passo guardia; vedi nuovi_difetti_visti.",
+      "verificato_da": "qa-sonnet revB: guardia (ci.yml:124-136) nello stesso job e prima del passo Test (138); trovati i 7 file che si saltano senza Postgres, tutti coperti dalla guardia; nessun altro job lancia npm run test."
     },
     {
       "id": "R01-003",
@@ -100,13 +101,18 @@
       "prova_file": [
         "tests/unit/minori-s08-avvisi.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/minori-s08-avvisi.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_comando": "sh -c 'f=tests/unit/minori-s08-avvisi.test.ts; ! grep -qE \"ClienteAvvisi = \\{|from: \\(t\\) => \\(\\{\" \"$f\" && grep -q fintoGiroNotturno \"$f\"' && npx vitest run tests/unit/minori-s08-avvisi.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "non_applicabile",
-        "uscita": null,
-        "comando": "la cura è nella prova stessa: la prova rimessa non si applica"
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "sh -c 'f=tests/unit/minori-s08-avvisi.test.ts; ! grep -qE \"ClienteAvvisi = \\{|from: \\(t\\) => \\(\\{\" \"$f\" && grep -q fintoGiroNotturno \"$f\"' (sul file a b856771f: uscita 0; sul file a b856771f^: uscita 1)",
+        "a_mano": {
+          "comando": "git show <rev>:tests/unit/minori-s08-avvisi.test.ts > /tmp/s08.ts e poi lo stesso controllo su /tmp/s08.ts: rev=b856771f^ (senza correzione) e rev=b856771f (con correzione)",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        }
       },
       "copre_tutta_la_voce": true,
       "prova_comune": {
@@ -116,19 +122,109 @@
         "casi_prima": 8,
         "casi_dopo": 8
       },
-      "cosa_ho_fatto": "Si tocca una prova comune perché la voce è proprio quella quinta copia: database() ora costruisce fintoGiroNotturno({chiaviUniche:true, guasti}) da tests/unit/aiuti/finto-giro-notturno.ts (pannelloRottoPer e turnoRotto diventano due Guasto di insert con seRiga) invece del cliente scritto a mano. Finto comune non cambiato, nessuna riga expect nel diff, 8 casi prima e dopo, 8 su 8 verdi."
+      "cosa_ho_fatto": "Si tocca una prova comune perché la voce è proprio quella quinta copia: database() ora costruisce fintoGiroNotturno({chiaviUniche:true, guasti}) da tests/unit/aiuti/finto-giro-notturno.ts (pannelloRottoPer e turnoRotto diventano due Guasto di insert con seRiga) invece del cliente scritto a mano. Finto comune non cambiato, nessuna riga expect nel diff, 8 casi prima e dopo, 8 su 8 verdi.",
+      "verificato_da": "qa-sonnet revB: diff solo su minori-s08-avvisi.test.ts, 8 casi prima e dopo, nessuna asserzione toccata; il finto comune dà gli stessi tre errori (permission denied, connessione persa, duplicate key <tabella>_pkey); nessun altra copia scritta a mano di ClienteAvvisi nelle prove degli avvisi."
     },
     {
       "id": "R01-007",
       "chiave": "deploy-sre|la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
-      "esito": "non_fatto",
-      "nota": "in attesa della regia: la cura fa diventare rossa la prova comune tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts (legge app/layout.tsx cercando next/font/google e tutti i .tsx di app/ e components/)."
+      "esito": "riparato",
+      "commit": "37e5b8cc768f1e0ee64398b4de164ce9b81d8b28",
+      "file_toccati": [
+        "app/layout.tsx",
+        "app/fonts/fraunces-latin-400-italic.woff2",
+        "app/fonts/fraunces-latin-400-normal.woff2",
+        "app/fonts/fraunces-latin-500-italic.woff2",
+        "app/fonts/fraunces-latin-500-normal.woff2",
+        "app/fonts/fraunces-latin-600-italic.woff2",
+        "app/fonts/fraunces-latin-600-normal.woff2",
+        "app/fonts/fraunces-latin-700-italic.woff2",
+        "app/fonts/fraunces-latin-700-normal.woff2",
+        "app/fonts/fraunces-latin-800-italic.woff2",
+        "app/fonts/fraunces-latin-800-normal.woff2",
+        "app/fonts/inter-latin-wght-italic.woff2",
+        "app/fonts/inter-latin-wght-normal.woff2",
+        "app/fonts/OFL-Inter.txt",
+        "app/fonts/OFL-Fraunces.txt",
+        "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts",
+        "tests/unit/riparazione-r10-manifest-nel-head.test.tsx",
+        "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts",
+        "tests/unit/riparazione-r01-caratteri-locali.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-caratteri-locali.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-caratteri-locali.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 37e5b8cc768f1e0ee64398b4de164ce9b81d8b28^ --file app/layout.tsx,app/fonts/fraunces-latin-400-italic.woff2,app/fonts/fraunces-latin-400-normal.woff2,app/fonts/fraunces-latin-500-italic.woff2,app/fonts/fraunces-latin-500-normal.woff2,app/fonts/fraunces-latin-600-italic.woff2,app/fonts/fraunces-latin-600-normal.woff2,app/fonts/fraunces-latin-700-italic.woff2,app/fonts/fraunces-latin-700-normal.woff2,app/fonts/fraunces-latin-800-italic.woff2,app/fonts/fraunces-latin-800-normal.woff2,app/fonts/inter-latin-wght-italic.woff2,app/fonts/inter-latin-wght-normal.woff2 --prove tests/unit/riparazione-r01-caratteri-locali.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "app/layout.tsx passa da next/font/google a next/font/local con gli stessi caratteri: Inter variabile (peso 100 900) e Fraunces 400-800, normale e corsivo, sottoinsieme latino, stesse variabili CSS, display swap e preload, adjustFontFallback Arial per Inter e Times New Roman per Fraunces come fa Google. 12 woff2 da @fontsource-variable/inter 5.3.0 e @fontsource/fraunces 5.3.0 in app/fonts con OFL-Inter.txt e OFL-Fraunces.txt accanto (fuori da --file della rimessa: da sole non cambiano il comportamento). Nessuna dipendenza nuova; la costruzione non scarica più niente da Google. In ci.yml:80-88 non c era nessun ripiego da togliere.",
+      "schermate": {
+        "come": "Playwright Chromium, npx next dev con variabili finte locali, viewport 390x900 e 1280x900, deviceScaleFactor 1, prima schermata dopo document.fonts.ready e 3 s, .next cancellato fra prima e dopo; prodotto con uuid inesistente (pagina «Qualcosa è andato storto»)",
+        "pixel_diversi_fuzz_0_10_30": {
+          "home 390": [
+            2853,
+            404,
+            1
+          ],
+          "home 1280": [
+            7077,
+            2008,
+            15
+          ],
+          "prodotto 390": [
+            939,
+            161,
+            1
+          ],
+          "prodotto 1280": [
+            960,
+            157,
+            1
+          ]
+        },
+        "due_prima_di_fila": 0,
+        "giudizio": "solo bordi sfumati del testo in Fraunces (logo, titoli): righe ferme, stessa larghezza e forma; confrontata solo la prima schermata da 900 px"
+      },
+      "prova_comune": [
+        {
+          "file": "tests/unit/il-corsivo-del-sito-e-un-corsivo-vero.test.ts",
+          "motivo": "legge app/layout.tsx cercando next/font/google e il catalogo di Google e scorre tutti i .tsx di app/ e components/: con localFont avrebbe trovato zero caratteri. Permesso della regia (21/11), firma di Nicola all unione.",
+          "asserzioni_toccate": "nessuna tolta né indebolita: caratteriCaricati riconosce anche localFont e prende pesi e stile dai singoli src; per i caratteri locali la verifica del corsivo vero guarda i woff2 sul disco (2 expect nuovi); ramo Google invariato; titolo di un caso ampliato a «(da Google o dai file del sito)»",
+          "casi_prima": 7,
+          "casi_dopo": 7
+        },
+        {
+          "file": "tests/unit/riparazione-r10-manifest-nel-head.test.tsx",
+          "motivo": "fa il finto di next/font/google e importa app/layout.tsx, che ora usa next/font/local: senza il finto cade all import. Permesso della regia (21/11).",
+          "asserzioni_toccate": "nessuna: una sola riga aggiunta, vi.mock(next/font/local) dopo quello di google",
+          "casi_prima": 3,
+          "casi_dopo": 3,
+          "expect_prima": 6,
+          "expect_dopo": 6
+        },
+        {
+          "file": "tests/unit/riparazione-r15-la-pagina-non-trovata-non-si-presenta-come-la-home.test.ts",
+          "motivo": "fa il finto di next/font/google e importa app/layout.tsx (anche tramite app/not-found.tsx): senza il finto di next/font/local cade all import. Permesso della regia (21/11).",
+          "asserzioni_toccate": "nessuna: una sola riga aggiunta, vi.mock(next/font/local) dopo quello di google",
+          "casi_prima": 8,
+          "casi_dopo": 8,
+          "expect_prima": 18,
+          "expect_dopo": 18
+        }
+      ],
+      "verificato_da": "qa-sonnet revB: rimessa uscita 0; diff delle tre prove comuni senza asserzioni tolte (skipIf salta di meno, non di più); pesi, stili, variabili, display e preload uguali a prima e ogni peso usato nelle classi ha il suo woff2; nessun import di next/font/google rimasto; 12 file con firma wOF2, OFL 1.1 coi copyright giusti; 4 prove 20/20, typecheck e lint verdi, npx next build uscita 0 con i 12 woff2 in .next/static/media e nessun riferimento a fonts.gstatic."
     },
     {
       "id": "R01-008",
       "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
       "esito": "serve_file_altrui",
-      "nota": "La barra è già a posto alla base: app/product/[id]/page.tsx:1647 passa prezzoPieno={prezzoPieno} e components/StickyAddToCart.tsx:114-118 barra il pieno solo se prezzoPieno > price; tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx 3 su 3 verdi. Nessun difetto resta in StickyAddToCart.tsx. Restano i 5 caroselli in file altrui; modello components/products/FrequentlyBoughtTogether.tsx:15 e :53-54. Nessun altro carosello col prezzo pieno (DropOfDay usa drop_price proprio, ReorderRail mostra il prezzo storico dell ordine).",
+      "nota": "La barra è già a posto alla base: app/product/[id]/page.tsx:1647 passa prezzoPieno={prezzoPieno} e components/StickyAddToCart.tsx:114-118 barra il pieno solo se prezzoPieno > price; tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx 3 su 3 verdi. Nessun difetto resta in StickyAddToCart.tsx. Restano i 5 caroselli in file altrui; modello components/products/FrequentlyBoughtTogether.tsx:15 e :53-54. Oltre ai 5 caroselli, anche la pagina dei preferiti e la vetrina del negozio montano ProductCard senza lo sconto (aggiunte qui sotto, trovate dal revisore). DropOfDay usa drop_price proprio, ReorderRail mostra il prezzo storico dell ordine: non c entrano.",
       "serve_file_altrui": [
         {
           "file": "components/SimilarProducts.tsx",
@@ -149,8 +245,17 @@
         {
           "file": "components/home/TrendingNow.tsx",
           "modifica": "riga 48: stesso schema sul queryFn di leggiTendenze; la riga 120 stampa già formatPrice(p.price); import da @/lib/promotions"
+        },
+        {
+          "file": "app/favorites/page.tsx",
+          "modifica": "righe 116-128: ProductCard è montata senza discountPercent; leggere gli sconti attivi dei prodotti mostrati con fetchActiveDiscounts(supabase, ids).catch(() => new Map<string, number>()) (da @/lib/promotions) e passare discountPercent={sconti.get(p.id) ?? 0}, come fa components/ProductGrid.tsx:668 (discountFor)"
+        },
+        {
+          "file": "components/StoreFeaturedStrip.tsx",
+          "modifica": "righe 72-84: stesso schema, ProductCard senza discountPercent; leggere gli sconti attivi con fetchActiveDiscounts e passare discountPercent={sconti.get(p.id) ?? 0}, come components/ProductGrid.tsx:668"
         }
-      ]
+      ],
+      "verificato_da": "qa-sonnet revB: righe della barra e dei 5 caroselli confermate, prova della barra 3/3; ha trovato altri due elenchi di prodotti a prezzo pieno (preferiti e vetrina del negozio), aggiunti qui sotto, più tre punti fuori dalla voce messi in nuovi_difetti_visti."
     },
     {
       "id": "R01-009",
@@ -158,13 +263,37 @@
       "esito": "parziale",
       "prova": "grep -n orientation|id|display_override|screenshots public/manifest.json → solo riga 5 \"id\": \"/\" e riga 8 \"display_override\": [\"standalone\",\"minimal-ui\"]; nessun orientation (parte già chiusa alla base), nessun screenshots; in public/ i soli PNG sono apple-touch-icon, icon-192, icon-512, icon-maskable-512.",
       "cosa_resta": "Manca la chiave screenshots: servono 2 PNG veri del sito (non generati da una build locale senza dati), uno narrow (es. 1080x1920) e uno wide (es. 1280x720 o più); poi in public/manifest.json screenshots:[{src,sizes,type:\"image/png\",form_factor:\"narrow\"|\"wide\",label}]. Le schermate le deve fornire Nicola.",
-      "copre_tutta_la_voce": false
+      "copre_tutta_la_voce": false,
+      "verificato_da": "qa-sonnet revB: manifest senza orientation, con id e display_override, senza screenshots; nessuna schermata in public/; nessun altro file impone l orientamento (app/manifest.ts non esiste)."
     },
     {
       "id": "R01-010",
       "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
-      "esito": "gia_riparato_prima",
-      "prova": "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts (3 casi, verde alla base). Mutanti applicate a mano in app/cart/page.tsx alla base, una alla volta e poi rimesse: consegnaVeloce false→true (536-539), couponScontoCents 0→100 (536), supplementoVeloceCents a 0 invece che da vociConsegna (542), couponSpedizioneGratis false→true (535), pickupInStore false→true (534), shippingCost +0.5 (543), consegnaDaPagare senza le tariffe (544-545): tutte rosse per asserzione. app/cart/page.tsx uguale alla base."
+      "esito": "riparato",
+      "commit": "9ea41313a9cf7ea02d90b712f8e42b747ba257ce",
+      "file_toccati": [
+        "tests/unit/riparazione-r01-carrello-arrotondamento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-carrello-arrotondamento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-carrello-arrotondamento.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "npx vitest run tests/unit/riparazione-r01-carrello-arrotondamento.test.ts --reporter=dot (uscita 0 con app/cart/page.tsx com è; uscita 1 con la mutante: Math.round tolto a app/cart/page.tsx:529)",
+        "a_mano": {
+          "comando": "sed -i \"529s/subtotalCents: Math.round(\\(.*\\)) \\* 100),/subtotalCents: \\1 * 100,/\" app/cart/page.tsx && npx vitest run tests/unit/riparazione-r01-carrello-arrotondamento.test.ts --reporter=dot; git checkout -- app/cart/page.tsx",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0,
+          "nota": "la cura è una prova nuova: la «correzione» che si toglie è il Math.round del subtotale (mutante), con lei la prova cade per asserzione: expected [ 4,00 € ] to deeply equal [ 3,00 € ]"
+        }
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Alla base la prova del carrello già uccideva sette mutanti del conto della consegna (consegna veloce, coupon, supplemento, spedizione gratis, ritiro, +0,5, tariffe tolte). Il revisore ne ha trovata una viva in tutte le 28 prove che montano il carrello: togliere Math.round dal subtotale (app/cart/page.tsx:529). Con 0,10 € ×1 e 3,30 € ×3 la somma fa 999,9999… centesimi, sotto la soglia di 1000 (SPESA_SENZA_SUPPLEMENTO_CENTS), e la consegna sale da 3 € a 4 €. La prova nuova monta il carrello vero con quei due articoli e vuole consegna 3,00 €, voci della consegna e totale 13,00 € uguali a prezziDelCarrello/riepilogoDaMostrare con 1000 centesimi, più una controprova sul grezzo. Solo la prova, nessun file di codice; gli aiuti del finto fetch e del carrello sono copiati dalla prova r02 del carrello, che non li esporta.",
+      "verificato_da": "capo squadra R01 (non chi ha scritto la prova): rilanciata la prova a 9ea41313, uscita 0; applicata a mano la mutante a app/cart/page.tsx:529 (Math.round tolto), uscita 1 con «la consegna a video non è quella della libreria: expected [4,00 €] to deeply equal [3,00 €]»; file rimesso, albero pulito. Le altre mutanti le aveva già provate il revisore B (8 su 9 uccise dalle prove esistenti; questa era la nona)."
     }
   ],
   "nuovi_difetti_visti": [
@@ -174,11 +303,28 @@
       "severita": "minore",
       "file": ".github/workflows/ci.yml:142",
       "descrizione": "PROVE_POSTGRES_OBBLIGATORIE=1 è impostata nel passo Test ma nessun file in tests/, lib/ o scripts/ la legge: la protezione vera è il passo guardia prima delle prove. Fuori dalla CI l aiutante tests/unit/postgres-usa-e-getta.ts continua a saltare in silenzio se manca Postgres."
+    },
+    {
+      "titolo": "nella pagina di una lista il prezzo dei prodotti non tiene conto della promozione",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:387",
+      "descrizione": "stampa formatPrice(Number(p.price)) senza applicare lo sconto attivo (fetchActiveDiscounts/discountedUnitCents), come i caroselli della voce sulla barra d acquisto."
+    },
+    {
+      "titolo": "l immagine di anteprima social del prodotto e i dati per i motori di ricerca mostrano il prezzo pieno durante una promozione",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/product/[id]/opengraph-image.tsx:31 · app/product/[id]/layout.tsx:99",
+      "descrizione": "la card social stampa il prezzo pieno e il JSON-LD dell offerta ha price: product.price; con una promozione attiva il prezzo pubblicato è diverso da quello che si paga (il secondo punto è meno sicuro come difetto: va deciso quale prezzo dichiarare a Google)."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 3,
-    "nota": "lotto A, revisore A, lotto B (tutti sonnet)"
-  }
+    "agenti": 5,
+    "subagenti": 5,
+    "costo_usd": 8.58,
+    "nota": "lotto A, revisore A, lotto B (ripreso due volte per R01-007, stesso subagente), revisore B, correzione di R01-010: tutti sonnet. Costo letto dalla regia alle 05:49, la spesa finale è un po più alta (get_session non mostra usage.cost_usd)."
+  },
+  "costo_usd": 8.58
 }
