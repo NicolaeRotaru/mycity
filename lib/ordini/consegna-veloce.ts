@@ -3,6 +3,7 @@ import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { formatPrice } from '@/lib/format';
 import { APERTURA_EXPRESS, CHIUSURA_EXPRESS, ETICHETTA_ADESSO, MINUTI_PER_IL_RITIRO, expressSiPuo } from '@/lib/quando-arriva';
 import { negozioPuoServire } from '@/lib/store-hours';
+import { ORE_PER_ACCETTARE } from '@/lib/ordini/scadenza-accettazione';
 
 /**
  * 29/10/2026 — LA CONSEGNA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE.
@@ -36,6 +37,20 @@ const VELOCI_PER_FATTORINO: number | null = null;
 
 /** Gli stati di una consegna venduta e non ancora finita: dal «nuovo» al «in strada». */
 const STATI_DELLA_CONSEGNA_IN_CORSO = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
+
+/**
+ * 21/11/2026 (R04-020) — UNA VELOCE DIMENTICATA NON SPEGNE LA VELOCE PER SEMPRE.
+ *
+ * Il conteggio delle veloci in corso non aveva una finestra di tempo: un ordine «Adesso» rimasto
+ * fermo in uno stato aperto (nessuno l'ha chiuso) contava per giorni, e con il tetto a una veloce per
+ * fattorino il fattorino solo risultava occupato. Il collaudo: un «Adesso» fermo dal 16/11 dava 409
+ * il 19/11. Adesso si contano solo le veloci nate nelle ultime `ORE_PER_ACCETTARE` ore: è la vita più
+ * lunga che il sito dà a una veloce (dopo tre ore senza conferma il giro notturno la annulla; una
+ * confermata promette 30-60 minuti, e il negozio ha 10 minuti per confermarla). È il valore più
+ * prudente già scritto nel codice: una veloce vera in ritardo resta contata; una più vecchia di tre
+ * ore è dimenticata. (Una finestra più corta è una scelta di Nicola.)
+ */
+const ORE_DELLA_VELOCE_IN_CORSO = ORE_PER_ACCETTARE;
 
 /** La fascia salvata sull'ordine è la veloce? È l'ingresso `consegnaVeloce` del conto. */
 export function eConsegnaVeloce(a: { fascia: string | null | undefined; ritiroInNegozio: boolean }): boolean {
@@ -130,17 +145,27 @@ export async function contaFattoriniOnline(db: SupabaseClient<any, any, any>): P
  * «Adesso», stato fra il nuovo e il «in strada». Le ha in mano un fattorino o le aspetta.
  * `null` se la lettura fallisce o non dà un numero: un conteggio caduto non vale zero.
  * Serve il client di servizio: gli ordini degli altri al cliente non si leggono.
+ * 21/11/2026 (R04-020) — Solo quelle nate nelle ultime `ORE_DELLA_VELOCE_IN_CORSO` ore.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function contaVelociInCorso(db: SupabaseClient<any, any, any>): Promise<number | null> {
+export async function contaVelociInCorso(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: SupabaseClient<any, any, any>,
+  adesso: Date = new Date(),
+): Promise<number | null> {
   try {
-    const { count, error } = await db
+    const { data, error } = await db
       .from('orders')
-      .select('id', { count: 'exact', head: true })
+      .select('created_at')
       .eq('delivery_slot', ETICHETTA_ADESSO)
       .in('delivery_status', STATI_DELLA_CONSEGNA_IN_CORSO);
-    if (error || count == null) return null;
-    return count;
+    if (error || !Array.isArray(data)) return null;
+    // La finestra si guarda qui: le veloci aperte sono poche. Una nascita che non si legge conta
+    // (non si può dire che sia dimenticata).
+    const soglia = adesso.getTime() - ORE_DELLA_VELOCE_IN_CORSO * 3_600_000;
+    return (data as Array<{ created_at?: unknown }>).filter((r) => {
+      const nato = Date.parse(String(r.created_at ?? ''));
+      return Number.isNaN(nato) || nato >= soglia;
+    }).length;
   } catch {
     return null;
   }
