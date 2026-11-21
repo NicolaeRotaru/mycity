@@ -71,10 +71,29 @@ function VideoField({ section, onChange }: { section: VideoSec; onChange: (s: Si
  * a-capo e grassetto (che senza una barra di formattazione non si può fare).
  */
 export function aCapoInHtml(testo: string): string {
-  return testo.replace(/\r?\n/g, '<br>');
+  // Il formato salvato è sempre codificato (& < >), così htmlInACapo lo decodifica una volta sola
+  // e «a &amp; b» scritto a lettere si rilegge uguale.
+  return testo
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r?\n/g, '<br>');
 }
 export function htmlInACapo(html: string): string {
-  return html.replace(/<br\s*\/?>/gi, '\n');
+  // Il testo salvato è già pulito dal server («&» → «&amp;», «<» → «&lt;», spazio non separabile →
+  // «&nbsp;»): nel campo si rilegge com'è stato scritto. Un solo passaggio, così «&amp;nbsp;»
+  // torna «&nbsp;» scritto a lettere e non diventa uno spazio.
+  const NOMI: Record<string, string> = {
+    lt: '<', gt: '>', amp: '&', quot: '"', apos: "'", nbsp: '\u00a0',
+  };
+  return html.replace(/<br\s*\/?>/gi, '\n').replace(
+    /&(?:(lt|gt|amp|quot|apos|nbsp)|#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6}));/g,
+    (m, nome, dec, hex) => {
+      if (nome) return NOMI[nome];
+      const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16);
+      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : m;
+    },
+  );
 }
 
 function StructuralNote({ type }: { type: string }) {

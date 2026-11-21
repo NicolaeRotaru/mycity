@@ -79,7 +79,7 @@ vi.mock('@/lib/supabase/server', () => {
     seller_public_profiles: ['id'],
     products: ['id'],
     coupons: ['id', 'code'],
-    coupon_redemptions: ['coupon_id', 'user_id', 'released_at'],
+    coupon_redemptions: ['id', 'coupon_id', 'user_id', 'released_at'],
   };
   const righeDi = (nome: string): Riga[] => {
     if (nome === 'orders') return stato.ordini;
@@ -163,7 +163,8 @@ vi.mock('@/lib/supabase/server', () => {
       if (buono.first_order_only && chi && (lucchetto || ordineVivo)) return Promise.resolve({ data: false, error: null });
       buono.uses_count = Number(buono.uses_count) + 1;
       if (buono.first_order_only && chi) {
-        stato.rivendicazioni.push({ coupon_id: buono.id, user_id: chi, claimed_at: new Date(adesso).toISOString(), released_at: null });
+        // Come la tabella vera: ogni riga ha il suo id (chiave primaria).
+        stato.rivendicazioni.push({ id: `riv-${stato.rivendicazioni.length + 1}`, coupon_id: buono.id, user_id: chi, claimed_at: new Date(adesso).toISOString(), released_at: null });
       }
       return Promise.resolve({ data: true, error: null });
     }

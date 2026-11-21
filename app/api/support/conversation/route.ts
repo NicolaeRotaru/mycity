@@ -159,14 +159,30 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
     }
   }
 
+  const idMessaggio = chiaveInvio ? await idDelMessaggio(user.id, chiaveInvio) : null;
   const { error: msgErr } = await admin.from('messages').insert({
-    ...(chiaveInvio ? { id: await idDelMessaggio(user.id, chiaveInvio) } : {}),
+    ...(idMessaggio ? { id: idMessaggio } : {}),
     conversation_id: conversationId,
     sender_id: user.id,
     body: firstMessage,
   });
   // R04-012 — Lo stesso invio è già arrivato (doppio clic, ritentativo): niente secondo avviso.
-  if (msgErr?.code === '23505' && chiaveInvio) {
+  if (msgErr?.code === '23505' && idMessaggio) {
+    // 21/11/2026 (R03-013) — «Lo stesso invio» vuol dire la stessa chiave E lo stesso testo. Con la
+    // stessa chiave e un testo diverso si rispondeva «già ricevuto» col primo, e il secondo testo
+    // spariva in silenzio. Si rilegge il messaggio salvato: testo diverso → 409, rilettura caduta → 503.
+    const { data: salvato, error: errRilettura } = await admin
+      .from('messages')
+      .select('body')
+      .eq('id', idMessaggio)
+      .maybeSingle();
+    if (errRilettura || !salvato) {
+      logger.error('[support] invio con la stessa chiave: messaggio salvato non riletto', { conversationId, message: errRilettura?.message });
+      return ApiErrors.unavailable('Non riusciamo a confermare il tuo messaggio. Riprova fra poco.');
+    }
+    if ((salvato as { body?: string | null }).body !== firstMessage) {
+      return ApiErrors.conflict('Questo invio è già stato usato per un altro messaggio: il nuovo testo non è stato inviato. Invialo di nuovo.');
+    }
     return NextResponse.json({ conversationId, supportId: support.id, giaRicevuto: true }, { status: 200 });
   }
   if (msgErr) return ApiErrors.internal('Impossibile inviare il messaggio');

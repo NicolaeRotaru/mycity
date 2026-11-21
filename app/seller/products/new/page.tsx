@@ -127,7 +127,7 @@ function NewProductInner() {
   } = useConsegnaVeloceDelNegozio();
 
   // Duplica: precarica da un prodotto esistente (?from=ID).
-  const { data: source, isLoading: loadingSource, isError: sorgenteNonLetta, fetchStatus: sorgenteFetchStatus, refetch: rileggiSorgente } = useQuery({
+  const { data: source, isLoading: loadingSource, isError: sorgenteNonLetta, fetchStatus: sorgenteFetchStatus, isFetching: sorgenteInLettura, isFetchedAfterMount: sorgenteRiletta, refetch: rileggiSorgente } = useQuery({
     queryKey: ['duplicate-source', fromId],
     enabled: !!fromId,
     queryFn: async () => {
@@ -148,11 +148,14 @@ function NewProductInner() {
 
   // Duplica: carica anche le varianti del prodotto sorgente (id azzerati → nuove).
   // Senza le taglie lette la copia non si apre: nascerebbe senza, e nessuno lo direbbe.
-  const { data: sourceVariants = [], isLoading: loadingVariants, isError: variantiNonLette, refetch: rileggiVarianti } = useQuery({
+  const { data: taglieLette, isLoading: loadingVariants, isError: variantiNonLette, fetchStatus: taglieFetchStatus, isFetching: taglieInLettura, isFetchedAfterMount: taglieRilette, refetch: rileggiVarianti } = useQuery({
     queryKey: ['duplicate-variants', fromId],
     enabled: !!fromId,
     queryFn: () => loadProductVariants(fromId!),
   });
+  const sourceVariants = useMemo(() => taglieLette ?? [], [taglieLette]);
+  // Le taglie mai lette e ferme senza rete: la copia non si apre con zero taglie che non sono vere.
+  const taglieNonArrivate = !!fromId && taglieLette === undefined && (variantiNonLette || taglieFetchStatus === 'paused');
   // Senza il prodotto da duplicare (lettura caduta, o in pausa senza rete) il modulo non si apre
   // vuoto come un prodotto nuovo: si dice, con «Riprova», e si apre pieno quando la lettura riesce.
   const sorgenteNonArrivata = !!fromId && !source && (sorgenteNonLetta || sorgenteFetchStatus === 'paused');
@@ -207,6 +210,46 @@ function NewProductInner() {
     }
     return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
   }, [imported, fromId, source, sourceVariants]);
+
+  /**
+   * IL MODULO APERTO RESTA APERTO QUANDO TORNA LA RETE.
+   * Aperta la pagina senza rete, al ritorno della rete le letture ripartivano (la consegna del
+   * negozio, la copia da duplicare) e la pagina rimetteva il caricamento al posto del modulo: il
+   * modulo si smontava e quello che il negoziante aveva scritto spariva. Adesso, aperto per un
+   * prodotto (nuovo, o la copia di `from`), il modulo resta finché la pagina non passa a un altro;
+   * e resta con la risposta sulla consegna dell'apertura: una consegna non letta all'apertura non
+   * diventa un «no» indovinato solo perché la risposta arriva dopo.
+   */
+  const chiaveDelModulo = fromId ?? '';
+  const [aperto, setAperto] = useState<{ per: string; offre: boolean | undefined; consegnaNonLetta: boolean; taglie: string; volta: number } | null>(null);
+  const giaAperto = aperto !== null && aperto.per === chiaveDelModulo ? aperto : null;
+  const caricamento = (fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura;
+  const categorieMancanti = (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0;
+  const moduloPronto = !caricamento && !categorieMancanti && !sorgenteNonArrivata && !taglieNonArrivate;
+  const firmaDelleTaglie = fromId && Array.isArray(sourceVariants) ? JSON.stringify(sourceVariants.map((v) => [v.id ?? null, v.options, v.label])) : '';
+  if (!giaAperto && moduloPronto) setAperto({ per: chiaveDelModulo, offre: offersExpress, consegnaNonLetta, taglie: firmaDelleTaglie, volta: 0 });
+  const consegnaDelModulo = giaAperto ?? { offre: offersExpress, consegnaNonLetta };
+  /**
+   * LA COPIA APERTA SENZA RETE NON NASCE SULLE TAGLIE DELLA MEMORIA.
+   * Finché il prodotto da duplicare e le sue taglie non sono riletti (fermi senza rete, in volo,
+   * caduti) la copia non si salva, e lo dice; se le taglie rilette non sono quelle con cui la copia
+   * si è aperta, non si salva finché non la si riapre con quelle vere. Il testo resta nel modulo.
+   */
+  const copiaNonRiletta = !!fromId && (
+    sorgenteFetchStatus === 'paused' || taglieFetchStatus === 'paused'
+    || (sorgenteInLettura && !sorgenteRiletta) || (taglieInLettura && !taglieRilette)
+    || sorgenteNonLetta || variantiNonLette
+  );
+  const taglieDellaCopiaCambiate = !!fromId && !copiaNonRiletta && giaAperto !== null && giaAperto.taglie !== firmaDelleTaglie;
+  const copiaFerma = copiaNonRiletta
+    ? sorgenteFetchStatus === 'paused' || taglieFetchStatus === 'paused'
+      ? 'Senza rete non posso salvare la copia: quello che hai scritto resta qui, salva quando torna la connessione.'
+      : sorgenteNonLetta || variantiNonLette
+        ? 'Non riesco a rileggere il prodotto da duplicare e le sue taglie: la copia non si salva finché non ci riesco. Quello che hai scritto resta qui.'
+        : 'Sto rileggendo il prodotto da duplicare: salva fra un momento, quello che hai scritto resta qui.'
+    : taglieDellaCopiaCambiate
+      ? 'Le taglie del prodotto da duplicare sono cambiate da quando hai aperto la copia: riaprila con le taglie aggiornate prima di salvare.'
+      : null;
 
   // Dopo un inserimento riuscito il modulo resta chiuso fino al cambio di pagina: `create.isPending`
   // torna falso prima che router.push porti via, e un clic in quel momento creava un secondo prodotto.
@@ -295,9 +338,9 @@ function NewProductInner() {
         </>
       )}
 
-      {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura ? (
+      {giaAperto || moduloPronto ? null : caricamento ? (
         <LoadingState />
-      ) : (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0 ? (
+      ) : categorieMancanti ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
           <p className="text-sm mb-3">
@@ -313,26 +356,52 @@ function NewProductInner() {
           <p className="text-sm mb-3">Senza il prodotto la copia partirebbe vuota. Riprova fra un momento.</p>
           <button type="button" onClick={() => { void rileggiSorgente(); }} className="text-sm font-semibold text-rose-700 underline">Riprova</button>
         </div>
-      ) : fromId && variantiNonLette ? (
+      ) : taglieNonArrivate ? (
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
           <p className="font-bold mb-1">Non riesco a leggere le taglie del prodotto da duplicare</p>
           <p className="text-sm mb-3">La copia nascerebbe senza taglie. Riprova fra un momento.</p>
           <button type="button" onClick={() => { void rileggiVarianti(); }} className="text-sm font-semibold text-rose-700 underline">Riprova</button>
         </div>
-      ) : (
+      ) : null}
+      {(giaAperto || moduloPronto) && copiaFerma && (
+        <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-900 text-sm">
+          <p className="flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> {copiaFerma}</p>
+          {(sorgenteNonLetta || variantiNonLette) && (
+            <button type="button" onClick={() => { void rileggiSorgente(); void rileggiVarianti(); }} className="mt-2 font-semibold text-amber-800 underline">
+              Riprova
+            </button>
+          )}
+          {taglieDellaCopiaCambiate && giaAperto && (
+            <button
+              type="button"
+              onClick={() => setAperto({ ...giaAperto, taglie: firmaDelleTaglie, volta: giaAperto.volta + 1 })}
+              className="mt-2 font-semibold text-amber-800 underline"
+            >
+              Riapri la copia con le taglie aggiornate (perdi quello che non hai salvato)
+            </button>
+          )}
+        </div>
+      )}
+      {(giaAperto || moduloPronto) && (
         <ProductForm
-          key={importNonce}
+          key={`${chiaveDelModulo}:${importNonce}:${giaAperto?.volta ?? 0}`}
           mode="create"
           categories={categories}
           initialValues={initialValues}
           submitting={create.isPending || creato}
-          sellerOffersExpress={offersExpress}
-          consegnaDelNegozioNonLetta={consegnaNonLetta}
+          sellerOffersExpress={consegnaDelModulo.offre}
+          consegnaDelNegozioNonLetta={consegnaDelModulo.consegnaNonLetta}
           recessoSegnabile={recessoSegnabileQui}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           // R01-012 — l'invio finisce quando finisce l'inserimento: fino ad allora il modulo
           // non ne fa partire un altro (l'errore lo dice già `onError` della mutazione).
-          onSubmit={(payload, ctx) => create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined)}
+          onSubmit={(payload, ctx) => {
+            if (copiaFerma) {
+              toast.error(copiaFerma);
+              return;
+            }
+            return create.mutateAsync({ payload, variants: ctx.variants }).catch(() => undefined);
+          }}
           onDiscard={async () => {
             const ok = await confirmDialog({
               title: 'Eliminare questo prodotto?',

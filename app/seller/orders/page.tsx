@@ -211,7 +211,7 @@ export default function SellerOrdersPage() {
           {grouped.map((group) =>
             group.orders.length === 0 ? null : (
               <section key={group.label}>
-                <h2 className="mb-2 text-sm font-bold uppercase tracking-[0.03em] text-ink-700">{group.label}</h2>
+                <h2 className="mb-2 text-sm font-bold uppercase tracking-label text-ink-700">{group.label}</h2>
                 <div className="space-y-2">
                   {group.orders.map((o) => {
                     const itemCount = o.order_items.reduce((s, i) => s + i.quantity, 0);

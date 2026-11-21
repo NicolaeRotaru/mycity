@@ -149,7 +149,9 @@ describe('il giro notturno fa scadere un ordine in contanti mai accettato', () =
       ...ordineInContanti, id: 'o1', payment_method: 'card', payment_status: 'PAID', stripe_payment_intent: 'pi_1', total_price: 50,
     }];
     await giro();
-    expect(refundOrderMock).toHaveBeenCalledWith(expect.objectContaining({ notifyBuyer: true }));
+    // 21/11/2026 (R02-001) — «Rimborso emesso» lo manda chi annulla, dopo la risposta, non più refundOrder
+    // dentro il giro (tests/unit/riparazione-r02-email-rimborso-dopo-la-risposta.test.ts).
+    expect(refundOrderMock).toHaveBeenCalledWith(expect.objectContaining({ notifyBuyer: false }));
     // R31-023 — Alla cliente nessuna seconda email; al negozio parte la sua.
     expect(spedite.filter((m) => m.to === 'maria@example.it')).toHaveLength(0);
     expect(spedite.map((m) => m.to)).toEqual(['forno@example.it']);

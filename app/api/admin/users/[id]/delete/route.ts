@@ -46,6 +46,8 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
   // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». «Non c'è»
   // restano PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessuna riga può averlo).
   if (errTarget && errTarget.code !== 'PGRST116' && errTarget.code !== '22P02') {
+    // Un 500 senza riga nel registro non lo vede nessuno: il guasto resta solo nella risposta.
+    logger.error('admin delete: lettura utente fallita', { targetId, code: errTarget.code, message: errTarget.message });
     return ApiErrors.internal('Non riesco a leggere l’utente adesso: riprova fra poco.');
   }
   if (!targetProfile) return ApiErrors.notFound('Utente non trovato.');

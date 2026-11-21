@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'sonner';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
  * /shared-cart — pagina destinazione del ShareCartButton.
@@ -277,8 +278,9 @@ function SharedCartInner() {
                     alt={p.name}
                     width={64}
                     height={64}
+                    sizes="64px"
                     className="object-cover w-full h-full"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>

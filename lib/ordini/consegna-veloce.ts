@@ -3,6 +3,7 @@ import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { formatPrice } from '@/lib/format';
 import { APERTURA_EXPRESS, CHIUSURA_EXPRESS, ETICHETTA_ADESSO, MINUTI_PER_IL_RITIRO, expressSiPuo } from '@/lib/quando-arriva';
 import { negozioPuoServire } from '@/lib/store-hours';
+import { ORE_PER_ACCETTARE } from '@/lib/ordini/scadenza-accettazione';
 
 /**
  * 29/10/2026 — LA CONSEGNA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE.
@@ -26,16 +27,40 @@ import { negozioPuoServire } from '@/lib/store-hours';
  * accesi: fattorini × `VELOCI_PER_FATTORINO`. Quel numero è una scelta di Nicola: finché non c'è, il
  * conteggio non decide e la veloce si vende come prima.
  * Prova: tests/unit/riparazione-r15-la-veloce-conta-quelle-in-mano.test.ts.
+ *
+ * 21/11/2026 (R04-021) — UNA VELOCE ALLA VOLTA PER FATTORINO, LA STESSA RISPOSTA DAPPERTUTTO.
+ * Nicola ha scelto il 19/11 (fatto `consegna.veloce-per-fattorino`): un fattorino porta una veloce
+ * alla volta. Il conto sta in `contaFattoriniOnline`, che tutte e quattro le strade già chiamano e
+ * passano a `veloceSiPuo` (la cassa e il carrello con /api/consegna/veloce, le schede dei negozi con
+ * /api/consegna/veloce/negozi, la rotta dei contanti e quella della carta): risponde i fattorini
+ * accesi che non hanno già una veloce in mano. Così la cassa non offre «Adesso» che poi il clic finale
+ * rifiuta con un 409. Si contano le consegne, non le righe: un carrello di due negozi è una consegna
+ * sola (`contaVelociInCorso`).
+ * Prova: tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts.
  */
 
 /**
- * Quante consegne veloci può avere in mano un fattorino nello stesso momento. `null` = non ancora
- * deciso: lo sceglie Nicola (domanda nel referto R15), qui non si inventa.
+ * Quante consegne veloci può avere in mano un fattorino nello stesso momento. Scelta di Nicola del
+ * 19/11/2026 (fatto `consegna.veloce-per-fattorino`): una alla volta. `null` = il conteggio non decide.
  */
-const VELOCI_PER_FATTORINO: number | null = null;
+const VELOCI_PER_FATTORINO: number | null = 1;
 
 /** Gli stati di una consegna venduta e non ancora finita: dal «nuovo» al «in strada». */
 const STATI_DELLA_CONSEGNA_IN_CORSO = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
+
+/**
+ * 21/11/2026 (R04-020) — UNA VELOCE DIMENTICATA NON SPEGNE LA VELOCE PER SEMPRE.
+ *
+ * Il conteggio delle veloci in corso non aveva una finestra di tempo: un ordine «Adesso» rimasto
+ * fermo in uno stato aperto (nessuno l'ha chiuso) contava per giorni, e con il tetto a una veloce per
+ * fattorino il fattorino solo risultava occupato. Il collaudo: un «Adesso» fermo dal 16/11 dava 409
+ * il 19/11. Adesso si contano solo le veloci nate nelle ultime `ORE_PER_ACCETTARE` ore: è la vita più
+ * lunga che il sito dà a una veloce (dopo tre ore senza conferma il giro notturno la annulla; una
+ * confermata promette 30-60 minuti, e il negozio ha 10 minuti per confermarla). È il valore più
+ * prudente già scritto nel codice: una veloce vera in ritardo resta contata; una più vecchia di tre
+ * ore è dimenticata. (Una finestra più corta è una scelta di Nicola.)
+ */
+const ORE_DELLA_VELOCE_IN_CORSO = ORE_PER_ACCETTARE;
 
 /** La fascia salvata sull'ordine è la veloce? È l'ingresso `consegnaVeloce` del conto. */
 export function eConsegnaVeloce(a: { fascia: string | null | undefined; ritiroInNegozio: boolean }): boolean {
@@ -51,14 +76,18 @@ export function veloceSiPuo(s: {
   adesso: Date;
   /** Gli orari dei negozi del carrello. `null` = la lettura non è riuscita. */
   negozi: Array<{ nome: string; orari: unknown }> | null;
-  /** I fattorini approvati e online. `null` = la lettura non è riuscita. */
+  /**
+   * I fattorini che possono partire adesso per una veloce. `null` = la lettura non è riuscita.
+   * 21/11/2026 (R04-021) — Da `contaFattoriniOnline` arrivano già senza quelli che hanno in mano
+   * tutte le veloci che possono portare: chi passa quel numero non passa anche `velociInCorso`.
+   */
   fattoriniOnline: number | null;
   /**
    * Le veloci già vendute e non ancora consegnate (`contaVelociInCorso`). `null` = la lettura non è
-   * riuscita. Assente = chi chiama non le conta.
+   * riuscita. Assente = chi chiama non le conta. Solo per chi passa i fattorini accesi, non i liberi.
    */
   velociInCorso?: number | null;
-  /** Quante veloci può avere in mano un fattorino. Assente = `VELOCI_PER_FATTORINO`. */
+  /** Quante veloci può avere in mano un fattorino. Assente = qui il conteggio non decide (vedi sotto). */
   velociPerFattorino?: number | null;
 }): EsitoVeloce {
   if (!expressSiPuo(s.adesso.getHours())) {
@@ -89,7 +118,9 @@ export function veloceSiPuo(s: {
   }
   // 13/11/2026 (R15-015) — Le veloci già in mano contano: i fattorini accesi ne portano al massimo
   // fattorini × tetto. Senza il tetto (scelta di Nicola) o senza il conteggio, si decide come prima.
-  const tetto = s.velociPerFattorino === undefined ? VELOCI_PER_FATTORINO : s.velociPerFattorino;
+  // 21/11/2026 (R04-021) — Qui il tetto conta solo se chi chiama lo passa: le strade passano i
+  // fattorini liberi di `contaFattoriniOnline`, che lo ha già applicato (due volte sarebbe un errore).
+  const tetto = s.velociPerFattorino ?? null;
   if (tetto !== null && s.velociInCorso !== undefined) {
     if (s.velociInCorso === null) {
       return { possibile: false, perche: `Adesso non riesco a confermare la consegna veloce. ${SCEGLI_UNA_FASCIA}` };
@@ -108,9 +139,17 @@ export function veloceSiPuo(s: {
  * Quanti fattorini possono partire adesso: ruolo rider, approvati, interruttore acceso.
  * `null` se la lettura fallisce (chi chiama non offre la veloce). Serve il client di servizio:
  * i profili degli altri al cliente non si leggono.
+ *
+ * 21/11/2026 (R04-021) — «Possono partire» per una veloce: senza quelli che hanno già in mano tutte
+ * le veloci che possono portare (`VELOCI_PER_FATTORINO`, una). Con un fattorino acceso e una veloce in
+ * corso risponde 0, e `veloceSiPuo` dice «non c'è un fattorino libero» alla cassa come al clic finale.
+ * Se il conteggio delle veloci cade, `null`: un conteggio caduto non vende la veloce.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function contaFattoriniOnline(db: SupabaseClient<any, any, any>): Promise<number | null> {
+export async function contaFattoriniOnline(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: SupabaseClient<any, any, any>,
+  adesso: Date = new Date(),
+): Promise<number | null> {
   try {
     const { count, error } = await db
       .from('profiles')
@@ -119,7 +158,11 @@ export async function contaFattoriniOnline(db: SupabaseClient<any, any, any>): P
       .eq('is_approved', true)
       .eq('rider_is_online', true);
     if (error) return null;
-    return count ?? 0;
+    const accesi = count ?? 0;
+    if (accesi === 0 || VELOCI_PER_FATTORINO === null) return accesi;
+    const inCorso = await contaVelociInCorso(db, adesso);
+    if (inCorso === null) return null;
+    return Math.max(0, accesi - Math.ceil(inCorso / VELOCI_PER_FATTORINO));
   } catch {
     return null;
   }
@@ -130,17 +173,33 @@ export async function contaFattoriniOnline(db: SupabaseClient<any, any, any>): P
  * «Adesso», stato fra il nuovo e il «in strada». Le ha in mano un fattorino o le aspetta.
  * `null` se la lettura fallisce o non dà un numero: un conteggio caduto non vale zero.
  * Serve il client di servizio: gli ordini degli altri al cliente non si leggono.
+ * 21/11/2026 (R04-020) — Solo quelle nate nelle ultime `ORE_DELLA_VELOCE_IN_CORSO` ore.
+ * 21/11/2026 (R04-021) — Si contano le CONSEGNE, non le righe: gli ordini di un carrello sono dello
+ * stesso cliente e partono insieme, quindi le veloci di un cliente sono una consegna sola (un
+ * carrello di due negozi fa due righe). Due carrelli veloci dello stesso cliente insieme contano
+ * uno: vanno alla stessa porta.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function contaVelociInCorso(db: SupabaseClient<any, any, any>): Promise<number | null> {
+export async function contaVelociInCorso(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: SupabaseClient<any, any, any>,
+  adesso: Date = new Date(),
+): Promise<number | null> {
   try {
-    const { count, error } = await db
+    const { data, error } = await db
       .from('orders')
-      .select('id', { count: 'exact', head: true })
+      .select('user_id, created_at')
       .eq('delivery_slot', ETICHETTA_ADESSO)
       .in('delivery_status', STATI_DELLA_CONSEGNA_IN_CORSO);
-    if (error || count == null) return null;
-    return count;
+    if (error || !Array.isArray(data)) return null;
+    // La finestra si guarda qui: le veloci aperte sono poche. Una nascita che non si legge conta
+    // (non si può dire che sia dimenticata).
+    const soglia = adesso.getTime() - ORE_DELLA_VELOCE_IN_CORSO * 3_600_000;
+    const recenti = (data as Array<{ user_id?: unknown; created_at?: unknown }>).filter((r) => {
+      const nato = Date.parse(String(r.created_at ?? ''));
+      return Number.isNaN(nato) || nato >= soglia;
+    });
+    // R04-021 — Una consegna per cliente; una riga senza cliente è una consegna sua.
+    return new Set(recenti.map((r, i) => (r.user_id ? `cliente:${String(r.user_id)}` : `riga:${i}`))).size;
   } catch {
     return null;
   }

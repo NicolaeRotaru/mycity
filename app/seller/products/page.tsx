@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -434,7 +435,7 @@ export default function SellerProductsPage() {
                   {(['Prodotto', 'Prezzo', 'Stock', 'Venduti da sempre', 'Stato', ''] as const).map((h, i) => (
                     <th
                       key={h || i}
-                      className={`px-4 py-3 text-[11px] font-bold uppercase tracking-[0.03em] text-ink-500 ${
+                      className={`px-4 py-3 text-[11px] font-bold uppercase tracking-label text-ink-500 ${
                         i > 0 && i < 5 ? 'text-right' : 'text-left'
                       }`}
                     >
@@ -454,7 +455,7 @@ export default function SellerProductsPage() {
                             alt={p.name}
                             fill
                             sizes="44px"
-                            unoptimized
+                            loader={caricatoreFotoRemote}
                             className="object-cover"
                           />
                         </div>
@@ -559,7 +560,7 @@ export default function SellerProductsPage() {
                       alt={p.name}
                       fill
                       sizes="64px"
-                      unoptimized
+                      loader={caricatoreFotoRemote}
                       className="object-cover"
                     />
                   </Link>

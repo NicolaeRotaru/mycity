@@ -59,15 +59,15 @@ afterEach(async () => {
 });
 
 describe('R07-006 · la pagina del reso dice scaduto quando il server lo direbbe', () => {
-  it('il giorno dopo l ultimo (16/3 alle 08:00, consegna 1/3 alle 20) il modulo non si apre', async () => {
+  it('il giorno dopo l ultimo (18/3 alle 08:00, consegna 3/3 alle 20) il modulo non si apre', async () => {
     // 15 giorni di calendario, ma solo 14 giorni e 12 ore di orologio: prima la pagina lasciava compilare.
-    await monta('2026-03-16T07:00:00Z', '2026-03-01T19:00:00Z');
+    await monta('2026-03-18T07:00:00Z', '2026-03-03T19:00:00Z');
     expect(chiuso()).toBe(true);
     expect(modulo()).toBe(false);
   });
 
-  it('l ultimo giorno, la sera (15/3 alle 21, consegna 1/3 alle 10), il modulo c è', async () => {
-    await monta('2026-03-15T20:00:00Z', '2026-03-01T09:00:00Z');
+  it('l ultimo giorno, la sera (17/3 alle 21, consegna 3/3 alle 10), il modulo c è', async () => {
+    await monta('2026-03-17T20:00:00Z', '2026-03-03T09:00:00Z');
     expect(chiuso()).toBe(false);
     expect(modulo()).toBe(true);
   });
@@ -82,10 +82,10 @@ describe('R07-006 · la pagina del reso dice scaduto quando il server lo direbbe
     const fuso = process.env.TZ;
     process.env.TZ = 'Pacific/Kiritimati';
     try {
-      // Consegna 1/3 alle 10 di Roma: l'ultimo giorno è il 15 marzo.
-      await monta('2026-03-16T12:00:00Z', '2026-03-01T09:00:00Z');
-      expect(c.textContent).toMatch(/15 marzo/);
-      expect(c.textContent).not.toMatch(/16 marzo/);
+      // Consegna 3/3 alle 10 di Roma: l'ultimo giorno è il 17 marzo.
+      await monta('2026-03-18T12:00:00Z', '2026-03-03T09:00:00Z');
+      expect(c.textContent).toMatch(/17 marzo/);
+      expect(c.textContent).not.toMatch(/18 marzo/);
     } finally {
       process.env.TZ = fuso;
     }

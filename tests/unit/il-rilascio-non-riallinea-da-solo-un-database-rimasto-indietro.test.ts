@@ -87,7 +87,12 @@ if [ "\${FINTO_PSQL_PASSWORD_SBAGLIATA:-}" = "1" ]; then
   echo 'psql: error: connection to server at "aws-0-eu-west-3.pooler.supabase.com" (13.38.0.1), port 5432 failed: FATAL:  password authentication failed for user "postgres"' >&2
   exit 2
 fi
-if [ -n "$file" ]; then echo "APPLICATO $(basename "$file")" >> "$REGISTRO_PSQL"; exit 0; fi
+if [ -n "$file" ]; then
+  echo "APPLICATO $(basename "$file")" >> "$REGISTRO_PSQL"
+  # Applicazione e registrazione nello stesso psql: -f e poi -c con l'INSERT del registro.
+  case "$query" in *INSERT*) echo "REGISTRATO" >> "$REGISTRO_PSQL" ;; esac
+  exit 0
+fi
 if [ -z "$query" ]; then cat > /dev/null; exit 0; fi
 case "$query" in
   *"count(*)"*) echo 156 ;;

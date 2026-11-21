@@ -9,8 +9,11 @@ describe('R09-005 tasso di conversione', () => {
     expect(tassoDiConversione(12, 5)).toBeNull();
     expect(tassoDiConversione(3, 2)).toBeNull();
   });
-  it('fino al 100% il conto resta quello', () => {
-    expect(tassoDiConversione(5, 5)).toBe(100);
+  // R02-008 — A pari (tanti ordini quante visite misurate) non c'è tasso: «100,0%» in verde diceva
+  // «compra chiunque guardi», e dice solo che le visite misurate sono troppo poche.
+  it('sotto il 100% il conto resta quello; a pari il campione è troppo piccolo', () => {
+    expect(tassoDiConversione(5, 5)).toBeNull();
+    expect(tassoDiConversione(4, 5)).toBe(80);
     expect(tassoDiConversione(4, 200)).toBe(2);
   });
   it('la scheda ha l\'etichetta in italiano e dice del campione piccolo', () => {
