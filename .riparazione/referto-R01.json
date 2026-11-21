@@ -1,13 +1,13 @@
 {
  "sessione": "R01",
- "aggiornato": "2026-11-21 04:50",
- "finita": false,
- "testa": "2befc63942ff1cde0c9232cecde4c589af669144",
+ "aggiornato": "2026-11-21 05:05",
+ "finita": true,
+ "testa": "90ee7bd3e32e9715dc953eb931319128c880cafe",
  "verifica": {
   "comando": "npm run verify",
-  "esito": "",
-  "testa": "",
-  "nota": ""
+  "esito": "verde",
+  "testa": "90ee7bd3e32e9715dc953eb931319128c880cafe",
+  "nota": "typecheck verde; lint 0 errori (98 avvisi, gli stessi della base); vitest 1895 file passati (1 saltato già sulla base), 11748 prove passate"
  },
  "voci": [
   {
@@ -68,28 +68,35 @@
   {
    "id": "R01-009",
    "chiave": "flussi-conversione|la scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
-   "esito": "parziale",
-   "commit": "62896089ea25fee61441b50443b0b0b75d657355",
+   "esito": "riparato",
+   "commit": [
+    "62896089ea25fee61441b50443b0b0b75d657355",
+    "85b822a4876c3e07bedf018d9f9b7b4075cd9331",
+    "90ee7bd3e32e9715dc953eb931319128c880cafe"
+   ],
    "file_toccati": [
     "app/product/[id]/page.tsx",
-    "tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx"
+    "tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx",
+    "tests/unit/riparazione-r01-contanti-strade-divergenti.test.tsx",
+    "tests/unit/riparazione-r01-contanti-prezzo-di-oggi.test.tsx"
    ],
    "prova_file": [
-    "tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx"
+    "tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx",
+    "tests/unit/riparazione-r01-contanti-strade-divergenti.test.tsx",
+    "tests/unit/riparazione-r01-contanti-prezzo-di-oggi.test.tsx"
    ],
-   "prova_comando": "npx vitest run tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx --reporter=dot",
+   "prova_comando": "npx vitest run tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx tests/unit/riparazione-r01-contanti-strade-divergenti.test.tsx tests/unit/riparazione-r01-contanti-prezzo-di-oggi.test.tsx --reporter=dot",
    "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "git checkout 62896089^ -- 'app/product/[id]/page.tsx' && npx vitest run tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx --reporter=dot → rossa per il comportamento (2 falliti su 5: il riquadro verde promette i contanti con 2.600 € già nel carrello, prima e dopo «Aggiungi»); git checkout 62896089 -- 'app/product/[id]/page.tsx' → verde 5/5; git status --short pulito"
+    "comando": "a mano (prova-rimessa.mjs non c'è in questa copia): git checkout 62896089 -- 'app/product/[id]/page.tsx' → strade-divergenti rossa 2/7 (AssertionError: il riquadro dice «non si può pagare»/«paghi con carta adesso», carta spenta e accesa); git checkout 0f98fb8a -- page → dopo-aggiungi+strade-divergenti rosse 4/12 (AssertionError); git checkout 85b822a4 -- page → prezzo-di-oggi rossa 3/4 (AssertionError: promessa con la riga a 2.000 €, promo di oggi ignorata, nessuna lettura); git checkout HEAD -- page → 16/16 verdi; git status --short pulito"
    },
-   "copre_tutta_la_voce": false,
-   "cosa_ho_fatto": "Parte (a): il riquadro verde (frasePagamento, page.tsx:1023) riceve il lordo più alto delle due strade e «Compri sicuro» (page.tsx:1330) compare solo con contantiSuTutteEDue = contantiQui && contantiAggiungendo (page.tsx:593-600); il testo «Compra ora · paghi alla consegna» e ricordaMetodoScelto('cod') restano su contantiQui; tetto non toccato. Prova sulla scheda vera col carrello in localStorage: 2.600 € già nel carrello = niente riquadro verde né «Compri sicuro», «Compra ora» li promette ancora; premo «Aggiungi» → carrello 5.200 €, ancora niente promessa; «Compra ora» riporta la riga a 2.600 € e ricorda 'cod'; controprove 1.000 € in carrello e carrello vuoto = promesse tutte. Le due prove r02-contanti-col-carrello e r02-contanti-sopra-il-tetto verdi senza toccarle; 40 file che leggono la scheda verdi (418).",
-   "cosa_resta": "Parte (b): il lordo usa ancora c.price salvato nel carrello (page.tsx:583-594) mentre la cassa rilegge prezzo e promo (lib/ordini/valida-carrello.ts:170). Non esiste un aiutante lato client esportato che rilegge i prezzi delle righe: la pagina del carrello lo fa dentro il suo effetto (app/cart/page.tsx:272-325: products.price + fetchActiveDiscounts + discountedUnitCents → prezzoDiOggi) e la cassa idem (app/checkout/page.tsx:~194-225). Per chiuderla serve prima estrarre quella lettura in un aiutante condiviso (file nuovo in lib, o app/cart/page.tsx: non miei), poi la scheda lo usa per altreRighe in lordoDelCarrelloCents. Non ho inventato una lettura nuova, come da mandato.",
-   "nota": "Quando solo «Aggiungi» supera il tetto, il riquadro verde dice «Sopra 4.999,99 € non si paga in contanti: paghi con carta adesso» mentre il pulsante dice «Compra ora · paghi alla consegna»: vere tutte e due, ognuna per la sua strada (come chiesto). Lint: 0 errori, i 4 avvisi jsx-a11y della pagina ci sono uguali sulla base.",
-   "verificato_da": "revisore 1 (subagente generico, modello grande, lente soldi, mandato di smentire, copia separata a 62896089): prova verde 5/5, rossa 2/5 per il comportamento con 62896089^; con 2.600 € nel carrello, prima e dopo «Aggiungi», spariscono riquadro verde (:1023), «Compri sicuro» (:1330) e nota della barra (:1662), nessun altro «alla consegna» sulla scheda; «Compra ora · paghi alla consegna» e il ricordo di 'cod' restano veri per la loro strada; r02-contanti-col-carrello e r02-contanti-sopra-il-tetto verdi. Regge come parziale. Visto: con la carta spenta il riquadro, nel caso in cui solo «Aggiungi» supera il tetto, dice che non si può pagare né in contanti né con carta mentre il pulsante dice «paghi alla consegna» (contraddizione nata da questo commit); e la parte (b) si può chiudere nel file della scheda con fetchActiveDiscounts e discountedUnitCents (lib/promotions.ts:22, :77) più il prezzo da products."
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Giro di correzione: quando le due strade divergono (contantiQui !== contantiAggiungendo) il riquadro verde non mostra la frase di pagamento, così non dice «non si può pagare in contanti/con carta» né «paghi con carta adesso» accanto a «Compra ora · paghi alla consegna»; consegna e reso restano; tutte e due sopra il tetto → il rifiuto di frasePagamento come sulla base (carta spenta o accesa), tutte e due sotto → la promessa. Parte (b): la scheda rilegge prezzo (products) e promo (fetchActiveDiscounts + discountedUnitCents) delle altre righe come app/cart/page.tsx, con un useEffect legato alla sola lista ordinata degli id delle altre righe (una lettura, nessuna senza altre righe, nessuna a ogni render o cambio di quantità); mentre legge, se cade o se gli sconti non si leggono vale il prezzo salvato; le righe dello stesso prodotto con altra variante contano al prezzo della scheda.",
+   "nota": "Nella mia prova tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx (nata in questo ramo con 62896089) ho cambiato un'asserzione del primo caso: diceva che il riquadro mostra «Sopra 4.999,99 € non si…» con le strade divergenti, ora dice che non lo mostra (è proprio la contraddizione da togliere). Nessuna prova di altri toccata; le 40 prove che leggono o montano page.tsx più le due nuove: 42 file, 429 casi verdi. eslint 0 errori (4 avvisi a11y già presenti sulla base, riga ~877), tsc --noEmit verde. La carta accesa nella prova si simula con vi.mock di lib/funzioni-al-lancio (getter su CARTA_ACCESA) e vi.stubEnv della chiave pubblica: i file lib non si toccano. Non spinto.",
+   "verificato_da": "non rivisto (tetto di spesa) per il giro di correzione 85b822a4 e 90ee7bd3: il revisore è stato fermato alla fermata dura di 28 $ prima del verdetto. Il primo commit 62896089 (parte a) l'aveva guardato il revisore 1 (lente soldi, modello grande, copia separata): regge come parziale, e da lui vengono i due punti chiusi dalla correzione (frase che contraddiceva il pulsante con la carta spenta, prezzi salvati nel carrello)."
   },
   {
    "id": "R01-008",
@@ -127,7 +134,8 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Tetto delle email a 240 s dall'inizio del giro (TETTO_EMAIL_MS): le spiegazioni partono una alla volta (rispondiAChiAspetta con un avviso per chiamata, tutto nel file della rotta, lib non toccata); passato il tetto, le rimaste si dicono subito con un allarme agli amministratori (chiave per stato dagli identificativi degli avvisi), si scrivono solo nel pannello della persona (recapitaAvvisi senza posta, nessun tentativo consumato), si contano in avvisiEmailSenzaTempo e la notte è 500. L'allarme di un'email ferma (avvisaUnaVoltaPerAvviso) si scrive subito dopo quella spiegazione, non più dopo tutte le email. avvisaDelTettoDiTempo passa ad avvisaAmministratori una chiave 'tetto-cancellazioni:<id rimandati ordinati>': stesso arretrato la notte dopo, nessun avviso nuovo.",
-   "nota": "Il tetto si guarda prima di ogni spiegazione: un'email già partita può ancora aspettare la posta fino a circa 20 s (lib/email/client.ts, 2 tentativi da 10 s), quindi l'ultima finisce entro circa 262 s; dopo il tetto restano solo scritture veloci nel database. Il tetto email di un altro ramo non è usato. Numeri tecnici scelti da me (240 s), non regole di business."
+   "nota": "Il tetto si guarda prima di ogni spiegazione: un'email già partita può ancora aspettare la posta fino a circa 20 s (lib/email/client.ts, 2 tentativi da 10 s), quindi l'ultima finisce entro circa 262 s; dopo il tetto restano solo scritture veloci nel database. Il tetto email di un altro ramo non è usato. Numeri tecnici scelti da me (240 s), non regole di business.",
+   "verificato_da": "non rivisto (tetto di spesa): il revisore 2 (lente dati e permessi, modello grande, copia separata) è stato fermato alla fermata dura di 28 $ prima del verdetto; restano le prove del riparatore (verdi, rimessa a mano rossa per il comportamento) e il collaudo."
   },
   {
    "id": "R01-003",
@@ -151,7 +159,8 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "segnalaLeCancellazioniRinviate legge a pagine da 200 in ordine di deletion_requested_at e poi id, a chiave (gt sulla data, e per il pari merito sul confine eq sulla data + gt su id), finché finiscono; i presi in carico si tolgono pagina per pagina. Tetto di 25 pagine e di 45 s dal proprio inizio, ognuno detto nel registro (logger.warn) quando scatta. Un errore di lettura a metà restituisce quante ne ha già segnalate.",
-   "nota": "La voce sbaglia il nome della funzione: non è la chiusura dell'allarme «scrivile tu» (chiudiGliAllarmiDelleEmailPartite non ha limiti), l'unico limit(200) era in segnalaLeCancellazioniRinviate (route.ts:466-473 sulla base). Paginazione a chiave e non con range(): il finto database comune (tests/unit/aiuti/finto-giro-notturno.ts, usato dalla prova r33) non ha range e non va toccato. Ordine del finto ignorato: la prova scrive le righe già in ordine."
+   "nota": "La voce sbaglia il nome della funzione: non è la chiusura dell'allarme «scrivile tu» (chiudiGliAllarmiDelleEmailPartite non ha limiti), l'unico limit(200) era in segnalaLeCancellazioniRinviate (route.ts:466-473 sulla base). Paginazione a chiave e non con range(): il finto database comune (tests/unit/aiuti/finto-giro-notturno.ts, usato dalla prova r33) non ha range e non va toccato. Ordine del finto ignorato: la prova scrive le righe già in ordine.",
+   "verificato_da": "non rivisto (tetto di spesa): il revisore 2 (lente dati e permessi, modello grande, copia separata) è stato fermato alla fermata dura di 28 $ prima del verdetto; restano le prove del riparatore (verdi, rimessa a mano rossa per il comportamento) e il collaudo."
   },
   {
    "id": "R01-001",
@@ -171,7 +180,8 @@
      "modifica": "Riga 396: sostituire `if (updErr) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message };` con `if (updErr) { logger.error('[annullaERimborsa] annullo non scritto: l ordine resta com era', { orderId: order.id, code: updErr.code, message: updErr.message }); return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message }; }` (logger è già importato a riga 5). Copre anche gli altri tre chiamanti che oggi rispondono 500 in silenzio (app/api/orders/[id]/cancel/route.ts:80, app/api/seller/orders/[id]/reject/route.ts:91, app/api/rider/orders/[id]/cliente-assente/route.ts:89)."
     }
    ],
-   "nota": "Nessun dato personale nelle righe: id ordine, codice e messaggio del database, motivo. Per l'annullo dell'amministrazione con ANNULLAMENTO_FALLITO escono due righe (lib e rotta, etichette diverse): se si vuole una riga sola, basta quella di lib più il punto (2) della rotta; il punto (3) resta la rete per motivi futuri. Diff provato: /tmp/claude-0/-home-user-mycity/16cc4363-c500-54cf-8466-1c5214c91507/scratchpad/r01-lotto2/r001-proposta.diff."
+   "nota": "Nessun dato personale nelle righe: id ordine, codice e messaggio del database, motivo. Per l'annullo dell'amministrazione con ANNULLAMENTO_FALLITO escono due righe (lib e rotta, etichette diverse): se si vuole una riga sola, basta quella di lib più il punto (2) della rotta; il punto (3) resta la rete per motivi futuri. Diff provato: /tmp/claude-0/-home-user-mycity/16cc4363-c500-54cf-8466-1c5214c91507/scratchpad/r01-lotto2/r001-proposta.diff.",
+   "verificato_da": "non rivisto (tetto di spesa): il revisore 2 (lente dati e permessi, modello grande, copia separata) è stato fermato alla fermata dura di 28 $ prima del verdetto; restano le prove del riparatore (verdi, rimessa a mano rossa per il comportamento) e il collaudo."
   },
   {
    "id": "R01-010",
@@ -207,7 +217,8 @@
      "modifica": "Righe 58-60: `href: '/contact'` diventa `href: '/sign-up?role=rider'` (chi è collegato va all'iscrizione, chi non lo è si registra come fattorino). Oggi non si cambia: porterebbe a un vicolo cieco."
     }
    ],
-   "nota": "Per Nicola: oggi il reclutamento dal sito è chiuso per tua decisione del 26/10, anche per i fattorini nuovi; questa strada lo riapre e serve il tuo sì. Per un cliente: da «Diventa rider» compila i suoi dati e, al primo salvataggio, il suo account diventa fattorino in attesa; poi carica documento, selfie, patente e polizza; finché non è approvato non vede le consegne, e da quel momento con quell'account non può più fare ordini (gli ordini già fatti restano visibili; se ne ha uno in corso, deve aspettare che arrivi prima di candidarsi). Per l'amministrazione: riceve un avviso, controlla i documenti in Utenti e approva o respinge come per i fattorini nuovi; se respinge, l'account resta fattorino respinto e per farlo tornare cliente serve l'amministrazione."
+   "nota": "Per Nicola: oggi il reclutamento dal sito è chiuso per tua decisione del 26/10, anche per i fattorini nuovi; questa strada lo riapre e serve il tuo sì. Per un cliente: da «Diventa rider» compila i suoi dati e, al primo salvataggio, il suo account diventa fattorino in attesa; poi carica documento, selfie, patente e polizza; finché non è approvato non vede le consegne, e da quel momento con quell'account non può più fare ordini (gli ordini già fatti restano visibili; se ne ha uno in corso, deve aspettare che arrivi prima di candidarsi). Per l'amministrazione: riceve un avviso, controlla i documenti in Utenti e approva o respinge come per i fattorini nuovi; se respinge, l'account resta fattorino respinto e per farlo tornare cliente serve l'amministrazione.",
+   "verificato_da": "non rivisto (tetto di spesa): il revisore 2 (lente dati e permessi, modello grande, copia separata) è stato fermato alla fermata dura di 28 $ prima del verdetto; restano le prove del riparatore (verdi, rimessa a mano rossa per il comportamento) e il collaudo."
   }
  ],
  "nuovi_difetti_visti": [
@@ -258,7 +269,10 @@
   "R01-010: vuoi riaprire una strada dal sito per far diventare fattorino un cliente già registrato? Oggi il reclutamento dei fattorini dal sito è chiuso per la tua decisione del 26/10; la modifica scritta in serve_file_altrui lo riaprirebbe (il cliente diventa fattorino in attesa e non può più ordinare con quell'account; l'amministrazione approva o respinge)."
  ],
  "conto": {
-  "agenti": 4,
-  "nota": "lotto 1 (modello grande), revisore 1 lente soldi (modello grande), lotto 2 (modello grande), revisore 2 lente dati e permessi (modello grande, in corso)"
- }
+  "agenti": 6,
+  "subagenti": 6,
+  "costo_usd": 27.91,
+  "nota": "6 subagenti, tutti modello grande: lotto 1 (soldi), revisore 1 lente soldi (finito), lotto 2 (dati e permessi), revisore 2 lente dati e permessi (fermato alla fermata dura prima del verdetto), giro di correzione su R01-009, revisore della correzione (fermato alla fermata dura). Costo 27,91 $ (usage.cost_usd letto dalla regia alle 05:46, lettura indietro di qualche minuto): fermata dura di 28 $ raggiunta, nessun subagente dopo; verify, referto e push fatti senza subagenti."
+ },
+ "costo_usd": 27.91
 }
