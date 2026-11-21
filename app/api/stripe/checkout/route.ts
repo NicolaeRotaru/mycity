@@ -758,6 +758,30 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const couponDiscountCents = codiceSconto.scontoCents;
   const couponFreeShipping = codiceSconto.spedizioneGratis;
   const validatedCouponCode = codiceSconto.codice;
+  // 21/11/2026 (R03-010) — La riga della rivendicazione di QUESTO tentativo (`coupon_redemptions`,
+  // migrazione 361), letta subito: è l'ultima aperta del cliente su quel codice, perché finché è
+  // aperta e recente un'altra non può nascere. Serve a `rilasciaCoupon` per chiudere solo lei. Se la
+  // lettura non riesce la riga resta aperta, come prima: il lucchetto si spegne da solo in due minuti.
+  let rivendicazioneDelTentativo: string | null = null;
+  if (validatedCouponCode) {
+    try {
+      const { data: buono } = await admin.from('coupons').select('id').eq('code', validatedCouponCode).maybeSingle();
+      if (buono) {
+        const { data: riga } = await admin
+          .from('coupon_redemptions')
+          .select('id')
+          .eq('coupon_id', (buono as { id: string }).id)
+          .eq('user_id', user.id)
+          .is('released_at', null)
+          .order('claimed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        rivendicazioneDelTentativo = (riga as { id?: string } | null)?.id ?? null;
+      }
+    } catch (e) {
+      logger.warn('[stripe] rivendicazione del codice non riletta', { code: validatedCouponCode, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   /**
    * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DEI CONTANTI.
@@ -877,7 +901,20 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const rilasciaCoupon = async () => {
     if (!validatedCouponCode) return;
     const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
-    if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+    if (relErr) {
+      logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+      return;
+    }
+    // 21/11/2026 (R03-010) — `release_coupon(p_code)` rimette l'uso nel contatore ma lascia aperta la
+    // rivendicazione del cliente: se la cassa cadeva, il benvenuto restava bloccato fino a due minuti.
+    // Dopo un rilascio riuscito si chiude anche lei, solo quella di questo tentativo.
+    if (!rivendicazioneDelTentativo) return;
+    const { error: errChiusa } = await admin
+      .from('coupon_redemptions')
+      .update({ released_at: new Date().toISOString() })
+      .eq('id', rivendicazioneDelTentativo)
+      .is('released_at', null);
+    if (errChiusa) logger.warn('[stripe] rivendicazione del codice non chiusa', { code: validatedCouponCode, message: errChiusa.message });
   };
 
   /**
