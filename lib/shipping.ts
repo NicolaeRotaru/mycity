@@ -1,12 +1,6 @@
 import { COMPENSO_RIDER_CENTS, COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS } from './constants';
 
-/**
- * Gli ingressi del conto della spedizione di un gruppo (un negozio).
- *
- * @deprecated 21/11/2026 (R04-010) — Non cambiano niente: la spedizione è zero (vedi `shippingForEuro`).
- * Restano solo perché chi chiama (lib/ordini/prezzi.ts e due prove) li passa ancora: toglierli
- * romperebbe il controllo dei tipi di quei file. Quando nessuno li passa più, si tolgono.
- */
+/** Gli ingressi del conto della spedizione di un gruppo (un negozio). */
 export type IngressiSpedizione = {
   subtotal: number;
   storeLat: number | null;
@@ -45,10 +39,7 @@ export function shippingForEuro(): number {
   return 0;
 }
 
-/**
- * Come shippingForEuro ma restituisce centesimi interi. Gli ingressi non cambiano niente (vedi sopra).
- * @param _opts deprecato e ignorato (vedi `IngressiSpedizione`): non passarlo nelle chiamate nuove.
- */
+/** Come shippingForEuro ma restituisce centesimi interi. Gli ingressi non cambiano niente (vedi sopra). */
 export function shippingCentsFor(_opts?: IngressiSpedizione): number {
   return Math.round(shippingForEuro() * 100);
 }
