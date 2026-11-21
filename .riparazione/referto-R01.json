@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-21 05:30",
+  "aggiornato": "2026-11-21 05:45",
   "finita": false,
-  "testa": "d13259de34f2f9c1c7b46e5c795c0c7b49ef27b7",
+  "testa": "b856771f68765cc6a012fca6cc31407cd7df1735",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "d13259de34f2f9c1c7b46e5c795c0c7b49ef27b7",
-    "nota": "fine lotto A: 1890 file + 1 saltato, 11723 prove + 1 saltata"
+    "testa": "b856771f68765cc6a012fca6cc31407cd7df1735",
+    "nota": "fine lotto B: 1890 file + 1 saltato, 11723 prove + 1 saltata"
   },
   "voci": [
     {
@@ -34,8 +34,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a32711214313951a690c449a87a5c485ff13cb5b^ --file .eslintrc.json --prove tests/unit/riparazione-r01-niente-any.test.ts --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "no-explicit-any era già error per ts/tsx con 16 file a warn come debito dichiarato; acceso reportUnusedDisableDirectives in .eslintrc.json, così i permessi di saltare il controllo che non saltano niente escono come avvisi (lint verde). La prova usa l API di ESLint sulla configurazione vera: un any in un file finto sotto lib/ dà errore, un eslint-disable inutile viene segnalato. Il secondo commit fa passare la prova anche al typecheck (createRequire).",
-      "cosa_resta": "29 eslint-disable inutili (ora avvisi) e 38 any in 16 file a warn, tutti in file altrui: elenco in serve_file_altrui e nel rapporto del lotto. tsconfig.json:7 è già strict: true, niente da accendere.",
+      "cosa_ho_fatto": "no-explicit-any era già error per ts/tsx con 16 file a warn come debito dichiarato; acceso reportUnusedDisableDirectives in .eslintrc.json, così i permessi di saltare il controllo che non saltano niente escono come avvisi (lint verde). La prova usa l API di ESLint sulla configurazione vera: un any in un file finto sotto lib/ dà errore, un eslint-disable inutile viene segnalato. Il secondo commit fa passare la prova anche al typecheck (createRequire). Nota: no-explicit-any era già error alla base (.eslintrc.json:53); il commit aggiunge solo reportUnusedDisableDirectives.",
+      "cosa_resta": "29 eslint-disable inutili (ora avvisi) e 36 any in 16 file a warn, tutti in file altrui: elenco in serve_file_altrui e nel rapporto del lotto. tsconfig.json:7 è già strict: true, niente da accendere.",
       "serve_file_altrui": [
         {
           "file": "app/api/cron/send-emails/route.ts",
@@ -57,38 +57,66 @@
           "file": "app/admin/products/page.tsx:197, app/product/[id]/layout.tsx:140, app/product/[id]/opengraph-image.tsx:65, app/product/[id]/page.tsx:865, app/seller/orders/[id]/page.tsx:656, app/seller/products/ai-batch/page.tsx:301, app/store/[id]/opengraph-image.tsx:63, components/CategoryShowcase.tsx:257, components/ImageUrlField.tsx:112, components/StoreListRow.tsx:82, components/StoreMediaManager.tsx:168, components/StorePreviewCard.tsx:142, components/SupportProductAssistant.tsx:361,408,421,516,660, components/account/AccountSidebar.tsx:116, components/seller/BackgroundRemovalPreview.tsx:147,161, components/seller/BarcodeScanner.tsx:130, components/seller/BulkPhotoCreate.tsx:287, components/seller/CameraCapture.tsx:159, components/seller/ProductForm.tsx:1399, components/seller/ProductImagesField.tsx:199, components/seller/ReturnRequestCard.tsx:219, components/seller/site/SitePreview.tsx:267, lib/email/avviso-messaggio-negozio.ts:64, app/api/cron/send-emails/route.ts:333",
           "modifica": "togliere il commento eslint-disable a quella riga: non salta niente (lo segnala ora reportUnusedDisableDirectives)"
         }
-      ]
+      ],
+      "verificato_da": "qa-sonnet revA: rimessa uscita 0; mutante reportUnusedDisableDirectives false e mutante no-explicit-any off fanno cadere la prova; lint verde (0 errori, 127 avvisi di cui 29 eslint-disable inutili), typecheck verde, nessun --max-warnings in ci.yml o package.json."
     },
     {
       "id": "R01-002",
       "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
-      "esito": "non_fatto",
-      "nota": "in corso"
+      "esito": "gia_riparato_prima",
+      "prova": ".github/workflows/ci.yml:90-109 (job unit-tests): passo che installa e accende PostgreSQL e passo «Le prove col database vero non si possono saltare» (esce 1 se /usr/lib/postgresql/*/bin/initdb manca o se psql -d postgres select 1 non risponde), prima del passo Test; cerca negli stessi percorsi e con lo stesso psql di tests/unit/postgres-usa-e-getta.ts:37 e un-invito-scritto-a-mano-non-paga.test.ts:24-25. Prova già alla base: tests/unit/riparazione-r01-prove-col-database-in-ci.test.ts, 3 su 3 verdi.",
+      "nota": "PROVE_POSTGRES_OBBLIGATORIE=1 in ci.yml non è letta da nessun file: oggi non fa danno perché il controllo vero è il passo guardia; vedi nuovi_difetti_visti."
     },
     {
       "id": "R01-003",
       "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
       "esito": "scelta_di_nicola",
-      "domanda": "Per chiudere le 18 falle restanti servono salti di versione maggiore (resend 6.39 per @react-email/render e js-beautify/glob/minimatch/editorconfig, zod 4.x, Storybook builder-webpack5/nextjs, polyfill di webpack): li vuoi? Tre dei pacchetti (@sentry/nextjs, resend, zod) vanno anche nel sito.",
-      "nota": "npm audit fix senza --force: da 18 falle (5 basse, 9 moderate, 4 alte) a 19 (5 basse, 10 moderate, 4 alte, compare fork-ts-checker-webpack-plugin), e tirerebbe dentro due salti maggiori (cosmiconfig 8→9, fs-extra 10→11): lockfile rimesso come alla base, nessun commit. Falle prima, per gravità: alte @storybook/builder-webpack5, @storybook/nextjs, webpack-dev-middleware, zod; moderate @react-email/render, @sentry/bundler-plugins, @sentry/nextjs, @sentry/webpack-plugin, editorconfig, glob, js-beautify, minimatch, resend; basse browserify-sign, create-ecdh, crypto-browserify, elliptic, node-polyfill-webpack-plugin. Dopo: le stesse più fork-ts-checker-webpack-plugin (moderata). Prova: npm audit --json prima e dopo."
+      "domanda": "Le 18 falle restanti si chiudono solo con salti di versione maggiore: resend ^3.0.0 → 6.39.0 (chiude anche @react-email/render, editorconfig, glob, js-beautify, minimatch), zod ^3.22.0 → 4.6.7; per Storybook (@storybook/builder-webpack5, @storybook/nextjs, webpack-dev-middleware), elliptic, browserify-sign, create-ecdh, crypto-browserify e node-polyfill-webpack-plugin npm non offre nessuna cura; le tre di Sentry (@sentry/nextjs ^10.53.1, @sentry/bundler-plugins, @sentry/webpack-plugin) risultano curabili per npm ma npm audit fix non cambia niente. Tre di questi pacchetti vanno anche nel sito, non solo negli strumenti: @sentry/nextjs, resend, zod. Vuoi i salti maggiori di resend (3→6) e zod (3→4)?",
+      "nota": "npm audit fix senza --force: da 18 falle (5 basse, 9 moderate, 4 alte) a 19 (5 basse, 10 moderate, 4 alte, compare fork-ts-checker-webpack-plugin), e tirerebbe dentro due salti maggiori (cosmiconfig 8→9, fs-extra 10→11): lockfile rimesso come alla base, nessun commit. Falle prima, per gravità: alte @storybook/builder-webpack5, @storybook/nextjs, webpack-dev-middleware, zod; moderate @react-email/render, @sentry/bundler-plugins, @sentry/nextjs, @sentry/webpack-plugin, editorconfig, glob, js-beautify, minimatch, resend; basse browserify-sign, create-ecdh, crypto-browserify, elliptic, node-polyfill-webpack-plugin. Dopo: le stesse più fork-ts-checker-webpack-plugin (moderata). Prova: npm audit --json prima e dopo.",
+      "verificato_da": "qa-sonnet revA: npm audit --json oggi 18 falle (4 alte, 9 moderate, 5 basse); zod e resend solo con isSemVerMajor true; Storybook, elliptic e polyfill di webpack senza cura (fixAvailable false); le tre Sentry segnano fixAvailable true ma npm audit fix --dry-run --package-lock-only in una copia a parte non cambia niente."
     },
     {
       "id": "R01-004",
       "chiave": "architettura|l'elenco delle librerie dichiara una libreria mai usata e ne usa una che non dichiara, e il lint gira con un comando che next 16 toglie",
       "esito": "gia_riparato_prima",
-      "prova": "package.json:9 il lint è già `eslint --ext … app components lib` (nessun next lint né configurazione equivalente in .eslintrc.json o next.config.js); package.json:42 dichiara iconv-lite usata da pdfkit; server-only non è più importato (lib/health/checks.ts:1). Già in base con le prove riparazione-r05-librerie-dichiarate e riparazione-r23-librerie-dichiarate."
+      "prova": "package.json:9 il lint è già `eslint --ext … app components lib` (nessun next lint né configurazione equivalente in .eslintrc.json o next.config.js); package.json:42 dichiara iconv-lite usata da pdfkit; server-only non è più importato (lib/health/checks.ts:1). Già in base con le prove riparazione-r05-librerie-dichiarate e riparazione-r23-librerie-dichiarate.",
+      "verificato_da": "qa-sonnet revA: import di app/components/lib/scripts contro package.json, nessuna libreria importata e non dichiarata; next lint resta solo in due documenti (PROMPT_CLAUDE_CODE.md:149, ANALISI_MARKETPLACE.md:272); ci.yml:75 lancia npm run lint."
     },
     {
       "id": "R01-005",
       "chiave": "architettura|il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
       "esito": "gia_riparato_prima",
-      "prova": "scripts/gen-db-types.mjs:35-40: sqlTypeToTs riconosce `[]` e `_tipo` prima del tipo base e restituisce `<tipo>[]`; lib/database.types.ts ha già 18 colonne string[] (es. riga 1014). Già in base con la prova tests/unit/riparazione-r05-tipi-colonne-array.test.ts."
+      "prova": "scripts/gen-db-types.mjs:35-40: sqlTypeToTs riconosce `[]` e `_tipo` prima del tipo base e restituisce `<tipo>[]`; lib/database.types.ts ha già 18 colonne string[] (es. riga 1014). Già in base con la prova tests/unit/riparazione-r05-tipi-colonne-array.test.ts.",
+      "verificato_da": "qa-sonnet revA: sqlTypeToTs su text[], uuid[], _text, _uuid, _int4, _varchar, varchar(20)[], text[][] → array; generatore rilanciato: nessuna differenza con lib/database.types.ts; resta scoperta solo la forma «text ARRAY», assente nelle migrazioni."
     },
     {
       "id": "R01-006",
       "chiave": "architettura|una quinta copia scritta a mano del finto clienteavvisi nelle prove degli avvisi",
-      "esito": "non_fatto",
-      "nota": "in corso"
+      "esito": "riparato",
+      "commit": "b856771f68765cc6a012fca6cc31407cd7df1735",
+      "file_toccati": [
+        "tests/unit/minori-s08-avvisi.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/minori-s08-avvisi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/minori-s08-avvisi.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": "la cura è nella prova stessa: la prova rimessa non si applica"
+      },
+      "copre_tutta_la_voce": true,
+      "prova_comune": {
+        "file": "tests/unit/minori-s08-avvisi.test.ts",
+        "motivo": "la voce è proprio la quinta copia scritta a mano del finto clienteavvisi dentro questa prova; permesso della regia (21/11), firma di Nicola all unione",
+        "asserzioni_toccate": 0,
+        "casi_prima": 8,
+        "casi_dopo": 8
+      },
+      "cosa_ho_fatto": "Si tocca una prova comune perché la voce è proprio quella quinta copia: database() ora costruisce fintoGiroNotturno({chiaviUniche:true, guasti}) da tests/unit/aiuti/finto-giro-notturno.ts (pannelloRottoPer e turnoRotto diventano due Guasto di insert con seRiga) invece del cliente scritto a mano. Finto comune non cambiato, nessuna riga expect nel diff, 8 casi prima e dopo, 8 su 8 verdi."
     },
     {
       "id": "R01-007",
@@ -99,26 +127,58 @@
     {
       "id": "R01-008",
       "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
-      "esito": "non_fatto",
-      "nota": "in corso"
+      "esito": "serve_file_altrui",
+      "nota": "La barra è già a posto alla base: app/product/[id]/page.tsx:1647 passa prezzoPieno={prezzoPieno} e components/StickyAddToCart.tsx:114-118 barra il pieno solo se prezzoPieno > price; tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx 3 su 3 verdi. Nessun difetto resta in StickyAddToCart.tsx. Restano i 5 caroselli in file altrui; modello components/products/FrequentlyBoughtTogether.tsx:15 e :53-54. Nessun altro carosello col prezzo pieno (DropOfDay usa drop_price proprio, ReorderRail mostra il prezzo storico dell ordine).",
+      "serve_file_altrui": [
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "riga 39: il queryFn di leggiSimili diventa async: const righe = await leggiSimili(...); if (righe.length === 0) return righe; const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()); return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 })); import { discountedUnitCents, fetchActiveDiscounts } from @/lib/promotions; la riga 94 stampa già formatPrice(p.price)"
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "riga 72: stesso schema sul queryFn di leggiVistiDiRecente (async, fetchActiveDiscounts, price scontato come FrequentlyBoughtTogether.tsx:53-54, import da @/lib/promotions); la riga 110 stampa già formatPrice(p.price)"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "righe 49-50: stesso schema sul queryFn di leggiSponsorizzati; lo sconto va sul prezzo stampato a :136; import da @/lib/promotions"
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "riga 57: stesso schema sul queryFn di leggiSuggerimentiRicerca (il primo useQuery; quello delle categorie a riga 66 non si tocca); prezzo stampato a :249; import da @/lib/promotions"
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "riga 48: stesso schema sul queryFn di leggiTendenze; la riga 120 stampa già formatPrice(p.price); import da @/lib/promotions"
+        }
+      ]
     },
     {
       "id": "R01-009",
       "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
-      "esito": "non_fatto",
-      "nota": "in corso"
+      "esito": "parziale",
+      "prova": "grep -n orientation|id|display_override|screenshots public/manifest.json → solo riga 5 \"id\": \"/\" e riga 8 \"display_override\": [\"standalone\",\"minimal-ui\"]; nessun orientation (parte già chiusa alla base), nessun screenshots; in public/ i soli PNG sono apple-touch-icon, icon-192, icon-512, icon-maskable-512.",
+      "cosa_resta": "Manca la chiave screenshots: servono 2 PNG veri del sito (non generati da una build locale senza dati), uno narrow (es. 1080x1920) e uno wide (es. 1280x720 o più); poi in public/manifest.json screenshots:[{src,sizes,type:\"image/png\",form_factor:\"narrow\"|\"wide\",label}]. Le schermate le deve fornire Nicola.",
+      "copre_tutta_la_voce": false
     },
     {
       "id": "R01-010",
       "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
-      "esito": "non_fatto",
-      "nota": "in corso"
+      "esito": "gia_riparato_prima",
+      "prova": "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts (3 casi, verde alla base). Mutanti applicate a mano in app/cart/page.tsx alla base, una alla volta e poi rimesse: consegnaVeloce false→true (536-539), couponScontoCents 0→100 (536), supplementoVeloceCents a 0 invece che da vociConsegna (542), couponSpedizioneGratis false→true (535), pickupInStore false→true (534), shippingCost +0.5 (543), consegnaDaPagare senza le tariffe (544-545): tutte rosse per asserzione. app/cart/page.tsx uguale alla base."
     }
   ],
-  "nuovi_difetti_visti": [],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la variabile che rende obbligatorie le prove col database in CI non la legge nessuno",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": ".github/workflows/ci.yml:142",
+      "descrizione": "PROVE_POSTGRES_OBBLIGATORIE=1 è impostata nel passo Test ma nessun file in tests/, lib/ o scripts/ la legge: la protezione vera è il passo guardia prima delle prove. Fuori dalla CI l aiutante tests/unit/postgres-usa-e-getta.ts continua a saltare in silenzio se manca Postgres."
+    }
+  ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 1,
-    "nota": "lotto A (sonnet)"
+    "agenti": 3,
+    "nota": "lotto A, revisore A, lotto B (tutti sonnet)"
   }
 }
