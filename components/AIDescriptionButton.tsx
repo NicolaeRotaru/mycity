@@ -24,6 +24,16 @@ type Props = {
   onResult: (text: string) => void;
 };
 
+/**
+ * Sopra un campo vuoto il testo entra nel campo e si può modificare; sopra una descrizione già
+ * scritta resta una proposta da accettare (ProductForm): il messaggio lo dice.
+ */
+export function messaggioDelRisultato(currentText: string | undefined): string {
+  return (currentText ?? '').trim()
+    ? 'Proposta pronta — la tua descrizione resta com\'è finché non scegli'
+    : 'Descrizione generata — modifica come preferisci';
+}
+
 export default function AIDescriptionButton({ productName, categoryName, currentText, onResult }: Props) {
   const [loading, setLoading] = useState(false);
 
@@ -50,7 +60,7 @@ export default function AIDescriptionButton({ productName, categoryName, current
       const json = await res.json();
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
       onResult(json.description);
-      toast.success('Descrizione generata — modifica come preferisci');
+      toast.success(messaggioDelRisultato(currentText));
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
