@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { fetchActiveDiscounts } from '@/lib/promotions';
 import ProductCard from '@/components/ProductCard';
 import ProductGrid from '@/components/ProductGrid';
 import { queryKeys } from '@/lib/queries/keys';
@@ -18,6 +19,8 @@ type Row = {
   stock: number | null;
   has_variants: boolean | null;
   created_at: string;
+  /** Sconto promo attivo (%), dalla stessa fonte della griglia e della cassa. */
+  sconto?: number;
 };
 
 /** Prodotti scelti a mano dal venditore, nell'ordine scelto (ri-valida proprietà/stato). */
@@ -44,7 +47,12 @@ function ManualCollection({
         .eq('status', 'available')
         .in('id', ids);
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      const righe = (data ?? []) as unknown as Row[];
+      // R02-013 — Le collezioni scelte a mano passavano a ProductCard il solo prezzo pieno: un prodotto
+      // in promozione non mostrava lo sconto. Lo si legge come la griglia (fetchActiveDiscounts); se la
+      // lettura cade si resta sul prezzo pieno, come prima.
+      const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());
+      return righe.map((p) => ({ ...p, sconto: sconti.get(p.id) ?? 0 }));
     },
   });
 
@@ -77,6 +85,7 @@ function ManualCollection({
       name={p.name}
       description={p.description ?? ''}
       price={Number(p.price)}
+      discountPercent={p.sconto ?? 0}
       images={Array.isArray(p.images) ? p.images : []}
       stock={p.stock ?? undefined}
       hasVariants={p.has_variants ?? undefined}
