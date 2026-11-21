@@ -403,8 +403,13 @@ export async function contaProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
+  // R11-010 R11-011 — Il numero conta solo i prodotti dei negozi approvati, come la griglia: il
+  // negozio si aggancia con `!inner` alla vista pubblica (la stessa delle storie). Se il servizio
+  // non conosce l'aggancio si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
+  let senzaAggancio = false;
   const conta = (blocco?: string[]) => {
-    let q = supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'available');
+    const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!inner(id)';
+    let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
     q = applicaFiltriComuni(q, d, categorie);
     if (termine) q = q.ilike('name', `%${termine}%`);
     if (blocco) q = q.in('id', blocco);
@@ -415,7 +420,12 @@ export async function contaProdottiDellaGriglia(
   const blocchi = d.idsColVoto !== undefined ? inBlocchi([...new Set(d.idsColVoto)]) : [undefined];
   let totale = 0;
   for (const blocco of blocchi) {
-    const { count, error } = await conta(blocco);
+    let { count, error } = await conta(blocco);
+    const codice = (error as { code?: string } | null)?.code;
+    if (error && !senzaAggancio && (codice === 'PGRST200' || codice === 'PGRST201')) {
+      senzaAggancio = true;
+      ({ count, error } = await conta(blocco));
+    }
     if (error || count == null) return null;
     totale += count;
   }
