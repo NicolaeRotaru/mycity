@@ -590,7 +590,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const pezziGiaQui = righeDelCarrello.filter(stessaRiga).reduce((t, c) => t + (Number(c.quantity) || 0), 0);
   const lordoContantiCents = lordoDelCarrelloCents(altreRighe, qty);
   const contantiQui = !sopraIlTettoDeiContanti(lordoContantiCents);
-  const contantiAggiungendo = !sopraIlTettoDeiContanti(lordoDelCarrelloCents(altreRighe, pezziGiaQui + qty));
+  const lordoAggiungendoCents = lordoDelCarrelloCents(altreRighe, pezziGiaQui + qty);
+  const contantiAggiungendo = !sopraIlTettoDeiContanti(lordoAggiungendoCents);
+  // R01-009 — Il riquadro verde e «Compri sicuro» non appartengono a un pulsante: stanno accanto ad
+  // «Aggiungi al carrello» (che somma) e a «Compra ora» (che porta la riga alla quantità scelta).
+  // Promettono i contanti solo se reggono su tutte e due le strade; il testo di «Compra ora» e il
+  // ricordo di 'cod' restano legati a `contantiQui`, perché lì la strada è una sola.
+  const contantiSuTutteEDue = contantiQui && contantiAggiungendo;
+  const lordoPiuAltoCents = Math.max(lordoContantiCents, lordoAggiungendoCents);
 
   // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
   // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
@@ -1013,7 +1020,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
                     non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
                     cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
-                <span>{frasePagamento(undefined, lordoContantiCents)}</span>
+                <span>{frasePagamento(undefined, lordoPiuAltoCents)}</span>
               </span>
               {/* Il costo di consegna: fin qui non compariva da nessuna parte, e il primo posto
                   dove si vedeva era il carrello. Chi legge la promessa qui sopra deve leggere
@@ -1320,7 +1327,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
               <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
-              {contantiQui && (
+              {contantiSuTutteEDue && (
                 <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
               )}
             </div>
