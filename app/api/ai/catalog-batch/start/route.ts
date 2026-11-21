@@ -162,6 +162,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .single();
 
   if (errJob || !job) {
+    // 21/11/2026 (R02-004 · R02-013) — DUE AVVII INSIEME. La lettura dei lavori
+    // aperti qui sopra passa per tutti e due; il database tiene un solo lavoro
+    // aperto per negozio (migrazione 640), e il secondo inserimento arriva qui
+    // con 23505. Non e' un guasto: e' il lavoro dell'altro avvio, gia' aperto.
+    if (errJob?.code === '23505') {
+      const { data: altri } = await admin
+        .from('catalog_ai_jobs')
+        .select('id, status')
+        .eq('seller_id', user.id)
+        .in('status', STATI_APERTI)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const altro = (altri ?? [])[0] as { id: string; status: string } | undefined;
+      return apiError(
+        409,
+        'Hai già un lavoro sul catalogo appena avviato: lo trovi qui sotto. Non avviarne un altro.',
+        'CONFLICT',
+        altro ? { jobId: altro.id, status: altro.status } : undefined,
+      );
+    }
     logger.error('catalog-batch start: insert job failed', { sellerId: user.id, status: errJob?.code });
     return ApiErrors.badGateway('Non sono riuscito ad aprire il lavoro. Riprova.');
   }
