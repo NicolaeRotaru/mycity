@@ -566,35 +566,82 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
  * versati): la notte non lo prende in carico e non lo cancella. Qui si trovano quelle
  * richieste scadute rimaste fuori dalla lista, e gli amministratori ricevono un avviso per
  * negozio (uno solo, non uno a notte). Una lettura che non riesce non ferma il giro.
+ *
+ * 21/11/2026 (R01-003) — Prima si leggevano al massimo 200 profili, senza ordine, e quelli presi
+ * in carico si toglievano DOPO il limite: con più di 200 richieste scadute il negozio rinviato
+ * poteva restare fuori per sempre. Adesso si legge a pagine, in ordine di richiesta e poi di id,
+ * finché finiscono, e i presi in carico si tolgono pagina per pagina. Due tetti, detti nel
+ * registro quando scattano: le pagine (`RINVIATE_PAGINE_MASSIME`) e il tempo
+ * (`TETTO_RINVIATE_MS`), perché questo passo viene prima del ciclo delle cancellazioni e il
+ * tempo di quel ciclo si conta dall'inizio del giro.
  */
+const RINVIATE_PER_PAGINA = 200;
+const RINVIATE_PAGINE_MASSIME = 25;
+const TETTO_RINVIATE_MS = 45_000;
+
 async function segnalaLeCancellazioniRinviate(admin: Admin, prese: Set<string>): Promise<number> {
+  const inizio = Date.now();
+  let rinviate = 0;
   try {
     const soglia = new Date(Date.now() - 7 * 86_400_000).toISOString();
-    const { data, error } = await admin
-      .from('profiles')
-      .select('id')
-      .lt('deletion_requested_at', soglia)
-      .limit(200);
-    if (error || !Array.isArray(data)) {
-      if (error) logger.warn('[cron-deletions] richieste rinviate non lette', { message: error.message });
-      return 0;
+    type Richiesta = { id: string; deletion_requested_at: string };
+    const leggi = async (pagina: PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
+      const { data, error } = await pagina;
+      if (error || !Array.isArray(data)) throw new Error(error?.message ?? 'risposta senza righe');
+      return data as Richiesta[];
+    };
+    let dopo: Richiesta | null = null;
+    for (let pagina = 0; ; pagina++) {
+      if (pagina === RINVIATE_PAGINE_MASSIME) {
+        logger.warn('[cron-deletions] richieste rinviate: tetto di pagine raggiunto, le altre si guardano la notte dopo', {
+          righeLette: pagina * RINVIATE_PER_PAGINA,
+        });
+        break;
+      }
+      // Prima chi ha la stessa ora di richiesta dell'ultima riga letta e un id più grande (a pari
+      // merito sul confine della pagina), poi chi ha chiesto dopo.
+      let righe: Richiesta[] = [];
+      let ultimaPagina = false;
+      if (dopo) {
+        righe = await leggi(
+          admin.from('profiles').select('id, deletion_requested_at')
+            .eq('deletion_requested_at', dopo.deletion_requested_at).gt('id', dopo.id)
+            .order('id').limit(RINVIATE_PER_PAGINA),
+        );
+      }
+      if (righe.length === 0) {
+        let q = admin.from('profiles').select('id, deletion_requested_at').lt('deletion_requested_at', soglia);
+        if (dopo) q = q.gt('deletion_requested_at', dopo.deletion_requested_at);
+        righe = await leggi(q.order('deletion_requested_at').order('id').limit(RINVIATE_PER_PAGINA));
+        ultimaPagina = righe.length < RINVIATE_PER_PAGINA;
+      }
+      for (const r of righe) {
+        if (!r?.id || prese.has(r.id)) continue;
+        if (Date.now() - inizio >= TETTO_RINVIATE_MS) {
+          logger.warn('[cron-deletions] richieste rinviate: tempo finito, le altre si avvisano la notte dopo', {
+            avvisate: rinviate,
+            tettoMs: TETTO_RINVIATE_MS,
+          });
+          return rinviate;
+        }
+        rinviate++;
+        logger.warn('[cron-deletions] cancellazione rinviata: il negozio ha ordini aperti o soldi da incassare', { userId: r.id });
+        await avvisaAmministratori(
+          admin,
+          'Cancellazione rinviata: ordini o soldi ancora aperti',
+          `L'account ${r.id.slice(0, 8)} ha chiesto la cancellazione da più di 7 giorni, ma come negozio ha ancora ` +
+            'un ordine aperto o soldi da incassare: la notte non la prende in carico e riprova ogni notte. ' +
+            'Chiusi ordini e bonifici, la cancellazione parte da sola.',
+          `cancellazione-rinviata-ordini:${r.id}`,
+        );
+      }
+      if (ultimaPagina || righe.length === 0) break;
+      dopo = righe[righe.length - 1];
     }
-    const rinviate = (data as Array<{ id: string }>).filter((r) => r?.id && !prese.has(r.id));
-    for (const r of rinviate) {
-      logger.warn('[cron-deletions] cancellazione rinviata: il negozio ha ordini aperti o soldi da incassare', { userId: r.id });
-      await avvisaAmministratori(
-        admin,
-        'Cancellazione rinviata: ordini o soldi ancora aperti',
-        `L'account ${r.id.slice(0, 8)} ha chiesto la cancellazione da più di 7 giorni, ma come negozio ha ancora ` +
-          'un ordine aperto o soldi da incassare: la notte non la prende in carico e riprova ogni notte. ' +
-          'Chiusi ordini e bonifici, la cancellazione parte da sola.',
-        `cancellazione-rinviata-ordini:${r.id}`,
-      );
-    }
-    return rinviate.length;
+    return rinviate;
   } catch (e) {
-    logger.warn('[cron-deletions] richieste rinviate non controllate', { e });
-    return 0;
+    logger.warn('[cron-deletions] richieste rinviate non lette', { message: e instanceof Error ? e.message : 'errore' });
+    return rinviate;
   }
 }
 
