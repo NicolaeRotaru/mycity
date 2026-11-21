@@ -10,7 +10,7 @@ import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flam
 import { supabase } from '@/lib/supabase/client';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/catalogo';
-import { addToCart, getCart, updateQuantity } from '@/lib/cart';
+import { addToCart, getCart, updateQuantity, type CartItem } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { discountedUnitCents } from '@/lib/promotions';
@@ -19,7 +19,7 @@ import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { fraseResoDelProdotto, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
-import { tariffaConsegnaCents } from '@/lib/ordini/prezzi';
+import { vociDellaConsegna } from '@/lib/ordini/prezzi';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
@@ -87,6 +87,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // 5/11/2026 — Dopo il primo tocco su «Compra ora» il pulsante si spegne fino al cambio pagina.
   const [inPartenza, setInPartenza] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  // R02-006 — Le righe che il carrello ha già: «Compra ora» apre la cassa su TUTTO il carrello, e il
+  // tetto dei contanti si guarda lì. Si rileggono a ogni cambio del carrello (anche da un'altra scheda).
+  const [righeDelCarrello, setRigheDelCarrello] = useState<CartItem[]>([]);
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   // R08-003 — L'indirizzo dello zoom che non ha risposto (foto cancellata): al suo posto il segnaposto,
@@ -379,6 +382,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     setIsNew(age < NEW_PRODUCT_DAYS);
   }, [createdAt]);
 
+  useEffect(() => {
+    const rileggi = () => setRigheDelCarrello(getCart());
+    rileggi();
+    window.addEventListener('cart:updated', rileggi);
+    window.addEventListener('storage', rileggi);
+    return () => {
+      window.removeEventListener('cart:updated', rileggi);
+      window.removeEventListener('storage', rileggi);
+    };
+  }, []);
+
   // L'elenco delle recensioni parte quando la sezione si avvicina allo schermo.
   useEffect(() => {
     if (recensioniInVista) return;
@@ -550,14 +564,33 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const maxQty = stock === undefined ? Infinity : Math.max(1, stock);
   const qty = Math.min(quantity, maxQty);
 
-  // R02-007 — «Paghi alla consegna» solo dove la cassa accetta davvero i contanti. Il tetto della legge
-  // (lib/ordini/tetto-dei-contanti.ts) vale sul lordo, merce più consegna, come in cassa e nella rotta
-  // dei contanti: qui la merce è QUESTO prodotto, al prezzo che si paga (promo compresa) e nella
-  // quantità scelta, più la consegna minima che la cassa gli aggiunge. Sopra il tetto la scheda non
-  // promette i contanti: né nel riquadro verde, né sul pulsante, né nella barra in fondo.
-  const merceCents = Math.round(price * 100) * qty;
-  const lordoContantiCents = merceCents + tariffaConsegnaCents({ pickupInStore: false, merceCents, consegnaVeloce: false });
+  // R02-006 — «Paghi alla consegna» solo dove la cassa accetta davvero i contanti. Il tetto della legge
+  // (lib/ordini/tetto-dei-contanti.ts, non si tocca) vale sul lordo di TUTTO il carrello, merce più
+  // consegna, come in cassa e nella rotta dei contanti. Si conta quindi il carrello che la cassa
+  // troverà: le righe che ci sono già più questo prodotto, al prezzo che si paga (promo compresa) e
+  // nella quantità scelta; la consegna con la regola della cassa (vociDellaConsegna: un euro per ogni
+  // negozio in più e per ogni negozio sotto i 10 €) e con la veloce, che costa un euro in più e in
+  // cassa si può ancora scegliere. Si promette solo quello che vale qualunque consegna si scelga.
+  // Due conti, uno per strada: «Compra ora» porta la riga di questo prodotto alla quantità scelta,
+  // «Aggiungi» (anche dalla barra in fondo) la somma a quella che c'è.
+  const stessaRiga = (c: CartItem) => c.id === product.id && (c.variantId ?? null) === (selectedVariant?.id ?? null);
+  const negozioQui = product.seller_id ?? product.id;
+  const lordoDelCarrelloCents = (righe: CartItem[], pezziQui: number) => {
+    const perNegozio = new Map<string, number>([[negozioQui, Math.round(price * 100) * pezziQui]]);
+    for (const c of righe) {
+      const negozio = c.sellerId ?? `senza-negozio:${c.id}`;
+      const riga = Math.round(Number(c.price) * 100) * Math.max(0, Number(c.quantity) || 0);
+      perNegozio.set(negozio, (perNegozio.get(negozio) ?? 0) + (Number.isFinite(riga) ? riga : 0));
+    }
+    const negozi = [...perNegozio.values()].map((m) => ({ spesaCents: m, merceCents: m }));
+    const merce = negozi.reduce((t, g) => t + g.merceCents, 0);
+    return merce + vociDellaConsegna({ pickupInStore: false, negozi, consegnaVeloce: true }).totaleCents;
+  };
+  const altreRighe = righeDelCarrello.filter((c) => !stessaRiga(c));
+  const pezziGiaQui = righeDelCarrello.filter(stessaRiga).reduce((t, c) => t + (Number(c.quantity) || 0), 0);
+  const lordoContantiCents = lordoDelCarrelloCents(altreRighe, qty);
   const contantiQui = !sopraIlTettoDeiContanti(lordoContantiCents);
+  const contantiAggiungendo = !sopraIlTettoDeiContanti(lordoDelCarrelloCents(altreRighe, pezziGiaQui + qty));
 
   // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
   // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
@@ -1618,7 +1651,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         note="Paghi alla consegna"
         // R02-007 — Sopra il tetto dei contanti la riga non si passa. La frase resta scritta qui sopra:
         // è quella che la prova della barra misura a 360 pixel.
-        {...(contantiQui ? {} : { note: undefined })}
+        // R02-006 — Il pulsante della barra è «Aggiungi»: il tetto si guarda sul carrello come lo lascia lui.
+        {...(contantiAggiungendo ? {} : { note: undefined })}
         qty={qty}
         onDec={() => setQuantity(Math.max(1, qty - 1))}
         onInc={() => setQuantity(Math.min(maxQty, qty + 1))}

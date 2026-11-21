@@ -193,14 +193,16 @@ describe('R02-007 · la scheda prodotto e i contanti', () => {
     expect(p.notaBarra).toBe('Paghi alla consegna');
   });
 
-  it('uguale al tetto: 4.996,99 € + 3 € di consegna = 4.999,99 € si paga in contanti; un centesimo in più no', async () => {
-    const giusto = promesse(await apri(4996.99));
+  // R02-006 — La consegna che si conta è la più cara che la cassa può ancora far scegliere: la veloce,
+  // un euro in più. 4.995,99 € + 3 € + 1 € = 4.999,99 €: i contanti valgono qualunque consegna si scelga.
+  it('uguale al tetto: 4.995,99 € + 3 € di consegna + 1 € della veloce = 4.999,99 € si paga in contanti; un centesimo in più no', async () => {
+    const giusto = promesse(await apri(4995.99));
     expect(giusto.testo).toContain('Paghi in contanti alla consegna');
     expect(giusto.compraOra).toBe('Compra ora · paghi alla consegna');
     schermo?.smonta();
     schermo = null;
     mondo.barra = [];
-    const sopra = promesse(await apri(4997));
+    const sopra = promesse(await apri(4996));
     expect(sopra.testo).not.toContain('Paghi in contanti alla consegna');
     expect(sopra.compraOra).toBe('Compra ora');
     expect(sopra.notaBarra).toBeUndefined();
