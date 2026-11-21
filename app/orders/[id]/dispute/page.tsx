@@ -99,6 +99,15 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   // R01-varie — Le uscite volute contate all'ultimo invio, e se al 401 la bozza è stata tenuta.
   const usciteAllInvio = useRef(0);
   const [bozzaTenuta, setBozzaTenuta] = useState(false);
+  // Chi ha la sessione adesso, anche se cambia da un'altra scheda (null: nessuno o non si sa).
+  const chiHaLaSessione = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof supabase.auth?.onAuthStateChange !== 'function') return;
+    const { data } = supabase.auth.onAuthStateChange((_evento, sessione) => {
+      chiHaLaSessione.current = sessione?.user?.id ?? null;
+    });
+    return () => data?.subscription?.unsubscribe();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -158,6 +167,11 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
     if (!bozzaInCorso.current || !utenteDelModulo.current) return;
     // R01-varie — Dopo un'uscita voluta il modulo non tiene più la bozza.
     if (usciteVolute() !== usciteAllInvio.current) {
+      bozzaInCorso.current = false;
+      return;
+    }
+    // È entrato un altro account: la bozza non è più di chi scrive qui.
+    if (chiHaLaSessione.current !== null && chiHaLaSessione.current !== utenteDelModulo.current) {
       bozzaInCorso.current = false;
       return;
     }
