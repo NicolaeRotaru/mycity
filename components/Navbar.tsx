@@ -234,17 +234,7 @@ export default function Navbar() {
       }
       if (chiEntrato) {
         utenteDellaSessione = chiEntrato;
-        // Le notifiche di questo apparecchio erano di un'altra persona e la sua uscita non si è
-        // vista: si spengono prima di ricordare chi c'è adesso, e a lei resta il segno.
-        const diPrima = leggiChiHaLaSessione();
-        const daSpegnere = (evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') && diPrima !== null && diPrima !== chiEntrato;
-        if (daSpegnere) ricordaChiHaLaSessione(null);
-        const spente = daSpegnere
-          ? scollegaQuestoDispositivo().then((esito) => {
-              if (esito.disiscritto) segnaNotificheSpente(diPrima);
-            })
-          : Promise.resolve();
-        void spente.then(questoApparecchioRiceveLeNotifiche).then((riceve) => {
+        void questoApparecchioRiceveLeNotifiche().then((riceve) => {
           if (riceve && utenteDellaSessione === chiEntrato) ricordaChiHaLaSessione(chiEntrato);
         });
       }
