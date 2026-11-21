@@ -1,0 +1,541 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-21 03:26",
+  "finita": true,
+  "testa": "0617700dfc4ad7a455e95d7dcf1da75b296bc3d7",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "0617700dfc4ad7a455e95d7dcf1da75b296bc3d7",
+    "nota": "typecheck verde; lint 0 errori (98 avvisi, gli stessi della base); vitest 1862 file passati (1 saltato già sulla base), 11593 prove"
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "chiave": "api-backend|nella scheda utente dell'amministrazione il codice fiscale appare vuoto mentre si sta ancora caricando",
+      "esito": "riparato",
+      "commit": "975d2aa17057ffe406312924e86fcf9e2195cf5f",
+      "file_toccati": [
+        "app/admin/users/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 975d2aa^ -- app/admin/users/page.tsx && npx vitest run <prova> → rossa (1 fallito: il codice fiscale in caricamento era «—»); git checkout 975d2aa -- app/admin/users/page.tsx → verde (2/2)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella funzione datoIdentita, se la lettura non è ancora arrivata (dato assente) la scheda scrive «Caricamento…» invece del trattino. Vale per i due pannelli (venditore e fattorino). Il trattino resta solo dove il dato manca davvero.",
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde; lettura caduta → «non disponibile: riprova», non resta su «Caricamento…»; il trattino resta dove il dato manca davvero. Regge (caso teorico: una risposta 200 con corpo null resterebbe su «Caricamento…», la rotta non lo fa)."
+    },
+    {
+      "id": "R03-002",
+      "chiave": "api-backend|quando l'amministrazione cambia solo le taglie di un prodotto, il registro delle azioni non scrive più niente",
+      "esito": "riparato",
+      "commit": "3cabf7a62ce18fdf8296e063572c69dc5d04287b",
+      "file_toccati": [
+        "app/api/admin/products/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-traccia-taglie-admin.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-traccia-taglie-admin.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 3cabf7a6^ -- app/api/admin/products/route.ts && npx vitest run <prova> → rossa (2 falliti); git checkout 3cabf7a6 -- … → verde (3/3)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con `variants` nella richiesta, la rotta legge le taglie dalla banca dati prima e dopo il salvataggio (nome, opzioni, scorta, in ordine di posizione). Se sono cambiate, `variants` entra nella stessa voce product.update, col prima e il dopo, anche quando è l'unico campo cambiato. Un salvataggio identico non scrive niente. Se una delle due letture cade, la voce si scrive lo stesso con null dove il valore non si sa.",
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde 3/3 (4 prove insieme 9/9); lettura che cade non fa fallire il salvataggio (try/catch → null), richiesta senza variants invariata, salvataggio identico non scrive. Regge."
+    },
+    {
+      "id": "R03-003",
+      "chiave": "api-backend|cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+      "esito": "parziale",
+      "commit": "cb6ac6b0d750d6fabd02d07fbcfdefdd6351b145",
+      "file_toccati": [
+        "app/api/admin/users/[id]/delete/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-cancellazione-utente-registro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-cancellazione-utente-registro.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout cb6ac6b0^ -- app/api/admin/users/[id]/delete/route.ts && npx vitest run <prova> → rossa (1 fallito); git checkout cb6ac6b0 -- … → verde (2/2)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Quando la lettura del profilo cade (codici diversi da PGRST116 e 22P02), la cancellazione utente scrive logger.error con targetId, codice e messaggio prima di rispondere 500. Il 404 resta senza errore nel registro.",
+      "cosa_resta": "I due 500 silenziosi dell'annullo ordine dell'amministrazione, in un file non mio (modifica esatta in serve_file_altrui). Nella rotta di cancellazione resta solo un 503 senza registro (app/api/admin/users/[id]/delete/route.ts:33, getAdminSupabase che lancia), che la voce non nomina.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/admin/orders/[id]/cancel/route.ts",
+          "modifica": "(1) Aggiungere `import { logger } from '@/lib/logger';`. (2) Nel ramo `if (error && error.code !== 'PGRST116' && error.code !== '22P02') {` (righe 40-41), prima di `return ApiErrors.internal(...)`, inserire `logger.error('admin cancel order: lettura ordine fallita', { orderId: params.id, code: error.code, message: error.message });`. (3) Prima della riga 98 `return ApiErrors.internal('Annullamento fallito')` (motivo ANNULLAMENTO_FALLITO, che lib/ordini/annulla.ts:393 restituisce senza registro), inserire `logger.error('admin cancel order: annullo fallito', { orderId: order.id, motivo: esito.motivo, dettaglio: esito.dettaglio });`."
+        }
+      ],
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): prova verde 2/2, rimessa rossa per il comportamento; la modifica proposta per l'annullo applicata per prova nel worktree: le 9 prove che importano quella rotta passano (59/59); trovato un secondo 500 silenzioso nell'annullo (riga 98), aggiunto alla modifica proposta."
+    },
+    {
+      "id": "R03-004",
+      "chiave": "api-backend|se la lettura dei ruoli cade, all'assistenza arriva l'email «un cliente ti ha scritto» pensata per un negozio",
+      "esito": "riparato",
+      "commit": "398fc475d4c03e25a26e56a60b327f73e9c50543",
+      "file_toccati": [
+        "app/api/chat/messages/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-chat-ruoli-non-letti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-chat-ruoli-non-letti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 398fc475^ -- app/api/chat/messages/route.ts && npx vitest run <prova> → rossa (1 fallito); git checkout 398fc475 -- … → verde (2/2)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta ora legge anche l'errore della lettura dei ruoli. Se la lettura cade, scrive logger.warn e non manda l'email da negozio. Campanella e messaggio restano come prima.",
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): prova verde 2/2, rimessa rossa (email partita coi ruoli non letti); il controllo serve perché lib/email/avviso-messaggio-negozio.ts non guarda i ruoli; campanella e 200 invariati. Regge."
+    },
+    {
+      "id": "R03-005",
+      "chiave": "api-backend|il giro notturno delle cancellazioni non ha un tetto di tempo nemmeno sul ciclo degli account scaduti",
+      "esito": "riparato",
+      "insieme_a": [
+        "R03-006"
+      ],
+      "commit": "85236e6fae5cb5aff6eb643e47385fe2d67f9bab",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-giro-cancellazioni-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-giro-cancellazioni-tetto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 85236e6f^ -- app/api/cron/process-deletions/route.ts && npx vitest run <prova> → rossa (1 fallito); git checkout 85236e6f -- … → verde (2/2)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel ciclo `for (const riga of scadute)` c'è ora un tetto, TETTO_CANCELLAZIONI_MS = 150 s, contato da `adesso`, cioè dall'inizio del giro. Passato il tetto non si prende in carico un account nuovo: la sua richiesta resta e la riprende la notte dopo. Il numero va nella risposta come `rimandateAlGiroDopo`. La prova usa l'orologio finto: ogni cancellazione dura un minuto.",
+      "nota_insieme": "Il tetto sul ciclo, dimensionato per lasciare metà del tempo alle email, è la stessa riga che chiede R03-006.",
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): prova verde 2/2, rimessa rossa per il comportamento; il tetto si guarda solo prima di prendere un account (nessuno resta a metà), la richiesta resta per la notte dopo. Regge. Restano due difetti nuovi (in nuovi_difetti_visti): ordine di taglio non dal più vecchio, tetto non rigido."
+    },
+    {
+      "id": "R03-006",
+      "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+      "esito": "parziale",
+      "insieme_a": [
+        "R03-005"
+      ],
+      "commit": "9f460d58e40296834ea4cbefaed9fc40a8334e91",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-notte-lunga-allarme.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-notte-lunga-allarme.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 9f460d58^ -- app/api/cron/process-deletions/route.ts && npx vitest run <prova> → rossa (1 fallito: l'allarme); git checkout 9f460d58 -- … → verde (3/3). Contro la base (85236e6f^) → rossa con 2 falliti: allarme ed email oltre i 300 s"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il tetto di R03-005 ferma il ciclo a 150 s dall'inizio, così le email partono nel tempo che resta (la prova controlla che partano entro i 300 s). Quando il tetto lascia indietro degli account c'è ora l'allarme: logger.error e un avviso agli amministratori («Cancellazioni rimandate: il giro notturno ha finito il tempo»), mandato prima delle email. Il codice di stato non cambia (vedi domande).",
+      "cosa_resta": "(1) Le email non hanno un tempo loro: hanno solo quello che resta dai 150 s, e l'allarme suona solo se il tetto taglia degli account; con account lenti ma non tagliati (es. due da 140 s) e posta lenta le email arrivano a ridosso dei 300 s di maxDuration e, se la funzione viene fermata, si perde anche l'allarme delle email bloccate (avvisaUnaVoltaPerAvviso gira dopo tutte le email). (2) L'allarme del tetto (avvisaDelTettoDiTempo, route.ts:409-415) non ha chiave: ogni notte con lo stesso arretrato manda un avviso nuovo a ogni amministratore, contro la regola del file «un allarme per stato, non per notte».",
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): prova verde 3/3, rimessa rossa sull'allarme; due prove veloci nel worktree mostrano i due difetti di cosa_resta → parziale."
+    },
+    {
+      "id": "R03-007",
+      "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
+      "esito": "non_fatto",
+      "copre_tutta_la_voce": false,
+      "nota": "Il riparatore l'aveva data per già riparata, il revisore l'ha smentita: la storia del file (git log -S 'limit(200)') mostra che l'unico limit(200) è sempre stato in segnalaLeCancellazioniRinviate, e la voce ne ha sbagliato solo il nome della funzione. Il difetto c'è sulla base (righe 415-422) e c'è ancora (app/api/cron/process-deletions/route.ts:466-473): legge al massimo 200 profili senza ordine e toglie quelli presi in carico solo dopo il limite, quindi oltre 200 i negozi rinviati possono non essere mai segnalati. Non riparato: dopo il 70% del tetto la regia non apre giri nuovi. Cura attesa: ordinare per deletion_requested_at e filtrare/paginare prima del limite, con una prova che fallisce con più di 200 righe.",
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): affermazione sbagliata (vedi nota) → non_fatto."
+    },
+    {
+      "id": "R03-008",
+      "chiave": "api-backend|la chiusura della rivendicazione del benvenuto non è limitata al tentativo in corso",
+      "esito": "parziale",
+      "commit": "155d11a4d04f61a13175e1ee49ee80f66ad1042c",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "tests/unit/riparazione-r03-benvenuto-del-tentativo.test.ts",
+        "tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-benvenuto-del-tentativo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-benvenuto-del-tentativo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 155d11a4^ -- app/api/orders/cod/route.ts && npx vitest run <prova> → rossa (1 fallito: chiusa la rivendicazione dell'altra scheda); git checkout 155d11a4 -- app/api/orders/cod/route.ts → verde (2/2)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La rotta legge l'id della riga coupon_redemptions subito dopo la rivendicazione e, al rilascio (tetto dei contanti o annullamento), chiude solo quella riga per id, invece di tutte quelle aperte del cliente. La prova esistente R04 (importa la rotta) ora dà un id a ogni riga finta, come la tabella vera: la prova non è indebolita.",
+      "nota": "Prova esistente tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts toccata perché importa la rotta dei contanti (mio file): solo il finto coupon_redemptions ora ha la colonna id, come la tabella vera. Il file finge anche lib/supabase/server (vi.mock), non ne esegue il codice.",
+      "prova_comune_toccata": {
+        "file": "tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts",
+        "commit": "155d11a4d04f61a13175e1ee49ee80f66ad1042c",
+        "motivo": "La rotta dei contanti ora chiude la rivendicazione del benvenuto per id della riga (solo quella del tentativo in corso). Il finto database di questa prova non dava un id alle righe di coupon_redemptions, mentre la tabella vera ha id come chiave primaria: senza id la chiusura per id non trova la riga.",
+        "cosa_cambia_nel_finto": "coupon_redemptions dichiara anche la colonna id e ogni riga finta nasce con id riv-N. Nessuna asserzione tolta o indebolita.",
+        "firma": "da portare a Nicola dalla regia (prova comune: finge anche lib/supabase/server di R04)"
+      },
+      "cosa_resta": "Manca solo il controllo indipendente: correzione, prova e prova rimessa (regge) ci sono, ma il revisore è stato fermato alla fermata dura di 33 $ prima di finire, e per regola della regia quello che non è controllato resta parziale.",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire"
+    },
+    {
+      "id": "R03-009",
+      "chiave": "api-backend|un profilo in attesa con approval_requested_at rimasto valorizzato non riceve mai consenso né avviso",
+      "esito": "riparato",
+      "commit": "44dca33e2f91b2bafb083c4c8d6204908e951ec5",
+      "file_toccati": [
+        "app/api/seller/apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-domanda-negozio-data-rimasta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-domanda-negozio-data-rimasta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 44dca33e^ -- app/api/seller/apply/route.ts && npx vitest run <prova> → rossa (1 fallito); git checkout 44dca33e -- … → verde (2/2)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "`giaAVerbale` ed `eraGiaInAttesa` richiedono ora anche role === 'seller', come fanno /sell e la coda dell'amministrazione: ogni profilo nasce «pending». Un cliente con approval_requested_at rimasta da prima riceve verbale del consenso e avviso agli amministratori. Un negozio già in coda che corregge la domanda non li riceve una seconda volta.",
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): prova verde 2/2, rimessa rossa (verbale 0 invece di 1); negozio già in coda senza verbale/avviso doppi, prove sui due invii insieme verdi; scrittura di ruolo e stato invariata, nessuna via per farsi approvare. Regge."
+    },
+    {
+      "id": "R03-010",
+      "chiave": "api-backend|con la carta, se la cassa cade dopo la rivendicazione del benvenuto, il codice resta bloccato fino a 2 minuti",
+      "esito": "parziale",
+      "commit": "8842b08b39c1a45bc29f605ab8794dd9461e8d25",
+      "file_toccati": [
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/riparazione-r03-benvenuto-carta-cassa-caduta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-benvenuto-carta-cassa-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-benvenuto-carta-cassa-caduta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 8842b08b^ -- app/api/stripe/checkout/route.ts && npx vitest run <prova> → rossa (1 fallito: rivendicazione rimasta aperta dopo Stripe caduto); git checkout 8842b08b -- … → verde (2/2)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Subito dopo la rivendicazione la rotta della carta rilegge l'id della riga, con una lettura che non può far cadere la cassa (try/catch). Dopo un release_coupon riuscito, rilasciaCoupon chiude quella riga. Così Stripe caduto, la riga di intento non scritta e la merce finita non bloccano più il benvenuto per 2 minuti.",
+      "cosa_resta": "Manca solo il controllo indipendente: correzione, prova e prova rimessa (regge) ci sono, ma il revisore è stato fermato alla fermata dura di 33 $ prima di finire, e per regola della regia quello che non è controllato resta parziale.",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire"
+    },
+    {
+      "id": "R03-011",
+      "chiave": "api-backend|il codice di benvenuto restituito dopo un rifiuto della carta resta bloccato al tentativo dopo",
+      "esito": "parziale",
+      "commit": "bf52059da9ea9aa26cf14afde45cc2bc9fd565d6",
+      "file_toccati": [
+        "app/api/stripe/checkout/route.ts",
+        "tests/unit/riparazione-r03-benvenuto-carta-rifiutata.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-benvenuto-carta-rifiutata.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-benvenuto-carta-rifiutata.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout bf52059d^ -- app/api/stripe/checkout/route.ts && npx vitest run <prova> → rossa (2 falliti: 400 «Coupon non disponibile» alla cassa dopo); git checkout bf52059d -- … → verde (2/2)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Caso coperto: la carta viene rifiutata sulla pagina di Stripe, il cliente cambia la fascia e ripreme «Paga» entro 2 minuti. Ogni cassa con la carta scrive in pending_checkouts.delivery l'id della sua rivendicazione; quando la pulizia del tentativo dopo libera quella cassa (e restituisce il codice), la rotta chiude solo le rivendicazioni scritte nelle casse liberate. Il lucchetto di una scheda la cui cassa non è ancora nata non si tocca.",
+      "cosa_resta": "Manca solo il controllo indipendente: correzione, prova e prova rimessa (regge) ci sono, ma il revisore è stato fermato alla fermata dura di 33 $ prima di finire, e per regola della regia quello che non è controllato resta parziale.",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire"
+    },
+    {
+      "id": "R03-012",
+      "chiave": "api-backend|un ordine con carta senza coordinate passa senza controllo della zona e senza avviso agli amministratori",
+      "esito": "gia_riparato_prima",
+      "prova": "Nella base app/api/stripe/checkout/route.ts:608-622 annota i negozi non misurati e :1038-1052 chiama notifyAdmins a pagamento aperto: è lo stesso comportamento dei contanti (cod/route.ts:1062-1077 e la campanella degli ordini non misurati). Commit 97b57cd9 (antenato della base). npx vitest run tests/unit/riparazione-r04-carta-senza-coordinate.test.ts → 4/4 verde.",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire (affermazione «già riparato» non ricontrollata da un secondo agente)"
+    },
+    {
+      "id": "R03-013",
+      "chiave": "api-backend|all'assistenza la stessa chiave con un testo diverso fa perdere il secondo testo in silenzio",
+      "esito": "parziale",
+      "commit": "82d3d4c4213a2bad8a4816ecc3317c0a2f57a51d",
+      "file_toccati": [
+        "app/api/support/conversation/route.ts",
+        "tests/unit/riparazione-r03-assistenza-stessa-chiave.test.ts",
+        "tests/unit/riparazione-r04-assistenza-doppione.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-assistenza-stessa-chiave.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-assistenza-stessa-chiave.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 82d3d4c4^ -- app/api/support/conversation/route.ts && npx vitest run <prova> → rossa (2 falliti: 200 giaRicevuto col testo diverso); git checkout 82d3d4c4 -- … → verde (3/3)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Quando il secondo invio trova l'id già usato (23505), la rotta rilegge il messaggio salvato. Stesso testo: 200 giaRicevuto come prima. Testo diverso: 409 «il nuovo testo non è stato inviato». Rilettura caduta: 503, non un «ricevuto» senza saperlo. Nella prova esistente R04 (importa la rotta) i messaggi finti ora si rileggono per id, come nella tabella vera.",
+      "nota": "Prova esistente tests/unit/riparazione-r04-assistenza-doppione.test.ts toccata perché importa la rotta dell'assistenza (mio file): il finto messages si rilegge per id, come la tabella vera. Il file finge anche lib/supabase/server (vi.mock), non ne esegue il codice.",
+      "prova_comune_toccata": {
+        "file": "tests/unit/riparazione-r04-assistenza-doppione.test.ts",
+        "commit": "82d3d4c4213a2bad8a4816ecc3317c0a2f57a51d",
+        "motivo": "Con la stessa chiave la rotta dell assistenza ora rilegge il messaggio già salvato per confrontarne il testo. Il finto database di questa prova non sapeva rileggere messages (maybeSingle rispondeva sempre null), mentre la tabella vera lo restituisce per id.",
+        "cosa_cambia_nel_finto": "maybeSingle su messages restituisce la riga finta che soddisfa i filtri, come la tabella vera. Nessuna asserzione tolta o indebolita.",
+        "firma": "da portare a Nicola dalla regia (prova comune: finge anche lib/supabase/server di R04)"
+      },
+      "cosa_resta": "Manca solo il controllo indipendente: correzione, prova e prova rimessa (regge) ci sono, ma il revisore è stato fermato alla fermata dura di 33 $ prima di finire, e per regola della regia quello che non è controllato resta parziale.",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire"
+    },
+    {
+      "id": "R03-014",
+      "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+      "esito": "parziale",
+      "commit": "af9ba53b67dbb0d134a133b520890c144f5f06f3",
+      "file_toccati": [
+        "lib/analytics/sentry.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-pagine-errore-inviano-al-registratore.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-pagine-errore-inviano-al-registratore.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout af9ba53^ -- lib/analytics/sentry.tsx && npx vitest run <prova> → rossa (3 falliti, uno per pagina: captureException mai chiamata); git checkout af9ba53 -- lib/analytics/sentry.tsx → verde (3/3)"
+      },
+      "copre_tutta_la_voce": false,
+      "nota_non_codice": "Resta una cosa per Nicola, non è codice: il DSN. Senza NEXT_PUBLIC_SENTRY_DSN su Vercel il browser non invia niente e la cattura scrive solo su console.error. Con la chiave il codice parte da solo. Va impostata prima del lancio.",
+      "cosa_ho_fatto": "Le tre pagine (app/error, app/global-error, app/admin/error) chiamavano già captureError, ma con il registratore non ancora acceso (accensione asincrona, o layout rotto) la cattura andava persa. captureError ora, nel browser, accende Sentry se non c'è ancora un cliente e poi invia l'errore. I testi non sono cambiati e le tre pagine non sono state toccate. La prova monta le tre pagine con un Sentry finto che perde la cattura se non è acceso.",
+      "nota": "Resta per Nicola, non codice: senza NEXT_PUBLIC_SENTRY_DSN impostata su Vercel il browser non invia niente (la cattura scrive solo su console.error); con la chiave il codice parte da solo.",
+      "cosa_resta": "Corsa con la seconda accensione: se captureError accende Sentry nel browser prima che arrivi l import di instrumentation-client.ts, quel file chiama S.init una seconda volta senza controllare getClient (danno basso: la configurazione viene sostituita, ma nessuna prova copre la corsa).",
+      "serve_file_altrui": [
+        {
+          "file": "instrumentation-client.ts",
+          "modifica": "Intorno alla riga 71, prima di `S.init({ ... })`, aggiungere la guardia `if (S.getClient()) return;` (o avvolgere la chiamata in `if (!S.getClient()) { ... }`), come fanno già initSentry e captureError in lib/analytics/sentry.tsx."
+        }
+      ],
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): prova verde 3/3; senza DSN esce prima di accendere, lato server invariato; trovata la corsa della doppia accensione con instrumentation-client.ts (file non mio) → parziale."
+    },
+    {
+      "id": "R03-015",
+      "chiave": "api-backend|la cancellazione legge un 404 qualsiasi come «account già chiuso»: un 404 di un gateway sbagliato verrebbe scambiato per un account già cancellato",
+      "esito": "riparato",
+      "commit": "b9ccb89aeebd1367a6acc2d91c0a4f29971dbf05",
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-cancellazione-404.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-cancellazione-404.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout b9ccb89a^ -- lib/account/cancellazione.ts && npx vitest run <prova> → rossa (2 falliti); git checkout b9ccb89a -- … → verde (4/4)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "`giaChiuso` vale solo con code === 'user_not_found', oppure con status 404 e testo esatto «User not found» (per le versioni di GoTrue che non mandano il codice). Un 404 generico o con un altro codice è un guasto: l'account non è cancellato e il profilo non viene svuotato.",
+      "verificato_da": "revisore 2 (subagente generico, modello grande, mandato di smentire, worktree separato): prova verde 4/4, rimessa rossa (2 falliti); con @supabase/auth-js 2.106.1 e un fetch finto (nessuna rete) controllata la forma vera dell'errore di deleteUser/getUserById: user_not_found con o senza codice e nei formati vecchi → già chiuso; 404 di Kong, 404 in HTML e 502 → guasto. Regge."
+    },
+    {
+      "id": "R03-016",
+      "chiave": "api-backend|se il servizio di posta conserva anche le risposte d'errore, una promozione mai partita risulta spedita",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/email/unsubscribe.ts",
+          "modifica": "In firmaDisiscrizione (riga ~65) sostituire `const iv = crypto.randomBytes(12);` con un IV deterministico: `const iv = crypto.createHmac('sha256', chiaveDiCifratura()).update(`iv:${dato}`).digest().subarray(0, 12);`. Così stesso indirizzo + stesso ambito danno lo stesso link, e una promozione ripresa con la stessa chiave di idempotenza ha lo stesso corpo: Resend restituisce la risposta originale (un id → spedita; un errore conservato → non spedita, caso già gestito)."
+        }
+      ],
+      "nota": "Causa: il link di disiscrizione è cifrato con un IV casuale, quindi il corpo di una promozione ripresa cambia a ogni giro. Resend risponde 409 invalid_idempotent_request e lib/email/client.ts:201-208 lo legge come «già spedita», anche quando la prima risposta conservata era un errore. Togliere quel ramo oggi senza il punto sopra romperebbe la regola «la promozione ripresa non finisce annullata». Fatto il punto sopra, client.ts (mio) va cambiato al giro dopo: il ramo invalid_idempotent_request diventa un errore non ritentabile invece di { ok: true, id: '' }.",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire (diagnosi e proposta per lib/email/unsubscribe.ts non ricontrollate: la proposta cambia la cifratura del link di disiscrizione e va guardata da chi conosce quel file prima di applicarla)"
+    },
+    {
+      "id": "R03-017",
+      "chiave": "api-backend|oltre 20.000 iscritti la ricerca utenti risulta sempre caduta e l'esportazione dell'elenco intero non esce, con un «riprova fra poco» che non serve",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base nessuna lettura della ricerca utenti o dell'esportazione passa dal tetto di lib/supabase/blocchi.ts:70. La ricerca (app/admin/users/page.tsx:242-277) usa .limit(200) + leggiInBlocchi, che non ha tetto. L'esportazione (page.tsx:544-569) usa raccogliUtentiDaEsportare (lib/admin/esporta-utenti.ts: 30 letture da 1000, e oltre il file esce dichiarato PARZIALE). I contatti vengono dalla RPC admin_list_user_emails (page.tsx:155-159), che su errore restituisce []. Il «riprova fra poco» (lib/admin/elenco-utenti.ts:148) scatta solo su un errore vero della ricerca. TETTO_DURO lo usano solo attività, funnel, cruscotto, sitemap, negozi e fattorino, e lì `troncato` vale «campione», non «guasto».",
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire (affermazione «già riparato» non ricontrollata da un secondo agente)"
+    },
+    {
+      "id": "R03-018",
+      "chiave": "qa-flussi|nella scheda utente dell'amministrazione i dati del negozio mostrano «—» mentre si caricano",
+      "esito": "parziale",
+      "file_toccati": [
+        "app/admin/users/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il «—» della voce è lo stesso della funzione datoIdentita (1053). Nome e indirizzo del negozio vengono dal profilo già letto, non da una lettura in corso. La parte in caricamento è la P.IVA, e ha la stessa causa e la stessa riga del codice fiscale. Un solo commit, dichiarato con insieme_a. La prova controlla P.IVA e codice fiscale.",
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde; lettura caduta → «non disponibile: riprova», non resta su «Caricamento…»; il trattino resta dove il dato manca davvero. Regge (caso teorico: una risposta 200 con corpo null resterebbe su «Caricamento…», la rotta non lo fa).",
+      "nota": "la correzione sta nel commit di R03-001 (975d2aa1, stessa funzione datoIdentita); il collaudo la giudica lì; si chiude nel giro di correzione con un commit suo o con la firma",
+      "cosa_resta": "la correzione sta nel commit di R03-001 (975d2aa1, stessa funzione datoIdentita); il collaudo la giudica lì; si chiude nel giro di correzione con un commit suo o con la firma"
+    },
+    {
+      "id": "R03-019",
+      "chiave": "qa-flussi|due veloci vendute nello stesso istante con un solo fattorino passano tutte e due",
+      "esito": "parziale",
+      "commit": "8c88c0e25779755cda6ab7f719ad5e1312983779",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "tests/unit/riparazione-r03-veloce-nello-stesso-istante.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-veloce-nello-stesso-istante.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-veloce-nello-stesso-istante.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "git checkout 8c88c0e2^ -- app/api/orders/cod/route.ts && npx vitest run <prova> → rossa (2 falliti: due veloci passate con un fattorino; seconda veloce passata col fattorino occupato); git checkout 8c88c0e2 -- … → verde (4/4)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "A ordini scritti e prima di ogni avviso, la rotta dei contanti conta le veloci in corso (contaVelociInCorso, meno le proprie) e rifà la stessa decisione veloceSiPuo; se il posto non c'è più annulla i suoi ordini (rollbackCreatedCodOrders) e risponde 409. Fra due invii insieme almeno uno vede l'altro, quindi non passano mai tutti e due. La prova fa girare veloceSiPuo col tetto della regola (1 veloce per fattorino).",
+      "cosa_resta": "1) Sulla base lib/ordini/consegna-veloce.ts ha VELOCI_PER_FATTORINO = null: finché non vale 1, il riconteggio non decide e in produzione non cambia niente. 2) La rotta della carta non riconta (la veloce pagata con la carta nasce dal webhook). 3) Se due invii si vedono a vicenda vengono rifiutati tutti e due: nessuna veloce in più promessa, ma un cliente rifiutato di troppo; solo un blocco atomico nel database (migrazione) lo eviterebbe, e non l'ho scritto perché senza un Postgres locale non si prova.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ordini/consegna-veloce.ts",
+          "modifica": "const VELOCI_PER_FATTORINO: number | null = 1; (scelta di Nicola del 19/11, voce gemella R04-020/021)"
+        }
+      ],
+      "verificato_da": "non controllata: il revisore 1 è stato fermato alla fermata dura di 33 $ della regia prima di finire"
+    },
+    {
+      "id": "R03-020",
+      "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+      "esito": "gia_riparato_prima",
+      "prova": "components/store-sections/useStorePageData.ts:78 `author: authorById.get(r.user_id) ?? handleById.get(r.user_id) ?? null`, con handleById costruito alle righe 64-65 da public_handle. Coperto dalla prova esistente tests/unit/riparazione-r04-firma-col-tetto-pubblico... cioè tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts. Il commit che l'ha riparato è 0f92b386.",
+      "file_toccati": [],
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nessuna modifica. Il ripiego sul nome pubblico c'è già sulla base. La prima parola di full_name resta quando c'è (fetchNomiPubblici).",
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): sulla base useStorePageData.ts:64-78 chi non ha nome vero prende public_handle; «Cliente» solo senza handle. Affermazione giusta."
+    },
+    {
+      "id": "R03-021",
+      "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
+      "esito": "gia_riparato_prima",
+      "commit": "0617700dfc4ad7a455e95d7dcf1da75b296bc3d7",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r03-notifiche-carica-altre-con-tentativi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-notifiche-carica-altre-con-tentativi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "prova": "app/notifications/page.tsx: ultimoLetto/placeholderData e `caricaAltre = isFetching && (isPlaceholderData || !data)` (il tasto resta, disabilitato, «Caricamento…'), `letturaCaduta`/`altreCadute` (l'elenco resta più il messaggio d'errore). Sulla base è già giusto anche con i tentativi di produzione.",
+      "rimessa": {
+        "esito": "non_applicabile",
+        "comando": "Nessuna correzione da togliere. Ho invece provato due difetti messi a mano nella pagina: il tasto che sparisce mentre carica e l'elenco azzerato da un errore. La prova è diventata rossa in entrambi i casi (poi ripristinata)."
+      },
+      "cosa_ho_fatto": "Nessuna modifica al sito. Ho aggiunto una prova nuova che chiude il PARZIALE del giro precedente. Monta il QueryProvider vero (retry 1, attesa 1 s), orologio finto, 60 notifiche. Fa cadere la rilettura di «Carica altre»: durante il tentativo il tasto resta disabilitato e le 50 righe restano. Passati i due tentativi, le 50 righe restano e compare «Non riusciamo a caricare altre notifiche». Le prove esistenti usavano retry:false.",
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): la prova usa il QueryProvider vero (retry 1, attesa 1 s); messi a mano i due difetti della voce (caricaAltre=false; elenco azzerato data ?? []) → prova rossa entrambe le volte, poi ripristinato. Affermazione giusta (togliere solo placeholderData lascia la prova verde perché l elenco resta via ultimoElenco: non è un difetto nominato dalla voce)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "coi contanti, il benvenuto restituito dalla pulizia di una cassa con la carta abbandonata resta bloccato 2 minuti",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/orders/cod/route.ts:1095",
+      "descrizione": "Stesso caso di R03-011 sulla rotta dei contanti: liberaRiserveAbbandonate restituisce il codice, ma la rivendicazione della cassa con la carta liberata resta aperta, e un ordine in contanti entro 2 minuti legge «Coupon non disponibile». La cura è la stessa (chiudere la rivendicazione scritta in pending_checkouts.delivery.rivendicazione)."
+    },
+    {
+      "titolo": "oltre mille iscritti la pagina utenti perde in silenzio email e ultimo accesso degli altri",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/admin/users/page.tsx:155-159",
+      "descrizione": "La RPC admin_list_user_emails si legge in una richiesta sola: PostgREST restituisce al massimo 1000 righe (max-rows vale anche per le RPC). Oltre i mille utenti, la ricerca per email non trova gli altri e l'esportazione esce senza le loro email, senza nessun avviso."
+    },
+    {
+      "titolo": "La segnalazione dei negozi con la cancellazione rinviata legge al massimo 200 profili senza ordine: oltre 200, i negozi con ordini aperti possono non essere mai segnalati",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts:473 (base 422)",
+      "descrizione": "segnalaLeCancellazioniRinviate legge i profili con deletion_requested_at più vecchia di 7 giorni con limit(200), senza order, e solo dopo toglie in memoria quelli presi in carico stanotte. Se i 200 si riempiono di altri profili, i negozi rinviati che restano fuori non ricevono mai l'avviso. Va ordinato e paginato, oppure filtrato prima di leggere. Forse è questa la riga che intendeva R03-007."
+    },
+    {
+      "titolo": "L'allarme «scrivile tu» resta aperto per sempre se la persona esce dall'elenco della notte",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts:579",
+      "descrizione": "chiudiGliAllarmiDelleEmailPartite chiude solo gli allarmi degli avvisi di stanotte (emailPartiteAvvisi, che vengono da verdetto.dovuti). Se la persona viene poi cancellata, o non è più fra i rinviati, il suo allarme non si chiude più."
+    },
+    {
+      "titolo": "Il tetto della notte lascia indietro gli account nell'ordine della RPC, non dal più vecchio: chi è già oltre il mese può essere rimandato ogni notte, senza avviso del termine",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts:205",
+      "descrizione": "La RPC process_expired_deletions non ordina; chi viene tagliato dal tetto non entra nei tentativi, quindi né lui né gli amministratori ricevono l'avviso del termine scaduto. Basta ordinare le scadute per deleted_at, dalla più vecchia."
+    },
+    {
+      "titolo": "Il tetto di tempo della notte non è rigido: l'ultimo account preso può sforare, e la cancellazione di un account non ha un limite di tempo suo",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts:207",
+      "descrizione": "Le email partono al massimo dopo 150 s più la durata dell'ultimo account preso; cancellaAccount non ha un timeout proprio."
+    },
+    {
+      "titolo": "La rotta di annullo dell'amministrazione risponde 500 in silenzio quando l'annullo stesso fallisce",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/admin/orders/[id]/cancel/route.ts:98",
+      "descrizione": "Con motivo ANNULLAMENTO_FALLITO lib/ordini/annulla.ts:393 ritorna senza registro e la rotta risponde 500 senza scrivere niente: la modifica è nel serve_file_altrui di R03-003."
+    }
+  ],
+  "domande_per_nicola": [
+    "R03-019: nel caso raro in cui due veloci simultanee si vedono a vicenda vengono rifiutate tutte e due (nessuna promessa in più, un cliente rifiutato di troppo): va bene, o vuoi il blocco atomico nel database (una migrazione da provare su un Postgres locale)?",
+    "R03-006: una notte in cui il tetto lascia indietro delle cancellazioni deve finire rossa (500, niente battito) o bastano l errore nel registro e l avviso agli amministratori? Ora la notte resta verde."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "6 subagenti: lotto 1 e lotto 2 (modello grande), lotto 3 (modello piccolo), revisore 1 (modello grande, fermato a 33,91 $ prima di finire), revisore 2 (modello grande), revisore 3 (modello piccolo). Costo della sessione 35,15 $ (usage.cost_usd di get_session alle 02:48), oltre il tetto di 35 $: la fermata dura di 33 $ è stata passata dai revisori già in corso e dalla chiusura del referto; nessun lotto o giro nuovo dopo il 70%.",
+    "subagenti": 6,
+    "costo_usd": 35.15
+  },
+  "costo_usd": 35.15
+}

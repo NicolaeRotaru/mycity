@@ -1,0 +1,546 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-21 03:22",
+  "finita": true,
+  "testa": "adf7ec6e901e1ddfe4e42725de7483648868c735",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "adf7ec6e901e1ddfe4e42725de7483648868c735",
+    "nota": "typecheck, lint e 1860 file di prova verdi (11603 prove, 1 saltata già sulla base)"
+  },
+  "voci": [
+    {
+      "id": "R02-010",
+      "chiave": "frontend-ux|un componente della home mostra il prezzo pieno con una promozione attiva",
+      "esito": "riparato",
+      "commit": "704eb327",
+      "file_toccati": [
+        "components/home/HeroStoreCard.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-prezzo-promo-vetrina-home.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-prezzo-promo-vetrina-home.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 704eb327^ --file components/home/HeroStoreCard.tsx --prove tests/unit/riparazione-r02-prezzo-promo-vetrina-home.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo vetrina_home il riquadro legge lo sconto attivo dei prodotti con fetchActiveDiscounts (stessa fonte di griglia e cassa, come CartUpsell e FrequentlyBoughtTogether; se la lettura cade resta il pieno) e stampa discountedUnitCents con il prezzo pieno barrato, come ProductCard. Prova montando il componente: 10 € al -20% si legge 8,00 € con «Prezzo pieno 10,00 €» barrato; senza promo nessun barrato; una sola domanda di sconti per la vetrina. Le 7 prove vicine che montano o leggono HeroStoreCard restano verdi.",
+      "verificato_da": "qa-sonnet revA: letto il diff di HeroStoreCard (fetchActiveDiscounts + discountedUnitCents, pieno barrato, fallback al pieno) e rilanciata la prova montata, verde."
+    },
+    {
+      "id": "R02-013",
+      "chiave": "frontend-ux|nelle collezioni scelte a mano dal negozio i prodotti in promozione hanno il prezzo pieno",
+      "esito": "riparato",
+      "commit": "a3074206",
+      "file_toccati": [
+        "components/store-sections/CollectionSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-prezzo-promo-collezione.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-prezzo-promo-collezione.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a3074206^ --file components/store-sections/CollectionSection.tsx --prove tests/unit/riparazione-r02-prezzo-promo-collezione.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ManualCollection, dopo la lettura dei prodotti, legge lo sconto attivo con fetchActiveDiscounts (la fonte di ProductGrid e della cassa; se cade resta il pieno) e passa discountPercent a ProductCard, che disegna già prezzo scontato e pieno barrato. Prova montando la sezione con react-query vero: la torta al -25% arriva alla scheda con discountPercent 25, senza promo 0, sconto non letto = sezione visibile a prezzo pieno. Le 3 prove vicine su CollectionSection restano verdi.",
+      "verificato_da": "qa-sonnet revA: letto il diff di ManualCollection (sconto passato come discountPercent a ProductCard, che lo gestisce) e rilanciata la prova, verde; altre collezioni passano da ProductGrid che già sconta."
+    },
+    {
+      "id": "R02-012",
+      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
+      "esito": "parziale",
+      "commit": "f6a88617",
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f6a88617^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La barra: la scheda (app/product/[id]/page.tsx, chiamata a StickyAddToCart) passa ora prezzoPieno={prezzoPieno} oltre a price (già scontato con discountedUnitCents): StickyAddToCart.tsx:115-119 barra il pieno accanto al prezzo che si paga, come il prezzo grande. La prova monta la scheda VERA con la barra VERA (non finta), promo attiva sull'orologio finto e pulsante principale fuori schermo: nella regione «Acquisto rapido» si legge «1 × 29,67 €» e il barrato «Prezzo pieno 34,90 €»; fuori dalla finestra della promo «1 × 34,90 €» senza barrato. Togliendo la riga dalla pagina la prova cade (rimessa: pagina alla base = rossa sul comportamento). 44 file di prova che montano o leggono la scheda o la barra: verdi.",
+      "cosa_resta": "I caroselli nominati dal titolo stampano ancora il prezzo pieno e non sono file di R02: components/SimilarProducts.tsx:94, components/RecentlyViewed.tsx:110, components/SponsoredCarousel.tsx:136, components/SearchBar.tsx:249 (suggerimenti della ricerca), components/home/TrendingNow.tsx:120. Le modifiche esatte sono in serve_file_altrui. (FrequentlyBoughtTogether e CartUpsell applicano già lo sconto; HeroStoreCard è chiusa da R02-010.)",
+      "serve_file_altrui": [
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "nel queryFn (riga 39, leggiSimili) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "nel queryFn (riga 72, leggiVistiDiRecente) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "nel queryFn (righe 49-50, leggiSponsorizzati; lo sconto va sul prezzo del prodotto che la riga stampa a :136) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "nel queryFn (riga 57, leggiSuggerimentiRicerca; il prezzo stampato a :249) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "nel queryFn (riga 48, leggiTendenze) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
+        }
+      ],
+      "verificato_da": "qa-sonnet revA: page.tsx:1647 passa prezzoPieno alla barra; tolta quella riga in copia mia la prova cade (expected [] to equal ['Prezzo pieno 34,90 €']); i caroselli (SimilarProducts, RecentlyViewed, SponsoredCarousel, SearchBar, TrendingNow) restano a prezzo pieno, quindi la voce non è chiusa.",
+      "difetti_del_revisore": [
+        "components/SimilarProducts.tsx:94, components/RecentlyViewed.tsx:110, components/SponsoredCarousel.tsx:136, components/home/TrendingNow.tsx:120 — i caroselli nominati dalla voce stampano ancora il prezzo pieno (file altrui, già dichiarato)"
+      ]
+    },
+    {
+      "id": "R02-006",
+      "chiave": "flussi-conversione|la scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
+      "esito": "riparato",
+      "commit": "c7525734",
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-contanti-col-carrello.test.tsx",
+        "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-contanti-col-carrello.test.tsx tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c7525734^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-contanti-col-carrello.test.tsx,tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base la scheda non prometteva più i contanti per un pezzo solo sopra il tetto, ma contava solo questo prodotto con la consegna minima. Ora il lordo è quello del carrello che la cassa troverà: righe già nel carrello (getCart, riletto a ogni cart:updated e storage) più questo prodotto al prezzo che si paga × quantità, consegna con vociDellaConsegna (la regola della cassa: +1 € per negozio in più e per negozio sotto 10 €) e con la veloce (+1 €, si può ancora scegliere in cassa). Due conti: «Compra ora» (riga portata a qty) decide riquadro verde, pulsante, «Compri sicuro» e il ricordo di 'cod'; la nota della barra (il suo pulsante è «Aggiungi», che somma) usa il carrello con la somma. Tetto TETTO_CONTANTI_CENTS invariato. Prova sulla scheda vera col carrello in localStorage: 2.600 € + 2.500 € di un altro negozio = nessuna promessa e niente 'cod'; stesso negozio 2.000 € = promessa; 4.990 € + 5 € di un altro negozio = 5.000 € con 5 € di consegna, niente; 4.996,50 € da soli con la veloce, niente; stesso prodotto già in carrello = «Compra ora» promette, la barra no; carrello cambiato a scheda aperta = la promessa si rifà. 45 file di prova vicini verdi.",
+      "nota": "Prova esistente modificata (legge app/product/[id]/page.tsx, file di R02): tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx, il caso del confine passa da 4.996,99 €/4.997 € a 4.995,99 €/4.996 € perché ora si conta l'euro della veloce (4.995,99 + 3 + 1 = 4.999,99). Fuori titolo, non chiuso qui: il lordo usa i prezzi che il carrello ha salvato e lo sconto letto all'apertura della scheda; se cambiano a scheda aperta (promo che scade senza ricaricare) la cassa e la rotta COD (app/api/orders/cod/route.ts:1163) rileggono e restano il presidio. È lo stesso prezzo vecchio che la scheda mostra in grande, segnalato come difetto nuovo.",
+      "prova_comune_toccata": {
+        "file": "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx",
+        "commit": "c7525734",
+        "motivo": "La scheda ora conta, come consegna, la più cara che la cassa può ancora far scegliere: la veloce, un euro in più. Il confine del tetto si sposta di un euro e la prova controlla ancora i due lati (uguale al tetto sì, un centesimo sopra no).",
+        "riga_vecchia": "it('uguale al tetto: 4.996,99 € + 3 € di consegna = 4.999,99 € si paga in contanti; un centesimo in più no' … apri(4996.99) … apri(4997)",
+        "riga_nuova": "it('uguale al tetto: 4.995,99 € + 3 € di consegna + 1 € della veloce = 4.999,99 € si paga in contanti; un centesimo in più no' … apri(4995.99) … apri(4996)",
+        "nota": "Prova comune (usa file di altre sessioni): la regia porta la firma di Nicola all'unione; il collaudatore giudica se è indebolita."
+      },
+      "verificato_da": "qa-sonnet revA: la prova comune non è indebolita (resta 4.999,99 sì / un centesimo sopra, ora 4.995,99 e 4.996, con +3 consegna +1 veloce); il conto con vociDellaConsegna(consegnaVeloce:true) è prudente rispetto a cassa e rotta COD (cod/route.ts:1163 guarda grandTotalCents); rilanciate le due prove, 8+8 verdi."
+    },
+    {
+      "id": "R02-021",
+      "chiave": "qa-flussi|un capo con più di cento combinazioni di taglia e colore perde le ultime in silenzio, e il cliente che le sceglie non può comprarle",
+      "esito": "riparato",
+      "commit": "ec5bbd4c",
+      "file_toccati": [
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-varianti-oltre-il-tetto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-varianti-oltre-il-tetto.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ec5bbd4c^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r02-varianti-oltre-il-tetto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La parte della scheda c'era già sulla base: app/product/[id]/page.tsx usa statoSceltaVarianti (combinazione che non c'è = «Questa combinazione non c'è», non «Scegli») e valoreSenzaVariante (valori senza variante spenti). Restava il taglio silenzioso nel modulo del negozio (ProductForm.tsx, file di R02): applyAxes ora controlla gli assi prima di reconcileVariants e, sopra un tetto di lib/products/variants.ts (MAX_VARIANTS 100, MAX_OPTION_VALUES 30 contati puliti e senza doppioni, MAX_OPTION_TYPES 3), non li applica e mostra il motivo («110 combinazioni, il massimo è 100. Togli qualche valore.»; «Colore: 31 valori, il massimo è 30…»). La tabella delle varianti mostra «N di 100 combinazioni»; la proposta dell'assistente passa da applyAxes e oltre il tetto non dice «Proposte». lib/products/variants.ts non è cambiato: i tetti restano (PostgREST non pagina), il prodotto cartesiano non cresce. Prova sul modulo vero: 10×10 = 100 con il conto; l'undicesima taglia non entra e l'avviso dice 110; il trentunesimo colore non entra; 9×11 = 99 entrano conservando le scorte. 48 file di prova vicini (modulo, AttributesFields, varianti) verdi.",
+      "verificato_da": "qa-sonnet revA: letto il diff di ProductForm (applyAxes rifiuta oltre 100 combinazioni/30 valori/3 assi con motivo, tutti i percorsi di aggiunta passano da lì; la scheda già gestiva la combinazione assente) e rilanciata la prova, verde."
+    },
+    {
+      "id": "R02-008",
+      "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
+      "esito": "riparato",
+      "commit": "51c73ef7",
+      "file_toccati": [
+        "app/seller/analytics/letture-dell-andamento.ts",
+        "app/seller/analytics/page.tsx",
+        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-tasso-di-conversione-scheda.test.tsx",
+        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-tasso-di-conversione-scheda.test.tsx tests/unit/riparazione-r09-tasso-di-conversione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 51c73ef7^ --file app/seller/analytics/letture-dell-andamento.ts,app/seller/analytics/page.tsx --prove tests/unit/riparazione-r02-tasso-di-conversione-scheda.test.tsx,tests/unit/riparazione-r09-tasso-di-conversione.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base oltre il 100% non si mostrava già più (tassoDiConversione null con ordini > visite, etichetta «Visite che diventano ordini»). Restavano i due casi del collaudo: ordini pari alle visite misurate davano «100,0%» in verde (ora tassoDiConversione torna null anche a pari: trattino, colore neutro); con zero visite misurate e ordini veri la scheda diceva «Serve il conto delle visite» accanto a Visite 0 (ora, con le visite lette e ordini > 0, «Campione troppo piccolo: N ordini su M visite misurate»; con le visite non lette resta «Serve il conto delle visite»). lib/analytics/visita-prodotto.ts:35 non cambia: le visite si contano solo col consenso, ed è giusto così. Prova sulla pagina vera «Analisi» col database finto: 4/200 = 2,0% verde; 5/5 = «—» non verde con «Campione troppo piccolo: 5 ordini su 5…»; 3/0 = «—» con «…3 ordini su 0 visite misurate»; visite non lette = «Serve il conto». 9 file di prova vicini verdi.",
+      "nota": "Prova esistente modificata (importa app/seller/analytics/letture-dell-andamento.ts, file di R02): tests/unit/riparazione-r09-tasso-di-conversione.test.ts, il caso (5,5) passa da 100 a null e si aggiunge (4,5) = 80. Fuori titolo, non toccato: un tasso fra il 50% e il 99% resta verde anche se gonfiato dal consenso ai cookie (osservato dal collaudo K04); una soglia di verosimiglianza sarebbe una scelta di Nicola.",
+      "verificato_da": "qa-sonnet revB: rilanciate le 4 prove che toccano tassoDiConversione (tutte verdi) e riletto il diff; il file di prova R09 è comune (creato da R09-005) ma il cambio (5,5)=100→null è la correzione voluta e aggiunge (4,5)=80, non indebolisce.",
+      "difetti_del_revisore": [
+        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts:14 — prova comune con R09-005: ora il contratto di R09 («fino al 100% il conto resta») cambia a pari; da segnalare, non è un difetto della voce",
+        "app/seller/analytics/page.tsx:367 — 4 ordini su 5 visite = 80% resta verde su campione minuscolo (fuori titolo, già dichiarato nel referto)"
+      ],
+      "prova_esistente_cambiata": {
+        "file": "tests/unit/riparazione-r09-tasso-di-conversione.test.ts",
+        "motivo": "importa app/seller/analytics/letture-dell-andamento.ts (file di R02); il revisore la chiama comune perché l'ha creata R09-005. (5,5) passa da 100 a null (campione troppo piccolo) e si aggiunge (4,5)=80: è la correzione voluta, non un indebolimento."
+      }
+    },
+    {
+      "id": "R02-020",
+      "chiave": "qa-flussi|cambiando categoria gli assi delle varianti della categoria vecchia restano",
+      "esito": "riparato",
+      "commit": "0a157ea3",
+      "file_toccati": [
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-assi-al-cambio-di-categoria.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-assi-al-cambio-di-categoria.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0a157ea3^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r02-assi-al-cambio-di-categoria.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al cambio di categoria (qualunque strada: i due menu, la scansione EAN, la proposta dell'assistente, perché si guarda category_id) il modulo tiene solo gli assi che la categoria nuova fa variare (campi variantable) e rigenera le combinazioni con reconcileVariants. È un aggiustamento dello stato durante il disegno (la categoria nota agli assi si ricorda in uno stato), non un effetto: al primo disegno e con le categorie non ancora lette non tocca niente, quindi un prodotto aperto in modifica non perde varianti. Prova sul modulo vero: Abbigliamento Taglia×Colore (4) → Casa = solo i colori (2); in Casa un colore in più = 3 varianti, non 6; sottocategoria della stessa categoria = assi e scorte intatti. 45 file di prova vicini del modulo verdi.",
+      "nota": "Il commit tocca anche applyAxes introdotta in R02-021 (estrae tipiDegliAssi per usarla in tutti e due i punti): se R02-021 venisse tolta, R02-020 va riapplicata a mano su quella riga.",
+      "verificato_da": "qa-sonnet revB: riletto il diff e rilanciata la prova (4 verdi); controllato che in modifica non ci sia reset del form (defaultValues iniziali, categoria ricordata allo stato iniziale) quindi un prodotto aperto non perde varianti.",
+      "difetti_del_revisore": [
+        "components/seller/ProductForm.tsx:418 — dipende da tipiDegliAssi/applyAxes di ec5bbd4c (R02-021): se R02-021 viene tolta va riapplicata a mano; con categories vuote al cambio gli assi non si puliscono (caso raro)"
+      ]
+    },
+    {
+      "id": "R02-001",
+      "chiave": "ai-endpoints|quando anthropic non risponde, vercel spegne la funzione ai prima che il negozio legga un errore chiaro",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/ai/client.ts:197-198 TEMPO_TENTATIVO_AI_MS=60_000 e RITENTATIVI_AI=0 (un tentativo, 60 s) contro maxDuration 120 in vercel.json:14; app/api/vision/extract-product/route.ts:320-334 risponde con mapAiError; la verifica web usa Math.min(restaMs, TEMPO_TENTATIVO_AI_MS) e senzaRitentativi (route.ts:390-391). Identico sulla base 2d19787b; la prova c'e' gia' in tests/unit/riparazione-r03-tempo-sotto-la-rotta.test.ts.",
+      "verificato_da": "qa-sonnet revC: client.ts:201-227 timeout 60 s e maxRetries 0 contro maxDuration 120 (vercel.json:14-18); filtro moderation 10 s (moderation.ts:83) quindi 70 s < 120; vision verifica con min(restaMs,60 s) e senzaRitentativi; remove-bg (60 s) non usa lib/ai/client. Non ho contato le chiamate sequenziali di ogni rotta ai."
+    },
+    {
+      "id": "R02-003",
+      "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Dentro il dopoLaRisposta che parte a riga ~1720 (dopo che le campanelle 'Nuovo ordine' sono state scritte a riga ~1686), importare mandaSubitoLaPushDelNuovoOrdine da '@/lib/push/subito' e chiamare `await mandaSubitoLaPushDelNuovoOrdine(admin, comunicazioni.map((c) => c.orderId))` (la funzione non lancia mai)."
+        },
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "Dopo suonaLaCampanellaAiNegozi (riga ~499), per gli ordini nuovi (`nuovi`), chiamare `await mandaSubitoLaPushDelNuovoOrdine(admin, nuovi.map((n) => n.orderId))` importandola da '@/lib/push/subito' (la funzione non lancia mai)."
+        }
+      ],
+      "nota": "L'aiutante mandaSubitoLaPushDelNuovoOrdine esiste gia' in lib/push/subito.ts (con la sua prova tests/unit/riparazione-r02-push-nuovo-ordine-subito.test.ts) e il commento del cron app/api/cron/send-push/route.ts dice che e' chiamata alla creazione dell'ordine, ma nessun file la chiama (grep: solo il test). Nessun cambio al cron e nessun costo Vercel."
+    },
+    {
+      "id": "R02-004",
+      "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
+      "esito": "riparato",
+      "commit": "48477040822dbbcd37cf58844ed1d7fbc62438e0",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh",
+        "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-registrazione-nello-stesso-passo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-registrazione-nello-stesso-passo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 48477040^ --file scripts/applica-migrazioni-mancanti.sh --prove tests/unit/riparazione-r02-registrazione-nello-stesso-passo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il confronto del contenuto (md5) c'era già sulla base (check-migration-drift.mjs:270-325, R16-003). Applicazione e registrazione ora stanno in un solo psql --single-transaction (-f e poi -c con l'INSERT): se la registrazione cade, anche la migrazione torna indietro. Prova nuova su Postgres locale.",
+      "prova_comune_toccata": {
+        "file": "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts",
+        "motivo": "Firma di Nicola del 21/11 (via regia 9.0): il psql finto trattava -f e -c come alternativi; ora, dopo APPLICATO, se la query -c contiene INSERT scrive anche REGISTRATO. Nessuna asserzione tolta: registrate=3 torna come prima.",
+        "riga_vecchia": "if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; exit 0; fi",
+        "riga_nuova": "if [ -n \"$file\" ]; then echo APPLICATO …; case \"$query\" in *INSERT*) echo \"REGISTRATO\" >> \"$REGISTRO_PSQL\" ;; esac; exit 0; fi"
+      },
+      "verificato_da": "non rivisto da un revisore interno (tetto di 6 subagenti raggiunto): prova rimessa a 0, più le 6 prove vicine dello script delle migrazioni verdi (50 prove); lo guarda il collaudo"
+    },
+    {
+      "id": "R02-005",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "riparato",
+      "commit": "5d59d92a530790661a32bb0ff285e0d050e35cde",
+      "file_toccati": [
+        "scripts/prova-di-fumo.mjs",
+        "tests/unit/il-ritorno-indietro-torna-a-quello-che-usano-i-clienti.test.ts",
+        "tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d59d92a^ --file scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "rilascioDaTornare: quando il dominio si legge ma dice il commit che esce, o non dice il suo commit, la risposta è null (ritorno a mano) invece dell'unico altro commit dell'elenco degli ultimi 20 rilasci. Quando il dominio non si legge affatto resta la regola dell'elenco (scena di ogni giorno, provata da il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts, non toccata).",
+      "prove_esistenti_cambiate": [
+        {
+          "file": "tests/unit/il-ritorno-indietro-torna-a-quello-che-usano-i-clienti.test.ts",
+          "cosa_cambia": "riga 83: «Y sul dominio e un solo altro commit: si torna a quello» → «nessun indirizzo, il ritorno si fa a mano» (toBe W → toBeNull)"
+        },
+        {
+          "file": "tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts",
+          "cosa_cambia": "riga 20: «dominio senza commit, [Y, X]: si torna a X» → «nessun indirizzo, né il dominio né X» (toBe X → toBeNull)"
+        }
+      ],
+      "firma": "Nicola, 21/11, via regia 9.0: cambiare il comportamento e aggiornare le due prove.",
+      "verificato_da": "non rivisto da un revisore interno (tetto di 6 subagenti raggiunto): prova rimessa a 0, più 8 file di prova del rilascio verdi (49 prove); lo guarda il collaudo"
+    },
+    {
+      "id": "R02-007",
+      "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
+      "esito": "gia_riparato_prima",
+      "prova": "app/messages/[id]/page.tsx:304-312 handleSend: con un invio in volo (sendMutation.isPending) il secondo Invio non parte e il testo resta nel campo (campo svuotato solo quando il primo e' partito); onError (riga ~297) rimette il testo davanti al nuovo. Commit edacdd69 R22-003, uguale sulla base 2d19787b. Resta per scelta che il secondo non va in coda: si preme Invio di nuovo a primo concluso.",
+      "verificato_da": "qa-sonnet revC: letto handleSend e onError in app/messages/[id]/page.tsx:296-312: con invio in volo il secondo Invio esce prima di setText(''), il testo resta; a invio riuscito non c'e' alcun reset del campo; sull'errore il testo torna davanti."
+    },
+    {
+      "id": "R02-018",
+      "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
+      "esito": "parziale",
+      "file_toccati": [
+        "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "cosa_ho_fatto": "Provate a mano 11 mutanti sul conto della consegna di app/cart/page.tsx contro le prove che montano il carrello (r03-carrello-consegna, al-lancio-si-paga-solo-la-consegna, r02-prezzo-promo-al-carrello): 8 gia' rosse, 3 sopravvivevano (consegnaVeloce false->true; couponScontoCents 0->100; supplementoVeloceCents letto da vociConsegna -> 0). Prova nuova con negozi tutti da 10 EUR in su e un negozio da 10,50 EUR, contro il conto della cassa: le tre tornano rosse.",
+      "cosa_resta": "la cura è la sola prova: prova-rimessa non si applica; mutanti applicate a mano: consegnaVeloce true nel conto, couponScontoCents 100, supplementoVeloceCents 0 → rosse",
+      "commit": "06fa5e4d",
+      "verificato_da": "qa-sonnet revC: in worktree ho applicato le 3 mutanti (veloce true, coupon 100, supplemento 0) e la prova nuova diventa rossa; rosse anche couponSpedizioneGratis true, pickup true, +0.5 sul totale spedizione; la mutante subtotale*99 resta verde nella prova nuova ma la uccide riparazione-r03-carrello-consegna (2 rosse)."
+    },
+    {
+      "id": "R02-019",
+      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "middleware.ts",
+          "modifica": "app/rider/onboarding sta sotto /rider, che e' ROLE_PROTECTED (middleware.ts:70, solo rider/admin): un cliente gia' registrato viene rimandato. Serve far passare /rider/onboarding anche al ruolo cliente (decidiAccessoArea) e una rotta/azione che al primo invio porti il profilo a role='rider' non approvato."
+        },
+        {
+          "file": "app/sign-up/page.tsx",
+          "modifica": "Con ?role=rider e utente gia' collegato, mandare a /rider/onboarding invece di rimbalzare; poi app/help/page.tsx:56-60 (mio) puo' puntare a quella strada al posto di /contact."
+        }
+      ],
+      "nota": "La pagina d'iscrizione dei fattorini esiste (app/rider/onboarding/page.tsx) ma un cliente non puo' arrivarci: il pezzo che manca e' fuori dai miei file. Non ho cambiato il link dell'aiuto: puntarlo a /lavora-con-noi o a /rider/onboarding oggi porterebbe a un vicolo cieco."
+    },
+    {
+      "id": "R02-011",
+      "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
+      "esito": "parziale",
+      "commit": "bc1db201",
+      "file_toccati": [
+        "components/seller/site/SectionConfigForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-testo-vetrina.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-testo-vetrina.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bc1db201^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r02-testo-vetrina.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "htmlInACapo ora decodifica &amp; &lt; &gt; oltre agli a-capo: il testo pulito dal server si rilegge nel campo come era stato scritto. La prova esistente minori-s06 resta verde senza modifiche.",
+      "verificato_da": "qa-sonnet revB: giro salva-rileggi-salva con sanitizeRichText vero su 7 testi; & e < normali tornano uguali, ma un testo con la scritta letterale «&amp;» o «&lt;b&gt;» non regge.",
+      "difetti_del_revisore": [
+        "components/seller/site/SectionConfigForm.tsx:77-82 — sanitizeRichText esce «&» crudo se nel testo non c'è «<» (solo con «<» diventa «&amp;»): quindi htmlInACapo decodifica anche un «&amp;» scritto davvero: «&amp;» → riletto «&» (perso), «scrivi &amp; per &» → «scrivi & per &»",
+        "components/seller/site/SectionConfigForm.tsx:82 — «&lt;b&gt;» scritto dal negoziante si rilegge «<b>» e al salvataggio successivo diventa un vero tag (<b></b>): il testo cambia a ogni giro e non è stabile; nel campo la scritta «&amp;» non si può nemmeno digitare (si trasforma subito in «&»). Manca il caso nella prova tests/unit/riparazione-r02-testo-vetrina.test.ts"
+      ],
+      "cosa_resta": "Casi limite trovati dal revisore: un testo con la scritta letterale «&amp;» si rilegge «&», e «&lt;b&gt;» scritto letteralmente torna «<b>» e al salvataggio dopo diventa un tag vero. La radice è in lib/sanitize-html.ts (file altrui): sanitizeRichText lascia «&» crudo quando nel testo non c'è «<», quindi il formato salvato non dice se «&amp;» era un'entità o testo. Serve che sanitizeRichText codifichi sempre «&» in «&amp;»; poi htmlInACapo decodifica una volta sola senza ambiguità."
+    },
+    {
+      "id": "R02-009",
+      "chiave": "frontend-ux|restano tre pagine con le foto sgranate perché `unoptimized` spegne srcset e sizes",
+      "esito": "riparato",
+      "commit": "6d2e1e7f",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "app/seller/products/page.tsx",
+        "app/shared-cart/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-foto-nitide.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-foto-nitide.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6d2e1e7f^ --file app/shared-cart/page.tsx,app/seller/products/page.tsx,app/orders/[id]/page.tsx --prove tests/unit/riparazione-r02-foto-nitide.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto unoptimized in tutte le Image delle tre pagine e messo loader={caricatoreFotoRemote} (lib/image-loader.ts, lo stesso già usato da orders/page, cart ecc.) più sizes (64px, 44px, 44px, 40px). Nessun problema di origini: il loader gira gli URL a Supabase/Pexels senza passare da remotePatterns, che resta com'è.",
+      "verificato_da": "qa-sonnet revB: letto loader e next.config (il loader aggira remotePatterns, Supabase/Pexels/altri http ok, data/blob passano) e le 5 Image delle 3 pagine; trovato che il loader ritaglia a quadrato il logo del negozio. · difetto del revisore (logo ritagliato) chiuso in 2078ec4e, prova rimessa 0",
+      "difetti_del_revisore": [
+        "app/orders/[id]/page.tsx:860 — logoNegozio(...) è fatto apposta per non ritagliare (quadrato:false), ma caricatoreFotoRemote richiama sizedImage(src,'thumb') che aggiunge height=width e resize=cover (lib/image-loader.ts:~55, lib/image-url.ts:68,174): il logo largo/con scritta ora viene ritagliato a quadrato, regressione rispetto a unoptimized"
+      ],
+      "commit_correzione": "2078ec4eb837fc98271fccabf0f34e1580c85c3f",
+      "correzione": "Il revisore ha trovato che caricatoreFotoRemote ritagliava a quadrato il logo del negozio in app/orders/[id]/page.tsx:860; ora il logo usa caricatoreLogoNegozio (components/StoreAvatar.tsx, solo larghezza) con sizes='40px'.",
+      "rimessa_correzione": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2078ec4e^ --file app/orders/[id]/page.tsx --prove tests/unit/riparazione-r02-foto-nitide.test.ts --json"
+      },
+      "commit_cricchetto": "adf7ec6e901e1ddfe4e42725de7483648868c735",
+      "prova_comune_toccata": {
+        "file": "tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts",
+        "commit": "adf7ec6e",
+        "motivo": "Il cricchetto «le foto che non passano dal caricatore» si aspettava ancora i tre file di questa voce con unoptimized; tolto unoptimized, scende a zero. Prova più forte, non più debole: una foto nuova con unoptimized torna rossa. Firma di Nicola del 21/11 (regia 9.0, giro4/piano.json).",
+        "riga_vecchia": "it('sono tre, e sono questi: …') … expect(senzaCaricatore).toEqual(['app/orders/[id]/page.tsx','app/seller/products/page.tsx','app/shared-cart/page.tsx'])",
+        "riga_nuova": "it('sono zero: il numero scende e non risale') … expect(senzaCaricatore).toEqual([])"
+      }
+    },
+    {
+      "id": "R02-014",
+      "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/Turnstile.tsx",
+          "modifica": "in window.turnstile.render(...) (riga ~76) aggiungere l'opzione size: window.innerWidth < 340 ? 'compact' : 'normal' (il widget normale è largo 300px e nel riquadro del modulo di app/contact a 280px di schermo, con px-6 + p-6, esce di circa 10px)."
+        }
+      ],
+      "prova": "Già chiusi sulla base dai commit precedenti di R02 (d0def26c e simili): components/Footer.tsx:139-142 COLONNE_DEL_PIEDE (auto-fit con min(100%,…), niente più grid-cols-2 fisso); app/lavora-con-noi/page.tsx:137 'min-w-0 … p-4 sm:p-6'; app/returns/page.tsx:36 'flex flex-wrap … p-4 sm:p-6'; app/faq/page.tsx:265 'px-4 py-8 sm:p-8' e link 'max-w-full'; app/help/page.tsx:106-110 'min-w-0 [overflow-wrap:anywhere]'; app/contact e app/terms con [overflow-wrap:anywhere] (contact:109, terms:271). Resta solo il Turnstile.",
+      "nota": "Nessuna modifica né commit miei: i file di R02 della voce erano già a posto. Resta solo il Turnstile (file non di R02, nemmeno app/contact).",
+      "verificato_da": "qa-sonnet revC: Playwright (chromium) a 320px con html font-size 200%: /, /lavora-con-noi, /returns, /faq, /help, /terms, /contact hanno scrollWidth 320 = clientWidth, nessun elemento oltre il bordo; Turnstile non verificato (widget non caricato in dev)."
+    },
+    {
+      "id": "R02-015",
+      "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
+      "esito": "gia_riparato_prima",
+      "prova": "app/admin/sponsored/page.tsx:21-23 (home_top → 'In cima alla home', ecc.), :146 e :273 usano etichettaStato(), :233-240 intestazioni in italiano (Posizione, Periodo, Budget al giorno, Speso, Visualizzazioni, Clic su 100 visualizzazioni, Stato, Azioni); già così alla base 2d19787b (git show 2d19787b:app/admin/sponsored/page.tsx riga 21 e 146).",
+      "verificato_da": "qa-sonnet revC: letto app/admin/sponsored/page.tsx (mappa POSIZIONE righe ~16-20, intestazioni 231-239 in italiano) e la base risulta uguale secondo il referto."
+    },
+    {
+      "id": "R02-016",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "esito": "parziale",
+      "cosa_resta": "public/manifest.json ha già \"id\": \"/\" (riga 5) e \"display_override\": [\"standalone\",\"minimal-ui\"] (riga 8) e non ha più \"orientation\" (grep orientation: nessun risultato); nessuna modifica necessaria. Manca solo \"screenshots\": in public/ non ci sono schermate vere (solo icone e marker). Servono almeno 2 PNG reali dell'app: una form_factor \"narrow\" (telefono, es. 1080x1920 o 540x960, home e scheda prodotto) e una form_factor \"wide\" (computer, es. 1280x720 o più, home), poi aggiungere in manifest.json screenshots:[{src,sizes,type:'image/png',form_factor,label}].",
+      "prova": "grep -n 'orientation\\|\"id\"\\|display_override' public/manifest.json → solo id (5) e display_override (8)",
+      "verificato_da": "qa-sonnet revC: public/manifest.json ha id '/' e display_override, nessun orientation (gia' cosi' sulla base 2d19787b), ma manca 'screenshots' e in public/ non ci sono schermate.",
+      "difetti_del_revisore": [
+        "public/manifest.json — manca la chiave screenshots (narrow e wide), meta' della voce resta aperta"
+      ]
+    },
+    {
+      "id": "R02-002",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "esito": "parziale",
+      "cosa_resta": "components/ui/Card.tsx è già allineato (radius di base 'xl' = 16px, '2xl' per prodotto/negozio, 'lg' per riquadri interni; tailwind.config.ts borderRadius xl=1rem): nessuna modifica. Restano le card scritte a mano in file altrui. Conteggio: grep -rEoh \"bg-white border border-(cream-300|surface-200)[^\\\"'`]*rounded-(lg|xl|2xl|md|3xl)\\b\" app components --include=*.tsx | grep -Eo 'rounded-[a-z0-9]+$' | sort | uniq -c → 78 rounded-2xl, 56 rounded-xl, 15 rounded-lg (149 in 73 file; 13 file importano Card). Regola di sostituzione: il div → <Card variant=\"bordered\" radius=\"…\">: rounded-xl → <Card> (di base), rounded-2xl → <Card radius=\"2xl\"> se è una card prodotto/negozio, altrimenti <Card> (16px); rounded-lg → <Card radius=\"lg\"> solo se è un riquadro dentro un'altra card; il padding p-4/p-6 → padding=\"md\"/\"lg\" e le classi restanti in className."
+    },
+    {
+      "id": "R02-022",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "commit": "1b418f27",
+      "file_toccati": [
+        "app/admin/orders/page.tsx",
+        "app/orders/[id]/page.tsx",
+        "app/orders/page.tsx",
+        "app/seller/analytics/page.tsx",
+        "app/seller/dashboard/page.tsx",
+        "app/seller/orders/page.tsx",
+        "app/seller/products/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-etichette-maiuscole-lotto3.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-etichette-maiuscole-lotto3.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b418f27^ --file app/admin/orders/page.tsx,app/orders/[id]/page.tsx,app/orders/page.tsx,app/seller/analytics/page.tsx,app/seller/dashboard/page.tsx,app/seller/orders/page.tsx,app/seller/products/page.tsx --prove tests/unit/riparazione-r02-etichette-maiuscole-lotto3.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nelle 7 pagine di R02 con righe uppercase le spaziature wide/wider/widest/[0.0Xem] sono ora tracking-label (8 righe). tailwind.config.ts non toccato (label 0.04em, wide già allineato a 0.04em).",
+      "cosa_resta": "Fuori dai file di R02 restano 62 righe uppercase con spaziatura diversa dal valore del design. Comando: grep -rnE \"uppercase\" app components --include=*.tsx | grep -E \"tracking-(wider|widest|\\[0\\.0[0-9]*em\\])\" → 34 tracking-wider, 2 tracking-widest, 14 [0.03em], 5 [0.05em], 4 [0.04em], 2 [0.06em], 1 [0.08em]. Sostituzione: su ogni riga con uppercase, quelle classi → tracking-label (tracking-wide vale già 0.04em, resta lecito). Esclusi i codici non etichetta (es. tracking-[0.3em]/[0.5em] senza uppercase).",
+      "verificato_da": "qa-sonnet revB: riletto il diff (8 righe, tracking-label esiste in tailwind.config letterSpacing 0.04em) e rilanciato il comando di cosa_resta: 62 righe, scomposizione 34/2/14/5/4/2/1 torna; prova verde.",
+      "difetti_del_revisore": [
+        "app/orders/[id]/page.tsx — «Codice consegna» passa da tracking-widest (0.1em) a 0.04em: cambio visibile voluto per uniformare, non è una spaziatura da codice; nessun punto con spaziatura voluta rovinato nelle 7 pagine",
+        "il conto cosa_resta conta solo le righe con uppercase e tracking sulla stessa riga: 40 file in tutto hanno tracking-wider/widest/[0.0Xem], quelli con className su più righe non sono contati; la voce resta parziale come dichiarato"
+      ]
+    },
+    {
+      "id": "R02-017",
+      "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
+      "esito": "non_fatto",
+      "nota": "Stato: app/page.tsx (209 righe) e app/seller/page.tsx (8 righe) sono già senza 'use client'; le altre cinque (orders, orders/[id], seller/orders, seller/dashboard, admin/orders) sono client con useQuery e supabase browser. Strada: per ogni pagina, in quest'ordine di rischio crescente: 1) app/orders/page.tsx: spostare fetchOrders (righe 57-70) in una funzione server con il client Supabase server (cookie di sessione) e passare gli ordini iniziali come initialData al componente client, che tiene filtri, tab e rilettura; 2) seller/orders e admin/orders, stesso schema, con il controllo del ruolo già fatto sul server; 3) orders/[id] (921 righe: pagamento, ritiro, recesso, chat) e seller/dashboard (632 righe): prima spezzare la pagina in guscio server + isole client (codice di consegna, azioni, grafici), poi spostare le letture. Non si fa in un giro di minori: ogni pagina è un file grosso a uso misto lettura/azioni sui soldi, serve l'autenticazione lato server (RLS con la sessione dell'utente, redirect se non loggato) e prove per ciascuna, e le prove esistenti leggono quei file per nome (prove comuni che qui non si toccano). Meglio una voce per pagina, con prova e controllo a mano del flusso ordine."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La scheda prodotto aperta oltre la fine della promozione continua a mostrare il prezzo scontato",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/product/[id]/page.tsx:340-352",
+      "descrizione": "Lo sconto si rilegge solo al ritorno sulla pagina, non quando la promozione scade; cassa e rotta dei contanti rileggono e restano il presidio."
+    },
+    {
+      "titolo": "Un tasso di conversione fra il 50% e il 99% resta verde anche se gonfiato dal consenso ai cookie",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/seller/analytics/page.tsx:362-366",
+      "descrizione": "Una soglia per il colore è una scelta di Nicola."
+    },
+    {
+      "titolo": "Le collezioni scelte a mano non passano il prezzo barrato del negozio",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/store-sections/CollectionSection.tsx",
+      "descrizione": "Non passa compareAtPrice a ProductCard, mentre ProductGrid sì (components/ProductGrid.tsx:661)."
+    },
+    {
+      "titolo": "Il commento del cron delle notifiche dice che il nuovo ordine manda la push subito, ma oggi nessun file lo fa",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "app/api/cron/send-push/route.ts:23-28",
+      "descrizione": "lib/push/subito.ts (mandaSubitoLaPushDelNuovoOrdine) non è chiamato da nessuna rotta; vedi R02-003 serve_file_altrui."
+    }
+  ],
+  "domande_per_nicola": [
+    "Colore del tasso di conversione del negozio: oggi resta verde anche fra il 50% e il 99% su pochi dati (app/seller/analytics/page.tsx:362-367). Serve una soglia?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "3 lotti (1 opus, 2 sonnet) + 3 revisori sonnet. R02-004, R02-005 e la correzione di R02-009 fatte dal capo squadra dopo la firma di Nicola, senza un settimo subagente. Spesa letta con get_session a fine lavoro: 23,82 $.",
+    "subagenti": 6
+  },
+  "costo_usd": 23.82
+}

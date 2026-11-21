@@ -1,0 +1,430 @@
+{
+ "collaudatore": "K02",
+ "riparatori": [
+  "R03",
+  "R04"
+ ],
+ "aggiornato": "2026-11-21 04:48",
+ "finita": true,
+ "basi": {
+  "base": "2d19787b789236307ac7ddd6c05b038a658a3d9d",
+  "R04": {
+   "punta": "44f46f7ac9147ed4dc665f221602a8c98b7ecd5c",
+   "testa": "356502b7f9778b247477d709d312d26946827352"
+  },
+  "R03": {
+   "punta": "dedbe1c3c48ea2595babf25925611862a4dd5e1b",
+   "testa": "0617700dfc4ad7a455e95d7dcf1da75b296bc3d7"
+  }
+ },
+ "nota": "Collaudo pieno di tutte le 29 voci (lotti di 21 voci per riparatore: niente campione). Prova rimessa lanciata dal collaudatore su 21 voci con prova-rimessa.mjs, una copia di lavoro per voce allo SHA del commit. Giudizio: 4 subagenti qa, due lenti separate per le voci su soldi (R04 + R03-008/010/011/019) e per quelle su dati e permessi (resto di R03); le 7 «già riparate prima» le ha guardate il collaudatore alla base. Unione R04+R03 provata in una copia staccata: entra senza conflitti di testo, ma rompe la veloce in contanti (R03-019 con R04-021). Nessuno strumento del database vero, di Vercel o di Stripe.",
+ "voci": [
+  {
+   "id": "R04-003",
+   "chiave": "architettura|il gancio semancalachiave rende morti i catch sulla chiave nelle rotte; senzachiave e sullaporta copiati in due file",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base 2d19787b una sola definizione: lib/privacy/porta-dei-diritti.ts:23-35 (sullaPortaDeiDiritti → seMancaLaChiave); app/api/account/delete/route.ts e export/route.ts la importano (righe 6 e 4) e non hanno più un catch sulla chiave (l'unico catch del delete, r.195, è la pulizia delle email). Difetto assente alla base. Nessuna correzione nuova: la lente nata_rotta non ha codice da guardare."
+  },
+  {
+   "id": "R04-004",
+   "chiave": "architettura|migrazione-124 ha dovuto creare un suo client admin, perché la fabbrica del sito porta next/headers",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base lib/db/migrazione-124.ts importa solo '@/lib/logger' (r.1): nessun createClient, nessun requireSupabaseService (git grep vuoto; requireSupabaseService fuori da supabase/server compare solo in cron/send-emails). Difetto assente alla base. Nessuna correzione nuova."
+  },
+  {
+   "id": "R04-005",
+   "chiave": "architettura|email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-005 --base c5547bc1^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r04-email-annullo-negozio.test.ts --json"
+   },
+   "nota": "La parte fatta regge: l'email di annullo al negozio parte dopo la risposta e, se cade, gli amministratori hanno la campanella (prova rimessa 0). Ma il referto dice «copre tutta la voce» e non è vero per la carta: l'email di annullo con la carta è il «Rimborso emesso» di refundOrder, ancora aspettata dentro la richiesta (lib/stripe/payout.ts:2706, chiamata da lib/ordini/annulla.ts:322 e da app/api/cron/expire-stale-orders/route.ts:256-260 con notifyBuyer:true): il Rifiuta di un ordine con carta e il giro degli scaduti aspettano ancora fino a circa 20 s per ordine. Le email perse non si ritentano (si avvisa una persona). Rischio accanto, non dimostrato: after() di Next 15.5.29 fa partire i lavori tutti insieme (after-context.js, p-queue senza limite), quindi nel giro degli scaduti le email ai negozi entrano nella raffica di quelle ai clienti; col limite d'invio di Resend (non verificato sul conto) alcune possono cadere, non più in silenzio."
+  },
+  {
+   "id": "R04-006",
+   "chiave": "architettura|i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base lib/ordini/annulla.ts: scriviInsieme chiama la rpc sposta_la_consegna_nel_carrello in una transazione (migrations/620_i_soldi_fra_gli_ordini_del_carrello_passano_in_una_transazione.sql, FOR UPDATE in ordine di id, SECURITY INVOKER); rifaiIlGiroRigaPerRiga parte solo se la funzione manca (SENZA_FUNZIONE). Chiuso nel codice; che la 620 sia applicata sul database vero non l'ho guardato (vietato). Nessuna correzione nuova."
+  },
+  {
+   "id": "R04-007",
+   "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-007 --base b13dc844^ --file lib/ordini/annulla.ts --prove tests/unit/riparazione-r04-carrello-contanti-senza-riga.test.ts --json"
+   },
+   "nota": "Parziale confermato dalle due lenti: senza la riga del carrello non si sposta nessuna cifra, niente unione per vicinanza di tempo, avviso agli amministratori una volta per ordine; la carta esce prima. Resta aperto, come dichiarato, che la regola scatti anche senza la riga (serve una migrazione). Due difetti di solo testo: lib/ordini/annulla.ts:866 dice «è annullato» anche quando il giro rimette l'ordine in coda perché il rimborso è fallito; annulla.ts:845 circa nomina «senza riga» un ordine vicino la cui lettura è caduta."
+  },
+  {
+   "id": "R04-008",
+   "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-008 --base cfe244ad^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r04-veloce-carrello-a-meta.test.ts --json"
+   },
+   "nota": "Il resto regge: se la scrittura del secondo ordine cade davvero, l'ordine ancora nuovo lo riprende il giro dopo nella stessa fascia, quello già confermato è nominato al cliente e agli amministratori, la carta rimborsa una volta sola (credito con p_ref, carta con la chiave del freno). Il rischio dichiarato (744/763) è vero: riprodotto con una prova usa e getta (scrittura passata con risposta d'errore → l'euro torna due volte). Ma non è completo: con la stessa causa c'è un secondo caso non dichiarato. Euro sul primo ordine, secondo già confermato: il secondo passa alla fascia nel database ma non entra in `scritti`/`deltaScritti` (lib/ordini/veloce-non-confermata.ts:744-778, 813, 815), quindi negozio e fattorino non ricevono «il carrello ha cambiato fascia», gli amministratori niente, e il cliente può leggere «puoi annullarlo» su un ordine già confermato; prima del commit almeno partiva «Freno fermo a metà». Cura: un ordine trovato già nella fascia alla rilettura va messo anche in `scritti` e `deltaScritti`. Prova usa e getta del revisore, non conservata: si rifà facendo rispondere errore alla scrittura del secondo ordine dopo averla salvata."
+  },
+  {
+   "id": "R04-010",
+   "chiave": "architettura|la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+   "verdetto": "non_regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 1,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-010 --base 356502b7^ --file lib/shipping.ts --prove tests/unit/shipping.test.ts,tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts,tests/unit/soldi-storni-sconti-e-compensi.test.ts --json"
+   },
+   "nota": "La prova rimessa non morde (uscita 1): il commit 356502b7 aggiunge solo @deprecated e un commento. La voce chiede di togliere i sette ingressi da shippingCentsFor e di smettere di passarli da lib/ordini/prezzi.ts:263: firma uguale (lib/shipping.ts:52), chiamante uguale, nessuna regola eslint sui deprecati, nessun comportamento o tipo cambiato. Nessun pezzo della voce è chiuso, quindi «parziale» non è onesto: la voce resta aperta col lavoro descritto in serve_file_altrui."
+  },
+  {
+   "id": "R04-018",
+   "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-018 --base 83806000^ --file app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r04-carrello-scaduto-nello-stesso-giro.test.ts --json"
+   },
+   "nota": "Provati i casi della voce: tre ordini che scadono insieme danno email senza cifre superate e nessuna campanella «conto cambiato»; con due scaduti e uno rimasto, quello rimasto ha le cifre di prima e quelle finali una volta; ordine rimesso in coda tolto dagli annullati col suo avviso; cliente senza ordini rimasti senza campanella vuota. Rischio raro, non difetto dimostrato: le email e le campanelle del carrello partono a fine giro (app/api/cron/expire-stale-orders/route.ts:436-445), se la funzione muore oltre i 300 s si perdono."
+  },
+  {
+   "id": "R04-020",
+   "chiave": "qa-flussi|il conteggio delle veloci in corso non ha una finestra di tempo: con il tetto a 1 una veloce dimenticata spegne la veloce",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-020 --base d380c652^ --file lib/ordini/consegna-veloce.ts --prove tests/unit/riparazione-r04-veloce-dimenticata.test.ts --json"
+   },
+   "nota": "La finestra c'è (3 ore, la stessa di ORE_PER_ACCETTARE), confine incluso, nascita illeggibile conta, orologio vero (i chiamanti usano new Date()); nessun import circolare. Limiti già dichiarati in R04-021: la finestra si applica dopo la lettura, senza .gte('created_at') (lib/ordini/consegna-veloce.ts:190 circa), quindi oltre 1000 righe aperte il conteggio esce basso; una veloce dimenticata spegne ancora la veloce fino a 3 ore (durata da decidere)."
+  },
+  {
+   "id": "R04-021",
+   "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R04-021 --base 5dd8eeaa^ --file lib/ordini/consegna-veloce.ts --prove tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts --json"
+   },
+   "nota": "Sul ramo R04 da solo il parziale è confermato: le quattro strade passano i fattorini liberi a veloceSiPuo, un carrello di due negozi conta una consegna, un conteggio caduto dà 503; restano la corsa fra due clienti nello stesso istante e le casse con la carta aperte, come dichiarato. ATTENZIONE ALL'UNIONE: il commit cambia il significato di contaFattoriniOnline (toglie le veloci in corso, comprese quelle appena scritte dal cliente) e di veloceSiPuo (il tetto conta solo se chi chiama lo passa), lib/ordini/consegna-veloce.ts:121 e 161-165. Con R03-019 questo blocca le veloci in contanti (vedi R03-019); nell'unione la prova di R04-021 diventa rossa 1 su 6 (test:127, velociInCorso nella rotta dei contanti)."
+  },
+  {
+   "id": "R03-001",
+   "chiave": "api-backend|nella scheda utente dell'amministrazione il codice fiscale appare vuoto mentre si sta ancora caricando",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-001 --base 975d2aa1^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts --json"
+   },
+   "nota": "Le tre righe (1139, 1149, 1249 alla base) passano da datoIdentita: senza risposta «Caricamento…», lettura caduta «non disponibile: riprova», «—» solo dove il dato manca; la rotta /kyc non risponde mai 200 con corpo vuoto; nessun permesso o dato nuovo esposto."
+  },
+  {
+   "id": "R03-002",
+   "chiave": "api-backend|quando l'amministrazione cambia solo le taglie di un prodotto, il registro delle azioni non scrive più niente",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-002 --base 3cabf7a6^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r03-traccia-taglie-admin.test.ts --json"
+   },
+   "nota": "Taglie cambiate da sole: voce product.update con «variants» prima e dopo; salvataggio identico non scrive, lettura caduta scrive null e non ferma il salvataggio; colonne lette presenti nella migrazione 080 (product_variants non ha prezzo, quindi nessun «prezzo della taglia» manca); nessun dato personale nella traccia. Caso al margine: una scorta scesa per una vendita fra le due letture finisce attribuita all'amministratore (app/api/admin/products/route.ts:254/311)."
+  },
+  {
+   "id": "R03-003",
+   "chiave": "api-backend|cancellazione utente e annullo ordine dell'amministrazione rispondono 500 senza scrivere nel registro",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-003 --base cb6ac6b0^ --file app/api/admin/users/[id]/delete/route.ts --prove tests/unit/riparazione-r03-cancellazione-utente-registro.test.ts --json"
+   },
+   "nota": "Parziale confermato: nella cancellazione utente la riga di registro c'è (id, codice, messaggio; nessun dato personale) e il 404 resta senza errore. L'annullo ordine dell'amministrazione, nominato dalla voce, non è toccato su nessun ramo: app/api/admin/orders/[id]/cancel/route.ts:40-41 e :98 rispondono 500 senza logger.error, e lib/ordini/annulla.ts:393 dà ANNULLAMENTO_FALLITO senza log. Il resto dichiarato è esatto."
+  },
+  {
+   "id": "R03-004",
+   "chiave": "api-backend|se la lettura dei ruoli cade, all'assistenza arriva l'email «un cliente ti ha scritto» pensata per un negozio",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-004 --base 398fc475^ --file app/api/chat/messages/route.ts --prove tests/unit/riparazione-r03-chat-ruoli-non-letti.test.ts --json"
+   },
+   "nota": "Con i ruoli non letti l'email «da negozio» non parte più; messaggio, campanella e 200 restano; nessuna altra strada fa partire quell'email. Prezzo accettabile: in quella notte di guasto anche un negozio vero tiene solo la campanella. Dettaglio fuori voce: il titolo della campanella resta generico (app/api/chat/messages/route.ts:125-132)."
+  },
+  {
+   "id": "R03-005",
+   "chiave": "api-backend|il giro notturno delle cancellazioni non ha un tetto di tempo nemmeno sul ciclo degli account scaduti",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-005 --base 85236e6f^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-giro-cancellazioni-tetto.test.ts --json"
+   },
+   "nota": "Il tetto di 150 s si guarda prima di prendere ogni account; process_expired_deletions (migrazione 572) è in sola lettura, quindi chi resta fuori torna la notte dopo, senza stati a metà. Nuovi, fuori voce: la funzione SQL non ordina (migrations/572…sql:33, nessun ORDER BY), quindi gli stessi account possono restare fuori ogni notte e non entrare nel calcolo dei termini scaduti; il tetto non è rigido (un account preso a 149 s può sforare). Alla fusione col ramo m14 (R14-013, 5e2aa09f, tetto email 240 s) i due tetti vanno messi d'accordo."
+  },
+  {
+   "id": "R03-006",
+   "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-006 --base 9f460d58^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-notte-lunga-allarme.test.ts --json"
+   },
+   "nota": "Parziale confermato: quando il tetto taglia degli account suona l'allarme, prima delle email. Restano i due punti dichiarati: le email non hanno un tempo loro, e avvisaDelTettoDiTempo chiama avvisaAmministratori senza chiave (app/api/cron/process-deletions/route.ts:409-415): un avviso nuovo ogni notte a ogni amministratore. Non dichiarato: il tetto email di R14-013 vive solo nel ramo m14; unendo, se il ciclo sfora senza tagliare, le email finiscono fuori tempo senza nessun allarme (il caso della voce)."
+  },
+  {
+   "id": "R03-008",
+   "chiave": "api-backend|la chiusura della rivendicazione del benvenuto non è limitata al tentativo in corso",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-008 --base 155d11a4^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r03-benvenuto-del-tentativo.test.ts --json"
+   },
+   "nota": "Il parziale del referto era solo il controllo indipendente mancante: fatto qui con le due lenti. La riga della rivendicazione si legge subito dopo l'aggancio (claim_coupon prende FOR UPDATE e rifiuta un secondo lucchetto recente; claimed_at esiste, migrations/361:49) e al rilascio si chiude solo lei; tutti e due i rilasci della rotta dei contanti passano di lì; una lettura caduta lascia bloccato due minuti solo il proprio codice. Regge anche nell'unione con R04 (prova R04 del benvenuto 3/3). Prova comune non firmata (commit 155d11a4, tests/unit/riparazione-r04-benvenuto-dopo-i-contanti.test.ts): NON indebolisce. Due righe (id alle righe finte), nessuna asserzione toccata; contro la rotta a 1c838577^ diventa rossa 2 su 3 (morde ancora il suo difetto); la versione vecchia contro la rotta di oggi è rossa, quindi il cambio era necessario. Fuori voce: release_coupon(p_code, p_order_id) chiude ancora tutte le righe del cliente (migrations/361:160-167)."
+  },
+  {
+   "id": "R03-009",
+   "chiave": "api-backend|un profilo in attesa con approval_requested_at rimasto valorizzato non riceve mai consenso né avviso",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-009 --base 44dca33e^ --file app/api/seller/apply/route.ts --prove tests/unit/riparazione-r03-domanda-negozio-data-rimasta.test.ts --json"
+   },
+   "nota": "Un cliente con approval_requested_at rimasto riceve verbale e avviso; un negozio già in coda che corregge non li riceve due volte; un respinto che rimanda li riceve; due invii insieme (righe 207-224): il secondo risponde 200 senza scrivere; limite di frequenza intatto."
+  },
+  {
+   "id": "R03-010",
+   "chiave": "api-backend|con la carta, se la cassa cade dopo la rivendicazione del benvenuto, il codice resta bloccato fino a 2 minuti",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-010 --base 8842b08b^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r03-benvenuto-carta-cassa-caduta.test.ts --json"
+   },
+   "nota": "Il parziale del referto era solo il controllo indipendente: fatto qui. Tutte le uscite della rotta della carta dopo l'aggancio (merce finita 967, intento non scritto 1023, pagina Stripe senza id 1082, Stripe caduto 1147) passano da rilasciaCoupon; la riga si chiude solo dopo un rilascio riuscito, la lettura sta in try/catch; il riuso della sessione aperta non è toccato."
+  },
+  {
+   "id": "R03-011",
+   "chiave": "api-backend|il codice di benvenuto restituito dopo un rifiuto della carta resta bloccato al tentativo dopo",
+   "verdetto": "parziale",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-011 --base bf52059d^ --file app/api/stripe/checkout/route.ts --prove tests/unit/riparazione-r03-benvenuto-carta-rifiutata.test.ts --json"
+   },
+   "nota": "Chiuso il caso carta rifiutata → nuovo tentativo con la carta (la pulizia segna EXPIRED, la rilettura trova la riga). Non chiuso il tentativo dopo in contanti («la carta non va, pago alla consegna»): la rotta dei contanti libera il vecchio tentativo con la carta col solo p_code e non chiude la sua rivendicazione (app/api/orders/cod/route.ts:757, liberaRiserveAbbandonate; meglio chiuderle in lib/ordini/riserve-abbandonate.ts:289-295): il cliente legge «Coupon non disponibile» per due minuti. Oggi non raggiungibile al lancio (codici e carta spenti). Minore accanto: la rivendicazione si chiude anche se release_coupon è fallito (riserve-abbandonate.ts:291-294 + app/api/stripe/checkout/route.ts:658): contatore +1, un uso globale perso, nessun uso doppio."
+  },
+  {
+   "id": "R03-012",
+   "chiave": "api-backend|un ordine con carta senza coordinate passa senza controllo della zona e senza avviso agli amministratori",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base app/api/stripe/checkout/route.ts:608-622 annota i negozi non misurati (coordinate mancanti) e a pagamento aperto (1038-1052) manda notifyAdmins dopo la risposta: lo stesso comportamento dei contanti (R31-018). La prova esistente tests/unit/riparazione-r04-carta-senza-coordinate.test.ts c'è. Difetto assente alla base."
+  },
+  {
+   "id": "R03-013",
+   "chiave": "api-backend|all'assistenza la stessa chiave con un testo diverso fa perdere il secondo testo in silenzio",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-013 --base 82d3d4c4^ --file app/api/support/conversation/route.ts --prove tests/unit/riparazione-r03-assistenza-stessa-chiave.test.ts --json"
+   },
+   "nota": "Il parziale del referto era solo il controllo indipendente: fatto qui. Stessa chiave e testo diverso → 409, stesso testo → 200 «già ricevuto», rilettura caduta → 503; il modulo (SupportChatModal) mostra 409 e 503 e cambia chiave quando cambia il testo; Postgres alza 23505 dopo aver salvato la riga, quindi la rilettura la trova; nessun trigger riscrive il testo all'inserimento. Prova comune non firmata (commit 82d3d4c4, tests/unit/riparazione-r04-assistenza-doppione.test.ts): NON indebolisce. Due righe (il finto rilegge messages per id, come la tabella vera), nessuna asserzione toccata; con la rotta a prima di 5aa465c6 (R04-012) diventa rossa 4 su 6, con quella di oggi 6/6; senza il cambio la rilettura nuova darebbe 503. Caso al margine: chi modifica il proprio messaggio e ritenta con la stessa chiave riceve 409."
+  },
+  {
+   "id": "R03-014",
+   "chiave": "api-backend|la pagina d'errore dice «abbiamo registrato il problema», ma un errore nel telefono del cliente non lo registra nessuno",
+   "verdetto": "non_regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-014 --base af9ba53b^ --file lib/analytics/sentry.tsx --prove tests/unit/riparazione-r03-pagine-errore-inviano-al-registratore.test.tsx --json"
+   },
+   "nota": "La voce parla del caso senza SENTRY_DSN (quello di oggi in produzione, secondo il referto stesso): lì captureError fa ancora solo console.error (lib/analytics/sentry.tsx:43-47), nessuna rotta raccoglie gli errori del browser, e le pagine dicono ancora «Abbiamo registrato il problema» (app/error.tsx:33, app/admin/error.tsx:27, app/global-error.tsx). Nessuna delle due cure del registro (rotta con logger.error o togliere la frase) è fatta. Il commit chiude un caso vicino (DSN presente ma registratore non ancora acceso) e la prova finge un DSN, quindi non tocca mai il caso della voce; per uno dei revisori anche quel caso vicino in pratica non capita (instrumentation-client.ts parte prima con lo stesso import). Cosa va a Sentry non cambia; doppia accensione: solo un avviso in console. Il DSN spostato in «nota non codice» non chiude la voce."
+  },
+  {
+   "id": "R03-015",
+   "chiave": "api-backend|la cancellazione legge un 404 qualsiasi come «account già chiuso»: un 404 di un gateway sbagliato verrebbe scambiato per un account già cancellato",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-015 --base b9ccb89a^ --file lib/account/cancellazione.ts --prove tests/unit/riparazione-r03-cancellazione-404.test.ts --json"
+   },
+   "nota": "Letta auth-js 2.106.1 in node_modules (lib/fetch.js:33-83, errors.js:21-28): il 404 di DELETE /admin/users/{id} arriva come AuthApiError con code 'user_not_found' (formato nuovo e vecchio error_code) o testo «User not found»; la correzione riconosce proprio quelli. Un 404 di gateway o HTML resta guasto; la cancellazione di un account già chiuso finisce come prima. Nessun servizio vero chiamato. La stessa famiglia resta altrove, fuori voce: lib/stripe/payout.ts:1150 e app/api/cron/send-emails/route.ts:257 accettano ancora un 404 qualsiasi."
+  },
+  {
+   "id": "R03-017",
+   "chiave": "api-backend|oltre 20.000 iscritti la ricerca utenti risulta sempre caduta e l'esportazione dell'elenco intero non esce, con un «riprova fra poco» che non serve",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base la pagina utenti non usa leggiTutteLeRighe né TETTO_DURO (lib/supabase/blocchi.ts:70): la ricerca usa leggiInBlocchi (app/admin/users/page.tsx:265), l'esportazione raccogliAFinestre con 30 letture da 1000 e -PARZIALE nel nome (lib/admin/esporta-utenti.ts:56-62); «Riprova fra poco» (lib/admin/elenco-utenti.ts:148) solo con ambito 'solo-caricati', cioè ricerca caduta davvero. Difetto assente alla base."
+  },
+  {
+   "id": "R03-018",
+   "chiave": "qa-flussi|nella scheda utente dell'amministrazione i dati del negozio mostrano «—» mentre si caricano",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-001 --base 975d2aa1^ --file app/admin/users/page.tsx --prove tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts --json"
+   },
+   "nota": "Giudicata nel commit 975d2aa1 di R03-001, dove sta la sua correzione (stessa funzione datoIdentita, riga 1053 della voce): mentre la lettura /kyc è in corso codice fiscale e partita IVA del negozio (e del fattorino, riga 1251) dicono «Caricamento…»; nome, indirizzo, ragione sociale e PEC vengono dal profilo già letto, senza caricamento. Ho messo a mano il difetto solo sulla riga della partita IVA del negozio: la prova diventa rossa («la partita IVA in caricamento sembra nessuna partita IVA»), poi verde rimessa. Prova rimessa: quella di R03-001 sul 975d2aa1 (uscita 0). Nel codice non resta niente: il «parziale» del referto è solo formale (manca un commit suo)."
+  },
+  {
+   "id": "R03-019",
+   "chiave": "qa-flussi|due veloci vendute nello stesso istante con un solo fattorino passano tutte e due",
+   "verdetto": "rompe_altro",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "rimessa": {
+    "uscita": 0,
+    "comando": "timeout 540 node cervello/prova-rimessa.mjs --repo ../wt-R03-019 --base 8c88c0e2^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r03-veloce-nello-stesso-istante.test.ts --json"
+   },
+   "nota": "Sul ramo R03 da solo il riconteggio non decide niente (VELOCI_PER_FATTORINO a null), come dichiarato. Ma R04-021 mette il tetto a 1 (scelta di Nicola del 19/11) e cambia contaFattoriniOnline: unendo i due rami (unione senza conflitti di testo, tsc 0) il riconteggio a ordini nati (app/api/orders/cod/route.ts:1680-1692 circa nell'unione) conta anche l'ordine appena scritto, vede 0 fattorini liberi e annulla con 409 «non c'è un fattorino libero». Provato da due revisori indipendenti coi contatori veri: una veloce sola con un fattorino libero → 409; con due fattorini e due clienti uno è rifiutato (3 casi su 4 rossi). Al lancio il fattorino è solo Nicola: nessuna veloce in contanti passerebbe. La prova del riparatore non può vederlo perché finge contaFattoriniOnline e forza velociPerFattorino:1 col vecchio significato; inoltre sottrae righe (createdOrderIds.length) da un conteggio che in R04 conta clienti. Sull'uscita 409 i soldi tornano una volta (ordini cancellati, restore_stock, wallet_credit con p_ref, benvenuto chiuso per id), ma ogni ordine fantasma fa scattare trg_cancel_lifecycle_first_order (migrations/033:173). Una delle due correzioni va adattata prima di unire (per esempio: nel riconteggio contare i fattorini accesi meno le consegne degli altri clienti, escludendo il proprio user_id, e passare il tetto esplicito). Le prove usa e getta non sono conservate: si rifanno unendo 0617700d su 356502b7 in una copia staccata e lanciando tests/unit/riparazione-r03-veloce-nello-stesso-istante.test.ts senza fingere contaFattoriniOnline né veloceSiPuo."
+  },
+  {
+   "id": "R03-020",
+   "chiave": "qa-flussi|nelle recensioni della vetrina chi ha solo il nome pubblico (senza nome vero) adesso appare come «cliente»",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base components/store-sections/useStorePageData.ts:78: author = authorById ?? handleById ?? null, con handleById da public_handle (righe 64-65); prova esistente tests/unit/riparazione-r04-firma-col-nome-pubblico.test.ts. Difetto assente alla base."
+  },
+  {
+   "id": "R03-021",
+   "chiave": "stati-ui|nelle notifiche il tasto «carica altre» sparisce mentre carica, e un errore cancella dalla pagina l'elenco già letto",
+   "verdetto": "regge",
+   "giudizio": "pieno",
+   "lenti": [
+    "chiude_tutta",
+    "nata_rotta"
+   ],
+   "nota": "Alla base app/notifications/page.tsx: caricaAltre = isFetching && (isPlaceholderData || !data) (r.272), forseAltre include caricaAltre (r.279), l'errore sostituisce la pagina solo senza dati né ultimoElenco (r.254). La prova nuova del riparatore (0617700d, QueryProvider vero con retry) è verde a 0617700d; ho messo a mano i due difetti della voce (forseAltre senza caricaAltre; errore che sostituisce l'elenco) e la prova è diventata rossa tutte e due le volte, poi verde rimessa."
+  }
+ ]
+}

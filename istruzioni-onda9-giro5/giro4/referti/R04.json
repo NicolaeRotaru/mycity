@@ -1,0 +1,387 @@
+{
+ "sessione": "R04",
+ "aggiornato": "2026-11-21 02:32",
+ "finita": true,
+ "testa": "356502b7f9778b247477d709d312d26946827352",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "356502b7f9778b247477d709d312d26946827352",
+  "nota": "typecheck + lint (0 errori, 98 avvisi) + vitest: 1853 file passati, 1 saltato; 11581 prove passate. git rev-parse HEAD prima e dopo nello stesso comando: 356502b7. Base 2d19787b: 1847 file passati, 1 saltato."
+ },
+ "voci": [
+  {
+   "id": "R04-001",
+   "chiave": "architettura|la regola che vieta i tipi «qualunque» non è accesa: 46 sono passati, e 40 permessi di saltare il controllo non saltano niente",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-002",
+   "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-003",
+   "chiave": "architettura|il gancio semancalachiave rende morti i catch sulla chiave nelle rotte; senzachiave e sullaporta copiati in due file",
+   "esito": "gia_riparato_prima",
+   "prova": "Sulla base una sola definizione: lib/privacy/porta-dei-diritti.ts:23-35 (grep -rn 'seMancaLaChiave:' app lib trova solo quella); nelle rotte nessun catch sulla chiave (app/api/account/delete/route.ts: unico catch r.195, pulizia email; app/api/account/export/route.ts: nessuno). npx vitest run --reporter=dot tests/unit/prima-chi-sei-poi-la-chiave-sulle-porte-dei-diritti.test.ts tests/unit/riparazione-r23-porte-dei-diritti.test.ts tests/unit/senza-chiave-la-porta-dei-diritti-non-si-ferma-all-accesso.test.ts → 3 file, 32 prove verdi.",
+   "verificato_da": "R04 (capo squadra) ha ricontrollato con grep sulla testa: seMancaLaChiave solo in lib/api/middleware.ts e lib/privacy/porta-dei-diritti.ts; nessun catch sulla chiave nelle due rotte."
+  },
+  {
+   "id": "R04-004",
+   "chiave": "architettura|migrazione-124 ha dovuto creare un suo client admin, perché la fabbrica del sito porta next/headers",
+   "esito": "gia_riparato_prima",
+   "prova": "lib/db/migrazione-124.ts importa solo '@/lib/logger' (r.1) e non crea nessun client (grep createClient/createAdmin: 0); git log -S createClient -- lib/db/migrazione-124.ts vuoto.",
+   "nota": "L'unico client admin fuori da server.ts è in app/api/cron/send-emails/route.ts:264-267 (non mio, vedi nuovi_difetti_visti).",
+   "verificato_da": "R04 (capo squadra) ha ricontrollato con grep sulla testa."
+  },
+  {
+   "id": "R04-005",
+   "chiave": "architettura|email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+   "esito": "riparato",
+   "commit": "c5547bc1",
+   "file_toccati": [
+    "lib/ordini/annulla.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-email-annullo-negozio.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-email-annullo-negozio.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout c5547bc1^ -- lib/ordini/annulla.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-email-annullo-negozio.test.ts (ROSSA, 2 su 3) ; git checkout c5547bc1 -- lib/ordini/annulla.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-email-annullo-negozio.test.ts (VERDE) ; git status pulito"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Sulla base l'email al cliente partiva già dopo la risposta, con avviso agli amministratori se cadeva. Restava dentro la richiesta l'email di annullo al NEGOZIO, aspettata ordine per ordine anche nel giro degli scaduti da 100 ordini, e un invio fallito restava solo nel registro. Ora usa lo stesso meccanismo (dopoLaRisposta → after() di Next; fuori da una richiesta si aspetta come prima) e un invio caduto arriva agli amministratori una volta per ordine. Nessuna coda nuova inventata.",
+   "nota": "Una coda durevole per le email di annullo si reggerebbe su lib/email/templates.ts (non mio): lavoro a parte. Rischio raffica di invii in nuovi_difetti_visti.",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso, worktree su fd1400c9, contenuto uguale a 356502b7 per questi file): regge: fuori da una richiesta after() lancia e si aspetta l'invio come prima; nessun chiamante usava il vecchio booleano (tsc 0); chiavi degli avvisi distinte. Riserva: la coda di after() in Next 15.5 non ha limite di concorrenza (vedi nuovi_difetti_visti)."
+  },
+  {
+   "id": "R04-006",
+   "chiave": "architettura|i soldi passano fra gli ordini del carrello con scritture una riga alla volta e una compensazione scritta a mano, non con una transazione",
+   "esito": "gia_riparato_prima",
+   "prova": "lib/ordini/annulla.ts (base 2d19787b) 971-1035: rifaiIlGiro passa tutte le righe a scriviInsieme → rpc sposta_la_consegna_nel_carrello (945-965); anche rimetti è una sola chiamata (1008-1032); 1117-1131: rifaiIlGiroRigaPerRiga parte solo su SENZA_FUNZIONE (PGRST202/42883). migrations/620_… c'è. Prova esistente: npx vitest run --reporter=dot tests/unit/riparazione-r05-soldi-in-transazione.test.ts (7/7 verde).",
+   "nota": "La 620 è già applicata in produzione (la regia: «Migrazioni a mano» il 21/11 alle 01:59, verificata in sola lettura dalla regia, non da R04). Il ripiego una riga alla volta resta solo per un database senza la funzione (PGRST202/42883)."
+  },
+  {
+   "id": "R04-007",
+   "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+   "esito": "parziale",
+   "commit": "b13dc844",
+   "file_toccati": [
+    "lib/ordini/annulla.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-carrello-contanti-senza-riga.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-carrello-contanti-senza-riga.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout b13dc844^ -- lib/ordini/annulla.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-carrello-contanti-senza-riga.test.ts (ROSSA, 2 su 5) ; git checkout b13dc844 -- lib/ordini/annulla.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-carrello-contanti-senza-riga.test.ts (VERDE) ; git status pulito"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Parte «nessuno lo sa» chiusa. Senza riga in cod_checkout_attempts (o con la riga illeggibile) non si sposta niente e nessun ordine si unisce per vicinanza di tempo. Se lo stesso cliente ha altri ordini in contanti vivi, nati entro 2 minuti e senza riga di carrello, gli amministratori ricevono un avviso (una volta per ordine) con codici, consegna, fattorino e totale di adesso e le cifre che la regola darebbe se fossero lo stesso carrello. Chi sta nella riga di un altro carrello si esclude con certezza: nell'esempio del collaudo b2 resta a 14 € e la frutta a 13. Corretto il commento sul codice sconto.",
+   "cosa_resta": "Che la regola scatti anche senza la riga: sugli ordini non c'è una chiave certa del carrello in contanti. Serve una migrazione 66x (orders.carrello_contanti text + indice (user_id, carrello_contanti)), che la rotta dei contanti la scriva (sotto), poi la lettura in ordiniDelCarrello di annulla.ts e di veloce-non-confermata.ts. Non va dentro rigaOrdine (il ripiego conRipiegoSchema accetta PGRST204 solo per le colonne della 124).",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "(1) Dopo `if (errChiave) { logger.error('[cod] prova del tentativo NON scritta…', {…}); }` (verso la riga 1909) aggiungere dentro lo stesso if: `await notifyAdmins('⚠️ Carrello in contanti senza la sua riga', `Gli ordini ${createdOrderIds.map((id) => '#' + id.slice(0, 6).toUpperCase()).join(', ')} sono nati insieme ma la riga del loro carrello non si è scritta: se un negozio li rifiuta, la consegna degli altri non si rifà da sola.`, '/admin/orders').catch(() => undefined);` e lo stesso dentro `if (errCarrello) {…}` (verso la riga 1928), dopo il logger.warn. (2) Dopo la migrazione 66x: subito dopo quei due blocchi `if (createdOrderIds.length > 1) { const { error: e } = await admin.from('orders').update({ carrello_contanti: chiaveCarrello }).in('id', createdOrderIds); if (e) logger.warn('[cod] chiave del carrello non scritta sugli ordini', { chiave: chiaveCarrello, message: e.message }); }`. È una scrittura a parte: se la colonna non c'è non ferma l'ordine."
+    }
+   ],
+   "verificato_da": "revisore avversario del lotto A (subagente diverso, worktree su fd1400c9, contenuto uguale a 356502b7 per questi file): parziale confermato: nessuna scrittura di soldi su ordini ritrovati per tempo (b2 resta a 14 €, frutta a 13), avviso una volta per ordine, tutto in try/catch. Difetto piccolo, solo testo: annulla.ts:845, se cade la lettura della riga di un ordine vicino quell'ordine conta «senza riga» e l'avviso agli admin può nominarlo."
+  },
+  {
+   "id": "R04-008",
+   "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+   "esito": "parziale",
+   "commit": "cfe244ad",
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-veloce-carrello-a-meta.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-veloce-carrello-a-meta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout cfe244ad^ -- lib/ordini/veloce-non-confermata.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-veloce-carrello-a-meta.test.ts (ROSSA, 4 su 5) ; git checkout cfe244ad -- lib/ordini/veloce-non-confermata.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-veloce-carrello-a-meta.test.ts (VERDE) ; git status pulito"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Scelta di Nicola rispettata: il primo ordine resta nella fascia nuova. Se una scrittura dopo la prima cade (o l'ordine è cambiato nel frattempo), il freno prova anche gli altri ordini e alla fine rilegge quelli rimasti indietro. Se uno è ancora NEW e «Adesso», il freno si ferma come prima: il giro dopo lo ritrova, lo mette nella stessa fascia, e il cliente riceve una sola campanella. Se nessuno è più NEW, il cliente legge subito «la tua spesa arriva nella fascia X (tranne l'ordine #Y)… ci pensiamo noi» e gli amministratori ricevono codice, stato ed errore dell'ordine da mettere nella fascia. Euro e rimborso con la carta mai due volte (provato su due giri).",
+   "nota": "Una corsa resta coperta solo dagli amministratori: un ordine ancora NEW al primo giro e confermato dal negozio prima del giro dopo non viene ritrovato dal freno; gli amministratori hanno l'avviso «Freno della veloce fermo a metà».",
+   "cosa_resta": "Difetto trovato dal revisore: se la scrittura del secondo ordine dà errore ma è passata davvero (timeout dopo il commit) e l'euro della veloce stava su quell'ordine, alla rilettura l'ordine trovato «già nella fascia» passa per a posto ma non entra in deltaScritti (lib/ordini/veloce-non-confermata.ts:744/763, poi :778 fra i rimasti): il cliente legge «l'euro te lo rendiamo a mano» e gli admin «rendilo a mano» anche se la consegna è già scesa di 1 €. L'euro può tornare due volte (a mano, da un amministratore). Cura proposta: alla rilettura confrontare anche delivery_fee_cents, o mettere l'ordine trovato in fascia in deltaScritti, prima di decidere «a mano». Non corretto: sopra 24,50 $ niente giri di correzione (regola della regia).",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso, worktree su fd1400c9, contenuto uguale a 356502b7 per questi file): non_regge sul caso della scrittura passata dopo un timeout (prova usa e getta rossa, fuori dal ramo); regge il resto: secondo ordine NEW ripreso dal giro dopo, una sola campanella, nessun ordine di altri carrelli toccato, carta rimborsata una volta sola."
+  },
+  {
+   "id": "R04-009",
+   "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+   "esito": "non_fatto",
+   "nota": "Cura pronta ma ferma: fa diventare rossa la prova comune tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts:59-64 (chiede apposta «niente memoria dopo l'arrivo»). Il diff (lib/queries/seller-public-profiles.ts: il negozio arrivato resta buono 30 s, lo staleTime dei chiamanti; più la prova comune riscritta con orologio finto) è stato mandato alla regia per la firma di Nicola. Senza firma non si applica.",
+   "modifica_pronta": [
+    {
+     "file": "lib/queries/seller-public-profiles.ts",
+     "modifica": "Prima della r.98 (type VoliDelClient): commento 21/11/2026 (R04-009) + `const RICORDO_MS = 30_000;`. Alla r.131 `() => { if (voli.get(k) === volo) voli.delete(k); },` → `() => { setTimeout(() => { if (voli.get(k) === volo) voli.delete(k); }, RICORDO_MS); },`. La r.132 (lettura caduta) resta. Aggiornare il commento r.88-93."
+    },
+    {
+     "file": "tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts",
+     "modifica": "r.13 importare anche vi; r.59-64: «a volo atterrato la domanda torna al database dopo 30 secondi»: due letture = 1 domanda, dopo vi.advanceTimersByTimeAsync(30_000) = 2 domande (prova comune: serve la firma)."
+    }
+   ]
+  },
+  {
+   "id": "R04-010",
+   "chiave": "architettura|la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+   "esito": "parziale",
+   "commit": "356502b7f9778b247477d709d312d26946827352",
+   "file_toccati": [
+    "lib/shipping.ts"
+   ],
+   "prova_file": [],
+   "prova_comando": "npm run typecheck && npx vitest run --reporter=dot tests/unit/shipping.test.ts tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts tests/unit/soldi-storni-sconti-e-compensi.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "non_regge",
+    "uscita": 1,
+    "comando": "git checkout 3879207a^ -- lib/shipping.ts && npx vitest run --reporter=dot tests/unit/shipping.test.ts tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts tests/unit/soldi-storni-sconti-e-compensi.test.ts (verde: il commit è solo di commento) && git checkout 3879207a -- lib/shipping.ts"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Solo commento: IngressiSpedizione e il parametro di shippingCentsFor segnati @deprecated, accettati e ignorati; cifre invariate (typecheck verde, 35 file e 181 prove verdi). Il commit (3879207a, ripetuto come 356502b7 dopo aver tolto l'unione) non cambia comportamento: la regia può non tenerlo.",
+   "cosa_resta": "Gli ingressi non si tolgono senza toccare lib/ordini/prezzi.ts (non mio) e due prove comuni: tests/unit/soldi-storni-sconti-e-compensi.test.ts:139 e :175 (passano l'oggetto: tipi rossi) e tests/unit/riparazione-r03-carrello-consegna.test.ts:54-58 (finge una spedizione a distanza con le coordinate).",
+   "serve_file_altrui": [
+    {
+     "file": "lib/ordini/prezzi.ts",
+     "modifica": "r.261-272: `const shippingPerGruppo = ing.gruppi.map(() => shippingCentsFor());` al posto del map che legge coord e passa i sette campi. Poi, con la firma per le due prove comuni, in lib/shipping.ts `export function shippingCentsFor(): number` e via IngressiSpedizione."
+    }
+   ],
+   "verificato_da": "non rivisto da un secondo subagente (tetto di spesa); il commit è solo di commento."
+  },
+  {
+   "id": "R04-011",
+   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "esito": "serve_file_altrui",
+   "cosa_ho_fatto": "Nessuna modifica: la parte in store-hours.ts c'è già sulla base (negozioPuoServire(storeHours, fascia, now, propostaIl) r.307-311 e finestraDelRitiro r.243 contano il domani da propostaIl), ma le rotte non la passano; la cassa manda già delivery_date (app/checkout/page.tsx:1038 e 1168), lo schema z.object delle rotte lo scarta.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "Nello schema Body, dopo r.92 `deliverySlot: campoFasciaConsegna,` aggiungere `delivery_date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullish(),`. Prima della r.927 (`const rifiutata = motivoFasciaRifiutata(`): commento + `if (body.delivery_date && body.deliverySlot) { const r = romeNow(); const giornoDiAdesso = new Date(Date.UTC(r.getFullYear(), r.getMonth(), r.getDate() + (body.deliverySlot.startsWith('Domani') ? 1 : 0))).toISOString().slice(0, 10); if (giornoDiAdesso !== body.delivery_date) return esciERilascia(ApiErrors.conflict('È passata la mezzanotte: la fascia che hai scelto adesso indica un altro giorno. Scegli di nuovo la fascia e conferma.')); }`"
+    },
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "La stessa riga dello schema dopo r.85 `deliverySlot: campoFasciaConsegna,` e lo stesso blocco prima della r.522, con `return ApiErrors.conflict(...)` al posto di esciERilascia (romeNow già importato, r.19)."
+    }
+   ],
+   "nota": "Si chiede al cliente di riscegliere invece di giudicare con propostaIl, perché lib/ordini/scadenza-accettazione.ts:184-185 legge «Domani» dall'ora di creazione: un ordine creato alle 00:01 e giudicato sul martedì verrebbe poi trattato come mercoledì. La cassa fa già così dopo mezzanotte (app/checkout/page.tsx:650-657)."
+  },
+  {
+   "id": "R04-012",
+   "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-013",
+   "chiave": "architettura|l'elenco delle librerie dichiara una libreria mai usata e ne usa una che non dichiara, e il lint gira con un comando che next 16 toglie",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-014",
+   "chiave": "architettura|il generatore dei tipi scrive le colonne array (text[], uuid[]) come string invece di string[]",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-015",
+   "chiave": "architettura|una quinta copia scritta a mano del finto clienteavvisi nelle prove degli avvisi",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-016",
+   "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+   "esito": "serve_file_altrui",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts",
+     "modifica": "Togliere la r.44: `  cod_reconciliations: 'quadratura della cassa contanti: registro contabile',`. La prova resta verde perché la rotta contiene from('cod_reconciliations') (app/api/account/export/route.ts:215)."
+    }
+   ],
+   "nota": "La tabella esiste ancora (migrazioni 126, 360, 501) e l'esportazione la legge già: l'esclusione è falsa e nasconde un passo indietro. È una prova comune: il diff è alla regia per la firma di Nicola.",
+   "verificato_da": "R04 (capo squadra) ha ricontrollato con grep: export/route.ts:215 legge cod_reconciliations, la prova la esclude alla r.44."
+  },
+  {
+   "id": "R04-017",
+   "chiave": "deploy-sre|la costruzione del sito dipende dal download dei caratteri da google e ogni tanto fallisce da sola",
+   "esito": "non_fatto",
+   "nota": "tetto di spesa: sopra 24,50 $ niente lotti nuovi (regia 10.0, 21/11); il lotto C (strumenti e prove) non è partito. Spesa al momento della fermata: 25,71 $."
+  },
+  {
+   "id": "R04-018",
+   "chiave": "flussi-conversione|se il carrello scade tutto nello stesso giro, il cliente riceve avvisi «il conto è cambiato» con cifre già superate",
+   "esito": "riparato",
+   "commit": "83806000",
+   "file_toccati": [
+    "app/api/cron/expire-stale-orders/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-carrello-scaduto-nello-stesso-giro.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-carrello-scaduto-nello-stesso-giro.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout 83806000^ -- app/api/cron/expire-stale-orders/route.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-carrello-scaduto-nello-stesso-giro.test.ts (ROSSA, 2 su 3) ; git checkout 83806000 -- app/api/cron/expire-stale-orders/route.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-carrello-scaduto-nello-stesso-giro.test.ts (VERDE) ; git status pulito"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Email e campanella del carrello partono a fine giro. Un ordine annullato anche lui nel giro non si nomina fra quelli che restano; un ordine che resta si dice una volta sola, con le cifre di prima del giro e quelle finali; senza ordini che restano la campanella «il conto è cambiato» non parte. Un solo ordine scaduto: come prima.",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso, worktree su fd1400c9, contenuto uguale a 356502b7 per questi file): regge: un solo ordine scaduto come prima; due scaduti e un terzo che resta (nominato una volta); carrelli diversi dello stesso cliente separati; rimborso caduto con carrello rimesso (avviso tolto). Rischio: se la funzione muore a metà giro (300 s) la campanella degli ordini già annullati non parte."
+  },
+  {
+   "id": "R04-019",
+   "chiave": "qa-flussi|un admin che pubblica una storia dall'area negozio lascia una foto orfana nel deposito: dopo la 404 l'inserimento gli è rifiutato",
+   "esito": "non_fatto",
+   "nota": "Cura pronta ma ferma: nel layout serve usePathname e tre prove comuni fingono next/navigation con solo useRouter (diventerebbero rosse); la cura nella pagina delle storie (non mia) ne farebbe rosse cinque. Diff mandato alla regia per la firma di Nicola.",
+   "modifica_pronta": [
+    {
+     "file": "app/seller/layout.tsx",
+     "modifica": "r.4 `import { usePathname, useRouter } from 'next/navigation';`; dopo la r.39: commento (R04-019) + `const pathname = usePathname();` + `const soloPerNegozi = (pathname ?? '').startsWith('/seller/stories') && !(isSeller && isApproved);`; dopo il blocco `if (!allowed) {…}`: `if (soloPerNegozi) { return (<SellerShell>…«Le storie le pubblica solo un negozio approvato, a suo nome: questo account non ha un negozio.» + Button «Torna all'area negozio» href /seller…</SellerShell>); }`"
+    },
+    {
+     "file": "tests/unit/il-negozio-che-non-ha-mandato-la-richiesta-non-legge-stiamo-verificando.test.tsx",
+     "modifica": "r.36: nel finto di 'next/navigation' aggiungere `usePathname: () => '/seller',` (prova comune)"
+    },
+    {
+     "file": "tests/unit/riparazione-r19-profilo-non-letto-nel-negozio.test.tsx",
+     "modifica": "r.21: come sopra (prova comune)"
+    },
+    {
+     "file": "tests/unit/minori-s06-layout-del-negozio.test.tsx",
+     "modifica": "r.17: come sopra (prova comune)"
+    }
+   ]
+  },
+  {
+   "id": "R04-020",
+   "chiave": "qa-flussi|il conteggio delle veloci in corso non ha una finestra di tempo: con il tetto a 1 una veloce dimenticata spegne la veloce",
+   "esito": "riparato",
+   "commit": "d380c652",
+   "commit_correzione": [
+    "ac69a108"
+   ],
+   "file_toccati": [
+    "lib/ordini/consegna-veloce.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-veloce-dimenticata.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-veloce-dimenticata.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout d380c652^ -- lib/ordini/consegna-veloce.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-veloce-dimenticata.test.ts (ROSSA, 2 su 3) ; git checkout d380c652 -- lib/ordini/consegna-veloce.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-veloce-dimenticata.test.ts (VERDE) ; git status pulito"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "contaVelociInCorso conta solo le veloci nate nelle ultime ORE_PER_ACCETTARE (3) ore, la costante esistente più prudente (dopo 3 ore senza conferma il giro notturno la annulla). Una nascita illeggibile conta (prudente). Orologio finto: l'«Adesso» del 16/11 non conta il 19/11; una veloce in ritardo di 2,5 ore conta; il confine è a 3 ore.",
+   "nota": "Il primo commit di questa voce, già spinto, toccava una prova comune: corretto con amend (d380c652, la prova comune è uguale alla base). Il commit vecchio e l'unione che lo riassorbiva sono stati tolti dal ramo con un push --force-with-lease chiesto dalla regia 10.0 e approvato dall'utente (testa 3879207a → 356502b7, contenuto identico).",
+   "domanda": "La finestra di 3 ore va accorciata (per esempio 10 minuti per confermare + 60 promessi + un margine)?",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso, worktree su fd1400c9, contenuto uguale a 356502b7 per questi file): regge: finestra su new Date() reale; created_at timestamptz letto anche coi microsecondi; nascita illeggibile conta; confine incluso."
+  },
+  {
+   "id": "R04-021",
+   "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+   "esito": "parziale",
+   "commit": "5dd8eeaa",
+   "file_toccati": [
+    "lib/ordini/consegna-veloce.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout 5dd8eeaa^ -- lib/ordini/consegna-veloce.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts (ROSSA, 4 su 6) ; git checkout 5dd8eeaa -- lib/ordini/consegna-veloce.ts && npx vitest run --reporter=dot tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts (VERDE) ; git status pulito"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Una veloce alla volta per fattorino (VELOCI_PER_FATTORINO = 1). Il conto sta in contaFattoriniOnline, che GET /api/consegna/veloce, /negozi, la rotta dei contanti e quella della carta già chiamano e passano alla STESSA veloceSiPuo: risponde i fattorini accesi meno quelli con una veloce in mano. Nessuna rotta cambia; con 1 fattorino e 1 veloce in corso il GET dice no, quindi la cassa non offre più «Adesso» che il clic finale rifiuta con 409. Si contano le consegne, non le righe (un carrello di 2 negozi conta 1). Finestra di 3 ore. Conteggio caduto → 503. Verdi le 114 prove che nominano consegna-veloce/veloceSiPuo/contaVelociInCorso/contaFattoriniOnline, le rotte della veloce, cod o checkout; nessuna prova esistente modificata.",
+   "cosa_resta": "(1) Due clienti nello stesso istante passano tutti e due: corsa fra lettura e creazione dell'ordine, si chiude solo con una prenotazione atomica nelle rotte o nel database (rotte non mie). (2) Le casse con la carta aperte non si contano: scelta di business (una cassa abbandonata terrebbe occupato l'unico fattorino fino a 2 ore); al lancio la carta è spenta. (3) contaVelociInCorso legge tutte le «Adesso» aperte senza filtro di tempo nella query (consegna-veloce.ts:190): oltre 1000 righe (il massimo di PostgREST) il conteggio esce basso; un .gte('created_at', soglia) lo chiude.",
+   "domanda": "Le casse con la carta aperte e non ancora pagate devono occupare il fattorino (fino a 2 ore se abbandonate)?",
+   "verificato_da": "revisore avversario del lotto A (subagente diverso, worktree su fd1400c9, contenuto uguale a 356502b7 per questi file): parziale confermato: tutti i chiamanti (cod/route.ts:940, stripe/checkout/route.ts:341 e :538, consegna/veloce/route.ts:93, consegna/veloce/negozi/route.ts:68) passano contaFattoriniOnline a veloceSiPuo senza velociInCorso: stessa decisione ovunque, tetto non contato due volte, carrello di due negozi conta 1, ritiro in negozio escluso."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "con molti ordini scaduti nello stesso giro, le email di annullo partono tutte insieme dopo la risposta",
+   "dimensione": "deploy-sre",
+   "severita": "minore",
+   "file": "lib/ordini/annulla.ts (dopoLaRisposta) · app/api/cron/expire-stale-orders/route.ts",
+   "descrizione": "after() di Next fa partire insieme i lavori lasciati da una richiesta (coda senza limite): 2 email per ordine nello stesso istante, possibili 429 da Resend e una raffica di avvisi «Email di annullo non partita». Vale già per l'email al cliente sulla base; ora anche per quella al negozio."
+  },
+  {
+   "titolo": "anche il freno della veloce trova il carrello in contanti solo dalla riga di cod_checkout_attempts",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "lib/ordini/veloce-non-confermata.ts:197-209",
+   "descrizione": "Senza riga sposta un ordine solo e dice «la tua spesa» per quello. Stessa radice di R04-007."
+  },
+  {
+   "titolo": "il codice sconto monouso guarda solo il carrello della carta, non quello in contanti",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "lib/ordini/annulla.ts tieneIlCodice",
+   "descrizione": "Per i contanti un codice monouso può tornare libero mentre un altro ordine dello stesso carrello lo tiene; il carrello in contanti si potrebbe leggere dalla riga per cliente."
+  },
+  {
+   "titolo": "commenti delle rotte della veloce dicono ancora «un fattorino approvato e online»",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "app/api/consegna/veloce/route.ts · app/api/orders/cod/route.ts:935",
+   "descrizione": "Dopo R04-021 la regola è «un fattorino libero» (senza una veloce in mano)."
+  },
+  {
+   "titolo": "anche il pagamento con la carta chiuso dopo mezzanotte rigiudica la fascia «Domani» sul giorno dopo",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "lib/stripe/webhook/ordini.ts:292",
+   "descrizione": "Il webhook rigiudica la fascia con l'orologio dell'arrivo del pagamento: stesso problema di R04-011."
+  },
+  {
+   "titolo": "la rotta delle email a orario si crea un suo client admin",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "app/api/cron/send-emails/route.ts:264-267",
+   "descrizione": "Doppione di getAdminSupabase."
+  }
+ ],
+ "domande_per_nicola": [
+  "R04-020: la finestra di 3 ore per contare una veloce in corso va accorciata (10 minuti per confermare + 60 promessi + margine)?",
+  "R04-021: le casse con la carta aperte e non ancora pagate devono occupare il fattorino (fino a 2 ore se abbandonate)?",
+  "Firme per le prove comuni (diff nel referto): R04-016 (togliere cod_reconciliations dalle escluse), R04-009 (vetrina tenuta 30 s), R04-019 (usePathname nei finti di next/navigation), R04-010 (due prove + prezzi.ts)."
+ ],
+ "conto": {
+  "agenti": 3,
+  "nota": "3 subagenti su 6: riparatore del lotto A (opus), riparatore del lotto B (opus), revisore avversario del lotto A (opus, in worktree). Il lotto C e il revisore del lotto B non sono partiti per il tetto (24,50 $). Nessuno strumento Workflow.",
+  "subagenti": 3,
+  "costo_usd": 25.71
+ },
+ "costo_usd": 25.71
+}
