@@ -422,7 +422,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       <Button onClick={() => setIncassoAperto(true)} variant="accent" size="lg" icon={Banknote} fullWidth>
         Conferma incasso contanti
       </Button>
-      <p className="text-center text-[12px] text-ink-500">
+      <p className="text-center text-xs text-ink-500">
         {done
           ? 'Senza questa conferma il negozio non viene pagato.'
           : 'Poi chiedi il codice al cliente per chiudere la consegna.'}
@@ -524,7 +524,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         {/* Card target unica con azioni Naviga / Chiama */}
         {!done && !annullato && (
           <div className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 p-4 shadow-warm">
-            <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.03em] text-ink-400">
+            <p className="mb-1 text-xs font-bold uppercase tracking-[0.03em] text-ink-400">
               {targetIsStore ? 'Ritira al negozio' : 'Consegna al cliente'}
             </p>
             <p className="flex items-center gap-1.5 font-serif text-xl font-bold text-ink-900">
@@ -547,7 +547,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 telefono da darti: niente «Naviga», niente «Chiama». Invece di lasciarti
                 un riquadro vuoto, si dice cosa fare. */}
             {targetIsStore && !order.seller && (
-              <div role="alert" className="mb-3 rounded-md border border-secondary-200 bg-secondary-50 p-2.5 text-[13px] leading-relaxed text-ink-700">
+              <div role="alert" className="mb-3 rounded-md border border-secondary-200 bg-secondary-50 p-2.5 text-sm leading-relaxed text-ink-700">
                 <p className="font-semibold text-ink-900">Non so dove ritirare questo ordine</p>
                 <p className="mt-0.5">
                   Il negozio non è più visibile sul sito, per esempio perché è stato sospeso, e da qui
@@ -596,7 +596,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               )}
             </div>
             {!targetIsStore && order.delivery_notes && (
-              <p className="mt-3 flex items-start gap-1.5 rounded-md bg-accent-50 p-2.5 text-[13px] italic text-ink-700">
+              <p className="mt-3 flex items-start gap-1.5 rounded-md bg-accent-50 p-2.5 text-sm italic text-ink-700">
                 <StickyNote size={14} className="mt-0.5 shrink-0" aria-hidden /> <span className="min-w-0 [overflow-wrap:anywhere]">{order.delivery_notes}</span>
               </p>
             )}
@@ -613,7 +613,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                     ? <><Radio size={16} strokeWidth={2.2} aria-hidden /> Posizione condivisa</>
                     : <><MapPin size={16} strokeWidth={2.2} aria-hidden /> Condividi posizione</>}
                 </p>
-                <p className="text-[13px] text-ink-600">
+                <p className="text-sm text-ink-600">
                   {sharing ? 'Il cliente vede dove sei in tempo reale.' : 'Attiva il GPS per il cliente.'}
                 </p>
               </div>
@@ -632,7 +632,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 dove si accende, non solo in una pagina legale che nessuno apre.
                 La posizione e' il dato piu' invasivo che chiediamo, e chi la
                 condivide ha diritto di sapere cosa succede. */}
-            <p className="mt-3 border-t border-cream-200 pt-3 text-[12px] leading-relaxed text-ink-500">
+            <p className="mt-3 border-t border-cream-200 pt-3 text-xs leading-relaxed text-ink-500">
               Mentre è attiva, la tua posizione viene salvata al massimo una volta ogni
               30 secondi e la vede il cliente di <em>questo</em> ordine, per sapere quando
               arrivi. Si ferma da sola quando l&apos;ordine si chiude e non viene usata per
@@ -662,7 +662,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           {order.payment_method === 'cod' && !annullato && (
             <div className="mt-2.5 flex items-center gap-2 rounded-md bg-accent-100 px-3 py-2.5">
               <Banknote size={18} className="text-accent-800" aria-hidden />
-              <span className="text-[13px] text-accent-900">
+              <span className="text-sm text-accent-900">
                 Incassa <strong>{formatPrice(order.total_price)}</strong> in contanti dal cliente.
               </span>
             </div>
