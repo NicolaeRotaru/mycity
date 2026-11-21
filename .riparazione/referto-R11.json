@@ -1,6 +1,6 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-22 00:20",
+  "aggiornato": "2026-11-22 00:25",
   "finita": true,
   "testa": "546959a85624d1adbf2c3a4a126a8e672fb0b85b",
   "verifica": {
@@ -280,6 +280,8 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "2 subagenti riparatori (lotti A e B) e 2 revisori, tutti col modello piccolo; nessun giro di correzione"
-  }
+    "nota": "2 subagenti riparatori (lotti A e B) e 2 revisori, tutti col modello piccolo; nessun giro di correzione",
+    "subagenti": 4
+  },
+  "costo_usd": 5.27
 }
