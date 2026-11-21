@@ -40,8 +40,9 @@ import {
 import { queryKeys } from '@/lib/queries/keys';
 import { conFattorinoDellOrdine, conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 // #92 — le miniature si chiedono gia' piccole al server
-import { sizedImage, logoNegozio } from '@/lib/image-url';
+import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
@@ -857,7 +858,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cream-100">
                 {order.seller?.store_logo ? (
-                  (<Image src={logoNegozio(order.seller.store_logo, 40)} alt="" width={40} height={40} sizes="40px" loader={caricatoreFotoRemote} className="h-full w-full object-contain" />)
+                  (<Image src={order.seller.store_logo} alt="" width={40} height={40} sizes="40px" loader={caricatoreLogoNegozio} className="h-full w-full object-contain" />)
                 ) : <Store size={18} className="text-ink-400" aria-hidden />}
               </div>
               <div className="min-w-0 flex-1">

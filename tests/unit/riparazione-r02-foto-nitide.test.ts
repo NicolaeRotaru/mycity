@@ -12,7 +12,13 @@ describe('foto nitide: niente unoptimized, con loader e sizes', () => {
       const immagini = src.match(/<Image[\s\S]*?\/>/g) ?? [];
       expect(immagini.length).toBeGreaterThan(0);
       for (const img of immagini) {
-        if (img.includes('sizedImage') || img.includes('logoNegozio')) {
+        // Il logo del negozio passa dal caricatore dei loghi: solo larghezza, mai il ritaglio
+        // quadrato di caricatoreFotoRemote, che taglierebbe un marchio largo.
+        if (img.includes('store_logo') || img.includes('logoNegozio')) {
+          expect(img).toContain('loader={caricatoreLogoNegozio}');
+          expect(img).not.toContain('caricatoreFotoRemote');
+          expect(img).toMatch(/sizes=/);
+        } else if (img.includes('sizedImage')) {
           expect(img).toContain('loader={caricatoreFotoRemote}');
           expect(img).toMatch(/sizes=/);
         }
