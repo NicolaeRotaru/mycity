@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { attachSellerProfiles, fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import { DIMENSIONE_BLOCCO, inBlocchi, leggiInBlocchi } from '@/lib/supabase/blocchi';
 import { NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { discountedUnitCents } from '@/lib/promotions';
 
 /**
  * LA LETTURA CHE STA SOTTO OGNI GRIGLIA DI PRODOTTI DEL SITO.
@@ -47,6 +48,12 @@ export interface DomandaGriglia {
   search?: string;
   sort: OrdineGriglia;
   maxPrice?: number;
+  /**
+   * R01-008 — Prodotti col prezzo pieno sopra `maxPrice` che con la promozione attiva ci scendono
+   * sotto (li risolve `idsCheInPromoScendonoSotto`): passano lo stesso il filtro di prezzo.
+   * Assente o vuoto = il filtro di prezzo di sempre.
+   */
+  idsScontatiSotto?: string[];
   minPrice?: number;
   onlyInStock?: boolean;
   /** Negozi aperti adesso (già risolti dal chiamante) — assente = filtro spento. */
@@ -104,6 +111,38 @@ export function inizioFinestraNovita(adesso: Date = new Date(), giorni: number =
   return dal.toISOString();
 }
 
+/**
+ * R01-008 — I PRODOTTI CHE SOLO IN PROMOZIONE SCENDONO SOTTO LA SOGLIA.
+ *
+ * «Sotto i 10 €» tagliava sul prezzo pieno: un prodotto da 12 € al -25% (9 € alla cassa) restava
+ * fuori. Qui si leggono i prodotti con una promozione attiva (`active_promo_products`, la stessa
+ * regola di `product_active_discounts` che usa la cassa) e si tengono quelli col prezzo pieno alla
+ * soglia o sopra che, scontati come li sconta la cassa (`discountedUnitCents`), stanno sotto.
+ * Gli id finiscono nell'indirizzo (`id.in.(…)` dentro l'`or`): al massimo `DIMENSIONE_BLOCCO`, i più
+ * economici, perché un indirizzo troppo lungo darebbe un 414 e la griglia vuota.
+ * Una lettura caduta vale «nessuno»: la pagina resta quella di prima invece di andare in errore.
+ */
+const TETTO_PROMO_LETTE = 1000;
+
+export async function idsCheInPromoScendonoSotto(
+  supabase: SupabaseClient,
+  soglia: number,
+  sellerId?: string,
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc('active_promo_products', {
+    p_limit: TETTO_PROMO_LETTE,
+    ...(sellerId ? { p_seller: sellerId } : {}),
+  });
+  if (error || !Array.isArray(data)) return [];
+  const sogliaCent = Math.round(soglia * 100);
+  return (data as Array<{ product_id: string; price: number | string; discount_percent: number | null }>)
+    .map((r) => ({ id: r.product_id, pieno: Number(r.price), pagato: discountedUnitCents(r.price, Number(r.discount_percent) || 0) }))
+    .filter((r) => !!r.id && Number.isFinite(r.pieno) && Math.round(r.pieno * 100) >= sogliaCent && r.pagato < sogliaCent)
+    .sort((a, b) => a.pagato - b.pagato || (a.id < b.id ? -1 : 1))
+    .slice(0, DIMENSIONE_BLOCCO)
+    .map((r) => r.id);
+}
+
 /** Quanti risultati chiedere alla ricerca del database: mai più della finestra a schermo. */
 const TETTO_PERTINENZA = 200;
 
@@ -126,12 +165,18 @@ async function idsPiuPertinenti(supabase: SupabaseClient, termine: string, tetto
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applicaFiltriComuni<Q extends { in: any; eq: any; lte: any; gte: any; or: any }>(
   q: Q,
-  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
+  d: Pick<DomandaGriglia, 'sellerId' | 'maxPrice' | 'idsScontatiSotto' | 'minPrice' | 'onlyInStock' | 'apertiOra' | 'creatiDal'>,
   categorie: string[] | null,
 ): Q {
   if (categorie) q = q.in('category_id', categorie);
   if (d.sellerId) q = q.eq('seller_id', d.sellerId);
-  if (d.maxPrice !== undefined) q = q.lte('price', d.maxPrice);
+  if (d.maxPrice !== undefined) {
+    // R01-008 — «Sotto i 10 €» è il prezzo che si paga: chi ci scende solo in promozione entra lo stesso.
+    const scontati = d.idsScontatiSotto ?? [];
+    q = scontati.length > 0
+      ? q.or(`price.lte.${d.maxPrice},id.in.(${scontati.join(',')})`)
+      : q.lte('price', d.maxPrice);
+  }
   if (d.minPrice !== undefined) q = q.gte('price', d.minPrice);
   // #91 — «Solo disponibili» lo decide il database. Attenzione: `stock` a NULL vuol dire
   // disponibilità illimitata.
