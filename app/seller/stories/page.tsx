@@ -34,14 +34,26 @@ const LINK_NON_VALIDO =
   'Il link deve portare a una pagina di MyCity: scrivi la parte dell\'indirizzo che comincia con «/», per esempio /promozioni. I siti esterni non si possono collegare.';
 
 /**
- * R09-006 — Chi copia l'indirizzo dalla barra incolla «https://<dominio>/promozioni»: se il dominio
- * è quello del sito stesso si tiene solo il percorso («/promozioni»), che è ciò che la regola
- * accetta. Un altro dominio resta com'è, e la regola lo rifiuta.
+ * Chi copia l'indirizzo dalla barra incolla «https://<dominio>/promozioni» (a volte «http://», a
+ * volte con «www.»): se il dominio è quello del sito stesso si tiene solo il percorso, con ricerca
+ * e #, che è ciò che la regola accetta. Un altro dominio resta com'è, e la regola lo rifiuta.
  */
-function togliOrigineDelSito(link: string): string {
+function senzaWww(host: string): string {
+  return host.toLowerCase().replace(/^www\./, '');
+}
+
+function togliOrigineDelSito(link: string, origineDelSito: string): string {
   try {
     const u = new URL(link);
-    if (u.origin === window.location.origin) return `${u.pathname}${u.search}${u.hash}`;
+    const sito = new URL(origineDelSito);
+    if (
+      (u.protocol === 'https:' || u.protocol === 'http:') &&
+      !u.username &&
+      !u.password &&
+      senzaWww(u.host) === senzaWww(sito.host)
+    ) {
+      return `${u.pathname}${u.search}${u.hash}`;
+    }
   } catch {
     // non è un indirizzo intero (es. «/promozioni»): resta com'è
   }
@@ -111,7 +123,7 @@ export default function SellerStoriesPage() {
       if (!image) throw new Error('Seleziona un\'immagine');
       // R16-011 — prima si salvava qualunque indirizzo, anche un sito esterno. Si controlla prima di
       // caricare la foto, così un link sbagliato non lascia una foto orfana nel magazzino.
-      const link = togliOrigineDelSito(linkUrl.trim());
+      const link = togliOrigineDelSito(linkUrl.trim(), window.location.origin);
       const linkInterno = link ? safeInternalPath(link, '') : '';
       if (link && !linkInterno) throw new Error(LINK_NON_VALIDO);
       const { data: { user } } = await supabase.auth.getUser();

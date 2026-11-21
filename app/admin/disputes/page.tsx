@@ -393,10 +393,12 @@ export default function AdminDisputesPage() {
               className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
 
-            {pagamentiNonLetti && !pagamento && (
+            {pagamentiNonLetti && (
               <p role="alert" className="rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
-                Non riesco a leggere come ha pagato il cliente né quanto si può rimborsare. Il server controlla
-                comunque il tetto, ma riprova prima di decidere un rimborso.
+                {pagamento
+                  ? 'Non riesco a rileggere il pagamento: quello che vedi sotto («Rimborsabile al massimo» compreso) può essere vecchio. '
+                  : 'Non riesco a leggere come ha pagato il cliente né quanto si può rimborsare. '}
+                Il server controlla comunque il tetto, ma riprova prima di decidere un rimborso.
               </p>
             )}
             {pagamento && (
@@ -410,8 +412,9 @@ export default function AdminDisputesPage() {
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
+              <label htmlFor="reclamo-rimborso-eur" className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
               <input
+                id="reclamo-rimborso-eur"
                 type="number"
                 step="0.01"
                 value={refundEur}

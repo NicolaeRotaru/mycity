@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -33,6 +34,8 @@ type ProfileRow = {
 
 export default function StoreDetailsEditor({ profile, onBack }: { profile: ProfileRow; onBack: () => void }) {
   const qc = useQueryClient();
+  // Il modulo dice se ci sono modifiche non salvate: «Tutte le impostazioni» lo smonta e le perderebbe.
+  const [dirty, setDirty] = useState(false);
 
   // Salva SOLO le colonne "branding" (vetrina). Telefono/indirizzo/orari stanno nel
   // Profilo (StoreContactForm), quindi qui non si toccano.
@@ -61,7 +64,10 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
     <div className="space-y-4">
       <button
         type="button"
-        onClick={onBack}
+        onClick={() => {
+          if (dirty && !window.confirm('Hai modifiche ai dettagli del negozio non salvate: se esci le perdi. Uscire lo stesso?')) return;
+          onBack();
+        }}
         className="inline-flex items-center gap-1.5 -ml-1 text-sm font-semibold text-ink-600 hover:text-ink-900"
       >
         <ArrowLeft size={16} aria-hidden /> Tutte le impostazioni
@@ -91,6 +97,8 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
           }}
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}
+          salvataggioRiuscito={update.isSuccess ? update.submittedAt : 0}
+          onDirtyChange={setDirty}
         />
       </div>
     </div>
