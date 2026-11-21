@@ -83,6 +83,18 @@ describe('R02-007 · link social incollati', () => {
     });
   });
 
+  it.each([
+    ['instagram', 'https://www.instagram.com/nome/?igsh=MXx4'],
+    ['instagram', 'https://www.instagram.com/nome/?hl=it'],
+    ['tiktok', 'https://www.tiktok.com/@nome?lang=it'],
+    ['facebook', 'https://www.facebook.com/nome?mibextid=x'],
+  ])('il link di condivisione di %s con la coda (%s) salva il solo nome', async (chiave, link) => {
+    const { radice, onSubmit } = await monta({ [chiave]: link });
+    await invia(radice);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].storeCustomization.socials[chiave]).toBe('nome');
+  });
+
   it('un nome con spazi in Facebook: errore sotto Facebook, sezione aperta, nessun salvataggio', async () => {
     const { radice, onSubmit } = await monta({ facebook: 'Pane Quotidiano Piacenza', website: 'www.panequotidiano.it' });
     expect(sezione(radice).open).toBe(false);
