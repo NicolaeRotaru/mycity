@@ -198,8 +198,11 @@ export default async function AboutPage() {
           >
             <MapPin size={64} strokeWidth={1.4} className="text-secondary-500/70" />
           </div>
-          <div className="order-1 md:order-2">
-            <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4">
+          {/* R12-001 — Come il blocco sopra: col testo al 200% a 280 px «arrivati» a 60px era più larga
+              della colonna e il titolo entrava nel margine destro. La colonna può stringersi (min-w-0)
+              e il titolo va a capo (break-words hyphens-auto). */}
+          <div className="order-1 md:order-2 min-w-0">
+            <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4 break-words hyphens-auto">
               Come siamo arrivati qui
             </h2>
             <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
