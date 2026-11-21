@@ -211,13 +211,13 @@ export default function RiderEarningsPage() {
       <div className="px-4">
         <p className="mb-2.5 text-sm font-bold uppercase tracking-label text-ink-700">Storico consegne</p>
         {filtered.length === 0 ? (
-          <div className="rounded-lg border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
+          <Card variant="surface" radius="lg" padding="none" className="p-8 text-center text-sm text-ink-500">
             Nessuna consegna in questo periodo.
-          </div>
+          </Card>
         ) : (
           <div className="flex flex-col gap-2">
             {filtered.slice(0, 20).map((o) => (
-              <div key={o.id} className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3">
+              <Card key={o.id} variant="surface" radius="lg" padding="none" className="flex items-center gap-3 px-3.5 py-3">
                 <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-olive-50 text-olive-700">
                   <Check size={17} strokeWidth={2.4} aria-hidden />
                 </span>
@@ -235,7 +235,7 @@ export default function RiderEarningsPage() {
                   <Banknote size={14} className="text-olive-600" aria-hidden />
                   {formatPrice(compensoConsegnaEuro(o))}
                 </span>
-              </div>
+              </Card>
             ))}
           </div>
         )}
