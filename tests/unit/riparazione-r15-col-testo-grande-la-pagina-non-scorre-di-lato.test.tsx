@@ -30,7 +30,7 @@ describe('il piede (ogni pagina pubblica)', () => {
     const { default: Footer } = await import('@/components/Footer');
     const html = renderToStaticMarkup(createElement(Footer));
     const griglia = html.match(/<footer[^>]*>\s*<div class="([^"]+)"/)?.[1] ?? '';
-    expect(griglia).toContain('md:grid-cols-5');
+    expect(griglia).toContain('md:grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))]'); // R12-006
     expect(griglia.split(/\s+/)).not.toContain('grid-cols-2');
     // R02-005 (onda 9) — Le stesse colonne, mai più larghe della riga (a 280 px col testo al 200%).
     expect(griglia).toContain('grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]');

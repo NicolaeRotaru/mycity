@@ -37,6 +37,6 @@ describe('R02-005 · il piede non è mai più largo dello schermo, col testo al 
     // Con max(8rem,…) da solo la colonna resta di 256 px anche dove la riga ne ha 216.
     expect(colonne[0]).toBe('grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]');
     // Da md in su, come prima.
-    expect(griglia).toContain('md:grid-cols-5');
+    expect(griglia).toContain('md:grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))]'); // R12-006
   });
 });

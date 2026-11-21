@@ -139,6 +139,11 @@ const CATEGORIE_DI_RISERVA: Categoria[] = [
 /** Sotto md: colonne larghe almeno 8rem e al massimo mezza riga (gap-8 = 2rem). Vedi R15-008.
  *  R02-005 (onda 9) — E mai più larghe della riga (min(100%,…)): a 280 px col testo al 200% gli 8rem
  *  (256 px) più i margini (2 × 32) facevano 320, e ogni pagina pubblica scorreva di lato di 8 px. */
+/** R12-006 — Da md in su, cinque colonne (quattro nell'area venditore) col testo normale: ogni colonna
+ *  è larga almeno 6rem ma mai più della riga, e le colonne vuote si chiudono. Col testo al 200% quelle
+ *  che non ci stanno vanno a capo invece di allargare la pagina (con cinque colonne fisse
+ *  «Dichiarazione accessibilità» usciva dal piede). */
+const COLONNE_DEL_PIEDE_MD = 'md:grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))]';
 const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]';
 
 const Footer = () => {
@@ -203,7 +208,7 @@ const Footer = () => {
           la pagina scorreva di lato, su ogni pagina pubblica. Adesso una colonna è larga almeno
           8rem (cresce col testo) e al massimo metà riga: due colonne col testo normale, una sola
           col testo grande. Dal computer in su, come prima. */}
-      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
+      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${COLONNE_DEL_PIEDE_MD} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-full md:col-span-1">
           {/*
