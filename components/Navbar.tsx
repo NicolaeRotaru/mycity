@@ -394,7 +394,7 @@ export default function Navbar() {
                   <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                   <span className="sr-only">Carrello{cartCount > 0 ? `, ${cartCount} ${cartCount === 1 ? 'articolo' : 'articoli'}` : ''}</span>
                   {cartCount > 0 && (
-                    <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                    <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                       {cartCount > 99 ? '99+' : cartCount}
                     </span>
                   )}
@@ -406,7 +406,7 @@ export default function Navbar() {
                     <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white hover:text-white focus-visible:outline-white">
                       <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                       <span className="sr-only">Carrello, {cartCount} {cartCount === 1 ? 'articolo' : 'articoli'}</span>
-                      <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                      <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     </Link>
@@ -468,7 +468,7 @@ export const IconButton = ({ href, label, badge, unita = 'non letti', children }
     <span className="sr-only">{label}</span>
     {badge && badge > 0 ? (
       <>
-        <span aria-hidden className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        <span aria-hidden className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
           {badge > 99 ? '99+' : badge}
         </span>
         <span className="sr-only">, {badge} {unita}</span>
@@ -491,7 +491,7 @@ const CartButton = ({ count }: { count: number }) => (
     <span className="sr-only lg:hidden">Carrello</span>
     {count > 0 && (
       <>
-        <span aria-hidden className="bg-ink-900 text-accent-400 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        <span aria-hidden className="bg-ink-900 text-accent-400 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
           {count > 99 ? '99+' : count}
         </span>
         <span className="sr-only">, {count} {count === 1 ? 'articolo' : 'articoli'}</span>
@@ -583,7 +583,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
           </span>
         )}
         <span className="hidden xl:flex flex-col leading-tight text-left">
-          <span className="text-[10px] uppercase tracking-label opacity-70">
+          <span className="text-2xs uppercase tracking-label opacity-70">
             {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
           </span>
           <span className="font-semibold text-sm truncate max-w-[120px]">{displayName}</span>
