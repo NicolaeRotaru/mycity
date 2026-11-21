@@ -13,7 +13,7 @@ import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/cata
 import { addToCart, getCart, updateQuantity, type CartItem } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import { discountedUnitCents } from '@/lib/promotions';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
@@ -90,6 +90,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // R02-006 — Le righe che il carrello ha già: «Compra ora» apre la cassa su TUTTO il carrello, e il
   // tetto dei contanti si guarda lì. Si rileggono a ogni cambio del carrello (anche da un'altra scheda).
   const [righeDelCarrello, setRigheDelCarrello] = useState<CartItem[]>([]);
+  // R01-009 — Il prezzo di oggi delle ALTRE righe (centesimi, promo compresa), riletto come la cassa.
+  const [centsDiOggi, setCentsDiOggi] = useState<Record<string, number>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   // R08-003 — L'indirizzo dello zoom che non ha risposto (foto cancellata): al suo posto il segnaposto,
@@ -393,6 +395,35 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     };
   }, []);
 
+  // R01-009 — Le altre righe del carrello hanno il prezzo del giorno in cui sono entrate; la cassa lo
+  // rilegge dal prodotto, con la promo di oggi (lib/ordini/valida-carrello.ts). Qui si fa lo stesso,
+  // come la pagina del carrello: una lettura sola, rifatta solo quando cambiano i prodotti delle altre
+  // righe. Finché non torna, o se cade, vale il prezzo salvato: cassa e rotta dei contanti restano il presidio.
+  const idAltreRighe = Array.from(new Set(righeDelCarrello.map((c) => c.id).filter((x) => x !== id))).sort().join(',');
+  useEffect(() => {
+    if (!idAltreRighe) return;
+    const ids = idAltreRighe.split(',');
+    let vivo = true;
+    void (async () => {
+      try {
+        const [prodotti, sconti] = await Promise.all([
+          supabase.from('products').select('id, price').in('id', ids),
+          fetchActiveDiscounts(supabase, ids),
+        ]);
+        if (!vivo || prodotti.error || sconti.scontiNonLetti) return;
+        const oggi: Record<string, number> = {};
+        for (const p of (prodotti.data ?? []) as Array<{ id: string; price: number | string | null }>) {
+          const pieno = Number(p.price ?? NaN);
+          if (Number.isFinite(pieno)) oggi[p.id] = discountedUnitCents(pieno, sconti.get(p.id) ?? 0);
+        }
+        setCentsDiOggi(oggi);
+      } catch {
+        // Lettura caduta: resta il prezzo salvato nel carrello.
+      }
+    })();
+    return () => { vivo = false; };
+  }, [idAltreRighe]);
+
   // L'elenco delle recensioni parte quando la sezione si avvicina allo schermo.
   useEffect(() => {
     if (recensioniInVista) return;
@@ -579,7 +610,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     const perNegozio = new Map<string, number>([[negozioQui, Math.round(price * 100) * pezziQui]]);
     for (const c of righe) {
       const negozio = c.sellerId ?? `senza-negozio:${c.id}`;
-      const riga = Math.round(Number(c.price) * 100) * Math.max(0, Number(c.quantity) || 0);
+      // R01-009 — Al prezzo di oggi, come la cassa: questo prodotto (un'altra variante) a quello della
+      // scheda, le altre righe a quello riletto; finché manca, a quello salvato nel carrello.
+      const unitaCents = c.id === product.id ? Math.round(price * 100) : (centsDiOggi[c.id] ?? Math.round(Number(c.price) * 100));
+      const riga = unitaCents * Math.max(0, Number(c.quantity) || 0);
       perNegozio.set(negozio, (perNegozio.get(negozio) ?? 0) + (Number.isFinite(riga) ? riga : 0));
     }
     const negozi = [...perNegozio.values()].map((m) => ({ spesaCents: m, merceCents: m }));
