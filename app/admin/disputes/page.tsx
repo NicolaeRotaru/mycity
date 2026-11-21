@@ -412,8 +412,9 @@ export default function AdminDisputesPage() {
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
+              <label htmlFor="reclamo-rimborso-eur" className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
               <input
+                id="reclamo-rimborso-eur"
                 type="number"
                 step="0.01"
                 value={refundEur}
