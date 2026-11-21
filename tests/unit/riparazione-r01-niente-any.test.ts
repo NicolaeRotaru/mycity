@@ -1,8 +1,16 @@
-import { ESLint } from 'eslint';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '..', '..');
+
+// `eslint` non porta i tipi: si descrive qui solo la parte che la prova usa.
+type Messaggio = { ruleId: string | null; severity: number; message: string };
+type Esito = { messages: Messaggio[] };
+type MotoreEslint = { lintText(codice: string, opz: { filePath: string }): Promise<Esito[]> };
+const { ESLint } = createRequire(import.meta.url)('eslint') as {
+  ESLint: new (opz: { cwd: string; useEslintrc: boolean }) => MotoreEslint;
+};
 
 // R01-001 — con la configurazione del deposito, un tipo «qualunque» in un file nuovo sotto lib/ è un
 // errore, e un permesso di saltare il controllo che non salta niente viene segnalato.
