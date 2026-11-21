@@ -248,6 +248,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
 
   // R03-005 — Chi il tetto ha lasciato fuori stanotte: la richiesta resta, la riprende la notte dopo.
   const rimandateAlGiroDopo = scadute.length - presiInCarico;
+  // R03-006 — Il tetto che taglia del lavoro non resta un numero nella risposta: lo si dice subito,
+  // prima delle email (che adesso hanno il loro tempo, perché il ciclo si è fermato al tetto).
+  if (rimandateAlGiroDopo > 0) await avvisaDelTettoDiTempo(admin, presiInCarico, rimandateAlGiroDopo);
 
   const verdetto = verdettoDelGiro(tentativi, Date.now());
 
@@ -382,6 +385,33 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
     'Cancellazioni account non eseguite',
     verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
     chiave,
+  );
+}
+
+/**
+ * 21/11/2026 (R03-006) — IL TETTO DI TEMPO HA TAGLIATO DEL LAVORO: LO SI DICE.
+ *
+ * Gli account lasciati fuori ripartono da soli la notte dopo, ma se succede tutte le notti la coda
+ * cresce e il termine di un mese si avvicina senza che nessuno lo sappia: per loro stanotte non si
+ * è nemmeno guardato se il termine è passato. Errore nel registro (arriva a Sentry) e avviso nel
+ * pannello degli amministratori.
+ */
+async function avvisaDelTettoDiTempo(admin: Admin, prese: number, rimandate: number): Promise<void> {
+  logger.error('[cron-deletions] tetto di tempo raggiunto: cancellazioni rimandate alla notte dopo', {
+    prese,
+    rimandate,
+    tettoMs: TETTO_CANCELLAZIONI_MS,
+  });
+  const quante =
+    rimandate === 1
+      ? '1 richiesta di cancellazione è rimandata alla notte dopo'
+      : `${rimandate} richieste di cancellazione sono rimandate alla notte dopo`;
+  await avvisaAmministratori(
+    admin,
+    'Cancellazioni rimandate: il giro notturno ha finito il tempo',
+    `Stanotte il giro delle cancellazioni ha raggiunto il suo tetto di tempo dopo ${prese} account: ${quante}. ` +
+      'Le richieste restano in attesa e ripartono da sole; se succede ogni notte la coda cresce e il termine ' +
+      'di un mese per rispondere si avvicina.',
   );
 }
 
