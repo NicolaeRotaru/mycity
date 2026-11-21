@@ -190,6 +190,36 @@ export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCent
   return `${inizio}. L’euro della veloce te lo rendiamo a mano entro un giorno. ${fine}`;
 }
 
+/**
+ * 21/11/2026 (R02-002) — Gli ordini del carrello in contanti dalla chiave scritta su ogni ordine dello
+ * stesso invio (`orders.carrello_contanti`, migrazione 640): lo stesso cliente, la stessa chiave non
+ * vuota. Prima della 640 la colonna non c'è (42703 / PGRST204): `null`, e si fa come prima. Anche una
+ * chiave assente, un ordine da solo o una lettura caduta danno `null`.
+ */
+async function idsDallaChiaveDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<string[] | null> {
+  if (!o.user_id) return null;
+  try {
+    const { data: sua, error: errSua } = await admin.from('orders').select('carrello_contanti').eq('id', o.id).maybeSingle();
+    const chiave = errSua ? '' : String((sua as { carrello_contanti?: unknown } | null)?.carrello_contanti ?? '').trim();
+    if (errSua && !colonnaDelCarrelloMancante(errSua)) {
+      logger.warn('[veloce-non-confermata] chiave del carrello in contanti non letta', { orderId: o.id, message: errSua.message });
+    }
+    if (!chiave) return null;
+    const { data, error } = await admin.from('orders').select('id').eq('user_id', o.user_id).eq('carrello_contanti', chiave);
+    if (error || !Array.isArray(data)) return null;
+    const ids = (data as Array<{ id: string }>).map((r) => r.id);
+    return ids.length >= 2 && ids.includes(o.id) ? ids : null;
+  } catch (err) {
+    logger.warn('[veloce-non-confermata] chiave del carrello in contanti non letta', { orderId: o.id, err });
+    return null;
+  }
+}
+
+/** La colonna della 640 non c'è ancora: PostgreSQL (42703) o la cache di PostgREST (PGRST204). */
+function colonnaDelCarrelloMancante(e: { code?: string; message?: string }): boolean {
+  return e.code === '42703' || e.code === 'PGRST204' || /carrello_contanti/.test(String(e.message ?? ''));
+}
+
 async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<RigaVeloce[] | null> {
   let righe: RigaVeloce[] | null = null;
   const sessione = o.stripe_session_id?.trim();
@@ -206,9 +236,13 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
       .eq('user_id', o.user_id)
       .contains('order_ids', JSON.stringify([{ id: o.id }]))
       .limit(1);
-    if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
-    if (!Array.isArray(tentativi) || tentativi.length === 0) return null;
-    const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
+    const senzaRiga = !!errT || !Array.isArray(tentativi) || tentativi.length === 0;
+    // 21/11/2026 (R02-002) — Senza la riga (o con la riga che non si legge) il carrello si ritrova
+    // dalla chiave scritta sugli ordini (migrazione 640). Senza chiave si fa come prima.
+    const dallaChiave = senzaRiga ? await idsDallaChiaveDelCarrello(admin, o) : null;
+    if (errT && !dallaChiave) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
+    if (senzaRiga && !dallaChiave) return null;
+    const elenco = dallaChiave ?? (tentativi as Array<{ order_ids: unknown }>)[0].order_ids;
     const ids = Array.isArray(elenco)
       ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
       : [];

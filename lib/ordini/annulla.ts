@@ -857,6 +857,9 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
   if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {
+    // 21/11/2026 (R02-002) — Senza la riga il carrello si ritrova dalla chiave scritta sugli ordini.
+    const dallaChiave = await ordiniDallaChiaveDelCarrello(admin, o);
+    if (dallaChiave) return dallaChiave;
     // 21/11/2026 (R04-007) — Senza la riga non si sposta niente, ma non in silenzio.
     await segnalaIlCarrelloSenzaRiga(admin, o, !!errT);
     return null;
@@ -870,6 +873,47 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+/**
+ * 21/11/2026 (R02-002) — IL CARRELLO IN CONTANTI SI RITROVA ANCHE SENZA LA RIGA DEL TENTATIVO.
+ *
+ * Dalla migrazione 640 la rotta dei contanti scrive su ogni ordine dello stesso invio la stessa
+ * chiave (`orders.carrello_contanti`). Se la riga del tentativo manca o non si legge, il carrello è
+ * fatto dagli ordini dello stesso cliente con la stessa chiave non vuota: la regola del negozio che
+ * rifiuta scatta come con la riga. Prima della 640 la colonna non c'è (42703 / PGRST204): si fa come
+ * prima, senza guasti. Una chiave che non c'è, o un ordine da solo, non è un carrello: `null`.
+ */
+async function ordiniDallaChiaveDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise<RigaDelGiro[] | null> {
+  if (!o.user_id) return null;
+  try {
+    const { data: sua, error: errSua } = await admin.from('orders').select('carrello_contanti').eq('id', o.id).maybeSingle();
+    if (errSua) {
+      if (!colonnaDelCarrelloMancante(errSua)) {
+        logger.warn('[ricalcolaLaConsegnaDelGiro] chiave del carrello in contanti non letta', { orderId: o.id, message: (errSua as { message?: string }).message });
+      }
+      return null;
+    }
+    const chiave = String((sua as { carrello_contanti?: unknown } | null)?.carrello_contanti ?? '').trim();
+    if (!chiave) return null;
+    const { data, error } = await leggiIlGiro('carrello-chiave', (c) =>
+      admin.from('orders').select(c).eq('user_id', o.user_id).eq('carrello_contanti', chiave));
+    if (error || !Array.isArray(data)) return null;
+    const righe = data as unknown as RigaDelGiro[];
+    if (righe.length < 2 || !righe.some((r) => r.id === o.id)) return null;
+    return righe.sort(
+      (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
+    );
+  } catch (err) {
+    logger.warn('[ricalcolaLaConsegnaDelGiro] chiave del carrello in contanti non letta', { orderId: o.id, err });
+    return null;
+  }
+}
+
+/** La colonna della 640 non c'è ancora: PostgreSQL (42703) o la cache di PostgREST (PGRST204). */
+function colonnaDelCarrelloMancante(e: unknown): boolean {
+  const { code, message } = (e ?? {}) as { code?: string; message?: string };
+  return code === '42703' || code === 'PGRST204' || /carrello_contanti/.test(String(message ?? ''));
 }
 
 /**
@@ -912,6 +956,9 @@ async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaDelGiro,
       !r.stripe_session_id?.trim() && !r.pickup_in_store && r.delivery_status !== 'CANCELED' && r.delivery_status !== 'DELIVERED'
       && Math.abs(Date.parse(String(r.created_at ?? '')) - nato) <= VICINI_ENTRO_MS);
     const senzaRiga: RigaDelGiro[] = [];
+    // 21/11/2026 (R02-002) — Un ordine vicino la cui riga non si è potuta leggere non è «senza riga»:
+    // l'avviso lo nomina a parte, per quello che è.
+    const nonLetti: RigaDelGiro[] = [];
     for (const r of vicini) {
       const { data: suaRiga, error: errR } = await admin
         .from('cod_checkout_attempts')
@@ -919,31 +966,40 @@ async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaDelGiro,
         .eq('user_id', o.user_id)
         .contains('order_ids', JSON.stringify([{ id: r.id }]))
         .limit(1);
-      if (!errR && Array.isArray(suaRiga) && suaRiga.length > 0) continue;
+      if (errR) { nonLetti.push(r); continue; }
+      if (Array.isArray(suaRiga) && suaRiga.length > 0) continue;
       senzaRiga.push(r);
     }
-    if (senzaRiga.length === 0) return;
-    const gruppo = [o, ...senzaRiga].sort(
+    const daGuardare = [...senzaRiga, ...nonLetti];
+    if (daGuardare.length === 0) return;
+    const gruppo = [o, ...daGuardare].sort(
       (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
     );
     const conto = contoDelCarrello(o, gruppo, o.id);
-    const adesso = senzaRiga
+    const cifre = (righe: RigaDelGiro[]) => righe
       .map((r) => `${codiceDi(r.id)} (${r.delivery_status}: consegna ${euro(Number(r.delivery_fee_cents ?? 0))}, fattorino ${euro(Number(r.rider_fee_cents ?? 0))}, totale ${euro(centesimi(r.total_price))})`)
       .join(', ');
+    const adesso = [
+      senzaRiga.length > 0 ? `senza una riga di carrello: ${cifre(senzaRiga)}` : '',
+      nonLetti.length > 0 ? `di cui la riga di carrello non si è potuta leggere: ${cifre(nonLetti)}` : '',
+    ].filter(Boolean).join('; e altri ');
     const seLoStesso = conto
       ? ` Se sono davvero lo stesso carrello, la regola darebbe: ${conto.rimasti
         .map((riga) => {
-          const r = senzaRiga.find((x) => x.id === riga.id);
+          const r = daGuardare.find((x) => x.id === riga.id);
           return `${codiceDi(riga.id)} consegna ${euro(riga.deliveryFeeCents)} e fattorino ${euro(riga.riderFeeCents)}${r ? `, totale ${euro(Math.max(0, centesimi(r.total_price) + riga.deltaCents))}` : ''}`;
         })
         .join('; ')}.`
       : ' Le loro cifre non tornano con un carrello solo: probabilmente sono carrelli diversi, ma guardalo tu.';
     await notifyAdmins(
       '⚠️ Annullo in contanti: carrello da controllare a mano',
-      `L'ordine ${codiceDi(o.id)} è annullato, ma ${rigaNonLetta ? 'la riga del suo carrello non si è potuta leggere' : 'la riga del suo carrello non c’è'}: ` +
+      // 21/11/2026 (R02-002) — «Si sta annullando»: il giro degli scaduti rimette l'ordine in coda se il
+      // rimborso sulla carta non riesce, e allora l'ordine non è annullato.
+      `L'ordine ${codiceDi(o.id)} si sta annullando, ma ${rigaNonLetta ? 'la riga del suo carrello non si è potuta leggere' : 'la riga del suo carrello non c’è'}: ` +
         'la consegna degli altri ordini dello stesso carrello NON è stata rifatta, e il sito non li unisce da solo. ' +
-        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e senza una riga di carrello: ${adesso}.${seLoStesso} ` +
-        'Se sono lo stesso carrello, sistema tu consegna, fattorino e totale e avvisa il cliente del conto nuovo; se no, non serve fare niente.',
+        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e ${adesso}.${seLoStesso} ` +
+        'Se sono lo stesso carrello, sistema tu consegna, fattorino e totale e avvisa il cliente del conto nuovo; se no, non serve fare niente. ' +
+        'Se l’ordine poi non risulta annullato (il rimborso sulla carta non è riuscito e il giro l’ha rimesso in coda), questo avviso non vale.',
       '/admin/orders',
       { unaVoltaPer: `carrello-senza-riga-${o.id}` },
     );
