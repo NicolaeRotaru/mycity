@@ -313,15 +313,24 @@ export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulD
 
   const deiClienti = indirizzoDiProduzione(sulDominio);
   // Sul dominio un altro commit: e' quello che usano i clienti, si torna li'.
-  // Sul dominio il commit che esce: chi c'era prima non si sa piu', e si
-  // ricade nella regola qui sotto (mai `candidati[0]`: puo' essere un
+  // Sul dominio il commit che esce: chi c'era prima non si sa piu', e la
+  // risposta e' nessun indirizzo (mai `candidati[0]`: puo' essere un
   // rilascio gia' tolto perche' rotto).
   // 12/11/2026 (R07-011) — un dominio che non dice il suo commit non e' «un altro
   // commit»: '' e' diverso da qualunque sha, e il dominio veniva preso per buono
-  // anche quando era proprio il rilascio rotto che esce. Senza commit si ricade
-  // nella regola qui sotto.
+  // anche quando era proprio il rilascio rotto che esce. Senza commit, nessun
+  // indirizzo (R02-005, sotto).
   const commitDeiClienti = commitDelRilascio(sulDominio);
   if (deiClienti && (!daScartare || (commitDeiClienti && commitDeiClienti !== daScartare))) return deiClienti;
+  // 21/11/2026 (R02-005, scelta di Nicola) — il dominio si legge ma dice il
+  // commit che esce, oppure non dice il suo commit: dove fossero i clienti prima
+  // non si sa piu'. Nell'elenco degli ultimi 20 rilasci anche un solo altro
+  // commit puo' essere un rilascio gia' tolto perche' rotto, e quello dei
+  // clienti puo' stare piu' indietro. Nessun indirizzo: il ritorno si fa a mano.
+  // La regola dell'elenco qui sotto resta solo per quando il dominio non si
+  // legge affatto (la scena di ogni giorno: in cima il commit che esce, sotto
+  // quello di prima).
+  if (deiClienti) return null;
 
   // Un rilascio senza commit conta come un commit a se': non si sa se e' lo
   // stesso di un altro.
