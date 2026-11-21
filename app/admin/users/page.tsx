@@ -1049,8 +1049,10 @@ type DatiIdentita = { legal_fiscal_code: string | null; business_vat_number: str
 
 /** R04-002 — Il trattino vuol dire «non c'è»; una lettura caduta si dice per quello che è. */
 function datoIdentita(d: DatiIdentita | null, campo: 'legal_fiscal_code' | 'business_vat_number'): string {
-  if (d?.nonLetti) return 'non disponibile: riprova';
-  return d?.[campo] ?? '—';
+  // R03-001 — Senza risposta la lettura è ancora in corso: il trattino direbbe «non c'è».
+  if (!d) return 'Caricamento…';
+  if (d.nonLetti) return 'non disponibile: riprova';
+  return d[campo] ?? '—';
 }
 
 function DetailPanel({
