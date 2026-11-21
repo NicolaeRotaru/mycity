@@ -1,0 +1,120 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-21 23:55",
+  "finita": false,
+  "testa": "54fec5e1bc74a714721ac210726cbadbdb9de311",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_lanciato",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R01-010",
+      "chiave": "rls-database|chi apre un reclamo può indirizzarlo a un negozio qualunque, e il negozio giusto non lo vede",
+      "esito": "non_fatto",
+      "nota": "permessi: va all'onda dei delicati, con ultracode (decisione della regista, 21/11 23:24)"
+    },
+    {
+      "id": "R01-006",
+      "chiave": "qa-flussi|il cliente non trova l'esito del reclamo nella pagina del suo ordine",
+      "esito": "riparato",
+      "commit": "54fec5e1bc74a714721ac210726cbadbdb9de311",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-esito-del-reclamo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-esito-del-reclamo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54fec5e1bc74a714721ac210726cbadbdb9de311^ --file app/orders/[id]/page.tsx,app/orders/[id]/dispute/page.tsx --prove tests/unit/riparazione-r01-esito-del-reclamo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina dell'ordine legge i reclami dell'ordine e mostra stato, esito, rimborso e note; nasconde «Apri reclamo» se un reclamo c'è già. La pagina del reclamo, su un reclamo chiuso, mostra l'esito al posto del modulo."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "(file di R01, da applicare insieme alle prove sotto) righe 74-76: `if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Scegli i prodotti a cui applicare le modifiche.'); const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));` e nel filtro dei risultati (riga 97) `(r) => r.product_id && onlyIds.has(r.product_id)`."
+        },
+        {
+          "file": "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
+          "modifica": ":116 `{ jobId: 'job-1' }` → `{ jobId: 'job-1', productIds: ['p1', 'p2'] }`"
+        },
+        {
+          "file": "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts",
+          "modifica": "dopo jobId aggiungere: :293 `productIds: ['focaccia']`, :325 `productIds: ['tagliere']`, :353 `productIds: ['focaccia']`"
+        },
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": ":213 e :221 `{ jobId: 'job-1' }` → `{ jobId: 'job-1', productIds: ['p1'] }` (anche la :213, se no il 400 del translate arriva per l'elenco mancante)"
+        },
+        {
+          "file": "tests/unit/minori-s10-lotto-applica.test.ts",
+          "modifica": ":102 corpo predefinito → `{ jobId: 'l1', productIds: ((db.lavoro?.results ?? []) as Array<{ product_id: string }>).map((r) => r.product_id) }`"
+        },
+        {
+          "file": "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
+          "modifica": ":212 aggiungere `productIds: ['p1', 'p2', 'p3']`"
+        },
+        {
+          "file": "tests/unit/riparazione-r01-lotto-senza-elenco.test.ts (nuova)",
+          "modifica": "con solo jobId la rotta risponde 400, non scrive niente e il lavoro resta «ready»; con productIds ['p1'] scrive solo p1"
+        }
+      ],
+      "nota": "Il difetto c'è ancora. Con la sola rotta corretta diventano rosse 13 prove in 5 file comuni (simulano lib/ai/moderation.ts, lib/funzioni-al-lancio.ts, lib/logger.ts di altre sessioni). La proposta intera, provata nell'albero e poi tolta, dà 8 file e 89 prove verdi; la prova nuova è rossa senza la rotta corretta. L'unica pagina che chiama la rotta manda già productIds."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/ordini/consegna-veloce.ts:46 `VELOCI_PER_FATTORINO = 1` e :161-165 contaFattoriniOnline toglie chi ha già una veloce; la chiamano app/api/consegna/veloce/route.ts:93, app/api/consegna/veloce/negozi/route.ts:68, app/api/orders/cod/route.ts:973, app/api/stripe/checkout/route.ts. `npx vitest run tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts` verde (6/6).",
+      "nota": "Resta la corsa di due clienti nello stesso istante: servirebbe una prenotazione atomica nelle rotte cod/checkout o nel database, file non di R01."
+    },
+    {
+      "id": "R01-005",
+      "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/notifications/page.tsx",
+          "modifica": "(file di R01, da applicare insieme agli altri due) :124-129 prima di leggere le notifiche: `const { data: preferenze, error: errPreferenze } = await supabase.from('profiles').select('notif_promos').eq('id', user.id).maybeSingle(); if (errPreferenze) throw errPreferenze; let lettura = supabase.from('notifications').select('*').eq('user_id', user.id); if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo');` poi `await lettura.order('created_at', { ascending: false }).limit(quante)`"
+        },
+        {
+          "file": "components/hooks/useNotificationsCount.ts",
+          "modifica": ":32-36 la stessa lettura di notif_promos per userId (errore → throw), poi `.neq('category','promo')` sul conteggio quando notif_promos !== true"
+        },
+        {
+          "file": "components/seller/SellerShell.tsx",
+          "modifica": ":113-117 (useNotifUnread) la stessa cosa (errore → return 0, come oggi)"
+        }
+      ],
+      "nota": "Il difetto c'è ancora (page.tsx:124-129 legge tutto). Correggere solo la pagina farebbe contare ai campanelli (Navbar, AccountShell, AdminSidebar, SellerShell) promozioni che la lista non mostra più. category è NOT NULL DEFAULT 'order' (115:210), notif_promos NOT NULL (054)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (preferenze di notifica): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": ""
+  }
+}
