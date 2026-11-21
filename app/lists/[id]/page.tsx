@@ -221,6 +221,11 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       qc.setQueryData<Array<{ id: string }> | null>(queryKeys.lists.mineMin, (vecchie) =>
         vecchie ? vecchie.filter((l) => l.id !== params.id) : vecchie);
       qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
+      // R08-006 — la lista eliminata non resta in memoria: col tasto indietro la pagina non la
+      // rimostra (con «Modifica» ed «Elimina») per 30 secondi. `null` è quello che la lettura
+      // risponde per una lista che non c'è.
+      qc.setQueryData(queryKeys.lists.detail(params.id), null);
+      qc.setQueryData(queryKeys.lists.items(params.id), []);
       router.push('/lists');
     },
     onError: (err: unknown) => toast.error(`Lista non eliminata: ${friendlyError(err)}`),
