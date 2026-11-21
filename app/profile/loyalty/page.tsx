@@ -31,10 +31,10 @@ const REASON_LABEL: Record<string, string> = {
   signup_bonus:     'Bonus iscrizione',
   first_order:      'Primo ordine',
   order_completed:  'Ordine completato',
-  streak_7_days:    'Streak 7 giorni',
-  streak_30_days:   'Streak 30 giorni',
-  streak_100_days:  'Streak 100 giorni',
-  referral_bonus:   'Referral amico',
+  streak_7_days:    '7 giorni di fila',
+  streak_30_days:   '30 giorni di fila',
+  streak_100_days:  '100 giorni di fila',
+  referral_bonus:   'Amico invitato',
   redeem:           'Sconto applicato',
   redeem_credit:    'Convertiti in credito',
 };
@@ -255,12 +255,12 @@ export default function LoyaltyPage() {
       </div>
       )}
 
-      {/* Streak card */}
+      {/* Scheda dei giorni di fila */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
           <div className="flex items-center gap-3 mb-2">
             <Flame size={24} className="text-primary-600" />
-            <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Streak attuale</p>
+            <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Giorni di fila</p>
           </div>
           <p className="text-3xl font-serif font-bold text-ink-900">{streak} <span className="text-base font-medium text-ink-600">{streak === 1 ? 'giorno' : 'giorni'}</span></p>
           <p className="text-xs text-ink-500 mt-1">
@@ -273,7 +273,7 @@ export default function LoyaltyPage() {
             <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">Record personale</p>
           </div>
           <p className="text-3xl font-serif font-bold text-ink-900">{longest} <span className="text-base font-medium text-ink-600">{longest === 1 ? 'giorno' : 'giorni'}</span></p>
-          <p className="text-xs text-ink-500 mt-1">Il tuo streak più lungo finora.</p>
+          <p className="text-xs text-ink-500 mt-1">Il tuo record di giorni di fila.</p>
         </div>
       </div>
 
@@ -288,10 +288,10 @@ export default function LoyaltyPage() {
           {[
             { n: '+1 pt', t: `per ogni ${formatPrice(1)} speso negli ordini` },
             { n: '+20 pt', t: 'a 7 giorni di visite consecutive' },
-            { n: '+100 pt', t: 'a 30 giorni di streak' },
-            { n: '+500 pt', t: 'a 100 giorni di streak' },
-            { n: '+50 pt', t: 'per ogni amico che si iscrive con il tuo codice referral' },
-            { n: formatPrice(POINTS_REDEEM_VALUE_CENTS / 100), t: `puoi convertire ${POINTS_REDEEM_RATE} punti in un buono spendibile al checkout` },
+            { n: '+100 pt', t: 'a 30 giorni di fila' },
+            { n: '+500 pt', t: 'a 100 giorni di fila' },
+            { n: '+50 pt', t: 'per ogni amico che si iscrive con il tuo codice di invito' },
+            { n: formatPrice(POINTS_REDEEM_VALUE_CENTS / 100), t: `puoi convertire ${POINTS_REDEEM_RATE} punti in un buono spendibile alla cassa` },
           ].map((r) => (
             <li key={r.t} className="flex items-baseline gap-3">
               <span className="text-primary-700 font-bold w-20 shrink-0">{r.n}</span>
