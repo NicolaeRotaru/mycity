@@ -313,11 +313,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // l'elenco degli id col voto, gli stessi della lettura.
   const contaVero = !!soloNovita || prezzoSotto !== undefined || !!soloRecensiti;
   const domandaTotale = useQuery<number | null>({
-    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal, soloRecensiti }),
-    enabled: contaVero && (!vistaPerVoto || idsColVoto !== undefined) && (prezzoSotto === undefined || idsScontatiSotto !== undefined),
+    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal, soloRecensiti, minRating, apertiOra: onlyOpenStores ? apertiOra ?? null : undefined }),
+    // R11-008 — Anche «aperti ora» e «col voto» entrano nel conteggio: finché l'elenco non c'è, non parte.
+    enabled: contaVero && (!onlyOpenStores || apertiOra !== undefined) && (!vistaPerVoto || idsColVoto !== undefined) && (prezzoSotto === undefined || idsScontatiSotto !== undefined),
     staleTime: 60_000,
     queryFn: () => contaProdottiDellaGriglia(supabase, {
       categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal,
+      apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
       idsColVoto: vistaPerVoto ? idsColVoto ?? [] : undefined,
     }),
   });
