@@ -347,6 +347,8 @@ function presoIl(metadata: unknown): number {
 const REGISTRO_INVII = 'audit_logs';
 const EMAIL_TENTATA = 'privacy.avviso_cancellazione.email_tentata';
 const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
+/** R05-006 — Le pause prima di ritentare il segno «partita»: tre prove in tutto, in due secondi e mezzo. */
+const PAUSE_DEL_SEGNO_MS = [500, 2_000];
 
 /** Una riga del registro degli invii. Il giro notturno non è una persona: `actor_id` resta vuoto. */
 function rigaDegliInvii(
@@ -416,15 +418,26 @@ async function emailDovuta(
     return tentativo > 1 ? 'bloccata' : 'non-partita';
   }
 
-  try {
-    const segno = await admin
-      .from(REGISTRO_INVII)
-      .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo, adesso)]);
-    if (segno.error && !eUnDoppione(segno.error.message)) throw new Error(segno.error.message);
-  } catch (e) {
-    registro.error('[avvisi-cancellazione] email partita ma non segnata: la notte dopo puo ripartire una seconda volta', {
-      userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
-    });
+  // R05-006 — Il segno «partita» si ritenta prima di arrendersi. Un solo rifiuto passeggero del
+  // database (scritto un attimo prima il turno, rifiutato il segno) bastava: la notte dopo l'email
+  // ripartiva, e se quella cadeva l'allarme diceva «non partita» per un'email già arrivata.
+  for (let prova = 0; ; prova++) {
+    try {
+      const segno = await admin
+        .from(REGISTRO_INVII)
+        .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo, adesso)]);
+      if (segno.error && !eUnDoppione(segno.error.message)) throw new Error(segno.error.message);
+      break;
+    } catch (e) {
+      if (prova < PAUSE_DEL_SEGNO_MS.length) {
+        await new Promise((r) => setTimeout(r, PAUSE_DEL_SEGNO_MS[prova]));
+        continue;
+      }
+      registro.error('[avvisi-cancellazione] email partita ma non segnata: la notte dopo puo ripartire una seconda volta', {
+        userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
+      });
+      break;
+    }
   }
   return 'partita';
 }
