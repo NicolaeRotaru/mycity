@@ -153,8 +153,12 @@ export function fraseNonSpostato(scadenza: Date, adesso: Date, carta = false): s
 export type ComeVaLEuro = 'tolto-contanti' | 'tolto-carta' | 'compresa' | 'a-mano';
 
 /** La frase per il cliente: la stessa nella campanella e nell'email. «Non lo paghi» solo se è tolto davvero. */
-export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number; sulCreditoCents?: number; giaConfermati?: number }): string {
-  const inizio = `Il negozio non ha confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti: la tua spesa arriva nella fascia ${a.fascia}`;
+export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number; sulCreditoCents?: number; giaConfermati?: number; nonSpostati?: string[] }): string {
+  // 21/11/2026 (R04-008) — Gli ordini del carrello che non sono passati alla fascia (la loro scrittura
+  // è caduta, e il freno non li ritrova da solo): la frase non dice che arriva tutta la spesa.
+  const indietro = a.nonSpostati ?? [];
+  const tranne = indietro.length === 0 ? '' : ` (tranne ${indietro.length === 1 ? `l’ordine ${indietro[0]}` : `gli ordini ${indietro.join(', ')}`})`;
+  const inizio = `Il negozio non ha confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti: la tua spesa arriva nella fascia ${a.fascia}${tranne}`;
   // Il limite è quello della rotta di annullo (app/api/orders/[id]/cancel): il cliente annulla solo
   // un ordine NEW. Prima la frase lo prometteva senza condizioni: alle 12:58 il forno accettava la
   // fascia nuova e alle 13:10 il tasto Annulla non c'era più, mentre la campanella diceva di sì.
@@ -165,7 +169,9 @@ export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCent
   const giaFermi = confermati > 0
     ? `${confermati === 1 ? `L’ordine che un negozio ha già confermato non si annulla più: arriva anche lui nella fascia ${a.fascia}` : `I ${confermati} ordini che i negozi hanno già confermato non si annullano più: arrivano anche loro nella fascia ${a.fascia}`}. `
     : '';
-  const fine = `${giaFermi}Se non ti va bene, puoi annullarlo senza costi dalla sua pagina finché il negozio non lo conferma.`;
+  const sistemiamo = indietro.length === 0 ? ''
+    : `${indietro.length === 1 ? `L’ordine ${indietro[0]} non siamo riusciti a spostarlo` : `Gli ordini ${indietro.join(', ')} non siamo riusciti a spostarli`}: ci pensiamo noi e ti scriviamo. `;
+  const fine = `${sistemiamo}${giaFermi}Se non ti va bene, puoi annullarlo senza costi dalla sua pagina finché il negozio non lo conferma.`;
   if (a.euro === 'compresa') return `${inizio}. La consegna veloce era già compresa nel prezzo, quindi il totale non cambia. ${fine}`;
   if (a.euro === 'tolto-contanti') {
     // L'euro pagato col credito MyCity torna sul credito: alla porta non si toglie quello che non c'era.
@@ -599,7 +605,10 @@ async function spostaIlCarrello(
     }
   }
 
-  let aMeta = false;
+  // 21/11/2026 (R04-008) — Gli ordini dopo il primo che non si sono scritti: la scrittura caduta
+  // (`primoErrore`) o l'ordine cambiato nel frattempo. Si guardano tutti alla fine del giro.
+  const nonSpostati: RigaVeloce[] = [];
+  let primoErrore: string | null = null;
   const deltaScritti = new Map<string, number>();
   const contantiScritti = new Map<string, number>();
   const accreditati = new Set<string>();
@@ -641,10 +650,13 @@ async function spostaIlCarrello(
     const { data: righeScritte, error } = await conRipiegoSchema<Risposta>(
       'veloce-non-confermata.sposta', () => scrivi(valori), () => scrivi(senzaCampi(valori, CAMPI_124)));
     if (error) {
-      // 12/11/2026 (R09-008) — Gli ordini già passati alla fascia restano lì: i loro negozi e il
-      // fattorino lo sanno subito, invece di leggere «Adesso» finché qualcuno non li chiama.
-      if (scritti.length > 0) await avvisaNegoziEFattorino(admin, o, scritti, fascia);
-      throw new Error(`ordine ${c.id}: ${error.message}`);
+      // Sul primo ordine non si è spostato niente: si lancia, e il giro dopo lo ritrova «Adesso».
+      if (i === 0) throw new Error(`ordine ${c.id}: ${error.message}`);
+      // 21/11/2026 (R04-008) — Su un ordine dopo il primo non si lancia più qui: si provano anche gli
+      // altri, e alla fine si decide chi lo riprende (il giro dopo, o gli amministratori).
+      primoErrore ??= `ordine ${c.id}: ${error.message}`;
+      nonSpostati.push(c);
+      continue;
     }
     if (!Array.isArray(righeScritte) || righeScritte.length === 0) {
       // Il primo è l'ordine non confermato: se non si scrive, il negozio l'ha accettato adesso
@@ -714,7 +726,7 @@ async function spostaIlCarrello(
         }
         return 'accettato';
       }
-      aMeta = true;
+      nonSpostati.push(c);
       continue;
     }
     // R17-012 — Se il giro cade dopo, gli amministratori leggono anche che l'euro qui è già tolto.
@@ -725,6 +737,35 @@ async function spostaIlCarrello(
       if (dalCredito > 0) sulCreditoCents += dalCredito;
     }
     scritti.push(c);
+  }
+
+  // 21/11/2026 (R04-008) — CHI E' RIMASTO INDIETRO NON SI PERDE. Il primo ordine resta nella fascia
+  // nuova (scelta di Nicola, 21/11: niente marcia indietro). Gli altri si rileggono: annullato è fuori
+  // dal carrello, già nella fascia è a posto (senza rilettura vale lo stato letto all'inizio).
+  // - Uno è ancora nuovo e «Adesso»: il giro dopo lo trova (cerca proprio quelli), ritrova il carrello
+  //   e lo finisce nella stessa fascia, con l'euro già reso contato una volta. Qui ci si ferma come
+  //   prima: al cliente scrive quel giro, una volta sola, quando il carrello è tutto in fascia.
+  // - Nessuno è più nuovo (il suo negozio l'aveva già confermato): il freno non lo ritroverebbe mai.
+  //   Prima il cliente non sapeva niente nemmeno del primo ordine spostato; adesso legge quale ordine
+  //   non è passato, e gli amministratori quale mettere nella stessa fascia.
+  let rimastiIndietro: RigaVeloce[] = [];
+  if (nonSpostati.length > 0) {
+    const { data: ora, error: errOra } = await admin
+      .from('orders').select('id, delivery_slot, delivery_status').in('id', nonSpostati.map((c) => c.id));
+    const riletti = !errOra && Array.isArray(ora)
+      ? (ora as Array<{ id: string; delivery_slot: string | null; delivery_status: string | null }>)
+      : [];
+    rimastiIndietro = nonSpostati
+      .map((c) => {
+        const r = riletti.find((x) => x.id === c.id);
+        return r ? { ...c, delivery_slot: r.delivery_slot, delivery_status: r.delivery_status } : c;
+      })
+      .filter((c) => c.delivery_slot === ETICHETTA_ADESSO && !FUORI_DAL_GIRO.includes(String(c.delivery_status)));
+    if (rimastiIndietro.some((c) => c.delivery_status === 'NEW')) {
+      // Come prima: i negozi e il fattorino degli ordini già passati alla fascia lo sanno subito.
+      if (scritti.length > 0) await avvisaNegoziEFattorino(admin, o, scritti, fascia);
+      throw new Error(primoErrore ?? `${rimastiIndietro.map((c) => `ordine ${codiceDi(c.id)}`).join(', ')} cambiato nel frattempo e ancora «Adesso»`);
+    }
   }
 
   const totaleCents = carrello
@@ -751,7 +792,12 @@ async function spostaIlCarrello(
   } else if (euroFinale === 'a-mano') {
     daFare.push('Il conto della consegna non è quello della regola: rendi a mano al cliente l’euro della veloce entro un giorno, se c’era.');
   }
-  if (aMeta) daFare.push('Un altro ordine dello stesso carrello è cambiato nel frattempo ed è rimasto sulla veloce: mettilo nella stessa fascia.');
+  if (rimastiIndietro.length > 0) {
+    // 21/11/2026 (R04-008) — Quale ordine, perché, e che il cliente l'ha già letto.
+    const codici = rimastiIndietro.map((c) => `${codiceDi(c.id)} (${c.delivery_status})`).join(', ');
+    const uno = rimastiIndietro.length === 1;
+    daFare.push(`${uno ? `L’ordine ${codici} dello stesso carrello è rimasto` : `Gli ordini ${codici} dello stesso carrello sono rimasti`} «Adesso», sulla veloce${primoErrore ? ` (la scrittura è caduta: ${primoErrore})` : ' (cambiato nel frattempo)'}. Il freno non ${uno ? 'lo' : 'li'} riprende da solo, perché il negozio ${uno ? 'l’ha' : 'li ha'} già confermat${uno ? 'o' : 'i'}: ${uno ? 'mettilo' : 'mettili'} tu nella fascia ${fascia} e avvisa il cliente, che ha già letto che ci pensiamo noi.`);
+  }
   if (daFare.length > 0) {
     await notifyAdmins(
       '⚠️ Veloce non confermata da sistemare',
@@ -762,7 +808,10 @@ async function spostaIlCarrello(
 
   // R17-012 — Con la carta un conto riscritto vuol dire l'euro tornato sul credito (R17-010).
   const giaSulCreditoCents = riscrittoAMeta && carta ? riscrittoAMeta.toltaCents : 0;
-  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents: sulCreditoCents + giaSulCreditoCents, giaConfermati: confermatiSpostati(o, scritti, vivi) }));
+  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({
+    fascia, euro: euroFinale, totaleCents, sulCreditoCents: sulCreditoCents + giaSulCreditoCents,
+    giaConfermati: confermatiSpostati(o, scritti, vivi), nonSpostati: rimastiIndietro.map((c) => codiceDi(c.id)),
+  }));
   await avvisaNegoziEFattorino(admin, o, scritti, fascia);
   logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
   // 5/11/2026 — La promessa al cliente è cambiata (da 30-60 minuti a una fascia): se né campanella né
@@ -776,7 +825,7 @@ async function spostaIlCarrello(
     ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
     return 'a-mano';
   }
-  return aMeta || euroFinale === 'a-mano' ? 'a-mano' : 'spostato';
+  return rimastiIndietro.length > 0 || euroFinale === 'a-mano' ? 'a-mano' : 'spostato';
 }
 
 export type EsitoDelFreno =
