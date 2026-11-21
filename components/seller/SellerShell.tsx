@@ -110,11 +110,21 @@ function useNotifUnread(userId: string | null) {
     refetchIntervalInBackground: false,
     queryFn: async () => {
       if (!userId) return 0;
-      const { count, error } = await supabase
+      // Le promozioni contano solo per chi le ha accese nelle impostazioni (`notif_promos`):
+      // chi le ha spente non riceve la push, e il pallino non deve accendersi per loro.
+      const { data: preferenze, error: errPreferenze } = await supabase
+        .from('profiles')
+        .select('notif_promos')
+        .eq('id', userId)
+        .maybeSingle();
+      if (errPreferenze) return 0;
+      let conta = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
+      if (preferenze?.notif_promos !== true) conta = conta.neq('category', 'promo');
+      const { count, error } = await conta;
       if (error) return 0;
       return count ?? 0;
     },
