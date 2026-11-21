@@ -114,6 +114,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /** 5/11/2026 — Le consegne del fattorino ancora aperte: tutto tranne consegnato e annullato. */
 const STATI_DELLE_MIE_CONSEGNE_APERTE = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
 
+/**
+ * R04-007 — La presa è persa perché l'ordine non si può più prendere: l'ha preso un altro
+ * fattorino (GIA_PRESO) o non è più pronto (NON_PIU_DISPONIBILE, migrazione 661). Non è solo un
+ * messaggio: quell'ordine in bacheca è un dato vecchio, e si toglie.
+ */
+class OrdineNonPiuPrendibile extends Error {}
+
 export default function RiderDashboardPage() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -350,18 +357,21 @@ export default function RiderDashboardPage() {
       if (error) throw error;
       const esito = data as { ok: boolean; id?: string; motivo?: string } | null;
       if (!esito?.ok || !esito.id) {
+        // R04-007 — Già preso da un altro, o non più pronto (annullato, tornato in preparazione).
+        if (esito?.motivo === 'GIA_PRESO') throw new OrdineNonPiuPrendibile('Ordine già preso da un altro rider');
+        if (esito?.motivo === 'NON_PIU_DISPONIBILE') {
+          throw new OrdineNonPiuPrendibile('Questo ordine non è più disponibile: non è più tra quelli pronti da prendere');
+        }
         throw new Error(
           esito?.motivo === 'NON_FATTORINO'
             ? 'Il tuo profilo fattorino non è ancora approvato'
             // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
             : esito?.motivo === 'DOCUMENTI_SCADUTI'
               ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
-              // R03-009 — «Già preso» solo quando `prendi_ordine` lo dice (GIA_PRESO, migrazione 270).
+              // R03-009 — «Già preso» solo quando `prendi_ordine` lo dice (GIA_PRESO, qui sopra).
               // Una risposta vuota, storta o con un motivo che non conosciamo non è «l'ha preso un
               // altro»: si dice che la presa non è riuscita, senza inventare il perché.
-              : esito?.motivo === 'GIA_PRESO'
-                ? 'Ordine già preso da un altro rider'
-                : "Non siamo riusciti a prendere l'ordine. Riprova.",
+              : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
       const data2 = { id: esito.id };
@@ -380,7 +390,17 @@ export default function RiderDashboardPage() {
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // R04-007 — Un «Accetta» perso perché l'ordine non si può più prendere: esce subito
+    // dall'elenco e la bacheca si rilegge, invece di restare lì col suo «Accetta» fino al giro dopo.
+    onError: (err: unknown, orderId: string) => {
+      if (err instanceof OrdineNonPiuPrendibile) {
+        qc.setQueryData<typeof letturaBacheca.data>(queryKeys.rider.orders, (prima) =>
+          prima ? { ...prima, liberi: prima.liberi.filter((o) => o.id !== orderId) } : prima,
+        );
+        void qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+      }
+      toast.error(friendlyError(err));
+    },
   });
 
   // Toggle online/offline: stesso update profilo della pagina Disponibilità.
@@ -658,10 +678,13 @@ export default function RiderDashboardPage() {
                       <p className="text-[11px] text-ink-400">Compenso</p>
                       <p className="font-serif text-lg font-extrabold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</p>
                     </div>
+                    {/* R04-007 — Gira solo il pulsante dell'ordine che si sta prendendo; gli altri
+                        restano fermi e spenti finché la presa non torna (una presa alla volta). */}
                     <Button
                       variant="accent"
                       onClick={() => claim.mutate(o.id)}
-                      loading={claim.isPending}
+                      loading={claim.isPending && claim.variables === o.id}
+                      disabled={claim.isPending && claim.variables !== o.id}
                     >
                       Accetta
                     </Button>
