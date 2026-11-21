@@ -322,12 +322,10 @@ export type SocialLink = { key: string; label: string; href: string };
 function handleDaLink(v: string | undefined, dominio: RegExp): string | undefined {
   if (v === undefined) return v;
   const t = v.trim();
-  const rx = new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i');
-  // Il link del tasto Condividi porta in coda «?igsh=…», «?hl=it», «#…»: non fanno parte del nome.
-  const m = t.replace(/[?#].*$/s, '').match(rx);
+  const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i'));
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
-  if (m && /^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1])) return t;
+  if (m && (/^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1]) || /\?/.test(t))) return t;
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
