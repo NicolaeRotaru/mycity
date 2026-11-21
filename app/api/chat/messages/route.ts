@@ -114,7 +114,12 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
     if (typeof nonLetti === 'number' && nonLetti > 1 && (errGia || vocePendente)) return;
     // S10 (5/11/2026) — Nella chat con l'account Assistenza le due parti non
     // sono cliente e negozio: il titolo lo dice col ruolo vero.
-    const { data: ruoli } = await admin.from('profiles').select('id, role').in('id', [mittente, destinatario]);
+    const { data: ruoli, error: errRuoli } = await admin.from('profiles').select('id, role').in('id', [mittente, destinatario]);
+    // 21/11/2026 (R03-004) — Ruoli non letti: non si sa se chi riceve è un negozio o l'Assistenza,
+    // quindi l'email «un cliente ti ha scritto» (pensata per un negozio) non parte. La campanella sì.
+    if (errRuoli) {
+      logger.warn('[chat/messages] ruoli non letti: email al negozio non inviata', { conversationId, message: errRuoli.message });
+    }
     const ruoloDi = (id: string) =>
       ((ruoli ?? []) as { id: string; role?: string | null }[]).find((r) => r.id === id)?.role ?? null;
     const titolo =
@@ -131,7 +136,7 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
     // cliente a un negozio (non nella chat con l'Assistenza). Una email per giro di non letti
     // e niente se il negozio è in chat: lo decide `avvisaNegozioMessaggioNuovo`. Parte dopo la
     // risposta e non lancia: un guasto della posta non fa fallire il messaggio, già salvato.
-    if (scriveIlCliente && ruoloDi(mittente) !== 'admin' && ruoloDi(destinatario) !== 'admin') {
+    if (!errRuoli && scriveIlCliente && ruoloDi(mittente) !== 'admin' && ruoloDi(destinatario) !== 'admin') {
       dopoLaRisposta(async () => {
         await avvisaNegozioMessaggioNuovo(admin, { conversationId, senderId: mittente });
       }, 'email al negozio per un messaggio nuovo');
