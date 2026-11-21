@@ -62,6 +62,19 @@ export const runtime = 'nodejs';
 type Admin = ReturnType<typeof getAdminSupabase>;
 
 /**
+ * 21/11/2026 (R03-005) — IL CICLO DELLE CANCELLAZIONI HA UN TETTO DI TEMPO.
+ *
+ * La piattaforma dà a un giro al massimo 300 secondi, contati dall'inizio. Il ciclo degli account
+ * scaduti non aveva tetto: con una notte lunga (molti account, Stripe o lo storage lenti) si
+ * mangiava tutto il tempo, e quello che viene dopo — la sveglia, le risposte dovute alle persone
+ * in attesa, le loro email — non partiva. Dopo questo tempo dall'inizio del giro non si prende in
+ * carico un account nuovo: la sua richiesta resta lì e la riprende la notte dopo. La metà del
+ * tempo resta a quello che viene dopo (ogni email può aspettare la posta fino a due volte dieci
+ * secondi).
+ */
+const TETTO_CANCELLAZIONI_MS = 150_000;
+
+/**
  * Il conto del giro senza il giro: gli account che la notte cancellerebbe e le
  * righe che le potature toccherebbero. Non scrive niente e non lascia il
  * battito, perche' il lavoro non e' stato fatto.
@@ -187,8 +200,12 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   const results = { ok: 0, errors: [] as string[] };
   let annullateNelFrattempo = 0;
   const tentativi: TentativoCancellazione[] = [];
+  let presiInCarico = 0;
 
   for (const riga of scadute) {
+    // R03-005 — Il tetto si guarda prima di prendere in carico un account, dall'inizio del giro.
+    if (Date.now() - adesso >= TETTO_CANCELLAZIONI_MS) break;
+    presiInCarico++;
     const userId = riga.user_id;
     // #178 — La stessa pipeline che usa la cancellazione fatta
     // dall'amministratore: anonimizza il profilo e i dati di verifica
@@ -228,6 +245,12 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     results.ok++;
     logger.info('[cron-deletions] processed', { userId, fileRimossi: esito.fileRimossi });
   }
+
+  // R03-005 — Chi il tetto ha lasciato fuori stanotte: la richiesta resta, la riprende la notte dopo.
+  const rimandateAlGiroDopo = scadute.length - presiInCarico;
+  // R03-006 — Il tetto che taglia del lavoro non resta un numero nella risposta: lo si dice subito,
+  // prima delle email (che adesso hanno il loro tempo, perché il ciclo si è fermato al tetto).
+  if (rimandateAlGiroDopo > 0) await avvisaDelTettoDiTempo(admin, presiInCarico, rimandateAlGiroDopo);
 
   const verdetto = verdettoDelGiro(tentativi, Date.now());
 
@@ -291,6 +314,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       errors: results.errors.length,
       total: userIds.length,
       annullateNelFrattempo,
+      rimandateAlGiroDopo,
       // R169 — Quante pulizie di ritenzione non sono riuscite: senza questo numero
       // il lavoro rispondeva «fatto» anche quando non aveva pulito niente.
       retentionFallite: potature.fallite,
@@ -361,6 +385,33 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
     'Cancellazioni account non eseguite',
     verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
     chiave,
+  );
+}
+
+/**
+ * 21/11/2026 (R03-006) — IL TETTO DI TEMPO HA TAGLIATO DEL LAVORO: LO SI DICE.
+ *
+ * Gli account lasciati fuori ripartono da soli la notte dopo, ma se succede tutte le notti la coda
+ * cresce e il termine di un mese si avvicina senza che nessuno lo sappia: per loro stanotte non si
+ * è nemmeno guardato se il termine è passato. Errore nel registro (arriva a Sentry) e avviso nel
+ * pannello degli amministratori.
+ */
+async function avvisaDelTettoDiTempo(admin: Admin, prese: number, rimandate: number): Promise<void> {
+  logger.error('[cron-deletions] tetto di tempo raggiunto: cancellazioni rimandate alla notte dopo', {
+    prese,
+    rimandate,
+    tettoMs: TETTO_CANCELLAZIONI_MS,
+  });
+  const quante =
+    rimandate === 1
+      ? '1 richiesta di cancellazione è rimandata alla notte dopo'
+      : `${rimandate} richieste di cancellazione sono rimandate alla notte dopo`;
+  await avvisaAmministratori(
+    admin,
+    'Cancellazioni rimandate: il giro notturno ha finito il tempo',
+    `Stanotte il giro delle cancellazioni ha raggiunto il suo tetto di tempo dopo ${prese} account: ${quante}. ` +
+      'Le richieste restano in attesa e ripartono da sole; se succede ogni notte la coda cresce e il termine ' +
+      'di un mese per rispondere si avvicina.',
   );
 }
 

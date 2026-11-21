@@ -47,6 +47,12 @@ export async function captureError(err: unknown, context?: Record<string, any>) 
   }
   const Sentry = await import('@sentry/nextjs').catch(() => null);
   if (!Sentry) return;
+  // R03-014 — Senza un registratore acceso la cattura non va da nessuna parte: è il caso della
+  // pagina d'errore che compare prima che l'accensione (asincrona) sia arrivata, o col layout
+  // rotto. Se non c'è ancora un cliente Sentry, lo si accende qui, nel browser, e poi si cattura.
+  if (typeof window !== 'undefined' && !(Sentry as { getClient?: () => unknown }).getClient?.()) {
+    Sentry.init(opzioniSentry() as Parameters<typeof Sentry.init>[0]);
+  }
   Sentry.captureException(err, { extra: context });
 }
 

@@ -36,6 +36,8 @@ vi.mock('@/lib/supabase/server', () => {
     b.maybeSingle = async () => {
       if (t === 'profiles') return { data: { id: 'admin-assistenza' }, error: null };
       if (t === 'conversations') return { data: stato.conversazioni.find((r) => filtri.every((f) => f(r))) ?? null, error: null };
+      // Come la tabella vera: il messaggio salvato si rilegge per id.
+      if (t === 'messages') return { data: stato.messaggi.find((r) => filtri.every((f) => f(r))) ?? null, error: null };
       return { data: null, error: null };
     };
     b.insert = (v: Riga) => {

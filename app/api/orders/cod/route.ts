@@ -15,7 +15,7 @@ import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-conse
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
-import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
+import { contaFattoriniOnline, contaVelociInCorso, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -933,6 +933,7 @@ export const POST = withAuthRateLimit(
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
     // fattorino approvato e online. La stessa decisione della cassa (`veloceSiPuo`).
+    // 21/11/2026 (R03-019) — Non basta: a ordini nati la stessa decisione si richiede con le veloci contate.
     if (consegnaVeloce) {
       const veloce = veloceSiPuo({
         adesso: romeNow(),
@@ -1081,6 +1082,7 @@ export const POST = withAuthRateLimit(
     let couponDiscountCents = 0;
     let couponFreeShipping = false;
     let validatedCouponCode: string | null = null;
+    let rivendicazioneDelTentativo: string | null = null;
     if (body.couponCode && body.couponCode.trim()) {
       // 31/10/2026 — I codici sconto in cassa sono spenti (CODICI_SCONTO_IN_CASSA):
       // un codice di MyCity oggi lo pagherebbe il negozio al 90%. Si rifiuta qui,
@@ -1108,6 +1110,25 @@ export const POST = withAuthRateLimit(
       couponDiscountCents = rivendicato.scontoCents;
       couponFreeShipping = rivendicato.spedizioneGratis;
       validatedCouponCode = rivendicato.codice;
+      // 21/11/2026 (R03-008) — La riga di QUESTO tentativo, letta subito dopo la rivendicazione: è
+      // l'ultima aperta del cliente su quel codice (claim_coupon mette in fila le rivendicazioni e,
+      // finché questa è aperta e recente, un'altra non può nascere). Chiudere più avanti «tutte quelle
+      // aperte» spegneva anche il lucchetto di un'altra scheda, e il benvenuto tornava doppio.
+      if (validatedCouponCode) {
+        const { data: buono } = await admin.from('coupons').select('id').eq('code', validatedCouponCode).maybeSingle();
+        if (buono) {
+          const { data: riga } = await admin
+            .from('coupon_redemptions')
+            .select('id')
+            .eq('coupon_id', (buono as { id: string }).id)
+            .eq('user_id', user.id)
+            .is('released_at', null)
+            .order('claimed_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          rivendicazioneDelTentativo = (riga as { id?: string } | null)?.id ?? null;
+        }
+      }
     }
 
     /**
@@ -1143,18 +1164,20 @@ export const POST = withAuthRateLimit(
      * restava acceso e il tentativo dopo il tetto dei contanti o dopo un annullamento leggeva
      * «Coupon non disponibile» senza che nessun ordine fosse nato. Si chiude qui, solo dopo un
      * rilascio riuscito: se il contatore non è tornato, la rivendicazione resta com'era.
+     *
+     * 21/11/2026 (R03-008) — Si chiude solo la riga di questo tentativo (letta dopo la
+     * rivendicazione), non tutte quelle aperte del cliente. Se non è stata letta, resta aperta: il
+     * lucchetto si spegne da solo in due minuti, mai quello di un'altra scheda.
      */
     const chiudiLaRivendicazione = async (codice: string) => {
-      const { data: buono, error: errBuono } = await admin.from('coupons').select('id').eq('code', codice).maybeSingle();
-      if (errBuono || !buono) {
-        logger.warn('[cod] rivendicazione del codice non chiusa: codice non riletto', { code: codice, message: errBuono?.message });
+      if (!rivendicazioneDelTentativo) {
+        logger.warn('[cod] rivendicazione del codice non chiusa: la riga di questo tentativo non è stata letta', { code: codice });
         return;
       }
       const { error: errChiusa } = await admin
         .from('coupon_redemptions')
         .update({ released_at: new Date().toISOString() })
-        .eq('coupon_id', (buono as { id: string }).id)
-        .eq('user_id', user.id)
+        .eq('id', rivendicazioneDelTentativo)
         .is('released_at', null);
       if (errChiusa) logger.warn('[cod] rivendicazione del codice non chiusa', { code: codice, message: errChiusa.message });
     };
@@ -1639,6 +1662,34 @@ export const POST = withAuthRateLimit(
 
       createdOrderIds.push(order.id);
       ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
+    }
+
+    /**
+     * 21/11/2026 (R03-019) — LA VELOCE SI RICONTA A ORDINI NATI.
+     *
+     * Il controllo della veloce (sopra) e la scrittura degli ordini non sono un passo solo: due
+     * veloci nello stesso istante con un fattorino solo leggevano tutte e due «c'è posto» e
+     * nascevano tutte e due. Adesso, a ordini scritti e prima di ogni avviso, si contano le veloci
+     * in corso (queste comprese) e si richiede la stessa decisione con quelle degli altri: se non
+     * c'è più posto, questi ordini si annullano come in ogni altra uscita d'errore. Fra due invii
+     * insieme almeno uno vede l'altro, quindi non passano mai tutti e due; se si vedono a vicenda
+     * si fermano tutti e due (nel dubbio la veloce non si promette: il cliente sceglie una fascia).
+     * Quante veloci per fattorino lo dice lib/ordini/consegna-veloce.ts: senza quel tetto il
+     * conteggio non decide, come nel controllo di sopra.
+     */
+    if (consegnaVeloce && createdOrderIds.length > 0) {
+      const inCorso = await contaVelociInCorso(admin);
+      const ancora = veloceSiPuo({
+        adesso: romeNow(),
+        negozi: (sellers ?? []).map((s) => ({ nome: s.store_name ?? 'Il negozio', orari: s.store_hours })),
+        fattoriniOnline: await contaFattoriniOnline(admin),
+        velociInCorso: inCorso === null ? null : Math.max(0, inCorso - createdOrderIds.length),
+      });
+      if (!ancora.possibile) {
+        logger.warn('[cod] veloce fermata a ordini nati: i fattorini sono già impegnati', { userId: user.id, chiave: chiaveTentativo });
+        await rollbackCreatedCodOrders();
+        return esciERilascia(ApiErrors.conflict(ancora.perche));
+      }
     }
 
     // --- 6. Adesso che TUTTI gli ordini esistono, si avvisa. (#159)
