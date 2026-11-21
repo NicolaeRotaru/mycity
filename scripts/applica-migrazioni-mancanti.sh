@@ -331,12 +331,9 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   #    prima meta' resta applicata e la migrazione non si registra. Per questo
   #    sotto ci sono due avvisi diversi: uno leggero quando dopo il COMMIT c'e'
   #    solo NOTIFY, uno forte quando c'e' altro.
-  # 2) L'applicazione e la registrazione sono due comandi psql, cioe' due
-  #    connessioni. Un intoppo di rete fra le due lascia la migrazione applicata
-  #    ma non registrata, e al rilascio dopo viene riapplicata. (13/11/2026,
-  #    R16-003: resta cosi'. Unirle in un solo psql --single-transaction e'
-  #    possibile, ma la prova comune del rilascio conta le registrazioni come
-  #    comandi psql separati: va cambiata insieme, dalla regista.)
+  # 2) L'applicazione e la registrazione stanno nello stesso comando psql (R02-004): prima erano
+  #    due connessioni, e un intoppo di rete fra le due lasciava la migrazione applicata ma non
+  #    registrata, riapplicata al rilascio dopo.
   #
   # 13/11/2026 (R16-003) — L'IMPRONTA DEL FILE ENTRA NEL REGISTRO. Nella colonna
   # `statements` si scrive l'md5 del file, come commento SQL «-- md5:<impronta>»
@@ -356,8 +353,10 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
     fi
   fi
   impronta="$( (md5sum "$f" 2>/dev/null || md5 -r "$f") | cut -d' ' -f1)"
-  psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f"
-  psql "$DB" -q -v ON_ERROR_STOP=1 \
+  # R02-004 — Applicazione e registrazione stanno in UN solo psql (una connessione, la stessa
+  # transazione del file): se la registrazione cade, anche l'applicazione torna indietro, e al
+  # rilascio dopo non si riapplica una migrazione gia' fatta ma mai registrata.
+  psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f" \
     -c "INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
         VALUES ('$versione', '$descrizione', ARRAY['-- md5:$impronta'])
         ON CONFLICT (version) DO NOTHING"

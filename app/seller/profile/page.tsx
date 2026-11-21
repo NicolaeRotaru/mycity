@@ -156,6 +156,7 @@ export default function SellerProfilePage() {
           }}
           onSubmit={(d) => updateContact.mutate(d)}
           isLoading={updateContact.isPending}
+          salvataggioRiuscito={updateContact.isSuccess ? updateContact.submittedAt : 0}
         />
       </div>
 

@@ -90,7 +90,7 @@ function AdminLogo() {
     <div className="font-serif text-2xl font-extrabold leading-none tracking-tight">
       <span className="text-accent-300">{branding.wordmark.accent}</span>
       <span className="text-white">{branding.wordmark.rest}</span>
-      <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-label text-secondary-300">
+      <span className="ml-1.5 font-sans text-xs font-bold uppercase tracking-label text-secondary-300">
         Admin
       </span>
     </div>
@@ -194,7 +194,7 @@ function CampanellaAdmin({ chiara = false, onNavigate }: { chiara?: boolean; onN
       {nonLette > 0 && (
         <span
           aria-hidden
-          className={`${chiara ? 'absolute -right-0.5 -top-0.5' : 'ml-auto'} inline-flex min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1 text-[11px] font-bold text-white`}
+          className={`${chiara ? 'absolute -right-0.5 -top-0.5' : 'ml-auto'} inline-flex min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1 text-xs font-bold text-white`}
         >
           {nonLette > 99 ? '99+' : nonLette}
         </span>
@@ -215,7 +215,7 @@ function AdminFooter({
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-white">{name}</p>
-          <p className="text-[11px] text-white/50">Admin</p>
+          <p className="text-xs text-white/50">Admin</p>
         </div>
       </div>
       <CampanellaAdmin onNavigate={onNavigate} />

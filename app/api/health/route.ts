@@ -390,7 +390,8 @@ export async function GET(request: Request) {
       ? {}
       : {
           error: registratoreErrori === 'spento'
-            ? 'registratore degli errori spento: manca NEXT_PUBLIC_SENTRY_DSN su Vercel (poi va rifatto il deploy)'
+            // R01-005 — Spento per scelta: si dice dove si vedono gli errori, non solo cosa manca.
+            ? 'registratore degli errori (Sentry) spento: gli errori del server li conta il sorvegliante e li dice con l\'allarme ERRORI_DEL_SITO, i dettagli sono nei log di Vercel. Per accenderlo: NEXT_PUBLIC_SENTRY_DSN su Vercel, poi va rifatto il deploy'
             : 'gli errori nelle pagine dei clienti non arrivano: manca NEXT_PUBLIC_SENTRY_DSN su Vercel (poi va rifatto il deploy)',
         }),
   };

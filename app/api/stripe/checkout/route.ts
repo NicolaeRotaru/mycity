@@ -632,6 +632,37 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   // R26-021 — Passati i rifiuti, si libera quello che questa persona teneva in ostaggio.
   const riserveLiberate = await pulisci();
+  /**
+   * 21/11/2026 (R03-011) — IL BENVENUTO RESTITUITO DAL TENTATIVO ABBANDONATO SI RIUSA SUBITO.
+   *
+   * La carta rifiutata sulla pagina di Stripe: il cliente torna, cambia qualcosa e ripreme «Paga».
+   * La pulizia chiude la pagina vecchia e restituisce il codice (`release_coupon(p_code)`), ma la
+   * rivendicazione di quel tentativo (`coupon_redemptions`, migrazione 361) restava aperta: entro due
+   * minuti la cassa nuova leggeva «Coupon non disponibile». Ogni tentativo scrive nella sua riga di
+   * intento quale rivendicazione è sua; qui si chiudono solo quelle dei tentativi appena liberati,
+   * mai il lucchetto di una scheda il cui pagamento non è ancora nato.
+   */
+  if (riserveLiberate.liberati.length > 0) {
+    try {
+      const { data: liberate } = await admin
+        .from('pending_checkouts')
+        .select('id, delivery')
+        .in('id', riserveLiberate.liberati);
+      const sue = ((liberate ?? []) as Array<{ delivery?: { rivendicazione?: unknown } | null }>)
+        .map((p) => p.delivery?.rivendicazione)
+        .filter((r): r is string => typeof r === 'string' && r !== '');
+      if (sue.length > 0) {
+        const { error: errChiusa } = await admin
+          .from('coupon_redemptions')
+          .update({ released_at: new Date().toISOString() })
+          .in('id', sue)
+          .is('released_at', null);
+        if (errChiusa) logger.warn('[stripe] rivendicazione del tentativo liberato non chiusa', { message: errChiusa.message });
+      }
+    } catch (e) {
+      logger.warn('[stripe] rivendicazione del tentativo liberato non chiusa', { message: e instanceof Error ? e.message : String(e) });
+    }
+  }
   let prodottiPerIlConto = products;
   if (riserveLiberate.liberati.length > 0) {
     // La merce liberata e' tornata a scaffale DOPO la lettura: le scorte si rileggono.
@@ -758,6 +789,30 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const couponDiscountCents = codiceSconto.scontoCents;
   const couponFreeShipping = codiceSconto.spedizioneGratis;
   const validatedCouponCode = codiceSconto.codice;
+  // 21/11/2026 (R03-010) — La riga della rivendicazione di QUESTO tentativo (`coupon_redemptions`,
+  // migrazione 361), letta subito: è l'ultima aperta del cliente su quel codice, perché finché è
+  // aperta e recente un'altra non può nascere. Serve a `rilasciaCoupon` per chiudere solo lei. Se la
+  // lettura non riesce la riga resta aperta, come prima: il lucchetto si spegne da solo in due minuti.
+  let rivendicazioneDelTentativo: string | null = null;
+  if (validatedCouponCode) {
+    try {
+      const { data: buono } = await admin.from('coupons').select('id').eq('code', validatedCouponCode).maybeSingle();
+      if (buono) {
+        const { data: riga } = await admin
+          .from('coupon_redemptions')
+          .select('id')
+          .eq('coupon_id', (buono as { id: string }).id)
+          .eq('user_id', user.id)
+          .is('released_at', null)
+          .order('claimed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        rivendicazioneDelTentativo = (riga as { id?: string } | null)?.id ?? null;
+      }
+    } catch (e) {
+      logger.warn('[stripe] rivendicazione del codice non riletta', { code: validatedCouponCode, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   /**
    * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DEI CONTANTI.
@@ -877,7 +932,20 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const rilasciaCoupon = async () => {
     if (!validatedCouponCode) return;
     const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
-    if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+    if (relErr) {
+      logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+      return;
+    }
+    // 21/11/2026 (R03-010) — `release_coupon(p_code)` rimette l'uso nel contatore ma lascia aperta la
+    // rivendicazione del cliente: se la cassa cadeva, il benvenuto restava bloccato fino a due minuti.
+    // Dopo un rilascio riuscito si chiude anche lei, solo quella di questo tentativo.
+    if (!rivendicazioneDelTentativo) return;
+    const { error: errChiusa } = await admin
+      .from('coupon_redemptions')
+      .update({ released_at: new Date().toISOString() })
+      .eq('id', rivendicazioneDelTentativo)
+      .is('released_at', null);
+    if (errChiusa) logger.warn('[stripe] rivendicazione del codice non chiusa', { code: validatedCouponCode, message: errChiusa.message });
   };
 
   /**
@@ -939,6 +1007,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // secondo invio, fa ritrovare il pagamento già aperto invece di
         // aprirne un altro e riservare la merce due volte.
         impronta_carrello: improntaCarrello,
+        // 21/11/2026 (R03-011) — La rivendicazione del benvenuto di questo tentativo: se il tentativo
+        // viene liberato, la pulizia del tentativo dopo chiude proprio lei.
+        rivendicazione: rivendicazioneDelTentativo,
       },
       pickup_in_store: body.pickupInStore,
       status: 'PENDING',

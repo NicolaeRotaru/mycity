@@ -17,10 +17,14 @@ const rilascio = (commit: string, nome: string) => ({
 const dominioSenzaCommit = { id: 'dpl_dominio', url: 'mycity-sul-dominio.vercel.app', target: 'production', readyState: 'READY', meta: {} };
 
 describe('R07-011 · il dominio senza commit non vale come «un altro commit»', () => {
-  it('esce Y, l elenco dice [Y, X], il dominio non dice il commit: si torna a X, non al dominio', () => {
+  // 21/11/2026 (R02-005, scelta di Nicola) — prima si tornava a X, l'unico altro
+  // commit dell'elenco: ma X puo' essere un rilascio gia' tolto perche' rotto. Con
+  // un dominio che non dice il suo commit non si tira a indovinare, ne' al dominio
+  // ne' a X.
+  it('esce Y, l elenco dice [Y, X], il dominio non dice il commit: nessun indirizzo, ne il dominio ne X', () => {
     expect(
       rilascioDaTornare({ deployments: [rilascio(Y, 'y-esce'), rilascio(X, 'x-prima')] }, { commitCheEsce: Y, sulDominio: dominioSenzaCommit }),
-    ).toBe('https://mycity-x-prima.vercel.app');
+    ).toBeNull();
   });
 
   it('dominio senza commit e due candidati diversi: nessun indirizzo, il ritorno si fa a mano', () => {

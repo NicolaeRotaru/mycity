@@ -4,7 +4,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
-import { DaCompletare, tracciaDellaModifica } from '@/lib/products/salvataggio-tracciato';
+import { DaCompletare, tracciaDellaModifica, type VoceDiTraccia } from '@/lib/products/salvataggio-tracciato';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
@@ -120,6 +120,27 @@ async function rimettiComEra(
   return !error && Array.isArray(data) && data.length > 0;
 }
 
+/**
+ * R03-002 — Le taglie di un prodotto come stanno in banca dati, in una forma che si confronta:
+ * in ordine di posizione, con nome, opzioni e scorta. `null` se non si leggono.
+ */
+type Taglia = { label: unknown; options: unknown; stock: unknown };
+async function taglieInBanca(admin: ReturnType<typeof getAdminSupabase>, id: string): Promise<Taglia[] | null> {
+  try {
+    const { data, error } = await admin
+      .from('product_variants')
+      .select('id, options, label, stock, position')
+      .eq('product_id', id);
+    if (error || !Array.isArray(data)) return null;
+    return (data as Array<Record<string, unknown>>)
+      .slice()
+      .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0) || String(a.id ?? '').localeCompare(String(b.id ?? '')))
+      .map((r) => ({ label: r.label ?? null, options: r.options ?? null, stock: r.stock ?? null }));
+  } catch {
+    return null;
+  }
+}
+
 export const POST = withAdminAuth(async ({ user, req }) => {
   let body: unknown;
   try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
@@ -229,6 +250,9 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     if (!data) return ApiErrors.notFound('Prodotto non trovato');
   }
 
+  // R03-002 — Com'erano le taglie prima del salvataggio: se cambiano (anche da sole) la traccia lo dice.
+  const taglieDiPrima = variants ? await taglieInBanca(admin, id) : null;
+
   if (variants) {
     try {
       await controllaScorteVarianti(admin, id, variants as ProductVariant[], scorteViste);
@@ -272,7 +296,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // R02-003 — La traccia «chi ha cambiato cosa» nella stessa forma del modulo del prodotto e delle
   // porte dell'AI (`tracciaDellaModifica`): solo i campi cambiati, col valore di prima e di dopo.
   // Il negozio e i dati esterni li cambia solo l'amministrazione: entrano nella stessa voce.
-  const voce = tracciaDellaModifica({
+  let voce: VoceDiTraccia | null = tracciaDellaModifica({
     prodottoId: id,
     attoreId: user.id,
     origine: 'admin',
@@ -280,6 +304,31 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     dopo: patch,
     altreColonne: ['seller_id', 'external_source_url', 'external_marketplace', 'external_data'],
   });
+  // R03-002 — Le taglie non sono colonne del prodotto: cambiate da sole, la voce non nasceva e il
+  // registro restava muto. Entrano nella stessa voce come `variants`, prima e dopo come stanno in
+  // banca dati, solo se cambiate davvero; se una delle due letture non riesce si scrive lo stesso
+  // (con `null` dove non si sa), perché il salvataggio delle taglie c'è stato.
+  if (variants) {
+    const taglieDopo = await taglieInBanca(admin, id);
+    if (taglieDiPrima === null || taglieDopo === null || JSON.stringify(taglieDiPrima) !== JSON.stringify(taglieDopo)) {
+      const base: VoceDiTraccia = voce ?? {
+        actorId: user.id,
+        action: 'product.update',
+        targetTable: 'products',
+        targetId: id,
+        metadata: { origine: 'admin', campi: [], prima: {}, dopo: {}, daAi: [] },
+      };
+      voce = {
+        ...base,
+        metadata: {
+          ...base.metadata,
+          campi: [...base.metadata.campi, 'variants'],
+          prima: { ...base.metadata.prima, variants: taglieDiPrima },
+          dopo: { ...base.metadata.dopo, variants: taglieDopo },
+        },
+      };
+    }
+  }
   if (voce) await writeAudit(voce);
 
   return apiSuccess({ ok: true });

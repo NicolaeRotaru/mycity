@@ -233,7 +233,12 @@ export const POST = withAuthRateLimit(
     // la pagina /accetta-condizioni lo richiederà.
     // Collaudo K04 — una domanda già in attesa che il negozio corregge (o rimanda dopo due secondi)
     // non è un nuovo consenso: la riga a verbale c'è già dal primo invio.
-    const giaAVerbale = attuale.approval_status === 'pending' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
+    // 21/11/2026 (R03-009) — «Già in attesa» è la richiesta vera, come la leggono /sell e la coda
+    // dell'amministrazione: un NEGOZIO in attesa con la data della richiesta. Ogni profilo nasce
+    // «pending»: un cliente con la data rimasta da un tentativo precedente (o scritta da lui, la
+    // colonna è fra quelle che può toccare) non è in coda, e senza il ruolo qui non riceveva mai
+    // né il verbale né l'avviso agli amministratori.
+    const giaAVerbale = attuale.approval_status === 'pending' && attuale.role === 'seller' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
     if (!giaAVerbale) try {
       const { error: errConsenso } = await admin.from('consent_log').insert({
         user_id: user.id,
@@ -252,7 +257,7 @@ export const POST = withAuthRateLimit(
 
     // Nicola deve saperlo subito: la coda dei negozi da approvare non avvisa da sola.
     // Una richiesta già in attesa che il negozio corregge non è un negozio nuovo: niente secondo avviso.
-    const eraGiaInAttesa = attuale.approval_status === 'pending' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
+    const eraGiaInAttesa = attuale.approval_status === 'pending' && attuale.role === 'seller' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
     if (!eraGiaInAttesa) try {
       await notifyAdmins(
         'Nuovo negozio da approvare',

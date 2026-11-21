@@ -1015,8 +1015,11 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   // giri notturni, due clic dell'amministratore). Era un «non cancellato»: l'amministratore
   // leggeva un errore falso, e la notte svegliava qualcuno per una cancellazione riuscita. Non
   // è un guasto: si va avanti col ④ (che si può ripetere) e si dice che l'ha fatto un altro.
+  // 21/11/2026 (R03-015) — Solo il «utente non trovato» del servizio di accesso: un 404 qualsiasi
+  // (un gateway, un indirizzo sbagliato) non dice che l'account è chiuso, e resta un guasto.
   const giaChiuso = !!errAuth && (
-    (errAuth as { status?: number }).status === 404 || (errAuth as { code?: string }).code === 'user_not_found'
+    (errAuth as { code?: string }).code === 'user_not_found' ||
+    ((errAuth as { status?: number }).status === 404 && /^user not found$/i.test(String(errAuth.message ?? '').trim()))
   );
   if (errAuth && !giaChiuso) {
     return {

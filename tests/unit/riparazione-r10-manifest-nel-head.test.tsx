@@ -20,6 +20,7 @@ vi.mock('next/font/google', () => ({
   Inter: () => ({ variable: 'font-inter', className: '' }),
   Fraunces: () => ({ variable: 'font-serif', className: '' }),
 }));
+vi.mock('next/font/local', () => ({ default: (o: { variable?: string }) => ({ variable: o?.variable ?? '', className: '' }) }));
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'it', getMessages: async () => ({}) }));
 
 const modulo = await import('@/app/layout');

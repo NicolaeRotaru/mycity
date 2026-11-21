@@ -1,6 +1,6 @@
 import { DESCRIZIONE_DEL_SITO } from '@/lib/site-branding';
 import './globals.css';
-import { Inter, Fraunces } from 'next/font/google';
+import localFont from 'next/font/local';
 import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
 import SellerShoppingBanner from '@/components/SellerShoppingBanner';
@@ -44,18 +44,37 @@ const precaricoDelSito = unstable_cache(precaricaSito, ['sito-precarico'], {
 // «veri» del titolone della home, in Fraunces a 60px — e Fraunces un corsivo
 // vero, disegnato, ce l'ha. Le regole in più costano qualche riga di CSS: il
 // browser scarica un file solo quando c'è davvero del testo che lo usa.
-const inter = Inter({
-  subsets: ['latin'],
+//
+// I caratteri stanno in `app/fonts/` e si caricano da qui, non da Google: la costruzione del sito
+// non scarica piu' niente e non puo' piu' fallire da sola per la rete. Sono gli stessi di prima
+// (Inter variabile con asse del peso; Fraunces 400-800), sottoinsieme latino, dritto e corsivo,
+// presi da @fontsource-variable/inter 5.3.0 e @fontsource/fraunces 5.3.0 (licenza OFL accanto).
+// `adjustFontFallback` come lo faceva Google per categoria: Arial per Inter, Times New Roman per Fraunces.
+const inter = localFont({
+  src: [
+    { path: './fonts/inter-latin-wght-normal.woff2', weight: '100 900', style: 'normal' },
+    { path: './fonts/inter-latin-wght-italic.woff2', weight: '100 900', style: 'italic' },
+  ],
   variable: '--font-inter',
   display: 'swap',
-  style: ['normal', 'italic'],
+  adjustFontFallback: 'Arial',
 });
-const fraunces = Fraunces({
-  subsets: ['latin'],
+const fraunces = localFont({
+  src: [
+    { path: './fonts/fraunces-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/fraunces-latin-400-italic.woff2', weight: '400', style: 'italic' },
+    { path: './fonts/fraunces-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/fraunces-latin-500-italic.woff2', weight: '500', style: 'italic' },
+    { path: './fonts/fraunces-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/fraunces-latin-600-italic.woff2', weight: '600', style: 'italic' },
+    { path: './fonts/fraunces-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    { path: './fonts/fraunces-latin-700-italic.woff2', weight: '700', style: 'italic' },
+    { path: './fonts/fraunces-latin-800-normal.woff2', weight: '800', style: 'normal' },
+    { path: './fonts/fraunces-latin-800-italic.woff2', weight: '800', style: 'italic' },
+  ],
   variable: '--font-serif',
   display: 'swap',
-  weight: ['400', '500', '600', '700', '800'],
-  style: ['normal', 'italic'],
+  adjustFontFallback: 'Times New Roman',
 });
 
 // metadataBase: rende assoluti i canonical/openGraph relativi delle pagine

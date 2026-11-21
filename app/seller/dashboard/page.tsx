@@ -530,7 +530,7 @@ const TINT: Record<'primary' | 'olive' | 'accent' | 'secondary', Tint> = {
 function HeroStat({ label, value, sub, className = '' }: { label: string; value: string; sub: string; className?: string }) {
   return (
     <div className={`min-w-0 rounded-2xl bg-black/10 backdrop-blur-sm border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3 ${className}`}>
-      <p className="text-xs uppercase tracking-wide text-cream-200 font-semibold">{label}</p>
+      <p className="text-xs uppercase tracking-label text-cream-200 font-semibold">{label}</p>
       {/* `break-words` e' la rete: se un giorno arriva un incasso a sei cifre,
           va a capo dentro il riquadro invece di sbordare sul vicino. */}
       <p className="text-lg sm:text-2xl font-bold leading-tight mt-0.5 break-words">{value}</p>

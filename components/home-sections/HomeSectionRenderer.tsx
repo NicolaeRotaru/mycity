@@ -116,12 +116,14 @@ function HomeBlock({
           <div aria-hidden className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-accent-200/40 blur-3xl" />
           <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} relative`}>
             <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 items-center">
-              <div className="space-y-6">
+              {/* R01-015 — Col testo grande sul telefono una parola del titolo poteva essere più larga
+                  dello schermo: la colonna si stringe (`min-w-0`) e il titolo va a capo (`break-words`). */}
+              <div className="min-w-0 space-y-6">
                 <span className="inline-flex items-center gap-1.5 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-primary-200">
                   <Sparkles size={14} strokeWidth={2.4} />
                   {eyebrow}
                 </span>
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900">
+                <h1 className="break-words text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900">
                   {headline}
                 </h1>
                 <p className="text-lg text-ink-600 max-w-xl leading-relaxed">{subhead}</p>
@@ -260,8 +262,8 @@ function HomeBlock({
       return (
         <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE} grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6`}>
           <LiveActivityFeed />
-          <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
-            <h3 className="font-serif font-bold text-ink-900 text-lg mb-4">
+          <div className="min-w-0 bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
+            <h3 className="break-words font-serif font-bold text-ink-900 text-lg mb-4">
               {c.trustTitle || 'Perché scegliere MyCity'}
             </h3>
             <ul className="space-y-3">
@@ -270,7 +272,9 @@ function HomeBlock({
                   <span className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${trustColorClass(v.color)}`}>
                     <v.Icon size={20} strokeWidth={2.2} />
                   </span>
-                  <div>
+                  {/* R01-015 — Accanto all'icona fissa il testo si stringe e va a capo: col testo grande
+                      «Commercianti locali» usciva dallo schermo e la home scorreva di lato. */}
+                  <div className="min-w-0 break-words">
                     <p className="font-semibold text-ink-900">{v.t}</p>
                     <p className="text-sm text-ink-600">{v.d}</p>
                   </div>
@@ -292,7 +296,7 @@ function HomeBlock({
                 <span className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center ${trustColorClass(v.color)}`}>
                   <v.Icon size={20} strokeWidth={2.2} />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 break-words">
                   <p className="font-semibold text-ink-900 leading-tight">{v.t}</p>
                   <p className="text-sm text-ink-600 mt-0.5 leading-snug">{v.d}</p>
                 </div>
@@ -373,11 +377,11 @@ function HomeBlock({
       return (
         <section className="bg-ink-900 text-white">
           <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}>
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <span className="shrink-0 w-10 h-10 rounded-full bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
                 <ShieldCheck size={18} strokeWidth={2.4} className="text-accent-400" />
               </span>
-              <p className="text-base md:text-lg">
+              <p className="min-w-0 break-words text-base md:text-lg">
                 <span className="font-serif font-bold">{c.heading || 'Hai un negozio a Piacenza?'}</span>{' '}
                 <span className="text-ink-300">{c.subtext || FRASE_PREZZO_NEGOZI}</span>
               </p>
@@ -386,7 +390,9 @@ function HomeBlock({
               href={c.href || '/sell'}
               ctaId="seller_cta"
               location="seller_band"
-              className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg whitespace-nowrap"
+              // R01-015 — Sul telefono (fascia in colonna) il pulsante può andare a capo e non supera lo
+              // schermo; da 640 px, dove la fascia è una riga, resta su una riga come prima.
+              className="inline-flex max-w-full items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg sm:whitespace-nowrap"
             >
               <Store size={18} strokeWidth={2.4} />
               {c.ctaLabel || 'Diventa venditore'}

@@ -8,7 +8,8 @@ import { contantiIncassati } from '@/lib/rimborsi/regole-del-rimborso';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
-import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate } from '@/lib/email/templates';
+import { ordineAnnullatoAlNegozioTemplate, ordineAnnullatoTemplate, refundIssuedTemplate } from '@/lib/email/templates';
+import { formatPriceFromCents } from '@/lib/format';
 import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 // 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
@@ -254,13 +255,16 @@ export async function annullaERimborsa(
    * ancora quel codice. In quel caso non si restituisce niente: lo fara'
    * l'ultimo ordine del carrello che se ne va.
    *
-   * LIMITE DICHIARATO, e vale solo per i contanti: il carrello pagato alla
-   * consegna non ha una targa sulle righe dell'ordine (la chiave del tentativo
-   * vive in `cod_checkout_attempts`, e cercarla per ordine sarebbe una
-   * scansione senza indice). Li' si restituisce come prima — meglio un uso
-   * regalato che un cliente che perde il buono senza aver comprato (R121). La
-   * chiusura completa vuole una colonna «carrello» sugli ordini: e' una
-   * migrazione, quindi si firma a parte.
+   * LIMITE DICHIARATO, e vale solo per i contanti: questo controllo guarda solo
+   * il carrello della carta (la sessione di pagamento). 21/11/2026 (R04-007) —
+   * Non perché il carrello in contanti non si possa trovare: si ritrova dalla
+   * riga del tentativo di cassa (`cod_checkout_attempts.order_ids`, letta per
+   * cliente, con l'indice), come fa la consegna del carrello più sotto
+   * (`ordiniDelCarrello`). Sulle righe dell'ordine però non c'è una chiave del
+   * carrello, e senza quella riga il carrello non si ritrova. Qui coi contanti
+   * si restituisce come prima — meglio un uso regalato che un cliente che perde
+   * il buono senza aver comprato. La chiusura completa vuole una colonna
+   * «carrello» sugli ordini: e' una migrazione, quindi si firma a parte.
    */
   // 5/11/2026 — La restituzione del codice sta fuori (`restituisciIlCodiceDellOrdine`, più sotto in
   // questo file): la usa anche il giro degli ordini scaduti, che prima chiamava release_coupon col
@@ -311,14 +315,17 @@ export async function annullaERimborsa(
       const totaleCent = giro ? giro.totaleCents : Math.round(Number(order.total_price) * 100);
       const giaRimborsato = Number(order.refunded_amount_cents ?? 0);
       const residuoCent = Math.max(0, totaleCent - giaRimborsato);
+      // 21/11/2026 (R02-001) — «Rimborso emesso» non lo manda più `refundOrder` dentro la richiesta:
+      // parte dopo la risposta (`avvisaIlClienteDelRimborso`), con l'importo che è tornato davvero.
       const res = await refundOrder({
         orderId: order.id,
         amountCents: residuoCent,
         reason: opts.reason,
         metadata: opts.metadata,
-        notifyBuyer: true,
+        notifyBuyer: false,
         ...(merceUscita ? { merceNonTorna: true } : {}),
       });
+      await avvisaIlClienteDelRimborso(admin, order, res.importoCents, opts.reason);
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
       //
       // 28/8/2026 — IL CREDITO TORNA ANCHE QUI. Il rimborso sulla carta copre
@@ -486,13 +493,93 @@ export async function avvisaIlClienteDellAnnullo(
       { unaVoltaPer: `email-annullo-${ordine.id}` },
     ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
   };
+  if (!dopoLaRisposta(lavoro)) await lavoro();
+}
+
+/**
+ * Il lavoro parte con `after()` di Next, dopo la risposta. Fuori da una richiesta `after()` lancia:
+ * torna false, e chi chiama aspetta l'invio, come prima.
+ */
+function dopoLaRisposta(lavoro: () => Promise<void>): boolean {
   try {
     after(lavoro);
-    return;
+    return true;
   } catch {
-    // Fuori da una richiesta `after()` lancia: si aspetta l'invio, come prima.
+    return false;
   }
-  await lavoro();
+}
+
+/**
+ * 21/11/2026 (R02-001) — «RIMBORSO EMESSO» DOPO LA RISPOSTA, E SE NON PARTE LO SA UNA PERSONA.
+ *
+ * Con la carta l'email dell'annullo è «Rimborso emesso». La mandava `refundOrder` (lib/stripe/payout.ts)
+ * dentro la richiesta: il negozio che rifiuta, il cliente che annulla e il giro degli scaduti (cento
+ * ordini a giro) aspettavano l'invio, fino a circa venti secondi per ordine, e un invio caduto restava
+ * solo nel registro. Ora chi annulla chiede il rimborso con `notifyBuyer: false` e l'email (lo stesso
+ * modello, sulla carta, con l'importo che `refundOrder` dice tornato) parte dopo la risposta con
+ * `after()` di Next; fuori da una richiesta si aspetta come prima. Se l'invio cade, o l'indirizzo del
+ * cliente non si legge per un guasto, gli amministratori lo ricevono nella campanella, una volta per
+ * ordine. Solo l'email: i soldi restano tutti in `refundOrder`. I contanti non passano di qui.
+ */
+export async function avvisaIlClienteDelRimborso(
+  admin: SupabaseClient,
+  ordine: { id: string; user_id: string | null },
+  importoCents: number | null | undefined,
+  motivo: string | null | undefined,
+): Promise<void> {
+  const importo = Number(importoCents ?? 0);
+  if (!Number.isFinite(importo) || importo <= 0) return;
+  const lavoro = async () => {
+    const esito = await spedisciLEmailDelRimborso(admin, ordine, importo, motivo);
+    if (esito !== 'invio-fallito' && esito !== 'indirizzo-non-letto') return;
+    await notifyAdmins(
+      '⚠️ Email del rimborso non partita',
+      `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è annullato e il rimborso di ${formatPriceFromCents(importo)} sulla carta è partito, ` +
+        `ma l'email «Rimborso emesso» al cliente non è partita (${esito === 'indirizzo-non-letto' ? "l'indirizzo del cliente non si è potuto leggere" : 'il motivo è nel registro'}). ` +
+        'Avvisa tu il cliente che il rimborso arriva sulla carta.',
+      '/admin/orders',
+      { unaVoltaPer: `email-rimborso-${ordine.id}` },
+    ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
+  };
+  if (!dopoLaRisposta(lavoro)) await lavoro();
+}
+
+async function spedisciLEmailDelRimborso(
+  admin: SupabaseClient,
+  ordine: { id: string; user_id: string | null },
+  importoCents: number,
+  motivo: string | null | undefined,
+): Promise<'partita' | 'senza-indirizzo' | 'indirizzo-non-letto' | 'invio-fallito'> {
+  if (!ordine.user_id) return 'senza-indirizzo';
+  let email: string | null | undefined;
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(ordine.user_id);
+    if (error) throw new Error(error.message);
+    email = data?.user?.email;
+  } catch (e) {
+    logger.error('[annullo] email del rimborso non spedita: indirizzo non letto', {
+      orderId: ordine.id, message: e instanceof Error ? e.message : String(e),
+    });
+    return 'indirizzo-non-letto';
+  }
+  if (!email) {
+    logger.warn('[annullo] email del rimborso non spedita: il cliente non ha un indirizzo', { orderId: ordine.id });
+    return 'senza-indirizzo';
+  }
+  try {
+    const t = refundIssuedTemplate({ orderId: ordine.id, amount: importoCents / 100, reason: motivo ?? null, modo: 'carta' });
+    const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text });
+    if (!res.ok) {
+      logger.error('[annullo] email del rimborso NON partita', { orderId: ordine.id });
+      return 'invio-fallito';
+    }
+    return 'partita';
+  } catch (e) {
+    logger.error('[annullo] email del rimborso NON partita', {
+      orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
+    });
+    return 'invio-fallito';
+  }
 }
 
 async function spedisciLEmailDellAnnullo(
@@ -581,21 +668,45 @@ async function spedisciLEmailDellAnnullo(
  * DOPO l'annullo riuscito, con la stessa frase della campanella. Non lancia mai: l'annullo è già
  * scritto, e una posta giù non deve farlo sembrare fallito. Ma non tace: se l'email non parte, lo
  * scrive nel registro degli errori.
+ *
+ * 21/11/2026 (R04-005) — Come l'email al cliente: dentro una richiesta parte dopo la risposta (il
+ * cliente che annulla, il fattorino, il giro degli scaduti con i suoi cento ordini non aspettano più
+ * fino a venti secondi per ordine), e un invio caduto non resta solo nel registro: gli amministratori
+ * lo ricevono nella campanella, una volta per ordine, per avvisare il negozio.
  */
 export async function avvisaIlNegozioDellAnnullo(
   admin: SupabaseClient,
   ordine: { id: string; seller_id?: string | null },
   frase: string,
-): Promise<boolean> {
+): Promise<void> {
+  const lavoro = async () => {
+    // Solo l'invio caduto: un indirizzo che non si legge resta nel registro, come per il cliente.
+    if ((await spedisciLEmailAlNegozio(admin, ordine, frase)) !== 'invio-fallito') return;
+    await notifyAdmins(
+      '⚠️ Email di annullo al negozio non partita',
+      `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è annullato, ma l'email che lo dice al negozio non è partita ` +
+        "(il motivo è nel registro). Il negozio ha l'avviso nella campanella: se sta già preparando l'ordine, avvisalo tu.",
+      '/admin/orders',
+      { unaVoltaPer: `email-annullo-negozio-${ordine.id}` },
+    ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
+  };
+  if (!dopoLaRisposta(lavoro)) await lavoro();
+}
+
+async function spedisciLEmailAlNegozio(
+  admin: SupabaseClient,
+  ordine: { id: string; seller_id?: string | null },
+  frase: string,
+): Promise<'partita' | 'senza-indirizzo' | 'invio-fallito'> {
   try {
-    if (!ordine.seller_id) return false;
+    if (!ordine.seller_id) return 'senza-indirizzo';
     const { data, error } = await admin.auth.admin.getUserById(ordine.seller_id);
     const email = data?.user?.email;
     if (error || !email) {
       logger.error('[annullo] email di annullo al negozio non spedita: indirizzo non letto', {
         orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
       });
-      return false;
+      return 'senza-indirizzo';
     }
     const t = ordineAnnullatoAlNegozioTemplate({ orderId: ordine.id, frase });
     const res = await sendEmail({
@@ -611,14 +722,14 @@ export async function avvisaIlNegozioDellAnnullo(
         orderId: ordine.id,
         motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
       });
-      return false;
+      return 'invio-fallito';
     }
-    return true;
+    return 'partita';
   } catch (e) {
     logger.error('[annullo] email di annullo al negozio NON partita', {
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return 'invio-fallito';
   }
 }
 
@@ -745,7 +856,11 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .eq('user_id', o.user_id)
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
-  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return null;
+  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {
+    // 21/11/2026 (R04-007) — Senza la riga non si sposta niente, ma non in silenzio.
+    await segnalaIlCarrelloSenzaRiga(admin, o, !!errT);
+    return null;
+  }
   const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
   const ids = Array.isArray(elenco)
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
@@ -755,6 +870,86 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+/**
+ * 21/11/2026 (R04-007) — IL CARRELLO IN CONTANTI SENZA LA SUA RIGA NON PASSA PIU' IN SILENZIO.
+ *
+ * Il carrello in contanti si ritrova solo dalla riga del tentativo di cassa: sugli ordini non c'è una
+ * chiave del carrello. Se la riga manca (la rotta della cassa non l'ha potuta scrivere) o non si legge,
+ * la regola del negozio che rifiuta non scatta, e prima non lo sapeva nessuno.
+ *
+ * Gli ordini di due carrelli diversi non si uniscono MAI perché sono nati vicini (regola della regista,
+ * dopo il collaudo del giro 3: così consegna e compenso del fattorino finivano sull'ordine di un altro
+ * carrello). Qui non si sposta niente: si guarda soltanto se lo stesso cliente ha altri ordini in
+ * contanti ancora vivi, nati entro due minuti da questo e senza una riga di carrello (chi sta nella riga
+ * di un altro carrello è di quel carrello, con certezza). Se ce ne sono, gli amministratori lo sanno,
+ * una volta per ordine, con i codici, le cifre di adesso e quelle che la regola darebbe se fossero
+ * davvero lo stesso carrello: lo decide e lo sistema una persona.
+ */
+const VICINI_ENTRO_MS = 2 * 60_000;
+const euro = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
+const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
+
+async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaDelGiro, rigaNonLetta: boolean): Promise<void> {
+  try {
+    const nato = Date.parse(String(o.created_at ?? ''));
+    if (!Number.isFinite(nato)) return;
+    const { data, error } = await leggiIlGiro('carrello-senza-riga', (c) =>
+      admin
+        .from('orders')
+        .select(c)
+        .eq('user_id', o.user_id)
+        .neq('id', o.id)
+        .lt('created_at', new Date(nato + VICINI_ENTRO_MS).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(20));
+    if (error || !Array.isArray(data)) {
+      logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti senza riga: altri ordini del cliente non letti', { orderId: o.id });
+      return;
+    }
+    const vicini = (data as unknown as RigaDelGiro[]).filter((r) =>
+      !r.stripe_session_id?.trim() && !r.pickup_in_store && r.delivery_status !== 'CANCELED' && r.delivery_status !== 'DELIVERED'
+      && Math.abs(Date.parse(String(r.created_at ?? '')) - nato) <= VICINI_ENTRO_MS);
+    const senzaRiga: RigaDelGiro[] = [];
+    for (const r of vicini) {
+      const { data: suaRiga, error: errR } = await admin
+        .from('cod_checkout_attempts')
+        .select('order_ids')
+        .eq('user_id', o.user_id)
+        .contains('order_ids', JSON.stringify([{ id: r.id }]))
+        .limit(1);
+      if (!errR && Array.isArray(suaRiga) && suaRiga.length > 0) continue;
+      senzaRiga.push(r);
+    }
+    if (senzaRiga.length === 0) return;
+    const gruppo = [o, ...senzaRiga].sort(
+      (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
+    );
+    const conto = contoDelCarrello(o, gruppo, o.id);
+    const adesso = senzaRiga
+      .map((r) => `${codiceDi(r.id)} (${r.delivery_status}: consegna ${euro(Number(r.delivery_fee_cents ?? 0))}, fattorino ${euro(Number(r.rider_fee_cents ?? 0))}, totale ${euro(centesimi(r.total_price))})`)
+      .join(', ');
+    const seLoStesso = conto
+      ? ` Se sono davvero lo stesso carrello, la regola darebbe: ${conto.rimasti
+        .map((riga) => {
+          const r = senzaRiga.find((x) => x.id === riga.id);
+          return `${codiceDi(riga.id)} consegna ${euro(riga.deliveryFeeCents)} e fattorino ${euro(riga.riderFeeCents)}${r ? `, totale ${euro(Math.max(0, centesimi(r.total_price) + riga.deltaCents))}` : ''}`;
+        })
+        .join('; ')}.`
+      : ' Le loro cifre non tornano con un carrello solo: probabilmente sono carrelli diversi, ma guardalo tu.';
+    await notifyAdmins(
+      '⚠️ Annullo in contanti: carrello da controllare a mano',
+      `L'ordine ${codiceDi(o.id)} è annullato, ma ${rigaNonLetta ? 'la riga del suo carrello non si è potuta leggere' : 'la riga del suo carrello non c’è'}: ` +
+        'la consegna degli altri ordini dello stesso carrello NON è stata rifatta, e il sito non li unisce da solo. ' +
+        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e senza una riga di carrello: ${adesso}.${seLoStesso} ` +
+        'Se sono lo stesso carrello, sistema tu consegna, fattorino e totale e avvisa il cliente del conto nuovo; se no, non serve fare niente.',
+      '/admin/orders',
+      { unaVoltaPer: `carrello-senza-riga-${o.id}` },
+    );
+  } catch (err) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti senza riga: avviso agli amministratori non partito', { orderId: o.id, err });
+  }
 }
 
 /** Quello che `ricalcolaLaConsegnaDelGiro` consegna a chi annulla. */

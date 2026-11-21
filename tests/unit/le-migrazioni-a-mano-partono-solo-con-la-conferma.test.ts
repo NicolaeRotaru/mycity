@@ -504,7 +504,9 @@ describe('il conto vero sullo script vero', () => {
   // e da come rispetta il tetto. Qui girano tutti e due veri, con un `psql`
   // finto che fa la parte del registro: conosce tutte le versioni tranne quelle
   // in FINTE_MANCANTI, e annota ogni file che gli si chiede di applicare.
-  const migrazioni = () => spawnSync('sort', ['-V'], {
+  const migrazioni = () => spawnSync('sort', [], {
+    // Stesso ordine dello script: per byte (LC_ALL=C), cosi' 052_ viene prima di 052b_.
+    env: { ...process.env, LC_ALL: 'C' },
     input: readdirSync(join(process.cwd(), 'migrations')).filter((f) => /^\d{3}[a-z]?_.+\.sql$/.test(f)).join('\n'),
     encoding: 'utf8',
   }).stdout.trim().split('\n');

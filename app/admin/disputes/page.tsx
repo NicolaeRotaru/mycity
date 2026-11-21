@@ -235,7 +235,7 @@ export default function AdminDisputesPage() {
           <div className="mb-3 flex items-center gap-2">
             <ShieldAlert size={17} className="text-secondary-600" strokeWidth={2.2} aria-hidden />
             <h2 className="font-serif text-base font-bold text-ink-900">Segnali di rischio</h2>
-            <span className="rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-bold text-secondary-700">automatici</span>
+            <span className="rounded-full bg-secondary-50 px-2 py-0.5 text-xs font-bold text-secondary-700">automatici</span>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {riskSignals.map((r) => {
@@ -247,9 +247,9 @@ export default function AdminDisputesPage() {
                 >
                   <div className="mb-1.5 flex items-center gap-2">
                     <Icon size={15} className={r.high ? 'text-secondary-600' : 'text-accent-700'} strokeWidth={2.2} aria-hidden />
-                    <span className="text-[13px] font-bold text-ink-900">{r.title}</span>
+                    <span className="text-sm font-bold text-ink-900">{r.title}</span>
                   </div>
-                  <p className="text-[12.5px] leading-snug text-ink-600">{r.body}</p>
+                  <p className="text-xs leading-snug text-ink-600">{r.body}</p>
                 </div>
               );
             })}
@@ -393,10 +393,12 @@ export default function AdminDisputesPage() {
               className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
 
-            {pagamentiNonLetti && !pagamento && (
+            {pagamentiNonLetti && (
               <p role="alert" className="rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
-                Non riesco a leggere come ha pagato il cliente né quanto si può rimborsare. Il server controlla
-                comunque il tetto, ma riprova prima di decidere un rimborso.
+                {pagamento
+                  ? 'Non riesco a rileggere il pagamento: quello che vedi sotto («Rimborsabile al massimo» compreso) può essere vecchio. '
+                  : 'Non riesco a leggere come ha pagato il cliente né quanto si può rimborsare. '}
+                Il server controlla comunque il tetto, ma riprova prima di decidere un rimborso.
               </p>
             )}
             {pagamento && (
@@ -410,8 +412,9 @@ export default function AdminDisputesPage() {
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
+              <label htmlFor="reclamo-rimborso-eur" className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
               <input
+                id="reclamo-rimborso-eur"
                 type="number"
                 step="0.01"
                 value={refundEur}

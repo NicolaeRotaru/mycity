@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { chiaveDiOggi, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
@@ -26,7 +27,7 @@ type Store = {
   stripe_charges_enabled?: boolean | null;
   stripe_payouts_enabled?: boolean | null;
 };
-type Prod = { id: string; name: string; price: number | string; images: string[] | null };
+type Prod = { id: string; name: string; price: number | string; images: string[] | null; sconto?: number };
 type Reviews = { avg: number; count: number };
 
 /**
@@ -102,7 +103,12 @@ export default function HeroStoreCard() {
       if (error) throw error;
       const v = risposta as { store: Store; products: Prod[] | null; reviews: Reviews | null } | null;
       if (!v?.store) return null;
-      return { store: v.store, products: v.products ?? [], reviews: v.reviews };
+      // R02-010 — I prodotti in vetrina stampavano il prezzo pieno anche con una promozione attiva.
+      // Lo sconto si legge dalla stessa fonte della griglia e della cassa (fetchActiveDiscounts), come
+      // fanno «Completa con» e «Spesso comprati insieme»; se non si legge si resta sul prezzo pieno.
+      const prodotti = v.products ?? [];
+      const sconti = await fetchActiveDiscounts(supabase, prodotti.map((p) => p.id)).catch(() => new Map<string, number>());
+      return { store: v.store, products: prodotti.map((p) => ({ ...p, sconto: sconti.get(p.id) ?? 0 })), reviews: v.reviews };
     },
   });
 
@@ -223,13 +229,23 @@ export default function HeroStoreCard() {
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
                   {products.map((p) => {
                     const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
+                    const scontato = (p.sconto ?? 0) > 0;
                     return (
                       <div key={p.id} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
                         <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
                           {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" loader={caricatoreFotoRemote} className="object-cover" />}
                         </div>
                         <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
-                        <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>
+                        {scontato ? (
+                          <p className="flex flex-wrap items-baseline gap-x-1 text-xs font-semibold text-secondary-600">
+                            {formatPrice(discountedUnitCents(p.price, p.sconto ?? 0) / 100)}
+                            <s className="text-[10px] font-normal text-ink-500">
+                              <span className="sr-only">Prezzo pieno </span>{formatPrice(Number(p.price))}
+                            </s>
+                          </p>
+                        ) : (
+                          <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>
+                        )}
                       </div>
                     );
                   })}

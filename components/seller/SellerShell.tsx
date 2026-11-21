@@ -306,7 +306,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             <Link href="/seller/dashboard" className="font-serif text-2xl font-extrabold leading-none tracking-tight">
               <span className="text-accent-300">My</span>
               <span className="text-white">City</span>
-              <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-label text-ink-300">
+              <span className="ml-1.5 font-sans text-xs font-bold uppercase tracking-label text-ink-300">
                 Seller
               </span>
             </Link>
@@ -348,7 +348,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             {!collapsed && (
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-extrabold">Copilot</span>
-                <span className="block text-[11px] text-white/80">Gestisci parlando</span>
+                <span className="block text-xs text-white/80">Gestisci parlando</span>
               </span>
             )}
           </Link>
@@ -386,7 +386,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
                     {!collapsed && <span className="flex-1">{n.label}</span>}
                     {/* Badge esteso */}
                     {showBadge && !collapsed && (
-                      <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-500 px-1.5 text-[11px] font-bold text-ink-900">
+                      <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-500 px-1.5 text-xs font-bold text-ink-900">
                         {todo > 99 ? '99+' : todo}
                       </span>
                     )}
@@ -506,7 +506,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
               </span>
               <span className="hidden leading-tight md:block">
                 <span className="block max-w-[140px] truncate text-sm font-bold text-ink-900">{storeName}</span>
-                <span className="block text-[11px] text-ink-400">Venditore</span>
+                <span className="block text-xs text-ink-400">Venditore</span>
               </span>
             </Link>
           </div>
