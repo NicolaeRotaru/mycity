@@ -489,13 +489,20 @@ export async function avvisaIlClienteDellAnnullo(
       { unaVoltaPer: `email-annullo-${ordine.id}` },
     ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
   };
+  if (!dopoLaRisposta(lavoro)) await lavoro();
+}
+
+/**
+ * Il lavoro parte con `after()` di Next, dopo la risposta. Fuori da una richiesta `after()` lancia:
+ * torna false, e chi chiama aspetta l'invio, come prima.
+ */
+function dopoLaRisposta(lavoro: () => Promise<void>): boolean {
   try {
     after(lavoro);
-    return;
+    return true;
   } catch {
-    // Fuori da una richiesta `after()` lancia: si aspetta l'invio, come prima.
+    return false;
   }
-  await lavoro();
 }
 
 async function spedisciLEmailDellAnnullo(
@@ -584,21 +591,45 @@ async function spedisciLEmailDellAnnullo(
  * DOPO l'annullo riuscito, con la stessa frase della campanella. Non lancia mai: l'annullo è già
  * scritto, e una posta giù non deve farlo sembrare fallito. Ma non tace: se l'email non parte, lo
  * scrive nel registro degli errori.
+ *
+ * 21/11/2026 (R04-005) — Come l'email al cliente: dentro una richiesta parte dopo la risposta (il
+ * cliente che annulla, il fattorino, il giro degli scaduti con i suoi cento ordini non aspettano più
+ * fino a venti secondi per ordine), e un invio caduto non resta solo nel registro: gli amministratori
+ * lo ricevono nella campanella, una volta per ordine, per avvisare il negozio.
  */
 export async function avvisaIlNegozioDellAnnullo(
   admin: SupabaseClient,
   ordine: { id: string; seller_id?: string | null },
   frase: string,
-): Promise<boolean> {
+): Promise<void> {
+  const lavoro = async () => {
+    // Solo l'invio caduto: un indirizzo che non si legge resta nel registro, come per il cliente.
+    if ((await spedisciLEmailAlNegozio(admin, ordine, frase)) !== 'invio-fallito') return;
+    await notifyAdmins(
+      '⚠️ Email di annullo al negozio non partita',
+      `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è annullato, ma l'email che lo dice al negozio non è partita ` +
+        "(il motivo è nel registro). Il negozio ha l'avviso nella campanella: se sta già preparando l'ordine, avvisalo tu.",
+      '/admin/orders',
+      { unaVoltaPer: `email-annullo-negozio-${ordine.id}` },
+    ).catch((err) => logger.error('[annullo] avviso agli amministratori non partito', { orderId: ordine.id, err }));
+  };
+  if (!dopoLaRisposta(lavoro)) await lavoro();
+}
+
+async function spedisciLEmailAlNegozio(
+  admin: SupabaseClient,
+  ordine: { id: string; seller_id?: string | null },
+  frase: string,
+): Promise<'partita' | 'senza-indirizzo' | 'invio-fallito'> {
   try {
-    if (!ordine.seller_id) return false;
+    if (!ordine.seller_id) return 'senza-indirizzo';
     const { data, error } = await admin.auth.admin.getUserById(ordine.seller_id);
     const email = data?.user?.email;
     if (error || !email) {
       logger.error('[annullo] email di annullo al negozio non spedita: indirizzo non letto', {
         orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
       });
-      return false;
+      return 'senza-indirizzo';
     }
     const t = ordineAnnullatoAlNegozioTemplate({ orderId: ordine.id, frase });
     const res = await sendEmail({
@@ -614,14 +645,14 @@ export async function avvisaIlNegozioDellAnnullo(
         orderId: ordine.id,
         motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
       });
-      return false;
+      return 'invio-fallito';
     }
-    return true;
+    return 'partita';
   } catch (e) {
     logger.error('[annullo] email di annullo al negozio NON partita', {
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return 'invio-fallito';
   }
 }
 
