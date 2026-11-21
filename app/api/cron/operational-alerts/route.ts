@@ -52,6 +52,38 @@ type AlertRow = {
   unaVoltaAlGiorno?: boolean;
 };
 
+/**
+ * R01-005 — Il conto degli errori del server che scrive il logger (lib/logger.ts, `contaErroreDelSito`):
+ * stessa chiave, una per ora (UTC) e per ambiente, nello stesso Upstash del freno anti-abuso.
+ * Qui si leggono l'ora in corso e quella prima.
+ */
+type ErroriDelSito =
+  | { configurato: false }
+  | { configurato: true; letti: false }
+  | { configurato: true; letti: true; conteggio: number };
+
+async function erroriDelSitoRecenti(adesso: number): Promise<ErroriDelSito> {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  if (!url || !token) return { configurato: false };
+  const ambiente = process.env.VERCEL_ENV || process.env.NODE_ENV || 'sconosciuto';
+  const chiave = (ms: number) => `mc:errori-del-sito:${ambiente}:${new Date(ms).toISOString().slice(0, 13)}`;
+  try {
+    const res = await fetch(`${url}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([['GET', chiave(adesso - 60 * 60_000)], ['GET', chiave(adesso)]]),
+      cache: 'no-store',
+    });
+    if (!res.ok) return { configurato: true, letti: false };
+    const righe = (await res.json()) as Array<{ result?: unknown; error?: unknown }>;
+    if (!Array.isArray(righe) || righe.some((r) => r?.error)) return { configurato: true, letti: false };
+    return { configurato: true, letti: true, conteggio: righe.reduce((somma, r) => somma + (Number(r?.result) || 0), 0) };
+  } catch {
+    return { configurato: true, letti: false };
+  }
+}
+
 // Non re-notifichiamo la stessa (tipo+entità) entro questa finestra.
 const COOLDOWN_HOURS = 6;
 // R33-002 — L'attesa degli avvisi `unaVoltaAlGiorno` (il reclamo fermo): un giorno pieno.
@@ -689,6 +721,28 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
           : 'Il registratore degli errori (Sentry) è acceso solo sul server: gli errori nelle pagine dei clienti non arrivano. Metti su Vercel NEXT_PUBLIC_SENTRY_DSN (lo stesso valore di SENTRY_DSN) e rifai il deploy.',
         url: '/admin/today',
         unaVoltaAlGiorno: true,
+      });
+    }
+  }
+
+  /**
+   * 14) R01-005 (21/11/2026) — GLI ERRORI DEL SITO, COL REGISTRATORE SPENTO.
+   *
+   * Il registratore (Sentry) resta spento per scelta: senza la sua chiave un errore del sito finiva
+   * solo nei log di Vercel e non lo vedeva nessuno. Il logger conta ogni errore del server
+   * (lib/logger.ts, nello stesso Upstash del freno anti-abuso, nessuna chiave nuova) e qui
+   * il conto delle ultime due ore, se c'è, diventa un allarme in campanella e per email: un canale
+   * che non dipende dalla chiave che manca. Col registratore acceso ci pensa lui.
+   */
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN?.trim() && !process.env.SENTRY_DSN?.trim()) {
+    const errori = await erroriDelSitoRecenti(Date.now());
+    if (errori.configurato && !errori.letti) controlliSaltati.push('conto degli errori del sito');
+    if (errori.configurato && errori.letti && errori.conteggio > 0) {
+      alerts.push({
+        key: 'ERRORI_DEL_SITO',
+        type: 'ERRORI_DEL_SITO',
+        detail: `Nelle ultime due ore il sito ha registrato ${errori.conteggio} ${errori.conteggio === 1 ? 'errore' : 'errori'} sul server. Il registratore degli errori (Sentry) è spento: i dettagli li trovi nei log di Vercel (Logs, livello «error»). Runbook, «Registratore degli errori».`,
+        url: '/admin/today',
       });
     }
   }

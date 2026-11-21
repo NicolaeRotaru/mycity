@@ -70,11 +70,50 @@ function leggiSegniNotificheSpente(): Record<string, number> {
   }
 }
 
-function scriviSegniNotificheSpente(segni: Record<string, number>): void {
+/**
+ * 21/11/2026 (R01-017) — DI CHI SONO LE NOTIFICHE, ANCHE FRA UN CARICAMENTO E L'ALTRO.
+ *
+ * La sessione scade più spesso a telefono chiuso: riaperto il giorno dopo, Supabase prova a
+ * rinnovarla, non ci riesce e manda SIGNED_OUT PRIMA di dire di chi era la sessione. La barra
+ * spegneva l'iscrizione senza sapere di chi fosse, quindi senza segno, e al rientro nessuno
+ * diceva niente. Adesso, finché c'è una sessione e questo apparecchio riceve le notifiche, nella
+ * stessa voce si tiene anche di chi sono (lo stesso identificativo interno, con la stessa durata):
+ * a SIGNED_OUT si legge da lì, e dopo si toglie.
+ */
+const CHI_HA_LA_SESSIONE = '@sessione';
+
+function leggiChiHaLaSessione(): string | null {
   try {
-    if (Object.keys(segni).length === 0) window.localStorage.removeItem(SEGNO_NOTIFICHE_SPENTE);
-    else window.localStorage.setItem(SEGNO_NOTIFICHE_SPENTE, JSON.stringify(segni));
+    const letti = JSON.parse(window.localStorage.getItem(SEGNO_NOTIFICHE_SPENTE) ?? 'null') as Record<string, unknown> | null;
+    const chi = letti && typeof letti === 'object' ? (letti[CHI_HA_LA_SESSIONE] as { id?: unknown; scade?: unknown } | undefined) : undefined;
+    if (chi && typeof chi.id === 'string' && typeof chi.scade === 'number' && Date.now() <= chi.scade) return chi.id;
+  } catch { /* memoria chiusa: non si sa */ }
+  return null;
+}
+
+function scriviSegniNotificheSpente(segni: Record<string, number>, chi: string | null = leggiChiHaLaSessione()): void {
+  try {
+    const memoria: Record<string, unknown> = { ...segni };
+    if (chi) memoria[CHI_HA_LA_SESSIONE] = { id: chi, scade: Date.now() + SEGNO_VALE_MS };
+    if (Object.keys(memoria).length === 0) window.localStorage.removeItem(SEGNO_NOTIFICHE_SPENTE);
+    else window.localStorage.setItem(SEGNO_NOTIFICHE_SPENTE, JSON.stringify(memoria));
   } catch { /* memoria chiusa: niente avviso */ }
+}
+
+/** Questo apparecchio riceve le notifiche di `utenteId`: lo si ricorda (null: non lo si ricorda più). */
+function ricordaChiHaLaSessione(utenteId: string | null): void {
+  if (leggiChiHaLaSessione() === utenteId) return;
+  scriviSegniNotificheSpente(leggiSegniNotificheSpente(), utenteId);
+}
+
+async function questoApparecchioRiceveLeNotifiche(): Promise<boolean> {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+  try {
+    const gestore = await gestoreDiQuestoBrowser();
+    return !!(gestore && (await gestore.getSubscription()));
+  } catch {
+    return false;
+  }
 }
 
 /** Chi è uscito non si sa (nessuna sessione vista): nessun segno, perché non si saprebbe a chi dirlo. */
@@ -184,14 +223,21 @@ export default function Navbar() {
     const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
       const chiEntrato = sessione?.user?.id ?? null;
       if (evento === 'SIGNED_OUT') {
-        const chiEUscito = utenteDellaSessione;
+        // R01-017 — Al caricamento SIGNED_OUT arriva prima della sessione: chi era, lo dice la memoria.
+        const chiEUscito = utenteDellaSessione ?? leggiChiHaLaSessione();
         utenteDellaSessione = null;
+        ricordaChiHaLaSessione(null);
         void scollegaQuestoDispositivo().then((esito) => {
           if (esito.disiscritto) segnaNotificheSpente(chiEUscito);
         });
         return;
       }
-      if (chiEntrato) utenteDellaSessione = chiEntrato;
+      if (chiEntrato) {
+        utenteDellaSessione = chiEntrato;
+        void questoApparecchioRiceveLeNotifiche().then((riceve) => {
+          if (riceve && utenteDellaSessione === chiEntrato) ricordaChiHaLaSessione(chiEntrato);
+        });
+      }
       if ((evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') && chiEntrato) {
         void diciSeLeNotificheSonoSpente(chiEntrato, () => doveLeNotifiche.current, (href) => router.push(href));
       }
@@ -295,21 +341,24 @@ export default function Navbar() {
                       <CartButton count={cartCount} />
                     )}
                     {/* 17/11/2026 (R01-005) — Fra 768 e 1023 px il nome è sr-only e resta l'icona sola:
-                        il title lo dice anche a chi vede, come per «Registrati». */}
+                        il title lo dice anche a chi vede, come per «Registrati».
+                        21/11/2026 (R01-001) — Ma il title non si vede col dito né da tastiera, e sui tablet
+                        l'icona restava senza nome. Scelta del 19/11: sotto lg i tre tasti stanno nel menu
+                        dell'account, col loro nome (una scritta sotto l'icona toglierebbe spazio alla ricerca). */}
                     {isSeller && (
-                      <Link href="/seller/orders" title="Ordini" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/seller/orders" title="Ordini" className="ml-1 hidden lg:inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Package size={16} strokeWidth={2.2} aria-hidden />
                         <span className="sr-only lg:not-sr-only">Ordini</span>
                       </Link>
                     )}
                     {isRider && (
-                      <Link href="/rider" title="Consegne" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/rider" title="Consegne" className="ml-1 hidden lg:inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Bike size={16} strokeWidth={2.2} aria-hidden />
                         <span className="sr-only lg:not-sr-only">Consegne</span>
                       </Link>
                     )}
                     {isAdmin && (
-                      <Link href="/admin" title="Admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/admin" title="Admin" className="ml-1 hidden lg:inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Shield size={16} strokeWidth={2.2} aria-hidden />
                         <span className="sr-only lg:not-sr-only">Admin</span>
                       </Link>
@@ -345,7 +394,7 @@ export default function Navbar() {
                   <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                   <span className="sr-only">Carrello{cartCount > 0 ? `, ${cartCount} ${cartCount === 1 ? 'articolo' : 'articoli'}` : ''}</span>
                   {cartCount > 0 && (
-                    <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                    <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                       {cartCount > 99 ? '99+' : cartCount}
                     </span>
                   )}
@@ -357,7 +406,7 @@ export default function Navbar() {
                     <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white hover:text-white focus-visible:outline-white">
                       <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                       <span className="sr-only">Carrello, {cartCount} {cartCount === 1 ? 'articolo' : 'articoli'}</span>
-                      <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                      <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     </Link>
@@ -419,7 +468,7 @@ export const IconButton = ({ href, label, badge, unita = 'non letti', children }
     <span className="sr-only">{label}</span>
     {badge && badge > 0 ? (
       <>
-        <span aria-hidden className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        <span aria-hidden className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
           {badge > 99 ? '99+' : badge}
         </span>
         <span className="sr-only">, {badge} {unita}</span>
@@ -442,7 +491,7 @@ const CartButton = ({ count }: { count: number }) => (
     <span className="sr-only lg:hidden">Carrello</span>
     {count > 0 && (
       <>
-        <span aria-hidden className="bg-ink-900 text-accent-400 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        <span aria-hidden className="bg-ink-900 text-accent-400 text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
           {count > 99 ? '99+' : count}
         </span>
         <span className="sr-only">, {count} {count === 1 ? 'articolo' : 'articoli'}</span>
@@ -534,7 +583,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
           </span>
         )}
         <span className="hidden xl:flex flex-col leading-tight text-left">
-          <span className="text-[10px] uppercase tracking-label opacity-70">
+          <span className="text-2xs uppercase tracking-label opacity-70">
             {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
           </span>
           <span className="font-semibold text-sm truncate max-w-[120px]">{displayName}</span>
@@ -570,6 +619,10 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
             {getAccountMenuItems(role).map((it) => (
               <MenuLink key={it.href} href={it.href} icon={it.icon} label={it.label} />
             ))}
+            {/* R01-001 — Sotto lg i tasti Ordini, Consegne e Admin della testata stanno qui: il menu del
+                ruolo principale li ha già; a chi ha anche un altro mestiere si aggiunge il suo. */}
+            {role === 'admin' && isSeller && <MenuLink href="/seller/orders" icon={Package} label="Ordini ricevuti" />}
+            {(role === 'admin' || role === 'seller') && isRider && <MenuLink href="/rider" icon={Bike} label="Consegne" />}
             <li aria-hidden><div className="border-t border-ink-100 my-1" /></li>
             <li>
               <button

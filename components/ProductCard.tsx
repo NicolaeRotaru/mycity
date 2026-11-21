@@ -8,6 +8,7 @@ import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents } from '@/lib/promotions';
 import { sizedImage } from '@/lib/image-url';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { promessaSpedizione } from '@/lib/promesse-pubbliche';
@@ -53,7 +54,10 @@ const ProductCard = ({
   stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, hasVariants, priority,
 }: ProductCardProps) => {
   const hasDiscount = !!discountPercent && discountPercent > 0;
-  const discountedPrice = hasDiscount ? price * (1 - (discountPercent as number) / 100) : price;
+  // R01-011 — Lo scontato si calcola con la funzione di carrello e cassa (`discountedUnitCents`:
+  // al centesimo, sconto fra 0 e 70). La formula a mano non arrotondava: 1,15 € al -10% la scheda
+  // scriveva 1,04 € e la cassa faceva pagare 1,03 €, e al carrello arrivava 1,035.
+  const discountedPrice = hasDiscount ? discountedUnitCents(price, discountPercent as number) / 100 : price;
   // Prezzo pieno barrato del venditore (solo se non c'è già una promo attiva).
   const compareValid = !hasDiscount && !!compareAtPrice && compareAtPrice > price;
   const showStrike = hasDiscount || compareValid;

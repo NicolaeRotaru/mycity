@@ -256,10 +256,10 @@ export default function SellerStoriesPage() {
                     sizes="200px"
                     className={`object-cover ${active ? '' : 'grayscale opacity-60'}`}
                   />
-                  <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
+                  <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-black/60 text-white text-2xs px-2 py-0.5 rounded-full">
                     <Clock size={10} strokeWidth={2.4} /> {active ? `${hours}h` : 'scaduta'}
                   </div>
-                  <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">
+                  <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-black/60 text-white text-2xs px-2 py-0.5 rounded-full">
                     <Eye size={10} strokeWidth={2.4} /> {s.view_count}
                   </div>
                 </div>

@@ -90,19 +90,19 @@ describe('R07-005 · il termine del recesso a giorni di calendario', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('consegna il 1/3 alle 10:00: il 15/3 alle 18:00 il reso si chiede ancora', async () => {
-    const r = await chiedi('2026-03-15T17:00:00Z', '2026-03-01T09:00:00Z');
+  it('consegna il 3/3 alle 10:00: il 17/3 alle 18:00 il reso si chiede ancora', async () => {
+    const r = await chiedi('2026-03-17T17:00:00Z', '2026-03-03T09:00:00Z');
     expect(r.scaduto).toBe(false);
     expect(r.status).toBe(201);
   });
 
-  it('il 15/3 alle 23:30 di Piacenza è ancora l ultimo giorno', async () => {
-    const r = await chiedi('2026-03-15T22:30:00Z', '2026-03-01T09:00:00Z');
+  it('il 17/3 alle 23:30 di Piacenza è ancora l ultimo giorno', async () => {
+    const r = await chiedi('2026-03-17T22:30:00Z', '2026-03-03T09:00:00Z');
     expect(r.scaduto).toBe(false);
   });
 
-  it('il 16/3 alle 00:30 di Piacenza il termine è scaduto', async () => {
-    const r = await chiedi('2026-03-15T23:30:00Z', '2026-03-01T09:00:00Z');
+  it('il 18/3 alle 00:30 di Piacenza il termine è scaduto', async () => {
+    const r = await chiedi('2026-03-17T23:30:00Z', '2026-03-03T09:00:00Z');
     expect(r.scaduto).toBe(true);
   });
 
@@ -114,7 +114,7 @@ describe('R07-005 · il termine del recesso a giorni di calendario', () => {
   });
 
   it('senza data di consegna si conta dalla data dell ordine', async () => {
-    expect((await chiedi('2026-02-15T20:00:00Z', null, '2026-02-01T10:00:00Z')).scaduto).toBe(false);
-    expect((await chiedi('2026-02-16T08:00:00Z', null, '2026-02-01T10:00:00Z')).scaduto).toBe(true);
+    expect((await chiedi('2026-02-17T20:00:00Z', null, '2026-02-03T10:00:00Z')).scaduto).toBe(false);
+    expect((await chiedi('2026-02-18T08:00:00Z', null, '2026-02-03T10:00:00Z')).scaduto).toBe(true);
   });
 });

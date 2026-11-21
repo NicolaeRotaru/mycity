@@ -127,7 +127,7 @@ export default function RiderEarningsPage() {
       {/* Big number */}
       <div className="px-4 pb-4">
         <div className="rounded-2xl border border-accent-200 bg-gradient-to-br from-accent-100 to-cream-200 p-[22px]">
-          <p className="text-[11px] font-extrabold uppercase tracking-label text-accent-800">Hai guadagnato</p>
+          <p className="text-xs font-extrabold uppercase tracking-label text-accent-800">Hai guadagnato</p>
           <p className="mt-1 font-serif text-5xl font-extrabold leading-none text-ink-900">{formatPrice(totalEarned)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <div className="rounded-md bg-white/60 px-3 py-2.5">
@@ -192,10 +192,10 @@ export default function RiderEarningsPage() {
                 (consegne pagate con carta, o col credito MyCity sopra i contanti) · <strong>{formatPrice(inContanti)}</strong> tenuti in contanti alla consegna.
               </p>
               {/* 12/11/2026 (R09-020) — «In arrivo» non diceva quando, né che senza IBAN collegato non arriva niente. */}
-              <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
+              <p className="mt-1 text-xs leading-relaxed text-olive-700">
                 I compensi in arrivo passano sul tuo conto di pagamento {fraseAttesaBonifico()}; da lì alla tua banca servono alcuni giorni lavorativi, col calendario dei versamenti di Stripe. Arrivano solo se hai collegato il tuo IBAN qui sotto: finché non è collegato restano in attesa.
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
+              <p className="mt-1 text-xs leading-relaxed text-olive-700">
                 Sulle consegne in contanti il compenso te lo tieni tu dall&apos;incasso: rimetti in
                 cassa il totale dell&apos;ordine meno il tuo compenso.
               </p>
@@ -227,7 +227,7 @@ export default function RiderEarningsPage() {
                       ? `${o.delivery_address}${o.delivery_city ? `, ${o.delivery_city}` : ''}`
                       : `Consegna${o.delivery_city ? ` a ${o.delivery_city}` : ''}`}
                   </p>
-                  <p className="text-[11px] text-ink-400">
+                  <p className="text-xs text-ink-400">
                     {o.delivered_at ? new Date(o.delivered_at).toLocaleDateString('it-IT') : '—'} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
                   </p>
                 </div>
