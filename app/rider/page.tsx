@@ -221,8 +221,17 @@ export default function RiderDashboardPage() {
     staleTime: 30_000,
   });
   const pref = letturaPref.data;
-  const statoOnlineIgnoto = !pref && letturaPref.isError;
-  const online = pref?.online ?? false;
+  /**
+   * R04-011 — Una lettura senza dato è CADUTA anche prima che `isError` si accenda: durante
+   * l'attesa del nuovo tentativo (il QueryProvider rifà una volta, dopo un secondo) e quando senza
+   * rete la lettura resta in pausa. In quei momenti la scheda scriveva «Sei offline».
+   */
+  const letturaCaduta = (q: { isError: boolean; failureCount: number; fetchStatus: string }) =>
+    q.isError || q.failureCount > 0 || q.fetchStatus === 'paused';
+  // R04-011 — Tre valori, non due: senza un dato letto lo stato non è «offline», è «non so».
+  const statoOnline: 'online' | 'offline' | 'non-so' = pref ? (pref.online ? 'online' : 'offline') : 'non-so';
+  const statoOnlineIgnoto = statoOnline === 'non-so' && letturaCaduta(letturaPref);
+  const online = statoOnline === 'online';
   const zones = pref?.zones ?? [];
 
   // Rating del rider (media + conteggio) per il badge in testata.
@@ -241,7 +250,8 @@ export default function RiderDashboardPage() {
     staleTime: 60_000,
   });
   const rating = letturaVoto.data;
-  const votoIgnoto = !rating && letturaVoto.isError;
+  // R04-011 — Anche il voto: il nuovo tentativo dopo un errore non è «nessuna recensione».
+  const votoIgnoto = !rating && letturaCaduta(letturaVoto);
 
   /**
    * 15/10/2026 (R33) — I CONTANTI ANCORA DA DICHIARARE.
@@ -484,6 +494,13 @@ export default function RiderDashboardPage() {
               Riprova
             </Button>
           </div>
+        ) : statoOnline === 'non-so' ? (
+          // R04-011 — La prima lettura sta ancora arrivando: non si dice «Sei offline» e non si
+          // offre l'interruttore finché lo stato non si sa.
+          <div aria-live="polite" className="rounded-2xl border border-cream-300 bg-surface-0 px-5 py-[18px] text-ink-900">
+            <p className="font-serif text-[18px] font-extrabold">Controllo se sei online…</p>
+            <p className="mt-0.5 text-xs text-ink-500">Un momento: sto leggendo il tuo stato.</p>
+          </div>
         ) : (
         <div
           className={`flex items-center justify-between rounded-2xl px-5 py-[18px] ${
@@ -718,7 +735,7 @@ export default function RiderDashboardPage() {
             </div>
           )}
         </div>
-      ) : statoOnlineIgnoto ? null : (
+      ) : statoOnline !== 'offline' ? null : (
         <div className="px-4">
           <div className="rounded-xl border border-cream-300 bg-surface-0 px-5 py-8 text-center">
             <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-olive-50">
