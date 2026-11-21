@@ -24,7 +24,32 @@ import { logger } from '@/lib/logger';
  * un lavoro periodico avviato a mano, una prova) lancia. Qui si ripiega sul
  * comportamento di prima — che fuori da un server serverless funziona — invece
  * di far fallire un ordine già pagato.
+ *
+ * R05-003 — IN FILA, NON TUTTE INSIEME. Dopo la risposta Next fa partire insieme tutti i lavori
+ * registrati con `after()`, senza tetto. Con tante email nello stesso giro (gli ordini scaduti:
+ * negozio, cliente, rimborso per ogni ordine) il limite d'invio della posta ne respingeva alcune, e
+ * il ritentativo unico del client della posta, dopo 300 ms, ripartiva per tutte nello stesso istante.
+ * Ora ogni lavoro aspetta che il precedente sia finito (`nellaFila`). Un lavoro appeso non ferma la
+ * fila per sempre: dopo `TETTO_DEL_TURNO_MS` parte il successivo, e l'appeso continua per conto suo.
  */
+const TETTO_DEL_TURNO_MS = 10_000;
+let ultimoTurno: Promise<void> = Promise.resolve();
+
+/**
+ * Mette il lavoro in fila: parte quando il precedente è finito (o dopo il tetto del turno).
+ * Esportata per chi registra da sé il suo `after()` (lib/ordini/annulla.ts): `after(() => nellaFila(lavoro))`.
+ */
+export function nellaFila(lavoro: () => Promise<void>): Promise<void> {
+  const turno = ultimoTurno.then(lavoro);
+  let sveglia: ReturnType<typeof setTimeout> | undefined;
+  const tetto = new Promise<void>((libera) => {
+    sveglia = setTimeout(libera, TETTO_DEL_TURNO_MS);
+    (sveglia as { unref?: () => void }).unref?.();
+  });
+  ultimoTurno = Promise.race([turno.then(() => undefined, () => undefined), tetto]).then(() => clearTimeout(sveglia));
+  return turno;
+}
+
 export function dopoLaRisposta(lavoro: () => Promise<void>, cosa: string): void {
   const conRete = () =>
     lavoro().catch((e) =>
@@ -34,7 +59,7 @@ export function dopoLaRisposta(lavoro: () => Promise<void>, cosa: string): void 
     );
 
   try {
-    after(conRete);
+    after(() => nellaFila(conRete));
   } catch {
     // Nessun contesto di richiesta: si fa partire lo stesso, senza attendere.
     void conRete();
