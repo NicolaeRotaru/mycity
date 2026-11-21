@@ -62,8 +62,33 @@ import {
   totalVariantStock,
   reconcileVariants,
   deriveOptionGroups,
+  contaCombinazioni,
+  MAX_VARIANTS,
+  MAX_OPTION_TYPES,
+  MAX_OPTION_VALUES,
+  type VariantOptionType,
 } from '@/lib/products/variants';
 import { leggiPrezzo } from '@/app/seller/products/import/csv';
+
+/**
+ * R02-021 — Perché questi assi non entrano nei tetti di lib/products/variants.ts, o `null` se entrano.
+ * `reconcileVariants` (via buildCombinations) taglia in silenzio quello che sta sopra: assi oltre
+ * MAX_OPTION_TYPES, valori oltre MAX_OPTION_VALUES (contati come li conta lui: puliti e senza doppioni),
+ * combinazioni oltre MAX_VARIANTS. `etichetta` dà il nome del campo da mostrare.
+ */
+function assiOltreITetti(types: VariantOptionType[], etichetta: (chiave: string) => string): string | null {
+  const assi = types
+    .map((t) => ({ name: t.name, quanti: new Set(t.values.map((v) => v.trim().toLowerCase()).filter(Boolean)).size }))
+    .filter((t) => t.name.trim() && t.quanti > 0);
+  if (assi.length > MAX_OPTION_TYPES) {
+    return `Al massimo ${MAX_OPTION_TYPES} caratteristiche possono cambiare da una variante all'altra.`;
+  }
+  const lungo = assi.find((t) => t.quanti > MAX_OPTION_VALUES);
+  if (lungo) return `${etichetta(lungo.name)}: ${lungo.quanti} valori, il massimo è ${MAX_OPTION_VALUES}. Togli qualche valore.`;
+  const quante = contaCombinazioni(types);
+  if (quante > MAX_VARIANTS) return `${quante} combinazioni, il massimo è ${MAX_VARIANTS}. Togli qualche valore.`;
+  return null;
+}
 
 /** R03-022 — Anteprima e salvataggio leggono il prezzo come lo schema: all'italiana. */
 function prezzoDelCampo(v: unknown): number {
@@ -352,14 +377,26 @@ export default function ProductForm({
 
   // ---- Varianti (assi inline dentro le caratteristiche) ---------------------
   // Rigenera le combinazioni dagli assi, preservando lo stock già inserito.
-  const applyAxes = (next: Record<string, string[]>) => {
-    setVariantAxes(next);
+  // R02-021 — Sopra i tetti (100 combinazioni, 30 valori per asse) reconcileVariants ne teneva una
+  // parte in silenzio: il capo si salvava senza le ultime combinazioni, e il cliente che le sceglieva
+  // non poteva comprarle. Adesso gli assi oltre un tetto non si applicano e il modulo dice perché.
+  const tipiDegliAssi = (next: Record<string, string[]>): VariantOptionType[] => {
     const order = attrFields.map((f) => f.key);
-    const types = Object.entries(next)
+    return Object.entries(next)
       .filter(([, vals]) => vals.length > 0)
       .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
       .map(([name, values]) => ({ name, values }));
+  };
+  const applyAxes = (next: Record<string, string[]>): boolean => {
+    const types = tipiDegliAssi(next);
+    const oltre = assiOltreITetti(types, (k) => attrFields.find((f) => f.key === k)?.label ?? k);
+    if (oltre) {
+      toast.error(oltre, { id: 'varianti-oltre-il-tetto' });
+      return false;
+    }
+    setVariantAxes(next);
     setVariants((cur) => reconcileVariants(types, cur));
+    return true;
   };
   const toggleVariantAxis = (key: string, on: boolean) => {
     const next = { ...variantAxes };
@@ -372,6 +409,24 @@ export default function ProductForm({
     applyAxes(next);
   };
   const setAxisValues = (key: string, values: string[]) => applyAxes({ ...variantAxes, [key]: values });
+  // R02-020 — Cambiando categoria gli assi della vecchia restavano: un capo passato da Abbigliamento a
+  // Casa teneva la «Taglia» fra le varianti, che il modulo non mostra più (il campo non c'è) e che
+  // nessuno poteva togliere, e le combinazioni si moltiplicavano per un asse invisibile. Al cambio di
+  // categoria restano solo gli assi che la categoria nuova fa variare. Si aggiusta lo stato durante il
+  // disegno (niente effetto): la categoria che gli assi conoscono si ricorda, e si guarda solo quando
+  // la categoria cambia davvero e le categorie sono lette.
+  const [categoriaDegliAssi, setCategoriaDegliAssi] = useState(currentCategoryId);
+  if (categoriaDegliAssi !== currentCategoryId) {
+    setCategoriaDegliAssi(currentCategoryId);
+    if (currentCategoryId && categories.length > 0) {
+      const ammessi = new Set(attrFields.filter((f) => f.variantable).map((f) => f.key));
+      if (Object.keys(variantAxes).some((k) => !ammessi.has(k))) {
+        const tenuti = Object.fromEntries(Object.entries(variantAxes).filter(([k]) => ammessi.has(k)));
+        setVariantAxes(tenuti);
+        setVariants((cur) => reconcileVariants(tipiDegliAssi(tenuti), cur));
+      }
+    }
+  }
   const setVariantStock = (idx: number, stock: number) =>
     setVariants((prev) =>
       prev.map((v, i) => (i === idx ? { ...v, stock: Math.max(0, Math.trunc(stock || 0)) } : v)),
@@ -712,8 +767,9 @@ export default function ProductForm({
       if (Array.isArray(json.axes) && json.axes.length > 0) {
         const next = { ...variantAxes };
         for (const a of json.axes as { key: string; values: string[] }[]) next[a.key] = a.values;
-        applyAxes(next);
-        toast.success(`Proposte ${json.axes.length} varianti — controlla le combinazioni e lo stock`, { id: tid });
+        // R02-021 — Oltre i tetti applyAxes non applica e dice già perché: niente «Proposte».
+        if (applyAxes(next)) toast.success(`Proposte ${json.axes.length} varianti — controlla le combinazioni e lo stock`, { id: tid });
+        else toast.dismiss(tid);
       } else {
         // 17/11/2026 — `toast.info` e non `toast(msg, { id })`: il caricamento deve diventare un
         // avviso che scade e si chiude con la X (sopra, il codice EAN).
@@ -1195,7 +1251,8 @@ export default function ProductForm({
           {variants.length > 0 && (
             <div className="rounded-lg border border-cream-300 overflow-hidden">
               <div className="flex items-center justify-between bg-cream-50 px-3 py-2 text-xs font-semibold text-ink-600">
-                <span>Variante</span>
+                {/* R02-021 — Il conto delle combinazioni, col tetto, prima di salvare. */}
+                <span>Variante · {variants.length} di {MAX_VARIANTS} combinazioni</span>
                 <span>Disponibilità</span>
               </div>
               <div className="divide-y divide-cream-200">

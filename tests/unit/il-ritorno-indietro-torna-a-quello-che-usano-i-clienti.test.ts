@@ -80,10 +80,14 @@ describe('il ritorno indietro torna al rilascio che usano i clienti', () => {
     }
   });
 
-  it('Y sul dominio e un solo altro commit nell elenco: si torna a quello, perche non c e altro dove i clienti potessero essere', () => {
+  // 21/11/2026 (R02-005, scelta di Nicola) — prima qui si tornava all'unico altro
+  // commit dell'elenco. Ma l'elenco sono gli ultimi 20 rilasci: quell'unico commit
+  // puo' essere un rilascio gia' tolto perche' rotto, e quello dei clienti stare
+  // piu' indietro. Con Y sul dominio non si tira a indovinare.
+  it('Y sul dominio e un solo altro commit nell elenco: nessun indirizzo, il ritorno si fa a mano', () => {
     expect(
       rilascioDaTornare({ deployments: [RILASCIO_Y, RILASCIO_W, RILASCIO_W] }, { commitCheEsce: Y, sulDominio: sulDominio(RILASCIO_Y) }),
-    ).toBe('https://mycity-w-dei-clienti.vercel.app');
+    ).toBeNull();
   });
 
   it('Y sul dominio e nessun altro commit: nessun indirizzo', () => {
