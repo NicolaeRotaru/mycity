@@ -43,6 +43,7 @@ Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In b
 - Usa "status" tra: available, draft, sold.
 - Se la STESSA operazione vale per molti prodotti (più di 20: una percentuale di prezzo, aggiungere o togliere un tag, cambiare lo stato), NON scrivere una voce per prodotto: usa "regola" con l'elenco degli id ("product_ids") e l'operazione ("prezzo_percentuale", per esempio -10; "aggiungi_tag"/"togli_tag"; "status"). Il server calcola i nuovi valori dai dati veri. Usa "changes" solo per le modifiche diverse da prodotto a prodotto.
 - Se l'operazione vale per TUTTI i prodotti dell'elenco, nella "regola" metti "tutti": true e NON scrivere gli id: li mette il server.
+- Se l'operazione vale per tutti i prodotti con un certo stato o di una certa categoria (es. "tutti i disponibili", "tutta l'elettronica"), NON scrivere gli id: nella "regola" metti "filtro" ({"stato": …, "categoria": …}, anche uno solo dei due) e li sceglie il server fra i prodotti dell'elenco.
 - In "changes" al massimo 40 voci: se ne servirebbero di più, prepara le prime 40 e dillo nel riepilogo.
 - Se l'istruzione è ambigua o pericolosa (es. "cancella tutto"), NON proporre modifiche: spiega e chiedi conferma in "reply".
 - Non inventare prodotti non in elenco. Niente emoji.
@@ -76,6 +77,14 @@ const TOOL: Anthropic.Tool = {
         description: 'La stessa operazione su molti prodotti: gli id e cosa fare. Il server calcola i valori.',
         properties: {
           tutti: { type: 'boolean', description: 'true se l\'operazione vale per TUTTI i prodotti dell\'elenco: allora gli id non servono.' },
+          filtro: {
+            type: 'object',
+            description: 'Un criterio che il server risolve al posto tuo: tutti i prodotti con questo stato e/o di questa categoria (nome o slug, sottocategorie comprese). Gli id non servono.',
+            properties: {
+              stato: { type: 'string', enum: ['available', 'draft', 'sold'] },
+              categoria: { type: 'string' },
+            },
+          },
           product_ids: { type: 'array', items: { type: 'string' }, description: 'ID presi dall\'elenco del catalogo (non servono con "tutti").' },
           prezzo_percentuale: { type: 'number', description: 'Variazione del prezzo in percento, es. -10 per abbassare del 10%.' },
           aggiungi_tag: { type: 'array', items: { type: 'string' } },
@@ -90,10 +99,48 @@ const TOOL: Anthropic.Tool = {
 
 // R04-008 — `history` non c'e' piu': la rotta lo ignora (vedi sotto).
 type Body = { instruction?: string };
-type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[]; regola?: RegolaCopilot & { tutti?: unknown } };
+type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[]; regola?: RegolaCopilot & { tutti?: unknown; filtro?: unknown } };
 
 const MAX_CATALOG = 200;
 const MAX_CHANGES = 200;
+/** Le voci singole che il modello puo' scrivere: lo dice il prompt, qui lo fa rispettare il server. */
+const MAX_VOCI_SINGOLE = 40;
+const STATI_FILTRO = new Set(['available', 'draft', 'sold']);
+
+/**
+ * R02-006 — Gli id di un criterio («tutti i disponibili», «tutta l'elettronica») li sceglie il
+ * server fra i prodotti che il modello ha visto, invece di farli scrivere uno per uno al modello
+ * (150 id su 200 non entrano nel tetto di risposta). Una categoria che non esiste non allarga
+ * mai il criterio: non sceglie niente. Un criterio senza stato ne' categoria validi non e' un
+ * criterio: nessun id.
+ */
+function idDelFiltro(filtro: unknown, products: ProductRow[], categories: CategoryRow[]): string[] {
+  if (!filtro || typeof filtro !== 'object') return [];
+  const { stato, categoria } = filtro as { stato?: unknown; categoria?: unknown };
+  const conStato = typeof stato === 'string' && STATI_FILTRO.has(stato) ? stato : null;
+  const nomeCat = typeof categoria === 'string' ? categoria.trim().toLowerCase() : '';
+  if (!conStato && !nomeCat) return [];
+  let categorieOk: Set<string> | null = null;
+  if (nomeCat) {
+    categorieOk = new Set(
+      categories.filter((c) => c.slug?.toLowerCase() === nomeCat || c.name?.toLowerCase() === nomeCat).map((c) => c.id),
+    );
+    // Le sottocategorie seguono la madre.
+    let cresciuto = true;
+    while (cresciuto) {
+      cresciuto = false;
+      for (const c of categories) {
+        if (c.parent_id && categorieOk.has(c.parent_id) && !categorieOk.has(c.id)) {
+          categorieOk.add(c.id);
+          cresciuto = true;
+        }
+      }
+    }
+  }
+  return products
+    .filter((p) => (!conStato || p.status === conStato) && (!categorieOk || (!!p.category_id && categorieOk.has(p.category_id))))
+    .map((p) => p.id);
+}
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
@@ -255,7 +302,8 @@ ${list}`;
     const singole = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
       .filter((c): c is { product_id: string; patch: AiProductPatch } =>
         !!c && typeof c.product_id === 'string' && owned.has(c.product_id) &&
-        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0);
+        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0)
+      .slice(0, MAX_VOCI_SINGOLE);
     // R04-007 — La regola si espande qui, sui dati veri; una voce singola sullo
     // stesso prodotto si aggiunge sopra (vince lei sui campi che tocca).
     // R03-005 — Anche la regola, con duecento id da 20-25 token l'uno, non entrava nel tetto di
@@ -264,7 +312,9 @@ ${list}`;
     // presi dall'elenco che il modello ha visto.
     const regola = toolInput?.regola && typeof toolInput.regola === 'object' && toolInput.regola.tutti === true
       ? { ...toolInput.regola, product_ids: products.map((p) => p.id) }
-      : toolInput?.regola;
+      : toolInput?.regola && typeof toolInput.regola === 'object' && toolInput.regola.filtro
+        ? { ...toolInput.regola, product_ids: idDelFiltro(toolInput.regola.filtro, products, categories) }
+        : toolInput?.regola;
     const daRegola = espandiRegolaCopilot(regola, products, MAX_CHANGES);
     const unite = new Map<string, AiProductPatch>();
     for (const c of [...daRegola, ...singole]) unite.set(c.product_id, { ...(unite.get(c.product_id) ?? {}), ...c.patch });
