@@ -189,7 +189,7 @@ function SearchInner() {
 
   // Mobile bottom-sheet: scroll-lock + Esc, PIÙ focus-trap nel pannello e
   // ritorno del focus al bottone trigger alla chiusura (WCAG 2.1.2 / 2.4.3).
-  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
+  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false), { indietroChiude: true });
   useBottomSheetA11y(sortOpen, sortSheetRef, sortTriggerRef, () => setSortOpen(false));
 
   const activeFilters = [

@@ -188,7 +188,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   // scritto li' dentro e nessuno l'aveva estratto.
   const sheetRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
+  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false), { indietroChiude: true });
 
   const reset = () => {
     setMaxPrice(500);
