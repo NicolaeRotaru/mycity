@@ -12,6 +12,7 @@ import {
 import { logger } from '@/lib/logger';
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import {
+  chiaveAvviso,
   verdettoDelGiro,
   type TentativoCancellazione,
   type VerdettoGiro,
@@ -207,6 +208,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // carico: si rimanda alla notte dopo e si segnala agli amministratori.
   const rinviatePerOrdiniAperti = await segnalaLeCancellazioniRinviate(admin, new Set(userIds));
   if (userIds.length === 0) {
+    // R03-006 — Anche la notte senza nessuno in lista: chi ne è appena uscito ha ancora il suo «scrivile tu».
+    await chiudiGliAllarmiDiChiNonAspettaPiu(admin);
     // Le notti senza cancellazioni da fare sono la maggioranza: se il conto
     // delle potature non riuscite non pesa QUI, non pesa quasi mai.
     return NextResponse.json(
@@ -332,6 +335,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // mese la stessa persona ne ha due, e prima i due allarmi erano identici.
   // R01-002 — Questi allarmi li scrive `rispondiEntroIlTetto`, uno appena l'email risulta ferma.
   await chiudiGliAllarmiDelleEmailPartite(admin, avvisi.emailPartiteAvvisi);
+  await chiudiGliAllarmiDiChiNonAspettaPiu(admin);
 
   return NextResponse.json(
     {
@@ -711,7 +715,7 @@ async function avvisaUnaVoltaPerAvviso(
         id,
         user_id: a.id,
         category: 'system',
-        title: "Spiegazione dell'attesa non partita per email",
+        title: TITOLO_EMAIL_FERMA,
         body:
           "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. " +
           "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
@@ -761,6 +765,73 @@ async function chiudiGliAllarmiDelleEmailPartite(admin: Admin, partite: string[]
       errore: e instanceof Error ? e.message : 'errore',
     });
   }
+}
+
+/** Il titolo dell'allarme «scrivile tu»: lo scrive `avvisaUnaVoltaPerAvviso`, lo cerca la chiusura qui sotto. */
+const TITOLO_EMAIL_FERMA = "Spiegazione dell'attesa non partita per email";
+const ALLARMI_PER_PAGINA = 200;
+
+/**
+ * 21/11/2026 (R03-006, R03-007) — «SCRIVILE TU» SI CHIUDE ANCHE QUANDO LA PERSONA NON ASPETTA PIÙ.
+ *
+ * L'allarme si chiudeva solo la notte in cui l'email partiva, e solo per gli avvisi di quella notte.
+ * Chi esce dall'elenco (cancellato, richiesta annullata, richiesta rifatta con un'altra data) non ha
+ * più un avviso, quindi il suo allarme restava aperto per sempre col suo id. Ogni notte, anche quella
+ * senza nessuno in lista, si leggono gli allarmi APERTI di ogni amministratore (solo quelli, in
+ * ordine di id, a pagine fino in fondo: nessuno resta fuori oltre i primi duecento) e si chiude chi
+ * non aspetta più: profilo sparito o senza richiesta, o un allarme che non è di nessuna spiegazione
+ * della richiesta di oggi. Chi aspetta ancora lo tiene, anche se stanotte non è stato guardato (tetto
+ * di tempo, ordini aperti). Una lettura che non riesce lascia aperto; non lancia mai.
+ */
+async function chiudiGliAllarmiDiChiNonAspettaPiu(admin: Admin): Promise<void> {
+  try {
+    const { data: amministratori, error } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (error) throw new Error(error.message);
+    // Chi aspetta → la sua richiesta: una data, null se non aspetta più, undefined se non si è letta.
+    const richieste = new Map<string, string | null | undefined>();
+    for (const { id: amministratore } of (amministratori ?? []) as { id: string }[]) {
+      let dopo: string | null = null;
+      for (;;) {
+        let q = admin.from('notifications').select('id, body')
+          .eq('user_id', amministratore).eq('title', TITOLO_EMAIL_FERMA).eq('is_read', false);
+        if (dopo) q = q.gt('id', dopo);
+        const { data, error: errLettura } = await q.order('id').limit(ALLARMI_PER_PAGINA);
+        if (errLettura) throw new Error(errLettura.message);
+        const righe = (Array.isArray(data) ? data : []) as Array<{ id: string; body: string | null }>;
+        for (const r of righe) {
+          const chi = /Chi aspetta: l'utente ([^\s.]+)\./.exec(String(r.body ?? ''))?.[1];
+          if (!chi) continue;
+          if (!richieste.has(chi)) richieste.set(chi, await richiestaDi(admin, chi));
+          const richiesta = richieste.get(chi);
+          if (richiesta === undefined) continue;
+          const ancoraSuo =
+            richiesta !== null &&
+            (['rinviata', 'termine-scaduto'] as const).some(
+              (tappa) => identificativoAvviso(`${identificativoAvviso(chiaveAvviso(chi, richiesta, tappa))}:email-ferma:${amministratore}`) === r.id,
+            );
+          if (ancoraSuo) continue;
+          const chiuso = await admin.from('notifications').update({ is_read: true }).eq('id', r.id);
+          if (chiuso.error) throw new Error(chiuso.error.message);
+        }
+        if (righe.length < ALLARMI_PER_PAGINA) break;
+        const ultimo = righe[righe.length - 1].id;
+        // Il cursore deve avanzare: una risposta che non rispetta l'ordine non fa girare a vuoto.
+        if (dopo !== null && ultimo <= dopo) break;
+        dopo = ultimo;
+      }
+    }
+  } catch (e) {
+    logger.warn('[cron-deletions] allarmi «scrivile tu» di chi non aspetta più non chiusi', {
+      errore: e instanceof Error ? e.message : 'errore',
+    });
+  }
+}
+
+/** La richiesta di cancellazione di oggi: la data, null se non c'è (o il profilo non c'è più), undefined se non si legge. */
+async function richiestaDi(admin: Admin, userId: string): Promise<string | null | undefined> {
+  const { data, error } = await admin.from('profiles').select('deletion_requested_at').eq('id', userId);
+  if (error || !Array.isArray(data)) return undefined;
+  return (data[0] as { deletion_requested_at?: string | null } | undefined)?.deletion_requested_at ?? null;
 }
 
 /**
