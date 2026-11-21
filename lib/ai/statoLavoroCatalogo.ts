@@ -35,16 +35,31 @@ export function puoAvviareLavoro(job: { status: string } | null | undefined): bo
   return !job || lavoroChiuso(job.status);
 }
 
+/**
+ * R01-011 — Un invio rimasto senza risposta e' «incerto»: il lotto potrebbe essere partito (ed essere
+ * pagato) e resta aperto fino a 24 ore. Il marcatore e' l'inizio del motivo che scrive il server
+ * (INVIO_SENZA_RISPOSTA in lib/ai/batch.ts, che qui non si importa: questa pagina gira nel browser).
+ */
+function invioIncerto(job: { status: string; error?: string | null }): boolean {
+  return job.status === 'submitting' && /^invio senza risposta/i.test(job.error ?? '');
+}
+
 /** La riga che spiega lo stato, quando la scheda dei risultati non c'e'. */
 export function testoStatoLavoro(job: { status: string; total: number; error?: string | null }): string | null {
   switch (job.status) {
     case 'submitting':
+      if (invioIncerto(job)) {
+        return `L'invio del lavoro su ${job.total} prodotti non ha avuto risposta: potrebbe essere già partito. Non riavviarlo: se entro 24 ore non succede niente, chiedi all'assistenza.`;
+      }
       return `Sto inviando il lavoro su ${job.total} prodotti… non riavviarlo: tra poco lo vedi partire.`;
     case 'processing':
       return `Sto elaborando ${job.total} prodotti… puoi lasciare aperta questa pagina o tornare più tardi.`;
     case 'failed':
-    case 'error':
-      return `Il lavoro non è andato a buon fine${job.error ? ` (${job.error})` : ''}. Puoi avviarne un altro.`;
+    case 'error': {
+      const base = `Il lavoro non è andato a buon fine${job.error ? ` (${job.error})` : ''}.`;
+      // Se il motivo manda all'assistenza, la riga non deve dire il contrario.
+      return /assistenza/i.test(job.error ?? '') ? base : `${base} Puoi avviarne un altro.`;
+    }
     case 'canceled':
       return 'Il lavoro è stato annullato. Puoi avviarne un altro.';
     default:
