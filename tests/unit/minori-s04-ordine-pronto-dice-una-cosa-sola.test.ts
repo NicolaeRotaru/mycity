@@ -8,10 +8,10 @@ import { readFileSync } from 'node:fs';
  * ritirarlo», che detto al cliente si confonde col ritiro in negozio.
  */
 describe('la pagina dell’ordine pronto', () => {
-  it('dice «un fattorino passa a prenderlo», come l’email', () => {
+  it('dice «un rider passa a prenderlo», come l’email e la campanella', () => {
     const pagina = readFileSync('app/orders/[id]/page.tsx', 'utf8');
     const riga = pagina.slice(pagina.indexOf('HERO_SUBTITLE')).split('\n').find((l) => /^\s*READY:\s*'/.test(l)) ?? '';
-    expect(riga).toMatch(/un fattorino passa a prenderlo/);
+    expect(riga).toMatch(/un rider passa a prenderlo/);
     expect(riga).not.toMatch(/ritir/);
   });
 
