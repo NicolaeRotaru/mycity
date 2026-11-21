@@ -254,13 +254,16 @@ export async function annullaERimborsa(
    * ancora quel codice. In quel caso non si restituisce niente: lo fara'
    * l'ultimo ordine del carrello che se ne va.
    *
-   * LIMITE DICHIARATO, e vale solo per i contanti: il carrello pagato alla
-   * consegna non ha una targa sulle righe dell'ordine (la chiave del tentativo
-   * vive in `cod_checkout_attempts`, e cercarla per ordine sarebbe una
-   * scansione senza indice). Li' si restituisce come prima — meglio un uso
-   * regalato che un cliente che perde il buono senza aver comprato (R121). La
-   * chiusura completa vuole una colonna «carrello» sugli ordini: e' una
-   * migrazione, quindi si firma a parte.
+   * LIMITE DICHIARATO, e vale solo per i contanti: questo controllo guarda solo
+   * il carrello della carta (la sessione di pagamento). 21/11/2026 (R04-007) —
+   * Non perché il carrello in contanti non si possa trovare: si ritrova dalla
+   * riga del tentativo di cassa (`cod_checkout_attempts.order_ids`, letta per
+   * cliente, con l'indice), come fa la consegna del carrello più sotto
+   * (`ordiniDelCarrello`). Sulle righe dell'ordine però non c'è una chiave del
+   * carrello, e senza quella riga il carrello non si ritrova. Qui coi contanti
+   * si restituisce come prima — meglio un uso regalato che un cliente che perde
+   * il buono senza aver comprato. La chiusura completa vuole una colonna
+   * «carrello» sugli ordini: e' una migrazione, quindi si firma a parte.
    */
   // 5/11/2026 — La restituzione del codice sta fuori (`restituisciIlCodiceDellOrdine`, più sotto in
   // questo file): la usa anche il giro degli ordini scaduti, che prima chiamava release_coupon col
@@ -745,7 +748,11 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     .eq('user_id', o.user_id)
     .contains('order_ids', JSON.stringify([{ id: o.id }]))
     .limit(1);
-  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return null;
+  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {
+    // 21/11/2026 (R04-007) — Senza la riga non si sposta niente, ma non in silenzio.
+    await segnalaIlCarrelloSenzaRiga(admin, o, !!errT);
+    return null;
+  }
   const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
   const ids = Array.isArray(elenco)
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
@@ -755,6 +762,86 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+/**
+ * 21/11/2026 (R04-007) — IL CARRELLO IN CONTANTI SENZA LA SUA RIGA NON PASSA PIU' IN SILENZIO.
+ *
+ * Il carrello in contanti si ritrova solo dalla riga del tentativo di cassa: sugli ordini non c'è una
+ * chiave del carrello. Se la riga manca (la rotta della cassa non l'ha potuta scrivere) o non si legge,
+ * la regola del negozio che rifiuta non scatta, e prima non lo sapeva nessuno.
+ *
+ * Gli ordini di due carrelli diversi non si uniscono MAI perché sono nati vicini (regola della regista,
+ * dopo il collaudo del giro 3: così consegna e compenso del fattorino finivano sull'ordine di un altro
+ * carrello). Qui non si sposta niente: si guarda soltanto se lo stesso cliente ha altri ordini in
+ * contanti ancora vivi, nati entro due minuti da questo e senza una riga di carrello (chi sta nella riga
+ * di un altro carrello è di quel carrello, con certezza). Se ce ne sono, gli amministratori lo sanno,
+ * una volta per ordine, con i codici, le cifre di adesso e quelle che la regola darebbe se fossero
+ * davvero lo stesso carrello: lo decide e lo sistema una persona.
+ */
+const VICINI_ENTRO_MS = 2 * 60_000;
+const euro = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
+const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
+
+async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaDelGiro, rigaNonLetta: boolean): Promise<void> {
+  try {
+    const nato = Date.parse(String(o.created_at ?? ''));
+    if (!Number.isFinite(nato)) return;
+    const { data, error } = await leggiIlGiro('carrello-senza-riga', (c) =>
+      admin
+        .from('orders')
+        .select(c)
+        .eq('user_id', o.user_id)
+        .neq('id', o.id)
+        .lt('created_at', new Date(nato + VICINI_ENTRO_MS).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(20));
+    if (error || !Array.isArray(data)) {
+      logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti senza riga: altri ordini del cliente non letti', { orderId: o.id });
+      return;
+    }
+    const vicini = (data as unknown as RigaDelGiro[]).filter((r) =>
+      !r.stripe_session_id?.trim() && !r.pickup_in_store && r.delivery_status !== 'CANCELED' && r.delivery_status !== 'DELIVERED'
+      && Math.abs(Date.parse(String(r.created_at ?? '')) - nato) <= VICINI_ENTRO_MS);
+    const senzaRiga: RigaDelGiro[] = [];
+    for (const r of vicini) {
+      const { data: suaRiga, error: errR } = await admin
+        .from('cod_checkout_attempts')
+        .select('order_ids')
+        .eq('user_id', o.user_id)
+        .contains('order_ids', JSON.stringify([{ id: r.id }]))
+        .limit(1);
+      if (!errR && Array.isArray(suaRiga) && suaRiga.length > 0) continue;
+      senzaRiga.push(r);
+    }
+    if (senzaRiga.length === 0) return;
+    const gruppo = [o, ...senzaRiga].sort(
+      (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
+    );
+    const conto = contoDelCarrello(o, gruppo, o.id);
+    const adesso = senzaRiga
+      .map((r) => `${codiceDi(r.id)} (${r.delivery_status}: consegna ${euro(Number(r.delivery_fee_cents ?? 0))}, fattorino ${euro(Number(r.rider_fee_cents ?? 0))}, totale ${euro(centesimi(r.total_price))})`)
+      .join(', ');
+    const seLoStesso = conto
+      ? ` Se sono davvero lo stesso carrello, la regola darebbe: ${conto.rimasti
+        .map((riga) => {
+          const r = senzaRiga.find((x) => x.id === riga.id);
+          return `${codiceDi(riga.id)} consegna ${euro(riga.deliveryFeeCents)} e fattorino ${euro(riga.riderFeeCents)}${r ? `, totale ${euro(Math.max(0, centesimi(r.total_price) + riga.deltaCents))}` : ''}`;
+        })
+        .join('; ')}.`
+      : ' Le loro cifre non tornano con un carrello solo: probabilmente sono carrelli diversi, ma guardalo tu.';
+    await notifyAdmins(
+      '⚠️ Annullo in contanti: carrello da controllare a mano',
+      `L'ordine ${codiceDi(o.id)} è annullato, ma ${rigaNonLetta ? 'la riga del suo carrello non si è potuta leggere' : 'la riga del suo carrello non c’è'}: ` +
+        'la consegna degli altri ordini dello stesso carrello NON è stata rifatta, e il sito non li unisce da solo. ' +
+        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e senza una riga di carrello: ${adesso}.${seLoStesso} ` +
+        'Se sono lo stesso carrello, sistema tu consegna, fattorino e totale e avvisa il cliente del conto nuovo; se no, non serve fare niente.',
+      '/admin/orders',
+      { unaVoltaPer: `carrello-senza-riga-${o.id}` },
+    );
+  } catch (err) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] carrello in contanti senza riga: avviso agli amministratori non partito', { orderId: o.id, err });
+  }
 }
 
 /** Quello che `ricalcolaLaConsegnaDelGiro` consegna a chi annulla. */
