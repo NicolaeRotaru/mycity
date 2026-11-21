@@ -151,7 +151,9 @@ describe('R01-009 · le promesse accanto ai due pulsanti valgono solo se i conta
     const radice = await apri(2600, [riga('p-1', 2600, 'neg-1')]);
     const p = promesse(radice);
     expect(p.testo, 'il riquadro verde promette i contanti accanto ad «Aggiungi», che porta il carrello a 5.200 €').not.toContain('Paghi in contanti alla consegna');
-    expect(p.testo).toContain(`Sopra ${TETTO} non si`);
+    // Giro di correzione: le strade divergono, il riquadro non dice nemmeno «non si può pagare in
+    // contanti» accanto a «Compra ora · paghi alla consegna» (riparazione-r01-contanti-strade-divergenti).
+    expect(p.testo).not.toContain(`Sopra ${TETTO}`);
     expect(p.testo, '«Compri sicuro» promette i contanti accanto ad «Aggiungi»').not.toContain('paghi solo quando arriva');
     // La strada di «Compra ora» è una sola: la riga torna a un pezzo, 2.600 €, e i contanti reggono.
     expect(p.compraOra).toBe('Compra ora · paghi alla consegna');

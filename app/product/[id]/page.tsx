@@ -598,6 +598,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // ricordo di 'cod' restano legati a `contantiQui`, perché lì la strada è una sola.
   const contantiSuTutteEDue = contantiQui && contantiAggiungendo;
   const lordoPiuAltoCents = Math.max(lordoContantiCents, lordoAggiungendoCents);
+  // Quando le due strade divergono il riquadro non dice niente sul pagamento: «Sopra il tetto non si
+  // può pagare in contanti» accanto a «Compra ora · paghi alla consegna» si legge «non puoi comprare».
+  // Ne parla il pulsante, che sa la sua strada; il resto del riquadro (consegna, reso) resta.
+  const stradeDivergono = contantiQui !== contantiAggiungendo;
 
   // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
   // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
@@ -1015,13 +1019,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 negozioId={(sellerProfile?.id ?? product.seller_id) || undefined}
                 externalDeliveryLabel={external?.delivery_label}
               />
-              <span className="inline-flex items-center gap-2 text-sm text-olive-800">
-                <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
-                    non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
-                    cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
-                <span>{frasePagamento(undefined, lordoPiuAltoCents)}</span>
-              </span>
+              {!stradeDivergono && (
+                <span className="inline-flex items-center gap-2 text-sm text-olive-800">
+                  <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+                  {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
+                      non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
+                      cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
+                  <span>{frasePagamento(undefined, lordoPiuAltoCents)}</span>
+                </span>
+              )}
               {/* Il costo di consegna: fin qui non compariva da nessuna parte, e il primo posto
                   dove si vedeva era il carrello. Chi legge la promessa qui sopra deve leggere
                   anche questo, sullo stesso schermo e prima di scegliere. */}
