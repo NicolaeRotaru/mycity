@@ -28,7 +28,7 @@
  * a sette per Inter e quindici per Fraunces.)
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -47,19 +47,75 @@ function bloccoGraffe(src: string, da: number): string {
   return '';
 }
 
-/** I caratteri che il layout carica da Google, con le opzioni che passa a ognuno. */
-function caratteriCaricati(): Array<{ nome: string; opzioni: string }> {
+type Carattere = {
+  nome: string;
+  opzioni: string;
+  /** Vero se il carattere sta sul disco (`next/font/local`), falso se arriva da Google. */
+  locale: boolean;
+  /** Gli stili che il layout chiede. */
+  stili: string[] | null;
+  /** Solo locale: i file `src` con peso e stile di ognuno. */
+  file: Array<{ percorso: string; stile: string | null; peso: string | null }>;
+};
+
+/** Le graffe di primo livello dentro `[ ... ]` di `src`, una per file. */
+function elementiDiSrc(opzioni: string): Array<{ percorso: string; stile: string | null; peso: string | null }> {
+  const inizio = opzioni.search(/\bsrc\s*:\s*\[/);
+  if (inizio < 0) return [];
+  const elementi: Array<{ percorso: string; stile: string | null; peso: string | null }> = [];
+  for (let i = opzioni.indexOf('[', inizio); i < opzioni.length; i++) {
+    if (opzioni[i] === ']') break;
+    if (opzioni[i] !== '{') continue;
+    const blocco = bloccoGraffe(opzioni, i);
+    elementi.push({
+      percorso: blocco.match(/path\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? '',
+      stile: blocco.match(/style\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? null,
+      peso: blocco.match(/weight\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? null,
+    });
+    i += blocco.length - 1;
+  }
+  return elementi;
+}
+
+/** I caratteri che il layout carica (da Google o dai file del sito), con le opzioni che passa a ognuno. */
+function caratteriCaricati(): Carattere[] {
+  const trovati: Carattere[] = [];
   const importazione = LAYOUT.match(/import\s*\{([^}]*)\}\s*from\s*'next\/font\/google'/);
-  if (!importazione) return [];
-  const nomi = importazione[1]
-    .split(',')
-    .map((n) => n.trim())
-    .filter(Boolean);
-  return nomi.map((nome) => {
-    const chiamata = new RegExp(`\\b${nome}\\s*\\(\\s*\\{`).exec(LAYOUT);
-    const opzioni = chiamata ? bloccoGraffe(LAYOUT, LAYOUT.indexOf('{', chiamata.index)) : '';
-    return { nome, opzioni };
-  });
+  if (importazione) {
+    const nomi = importazione[1]
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    for (const nome of nomi) {
+      const chiamata = new RegExp(`\\b${nome}\\s*\\(\\s*\\{`).exec(LAYOUT);
+      const opzioni = chiamata ? bloccoGraffe(LAYOUT, LAYOUT.indexOf('{', chiamata.index)) : '';
+      const stile = opzioni.match(/style\s*:\s*\[([^\]]*)\]/);
+      trovati.push({
+        nome,
+        opzioni,
+        locale: false,
+        stili: stile ? stile[1].split(',').map((x) => x.trim().replace(/['"]/g, '')) : null,
+        file: [],
+      });
+    }
+  }
+  // `const inter = localFont({ src: [ { path, weight, style }, ... ], ... })`: il nome e' quello della costante.
+  const funzioneLocale = LAYOUT.match(/import\s+(\w+)\s+from\s+'next\/font\/local'/)?.[1];
+  if (funzioneLocale) {
+    const dichiarazione = new RegExp(`const\\s+(\\w+)\\s*=\\s*${funzioneLocale}\\s*\\(\\s*\\{`, 'g');
+    for (let m = dichiarazione.exec(LAYOUT); m; m = dichiarazione.exec(LAYOUT)) {
+      const opzioni = bloccoGraffe(LAYOUT, LAYOUT.indexOf('{', m.index + m[0].length - 1));
+      const file = elementiDiSrc(opzioni);
+      trovati.push({
+        nome: m[1].charAt(0).toUpperCase() + m[1].slice(1),
+        opzioni,
+        locale: true,
+        stili: file.length > 0 ? file.map((f) => f.stile ?? 'normal') : null,
+        file,
+      });
+    }
+  }
+  return trovati;
 }
 
 /** Ogni punto del sito che chiede al browser di inclinare il testo. */
@@ -99,7 +155,7 @@ describe('il corsivo del sito', () => {
     expect(punti).toContain('app/page.tsx'); // il titolone della home
   });
 
-  it('il layout carica i caratteri da Google, e sono più di uno', () => {
+  it('il layout carica i caratteri (da Google o dai file del sito), e sono più di uno', () => {
     expect(CARATTERI.map((c) => c.nome)).toEqual(expect.arrayContaining(['Inter', 'Fraunces']));
     for (const c of CARATTERI) {
       expect(c.opzioni, `non trovo come viene chiamato ${c.nome}`).not.toBe('');
@@ -108,20 +164,29 @@ describe('il corsivo del sito', () => {
 
   for (const carattere of CARATTERI) {
     it(`${carattere.nome} chiede anche la variante inclinata, non solo quella dritta`, () => {
-      const stile = carattere.opzioni.match(/style\s*:\s*\[([^\]]*)\]/);
+      const stile = carattere.stili;
       expect(
         stile,
         `${carattere.nome} non dichiara nessuno stile: si scarica solo il dritto e il browser inventa il corsivo`,
       ).not.toBeNull();
 
-      const stiliChiesti = stile![1].split(',').map((s) => s.trim().replace(/['"]/g, ''));
+      const stiliChiesti = stile!;
       expect(stiliChiesti, `${carattere.nome} non chiede il corsivo`).toContain('italic');
       expect(stiliChiesti, `${carattere.nome} non chiede più il dritto`).toContain('normal');
     });
 
-    it.skipIf(CATALOGO === null)(
+    it.skipIf(CATALOGO === null && !carattere.locale)(
       `${carattere.nome} il corsivo ce l'ha davvero: non stiamo chiedendo una variante inesistente`,
       () => {
+        if (carattere.locale) {
+          // Un carattere dei file del sito: la variante esiste se il woff2 inclinato sta sul disco.
+          const inclinati = carattere.file.filter((f) => f.stile === 'italic');
+          expect(inclinati.length, `${carattere.nome} non ha nessun file inclinato`).toBeGreaterThan(0);
+          for (const f of inclinati) {
+            expect(existsSync(path.join('app', f.percorso)), `${f.percorso} non esiste sul disco`).toBe(true);
+          }
+          return;
+        }
         const scheda = CATALOGO![carattere.nome];
         expect(scheda, `${carattere.nome} non è nel catalogo di Google`).toBeTruthy();
         expect(scheda.styles).toContain('italic');
