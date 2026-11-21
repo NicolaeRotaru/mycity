@@ -101,19 +101,31 @@ try {
 // Sentry wrapper: attivo solo se NEXT_PUBLIC_SENTRY_DSN e' configurato.
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
 
+/**
+ * 20/11/2026 (R03-004) — PER ACCENDERE IL REGISTRATORE BASTA IL DSN.
+ *
+ * Le mappe del codice (per leggere gli errori coi nomi veri delle funzioni) si caricano su Sentry
+ * solo se ci sono anche SENTRY_AUTH_TOKEN, SENTRY_ORG e SENTRY_PROJECT. Senza, il costruttore non
+ * prova a caricarle e non le genera: il deploy parte lo stesso e non lascia mappe pubbliche in giro.
+ * `hideSourceMaps` non c'e' piu' in @sentry/nextjs 10: lo fa `sourcemaps` (le cancella dopo il carico).
+ */
+const MAPPE_SU_SENTRY = Boolean(
+  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT,
+);
+
 if (SENTRY_DSN) {
   try {
     const { withSentryConfig } = require('@sentry/nextjs');
     module.exports = withSentryConfig(configWithAnalyzer, {
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
       silent: !process.env.CI,
-      // Source maps upload (richiede SENTRY_AUTH_TOKEN in CI env)
+      // Il caricamento delle mappe e' facoltativo (vedi MAPPE_SU_SENTRY).
+      sourcemaps: { disable: !MAPPE_SU_SENTRY },
       widenClientFileUpload: true,
       // Tunnel route per bypassare ad-blockers (opzionale)
       tunnelRoute: '/monitoring',
-      // Hide source maps dal client bundle finale
-      hideSourceMaps: true,
       // Disabilita Sentry CLI logging in dev
       disableLogger: true,
     });

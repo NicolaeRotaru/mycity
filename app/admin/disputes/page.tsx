@@ -150,6 +150,11 @@ export default function AdminDisputesPage() {
   });
 
   const detail = disputes.find((d) => d.id === openId);
+  // R03-007 — A finestra aperta i reclami si rileggono (al ritorno sulla scheda, per esempio). Se la
+  // rilettura cade, React Query tiene i dati di prima: la lista sotto diceva l'errore, ma la finestra
+  // restava aperta su quei dati, e si poteva rimborsare o rifiutare un reclamo che nel frattempo un
+  // altro aveva già chiuso. Finché una rilettura non riesce, la decisione è spenta e la finestra lo dice.
+  const datiVecchi = query.isError;
   const ordineDelDettaglio = detail ? ordiniDeiReclami[detail.order_id] : undefined;
   const pagamento = ordineDelDettaglio ? pagamentoPerChiDecide(ordineDelDettaglio) : null;
   // Collaudo del 15/10, terzo giro: su un ordine misto la cifra si divide fra
@@ -362,6 +367,21 @@ export default function AdminDisputesPage() {
       >
         {openId && detail && (
           <div className="space-y-4">
+            {datiVecchi && (
+              <div role="alert" className="rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
+                <p>
+                  Non riesco a rileggere questo reclamo: quello che vedi può essere vecchio, e nel frattempo
+                  qualcuno potrebbe averlo già deciso. Per decidere serve una lettura riuscita.
+                </p>
+                <Button
+                  onClick={() => void query.refetch()}
+                  loading={query.isFetching}
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                >Riprova</Button>
+              </div>
+            )}
 
             <textarea
               value={resolution}
@@ -410,7 +430,7 @@ export default function AdminDisputesPage() {
                   notes: resolution.trim(),
                   refund: refundEur ? Math.round(Number(refundEur) * 100) : undefined,
                 })}
-                disabled={decide.isPending || resolution.trim().length < 10}
+                disabled={decide.isPending || datiVecchi || resolution.trim().length < 10}
                 className="bg-olive-600 hover:bg-olive-700 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-600 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
               >
                 <Check size={14} /> A favore del cliente
@@ -422,7 +442,7 @@ export default function AdminDisputesPage() {
                   notes: resolution.trim(),
                 })}
                 loading={decide.isPending}
-                disabled={resolution.trim().length < 10}
+                disabled={datiVecchi || resolution.trim().length < 10}
                 size="sm"
                 icon={Check}
               >A favore del venditore</Button>
@@ -432,7 +452,7 @@ export default function AdminDisputesPage() {
                   status: 'rejected',
                   notes: resolution.trim(),
                 })}
-                disabled={decide.isPending || resolution.trim().length < 10}
+                disabled={decide.isPending || datiVecchi || resolution.trim().length < 10}
                 className="bg-secondary-600 hover:bg-secondary-700 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-600 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
               >
                 <X size={14} /> Rifiuta

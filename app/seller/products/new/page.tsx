@@ -156,6 +156,15 @@ function NewProductInner() {
   // Senza il prodotto da duplicare (lettura caduta, o in pausa senza rete) il modulo non si apre
   // vuoto come un prodotto nuovo: si dice, con «Riprova», e si apre pieno quando la lettura riesce.
   const sorgenteNonArrivata = !!fromId && !source && (sorgenteNonLetta || sorgenteFetchStatus === 'paused');
+  /**
+   * 20/11/2026 (S01-002) — LA COPIA DI UN PRODOTTO ESCLUSO DAL RECESSO NON NASCE RECEDIBILE IN SILENZIO.
+   * La spunta (e il suo salvataggio) aspettava la lettura a parte della colonna: finche' quella non
+   * rispondeva (in volo, caduta, senza rete) valeva «no», e la copia di un pane escluso dal recesso
+   * si salvava recedibile, senza spunta a video e senza avviso. In «Duplica» la risposta c'e' gia':
+   * il prodotto da duplicare e' letto con `*`, e se ha `non_recedibile` la colonna c'e'. Il modulo si
+   * apre solo con la sorgente arrivata, quindi quando si apre lo sa sempre.
+   */
+  const recessoSegnabileQui = recessoSegnabile || (!!fromId && colonnaDelRecessoPresente(source));
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
     if (imported) {
@@ -319,7 +328,7 @@ function NewProductInner() {
           submitting={create.isPending || creato}
           sellerOffersExpress={offersExpress}
           consegnaDelNegozioNonLetta={consegnaNonLetta}
-          recessoSegnabile={recessoSegnabile}
+          recessoSegnabile={recessoSegnabileQui}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           // R01-012 — l'invio finisce quando finisce l'inserimento: fino ad allora il modulo
           // non ne fa partire un altro (l'errore lo dice già `onError` della mutazione).

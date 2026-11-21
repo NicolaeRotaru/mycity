@@ -368,6 +368,34 @@ export async function GET(request: Request) {
   }
 
   /**
+   * Check 5 (R03-004, 20/11/2026): IL REGISTRATORE DEGLI ERRORI È ACCESO?
+   *
+   * Senza la chiave pubblica di Sentry (DSN) un errore del sito finisce solo nei log di Vercel, che
+   * non guarda nessuno: il giorno del lancio non lo vedrebbe nessuno, e qui non lo diceva niente. Il
+   * registratore si accende da solo appena la chiave c'è: il server (sentry.server.config.ts,
+   * lib/logger.ts) legge `NEXT_PUBLIC_SENTRY_DSN` o `SENTRY_DSN`, il browser solo
+   * `NEXT_PUBLIC_SENTRY_DSN`, stampata nel pacchetto quando si costruisce (per esteso, come le altre
+   * qui sopra). Si dice a tutti, anche al monitor senza segreto: la chiave è pubblica per natura (sta
+   * nelle pagine), quindi sapere se c'è non apre niente. Il colore del semaforo non cambia: il sito
+   * vende anche senza. Lo stesso avviso lo manda il sorvegliante (operational-alerts) agli
+   * amministratori, una volta al giorno.
+   */
+  const dsnDelBrowser = process.env.NEXT_PUBLIC_SENTRY_DSN?.trim();
+  const registratoreServer = !!dsnDelBrowser || !!process.env.SENTRY_DSN?.trim();
+  const registratoreErrori = !registratoreServer ? 'spento' : dsnDelBrowser ? 'acceso' : 'acceso solo sul server';
+  checks.registratore = {
+    ok: registratoreErrori === 'acceso',
+    stato: registratoreErrori,
+    ...(registratoreErrori === 'acceso'
+      ? {}
+      : {
+          error: registratoreErrori === 'spento'
+            ? 'registratore degli errori spento: manca NEXT_PUBLIC_SENTRY_DSN su Vercel (poi va rifatto il deploy)'
+            : 'gli errori nelle pagine dei clienti non arrivano: manca NEXT_PUBLIC_SENTRY_DSN su Vercel (poi va rifatto il deploy)',
+        }),
+  };
+
+  /**
    * 22/8/2026 — UN DATABASE LENTO FACEVA RIAVVIARE UN'ISTANZA SANA.
    *
    * Questa rotta e' quella che l'hosting interroga per decidere se il processo
@@ -406,9 +434,10 @@ export async function GET(request: Request) {
         // dice ancora la verità, ma non è un dato su cui ragionare in produzione.
         uptimeSec: process.uptime?.() ?? null,
         latencyMs: Date.now() - startedAt,
+        registratoreErrori,
         checks: { ...checks, cron: dettaglioBattiti ? { ...cron, dettaglio: dettaglioBattiti } : cron },
       }
-    : { status, timestamp: new Date().toISOString(), cron };
+    : { status, timestamp: new Date().toISOString(), cron, registratoreErrori };
 
   return NextResponse.json(corpo, { status: httpStatus, headers: { 'cache-control': 'no-store' } });
 }

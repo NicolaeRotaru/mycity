@@ -29,6 +29,14 @@ type Props = {
   /** Limiti dello stepper (disabilita i pulsanti agli estremi). */
   canDec?: boolean;
   canInc?: boolean;
+  /**
+   * R03-012 — Il prezzo pieno, con una promozione attiva. `price` resta quello che si paga, già
+   * scontato dalla scheda con `discountedUnitCents` come la cassa: qui non si ricalcola niente. Se il
+   * pieno è più alto, la barra lo mostra barrato accanto, come il prezzo grande della scheda, e chi
+   * scorre legge sotto lo stesso prezzo che c'è sopra. Sta in coda alla riga: su uno schermo stretto
+   * il `truncate` taglia lui, non il prezzo che si paga.
+   */
+  prezzoPieno?: number;
 };
 
 /**
@@ -62,7 +70,7 @@ const ETICHETTA_INTERA = 'Aggiungi al carrello';
 const ETICHETTA_ESAURITO_CORTA = 'Esaurito';
 const ETICHETTA_ESAURITO = 'Non disponibile';
 
-export default function StickyAddToCart({ bersaglio, price, available, onAdd, note, qty, onDec, onInc, canDec, canInc }: Props) {
+export default function StickyAddToCart({ bersaglio, price, available, onAdd, note, qty, onDec, onInc, canDec, canInc, prezzoPieno }: Props) {
   const [visible, setVisible] = useState(false);
   const barraRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +112,11 @@ export default function StickyAddToCart({ bersaglio, price, available, onAdd, no
 
   const hasStepper = typeof qty === 'number' && !!onDec && !!onInc;
   const total = typeof qty === 'number' ? price * qty : price;
+  const barrato = typeof prezzoPieno === 'number' && prezzoPieno > price ? (
+    <span className="ml-1 text-xs font-normal text-ink-400 line-through">
+      <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -129,9 +142,9 @@ export default function StickyAddToCart({ bersaglio, price, available, onAdd, no
           <div className="flex items-center gap-3">
             <div className="min-w-0">
               {hasStepper && (
-                <p className="truncate text-xs text-ink-600 leading-tight">{qty} × {formatPrice(price)}</p>
+                <p className="truncate text-xs text-ink-600 leading-tight">{qty} × {formatPrice(price)}{barrato}</p>
               )}
-              <p className="truncate text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}</p>
+              <p className="truncate text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}{!hasStepper && barrato}</p>
             </div>
 
             {hasStepper && (

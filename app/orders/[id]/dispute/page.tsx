@@ -32,8 +32,12 @@ const REASONS: Array<{ value: string; label: string; hint: string }> = [
  * subito: da lì in poi il testo vero è quello del modulo, e una bozza vecchia non torna più.
  * La bozza riprende il testo solo per chi l'ha scritto.
  * I controlli restano tutti nel server (/api/disputes).
+ *
+ * R01-002 — La bozza nata dal 401 porta il segno `perIlRientro`: all'uscita non chiesta (la
+ * sessione scaduta) il fornitore delle domande (components/providers/QueryProvider.tsx) la lascia
+ * per il rientro, mentre all'uscita voluta e all'ingresso di un altro account la toglie.
  */
-type BozzaReclamo = { utente: string; reason: string; description: string };
+type BozzaReclamo = { utente: string; reason: string; description: string; perIlRientro?: boolean };
 const chiaveBozza = (orderId: string) => `mycity:bozza-reclamo:${orderId}`;
 
 /** Legge la bozza di questo ordine e la toglie dalla scheda: quello che serve passa nel modulo. */
@@ -50,6 +54,16 @@ function prendiBozza(orderId: string): BozzaReclamo | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * R01-varie — Le uscite volute contate da components/providers/QueryProvider.tsx (stessa chiave su
+ * `globalThis`). Se il numero cambia mentre il modulo aspetta la risposta, la bozza non si riscrive.
+ */
+const USCITE_VOLUTE = Symbol.for('mycity.uscite-volute');
+function usciteVolute(): number {
+  const n = (globalThis as unknown as Record<PropertyKey, unknown>)[USCITE_VOLUTE];
+  return typeof n === 'number' ? n : 0;
 }
 
 function scriviBozza(orderId: string, bozza: BozzaReclamo | null) {
@@ -82,6 +96,9 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   // R01-003 — La bozza nata da un 401 segue il modulo finché il reclamo non parte, anche se un nuovo
   // invio cade (rete, errore del server): se no restava nella scheda il testo di prima.
   const bozzaInCorso = useRef(false);
+  // R01-varie — Le uscite volute contate all'ultimo invio, e se al 401 la bozza è stata tenuta.
+  const usciteAllInvio = useRef(0);
+  const [bozzaTenuta, setBozzaTenuta] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -135,10 +152,17 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
 
   // R01-003 — Dal 401 all'invio riuscito la bozza segue il modulo: si ritrova l'ultimo testo,
   // e un modulo svuotato non lascia una bozza vecchia.
+  // R01-002 — Si riscrive anche quando arriva il 401 (`sessioneScaduta`): il testo cambiato fra il
+  // clic e la risposta del server è quello che si ritrova, non quello del momento del clic.
   useEffect(() => {
     if (!bozzaInCorso.current || !utenteDelModulo.current) return;
-    scriviBozza(params.id, description.trim() ? { utente: utenteDelModulo.current, reason, description } : null);
-  }, [reason, description, params.id]);
+    // R01-varie — Dopo un'uscita voluta il modulo non tiene più la bozza.
+    if (usciteVolute() !== usciteAllInvio.current) {
+      bozzaInCorso.current = false;
+      return;
+    }
+    scriviBozza(params.id, description.trim() ? { utente: utenteDelModulo.current, reason, description, perIlRientro: true } : null);
+  }, [sessioneScaduta, reason, description, params.id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +171,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
 
     setSubmitting(true);
     setSessioneScaduta(false);
+    usciteAllInvio.current = usciteVolute();
     try {
       // 12/11/2026 (R03-013) — Il reclamo lo apre il server (/api/disputes): controlla che
       // l'ordine sia tuo, avvisa gli amministratori e il negozio, e ti manda la ricevuta. Prima la
@@ -158,8 +183,16 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       });
       if (!res.ok) {
         if (res.status === 401) {
-          if (utenteDelModulo.current) scriviBozza(params.id, { utente: utenteDelModulo.current, reason, description });
-          bozzaInCorso.current = true;
+          // R01-varie — La bozza si tiene solo se nel frattempo non c'è stata un'uscita voluta e la
+          // sessione del browser, se c'è, è ancora di chi ha scritto il modulo.
+          const { data: sessioneOra } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          const chiOra = sessioneOra?.session?.user?.id ?? null;
+          const autore = utenteDelModulo.current;
+          const tieni = !!autore && usciteVolute() === usciteAllInvio.current && (chiOra === null || chiOra === autore);
+          if (tieni) scriviBozza(params.id, { utente: autore, reason, description, perIlRientro: true });
+          else scriviBozza(params.id, null);
+          bozzaInCorso.current = tieni;
+          setBozzaTenuta(tieni);
           setSessioneScaduta(true);
           return;
         }
@@ -290,7 +323,9 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         {sessioneScaduta && (
           <div role="alert" className="rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
             <p className="font-semibold">La sessione è scaduta: rientra per aprire il reclamo.</p>
-            <p className="mt-1">Quello che hai scritto resta salvato in questa scheda e lo ritrovi qui al ritorno.</p>
+            {bozzaTenuta && (
+              <p className="mt-1">Quello che hai scritto resta salvato in questa scheda e lo ritrovi qui al ritorno.</p>
+            )}
             <Link
               href={`/sign-in?returnTo=${encodeURIComponent(`/orders/${params.id}/dispute`)}`}
               className="inline-block mt-2 font-semibold text-primary-700 hover:underline"

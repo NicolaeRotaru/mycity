@@ -88,8 +88,13 @@ describe('310 — con una promozione il prezzo grande è quello che si paga', ()
     expect(src).toMatch(/const price = scontoPromo > 0 \? discountedUnitCents\(prezzoPieno, scontoPromo\) \/ 100 : prezzoPieno;/);
     expect(src).toMatch(/scontoPromo > 0 && \(\s*<span className="text-lg text-ink-400 line-through">/);
   });
-  it('al carrello va il prezzo pieno: lo sconto lo applica lui, non due volte', () => {
-    expect(src.match(/price: prezzoPieno,/g)?.length).toBe(2);
+  // R02-020 / R02-021 — Al carrello va il prezzo che la scheda mostra (scontato con la promo attiva):
+  // carrello e cassa lo sostituiscono col pieno del database meno la promo, non lo scontano di nuovo.
+  // Col pieno qui il carrello scriveva «il prezzo è sceso». La prova di comportamento è
+  // tests/unit/riparazione-r02-prezzo-promo-al-carrello.test.tsx.
+  it('al carrello va il prezzo che si mostra: carrello e cassa lo ricalcolano dal pieno, non due volte', () => {
+    expect(src).not.toMatch(/price: prezzoPieno,/);
+    expect(src.match(/^\s+price,$/gm)?.length).toBe(2);
   });
   it('barra fissa e riquadro d\'acquisto usano lo stesso prezzo', () => {
     expect(src).toMatch(/<StickyAddToCart\s+price=\{price\}/);

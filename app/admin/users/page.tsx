@@ -477,10 +477,16 @@ function AdminUsersPageInner() {
     enabled: !!detailId,
     staleTime: 0,
     gcTime: 0,
-    queryFn: async (): Promise<{ legal_fiscal_code: string | null; business_vat_number: string | null }> => {
-      const res = await fetch(`/api/admin/users/${detailId}/kyc`);
-      if (!res.ok) return { legal_fiscal_code: null, business_vat_number: null };
-      return res.json();
+    // 20/11/2026 (R04-002) — Una lettura che non riesce non è «nessun dato»: la scheda scrive «non
+    // disponibile» invece del trattino, che sembrava un codice fiscale o una partita IVA mai dati.
+    queryFn: async (): Promise<DatiIdentita> => {
+      try {
+        const res = await fetch(`/api/admin/users/${detailId}/kyc`);
+        if (!res.ok) return { legal_fiscal_code: null, business_vat_number: null, nonLetti: true };
+        return await res.json();
+      } catch {
+        return { legal_fiscal_code: null, business_vat_number: null, nonLetti: true };
+      }
     },
   });
 
@@ -1038,13 +1044,22 @@ function EditUserModal({
   );
 }
 
+/** Codice fiscale e partita IVA di UN utente (/api/admin/users/[id]/kyc). `nonLetti` = la lettura non è riuscita. */
+type DatiIdentita = { legal_fiscal_code: string | null; business_vat_number: string | null; nonLetti?: boolean };
+
+/** R04-002 — Il trattino vuol dire «non c'è»; una lettura caduta si dice per quello che è. */
+function datoIdentita(d: DatiIdentita | null, campo: 'legal_fiscal_code' | 'business_vat_number'): string {
+  if (d?.nonLetti) return 'non disponibile: riprova';
+  return d?.[campo] ?? '—';
+}
+
 function DetailPanel({
   profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
 }: {
   profile: Profile;
   // #81 — Codice fiscale e partita IVA arrivano solo qui, per questo utente,
   // e la lettura e' registrata: non viaggiano piu' con l'elenco di tutti.
-  datiIdentita: { legal_fiscal_code: string | null; business_vat_number: string | null } | null;
+  datiIdentita: DatiIdentita | null;
   /** Solo per i fattorini: undefined = in arrivo, null = lettura non riuscita. */
   documentiRider?: DatiEsameRider | null;
   onClose: () => void;
@@ -1121,7 +1136,7 @@ function DetailPanel({
           </DetailRow>
           <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
           <DetailRow label="Codice fiscale">
-            <code>{datiIdentita?.legal_fiscal_code ?? '—'}</code>
+            <code>{datoIdentita(datiIdentita, 'legal_fiscal_code')}</code>
           </DetailRow>
           <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
           <DetailRow label="Ultimo accesso">
@@ -1131,7 +1146,7 @@ function DetailPanel({
 
         <DetailGroup title="Azienda" icon={ReceiptText}>
           <DetailRow label="Ragione sociale">{profile.business_legal_name ?? '—'}</DetailRow>
-          <DetailRow label="P.IVA"><code>{datiIdentita?.business_vat_number ?? '—'}</code></DetailRow>
+          <DetailRow label="P.IVA"><code>{datoIdentita(datiIdentita, 'business_vat_number')}</code></DetailRow>
           <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
           <DetailRow label="Sede legale">
             {profile.business_address} — {profile.business_city}
@@ -1169,7 +1184,7 @@ function PannelloFattorino({
   profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
 }: {
   profile: Profile;
-  datiIdentita: { legal_fiscal_code: string | null; business_vat_number: string | null } | null;
+  datiIdentita: DatiIdentita | null;
   documentiRider?: DatiEsameRider | null;
   onClose: () => void;
   onApprove: () => void;
@@ -1231,7 +1246,7 @@ function PannelloFattorino({
             )}
           </DetailRow>
           <DetailRow label="Codice fiscale">
-            <code>{datiIdentita?.legal_fiscal_code ?? '—'}</code>
+            <code>{datoIdentita(datiIdentita, 'legal_fiscal_code')}</code>
           </DetailRow>
           <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
           <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>

@@ -664,6 +664,36 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   }
 
   /**
+   * 13) R03-004 (20/11/2026) — IL REGISTRATORE DEGLI ERRORI SPENTO.
+   *
+   * Senza la chiave pubblica di Sentry (DSN) gli errori del sito restano nei log di Vercel e
+   * `logger.error` non li manda a nessuno: anche gli errori che questo stesso giro scrive (un
+   * controllo saltato, una campanella non scritta) li leggerebbe solo chi apre quei log. Questo è un
+   * canale che non dipende da quella chiave (campanella ed email), quindi lo dice qui, una volta al
+   * giorno finché non si accende. Solo sul sito vero: le anteprime il registratore possono non
+   * averlo. La regola della chiave è la stessa di sentry.server.config.ts (server) e di
+   * instrumentation-client.ts (browser, solo `NEXT_PUBLIC_SENTRY_DSN`).
+   */
+  if (process.env.VERCEL_ENV === 'production') {
+    const dsnDelBrowser = process.env.NEXT_PUBLIC_SENTRY_DSN?.trim();
+    const registratoreServer = !!dsnDelBrowser || !!process.env.SENTRY_DSN?.trim();
+    if (!registratoreServer || !dsnDelBrowser) {
+      alerts.push({
+        // Chiave stabile, una per caso (spento del tutto / spento nel browser), e l'attesa di un giorno.
+        // Con la data UTC dentro, la chiave cambiava alla mezzanotte UTC e non a quella italiana, e
+        // valeva l'attesa di sei ore: fino a quattro avvisi al giorno.
+        key: `REGISTRATORE_ERRORI_SPENTO|${!registratoreServer ? 'ovunque' : 'browser'}`,
+        type: 'REGISTRATORE_ERRORI_SPENTO',
+        detail: !registratoreServer
+          ? 'Il registratore degli errori (Sentry) è spento: un errore del sito non lo vede nessuno. Metti su Vercel NEXT_PUBLIC_SENTRY_DSN e rifai il deploy (runbook, «Registratore degli errori»).'
+          : 'Il registratore degli errori (Sentry) è acceso solo sul server: gli errori nelle pagine dei clienti non arrivano. Metti su Vercel NEXT_PUBLIC_SENTRY_DSN (lo stesso valore di SENTRY_DSN) e rifai il deploy.',
+        url: '/admin/today',
+        unaVoltaAlGiorno: true,
+      });
+    }
+  }
+
+  /**
    * 5/11/2026 — UN CONTROLLO SALTATO NON BUTTA VIA GLI ALLARMI VERI.
    *
    * Prima, con un solo controllo illeggibile, il giro rispondeva 500 subito: prima della campanella

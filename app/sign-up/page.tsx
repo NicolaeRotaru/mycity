@@ -87,6 +87,12 @@ function SignUpInner() {
   const [password, setPassword] = useState('');
   const [acceptTos, setAcceptTos] = useState(false);
   const [role, setRole] = useState<Role>(initialRole);
+  /**
+   * Google non porta il ruolo scelto (signInWithOAuth non ha `data`): handle_new_user crea sempre un
+   * cliente. 17/11 (R02-009) per il fattorino; 20/11 (R03-020) anche per il venditore, che con
+   * Google diventava cliente e il negozio non nasceva. A loro Google non si mostra né si consiglia.
+   */
+  const senzaGoogle = role === 'rider' || role === 'seller';
   const [captchaToken, setCaptchaToken] = useState('');
   /**
    * 22/8/2026 — IL GETTONE ANTI-BOT SI CONSUMA AL PRIMO TENTATIVO.
@@ -131,7 +137,7 @@ function SignUpInner() {
       // 17/11/2026 (R02-009) — A chi ha scelto Rider non si consiglia Google: con Google nasce un
       // account cliente (vedi sotto, vicino ad AuthAlternatives).
       toast.error(captchaRotto
-        ? `${captchaRotto} Senza questo controllo l'iscrizione con email non può partire: ${role === 'rider' ? `ricarica la pagina o scrivici a ${indirizzoContatto('info')}.` : 'ricarica la pagina o registrati con Google.'}`
+        ? `${captchaRotto} Senza questo controllo l'iscrizione con email non può partire: ${senzaGoogle ? `ricarica la pagina o scrivici a ${indirizzoContatto('info')}.` : 'ricarica la pagina o registrati con Google.'}`
         : 'Completa il controllo anti-bot');
       return;
     }
@@ -325,7 +331,7 @@ function SignUpInner() {
         {captchaRotto && (
           <p role="alert" className="text-center text-sm text-ink-600">
             {captchaRotto} Senza questo controllo l&apos;iscrizione con email non può partire:
-            {role === 'rider' ? ' ricarica la pagina.' : ' ricarica la pagina, oppure registrati con Google qui sotto.'} Se non funziona, scrivici a{' '}
+            {senzaGoogle ? ' ricarica la pagina.' : ' ricarica la pagina, oppure registrati con Google qui sotto.'} Se non funziona, scrivici a{' '}
             <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
           </p>
         )}
@@ -352,6 +358,10 @@ function SignUpInner() {
       {role === 'rider' ? (
         <p className="mt-5 text-sm leading-relaxed text-ink-600">
           Con Google si crea un account cliente: per candidarti come fattorino usa email e password.
+        </p>
+      ) : role === 'seller' ? (
+        <p className="mt-5 text-sm leading-relaxed text-ink-600">
+          Con Google si crea un account cliente: i negozi si iscrivono con email e password.
         </p>
       ) : (
         <AuthAlternatives condizioniDalModulo={acceptTos} />

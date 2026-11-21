@@ -12,7 +12,35 @@ export const runtime = 'nodejs';
 
 const Schema = z.object({
   firstMessage: z.string().trim().min(1, 'Messaggio vuoto').max(4000, 'Massimo 4000 caratteri'),
+  // 20/11/2026 (R04-012) — La chiave dell'invio (components/SupportChatModal.tsx): la stessa nei
+  // ritentativi dello stesso messaggio. Facoltativa: chi non la manda invia come prima.
+  idempotency_key: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{8,100}$/, 'Chiave dell’invio non valida')
+    .optional(),
 });
+
+/**
+ * 20/11/2026 (R04-012) — DUE INVII UGUALI NELLO STESSO ISTANTE FACEVANO DUE MESSAGGI E DUE AVVISI.
+ *
+ * Doppio clic o rete che ritenta: due richieste con lo stesso testo creavano due messaggi
+ * all'Assistenza e due campanelle «Nuova richiesta di assistenza». Come per gli ordini in contanti
+ * (`idOrdiniDelTentativo`, lib/ordini/chiave-dopo-l-errore.ts), il legame non chiede colonne nuove:
+ * l'identificativo del messaggio nasce da persona + chiave dell'invio (SHA-256 in forma di UUID), e
+ * la chiave primaria di `messages` rifiuta da sola il secondo (23505). Chi arriva secondo risponde
+ * «già ricevuto», senza un altro messaggio né un altro avviso.
+ */
+async function idDelMessaggio(utente: string, chiave: string): Promise<string> {
+  const impronta = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`mycity:assistenza:${utente}:${chiave}`)),
+  );
+  const b = Array.from(impronta.slice(0, 16));
+  b[6] = (b[6] & 0x0f) | 0x50; // forma di un UUID versione 5
+  b[8] = (b[8] & 0x3f) | 0x80; // variante RFC 4122
+  const hex = b.map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 /**
  * GET /api/support/conversation → `{ supportId }`
@@ -80,7 +108,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   try { json = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = Schema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
-  const { firstMessage } = parsed.data;
+  const { firstMessage, idempotency_key: chiaveInvio } = parsed.data;
 
   const admin = getAdminSupabase();
 
@@ -132,10 +160,15 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   }
 
   const { error: msgErr } = await admin.from('messages').insert({
+    ...(chiaveInvio ? { id: await idDelMessaggio(user.id, chiaveInvio) } : {}),
     conversation_id: conversationId,
     sender_id: user.id,
     body: firstMessage,
   });
+  // R04-012 — Lo stesso invio è già arrivato (doppio clic, ritentativo): niente secondo avviso.
+  if (msgErr?.code === '23505' && chiaveInvio) {
+    return NextResponse.json({ conversationId, supportId: support.id, giaRicevuto: true }, { status: 200 });
+  }
   if (msgErr) return ApiErrors.internal('Impossibile inviare il messaggio');
 
   // 5/11/2026 (S05) — La campanella dell'Assistenza: prima la richiesta d'aiuto

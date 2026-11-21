@@ -110,7 +110,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .eq('id', params.id)
     .single();
 
-  if (error || !dispute) return ApiErrors.notFound('Reclamo non trovato');
+  // 20/11/2026 (R04-002) — Un guasto del database non è «non trovato»: 500 «riprova». «Non c'è»
+  // restano PGRST116 («nessuna riga») e 22P02 (un id che non è un UUID: nessuna riga può averlo).
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') {
+    logger.error('[admin/disputes] reclamo non letto', { disputeId: params.id, code: error.code, message: error.message });
+    return ApiErrors.internal('Non riesco a leggere il reclamo adesso: riprova fra poco.');
+  }
+  if (!dispute) return ApiErrors.notFound('Reclamo non trovato');
 
   let refundId: string | null = null;
 
@@ -130,11 +136,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id, seller_id, dispute_status';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
-    const { data } = await conRipiegoSchema(
+    const { data, error: errOrdine } = await conRipiegoSchema(
       'orders.select (risoluzione del reclamo)',
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', dispute.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', dispute.order_id).single(),
     );
+    // 20/11/2026 (R04-002) — Una lettura caduta non è un ordine senza dati: con `ord` vuoto saltavano il
+    // tetto R84 e il controllo «Stripe non configurato», e partivano lo stesso la chiusura col rimborso,
+    // il rimborso e gli avvisi. 500 «riprova» prima di ogni scrittura. «Non c'è» (PGRST116, 22P02) resta com'era.
+    const codiceOrdine = (errOrdine as { code?: string } | null)?.code;
+    if (errOrdine && codiceOrdine !== 'PGRST116' && codiceOrdine !== '22P02') {
+      logger.error('[admin/disputes] ordine del reclamo non letto', { disputeId: dispute.id, orderId: dispute.order_id, code: codiceOrdine });
+      return ApiErrors.internal('Non riesco a leggere l’ordine del reclamo adesso: riprova fra poco.');
+    }
     ord = (data ?? null) as OrdineDaRimborsare | null;
   }
 
