@@ -417,10 +417,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const HERO_SUBTITLE: Partial<Record<OrderStatus, string>> = {
     NEW: 'Il negozio sta confermando il tuo ordine',
     ACCEPTED: 'Il negozio sta preparando il tuo ordine',
-    READY: 'Pronto in negozio · un rider passa a prenderlo a breve',
-    ASSIGNED: 'Un rider sta arrivando in negozio',
-    PICKED_UP: 'Il rider ha ritirato il tuo ordine',
-    OUT_FOR_DELIVERY: 'Il rider è in viaggio verso di te',
+    READY: 'Pronto in negozio · un fattorino passa a prenderlo a breve',
+    ASSIGNED: 'Un fattorino sta arrivando in negozio',
+    PICKED_UP: 'Il fattorino ha ritirato il tuo ordine',
+    OUT_FOR_DELIVERY: 'Il fattorino è in viaggio verso di te',
     DELIVERED: 'Consegnato — grazie!',
     CANCELED: 'Questo ordine è stato annullato',
   };
@@ -673,7 +673,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       {showDeliveryCode && !deliveryCode?.code && codiceNonLetto && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-accent-200 bg-accent-50 p-4 text-sm text-accent-900">
           <span>
-            <strong>Non riesco a mostrarti il codice di consegna.</strong> {ritiroInNegozio ? 'Il negozio ne ha bisogno per darti la spesa.' : 'Il rider ne ha bisogno per chiudere la consegna.'}
+            <strong>Non riesco a mostrarti il codice di consegna.</strong> {ritiroInNegozio ? 'Il negozio ne ha bisogno per darti la spesa.' : 'Il fattorino ne ha bisogno per chiudere la consegna.'}
           </span>
           <button type="button" onClick={() => { void rileggiCodice(); }} className="rounded-lg bg-white px-3 py-1.5 font-semibold">
             Riprova

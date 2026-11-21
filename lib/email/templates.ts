@@ -374,11 +374,11 @@ export function orderReadyTemplate(args: {
     ${dove ? `<p style="margin:0 0 12px;line-height:1.6">Indirizzo: <strong>${escapeHtml(dove)}</strong></p>` : ''}
     ${codice ? `<p style="margin:0 0 12px;line-height:1.6">Mostra questo codice al negozio: <span style="font-family:monospace;font-size:18px;font-weight:700">${escapeHtml(codice)}</span></p>` : ''}
   `;
-  // 27/10/2026 — «un rider passa a prenderlo», non «lo ritira»: detto al cliente, «ritira» si
+  // 27/10/2026 — «un fattorino passa a prenderlo», non «lo ritira»: detto al cliente, «ritira» si
   // confonde col ritiro in negozio, che al lancio e' spento. Finche' e' spento nessuna email
   // nomina il ritiro (la prova scorre tutti i modelli di questo file).
   const corpoConsegna = `
-    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine è pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un rider passa a prenderlo e te lo porta a casa nella fascia che hai scelto.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine è pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un fattorino passa a prenderlo e te lo porta a casa nella fascia che hai scelto.</p>
     <p style="margin:0 0 12px;line-height:1.6">La fascia e lo stato della consegna li trovi nella pagina dell’ordine, insieme al codice che il fattorino ti chiederà alla consegna.</p>
   `;
 
@@ -394,7 +394,7 @@ export function orderReadyTemplate(args: {
     html: shell('Ordine pronto', body),
     text: args.pickupInStore
       ? `Il tuo ordine è pronto${dove ? ` da ritirare in ${dove}` : ''}.${codice ? ` Mostra il codice ${codice}.` : ''} ${orderUrl}`
-      : `Il tuo ordine è pronto: un rider passa a prenderlo e te lo porta a casa nella fascia che hai scelto. ${orderUrl}`,
+      : `Il tuo ordine è pronto: un fattorino passa a prenderlo e te lo porta a casa nella fascia che hai scelto. ${orderUrl}`,
   };
 }
 
