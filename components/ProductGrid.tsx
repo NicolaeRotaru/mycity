@@ -24,6 +24,16 @@ import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } 
 import { trackSearchPerformed } from '@/lib/analytics/events';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
+/**
+ * R11-012 R11-007 — Quante righe ha dato il database per questa pagina, prima del filtro sui
+ * negozi (`righeLette`, attaccato alla pagina da `leggiProdottiDellaGriglia`). Dove manca vale
+ * la lunghezza, come prima. «Ce n'è un'altra» si decide su queste, non sulle righe rimaste.
+ */
+function righeLetteDellaPagina(pagina: readonly unknown[]): number {
+  const lette = (pagina as { righeLette?: unknown }).righeLette;
+  return typeof lette === 'number' ? lette : pagina.length;
+}
+
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -288,7 +298,10 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         finestra: finestraDellaPagina(pageParam as number, righePerPagina),
       });
     },
-    getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length, righePerPagina),
+    // R11-012 R11-007 — La condivisione strutturale ricopia le pagine e perderebbe `righeLette`,
+    // che viaggia attaccata alla pagina e non si può copiare: la si spegne qui.
+    structuralSharing: false,
+    getNextPageParam: (ultima, tutte) => pagineSuccessiva(righeLetteDellaPagina(ultima), tutte.length, righePerPagina),
   });
 
   const { isLoading, isError, refetch, isFetching } = domanda;
@@ -739,7 +752,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // 30/8/2026 (R080) — E la domanda adesso e' sull'ultima pagina, non sul
   // totale: se l'ultima e' tornata piena quasi certamente ce n'e' un'altra.
   const ultimaPagina = domanda.data?.pages?.[domanda.data.pages.length - 1] ?? [];
-  const forseCeNeSonoAltri = cEUnAltraPagina(ultimaPagina.length, righePerPagina);
+  const forseCeNeSonoAltri = cEUnAltraPagina(righeLetteDellaPagina(ultimaPagina), righePerPagina);
 
   return (
     <>
