@@ -178,8 +178,10 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         .eq('product_id', productId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_esito, productId) => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
+      // R08-005 — e la spunta del menu «Aggiungi a lista» della scheda di quel prodotto.
+      qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
       // R02-008 — /lists legge il conteggio dei prodotti da queste tre: come quando /lists crea una
       // lista, si rileggono, invece di mostrare il numero vecchio fino a quando scadono.
       qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
