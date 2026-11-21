@@ -71,15 +71,18 @@ function VideoField({ section, onChange }: { section: VideoSec; onChange: (s: Si
  * a-capo e grassetto (che senza una barra di formattazione non si può fare).
  */
 export function aCapoInHtml(testo: string): string {
-  return testo.replace(/\r?\n/g, '<br>');
+  // Il formato salvato è sempre codificato (& < >), così htmlInACapo lo decodifica una volta sola
+  // e «a &amp; b» scritto a lettere si rilegge uguale.
+  return testo
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r?\n/g, '<br>');
 }
 export function htmlInACapo(html: string): string {
   // Il testo salvato è già pulito dal server («&» → «&amp;», «<» → «&lt;»): nel campo si rilegge com'è stato scritto.
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+  const ENTITA: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&amp;': '&' };
+  return html.replace(/<br\s*\/?>/gi, '\n').replace(/&(?:lt|gt|amp);/g, (m) => ENTITA[m]);
 }
 
 function StructuralNote({ type }: { type: string }) {
