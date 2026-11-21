@@ -291,13 +291,24 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // R01-002 — Le spiegazioni una alla volta, col tetto delle email: l'allarme di un'email ferma si
   // scrive subito (vedi più sotto), quelle senza tempo si contano e si dicono.
   const { avvisi, allarmiEmail, senzaTempo } = await rispondiEntroIlTetto(admin, verdetto, adesso);
-  if (avvisi.falliti > 0) {
+  // R03-003 — Un allarme per avviso non recapitato, non uno a notte: come per le email ferme,
+  // l'identificativo si ricava dall'avviso (la notte dopo la riga c'è già) e il testo dice chi aspetta.
+  for (const e of avvisi.esiti) {
+    if (e.esito !== 'fallito') continue;
+    const dovuto = verdetto.dovuti.find((d) => d.chiave === e.chiave);
+    const quale =
+      dovuto?.tappa === 'termine-scaduto'
+        ? ' La spiegazione non recapitata è quella del termine di legge scaduto.'
+        : dovuto?.tappa === 'rinviata'
+          ? ' La spiegazione non recapitata è quella del rinvio.'
+          : '';
     await avvisaAmministratori(
       admin,
       'Persone non avvisate del rinvio della cancellazione',
-      avvisi.falliti === 1
-        ? "Stanotte una persona che aspetta la cancellazione non ha ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese."
-        : `Stanotte ${avvisi.falliti} persone che aspettano la cancellazione non hanno ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese.`,
+      "Stanotte una persona che aspetta la cancellazione non ha ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese. " +
+        'Il giro riprova da solo ogni notte; questo avviso non si ripete per la stessa spiegazione. ' +
+        `Chi aspetta: l'utente ${dovuto?.userId ?? 'sconosciuto'}.${quale}`,
+      `${identificativoAvviso(e.chiave)}:non-avvisata`,
     );
   }
   // 27/10/2026 (terzo giro) — LA SPIEGAZIONE PER EMAIL CHE NON PARTE NON È UNA
