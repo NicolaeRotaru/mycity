@@ -10,7 +10,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDelRimborso, avvisaIlClienteDellAnnullo, avvisaIlNegozioDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type AvvisoDelCarrello, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 import { scriviCampanella } from '@/lib/ordini/campanella';
@@ -253,17 +253,21 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     try {
       if (isCardPaid) {
         try {
-          await refundOrder({
+          const motivoDelRimborso = 'Ordine annullato: il venditore non lo ha accettato in tempo';
+          const rimborso = await refundOrder({
             orderId: o.id,
             amountCents: giro ? giro.totaleCents : totaleCents,
-            reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
-            notifyBuyer: true,
+            reason: motivoDelRimborso,
+            // 21/11/2026 (R02-001) — «Rimborso emesso» parte dopo la risposta (lib/ordini/annulla.ts,
+            // `avvisaIlClienteDelRimborso`): il giro non aspetta più l'invio, ordine per ordine.
+            notifyBuyer: false,
             // L'ordine l'ha annullato questo giro, qui sopra, e la merce non
             // l'ha ancora rimessa nessuno: anche se un rimborso parziale dal
             // cruscotto c'era già (lib/ordini/rimessa-a-scaffale.ts).
             annullatoDaChiChiama: true,
           });
           refunded++;
+          await avvisaIlClienteDelRimborso(admin, o, rimborso?.importoCents, motivoDelRimborso);
         } catch (errRimborso) {
           // 6/9/2026 — UN ORDINE CHE NON SI PUO' RIMBORSARE NON SI RIMETTE IN CODA.
           //
