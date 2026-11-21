@@ -283,7 +283,9 @@ export async function leggiProdottiDellaGriglia(
   const soloConVoto = d.idsColVoto !== undefined ? new Set(d.idsColVoto) : null;
   if (perPertinenza && soloConVoto) {
     perPertinenza = perPertinenza.filter((id) => soloConVoto.has(id));
-    if (perPertinenza.length === 0) return [];
+    // R11-009 — Nessun pertinente fra i recensiti non vuol dire «nessun risultato»: si torna al
+    // ripiego sul nome, che sa trovare anche le parole tagliate a metà.
+    if (perPertinenza.length === 0) perPertinenza = null;
   }
 
   /**
@@ -343,9 +345,10 @@ export async function leggiProdottiDellaGriglia(
      * filtro che stringe, sotto i pertinenti si aggiungono quelli che hanno la parola nel nome
      * (la vecchia strada), senza doppioni.
      */
-    const filtroCheStringe =
-      !!d.sellerId || !!categorieDaLeggere || d.minPrice !== undefined || d.maxPrice !== undefined || d.apertiOra !== undefined;
-    if (termine && filtroCheStringe) {
+    // R11-009 — Il ripiego sul nome vale SEMPRE, non solo con un filtro che stringe: la ricerca
+    // italiana non riconosce «pomo» per «Pomodori», e con un solo pertinente trovato gli altri
+    // prodotti con la parola nel nome restavano fuori. I doppioni li toglie `gia`.
+    if (termine) {
       const perNome = () => base().ilike('name', `%${termine}%`);
       // Fino alla fine della finestra chiesta, non una pagina sola: «Carica altri» deve arrivarci.
       const fine = d.finestra ? d.finestra[1] + 1 : d.tetto;
