@@ -17,7 +17,13 @@ import {
   type VerdettoGiro,
   type TappaAvviso,
 } from '@/lib/cron-cancellazioni';
-import { identificativoAvviso, rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
+import {
+  identificativoAvviso,
+  recapitaAvvisi,
+  rispondiAChiAspetta,
+  type ClienteAvvisi,
+  type RapportoAvvisi,
+} from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
   contaOrfaniKyc,
   contaPotature,
@@ -73,6 +79,18 @@ type Admin = ReturnType<typeof getAdminSupabase>;
  * secondi).
  */
 const TETTO_CANCELLAZIONI_MS = 150_000;
+
+/**
+ * 21/11/2026 (R01-002) — LE EMAIL DELLA NOTTE HANNO UN TETTO LORO.
+ *
+ * Il tetto qui sopra si guarda prima di prendere un account, ma un account preso può durare a
+ * lungo: con due account lenti il ciclo finiva a ridosso dei 300 secondi e le email partivano lo
+ * stesso; se la piattaforma fermava la funzione, si perdeva anche l'allarme delle email ferme.
+ * Dopo questo tempo dall'inizio del giro non si tenta un'email nuova: quelle rimaste si contano,
+ * si dicono con un allarme, la notte è rossa e la notte dopo si riprovano da sole. Il margine:
+ * un'email può aspettare la posta fino a due volte dieci secondi, e dopo restano gli allarmi.
+ */
+const TETTO_EMAIL_MS = 240_000;
 
 /**
  * Il conto del giro senza il giro: gli account che la notte cancellerebbe e le
@@ -250,7 +268,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   const rimandateAlGiroDopo = scadute.length - presiInCarico;
   // R03-006 — Il tetto che taglia del lavoro non resta un numero nella risposta: lo si dice subito,
   // prima delle email (che adesso hanno il loro tempo, perché il ciclo si è fermato al tetto).
-  if (rimandateAlGiroDopo > 0) await avvisaDelTettoDiTempo(admin, presiInCarico, rimandateAlGiroDopo);
+  if (rimandateAlGiroDopo > 0) {
+    await avvisaDelTettoDiTempo(admin, presiInCarico, scadute.slice(presiInCarico).map((r) => r.user_id));
+  }
 
   const verdetto = verdettoDelGiro(tentativi, Date.now());
 
@@ -268,7 +288,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // appesa e quindici persone in attesa la notte sforava i 300 secondi prima
   // di arrivare alla sveglia, e le cancellazioni ferme non le sapeva nessuno.
   if (verdetto.daSvegliare) await sveglia(admin, verdetto);
-  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
+  // R01-002 — Le spiegazioni una alla volta, col tetto delle email: l'allarme di un'email ferma si
+  // scrive subito (vedi più sotto), quelle senza tempo si contano e si dicono.
+  const { avvisi, allarmiEmail, senzaTempo } = await rispondiEntroIlTetto(admin, verdetto, adesso);
   if (avvisi.falliti > 0) {
     await avvisaAmministratori(
       admin,
@@ -297,11 +319,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // si riesce a scrivere, la notte resta rossa.
   // 5/11/2026 — Ogni allarme dice QUALE spiegazione è ferma (rinvio o termine scaduto): oltre il
   // mese la stessa persona ne ha due, e prima i due allarmi erano identici.
-  const tappaDi = new Map(verdetto.dovuti.map((d) => [identificativoAvviso(d.chiave), d.tappa] as const));
-  const allarmiEmail = await avvisaUnaVoltaPerAvviso(
-    admin,
-    avvisi.emailBloccateAvvisi.map((x) => ({ ...x, tappa: tappaDi.get(x.id) })),
-  );
+  // R01-002 — Questi allarmi li scrive `rispondiEntroIlTetto`, uno appena l'email risulta ferma.
   await chiudiGliAllarmiDelleEmailPartite(admin, avvisi.emailPartiteAvvisi);
 
   return NextResponse.json(
@@ -341,6 +359,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       // 27/10/2026 (quarto giro, fase 2) — Quante email stanotte non si sono
       // tentate perché il turno l'aveva già preso un altro giro da poco.
       avvisiEmailRimandate: avvisi.emailRimandate,
+      // R01-002 — Quante spiegazioni stanotte non hanno tentato l'email perché il giro aveva finito
+      // il tempo delle email: si riprovano la notte dopo.
+      avvisiEmailSenzaTempo: senzaTempo,
       rinviatePerOrdiniAperti,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
@@ -357,7 +378,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
         potature.fallite > 0 ||
         avvisi.falliti > 0 ||
         allarmiEmail.nuovi > 0 ||
-        allarmiEmail.nonScritti > 0
+        allarmiEmail.nonScritti > 0 ||
+        senzaTempo > 0
           ? 500
           : 200,
     },
@@ -396,7 +418,8 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
  * è nemmeno guardato se il termine è passato. Errore nel registro (arriva a Sentry) e avviso nel
  * pannello degli amministratori.
  */
-async function avvisaDelTettoDiTempo(admin: Admin, prese: number, rimandate: number): Promise<void> {
+async function avvisaDelTettoDiTempo(admin: Admin, prese: number, rimandati: string[]): Promise<void> {
+  const rimandate = rimandati.length;
   logger.error('[cron-deletions] tetto di tempo raggiunto: cancellazioni rimandate alla notte dopo', {
     prese,
     rimandate,
@@ -406,12 +429,93 @@ async function avvisaDelTettoDiTempo(admin: Admin, prese: number, rimandate: num
     rimandate === 1
       ? '1 richiesta di cancellazione è rimandata alla notte dopo'
       : `${rimandate} richieste di cancellazione sono rimandate alla notte dopo`;
+  // R01-002 — Un allarme per stato, non per notte: l'identificativo si ricava da CHI è rimandato
+  // (come la sveglia dei termini scaduti). La notte dopo, con gli stessi account indietro, la riga
+  // c'è già e non se ne scrive un'altra a ogni amministratore; con un arretrato diverso sì.
+  const chiave = `tetto-cancellazioni:${[...new Set(rimandati)].sort().join(',')}`;
   await avvisaAmministratori(
     admin,
     'Cancellazioni rimandate: il giro notturno ha finito il tempo',
     `Stanotte il giro delle cancellazioni ha raggiunto il suo tetto di tempo dopo ${prese} account: ${quante}. ` +
       'Le richieste restano in attesa e ripartono da sole; se succede ogni notte la coda cresce e il termine ' +
       'di un mese per rispondere si avvicina.',
+    chiave,
+  );
+}
+
+/**
+ * 21/11/2026 (R01-002) — LE SPIEGAZIONI DELLA NOTTE, UNA ALLA VOLTA, COL TETTO DELLE EMAIL.
+ *
+ * Prima partivano tutte in una chiamata sola, e gli allarmi delle email ferme si scrivevano dopo
+ * l'ultima: con la posta lenta e il giro a ridosso dei 300 secondi, la funzione fermata dalla
+ * piattaforma li perdeva. Adesso:
+ *  · prima di ogni spiegazione si guarda il tetto delle email (dall'inizio del giro);
+ *  · l'allarme di un'email ferma si scrive subito, prima di tentare quella dopo;
+ *  · passato il tetto, le spiegazioni rimaste si dicono con un allarme, poi si scrivono solo nel
+ *    pannello della persona (è veloce) senza tentare l'email, che si riprova la notte dopo.
+ */
+async function rispondiEntroIlTetto(
+  admin: Admin,
+  verdetto: VerdettoGiro,
+  inizio: number,
+): Promise<{ avvisi: RapportoAvvisi; allarmiEmail: { nuovi: number; nonScritti: number }; senzaTempo: number }> {
+  const avvisi: RapportoAvvisi = {
+    recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, emailBloccateAvvisi: [],
+    emailPartiteAvvisi: [], emailRimandate: 0, esiti: [],
+  };
+  const somma = (uno: RapportoAvvisi) => {
+    avvisi.recapitati += uno.recapitati;
+    avvisi.giaDetti += uno.giaDetti;
+    avvisi.falliti += uno.falliti;
+    avvisi.emailNonPartite += uno.emailNonPartite;
+    avvisi.emailBloccate += uno.emailBloccate;
+    avvisi.emailRimandate += uno.emailRimandate;
+    avvisi.emailBloccateAvvisi.push(...uno.emailBloccateAvvisi);
+    avvisi.emailPartiteAvvisi.push(...uno.emailPartiteAvvisi);
+    avvisi.esiti.push(...uno.esiti);
+  };
+  const allarmiEmail = { nuovi: 0, nonScritti: 0 };
+  const dovuti = verdetto.dovuti;
+  for (let i = 0; i < dovuti.length; i++) {
+    if (Date.now() - inizio >= TETTO_EMAIL_MS) {
+      const rimaste = dovuti.slice(i);
+      await avvisaDelleEmailSenzaTempo(admin, rimaste.map((d) => identificativoAvviso(d.chiave)));
+      somma(await recapitaAvvisi(admin as unknown as ClienteAvvisi, rimaste, logger));
+      return { avvisi, allarmiEmail, senzaTempo: rimaste.length };
+    }
+    const uno = await rispondiAChiAspetta(admin, { dovuti: [dovuti[i]] }, logger);
+    somma(uno);
+    const allarmi = await avvisaUnaVoltaPerAvviso(
+      admin,
+      uno.emailBloccateAvvisi.map((x) => ({ ...x, tappa: dovuti[i].tappa })),
+    );
+    allarmiEmail.nuovi += allarmi.nuovi;
+    allarmiEmail.nonScritti += allarmi.nonScritti;
+  }
+  return { avvisi, allarmiEmail, senzaTempo: 0 };
+}
+
+/**
+ * 21/11/2026 (R01-002) — Le spiegazioni rimaste senza il tempo delle email: errore nel registro
+ * (arriva a Sentry) e un avviso agli amministratori, uno per stato (identificativo ricavato dalle
+ * spiegazioni rimaste), non uno a notte. La notte resta rossa (il 500 sta nella rotta).
+ */
+async function avvisaDelleEmailSenzaTempo(admin: Admin, idAvvisi: string[]): Promise<void> {
+  const quante = idAvvisi.length;
+  logger.error('[cron-deletions] tetto di tempo delle email raggiunto: spiegazioni non tentate per email', {
+    quante,
+    tettoMs: TETTO_EMAIL_MS,
+  });
+  const chiave = `email-senza-tempo:${[...new Set(idAvvisi)].sort().join(',')}`;
+  await avvisaAmministratori(
+    admin,
+    'Spiegazioni non partite per email: il giro notturno ha finito il tempo',
+    (quante === 1
+      ? "Stanotte 1 spiegazione dell'attesa per la cancellazione non è partita per email: "
+      : `Stanotte ${quante} spiegazioni dell'attesa per la cancellazione non sono partite per email: `) +
+      'il giro aveva finito il tempo delle email. Sono scritte nel pannello del sito della persona e la notte ' +
+      'dopo si riprova da sola; se succede ogni notte, chi vuole andarsene non riceve niente fuori dal sito.',
+    chiave,
   );
 }
 
@@ -462,35 +566,82 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
  * versati): la notte non lo prende in carico e non lo cancella. Qui si trovano quelle
  * richieste scadute rimaste fuori dalla lista, e gli amministratori ricevono un avviso per
  * negozio (uno solo, non uno a notte). Una lettura che non riesce non ferma il giro.
+ *
+ * 21/11/2026 (R01-003) — Prima si leggevano al massimo 200 profili, senza ordine, e quelli presi
+ * in carico si toglievano DOPO il limite: con più di 200 richieste scadute il negozio rinviato
+ * poteva restare fuori per sempre. Adesso si legge a pagine, in ordine di richiesta e poi di id,
+ * finché finiscono, e i presi in carico si tolgono pagina per pagina. Due tetti, detti nel
+ * registro quando scattano: le pagine (`RINVIATE_PAGINE_MASSIME`) e il tempo
+ * (`TETTO_RINVIATE_MS`), perché questo passo viene prima del ciclo delle cancellazioni e il
+ * tempo di quel ciclo si conta dall'inizio del giro.
  */
+const RINVIATE_PER_PAGINA = 200;
+const RINVIATE_PAGINE_MASSIME = 25;
+const TETTO_RINVIATE_MS = 45_000;
+
 async function segnalaLeCancellazioniRinviate(admin: Admin, prese: Set<string>): Promise<number> {
+  const inizio = Date.now();
+  let rinviate = 0;
   try {
     const soglia = new Date(Date.now() - 7 * 86_400_000).toISOString();
-    const { data, error } = await admin
-      .from('profiles')
-      .select('id')
-      .lt('deletion_requested_at', soglia)
-      .limit(200);
-    if (error || !Array.isArray(data)) {
-      if (error) logger.warn('[cron-deletions] richieste rinviate non lette', { message: error.message });
-      return 0;
+    type Richiesta = { id: string; deletion_requested_at: string };
+    const leggi = async (pagina: PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
+      const { data, error } = await pagina;
+      if (error || !Array.isArray(data)) throw new Error(error?.message ?? 'risposta senza righe');
+      return data as Richiesta[];
+    };
+    let dopo: Richiesta | null = null;
+    for (let pagina = 0; ; pagina++) {
+      if (pagina === RINVIATE_PAGINE_MASSIME) {
+        logger.warn('[cron-deletions] richieste rinviate: tetto di pagine raggiunto, le altre si guardano la notte dopo', {
+          righeLette: pagina * RINVIATE_PER_PAGINA,
+        });
+        break;
+      }
+      // Prima chi ha la stessa ora di richiesta dell'ultima riga letta e un id più grande (a pari
+      // merito sul confine della pagina), poi chi ha chiesto dopo.
+      let righe: Richiesta[] = [];
+      let ultimaPagina = false;
+      if (dopo) {
+        righe = await leggi(
+          admin.from('profiles').select('id, deletion_requested_at')
+            .eq('deletion_requested_at', dopo.deletion_requested_at).gt('id', dopo.id)
+            .order('id').limit(RINVIATE_PER_PAGINA),
+        );
+      }
+      if (righe.length === 0) {
+        let q = admin.from('profiles').select('id, deletion_requested_at').lt('deletion_requested_at', soglia);
+        if (dopo) q = q.gt('deletion_requested_at', dopo.deletion_requested_at);
+        righe = await leggi(q.order('deletion_requested_at').order('id').limit(RINVIATE_PER_PAGINA));
+        ultimaPagina = righe.length < RINVIATE_PER_PAGINA;
+      }
+      for (const r of righe) {
+        if (!r?.id || prese.has(r.id)) continue;
+        if (Date.now() - inizio >= TETTO_RINVIATE_MS) {
+          logger.warn('[cron-deletions] richieste rinviate: tempo finito, le altre si avvisano la notte dopo', {
+            avvisate: rinviate,
+            tettoMs: TETTO_RINVIATE_MS,
+          });
+          return rinviate;
+        }
+        rinviate++;
+        logger.warn('[cron-deletions] cancellazione rinviata: il negozio ha ordini aperti o soldi da incassare', { userId: r.id });
+        await avvisaAmministratori(
+          admin,
+          'Cancellazione rinviata: ordini o soldi ancora aperti',
+          `L'account ${r.id.slice(0, 8)} ha chiesto la cancellazione da più di 7 giorni, ma come negozio ha ancora ` +
+            'un ordine aperto o soldi da incassare: la notte non la prende in carico e riprova ogni notte. ' +
+            'Chiusi ordini e bonifici, la cancellazione parte da sola.',
+          `cancellazione-rinviata-ordini:${r.id}`,
+        );
+      }
+      if (ultimaPagina || righe.length === 0) break;
+      dopo = righe[righe.length - 1];
     }
-    const rinviate = (data as Array<{ id: string }>).filter((r) => r?.id && !prese.has(r.id));
-    for (const r of rinviate) {
-      logger.warn('[cron-deletions] cancellazione rinviata: il negozio ha ordini aperti o soldi da incassare', { userId: r.id });
-      await avvisaAmministratori(
-        admin,
-        'Cancellazione rinviata: ordini o soldi ancora aperti',
-        `L'account ${r.id.slice(0, 8)} ha chiesto la cancellazione da più di 7 giorni, ma come negozio ha ancora ` +
-          'un ordine aperto o soldi da incassare: la notte non la prende in carico e riprova ogni notte. ' +
-          'Chiusi ordini e bonifici, la cancellazione parte da sola.',
-        `cancellazione-rinviata-ordini:${r.id}`,
-      );
-    }
-    return rinviate.length;
+    return rinviate;
   } catch (e) {
-    logger.warn('[cron-deletions] richieste rinviate non controllate', { e });
-    return 0;
+    logger.warn('[cron-deletions] richieste rinviate non lette', { message: e instanceof Error ? e.message : 'errore' });
+    return rinviate;
   }
 }
 

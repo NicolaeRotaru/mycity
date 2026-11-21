@@ -13,7 +13,7 @@ import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/cata
 import { addToCart, getCart, updateQuantity, type CartItem } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import { discountedUnitCents } from '@/lib/promotions';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
@@ -90,6 +90,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // R02-006 — Le righe che il carrello ha già: «Compra ora» apre la cassa su TUTTO il carrello, e il
   // tetto dei contanti si guarda lì. Si rileggono a ogni cambio del carrello (anche da un'altra scheda).
   const [righeDelCarrello, setRigheDelCarrello] = useState<CartItem[]>([]);
+  // R01-009 — Il prezzo di oggi delle ALTRE righe (centesimi, promo compresa), riletto come la cassa.
+  const [centsDiOggi, setCentsDiOggi] = useState<Record<string, number>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   // R08-003 — L'indirizzo dello zoom che non ha risposto (foto cancellata): al suo posto il segnaposto,
@@ -393,6 +395,35 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     };
   }, []);
 
+  // R01-009 — Le altre righe del carrello hanno il prezzo del giorno in cui sono entrate; la cassa lo
+  // rilegge dal prodotto, con la promo di oggi (lib/ordini/valida-carrello.ts). Qui si fa lo stesso,
+  // come la pagina del carrello: una lettura sola, rifatta solo quando cambiano i prodotti delle altre
+  // righe. Finché non torna, o se cade, vale il prezzo salvato: cassa e rotta dei contanti restano il presidio.
+  const idAltreRighe = Array.from(new Set(righeDelCarrello.map((c) => c.id).filter((x) => x !== id))).sort().join(',');
+  useEffect(() => {
+    if (!idAltreRighe) return;
+    const ids = idAltreRighe.split(',');
+    let vivo = true;
+    void (async () => {
+      try {
+        const [prodotti, sconti] = await Promise.all([
+          supabase.from('products').select('id, price').in('id', ids),
+          fetchActiveDiscounts(supabase, ids),
+        ]);
+        if (!vivo || prodotti.error || sconti.scontiNonLetti) return;
+        const oggi: Record<string, number> = {};
+        for (const p of (prodotti.data ?? []) as Array<{ id: string; price: number | string | null }>) {
+          const pieno = Number(p.price ?? NaN);
+          if (Number.isFinite(pieno)) oggi[p.id] = discountedUnitCents(pieno, sconti.get(p.id) ?? 0);
+        }
+        setCentsDiOggi(oggi);
+      } catch {
+        // Lettura caduta: resta il prezzo salvato nel carrello.
+      }
+    })();
+    return () => { vivo = false; };
+  }, [idAltreRighe]);
+
   // L'elenco delle recensioni parte quando la sezione si avvicina allo schermo.
   useEffect(() => {
     if (recensioniInVista) return;
@@ -579,7 +610,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     const perNegozio = new Map<string, number>([[negozioQui, Math.round(price * 100) * pezziQui]]);
     for (const c of righe) {
       const negozio = c.sellerId ?? `senza-negozio:${c.id}`;
-      const riga = Math.round(Number(c.price) * 100) * Math.max(0, Number(c.quantity) || 0);
+      // R01-009 — Al prezzo di oggi, come la cassa: questo prodotto (un'altra variante) a quello della
+      // scheda, le altre righe a quello riletto; finché manca, a quello salvato nel carrello.
+      const unitaCents = c.id === product.id ? Math.round(price * 100) : (centsDiOggi[c.id] ?? Math.round(Number(c.price) * 100));
+      const riga = unitaCents * Math.max(0, Number(c.quantity) || 0);
       perNegozio.set(negozio, (perNegozio.get(negozio) ?? 0) + (Number.isFinite(riga) ? riga : 0));
     }
     const negozi = [...perNegozio.values()].map((m) => ({ spesaCents: m, merceCents: m }));
@@ -590,7 +624,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const pezziGiaQui = righeDelCarrello.filter(stessaRiga).reduce((t, c) => t + (Number(c.quantity) || 0), 0);
   const lordoContantiCents = lordoDelCarrelloCents(altreRighe, qty);
   const contantiQui = !sopraIlTettoDeiContanti(lordoContantiCents);
-  const contantiAggiungendo = !sopraIlTettoDeiContanti(lordoDelCarrelloCents(altreRighe, pezziGiaQui + qty));
+  const lordoAggiungendoCents = lordoDelCarrelloCents(altreRighe, pezziGiaQui + qty);
+  const contantiAggiungendo = !sopraIlTettoDeiContanti(lordoAggiungendoCents);
+  // R01-009 — Il riquadro verde e «Compri sicuro» non appartengono a un pulsante: stanno accanto ad
+  // «Aggiungi al carrello» (che somma) e a «Compra ora» (che porta la riga alla quantità scelta).
+  // Promettono i contanti solo se reggono su tutte e due le strade; il testo di «Compra ora» e il
+  // ricordo di 'cod' restano legati a `contantiQui`, perché lì la strada è una sola.
+  const contantiSuTutteEDue = contantiQui && contantiAggiungendo;
+  const lordoPiuAltoCents = Math.max(lordoContantiCents, lordoAggiungendoCents);
+  // Quando le due strade divergono il riquadro non dice niente sul pagamento: «Sopra il tetto non si
+  // può pagare in contanti» accanto a «Compra ora · paghi alla consegna» si legge «non puoi comprare».
+  // Ne parla il pulsante, che sa la sua strada; il resto del riquadro (consegna, reso) resta.
+  const stradeDivergono = contantiQui !== contantiAggiungendo;
 
   // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
   // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
@@ -1008,13 +1053,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 negozioId={(sellerProfile?.id ?? product.seller_id) || undefined}
                 externalDeliveryLabel={external?.delivery_label}
               />
-              <span className="inline-flex items-center gap-2 text-sm text-olive-800">
-                <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
-                    non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
-                    cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
-                <span>{frasePagamento(undefined, lordoContantiCents)}</span>
-              </span>
+              {!stradeDivergono && (
+                <span className="inline-flex items-center gap-2 text-sm text-olive-800">
+                  <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+                  {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
+                      non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
+                      cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
+                  <span>{frasePagamento(undefined, lordoPiuAltoCents)}</span>
+                </span>
+              )}
               {/* Il costo di consegna: fin qui non compariva da nessuna parte, e il primo posto
                   dove si vedeva era il carrello. Chi legge la promessa qui sopra deve leggere
                   anche questo, sullo stesso schermo e prima di scegliere. */}
@@ -1320,7 +1367,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
               <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
-              {contantiQui && (
+              {contantiSuTutteEDue && (
                 <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
               )}
             </div>
