@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Clock, CalendarDays, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -132,20 +132,31 @@ export default function EventsPage() {
   const adesso = Date.now();
   const events = tuttiGliEventi.filter((ev) => Date.parse(ev.ends_at) > adesso);
 
+  // 21/11/2026 — Il doppio tocco sul telefono faceva partire due scritture: la seconda tornava
+  // «già usato» e sotto «Ci sei!» compariva un errore. Il secondo tocco su un evento che sta già
+  // lavorando non parte: lo ferma questo elenco, che si aggiorna subito, non al prossimo disegno.
+  const inCorso = useRef<Set<string>>(new Set());
+
   const rsvp = useMutation({
     mutationFn: async (eventId: string) => {
-      if (!userId) throw new Error('Devi accedere per partecipare');
-      const isGoing = myRsvps.has(eventId);
-      if (isGoing) {
-        const { error } = await supabase.from('event_rsvps').delete().eq('user_id', userId).eq('event_id', eventId);
-        if (error) throw error;
-        const next = new Set(myRsvps); next.delete(eventId); setMyRsvps(next);
-        return false;
-      } else {
-        const { error } = await supabase.from('event_rsvps').insert({ user_id: userId, event_id: eventId });
-        if (error) throw error;
-        const next = new Set(myRsvps); next.add(eventId); setMyRsvps(next);
-        return true;
+      try {
+        if (!userId) throw new Error('Devi accedere per partecipare');
+        const isGoing = myRsvps.has(eventId);
+        if (isGoing) {
+          const { error } = await supabase.from('event_rsvps').delete().eq('user_id', userId).eq('event_id', eventId);
+          if (error) throw error;
+          setMyRsvps((prima) => { const next = new Set(prima); next.delete(eventId); return next; });
+          return false;
+        } else {
+          const { error } = await supabase.from('event_rsvps').insert({ user_id: userId, event_id: eventId });
+          // 23505: la riga c'è già (un tocco arrivato prima, o le tue iscrizioni non lette).
+          // Vuol dire che sei già iscritto: è un «Ci sei», non un errore.
+          if (error && error.code !== '23505') throw error;
+          setMyRsvps((prima) => { const next = new Set(prima); next.add(eventId); return next; });
+          return true;
+        }
+      } finally {
+        inCorso.current.delete(eventId);
       }
     },
     onSuccess: (going) => {
@@ -283,7 +294,15 @@ export default function EventsPage() {
 
                   <div className="flex gap-2 mt-auto pt-3">
                     <button
-                      onClick={() => userId ? rsvp.mutate(ev.id) : toast.error('Accedi per partecipare')}
+                      onClick={() => {
+                        if (!userId) { toast.error('Accedi per partecipare'); return; }
+                        // L'ora si guarda al tocco, non all'ultimo disegno: un evento finito
+                        // mentre la pagina era aperta non si preme più, e la scheda se ne va.
+                        if (Date.parse(ev.ends_at) <= Date.now()) { battito((n) => n + 1); return; }
+                        if (inCorso.current.has(ev.id)) return;
+                        inCorso.current.add(ev.id);
+                        rsvp.mutate(ev.id);
+                      }}
                       disabled={rsvp.isPending}
                       className={`flex-1 px-4 py-2 rounded-full font-bold text-sm transition-colors ${
                         isGoing
