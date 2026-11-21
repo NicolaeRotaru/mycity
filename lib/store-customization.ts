@@ -324,7 +324,7 @@ function handleDaLink(v: string | undefined, dominio: RegExp): string | undefine
   const t = v.trim();
   const rx = new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i');
   // Il link del tasto Condividi porta in coda «?igsh=…», «?hl=it», «#…»: non fanno parte del nome.
-  const m = t.replace(/[?#][^]*$/, '').match(rx);
+  const m = t.replace(/[?#].*$/s, '').match(rx);
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
   if (m && /^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1])) return t;
