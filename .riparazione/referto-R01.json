@@ -1,0 +1,456 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-21 02:53",
+  "finita": true,
+  "testa": "438462e900b9a0ec41e0c4a57d4d18d6ea32a357",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "438462e900b9a0ec41e0c4a57d4d18d6ea32a357",
+    "nota": "typecheck, lint e vitest: 1857 file passati, 1 saltato (già sulla base); 11619 test passati. SHA preso con git rev-parse HEAD nello stesso comando."
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "chiave": "accessibilita|tra 768 e 1023 px i tasti ordini, consegne e admin della testata sono solo un'icona senza nome per chi vede",
+      "esito": "riparato",
+      "commit": "6ab1441c",
+      "file_toccati": [
+        "components/Navbar.tsx",
+        "tests/unit/riparazione-r01-tasti-di-mestiere-nel-menu-sui-tablet.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-tasti-di-mestiere-nel-menu-sui-tablet.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-tasti-di-mestiere-nel-menu-sui-tablet.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ab1441c^ --file components/Navbar.tsx --prove tests/unit/riparazione-r01-tasti-di-mestiere-nel-menu-sui-tablet.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Applicata la scelta del 19/11 (DECISIONI, punto 3): sotto lg i tre tasti escono dalla barra (hidden lg:inline-flex) e stanno nel menu dell'account col loro nome; a chi ha più mestieri il menu aggiunge «Ordini ricevuti» e «Consegne». Da lg in su la barra resta com'era.",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; nessun ruolo perde un tasto. Dettaglio: le due voci aggiunte compaiono nel menu anche da lg in su (doppione innocuo)."
+    },
+    {
+      "id": "R01-002",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "parziale",
+      "insieme_a": "R01-024",
+      "commit": "c3281100",
+      "file_toccati": [
+        "components/seller/SellerShell.tsx",
+        "app/rider/earnings/page.tsx",
+        "app/search/page.tsx",
+        "components/admin/AdminSidebar.tsx",
+        "components/Navbar.tsx",
+        "app/admin/disputes/page.tsx",
+        "app/seller/stories/page.tsx",
+        "app/novita/page.tsx",
+        "app/piccoli-prezzi/page.tsx",
+        "app/piu-venduti/page.tsx",
+        "tests/unit/riparazione-r01-scala-del-testo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-scala-del-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-scala-del-testo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c3281100^ --file app/admin/disputes/page.tsx,app/novita/page.tsx,app/piccoli-prezzi/page.tsx,app/piu-venduti/page.tsx,app/rider/earnings/page.tsx,app/search/page.tsx,app/seller/stories/page.tsx,components/Navbar.tsx,components/admin/AdminSidebar.tsx,components/seller/SellerShell.tsx --prove tests/unit/riparazione-r01-scala-del-testo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "31 misure a mano nei file di R01 portate sulla scala: 10px → text-2xs (7), 11px → text-xs (16), 12.5px → text-xs (1), 13px → text-sm (7; i select restano coperti dal pavimento a 16px di globals.css). Il cricchetto guarda solo gli 11 file di R01, così non diventa rosso per i rami delle altre sessioni.",
+      "cosa_resta": "Fuori dai file di R01 restano 241 text-[Npx] in 82 file. Per cartella: app/rider 70, app/seller 28, app/admin 19, app/category 10, components/seller 9, components/account 9, components/ui 8, components/products 8, app/about 8, components/home 6, app/lavora-con-noi 6, poi il resto. Misure più frequenti: 13px 81, 11px 53, 10px 28, 15px 17, 17px 16.",
+      "domanda": "11px non è un gradino della scala: qui va a 12 (text-xs). Nicola conferma, oppure vuole 10 o un gradino nuovo da 11? (domanda già aperta in un'onda precedente)",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; text-2xs (tailwind.config.ts:156-159), --text-xs e --text-sm (globals.css:22-24) esistono; il cricchetto legge solo gli 11 file di R01; nessun text-[Npx] rimasto nei file toccati."
+    },
+    {
+      "id": "R01-003",
+      "chiave": "deploy-sre|l'avviso «registratore degli errori acceso solo sul server» resta finché non si rifà il deploy",
+      "esito": "non_codice",
+      "nota": "Non c'è logica da correggere: la chiave del browser entra nelle pagine solo quando il sito si ricostruisce; finché non si rifà il deploy il browser non registra ed è giusto che l'avviso resti. Il testo lo dice già (operational-alerts/route.ts:689 sulla base: «… e rifai il deploy.»). Con Sentry spento per scelta il caso non si presenta. Quando Nicola lo accenderà: chiave su Vercel e poi un nuovo deploy (runbook, sezione 13).",
+      "prova": "git show 2d19787b:app/api/cron/operational-alerts/route.ts | sed -n 678,690p",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): il testo «rifai il deploy» sta nel file citato, confermato non_codice."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "deploy-sre|nei log la spesa dell ai non mostra i token",
+      "esito": "riparato",
+      "commit": "26cb0598",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "tests/unit/riparazione-r01-token-nei-log-della-spesa.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-token-nei-log-della-spesa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-token-nei-log-della-spesa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 26cb0598^ --file lib/ai/run.ts --prove tests/unit/riparazione-r01-token-nei-log-della-spesa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il logger oscura ogni chiave che contiene «token», quindi ai_usage usciva «[redacted]». Ora i numeri escono con chiavi senza quella parola (ingresso, uscita, cacheScritta, cacheLetta) più unita:'token'. Stessa cura sull'avviso ai_risposta_tagliata. Logger non toccato.",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; le chiavi nuove non combaciano con PII_KEYS; nessuno legge i vecchi nomi."
+    },
+    {
+      "id": "R01-005",
+      "chiave": "deploy-sre|il giorno del lancio un errore del sito non lo vede nessuno: il registratore degli errori è spento e l'unico allarme dipende dalla chiave che manca",
+      "esito": "parziale",
+      "commit": "831f5a05",
+      "file_toccati": [
+        "lib/logger.ts",
+        "app/api/cron/operational-alerts/route.ts",
+        "app/api/health/route.ts",
+        "docs/runbook.md",
+        "tests/unit/riparazione-r01-errori-del-sito-senza-sentry.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-errori-del-sito-senza-sentry.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-errori-del-sito-senza-sentry.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 831f5a05^ --file lib/logger.ts,app/api/cron/operational-alerts/route.ts,app/api/health/route.ts --prove tests/unit/riparazione-r01-errori-del-sito-senza-sentry.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Un allarme che non dipende dalla chiave di Sentry: logger.error sul server conta ogni errore (solo il numero) in Upstash, per ora e per ambiente; con Sentry spento il sorvegliante manda ERRORI_DEL_SITO in campanella e per email se nelle ultime due ore ce n'è almeno uno; se il conto non si legge lo mette fra i controlli saltati. Il semaforo dice dove si vedono gli errori. Runbook sezione 13 allineato alla scelta «spento».",
+      "cosa_resta": "Sentry resta spento per scelta di Nicola: niente chiave e nessuna richiesta di chiave. Il testo degli errori sta solo nei log di Vercel.",
+      "nota": "Parte del logger che oscura i testi non toccata. Il conto è al meglio: senza attesa, una chiamata può perdersi se la funzione si chiude prima. Resta l'allarme quotidiano REGISTRATORE_ERRORI_SPENTO, che il runbook dà per atteso.",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; fetch che lancia, rifiuta, restituisce undefined, non risolve mai: logger.error non lancia, nessuna unhandledRejection; il corpo è solo INCR/EXPIRE senza testo; oscuramento invariato. Note: nessun timeout sul fetch, una richiesta per errore senza limite."
+    },
+    {
+      "id": "R01-006",
+      "chiave": "deploy-sre|un'ultima prova ordina ancora le migrazioni con l'ordine vecchio",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "frontend-ux|nella finestra dei reclami, i dati del pagamento vecchi non danno avviso",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "frontend-ux|la pagina «sotto i 10 €» mostra prodotti da 10 € e nasconde quelli che in promozione costano meno di 10",
+      "esito": "riparato",
+      "commit": "dba68fbf",
+      "file_toccati": [
+        "components/ProductGrid.tsx",
+        "lib/queries/griglia-prodotti.ts",
+        "tests/unit/riparazione-r01-sotto-i-dieci-in-promo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sotto-i-dieci-in-promo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sotto-i-dieci-in-promo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dba68fbf^ --file components/ProductGrid.tsx,lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r01-sotto-i-dieci-in-promo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il 10,00 escluso e il numero vero in alto c'erano già. Restavano fuori i prodotti che solo in promozione scendono sotto 10: idsCheInPromoScendonoSotto li trova (active_promo_products più discountedUnitCents) e il filtro di prezzo li lascia passare con un or price.lte/id.in, sia nella lettura sia nel conteggio. Se quella domanda cade, la griglia resta com'era prima.",
+      "nota": "Limite dichiarato: nell'indirizzo vanno al massimo 100 id (i più economici), per non avere un 414. Prezzi e commissioni non toccati. Limiti visti dal revisore: con più di 100 prodotti che scendono sotto la soglia solo in promo, i meno economici restano fuori da lista e conteggio (coerenti); se la lettura degli sconti della griglia (scontiPromo, ProductGrid.tsx:449) cade da sola, i prodotti promo spariscono dalla lista ma restano nel conteggio.",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; 37 prove di ProductGrid/griglia-prodotti verdi (ricerca, categorie, novità, più recensiti); 10,00 escluso, 9,99 dentro, 12→9 in promo dentro, 12→10 fuori; altri filtri in AND."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "frontend-ux|il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "frontend-ux|la scheda prodotto delle griglie calcola il prezzo scontato con una formula sua",
+      "esito": "riparato",
+      "commit": "8a4c9546",
+      "file_toccati": [
+        "components/ProductCard.tsx",
+        "tests/unit/riparazione-r01-prezzo-scontato-scheda.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-prezzo-scontato-scheda.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-prezzo-scontato-scheda.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8a4c9546^ --file components/ProductCard.tsx --prove tests/unit/riparazione-r01-prezzo-scontato-scheda.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scheda calcola lo scontato con discountedUnitCents di lib/promotions.ts, la funzione di carrello e cassa (importata, non modificata): arrotonda al centesimo e tiene lo sconto fra 0 e 70. Prima 1,15 € al -10% la scheda scriveva 1,04 € contro 1,03 € della cassa. La prova monta la scheda vera.",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; prova di smentita sulla scheda vera (1,15 € al 10%, 0,05 €, 0, 12,5%, 70%, 80%, prezzo in stringa): sempre il prezzo di discountedUnitCents, barrato e prezzo al carrello tornano."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "frontend-ux|le modifiche ai dettagli del negozio e al profilo si perdono uscendo, senza nessun avviso",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "immagini-media|se l'abbonamento supabase scade, le foto del sito tornano rotte e nessun controllo se ne accorge",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base 2d19787b: app/api/health/route.ts:338-366 chiede a /render/image una foto vera di un prodotto in vendita (controllaTrasformazioneFoto, lib/image-url.ts:125) e dice «degradato»; lib/image-url.ts:105 (trasformazioneFotoSpenta, NEXT_PUBLIC_FOTO_SENZA_TRASFORMAZIONE=1) riporta le foto originali. npx vitest run tests/unit/riparazione-r30-foto-salute.test.ts tests/unit/riparazione-r15-foto-senza-trasformazione.test.ts → 8/8 verdi.",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): prove r30 e r15 verdi, confermato."
+    },
+    {
+      "id": "R01-015",
+      "chiave": "layout-responsive|la home e /about scorrono di lato col testo grande sul telefono",
+      "esito": "parziale",
+      "commit": "d24f3138",
+      "file_toccati": [
+        "components/home-sections/HomeSectionRenderer.tsx",
+        "tests/unit/riparazione-r01-home-col-testo-grande.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-home-col-testo-grande.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-home-col-testo-grande.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d24f3138^ --file components/home-sections/HomeSectionRenderer.tsx --prove tests/unit/riparazione-r01-home-col-testo-grande.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "min-w-0 e break-words ai testi accanto alle icone fisse (riquadro «Perché scegliere MyCity», banda fiducia, frase della fascia negozi) e alla colonna e al titolo dell'hero; il pulsante «Diventa venditore» ha max-w-full e sm:whitespace-nowrap (va a capo solo sotto i 640 px). Prova leggera sulle classi (jsdom non misura).",
+      "cosa_resta": "Misurato in Chrome a 360 px col testo al 200% (collaudo precedente), altri due punti escono, in file non miei. /about era già a posto.",
+      "serve_file_altrui": [
+        {
+          "file": "components/LiveActivityFeed.tsx",
+          "modifica": ":55 e :150, sul div dell'intestazione «flex items-center justify-between mb-4» aggiungere flex-wrap gap-x-3 gap-y-1; :56 e :151, sull'h2 «Cosa sta succedendo a Piacenza» aggiungere min-w-0 break-words"
+        },
+        {
+          "file": "components/home/HowItWorks.tsx",
+          "modifica": ":81, sull'h3 del passo (accanto al cerchio shrink-0) aggiungere min-w-0 break-words"
+        }
+      ],
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; sopra 640 px il pulsante resta su una riga; nessun effetto sui desktop (non misurato in browser)."
+    },
+    {
+      "id": "R01-016",
+      "chiave": "microcopy|la pagina dei più recensiti presenta 40 prodotti come «scelti dai clienti» anche quando nessuno ha una recensione",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base 2d19787b: app/piu-venduti/page.tsx:33 eyebrow=\"Con recensioni\" e :58 soloRecensiti → components/ProductGrid.tsx:203 vistaPerVoto → prodotti_con_voto_almeno(0), che (migrazione 127) tiene solo i prodotti con almeno una recensione; stato vuoto «Ancora nessun prodotto recensito». Prove riparazione-r15-piu-recensiti-solo-recensiti.test.ts e riparazione-r09-piu-recensiti-occhiello.test.tsx verdi.",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prove citate verdi, righe citate presenti. Confermato."
+    },
+    {
+      "id": "R01-017",
+      "chiave": "mobile-pwa|quando la sessione scade da sola, il telefono perde le notifiche in silenzio e al nuovo accesso nessuno le riaccende",
+      "esito": "parziale",
+      "commit": "f2ccd210",
+      "file_toccati": [
+        "components/Navbar.tsx",
+        "tests/unit/riparazione-r01-notifiche-sessione-scaduta-al-caricamento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-notifiche-sessione-scaduta-al-caricamento.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-notifiche-sessione-scaduta-al-caricamento.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f2ccd210^ --file components/Navbar.tsx --prove tests/unit/riparazione-r01-notifiche-sessione-scaduta-al-caricamento.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Restava il caso più comune: al caricamento SIGNED_OUT arriva prima della sessione, e l'iscrizione si spegneva senza segno. Finché c'è una sessione e il telefono riceve notifiche, nella voce mc_notifiche_spente_all_uscita (già nella Cookie policy) si ricorda di chi sono; a SIGNED_OUT si lascia il segno e al rientro di quella persona compare l'avviso con «Riattiva»; a un'altra persona niente.",
+      "nota": "middleware.ts non toccato. Accesso e uscita non cambiano. Le notifiche non si riaccendono da sole (apparecchio condivisibile).",
+      "cosa_resta": "Buco stretto visto dal revisore (letto nel diff, non provato con un test): chi lo usa si ricorda solo a un evento di sessione con l'iscrizione già attiva. Se uno attiva le notifiche e la sessione scade prima di un altro evento di sessione valido (nessun ricaricamento, nessun rinnovo), al SIGNED_OUT del caricamento la memoria è vuota e le notifiche si spengono ancora in silenzio. Cura piccola possibile: scrivere la memoria anche subito dopo l'attivazione (PushNotificationOptIn.tsx o lib/push/dispositivo.ts, file di R01), non fatta per il tetto di spesa.",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; l'avviso è per persona (a un'altra persona non compare); trovato il buco stretto in cosa_resta → parziale."
+    },
+    {
+      "id": "R01-018",
+      "chiave": "performance|l'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base 2d19787b: components/ui/DeliveryCutoff.tsx:60-119: chiediVeloce raccoglie le schede dello stesso giro e partiVeloce fa una sola domanda a /api/consegna/veloce/negozi, a blocchi da 100 (la rotta esiste). Prova riparazione-r02-veloce-una-domanda-per-la-lista.test.tsx verde.",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prova citata verde, raggruppamento e rotta presenti. Confermato."
+    },
+    {
+      "id": "R01-019",
+      "chiave": "qa-flussi|l etichetta «rimborso (€)» non è collegata al suo campo",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-020",
+      "chiave": "qa-flussi|la pagina novità mostra tutto il catalogo, anche un prodotto di tre mesi fa, e il numero in alto conta solo i prodotti già caricati",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base 2d19787b: app/novita/page.tsx:51 soloNovita → components/ProductGrid.tsx:248 creatiDal = inizioFinestraNovita() (14 giorni, NEW_PRODUCT_DAYS di lib/constants.ts:2, la soglia del badge «Nuovo») → lib/queries/griglia-prodotti.ts:140 gte('created_at', creatiDal). Conteggio vero: ProductGrid.tsx:289 (contaVero) e :482. Prove riparazione-r15-novita-finestra.test.ts (orologio finto) e riparazione-r15-novita-conteggio.test.ts verdi.",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prove r15-novita verdi, codice citato presente (righe scivolate dopo dba68fbf: ProductGrid.tsx:258, griglia-prodotti.ts:185). Confermato."
+    },
+    {
+      "id": "R01-021",
+      "chiave": "qa-flussi|la scadenza del recesso non si sposta quando l'ultimo giorno cade di sabato, domenica o in un festivo",
+      "esito": "riparato",
+      "commit": "5bdb23a1",
+      "file_toccati": [
+        "lib/ordini/termine-del-recesso.ts",
+        "tests/unit/riparazione-r01-recesso-sabato-domenica-festivi.test.ts",
+        "tests/unit/riparazione-r07-termine-recesso-server.test.ts",
+        "tests/unit/riparazione-r07-termine-recesso-pagina.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-recesso-sabato-domenica-festivi.test.ts",
+        "tests/unit/riparazione-r07-termine-recesso-server.test.ts",
+        "tests/unit/riparazione-r07-termine-recesso-pagina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-recesso-sabato-domenica-festivi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5bdb23a1^ --file lib/ordini/termine-del-recesso.ts --prove tests/unit/riparazione-r01-recesso-sabato-domenica-festivi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se il 14° giorno cade di sabato, di domenica o in un festivo, il termine si sposta al primo giorno lavorativo dopo. Festivi: le feste nazionali (dal 2026 anche il 4 ottobre), il lunedì dell'Angelo e il patrono (Sant'Antonino, 4 luglio), come dice il fatto legale.recesso-scadenza-festivi. Pagina e server usano la stessa funzione.",
+      "commit_prove_comuni": "438462e9",
+      "nota": "Le due prove comuni riparazione-r07-termine-recesso-server.test.ts e -pagina.test.tsx mettevano l'ultimo giorno di domenica (15/3 e 15/2/2026) e si aspettavano la regola vecchia: nel commit 438462e9 le date sono spostate di 2 giorni (ultimo giorno di martedì), nessuna asserzione tolta. Motivo: con la cura la scadenza slitta al lunedì e le 4 asserzioni diventavano rosse. Eccezione firmata da Nicola il 21/11 («firmo tutte e due»), giro4/piano.json eccezioni_firmate. 16/16 verdi sulle tre prove del recesso.",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): 3 prove verdi, rimessa 0; 20 consegne a mano (1/1 e 25/12 col weekend, 31/12, Pasqua/Pasquetta 2026-2028, 4 ottobre 2025-2027, 4 luglio 2026-2028, 23:30/00:30 di Roma al cambio d'ora e a capodanno): tutte giuste; pagina e server usano la stessa funzione."
+    },
+    {
+      "id": "R01-022",
+      "chiave": "stati-ui|quando la rete torna, le pagine prodotto del negoziante rimettono il caricamento al posto del modulo e le modifiche non salvate si perdono",
+      "esito": "riparato",
+      "commit": "d59eee42",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx",
+        "app/seller/products/[id]/edit/page.tsx",
+        "tests/unit/riparazione-r01-modulo-prodotto-quando-torna-la-rete.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-modulo-prodotto-quando-torna-la-rete.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-modulo-prodotto-quando-torna-la-rete.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d59eee42^ --file 'app/seller/products/new/page.tsx,app/seller/products/[id]/edit/page.tsx' --prove tests/unit/riparazione-r01-modulo-prodotto-quando-torna-la-rete.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Rifatta tutta dalla base. Una volta aperto, il modulo resta aperto quando torna la rete, in Modifica, Nuovo e Duplica, e tiene riga, taglie e risposta sulla consegna dell'apertura. Il Salva non scrive finché riga e taglie non sono rilette (senza rete, in volo o cadute): lo dice e il testo resta. Non riscrive quello che è cambiato su un altro telefono e che qui nessuno ha toccato (escluso dal recesso, prezzo, stato, taglie); se le taglie sono state toccate anche qui chiede «Riapri». Una copia non nasce sulle taglie della memoria.",
+      "nota": "ProductForm.tsx non serve: la pagina passa sempre le initialValues dell'apertura, quindi recedibileAllApertura (ProductForm.tsx:291) resta fermo e non_recedibile parte solo se il negoziante la cambia. Prova obbligatoria: un altro telefono cambia solo la spunta, in tutte e due le direzioni, e non torna vecchia. 15 casi, 12 rossi sulla base. Limite visto dal revisore: dopo la prima rilettura riuscita il Salva non è più fermo, quindi un cambio di prezzo da un altro telefono arrivato in una seconda rilettura in quel momento può essere riscritto (normale «l'ultimo vince»).",
+      "verificato_da": "revisore lotto 1 (subagente diverso, modello piccolo, copia a parte): 55/55 verdi, rimessa 0; tre prove di smentita (spunta da altro telefono nei due versi, rilettura caduta e Riprova, vendita di sola scorta, Nuovo/Duplica): regge. Limite: dopo una prima rilettura riuscita, una seconda rilettura con un prezzo cambiato altrove nello stesso istante lascia vincere l'ultimo Salva (finestra normale «l'ultimo vince», fuori dallo scenario della voce)."
+    },
+    {
+      "id": "R01-023",
+      "chiave": "stati-ui|campanello del negozio non azzerato se la rilettura dopo «segna tutte come lette» cade",
+      "esito": "non_fatto",
+      "nota": "tetto: il lotto 3 non è partito perché la spesa della sessione era sopra 24,50 $ (regola della regia 10.0, consegna al 70% di 35 $). Nessun codice toccato per questa voce."
+    },
+    {
+      "id": "R01-024",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "parziale",
+      "insieme_a": "R01-002",
+      "commit": "c3281100",
+      "file_toccati": [
+        "(gli stessi di R01-002)"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-scala-del-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-scala-del-testo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "(lo stesso di R01-002)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "components/ProductCard.tsx:182/185/188/211 erano già sulla scala: nella scheda resta un text-[11px] solo dentro un commento, e il cricchetto la tiene pulita. app/globals.css:22-32 è la scala dichiarata, niente da cambiare. Le correzioni sono nel commit di R01-002.",
+      "cosa_resta": "Come R01-002: 241 occorrenze in 82 file altrui.",
+      "verificato_da": "revisore lotto 2 (subagente diverso, modello piccolo, copia a parte): prova verde, rimessa 0; text-2xs (tailwind.config.ts:156-159), --text-xs e --text-sm (globals.css:22-24) esistono; il cricchetto legge solo gli 11 file di R01; nessun text-[Npx] rimasto nei file toccati."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il modulo prodotto ricalcola la spunta «escluso dal recesso» dell'apertura a ogni disegno",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "components/seller/ProductForm.tsx:291",
+      "descrizione": "recedibileAllApertura si ricalcola dalle initialValues di ogni disegno, mentre lo stato della spunta resta quello dell'apertura: una pagina che cambiasse initialValues senza rimontare il modulo farebbe partire non_recedibile vecchio. Oggi latente (le pagine prodotto passano i valori dell'apertura). Cura: fissarlo con useState/useRef all'apertura (file di R02)."
+    },
+    {
+      "titolo": "«Duplica» con la sorgente in memoria da meno di 30 secondi si apre con le taglie e la spunta di prima",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/products/new/page.tsx:130-155",
+      "descrizione": "Con la rete accesa e la memoria fresca (staleTime 30 s) le letture della sorgente e delle taglie non ripartono, quindi la copia nasce con i dati vecchi. Già sulla base, non è la voce R01-022."
+    },
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (accessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "ordinando per prezzo, le griglie guardano il prezzo pieno e non quello che si paga",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/queries/griglia-prodotti.ts:310",
+      "descrizione": "In «Sotto i 10 €» col «prezzo crescente» un prodotto da 12 € in promozione a 9 € esce dopo quelli da 9,99 €, perché il database ordina sul prezzo pieno. Lo stesso in ricerca e categorie. Solo l'ordine, non i soldi."
+    },
+    {
+      "titolo": "il bollino dello sconto della scheda prodotto mostra la percentuale grezza, oltre il 70% che il prezzo applica",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/ProductCard.tsx:66-68",
+      "descrizione": "Con discount_percent 80 il bollino scrive «-80%» ma il prezzo è scontato del 70% (discountedUnitCents taglia a 70). Dalle griglie non succede (fetchActiveDiscounts taglia a 0-70); può succedere da PromoDeals.tsx:66 e app/promozioni/page.tsx:133 che passano il valore del database."
+    },
+    {
+      "titolo": "il conto degli errori del sito non ha un tempo massimo e fa una richiesta per ogni errore",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/logger.ts (conto errori, R01-005)",
+      "descrizione": "Il fetch verso Upstash non ha timeout e in una tempesta di errori parte una richiesta per errore, senza limite. Non rompe il logger (le eccezioni sono assorbite)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R01-002/R01-024: 11px non è un gradino della scala; nei file di R01 è andato a 12 (text-xs). Confermi, oppure 10 o un gradino nuovo da 11?"
+  ],
+  "conto": {
+    "agenti": 4,
+    "nota": "2 riparatori (lotti 1 e 2, modello grande), 2 revisori (modello piccolo). Lotto 3 non partito per il tetto (sopra 24,50 $): le sue 8 voci sono non_fatto «tetto». Spesa letta con get_session (senza id) alle 02:52 UTC: 25,97 $.",
+    "subagenti": 4
+  },
+  "costo_usd": 25.97
+}
