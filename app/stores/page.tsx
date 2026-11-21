@@ -344,10 +344,13 @@ export default function StoresPage() {
               il 4,5 che serve a un testo (WCAG 2.1 — 1.4.3, livello AA). Con olive-600
               (#5A7C42, il verde «success» del brand) si sale a 4,78. Il pallino accanto resta
               olive-500: e' un elemento grafico, e li' la soglia e' 3. */}
+          {/* R12-002 — A 280 px col testo al 200% «Aperti ora» (che non andava a capo) e il menu
+              «Più assortiti» erano più larghi della riga e la pagina scorreva di lato: ora il testo del
+              bottone va a capo e il menu non supera mai la riga. */}
           <button
             onClick={() => setOnlyOpen((v) => !v)}
             aria-pressed={onlyOpen}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
+            className={`inline-flex items-center gap-1.5 max-w-full px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
               onlyOpen ? 'bg-olive-600 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
           >
@@ -358,7 +361,7 @@ export default function StoresPage() {
             value={sort}
             onChange={(e) => setSort(e.target.value as SortMode)}
             aria-label="Ordina i negozi"
-            className="border rounded-lg px-3 py-2 text-sm bg-white font-semibold"
+            className="max-w-full border rounded-lg px-3 py-2 text-sm bg-white font-semibold"
           >
             <option value="rating">Più amati</option>
             <option value="most-products">Più assortiti</option>
