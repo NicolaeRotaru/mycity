@@ -110,7 +110,32 @@ export function testoSenzaIndirizzi(testo: string): string {
 // Il dominio finisce con lettere: `react@18.3.1` non e' un'email. Dopo puo'
 // venire un punto di fine frase («scrivimi a mario.rossi@gmail.com.»), ma non
 // un altro pezzo di dominio.
-const UN_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])(?!\.[\w-])/gi;
+// La regola si prova (`y`) solo dove un'email puo' cominciare: vedi testoSenzaEmail.
+const UN_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])(?!\.[\w-])/iy;
+const UN_CARATTERE_DELL_EMAIL = /[\w.+-]/;
+
+/**
+ * Nasconde le email di un testo, in tempo lineare.
+ *
+ * Si prova solo in testa al testo, subito dopo l'email di prima o dopo un
+ * carattere che in un'email non sta: ripartire da ogni carattere di una stessa
+ * sequenza non trova niente di nuovo. Niente lookbehind: il file gira anche nel
+ * browser, e Safari prima della 16.4 non lo legge.
+ */
+export function testoSenzaEmail(testo: string, segno: string = VALORE_NASCOSTO): string {
+  if (!testo || !testo.includes('@')) return testo;
+  let fuori = '';
+  let copiato = 0;
+  for (let i = 0; i < testo.length; i++) {
+    if (i !== copiato && UN_CARATTERE_DELL_EMAIL.test(testo[i - 1])) continue;
+    UN_EMAIL.lastIndex = i;
+    if (!UN_EMAIL.test(testo)) continue;
+    fuori += testo.slice(copiato, i) + segno;
+    copiato = UN_EMAIL.lastIndex;
+    i = copiato - 1;
+  }
+  return fuori + testo.slice(copiato);
+}
 // Prefisso +39 / 0039 facoltativo, poi un cellulare (3xx) o un fisso (0x…), anche
 // fra parentesi, con spazi, punti, trattini o barre fra le cifre («0532/123456»).
 // Prima e dopo non ci devono essere lettere, cifre, trattini o barre: cosi' un
@@ -123,8 +148,7 @@ const SEMBRA_UNA_DATA_O_UN_DECIMALE = /^(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d+
 
 export function testoSenzaRecapiti(testo: string): string {
   if (!testo) return testo;
-  return testo
-    .replace(UN_EMAIL, VALORE_NASCOSTO)
+  return testoSenzaEmail(testo)
     .replace(UN_TELEFONO, (trovato) => (SEMBRA_UNA_DATA_O_UN_DECIMALE.test(trovato) ? trovato : VALORE_NASCOSTO));
 }
 
