@@ -11,7 +11,7 @@ import { cn } from '@/lib/cn';
  *   3 size: sm/md/lg. Composition con Card.Header/Body/Footer in v2."
  */
 
-type Variant = 'bordered' | 'elevated' | 'flat' | 'funnel';
+type Variant = 'bordered' | 'elevated' | 'flat' | 'funnel' | 'surface' | 'quiet';
 type Padding = 'none' | 'sm' | 'md' | 'lg';
 /**
  * 12/11/2026 (R10-010) — IL RAGGIO PER CONTESTO, DETTO QUI.
@@ -40,6 +40,10 @@ const VARIANTS: Record<Variant, string> = {
    * e chi la usa non riscrive più le classi a mano.
    */
   funnel:   'bg-white border border-surface-200 shadow-card',
+  /** Card a mano con fondo `surface-0` e bordo sabbia (righe di elenco, riquadri dei cruscotti). */
+  surface:  'bg-surface-0 border border-cream-300',
+  /** Card a mano con bordo sabbia chiaro e ombra lieve (le più comuni dopo `bordered`). */
+  quiet:    'bg-white border border-cream-200 shadow-warm-sm',
 };
 
 const PADDINGS: Record<Padding, string> = {
