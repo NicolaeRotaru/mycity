@@ -551,12 +551,16 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
   const quali = quante === 1
     ? 'Stanotte una pulizia dei dati vecchi non è riuscita.'
     : `Stanotte ${quante} pulizie dei dati vecchi non sono riuscite.`;
+  // R03-004 — Un allarme per stato, non per notte: l'identificativo si ricava da QUALI pulizie non
+  // riescono. La notte dopo, con lo stesso guasto, la riga c'è già; con un guasto diverso se ne scrive una.
+  const chiave = `ritenzione-non-riuscita:${[...new Set(rapporto.esiti.filter((e) => !e.ok).map((e) => e.cosa))].sort().join(',')}`;
   await avvisaAmministratori(
     admin,
     'Dati vecchi non cancellati',
     `${quali} I dati che dovevamo cancellare sono ancora al loro posto, oltre il tempo che ` +
       'promettiamo nella pagina della privacy. Non si sistema da sola: se il database ha detto di ' +
       'no stanotte, dirà di no anche domani.',
+    chiave,
   );
 }
 
