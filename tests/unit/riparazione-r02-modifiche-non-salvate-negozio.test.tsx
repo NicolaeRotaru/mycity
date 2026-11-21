@@ -89,6 +89,8 @@ describe('R02-006 · modifiche non salvate dentro VendorForm', () => {
     const { radice, riDisegna } = await monta();
     await scrivi(radice, 'Forno e pasticceria');
     expect(tentaUscita()).toBe(true);
+    await act(async () => { radice.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    await aspetta();
     await riDisegna(0); // salvataggio caduto: il numero non cambia
     expect(tentaUscita()).toBe(true);
     await riDisegna(1735000000000);

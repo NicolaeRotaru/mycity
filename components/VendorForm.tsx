@@ -140,16 +140,26 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   // Modifiche non salvate: l'istantanea di quello che il negoziante può cambiare, confrontata con
   // quella di quando la schermata si è aperta (o dell'ultimo salvataggio riuscito).
   const storePhone = watch('storePhone');
-  const istantanea = JSON.stringify([
+  const fotografia = (c: StoreCustomization) => JSON.stringify([
     storeName, storePhone, location.address.trim(), Number(location.lat).toFixed(5), Number(location.lng).toFixed(5),
-    logoUrl, media, description, hours, custom,
+    logoUrl, media, description, hours, c,
   ]);
+  const istantanea = fotografia(custom);
   const [salvata, setSalvata] = useState(istantanea);
-  const ultimaIstantanea = useRef(istantanea);
-  ultimaIstantanea.current = istantanea;
-  const dirty = istantanea !== salvata;
+  // Finché il negoziante non ha fatto nulla nel modulo, quello che cambia da solo (il selettore della
+  // mappa corregge il vecchio punto di Roma o le coordinate non valide appena si apre) è la
+  // posizione di partenza, non una sua modifica: la fotografia di partenza lo assorbe.
+  const primoGesto = useRef(false);
+  const segnaGesto = () => { primoGesto.current = true; };
   useEffect(() => {
-    if (salvataggioRiuscito > 0) setSalvata(ultimaIstantanea.current);
+    if (!primoGesto.current) setSalvata(istantanea);
+  }, [istantanea]);
+  const dirty = primoGesto.current && istantanea !== salvata;
+  // Quello che è partito con l'invio: a salvataggio riuscito la fotografia è questa, non quello che
+  // il negoziante ha scritto mentre la risposta era in volo.
+  const inviata = useRef<string | null>(null);
+  useEffect(() => {
+    if (salvataggioRiuscito > 0 && inviata.current !== null) setSalvata(inviata.current);
   }, [salvataggioRiuscito]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => {
@@ -274,6 +284,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     }
     setCustomError(null);
     setErroriSocial({});
+    inviata.current = fotografia(showBranding ? { ...custom, socials: normalizzaSocials(custom.socials) } : custom);
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
@@ -289,7 +300,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
+    <form
+      onSubmit={handleSubmit(handleFormSubmit)}
+      onInputCapture={segnaGesto}
+      onChangeCapture={segnaGesto}
+      onPointerDownCapture={segnaGesto}
+      onKeyDownCapture={segnaGesto}
+      onDropCapture={segnaGesto}
+      className="space-y-5"
+    >
       {showBranding && (
         <>
           {/* Logo upload */}
