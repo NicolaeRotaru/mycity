@@ -760,6 +760,39 @@ export const POST = withAuthRateLimit(
     });
 
     /**
+     * 21/11/2026 (R01-006) — CARTA RIFIUTATA, POI «PAGO ALLA CONSEGNA»: IL BENVENUTO VALE SUBITO.
+     *
+     * La pulizia qui sopra chiude la cassa con la carta e restituisce il codice
+     * (`release_coupon(p_code)`), ma la rivendicazione di quella cassa (`coupon_redemptions`,
+     * migrazione 361) restava aperta: per due minuti la rivendicazione qui sotto rispondeva «Coupon
+     * non disponibile». Come nella rotta della carta, ogni cassa con la carta ha scritto nella sua riga
+     * di intento (`delivery.rivendicazione`) quale rivendicazione è sua: si chiudono solo quelle delle
+     * casse appena liberate, mai il lucchetto di un'altra scheda. Se la lettura non riesce, la riga
+     * resta aperta come prima e il lucchetto si spegne da solo in due minuti.
+     */
+    if (riserveLiberate.liberati.length > 0) {
+      try {
+        const { data: liberate } = await admin
+          .from('pending_checkouts')
+          .select('id, delivery')
+          .in('id', riserveLiberate.liberati);
+        const sue = ((liberate ?? []) as Array<{ delivery?: { rivendicazione?: unknown } | null }>)
+          .map((p) => p.delivery?.rivendicazione)
+          .filter((r): r is string => typeof r === 'string' && r !== '');
+        if (sue.length > 0) {
+          const { error: errChiusa } = await admin
+            .from('coupon_redemptions')
+            .update({ released_at: new Date().toISOString() })
+            .in('id', sue)
+            .is('released_at', null);
+          if (errChiusa) logger.warn('[cod] rivendicazione della cassa con la carta liberata non chiusa', { message: errChiusa.message });
+        }
+      } catch (e) {
+        logger.warn('[cod] rivendicazione della cassa con la carta liberata non chiusa', { message: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    /**
      * 8/9/2026 — SE LA PAGINA CON LA CARTA È RIMASTA VIVA, L'ORDINE IN CONTANTI
      * NON NASCE.
      *
