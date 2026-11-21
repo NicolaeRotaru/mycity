@@ -351,10 +351,13 @@ export default function SellerAnalyticsPage() {
           // Il campione, dichiarato: le visite si contano solo su chi accetta i
           // cookie, quindi questo numero e' un indizio, non una misura. E senza
           // le visite il tasso non c'e': un «0,0%» direbbe che nessuno compra.
+          // R02-008 — Con le visite lette e degli ordini, un tasso che manca vuol dire campione troppo
+          // piccolo, anche con zero visite misurate (al lancio, se nessuno accetta i cookie): la scheda
+          // Visite mostra 0, e «Serve il conto delle visite» qui sembrava un guasto.
           delta={
             analytics.conversionRate == null
-              ? (analytics.views30 != null && analytics.views30 > 0
-                ? 'Campione troppo piccolo: più ordini che visite misurate'
+              ? (analytics.views30 != null && analytics.orders30 > 0
+                ? `Campione troppo piccolo: ${analytics.orders30} ordini su ${analytics.views30} visite misurate`
                 : 'Serve il conto delle visite per calcolarlo')
               : `su ${analytics.views30} visite misurate`
           }
