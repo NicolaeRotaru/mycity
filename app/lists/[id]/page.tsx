@@ -129,6 +129,9 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
 
   const updateMeta = useMutation({
     mutationFn: async () => {
+      // R08-007 — la creazione su /lists vieta il titolo vuoto, e anche la modifica: il database
+      // accetta la stringa vuota, quindi il controllo sta qui.
+      if (!titleVal.trim()) throw new Error('Scrivi un titolo per la lista.');
       const { error } = await supabase
         .from('product_lists')
         .update({ title: titleVal.trim(), description: descVal.trim() || null, updated_at: new Date().toISOString() })
@@ -282,7 +285,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
                 className="w-full text-sm bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 resize-none"
               />
               <div className="flex gap-2">
-                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{tActions('save')}</button>
+                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending || !titleVal.trim()} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{tActions('save')}</button>
                 <button onClick={() => setEditTitle(false)} className="text-ink-500 px-3 py-1 rounded-lg text-sm">{tActions('cancel')}</button>
               </div>
             </div>
