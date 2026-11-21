@@ -243,8 +243,9 @@ sorvegliante lo dà per fermo dopo 30 minuti senza battito (`lib/cron-health.ts`
 4. Se 500 → prima si legge il corpo della risposta: diversi lavori rispondono 500
    apposta per un caso da sistemare a mano (il freno della veloce col suo
    `daSistemareAMano`, le cancellazioni con le loro sveglie, il sorvegliante con
-   `controlliSaltati`). Se il corpo non dice niente del genere → bug nel codice,
-   e Sentry dovrebbe averlo catturato.
+   `controlliSaltati`). Se il corpo non dice niente del genere → bug nel codice:
+   con Sentry spento il testo sta nei log di Vercel (livello «error»), e il
+   sorvegliante lo segnala con `ERRORI_DEL_SITO` (sezione 13).
 5. Se 504 → il lavoro ha sforato il tempo massimo. Il tetto è in `vercel.json`
    → `functions`; alzarlo è l'ultima spiaggia, prima si guarda perché ci mette
    tanto.
@@ -504,19 +505,37 @@ scavalcare dal giro dopo, e la stessa persona riceve il messaggio due volte.
 
 ---
 
-## 13. Registratore degli errori (Sentry): accenderlo prima del lancio
+## 13. Registratore degli errori (Sentry): spento per scelta, e come si vedono gli errori
 
-**Perché**: senza, un errore del sito finisce solo nei log di Vercel e non lo vede nessuno. Scelta
-del 19/11: si accende prima del lancio, piano gratuito (Developer: 5.000 errori al mese). Il codice
-è già pronto: parte da solo appena su Vercel c'è la chiave pubblica (DSN). Non serve toccare niente
-nel codice.
+**Com'è adesso**: il registratore degli errori (Sentry) resta **spento per scelta di Nicola**
+(21/11): niente chiave su Vercel. Senza, il testo di un errore del sito finisce solo nei log di
+Vercel. Perché qualcuno lo veda lo stesso, il logger **conta** ogni errore del server (solo il
+numero, nessun testo) nello stesso Upstash del freno anti-abuso, e il sorvegliante
+(operational-alerts, ogni 5 minuti) manda l'allarme **`ERRORI_DEL_SITO`** (campanella in
+`/admin/today` ed email a `SUPPORT_EMAIL`, al massimo ogni sei ore) quando nelle ultime due ore ce
+n'è almeno uno. Non serve nessuna chiave in più: bastano `UPSTASH_REDIS_REST_URL` e
+`UPSTASH_REDIS_REST_TOKEN`, che il sito ha già (se mancano, `/api/health` lo dice in rosso).
 
-**Come capire se è acceso**: apri `https://<sito>/api/health` e guarda `registratoreErrori`:
+**Quando arriva `ERRORI_DEL_SITO`**:
+
+1. Vercel → progetto → **Logs** → filtro livello **error**, ultime due ore.
+2. Ogni riga è un JSON con `msg` e il contesto (già ripulito dai dati personali): cerca il percorso
+   (`percorso`) o la rotta che si ripete.
+3. Se è un errore di soldi o di consegna (Stripe, rimborsi, bonifici, ordini), guardalo subito con
+   le sezioni di questo runbook; se si ripete senza fermarsi, valuta di accendere Sentry (sotto).
+4. Se il conto non si legge (Upstash giù), il sorvegliante lo dice con `SORVEGLIANTE_INCOMPLETO`
+   («conto degli errori del sito»).
+
+**Come capire se Sentry è acceso**: apri `https://<sito>/api/health` e guarda `registratoreErrori`:
 `acceso`, `acceso solo sul server` (manca la chiave del browser) o `spento`. Finché non è `acceso`,
-il sorvegliante (operational-alerts) manda ogni giorno l'allarme `REGISTRATORE_ERRORI_SPENTO`
-(campanella in `/admin/today` ed email a `SUPPORT_EMAIL`).
+il sorvegliante manda anche, una volta al giorno, l'allarme `REGISTRATORE_ERRORI_SPENTO`: con la
+scelta di adesso è atteso.
 
-### Accenderlo (15 minuti, una volta sola)
+### Se un giorno si decide di accenderlo (15 minuti, una volta sola)
+
+Il codice è già pronto: parte da solo appena su Vercel c'è la chiave pubblica (DSN), piano gratuito
+(Developer: 5.000 errori al mese). Non serve toccare niente nel codice. Acceso Sentry, l'allarme
+`ERRORI_DEL_SITO` tace: gli errori li manda Sentry.
 
 1. **Account**: su sentry.io crea l'account e l'organizzazione. Alla domanda sulla regione dei dati
    scegli **European Union (Frankfurt)**: gli errori possono contenere pezzi di dati dei clienti, e

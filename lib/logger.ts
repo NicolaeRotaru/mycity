@@ -99,6 +99,56 @@ async function captureClientWarning(msg: string, ctx?: Record<string, unknown>):
   Sentry?.captureMessage(msg, { level: 'warning', ...(ctx ? { extra: ctx } : {}) });
 }
 
+/**
+ * 21/11/2026 (R01-005) — GLI ERRORI DEL SITO SI CONTANO ANCHE CON IL REGISTRATORE SPENTO.
+ *
+ * Il registratore degli errori (Sentry) resta spento per scelta, e senza la sua chiave
+ * `logger.error` scriveva solo nei log di Vercel: il giorno del lancio un errore del sito non lo
+ * vedeva nessuno, e l'unico allarme possibile dipendeva proprio dalla chiave che manca. Qui ogni
+ * errore del server si conta, ora per ora, nello stesso Upstash che usa il freno anti-abuso
+ * (nessuna chiave nuova): solo il numero, nessun testo, quindi nessun dato personale esce dai log.
+ * Il sorvegliante (operational-alerts) legge il conto (stessa chiave: `chiaveErroriDellOra`) e, se
+ * c'è, avvisa in campanella e per email.
+ *
+ * Un conteggio perso (Upstash giù, funzione chiusa prima della risposta) non ferma niente: è un
+ * campanello in più, non un registro.
+ */
+const ERRORI_DURATA_SECONDI = 2 * 24 * 60 * 60;
+
+function upstashDegliErrori(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  return url && token ? { url, token } : null;
+}
+
+/** Una chiave per ora (UTC) e per ambiente: gli errori delle anteprime non suonano per il sito vero. */
+function chiaveErroriDellOra(ms: number): string {
+  const ambiente = process.env.VERCEL_ENV || process.env.NODE_ENV || 'sconosciuto';
+  return `mc:errori-del-sito:${ambiente}:${new Date(ms).toISOString().slice(0, 13)}`;
+}
+
+function chiamaUpstash(u: { url: string; token: string }, comandi: unknown[][]): Promise<Response> {
+  return fetch(`${u.url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${u.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(comandi),
+    cache: 'no-store',
+  });
+}
+
+/** Conta un errore del server. Nel browser e senza Upstash non fa niente; non lancia mai. */
+function contaErroreDelSito(adesso: number = Date.now()): Promise<void> {
+  if (typeof window !== 'undefined') return Promise.resolve();
+  const u = upstashDegliErrori();
+  if (!u) return Promise.resolve();
+  const chiave = chiaveErroriDellOra(adesso);
+  try {
+    return chiamaUpstash(u, [['INCR', chiave], ['EXPIRE', chiave, ERRORI_DURATA_SECONDI]]).then(() => undefined, () => undefined);
+  } catch {
+    return Promise.resolve();
+  }
+}
+
 // Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
   return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
@@ -161,6 +211,8 @@ export const logger = {
     if (typeof window === 'undefined') {
       // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
       void captureServerError(errore, c);
+      // R01-005 — E si conta, anche col registratore spento: il sorvegliante lo dice (vedi contaErroreDelSito).
+      void contaErroreDelSito();
     } else {
       // Client: wrapper lazy esistente (init Sentry browser al primo errore).
       void captureError(errore, c);
