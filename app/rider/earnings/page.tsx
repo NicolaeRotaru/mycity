@@ -14,7 +14,7 @@ import RiderConnectButton from '@/components/rider/RiderConnectButton';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 import { riepilogoFattorino } from '@/lib/guadagni/fattorino';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
-import { giornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
+import { FUSO_PIACENZA, giornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -228,7 +228,7 @@ export default function RiderEarningsPage() {
                       : `Consegna${o.delivery_city ? ` a ${o.delivery_city}` : ''}`}
                   </p>
                   <p className="text-xs text-ink-400">
-                    {o.delivered_at ? new Date(o.delivered_at).toLocaleDateString('it-IT') : '—'} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
+                    {o.delivered_at ? new Date(o.delivered_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA }) : '—'} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
                   </p>
                 </div>
                 <span className="inline-flex items-center gap-1 font-bold text-olive-700">
