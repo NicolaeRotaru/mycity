@@ -74,7 +74,12 @@ export function aCapoInHtml(testo: string): string {
   return testo.replace(/\r?\n/g, '<br>');
 }
 export function htmlInACapo(html: string): string {
-  return html.replace(/<br\s*\/?>/gi, '\n');
+  // Il testo salvato è già pulito dal server («&» → «&amp;», «<» → «&lt;»): nel campo si rilegge com'è stato scritto.
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }
 
 function StructuralNote({ type }: { type: string }) {
