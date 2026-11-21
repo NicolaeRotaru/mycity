@@ -5,7 +5,6 @@ vi.mock('@sentry/nextjs', () => sentry);
 vi.mock('@/lib/analytics/sentry', () => ({ captureError: vi.fn() }));
 
 import { logger } from '@/lib/logger';
-import { runInNewContext } from 'node:vm';
 
 const EMAIL = 'mario.rossi@example.com';
 const JWT =
@@ -136,40 +135,4 @@ describe('S01 · il registro oscura i testi', () => {
     expect(ms1, `elenco: ${Math.round(ms1)} ms`).toBeLessThan(200);
     expect(ms2, `testo: ${Math.round(ms2)} ms`).toBeLessThan(200);
   }, 60_000);
-
-  it('un message che non è un testo non fa lanciare', () => {
-    const numero = new Error('x');
-    (numero as unknown as { message: unknown }).message = 42;
-    const oggetto = new Error('x');
-    (oggetto as unknown as { message: unknown }).message = { email: EMAIL };
-    expect(() => logger.error(numero)).not.toThrow();
-    expect(ultimaRiga().msg).toBe('42');
-    expect(() => logger.error(oggetto)).not.toThrow();
-    expect(() => logger.warn('avviso', { errore: numero })).not.toThrow();
-    expect(uscita()).not.toContain(EMAIL);
-  });
-
-  it('se pulire la voce lancia, esce una riga fissa senza il testo', () => {
-    const scoppia = { get dettaglio(): string { throw new Error(`guasto ${EMAIL}`); } };
-    expect(() => logger.warn(`avviso ${EMAIL}`, scoppia)).not.toThrow();
-    expect(() => logger.error(new Error(`errore ${EMAIL}`), scoppia)).not.toThrow();
-    expect(righe.length).toBe(2);
-    expect(uscita()).not.toContain(EMAIL);
-    expect(ultimaRiga().level).toBe('error');
-  });
-
-  it('un errore di un altro realm arriva a Sentry col suo messaggio oscurato', async () => {
-    vi.stubEnv('SENTRY_DSN', 'https://chiave-finta@o1.ingest.sentry.io/1');
-    const err = runInNewContext(`new Error('pagamento di ${EMAIL} fallito')`) as Error;
-    expect(err instanceof Error).toBe(false);
-    logger.error(err);
-    await vi.waitFor(() => expect(sentry.captureException).toHaveBeenCalledTimes(1));
-    const [mandato] = sentry.captureException.mock.calls[0] as [{ message?: unknown; stack?: unknown }];
-    expect(mandato.message).toBe('pagamento di [redacted] fallito');
-    expect(typeof mandato.stack).toBe('string');
-    expect(String(mandato.stack)).not.toContain(EMAIL);
-    expect(ultimaRiga().msg).toBe('pagamento di [redacted] fallito');
-    logger.warn('avviso', { errore: err });
-    expect((ultimaRiga().errore as { message?: unknown }).message).toBe('pagamento di [redacted] fallito');
-  });
 });

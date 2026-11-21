@@ -83,27 +83,7 @@ function senzaIban(pezzo: string): string {
   return pezzo;
 }
 
-/** Un testo da qualunque cosa, senza lanciare: un message può essere un numero o un oggetto. */
-function comeTesto(x: unknown): string {
-  if (typeof x === 'string') return x;
-  try {
-    return String(x);
-  } catch {
-    return '[non leggibile]';
-  }
-}
-
-/** Un errore anche se viene da un altro realm (vm, iframe), dove `instanceof Error` è falso. */
-function eUnErrore(x: unknown): x is Error {
-  if (x instanceof Error) return true;
-  if (x === null || typeof x !== 'object') return false;
-  if (Object.prototype.toString.call(x) === '[object Error]') return true;
-  const e = x as { message?: unknown; stack?: unknown };
-  return typeof e.message === 'string' && typeof e.stack === 'string';
-}
-
-function testoPulito(valore: unknown, conto: Conto): string {
-  const testo = comeTesto(valore);
+function testoPulito(testo: string, conto: Conto): string {
   if (!testo) return testo;
   if (conto.resto <= 0) return TRONCATO;
   const massimo = Math.min(TAGLIO_PER_TESTO, conto.resto);
@@ -140,7 +120,7 @@ function redact(value: unknown, depth: number, conto: Conto): unknown {
   // su ottantaquattro l'errore era il secondo argomento, quindi nei log
   // restava la frase («rimborso fallito») e spariva il motivo. Chi apriva il
   // log dopo un rimborso fallito leggeva: rimborso fallito, {}.
-  if (eUnErrore(value)) {
+  if (value instanceof Error) {
     return {
       name: value.name,
       message: testoPulito(value.message, conto),
@@ -172,7 +152,7 @@ function toCtx(ctx: unknown, conto: Conto): Record<string, unknown> | undefined 
  */
 function erroreSenzaDati(err: unknown, conto: Conto, giro = 0): unknown {
   if (typeof err === 'string') return testoPulito(err, conto);
-  if (!eUnErrore(err)) return err !== null && typeof err === 'object' ? redact(err, 0, conto) : err;
+  if (!(err instanceof Error)) return err !== null && typeof err === 'object' ? redact(err, 0, conto) : err;
   const messaggio = testoPulito(err.message, conto);
   const pila = typeof err.stack === 'string' ? testoPulito(err.stack, conto) : err.stack;
   const haCausa = 'cause' in err;
@@ -288,21 +268,6 @@ function messaggioPulito(msg: string, conto: Conto): string {
 }
 
 /**
- * La rete: il registro non lancia mai. Se pulire la voce lancia (un getter che scoppia, un valore
- * che non si scrive), esce una riga fissa, senza niente della voce: mai il testo grezzo.
- */
-const VOCE_NON_LEGGIBILE = '[registro: voce non leggibile]';
-function senzaLanciare(level: string, scrivi: (riga: string) => void, fai: () => void): void {
-  try {
-    fai();
-  } catch {
-    try {
-      scrivi(lineaPulita(level, VOCE_NON_LEGGIBILE));
-    } catch { /* nemmeno la console: niente */ }
-  }
-}
-
-/**
  * Sul SERVER si scrive sempre, anche in produzione.
  *
  * Prima le tre funzioni erano avvolte da `NODE_ENV !== 'production'`: in
@@ -317,7 +282,7 @@ const eServer = typeof window === 'undefined';
 export const logger = {
   info: (msg: string, ctx?: LogContext) => {
     if (process.env.NODE_ENV !== 'production' || process.env.LOG_LEVEL === 'info') {
-      senzaLanciare('info', (r) => console.log(r), () => console.log(line('info', msg, ctx)));
+      console.log(line('info', msg, ctx));
     }
   },
 
@@ -329,18 +294,16 @@ export const logger = {
    * Questa esce sempre, come gli avvisi, e resta riconoscibile per grep.
    */
   spesa: (msg: string, ctx?: LogContext) => {
-    senzaLanciare('spesa', (r) => console.log(r), () => console.log(line('spesa', msg, ctx)));
+    console.log(line('spesa', msg, ctx));
   },
 
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
-    senzaLanciare('warn', (r) => console.warn(r), () => {
-      const conto = nuovoConto();
-      const m = messaggioPulito(msg, conto);
-      const c = toCtx(ctx, conto);
-      console.warn(lineaPulita('warn', m, c));
-      if (!eServer) void captureClientWarning(m, c).catch(() => undefined);
-    });
+    const conto = nuovoConto();
+    const m = messaggioPulito(msg, conto);
+    const c = toCtx(ctx, conto);
+    console.warn(lineaPulita('warn', m, c));
+    if (!eServer) void captureClientWarning(m, c);
   },
 
   error: (err: unknown, ctx?: LogContext) => {
@@ -351,28 +314,17 @@ export const logger = {
     // ottantaquattro punti e sperare che nessuno ne aggiunga un altro, li
     // rimette in ordine il logger: l'Error va a Sentry, la frase resta come
     // contesto. Così l'errore vero smette di sparire.
-    let pulito: unknown;
-    let c: Record<string, unknown> | undefined;
-    try {
-      let errore = err;
-      let contesto = ctx;
-      if (typeof err === 'string' && eUnErrore(ctx)) {
-        errore = ctx;
-        contesto = { messaggio: err };
-      }
-      const conto = nuovoConto();
-      pulito = erroreSenzaDati(errore, conto);
-      c = toCtx(contesto, conto);
-      if (eServer || process.env.NODE_ENV !== 'production') {
-        console.error(lineaPulita('error', eUnErrore(pulito) ? comeTesto(pulito.message) : comeTesto(pulito), c));
-      }
-    } catch {
-      // La rete: l'errore non si perde, ma parte solo la riga fissa, mai il testo grezzo.
-      pulito = new Error(VOCE_NON_LEGGIBILE);
-      c = undefined;
-      try {
-        if (eServer || process.env.NODE_ENV !== 'production') console.error(lineaPulita('error', VOCE_NON_LEGGIBILE));
-      } catch { /* nemmeno la console: niente */ }
+    let errore = err;
+    let contesto = ctx;
+    if (typeof err === 'string' && ctx instanceof Error) {
+      errore = ctx;
+      contesto = { messaggio: err };
+    }
+    const conto = nuovoConto();
+    const pulito = erroreSenzaDati(errore, conto);
+    const c = toCtx(contesto, conto);
+    if (eServer || process.env.NODE_ENV !== 'production') {
+      console.error(lineaPulita('error', pulito instanceof Error ? pulito.message : String(pulito), c));
     }
     if (typeof window === 'undefined') {
       // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
