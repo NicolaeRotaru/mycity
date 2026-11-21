@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-21 02:35",
+  "aggiornato": "2026-11-21 02:50",
   "finita": true,
   "testa": "0617700dfc4ad7a455e95d7dcf1da75b296bc3d7",
   "verifica": {
@@ -421,7 +421,8 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il «—» della voce è lo stesso della funzione datoIdentita (1053). Nome e indirizzo del negozio vengono dal profilo già letto, non da una lettura in corso. La parte in caricamento è la P.IVA, e ha la stessa causa e la stessa riga del codice fiscale. Un solo commit, dichiarato con insieme_a. La prova controlla P.IVA e codice fiscale.",
-      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde; lettura caduta → «non disponibile: riprova», non resta su «Caricamento…»; il trattino resta dove il dato manca davvero. Regge (caso teorico: una risposta 200 con corpo null resterebbe su «Caricamento…», la rotta non lo fa)."
+      "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde; lettura caduta → «non disponibile: riprova», non resta su «Caricamento…»; il trattino resta dove il dato manca davvero. Regge (caso teorico: una risposta 200 con corpo null resterebbe su «Caricamento…», la rotta non lo fa).",
+      "nota": "Nessun commit separato: la correzione di R03-018 è lo stesso commit 975d2aa1 di R03-001 (stessa funzione datoIdentita, app/admin/users/page.tsx:1053), dichiarato con insieme_a su tutte e due le voci; la prova riparazione-r03-scheda-utente-admin-in-caricamento controlla sia la P.IVA sia il codice fiscale."
     },
     {
       "id": "R03-019",
@@ -543,6 +544,9 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "6 subagenti: lotto 1 e lotto 2 (modello grande), lotto 3 (modello piccolo), revisore 1 (modello grande, fermato a 33 $ prima di finire), revisore 2 (modello grande), revisore 3 (modello piccolo). Spesa della sessione 33,91 $ (usage.cost_usd di get_session alle 02:29), oltre la fermata dura di 33 $ per i revisori già in corso; nessun lotto o giro nuovo dopo il 70%."
-  }
+    "nota": "6 subagenti: lotto 1 e lotto 2 (modello grande), lotto 3 (modello piccolo), revisore 1 (modello grande, fermato a 33,91 $ prima di finire), revisore 2 (modello grande), revisore 3 (modello piccolo). Costo della sessione 35,15 $ (usage.cost_usd di get_session alle 02:48), oltre il tetto di 35 $: la fermata dura di 33 $ è stata passata dai revisori già in corso e dalla chiusura del referto; nessun lotto o giro nuovo dopo il 70%.",
+    "subagenti": 6,
+    "costo_usd": 35.15
+  },
+  "costo_usd": 35.15
 }
