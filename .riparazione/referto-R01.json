@@ -1,6 +1,6 @@
 {
  "sessione": "R01",
- "aggiornato": "2026-11-21 05:05",
+ "aggiornato": "2026-11-21 05:08",
  "finita": true,
  "testa": "90ee7bd3e32e9715dc953eb931319128c880cafe",
  "verifica": {
@@ -69,11 +69,7 @@
    "id": "R01-009",
    "chiave": "flussi-conversione|la scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
    "esito": "riparato",
-   "commit": [
-    "62896089ea25fee61441b50443b0b0b75d657355",
-    "85b822a4876c3e07bedf018d9f9b7b4075cd9331",
-    "90ee7bd3e32e9715dc953eb931319128c880cafe"
-   ],
+   "commit": "90ee7bd3e32e9715dc953eb931319128c880cafe",
    "file_toccati": [
     "app/product/[id]/page.tsx",
     "tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx",
@@ -95,7 +91,7 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Giro di correzione: quando le due strade divergono (contantiQui !== contantiAggiungendo) il riquadro verde non mostra la frase di pagamento, così non dice «non si può pagare in contanti/con carta» né «paghi con carta adesso» accanto a «Compra ora · paghi alla consegna»; consegna e reso restano; tutte e due sopra il tetto → il rifiuto di frasePagamento come sulla base (carta spenta o accesa), tutte e due sotto → la promessa. Parte (b): la scheda rilegge prezzo (products) e promo (fetchActiveDiscounts + discountedUnitCents) delle altre righe come app/cart/page.tsx, con un useEffect legato alla sola lista ordinata degli id delle altre righe (una lettura, nessuna senza altre righe, nessuna a ogni render o cambio di quantità); mentre legge, se cade o se gli sconti non si leggono vale il prezzo salvato; le righe dello stesso prodotto con altra variante contano al prezzo della scheda.",
-   "nota": "Nella mia prova tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx (nata in questo ramo con 62896089) ho cambiato un'asserzione del primo caso: diceva che il riquadro mostra «Sopra 4.999,99 € non si…» con le strade divergenti, ora dice che non lo mostra (è proprio la contraddizione da togliere). Nessuna prova di altri toccata; le 40 prove che leggono o montano page.tsx più le due nuove: 42 file, 429 casi verdi. eslint 0 errori (4 avvisi a11y già presenti sulla base, riga ~877), tsc --noEmit verde. La carta accesa nella prova si simula con vi.mock di lib/funzioni-al-lancio (getter su CARTA_ACCESA) e vi.stubEnv della chiave pubblica: i file lib non si toccano. Non spinto.",
+   "nota": "Commit della voce, tutti in questo ramo: 62896089ea25fee61441b50443b0b0b75d657355 (riquadro verde e «Compri sicuro» promettono i contanti solo se reggono sia con «Compra ora» sia con «Aggiungi»; pulsante e ricordo di 'cod' restano su «Compra ora»); 85b822a4876c3e07bedf018d9f9b7b4075cd9331 (giro di correzione: con le due strade divergenti il riquadro non mostra la frase di pagamento, così non contraddice «Compra ora · paghi alla consegna», carta accesa o spenta); 90ee7bd3e32e9715dc953eb931319128c880cafe (le altre righe del carrello contano al prezzo e alla promo di oggi, come la cassa; mentre legge o se la lettura cade vale il prezzo salvato). Nella mia prova tests/unit/riparazione-r01-contanti-dopo-aggiungi.test.tsx (nata in questo ramo con 62896089) ho cambiato un'asserzione del primo caso: diceva che il riquadro mostra «Sopra 4.999,99 € non si…» con le strade divergenti, ora dice che non lo mostra (è proprio la contraddizione da togliere). Nessuna prova di altri toccata; le 40 prove che leggono o montano page.tsx più le due nuove: 42 file, 429 casi verdi. eslint 0 errori (4 avvisi a11y già presenti sulla base, riga ~877), tsc --noEmit verde. La carta accesa nella prova si simula con vi.mock di lib/funzioni-al-lancio (getter su CARTA_ACCESA) e vi.stubEnv della chiave pubblica: i file lib non si toccano. Non spinto.",
    "verificato_da": "non rivisto (tetto di spesa) per il giro di correzione 85b822a4 e 90ee7bd3: il revisore è stato fermato alla fermata dura di 28 $ prima del verdetto. Il primo commit 62896089 (parte a) l'aveva guardato il revisore 1 (lente soldi, modello grande, copia separata): regge come parziale, e da lui vengono i due punti chiusi dalla correzione (frase che contraddiceva il pulsante con la carta spenta, prezzi salvati nel carrello)."
   },
   {
