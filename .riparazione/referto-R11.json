@@ -1,13 +1,13 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-21 23:58",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-22 00:20",
+  "finita": true,
+  "testa": "546959a85624d1adbf2c3a4a126a8e672fb0b85b",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "546959a85624d1adbf2c3a4a126a8e672fb0b85b",
+    "nota": "typecheck, lint e vitest: 1916 file di prova passati (1 saltato già prima), 11841 prove passate; SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -164,9 +164,15 @@
     {
       "id": "R11-001",
       "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
-      "esito": "gia_riparato_prima",
-      "prova": "components/ProductGrid.tsx:692 priority={prioritaPrimeFoto && !formaFila && i < 4}: la home monta la griglia come fila (components/home-sections/HomeSectionRenderer.tsx:245-247 rail), quindi senza priority; components/home/PromoDeals.tsx:71 priority={false}; components/store-sections/CollectionSection.tsx:98 priority={false} e :156 prioritaPrimeFoto={false}; app/promozioni/page.tsx:138 priority={i < 4}, ora quattro e non sei, su una pagina dove la griglia è la prima cosa dopo la testata.",
-      "copre_tutta_la_voce": true
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "riga 223: aggiungere prioritaPrimeFoto={false} al <ProductGrid> della vetrina; la sezione productGrid è l ultima della home del negozio (lib/store-site.ts:340-348), sotto la piega, e oggi le sue prime 4 foto escono priority (components/ProductGrid.tsx:692, prioritaPrimeFoto predefinito true)"
+        }
+      ],
+      "nota": "Il resto della voce era già sistemato prima: la home della città monta la griglia come fila senza priority (components/home-sections/HomeSectionRenderer.tsx:245-247; components/ProductGrid.tsx:692 esclude formaFila), components/home/PromoDeals.tsx:71 e components/store-sections/CollectionSection.tsx:98 e :156 hanno priority falso, app/promozioni/page.tsx:138 è sceso da sei a quattro su una pagina dove la griglia è in cima. Resta solo la home del negozio, e la cura sta in un file non mio. Toccare il predefinito in ProductGrid.tsx toglierebbe la priorità anche dove la griglia è in cima (categoria, ricerca, novità).",
+      "verificato_da": "qa (subagente revisore del lotto B): ha trovato la griglia della vetrina sotto la piega con priority; la sessione R11 l ha ricontrollato su lib/store-site.ts:340-348 e components/StoreProductExplorer.tsx:223"
     },
     {
       "id": "R11-002",
@@ -198,7 +204,8 @@
           "modifica": "togliere la riga 51 { protocol: 'https', hostname: 'placehold.co' }, nello stesso commit delle modifiche sopra"
         }
       ],
-      "nota": "next.config.js è mio, ma toglierlo da solo fa cadere tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts (righe 284-290), che vuole HOST_IMMAGINI_AMMESSI uguale a remotePatterns e ogni host nell'img-src del middleware: le cinque copie vanno tolte insieme. Nel codice che gira placehold.co non si usa più. Restano stories/StoreAvatar.stories.tsx, documenti .md e seeds/001_piacenza_stores.sql (prodotti in bozza con foto placehold.co: se quei dati sono nel database vero perderebbero la foto, da guardare lato Nicola)."
+      "nota": "next.config.js è mio, ma toglierlo da solo fa cadere tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts (righe 284-290), che vuole HOST_IMMAGINI_AMMESSI uguale a remotePatterns e ogni host nell'img-src del middleware: le cinque copie vanno tolte insieme. Nel codice che gira placehold.co non si usa più. Restano stories/StoreAvatar.stories.tsx, documenti .md e seeds/001_piacenza_stores.sql (prodotti in bozza con foto placehold.co: se quei dati sono nel database vero perderebbero la foto, da guardare lato Nicola).",
+      "verificato_da": "qa (subagente revisore del lotto B): la prova tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts:284-290 impone davvero HOST_IMMAGINI_AMMESSI uguale a remotePatterns"
     },
     {
       "id": "R11-003",
@@ -208,7 +215,8 @@
       "file_toccati": [],
       "prova": "public/manifest.json sulla base ha già \"id\": \"/\" (riga 5) e \"display_override\": [\"standalone\",\"minimal-ui\"] (riga 8), e non ha più orientation: il blocco in verticale, id e display_override erano già sistemati prima.",
       "cosa_resta": "servono schermate vere dell'app (una stretta e una larga) da mettere in public/ e in manifest.screenshots; nel deposito ci sono solo mockup in docs/mockup. Niente immagini finte, come da indicazione della regista.",
-      "copre_tutta_la_voce": false
+      "copre_tutta_la_voce": false,
+      "verificato_da": "qa (subagente revisore del lotto B): c è un solo manifest (public/manifest.json, collegato da app/layout.tsx:243), senza orientation, con id e display_override"
     },
     {
       "id": "R11-004",
@@ -230,21 +238,24 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 546959a8^ --file app/lists/page.tsx --prove tests/unit/riparazione-r11-lista-nel-menu.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il menu (components/AddToListButton.tsx) legge la chiave React Query lists.mineMin, mentre la creazione da /lists invalidava solo lists.mine. Ora invalida anche lists.mineMin. La prova monta /lists, mette in cache le liste del menu, crea una lista e controlla che quella chiave risulti da rileggere."
+      "cosa_ho_fatto": "Il menu (components/AddToListButton.tsx) legge la chiave React Query lists.mineMin, mentre la creazione da /lists invalidava solo lists.mine. Ora invalida anche lists.mineMin. La prova monta /lists, mette in cache le liste del menu, crea una lista e controlla che quella chiave risulti da rileggere.",
+      "verificato_da": "qa (subagente revisore del lotto B): la chiave [lists, mine-min] di lib/queries/keys.ts:262 è la stessa del menu (components/AddToListButton.tsx:40); prova 0, prova rimessa 0"
     },
     {
       "id": "R11-005",
       "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
       "esito": "gia_riparato_prima",
       "prova": "app/rider/availability/page.tsx:121-124 saveZones chiama solo persist({ rider_zones }), senza nessun «salvate»; persist (righe 91-96) mostra toast.error se fallisce; il «Preferenze salvate» dei turni esce solo dopo ok (righe 112-119, commento R03-015 alle righe 99-104).",
-      "copre_tutta_la_voce": true
+      "copre_tutta_la_voce": true,
+      "verificato_da": "qa (subagente revisore del lotto B): nessun «salvate» anticipato per le zone, né nella pagina né in componenti figli (il «salvat» di riga 327 è un testo fisso)"
     },
     {
       "id": "R11-006",
       "chiave": "qa-flussi|le pagine cms caricano ancora youtube/vimeo senza clic",
       "esito": "gia_riparato_prima",
       "prova": "components/cms/CmsBlockRenderer.tsx:98 rende <VideoAlClic provider=… src=… titolo=… /> al posto dell'iframe; components/store-sections/VideoAlClic.tsx: pulsante type=\"button\" e l'<iframe> nasce solo dopo il clic.",
-      "copre_tutta_la_voce": true
+      "copre_tutta_la_voce": true,
+      "verificato_da": "qa (subagente revisore del lotto B): l unico embed YouTube/Vimeo del CMS passa da VideoAlClic, e il testo ricco vieta iframe (lib/sanitize-html.ts:43)"
     }
   ],
   "nuovi_difetti_visti": [
@@ -254,11 +265,21 @@
       "severita": "minore",
       "file": "app/rider/availability/page.tsx:121-124",
       "descrizione": "saveZones fa setZones(next) prima di persist e non ripristina le zone di prima se persist torna false, mentre save() per i turni ripristina (setAvail(prima))."
+    },
+    {
+      "titolo": "una lista rinominata o eliminata resta com era nel menu «aggiungi a lista»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:123-127",
+      "descrizione": "rileggiLeListeDiLists invalida solo le chiavi mine, public e inVetrina, non mine-min (lib/queries/keys.ts:262), che è quella letta dal menu in components/AddToListButton.tsx:40; mine-min non ha mine come prefisso."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "placehold.co (R11-002): lo togliamo da tutte e cinque le liste dei domini ammessi insieme (next.config.js, lib/indirizzo-immagine-ammesso.ts, middleware.ts, lib/immagine-categoria.ts, lib/ai/productContext.ts)? Prima conviene guardare se nel database vero ci sono ancora prodotti con foto placehold.co (seeds/001_piacenza_stores.sql ne crea in bozza).",
+    "Schermate per l installazione dell app (R11-003): servono due schermate vere, una stretta e una larga, da mettere in public/ e in manifest.screenshots. Chi le fa?"
+  ],
   "conto": {
-    "agenti": 3,
-    "nota": ""
+    "agenti": 4,
+    "nota": "2 subagenti riparatori (lotti A e B) e 2 revisori, tutti col modello piccolo; nessun giro di correzione"
   }
 }
