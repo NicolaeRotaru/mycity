@@ -494,9 +494,13 @@ async function rispondiEntroIlTetto(
   for (let i = 0; i < dovuti.length; i++) {
     if (Date.now() - inizio >= TETTO_EMAIL_MS) {
       const rimaste = dovuti.slice(i);
-      await avvisaDelleEmailSenzaTempo(admin, rimaste.map((d) => identificativoAvviso(d.chiave)));
+      // R03-008 — Una spiegazione arrivata per email in una notte prima non è «non partita»: fuori
+      // dal conto, dal testo e dalla chiave dell'allarme. Nel pannello si scrivono tutte, come prima.
+      const nonPartite: typeof rimaste = [];
+      for (const d of rimaste) if (!(await emailGiaPartita(admin, identificativoAvviso(d.chiave)))) nonPartite.push(d);
+      if (nonPartite.length > 0) await avvisaDelleEmailSenzaTempo(admin, nonPartite.map((d) => identificativoAvviso(d.chiave)));
       somma(await recapitaAvvisi(admin as unknown as ClienteAvvisi, rimaste, logger));
-      return { avvisi, allarmiEmail, senzaTempo: rimaste.length };
+      return { avvisi, allarmiEmail, senzaTempo: nonPartite.length };
     }
     const uno = await rispondiAChiAspetta(admin, { dovuti: [dovuti[i]] }, logger);
     somma(uno);
@@ -508,6 +512,27 @@ async function rispondiEntroIlTetto(
     allarmiEmail.nonScritti += allarmi.nonScritti;
   }
   return { avvisi, allarmiEmail, senzaTempo: 0 };
+}
+
+/**
+ * 21/11/2026 (R03-008) — Il segno che lib/privacy/avvisi-a-chi-aspetta.ts scrive nel registro degli
+ * invii quando l'email di un avviso è partita (lì è una costante non esportata: deve restare uguale).
+ */
+const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
+
+/** L'email di questo avviso risulta già partita? Se il registro non si legge, no: si conta fra le non partite. */
+async function emailGiaPartita(admin: Admin, idAvviso: string): Promise<boolean> {
+  try {
+    const { data, error } = await admin
+      .from('audit_logs')
+      .select('action')
+      .eq('target_table', 'notifications')
+      .eq('target_id', idAvviso);
+    if (error || !Array.isArray(data)) return false;
+    return data.some((r) => (r as { action?: unknown }).action === EMAIL_PARTITA);
+  } catch {
+    return false;
+  }
 }
 
 /**
