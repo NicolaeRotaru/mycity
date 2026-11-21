@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-21 02:50",
+  "aggiornato": "2026-11-21 03:26",
   "finita": true,
   "testa": "0617700dfc4ad7a455e95d7dcf1da75b296bc3d7",
   "verifica": {
@@ -31,9 +31,6 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nella funzione datoIdentita, se la lettura non è ancora arrivata (dato assente) la scheda scrive «Caricamento…» invece del trattino. Vale per i due pannelli (venditore e fattorino). Il trattino resta solo dove il dato manca davvero.",
-      "insieme_a": [
-        "R03-018"
-      ],
       "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde; lettura caduta → «non disponibile: riprova», non resta su «Caricamento…»; il trattino resta dove il dato manca davvero. Regge (caso teorico: una risposta 200 con corpo null resterebbe su «Caricamento…», la rotta non lo fa)."
     },
     {
@@ -400,11 +397,7 @@
     {
       "id": "R03-018",
       "chiave": "qa-flussi|nella scheda utente dell'amministrazione i dati del negozio mostrano «—» mentre si caricano",
-      "esito": "riparato",
-      "commit": "975d2aa17057ffe406312924e86fcf9e2195cf5f",
-      "insieme_a": [
-        "R03-001"
-      ],
+      "esito": "parziale",
       "file_toccati": [
         "app/admin/users/page.tsx"
       ],
@@ -414,15 +407,11 @@
       "prova_comando": "npx vitest run tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "stessa rimessa di R03-001: senza la correzione la prova è rossa, con la correzione verde"
-      },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il «—» della voce è lo stesso della funzione datoIdentita (1053). Nome e indirizzo del negozio vengono dal profilo già letto, non da una lettura in corso. La parte in caricamento è la P.IVA, e ha la stessa causa e la stessa riga del codice fiscale. Un solo commit, dichiarato con insieme_a. La prova controlla P.IVA e codice fiscale.",
       "verificato_da": "revisore 3 (subagente generico, modello piccolo, mandato di smentire): diff letto, prova verde; lettura caduta → «non disponibile: riprova», non resta su «Caricamento…»; il trattino resta dove il dato manca davvero. Regge (caso teorico: una risposta 200 con corpo null resterebbe su «Caricamento…», la rotta non lo fa).",
-      "nota": "Nessun commit separato: la correzione di R03-018 è lo stesso commit 975d2aa1 di R03-001 (stessa funzione datoIdentita, app/admin/users/page.tsx:1053), dichiarato con insieme_a su tutte e due le voci; la prova riparazione-r03-scheda-utente-admin-in-caricamento controlla sia la P.IVA sia il codice fiscale."
+      "nota": "la correzione sta nel commit di R03-001 (975d2aa1, stessa funzione datoIdentita); il collaudo la giudica lì; si chiude nel giro di correzione con un commit suo o con la firma",
+      "cosa_resta": "la correzione sta nel commit di R03-001 (975d2aa1, stessa funzione datoIdentita); il collaudo la giudica lì; si chiude nel giro di correzione con un commit suo o con la firma"
     },
     {
       "id": "R03-019",
