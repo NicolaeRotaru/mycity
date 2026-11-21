@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,6 +27,7 @@ import AnnouncementEditor from './seller/AnnouncementEditor';
 import BadgePicker from './seller/BadgePicker';
 import StoreHoursEditor from './seller/StoreHoursEditor';
 import { erroreDegliOrari } from './seller/orari-validi';
+import { clicDaFermare } from './seller/site/dove-e-l-errore';
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 type SchemaData = { storeName: string; storePhone: string };
@@ -68,9 +69,17 @@ interface Props {
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
   mode?: VendorFormMode;
+  /**
+   * Un numero che cambia (e non è 0) quando il salvataggio è RIUSCITO: da quel momento i dati
+   * in pagina sono quelli salvati e uscire non fa perdere niente. Se il salvataggio cade non
+   * cambia, e l'avviso resta.
+   */
+  salvataggioRiuscito?: number;
+  /** Dice a chi sta sopra se ci sono modifiche non salvate (per il suo tasto «indietro»). */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', salvataggioRiuscito = 0, onDirtyChange }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
@@ -127,6 +136,43 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [apriSocial, setApriSocial] = useState(0);
 
   const storeName = watch('storeName');
+
+  // Modifiche non salvate: l'istantanea di quello che il negoziante può cambiare, confrontata con
+  // quella di quando la schermata si è aperta (o dell'ultimo salvataggio riuscito).
+  const storePhone = watch('storePhone');
+  const istantanea = JSON.stringify([
+    storeName, storePhone, location.address.trim(), Number(location.lat).toFixed(5), Number(location.lng).toFixed(5),
+    logoUrl, media, description, hours, custom,
+  ]);
+  const [salvata, setSalvata] = useState(istantanea);
+  const ultimaIstantanea = useRef(istantanea);
+  ultimaIstantanea.current = istantanea;
+  const dirty = istantanea !== salvata;
+  useEffect(() => {
+    if (salvataggioRiuscito > 0) setSalvata(ultimaIstantanea.current);
+  }, [salvataggioRiuscito]);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => {
+    if (!dirty) return;
+    // Chiusura, ricarica, indirizzo scritto a mano: lo chiede il browser.
+    const alLasciare = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    // Next non lancia beforeunload per i link interni (il menu del pannello): li ferma questo.
+    const alClic = (e: MouseEvent) => {
+      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', alLasciare);
+    document.addEventListener('click', alClic, true);
+    return () => {
+      window.removeEventListener('beforeunload', alLasciare);
+      document.removeEventListener('click', alClic, true);
+    };
+  }, [dirty]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
