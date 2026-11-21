@@ -1609,6 +1609,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}
       <StickyAddToCart
         price={price}
+        // R02-012 — Con la promo attiva la barra riceve anche il pieno e lo barra accanto, come il
+        // prezzo grande qui sopra: senza, chi scorreva leggeva sotto un prezzo diverso da quello di sopra.
+        prezzoPieno={prezzoPieno}
         bersaglio="acquisto-principale"
         available={canAdd}
         onAdd={handleAdd}
