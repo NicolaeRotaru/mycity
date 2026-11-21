@@ -328,12 +328,14 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   #    tutte dopo il COMMIT resta solo NOTIFY, e li' il danno e' nullo; ma non
   #    in tutte: la 115 e la 117 (contate il 12/11/2026, R01-023) dopo il COMMIT
   #    aprono un altro BEGIN e fanno lavoro vero, e se quel pezzo si rompe la
-  #    prima meta' resta applicata e la migrazione non si registra. Per questo
-  #    sotto ci sono due avvisi diversi: uno leggero quando dopo il COMMIT c'e'
-  #    solo NOTIFY, uno forte quando c'e' altro.
-  # 2) L'applicazione e la registrazione stanno nello stesso comando psql (R02-004): prima erano
+  #    prima meta' resta applicata (e, dal 21/11/2026, R02-007, gia' registrata:
+  #    vedi il punto 2). Per questo sotto ci sono due avvisi diversi: uno
+  #    leggero quando dopo il COMMIT c'e' solo NOTIFY, uno forte quando c'e' altro.
+  # 2) L'applicazione e la registrazione stanno nello stesso comando psql: prima erano
   #    due connessioni, e un intoppo di rete fra le due lasciava la migrazione applicata ma non
-  #    registrata, riapplicata al rilascio dopo.
+  #    registrata, riapplicata al rilascio dopo. Dal 21/11/2026 (R02-007) la registrazione
+  #    viene PRIMA del file: cosi' sta nella stessa transazione anche quando il file ha un
+  #    COMMIT suo (fino a quel COMMIT). Se venisse dopo, quel COMMIT la lascerebbe fuori.
   #
   # 13/11/2026 (R16-003) — L'IMPRONTA DEL FILE ENTRA NEL REGISTRO. Nella colonna
   # `statements` si scrive l'md5 del file, come commento SQL «-- md5:<impronta>»
@@ -347,19 +349,26 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
     dopo="$(awk 'trovato && NF && $0 !~ /^[[:space:]]*--/ && toupper($0) !~ /^[[:space:]]*(NOTIFY|COMMIT)[[:space:];]/ { print; exit }
                  toupper($0) ~ /^[[:space:]]*COMMIT[[:space:]]*;/ { trovato = 1 }' "$f")"
     if [ -n "$dopo" ]; then
-      avviso_migrazione "⚠⚠ $name dopo il suo COMMIT fa altro lavoro («$(printf '%s' "$dopo" | head -c 60)»): se si rompe li', la prima parte resta applicata e la migrazione non si registra. Controlla lo schema a mano se questo passo fallisce."
+      # R02-007 (21/11/2026) — La registrazione parte prima del file e si conferma col suo primo
+      # COMMIT: se il lavoro dopo si rompe, la migrazione risulta GIA' REGISTRATA con meta' fatta.
+      avviso_migrazione "⚠⚠ $name dopo il suo COMMIT fa altro lavoro («$(printf '%s' "$dopo" | head -c 60)»): se si rompe li', la prima parte resta applicata e la migrazione risulta GIA' REGISTRATA, quindi al rilascio dopo non si riapplica da sola. Se questo passo fallisce, controlla lo schema a mano e completa a mano la parte dopo il COMMIT."
     else
-      avviso_migrazione "⚠ $name contiene un COMMIT suo: dopo resta solo NOTIFY, quindi una rottura a meta' non lascia lavoro a meta'."
+      avviso_migrazione "⚠ $name contiene un COMMIT suo: dopo resta solo NOTIFY e la registrazione sta prima di quel COMMIT, quindi una rottura a meta' non lascia lavoro a meta'."
     fi
   fi
   impronta="$( (md5sum "$f" 2>/dev/null || md5 -r "$f") | cut -d' ' -f1)"
-  # R02-004 — Applicazione e registrazione stanno in UN solo psql (una connessione, la stessa
-  # transazione del file): se la registrazione cade, anche l'applicazione torna indietro, e al
-  # rilascio dopo non si riapplica una migrazione gia' fatta ma mai registrata.
-  psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f" \
+  # R02-007 (21/11/2026) — Applicazione e registrazione stanno in UN solo psql (una connessione).
+  # psql esegue -c e -f nell'ordine dato, tutto nella transazione di --single-transaction fino al
+  # primo COMMIT del file: per questo la registrazione (-c) viene PRIMA del file (-f).
+  # - File senza COMMIT suo: se la registrazione o il file cadono, torna indietro tutto.
+  # - File con un COMMIT suo: registrazione e lavoro fino a quel COMMIT si confermano insieme.
+  #   Il lavoro DOPO quel COMMIT (la 115 e la 117) va per conto suo: se si rompe, la
+  #   migrazione resta registrata con la prima parte applicata (l'avviso forte sopra).
+  psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction \
     -c "INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
         VALUES ('$versione', '$descrizione', ARRAY['-- md5:$impronta'])
-        ON CONFLICT (version) DO NOTHING"
+        ON CONFLICT (version) DO NOTHING" \
+    -f "$f"
   applicate=$((applicate + 1))
 done
 
