@@ -42,7 +42,7 @@ function senzaWww(host: string): string {
   return host.toLowerCase().replace(/^www\./, '');
 }
 
-export function togliOrigineDelSito(link: string, origineDelSito: string): string {
+function togliOrigineDelSito(link: string, origineDelSito: string): string {
   try {
     const u = new URL(link);
     const sito = new URL(origineDelSito);

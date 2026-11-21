@@ -107,6 +107,21 @@ describe('R02-003 · l\'indirizzo intero del sito con un altro schema o con www.
     expect(stato.insert.mock.calls[0][0]).toMatchObject({ link_url: '/categoria/frutta/?x=1#su' });
   });
 
+  it('maiuscole nel dominio e nello schema si accettano', async () => {
+    await pubblicaConLink(`${ALTRO.toUpperCase()}//WWW.${U.host.toUpperCase()}/promozioni`);
+    expect(stato.insert.mock.calls[0][0]).toMatchObject({ link_url: '/promozioni' });
+  });
+
+  it('il solo dominio diventa /', async () => {
+    await pubblicaConLink(`${ALTRO}//www.${U.host}`);
+    expect(stato.insert.mock.calls[0][0]).toMatchObject({ link_url: '/' });
+  });
+
+  it('un indirizzo con utente@ non si salva', async () => {
+    await pubblicaConLink(`${U.protocol}//utente@${U.host}/promozioni`);
+    expect(stato.insert).not.toHaveBeenCalled();
+  });
+
   it('il dominio nostro con un prefisso estraneo non si salva', async () => {
     await pubblicaConLink(`${U.protocol}//estraneo.${U.host}/promozioni`);
     expect(stato.insert).not.toHaveBeenCalled();
