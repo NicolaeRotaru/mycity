@@ -12,11 +12,14 @@ import { Modal } from '@/components/ui/Modal';
 let root: Root;
 let contenitore: HTMLDivElement;
 
-beforeEach(async () => {
+beforeEach(() => {
+  // Timer finti: il primo fuoco della finestra e' un setTimeout(10ms); lo facciamo scattare
+  // noi, in modo deterministico, prima che il test muova il fuoco.
+  vi.useFakeTimers();
   contenitore = document.createElement('div');
   document.body.appendChild(contenitore);
   root = createRoot(contenitore);
-  await act(async () =>
+  act(() =>
     root.render(
       createElement(
         Modal as never,
@@ -28,31 +31,35 @@ beforeEach(async () => {
       ),
     ),
   );
+  act(() => {
+    vi.advanceTimersByTime(100);
+  });
 });
 
-afterEach(async () => {
-  await act(async () => root.unmount());
+afterEach(() => {
+  act(() => root.unmount());
+  vi.useRealTimers();
   document.body.innerHTML = '';
 });
 
 describe('R01-001 la trappola del fuoco ignora i campi con tabindex -1', () => {
-  it('Tab dall ultimo campo raggiungibile riporta il fuoco al primo', async () => {
+  it('Tab dall ultimo campo raggiungibile riporta il fuoco al primo', () => {
     const ultimo = document.getElementById('ultimo') as HTMLElement;
     const primo = document.querySelector('[role="dialog"] button') as HTMLElement; // il primo attivabile e' il pulsante di chiusura
     ultimo.focus();
     const ev = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(ev);
     });
     expect(ev.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(primo);
   });
-  it('Shift+Tab dal primo porta il fuoco all ultimo raggiungibile', async () => {
+  it('Shift+Tab dal primo porta il fuoco all ultimo raggiungibile', () => {
     const ultimo = document.getElementById('ultimo') as HTMLElement;
     const primo = document.querySelector('[role="dialog"] button') as HTMLElement; // il primo attivabile e' il pulsante di chiusura
     primo.focus();
     const ev = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(ev);
     });
     expect(document.activeElement).toBe(ultimo);
