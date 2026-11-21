@@ -1,546 +1,329 @@
 {
-  "sessione": "R02",
-  "aggiornato": "2026-11-21 03:22",
-  "finita": true,
-  "testa": "adf7ec6e901e1ddfe4e42725de7483648868c735",
-  "verifica": {
-    "comando": "npm run verify",
-    "esito": "verde",
-    "testa": "adf7ec6e901e1ddfe4e42725de7483648868c735",
-    "nota": "typecheck, lint e 1860 file di prova verdi (11603 prove, 1 saltata già sulla base)"
-  },
-  "voci": [
+ "sessione": "R02",
+ "aggiornato": "2026-11-21 05:10",
+ "finita": true,
+ "testa": "e8f65c4605b28791fdee7ea6ea818138d8d2dc48",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "e8f65c4605b28791fdee7ea6ea818138d8d2dc48",
+  "nota": "typecheck e lint verdi (0 errori, 98 avvisi già presenti), 1894 file di prova e 11740 prove verdi; SHA preso con git rev-parse HEAD nello stesso comando del verify"
+ },
+ "voci": [
+  {
+   "id": "R02-001",
+   "chiave": "architettura|email di annullo spedita dentro la richiesta, senza coda: fino a circa 20 s di attesa, e se fallisce resta solo nel registro",
+   "esito": "riparato",
+   "commit": "790590f5ac0bb6a073670d1de4c5209ab53049a4",
+   "file_toccati": [
+    "lib/ordini/annulla.ts",
+    "app/api/cron/expire-stale-orders/route.ts",
+    "tests/unit/api-cron-expire-stale-orders.test.ts",
+    "tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-email-rimborso-dopo-la-risposta.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-email-rimborso-dopo-la-risposta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout 790590f5^ -- lib/ordini/annulla.ts app/api/cron/expire-stale-orders/route.ts && npx vitest run --reporter=dot tests/unit/riparazione-r02-email-rimborso-dopo-la-risposta.test.ts (ROSSA 5/5: annullo e giro aspettano la posta; nessun avviso se l'invio cade o l'indirizzo non si legge) ; git checkout 790590f5 -- gli stessi file && stessa prova (VERDE 5/5) ; git status pulito"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nel ramo carta di annullaERimborsa e nel giro degli scaduti refundOrder si chiama con notifyBuyer:false. La nuova avvisaIlClienteDelRimborso (annulla.ts) manda «Rimborso emesso» (refundIssuedTemplate, modo 'carta', con importoCents restituito da refundOrder) dopo la risposta con after(); fuori da una richiesta si aspetta come prima. Se l'invio cade, o getUserById dà errore, gli amministratori ricevono una campanella con unaVoltaPer `email-rimborso-<id>`. Nessuna logica di soldi duplicata. Il ramo dei contanti non passa di qui ed è invariato. Due prove esistenti modificate e dichiarate: importano solo miei file (lib/ordini/annulla, la rotta degli scaduti); gli altri moduli compaiono solo in vi.mock. Cambia solo l'attesa notifyBuyer:true → false.",
+   "cosa_resta": "",
+   "serve_file_altrui": [],
+   "nota": "Alternativa per il giro dopo (serve_file_altrui su lib/stripe/payout.ts, righe di oggi 2706-2722): aggiungere `import { after } from 'next/server';` in testa e sostituire il blocco `const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero); … if (emailAlCliente === 'non-partita' && ripartoVero.bonificoCents > 0) { try { await notifyAdmins('⚠️ Email al cliente per l IBAN non partita', …, { unaVoltaPer: `iban-non-chiesto:${chiave}` }); } catch (e) { logger.error(…); } }` con `const avvisiDelRimborso = async () => { const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero); <stesso if/try dell'IBAN di oggi>; if (emailAlCliente === 'non-partita' && ripartoVero.modo === 'carta') await notifyAdmins('⚠️ Email del rimborso non partita', `L'email «Rimborso emesso» dell'ordine #${order.id.slice(0, 8)} non è partita: avvisa tu il cliente.`, '/admin/orders', { unaVoltaPer: `email-rimborso-${order.id}` }).catch(() => undefined); }; try { after(avvisiDelRimborso); } catch { await avvisiDelRimborso(); }`. Copre anche resi e reclami. Dopo, annulla.ts e la rotta degli scaduti tornano a notifyBuyer:true e avvisaIlClienteDelRimborso si toglie. 42 file di prova diretti (331 test) e 34 indiretti, attraverso le rotte di annullo e rifiuto (264 test): verdi. RISCHIO visto dal revisore (dimostrato solo con una posta finta, non sul conto Resend): after() di Next 15.5 non ha limite di concorrenza, quindi nel giro degli scaduti i «Rimborso emesso» non partono più in fila ma insieme alle email ai negozi (3 ordini con la carta = 6 invii insieme); con un limite d'invio basso alcuni cadono, non in silenzio (campanella agli amministratori). Cura proposta: nel cron un solo after() che spedisce in sequenza, oppure un piccolo limite in lib/api/dopo-la-risposta.ts (non mio).",
+   "verificato_da": "revisore avversario del lotto A: prova nuova verde 5/5, più cron, chi-paga, annullo al negozio e annullo dopo la risposta 22/22; rimessa a mano 5/5 rosse (4 sul comportamento), poi verde; 104 file vicini verdi. Controllati: notifyBuyer:true resta solo su reclami e resi; importo = safeAmountCents come la vecchia email; modo sempre «carta»; nessuna email doppia; niente email se il rimborso fallisce o è zero; ramo contanti intatto. Le due prove comuni cambiate non sono indebolite. Regge, con un rischio da decidere (nota).",
+   "prove_comuni_toccate": [
     {
-      "id": "R02-010",
-      "chiave": "frontend-ux|un componente della home mostra il prezzo pieno con una promozione attiva",
-      "esito": "riparato",
-      "commit": "704eb327",
-      "file_toccati": [
-        "components/home/HeroStoreCard.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-prezzo-promo-vetrina-home.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-prezzo-promo-vetrina-home.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 704eb327^ --file components/home/HeroStoreCard.tsx --prove tests/unit/riparazione-r02-prezzo-promo-vetrina-home.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Dopo vetrina_home il riquadro legge lo sconto attivo dei prodotti con fetchActiveDiscounts (stessa fonte di griglia e cassa, come CartUpsell e FrequentlyBoughtTogether; se la lettura cade resta il pieno) e stampa discountedUnitCents con il prezzo pieno barrato, come ProductCard. Prova montando il componente: 10 € al -20% si legge 8,00 € con «Prezzo pieno 10,00 €» barrato; senza promo nessun barrato; una sola domanda di sconti per la vetrina. Le 7 prove vicine che montano o leggono HeroStoreCard restano verdi.",
-      "verificato_da": "qa-sonnet revA: letto il diff di HeroStoreCard (fetchActiveDiscounts + discountedUnitCents, pieno barrato, fallback al pieno) e rilanciata la prova montata, verde."
+     "file": "tests/unit/api-cron-expire-stale-orders.test.ts",
+     "cosa_cambia": "l'attesa su refundOrder: notifyBuyer true → false (l'email «Rimborso emesso» la manda ora la rotta dopo la risposta); importa solo la rotta degli scaduti, gli altri moduli solo in vi.mock; nessuna asserzione tolta",
+     "motivo": "l'attesa su refundOrder: notifyBuyer true → false (l'email «Rimborso emesso» la manda ora la rotta dopo la risposta); importa solo la rotta degli scaduti, gli altri moduli solo in vi.mock; nessuna asserzione tolta. Per la guardia-ramo sono comuni: la firma la chiede la regia a Nicola (21/11)."
     },
     {
-      "id": "R02-013",
-      "chiave": "frontend-ux|nelle collezioni scelte a mano dal negozio i prodotti in promozione hanno il prezzo pieno",
-      "esito": "riparato",
-      "commit": "a3074206",
-      "file_toccati": [
-        "components/store-sections/CollectionSection.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-prezzo-promo-collezione.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-prezzo-promo-collezione.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a3074206^ --file components/store-sections/CollectionSection.tsx --prove tests/unit/riparazione-r02-prezzo-promo-collezione.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "ManualCollection, dopo la lettura dei prodotti, legge lo sconto attivo con fetchActiveDiscounts (la fonte di ProductGrid e della cassa; se cade resta il pieno) e passa discountPercent a ProductCard, che disegna già prezzo scontato e pieno barrato. Prova montando la sezione con react-query vero: la torta al -25% arriva alla scheda con discountPercent 25, senza promo 0, sconto non letto = sezione visibile a prezzo pieno. Le 3 prove vicine su CollectionSection restano verdi.",
-      "verificato_da": "qa-sonnet revA: letto il diff di ManualCollection (sconto passato come discountPercent a ProductCard, che lo gestisce) e rilanciata la prova, verde; altre collezioni passano da ProductGrid che già sconta."
-    },
-    {
-      "id": "R02-012",
-      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato",
-      "esito": "parziale",
-      "commit": "f6a88617",
-      "file_toccati": [
-        "app/product/[id]/page.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f6a88617^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-barra-prezzo-pieno-dalla-scheda.test.tsx --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "La barra: la scheda (app/product/[id]/page.tsx, chiamata a StickyAddToCart) passa ora prezzoPieno={prezzoPieno} oltre a price (già scontato con discountedUnitCents): StickyAddToCart.tsx:115-119 barra il pieno accanto al prezzo che si paga, come il prezzo grande. La prova monta la scheda VERA con la barra VERA (non finta), promo attiva sull'orologio finto e pulsante principale fuori schermo: nella regione «Acquisto rapido» si legge «1 × 29,67 €» e il barrato «Prezzo pieno 34,90 €»; fuori dalla finestra della promo «1 × 34,90 €» senza barrato. Togliendo la riga dalla pagina la prova cade (rimessa: pagina alla base = rossa sul comportamento). 44 file di prova che montano o leggono la scheda o la barra: verdi.",
-      "cosa_resta": "I caroselli nominati dal titolo stampano ancora il prezzo pieno e non sono file di R02: components/SimilarProducts.tsx:94, components/RecentlyViewed.tsx:110, components/SponsoredCarousel.tsx:136, components/SearchBar.tsx:249 (suggerimenti della ricerca), components/home/TrendingNow.tsx:120. Le modifiche esatte sono in serve_file_altrui. (FrequentlyBoughtTogether e CartUpsell applicano già lo sconto; HeroStoreCard è chiusa da R02-010.)",
-      "serve_file_altrui": [
-        {
-          "file": "components/SimilarProducts.tsx",
-          "modifica": "nel queryFn (riga 39, leggiSimili) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
-        },
-        {
-          "file": "components/RecentlyViewed.tsx",
-          "modifica": "nel queryFn (riga 72, leggiVistiDiRecente) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
-        },
-        {
-          "file": "components/SponsoredCarousel.tsx",
-          "modifica": "nel queryFn (righe 49-50, leggiSponsorizzati; lo sconto va sul prezzo del prodotto che la riga stampa a :136) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
-        },
-        {
-          "file": "components/SearchBar.tsx",
-          "modifica": "nel queryFn (riga 57, leggiSuggerimentiRicerca; il prezzo stampato a :249) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
-        },
-        {
-          "file": "components/home/TrendingNow.tsx",
-          "modifica": "nel queryFn (riga 48, leggiTendenze) dopo la lettura chiamare `fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>())` e restituire le righe con `price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100`, come components/products/FrequentlyBoughtTogether.tsx:53-54 (import da '@/lib/promotions'); così il prezzo stampato è quello che si paga"
-        }
-      ],
-      "verificato_da": "qa-sonnet revA: page.tsx:1647 passa prezzoPieno alla barra; tolta quella riga in copia mia la prova cade (expected [] to equal ['Prezzo pieno 34,90 €']); i caroselli (SimilarProducts, RecentlyViewed, SponsoredCarousel, SearchBar, TrendingNow) restano a prezzo pieno, quindi la voce non è chiusa.",
-      "difetti_del_revisore": [
-        "components/SimilarProducts.tsx:94, components/RecentlyViewed.tsx:110, components/SponsoredCarousel.tsx:136, components/home/TrendingNow.tsx:120 — i caroselli nominati dalla voce stampano ancora il prezzo pieno (file altrui, già dichiarato)"
-      ]
-    },
-    {
-      "id": "R02-006",
-      "chiave": "flussi-conversione|la scheda prodotto promette «paghi alla consegna» anche sopra il tetto dei contanti",
-      "esito": "riparato",
-      "commit": "c7525734",
-      "file_toccati": [
-        "app/product/[id]/page.tsx",
-        "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-contanti-col-carrello.test.tsx",
-        "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-contanti-col-carrello.test.tsx tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c7525734^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-contanti-col-carrello.test.tsx,tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sulla base la scheda non prometteva più i contanti per un pezzo solo sopra il tetto, ma contava solo questo prodotto con la consegna minima. Ora il lordo è quello del carrello che la cassa troverà: righe già nel carrello (getCart, riletto a ogni cart:updated e storage) più questo prodotto al prezzo che si paga × quantità, consegna con vociDellaConsegna (la regola della cassa: +1 € per negozio in più e per negozio sotto 10 €) e con la veloce (+1 €, si può ancora scegliere in cassa). Due conti: «Compra ora» (riga portata a qty) decide riquadro verde, pulsante, «Compri sicuro» e il ricordo di 'cod'; la nota della barra (il suo pulsante è «Aggiungi», che somma) usa il carrello con la somma. Tetto TETTO_CONTANTI_CENTS invariato. Prova sulla scheda vera col carrello in localStorage: 2.600 € + 2.500 € di un altro negozio = nessuna promessa e niente 'cod'; stesso negozio 2.000 € = promessa; 4.990 € + 5 € di un altro negozio = 5.000 € con 5 € di consegna, niente; 4.996,50 € da soli con la veloce, niente; stesso prodotto già in carrello = «Compra ora» promette, la barra no; carrello cambiato a scheda aperta = la promessa si rifà. 45 file di prova vicini verdi.",
-      "nota": "Prova esistente modificata (legge app/product/[id]/page.tsx, file di R02): tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx, il caso del confine passa da 4.996,99 €/4.997 € a 4.995,99 €/4.996 € perché ora si conta l'euro della veloce (4.995,99 + 3 + 1 = 4.999,99). Fuori titolo, non chiuso qui: il lordo usa i prezzi che il carrello ha salvato e lo sconto letto all'apertura della scheda; se cambiano a scheda aperta (promo che scade senza ricaricare) la cassa e la rotta COD (app/api/orders/cod/route.ts:1163) rileggono e restano il presidio. È lo stesso prezzo vecchio che la scheda mostra in grande, segnalato come difetto nuovo.",
-      "prova_comune_toccata": {
-        "file": "tests/unit/riparazione-r02-contanti-sopra-il-tetto.test.tsx",
-        "commit": "c7525734",
-        "motivo": "La scheda ora conta, come consegna, la più cara che la cassa può ancora far scegliere: la veloce, un euro in più. Il confine del tetto si sposta di un euro e la prova controlla ancora i due lati (uguale al tetto sì, un centesimo sopra no).",
-        "riga_vecchia": "it('uguale al tetto: 4.996,99 € + 3 € di consegna = 4.999,99 € si paga in contanti; un centesimo in più no' … apri(4996.99) … apri(4997)",
-        "riga_nuova": "it('uguale al tetto: 4.995,99 € + 3 € di consegna + 1 € della veloce = 4.999,99 € si paga in contanti; un centesimo in più no' … apri(4995.99) … apri(4996)",
-        "nota": "Prova comune (usa file di altre sessioni): la regia porta la firma di Nicola all'unione; il collaudatore giudica se è indebolita."
-      },
-      "verificato_da": "qa-sonnet revA: la prova comune non è indebolita (resta 4.999,99 sì / un centesimo sopra, ora 4.995,99 e 4.996, con +3 consegna +1 veloce); il conto con vociDellaConsegna(consegnaVeloce:true) è prudente rispetto a cassa e rotta COD (cod/route.ts:1163 guarda grandTotalCents); rilanciate le due prove, 8+8 verdi."
-    },
-    {
-      "id": "R02-021",
-      "chiave": "qa-flussi|un capo con più di cento combinazioni di taglia e colore perde le ultime in silenzio, e il cliente che le sceglie non può comprarle",
-      "esito": "riparato",
-      "commit": "ec5bbd4c",
-      "file_toccati": [
-        "components/seller/ProductForm.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-varianti-oltre-il-tetto.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-varianti-oltre-il-tetto.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ec5bbd4c^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r02-varianti-oltre-il-tetto.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La parte della scheda c'era già sulla base: app/product/[id]/page.tsx usa statoSceltaVarianti (combinazione che non c'è = «Questa combinazione non c'è», non «Scegli») e valoreSenzaVariante (valori senza variante spenti). Restava il taglio silenzioso nel modulo del negozio (ProductForm.tsx, file di R02): applyAxes ora controlla gli assi prima di reconcileVariants e, sopra un tetto di lib/products/variants.ts (MAX_VARIANTS 100, MAX_OPTION_VALUES 30 contati puliti e senza doppioni, MAX_OPTION_TYPES 3), non li applica e mostra il motivo («110 combinazioni, il massimo è 100. Togli qualche valore.»; «Colore: 31 valori, il massimo è 30…»). La tabella delle varianti mostra «N di 100 combinazioni»; la proposta dell'assistente passa da applyAxes e oltre il tetto non dice «Proposte». lib/products/variants.ts non è cambiato: i tetti restano (PostgREST non pagina), il prodotto cartesiano non cresce. Prova sul modulo vero: 10×10 = 100 con il conto; l'undicesima taglia non entra e l'avviso dice 110; il trentunesimo colore non entra; 9×11 = 99 entrano conservando le scorte. 48 file di prova vicini (modulo, AttributesFields, varianti) verdi.",
-      "verificato_da": "qa-sonnet revA: letto il diff di ProductForm (applyAxes rifiuta oltre 100 combinazioni/30 valori/3 assi con motivo, tutti i percorsi di aggiunta passano da lì; la scheda già gestiva la combinazione assente) e rilanciata la prova, verde."
-    },
-    {
-      "id": "R02-008",
-      "chiave": "frontend-ux|il «conversion rate» del negozio può superare il 100% e viene colorato di verde",
-      "esito": "riparato",
-      "commit": "51c73ef7",
-      "file_toccati": [
-        "app/seller/analytics/letture-dell-andamento.ts",
-        "app/seller/analytics/page.tsx",
-        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-tasso-di-conversione-scheda.test.tsx",
-        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-tasso-di-conversione-scheda.test.tsx tests/unit/riparazione-r09-tasso-di-conversione.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 51c73ef7^ --file app/seller/analytics/letture-dell-andamento.ts,app/seller/analytics/page.tsx --prove tests/unit/riparazione-r02-tasso-di-conversione-scheda.test.tsx,tests/unit/riparazione-r09-tasso-di-conversione.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sulla base oltre il 100% non si mostrava già più (tassoDiConversione null con ordini > visite, etichetta «Visite che diventano ordini»). Restavano i due casi del collaudo: ordini pari alle visite misurate davano «100,0%» in verde (ora tassoDiConversione torna null anche a pari: trattino, colore neutro); con zero visite misurate e ordini veri la scheda diceva «Serve il conto delle visite» accanto a Visite 0 (ora, con le visite lette e ordini > 0, «Campione troppo piccolo: N ordini su M visite misurate»; con le visite non lette resta «Serve il conto delle visite»). lib/analytics/visita-prodotto.ts:35 non cambia: le visite si contano solo col consenso, ed è giusto così. Prova sulla pagina vera «Analisi» col database finto: 4/200 = 2,0% verde; 5/5 = «—» non verde con «Campione troppo piccolo: 5 ordini su 5…»; 3/0 = «—» con «…3 ordini su 0 visite misurate»; visite non lette = «Serve il conto». 9 file di prova vicini verdi.",
-      "nota": "Prova esistente modificata (importa app/seller/analytics/letture-dell-andamento.ts, file di R02): tests/unit/riparazione-r09-tasso-di-conversione.test.ts, il caso (5,5) passa da 100 a null e si aggiunge (4,5) = 80. Fuori titolo, non toccato: un tasso fra il 50% e il 99% resta verde anche se gonfiato dal consenso ai cookie (osservato dal collaudo K04); una soglia di verosimiglianza sarebbe una scelta di Nicola.",
-      "verificato_da": "qa-sonnet revB: rilanciate le 4 prove che toccano tassoDiConversione (tutte verdi) e riletto il diff; il file di prova R09 è comune (creato da R09-005) ma il cambio (5,5)=100→null è la correzione voluta e aggiunge (4,5)=80, non indebolisce.",
-      "difetti_del_revisore": [
-        "tests/unit/riparazione-r09-tasso-di-conversione.test.ts:14 — prova comune con R09-005: ora il contratto di R09 («fino al 100% il conto resta») cambia a pari; da segnalare, non è un difetto della voce",
-        "app/seller/analytics/page.tsx:367 — 4 ordini su 5 visite = 80% resta verde su campione minuscolo (fuori titolo, già dichiarato nel referto)"
-      ],
-      "prova_esistente_cambiata": {
-        "file": "tests/unit/riparazione-r09-tasso-di-conversione.test.ts",
-        "motivo": "importa app/seller/analytics/letture-dell-andamento.ts (file di R02); il revisore la chiama comune perché l'ha creata R09-005. (5,5) passa da 100 a null (campione troppo piccolo) e si aggiunge (4,5)=80: è la correzione voluta, non un indebolimento."
-      }
-    },
-    {
-      "id": "R02-020",
-      "chiave": "qa-flussi|cambiando categoria gli assi delle varianti della categoria vecchia restano",
-      "esito": "riparato",
-      "commit": "0a157ea3",
-      "file_toccati": [
-        "components/seller/ProductForm.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-assi-al-cambio-di-categoria.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-assi-al-cambio-di-categoria.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0a157ea3^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r02-assi-al-cambio-di-categoria.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Al cambio di categoria (qualunque strada: i due menu, la scansione EAN, la proposta dell'assistente, perché si guarda category_id) il modulo tiene solo gli assi che la categoria nuova fa variare (campi variantable) e rigenera le combinazioni con reconcileVariants. È un aggiustamento dello stato durante il disegno (la categoria nota agli assi si ricorda in uno stato), non un effetto: al primo disegno e con le categorie non ancora lette non tocca niente, quindi un prodotto aperto in modifica non perde varianti. Prova sul modulo vero: Abbigliamento Taglia×Colore (4) → Casa = solo i colori (2); in Casa un colore in più = 3 varianti, non 6; sottocategoria della stessa categoria = assi e scorte intatti. 45 file di prova vicini del modulo verdi.",
-      "nota": "Il commit tocca anche applyAxes introdotta in R02-021 (estrae tipiDegliAssi per usarla in tutti e due i punti): se R02-021 venisse tolta, R02-020 va riapplicata a mano su quella riga.",
-      "verificato_da": "qa-sonnet revB: riletto il diff e rilanciata la prova (4 verdi); controllato che in modifica non ci sia reset del form (defaultValues iniziali, categoria ricordata allo stato iniziale) quindi un prodotto aperto non perde varianti.",
-      "difetti_del_revisore": [
-        "components/seller/ProductForm.tsx:418 — dipende da tipiDegliAssi/applyAxes di ec5bbd4c (R02-021): se R02-021 viene tolta va riapplicata a mano; con categories vuote al cambio gli assi non si puliscono (caso raro)"
-      ]
-    },
-    {
-      "id": "R02-001",
-      "chiave": "ai-endpoints|quando anthropic non risponde, vercel spegne la funzione ai prima che il negozio legga un errore chiaro",
-      "esito": "gia_riparato_prima",
-      "prova": "lib/ai/client.ts:197-198 TEMPO_TENTATIVO_AI_MS=60_000 e RITENTATIVI_AI=0 (un tentativo, 60 s) contro maxDuration 120 in vercel.json:14; app/api/vision/extract-product/route.ts:320-334 risponde con mapAiError; la verifica web usa Math.min(restaMs, TEMPO_TENTATIVO_AI_MS) e senzaRitentativi (route.ts:390-391). Identico sulla base 2d19787b; la prova c'e' gia' in tests/unit/riparazione-r03-tempo-sotto-la-rotta.test.ts.",
-      "verificato_da": "qa-sonnet revC: client.ts:201-227 timeout 60 s e maxRetries 0 contro maxDuration 120 (vercel.json:14-18); filtro moderation 10 s (moderation.ts:83) quindi 70 s < 120; vision verifica con min(restaMs,60 s) e senzaRitentativi; remove-bg (60 s) non usa lib/ai/client. Non ho contato le chiamate sequenziali di ogni rotta ai."
-    },
-    {
-      "id": "R02-003",
-      "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
-      "esito": "serve_file_altrui",
-      "serve_file_altrui": [
-        {
-          "file": "app/api/orders/cod/route.ts",
-          "modifica": "Dentro il dopoLaRisposta che parte a riga ~1720 (dopo che le campanelle 'Nuovo ordine' sono state scritte a riga ~1686), importare mandaSubitoLaPushDelNuovoOrdine da '@/lib/push/subito' e chiamare `await mandaSubitoLaPushDelNuovoOrdine(admin, comunicazioni.map((c) => c.orderId))` (la funzione non lancia mai)."
-        },
-        {
-          "file": "lib/stripe/webhook/ordini.ts",
-          "modifica": "Dopo suonaLaCampanellaAiNegozi (riga ~499), per gli ordini nuovi (`nuovi`), chiamare `await mandaSubitoLaPushDelNuovoOrdine(admin, nuovi.map((n) => n.orderId))` importandola da '@/lib/push/subito' (la funzione non lancia mai)."
-        }
-      ],
-      "nota": "L'aiutante mandaSubitoLaPushDelNuovoOrdine esiste gia' in lib/push/subito.ts (con la sua prova tests/unit/riparazione-r02-push-nuovo-ordine-subito.test.ts) e il commento del cron app/api/cron/send-push/route.ts dice che e' chiamata alla creazione dell'ordine, ma nessun file la chiama (grep: solo il test). Nessun cambio al cron e nessun costo Vercel."
-    },
-    {
-      "id": "R02-004",
-      "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
-      "esito": "riparato",
-      "commit": "48477040822dbbcd37cf58844ed1d7fbc62438e0",
-      "file_toccati": [
-        "scripts/applica-migrazioni-mancanti.sh",
-        "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-registrazione-nello-stesso-passo.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-registrazione-nello-stesso-passo.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 48477040^ --file scripts/applica-migrazioni-mancanti.sh --prove tests/unit/riparazione-r02-registrazione-nello-stesso-passo.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il confronto del contenuto (md5) c'era già sulla base (check-migration-drift.mjs:270-325, R16-003). Applicazione e registrazione ora stanno in un solo psql --single-transaction (-f e poi -c con l'INSERT): se la registrazione cade, anche la migrazione torna indietro. Prova nuova su Postgres locale.",
-      "prova_comune_toccata": {
-        "file": "tests/unit/il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts",
-        "motivo": "Firma di Nicola del 21/11 (via regia 9.0): il psql finto trattava -f e -c come alternativi; ora, dopo APPLICATO, se la query -c contiene INSERT scrive anche REGISTRATO. Nessuna asserzione tolta: registrate=3 torna come prima.",
-        "riga_vecchia": "if [ -n \"$file\" ]; then echo \"APPLICATO $(basename \"$file\")\" >> \"$REGISTRO_PSQL\"; exit 0; fi",
-        "riga_nuova": "if [ -n \"$file\" ]; then echo APPLICATO …; case \"$query\" in *INSERT*) echo \"REGISTRATO\" >> \"$REGISTRO_PSQL\" ;; esac; exit 0; fi"
-      },
-      "verificato_da": "non rivisto da un revisore interno (tetto di 6 subagenti raggiunto): prova rimessa a 0, più le 6 prove vicine dello script delle migrazioni verdi (50 prove); lo guarda il collaudo"
-    },
-    {
-      "id": "R02-005",
-      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
-      "esito": "riparato",
-      "commit": "5d59d92a530790661a32bb0ff285e0d050e35cde",
-      "file_toccati": [
-        "scripts/prova-di-fumo.mjs",
-        "tests/unit/il-ritorno-indietro-torna-a-quello-che-usano-i-clienti.test.ts",
-        "tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d59d92a^ --file scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "rilascioDaTornare: quando il dominio si legge ma dice il commit che esce, o non dice il suo commit, la risposta è null (ritorno a mano) invece dell'unico altro commit dell'elenco degli ultimi 20 rilasci. Quando il dominio non si legge affatto resta la regola dell'elenco (scena di ogni giorno, provata da il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts, non toccata).",
-      "prove_esistenti_cambiate": [
-        {
-          "file": "tests/unit/il-ritorno-indietro-torna-a-quello-che-usano-i-clienti.test.ts",
-          "cosa_cambia": "riga 83: «Y sul dominio e un solo altro commit: si torna a quello» → «nessun indirizzo, il ritorno si fa a mano» (toBe W → toBeNull)"
-        },
-        {
-          "file": "tests/unit/riparazione-r07-ritorno-dominio-senza-commit.test.ts",
-          "cosa_cambia": "riga 20: «dominio senza commit, [Y, X]: si torna a X» → «nessun indirizzo, né il dominio né X» (toBe X → toBeNull)"
-        }
-      ],
-      "firma": "Nicola, 21/11, via regia 9.0: cambiare il comportamento e aggiornare le due prove.",
-      "verificato_da": "non rivisto da un revisore interno (tetto di 6 subagenti raggiunto): prova rimessa a 0, più 8 file di prova del rilascio verdi (49 prove); lo guarda il collaudo"
-    },
-    {
-      "id": "R02-007",
-      "chiave": "frontend-ux|in chat, se l'assistenza scrive il secondo messaggio mentre il primo sta partendo, il secondo sparisce senza essere inviato",
-      "esito": "gia_riparato_prima",
-      "prova": "app/messages/[id]/page.tsx:304-312 handleSend: con un invio in volo (sendMutation.isPending) il secondo Invio non parte e il testo resta nel campo (campo svuotato solo quando il primo e' partito); onError (riga ~297) rimette il testo davanti al nuovo. Commit edacdd69 R22-003, uguale sulla base 2d19787b. Resta per scelta che il secondo non va in coda: si preme Invio di nuovo a primo concluso.",
-      "verificato_da": "qa-sonnet revC: letto handleSend e onError in app/messages/[id]/page.tsx:296-312: con invio in volo il secondo Invio esce prima di setText(''), il testo resta; a invio riuscito non c'e' alcun reset del campo; sull'errore il testo torna davanti."
-    },
-    {
-      "id": "R02-018",
-      "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi",
-      "esito": "parziale",
-      "file_toccati": [
-        "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "cosa_ho_fatto": "Provate a mano 11 mutanti sul conto della consegna di app/cart/page.tsx contro le prove che montano il carrello (r03-carrello-consegna, al-lancio-si-paga-solo-la-consegna, r02-prezzo-promo-al-carrello): 8 gia' rosse, 3 sopravvivevano (consegnaVeloce false->true; couponScontoCents 0->100; supplementoVeloceCents letto da vociConsegna -> 0). Prova nuova con negozi tutti da 10 EUR in su e un negozio da 10,50 EUR, contro il conto della cassa: le tre tornano rosse.",
-      "cosa_resta": "la cura è la sola prova: prova-rimessa non si applica; mutanti applicate a mano: consegnaVeloce true nel conto, couponScontoCents 100, supplementoVeloceCents 0 → rosse",
-      "commit": "06fa5e4d",
-      "verificato_da": "qa-sonnet revC: in worktree ho applicato le 3 mutanti (veloce true, coupon 100, supplemento 0) e la prova nuova diventa rossa; rosse anche couponSpedizioneGratis true, pickup true, +0.5 sul totale spedizione; la mutante subtotale*99 resta verde nella prova nuova ma la uccide riparazione-r03-carrello-consegna (2 rosse)."
-    },
-    {
-      "id": "R02-019",
-      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
-      "esito": "serve_file_altrui",
-      "serve_file_altrui": [
-        {
-          "file": "middleware.ts",
-          "modifica": "app/rider/onboarding sta sotto /rider, che e' ROLE_PROTECTED (middleware.ts:70, solo rider/admin): un cliente gia' registrato viene rimandato. Serve far passare /rider/onboarding anche al ruolo cliente (decidiAccessoArea) e una rotta/azione che al primo invio porti il profilo a role='rider' non approvato."
-        },
-        {
-          "file": "app/sign-up/page.tsx",
-          "modifica": "Con ?role=rider e utente gia' collegato, mandare a /rider/onboarding invece di rimbalzare; poi app/help/page.tsx:56-60 (mio) puo' puntare a quella strada al posto di /contact."
-        }
-      ],
-      "nota": "La pagina d'iscrizione dei fattorini esiste (app/rider/onboarding/page.tsx) ma un cliente non puo' arrivarci: il pezzo che manca e' fuori dai miei file. Non ho cambiato il link dell'aiuto: puntarlo a /lavora-con-noi o a /rider/onboarding oggi porterebbe a un vicolo cieco."
-    },
-    {
-      "id": "R02-011",
-      "chiave": "frontend-ux|dopo un salvataggio, il blocco di testo della vetrina mostra «&amp;» al posto di «&» (e «&lt;» al posto di «<»)",
-      "esito": "parziale",
-      "commit": "bc1db201",
-      "file_toccati": [
-        "components/seller/site/SectionConfigForm.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-testo-vetrina.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-testo-vetrina.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bc1db201^ --file components/seller/site/SectionConfigForm.tsx --prove tests/unit/riparazione-r02-testo-vetrina.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "htmlInACapo ora decodifica &amp; &lt; &gt; oltre agli a-capo: il testo pulito dal server si rilegge nel campo come era stato scritto. La prova esistente minori-s06 resta verde senza modifiche.",
-      "verificato_da": "qa-sonnet revB: giro salva-rileggi-salva con sanitizeRichText vero su 7 testi; & e < normali tornano uguali, ma un testo con la scritta letterale «&amp;» o «&lt;b&gt;» non regge.",
-      "difetti_del_revisore": [
-        "components/seller/site/SectionConfigForm.tsx:77-82 — sanitizeRichText esce «&» crudo se nel testo non c'è «<» (solo con «<» diventa «&amp;»): quindi htmlInACapo decodifica anche un «&amp;» scritto davvero: «&amp;» → riletto «&» (perso), «scrivi &amp; per &» → «scrivi & per &»",
-        "components/seller/site/SectionConfigForm.tsx:82 — «&lt;b&gt;» scritto dal negoziante si rilegge «<b>» e al salvataggio successivo diventa un vero tag (<b></b>): il testo cambia a ogni giro e non è stabile; nel campo la scritta «&amp;» non si può nemmeno digitare (si trasforma subito in «&»). Manca il caso nella prova tests/unit/riparazione-r02-testo-vetrina.test.ts"
-      ],
-      "cosa_resta": "Casi limite trovati dal revisore: un testo con la scritta letterale «&amp;» si rilegge «&», e «&lt;b&gt;» scritto letteralmente torna «<b>» e al salvataggio dopo diventa un tag vero. La radice è in lib/sanitize-html.ts (file altrui): sanitizeRichText lascia «&» crudo quando nel testo non c'è «<», quindi il formato salvato non dice se «&amp;» era un'entità o testo. Serve che sanitizeRichText codifichi sempre «&» in «&amp;»; poi htmlInACapo decodifica una volta sola senza ambiguità."
-    },
-    {
-      "id": "R02-009",
-      "chiave": "frontend-ux|restano tre pagine con le foto sgranate perché `unoptimized` spegne srcset e sizes",
-      "esito": "riparato",
-      "commit": "6d2e1e7f",
-      "file_toccati": [
-        "app/orders/[id]/page.tsx",
-        "app/seller/products/page.tsx",
-        "app/shared-cart/page.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-foto-nitide.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-foto-nitide.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6d2e1e7f^ --file app/shared-cart/page.tsx,app/seller/products/page.tsx,app/orders/[id]/page.tsx --prove tests/unit/riparazione-r02-foto-nitide.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Tolto unoptimized in tutte le Image delle tre pagine e messo loader={caricatoreFotoRemote} (lib/image-loader.ts, lo stesso già usato da orders/page, cart ecc.) più sizes (64px, 44px, 44px, 40px). Nessun problema di origini: il loader gira gli URL a Supabase/Pexels senza passare da remotePatterns, che resta com'è.",
-      "verificato_da": "qa-sonnet revB: letto loader e next.config (il loader aggira remotePatterns, Supabase/Pexels/altri http ok, data/blob passano) e le 5 Image delle 3 pagine; trovato che il loader ritaglia a quadrato il logo del negozio. · difetto del revisore (logo ritagliato) chiuso in 2078ec4e, prova rimessa 0",
-      "difetti_del_revisore": [
-        "app/orders/[id]/page.tsx:860 — logoNegozio(...) è fatto apposta per non ritagliare (quadrato:false), ma caricatoreFotoRemote richiama sizedImage(src,'thumb') che aggiunge height=width e resize=cover (lib/image-loader.ts:~55, lib/image-url.ts:68,174): il logo largo/con scritta ora viene ritagliato a quadrato, regressione rispetto a unoptimized"
-      ],
-      "commit_correzione": "2078ec4eb837fc98271fccabf0f34e1580c85c3f",
-      "correzione": "Il revisore ha trovato che caricatoreFotoRemote ritagliava a quadrato il logo del negozio in app/orders/[id]/page.tsx:860; ora il logo usa caricatoreLogoNegozio (components/StoreAvatar.tsx, solo larghezza) con sizes='40px'.",
-      "rimessa_correzione": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2078ec4e^ --file app/orders/[id]/page.tsx --prove tests/unit/riparazione-r02-foto-nitide.test.ts --json"
-      },
-      "commit_cricchetto": "adf7ec6e901e1ddfe4e42725de7483648868c735",
-      "prova_comune_toccata": {
-        "file": "tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts",
-        "commit": "adf7ec6e",
-        "motivo": "Il cricchetto «le foto che non passano dal caricatore» si aspettava ancora i tre file di questa voce con unoptimized; tolto unoptimized, scende a zero. Prova più forte, non più debole: una foto nuova con unoptimized torna rossa. Firma di Nicola del 21/11 (regia 9.0, giro4/piano.json).",
-        "riga_vecchia": "it('sono tre, e sono questi: …') … expect(senzaCaricatore).toEqual(['app/orders/[id]/page.tsx','app/seller/products/page.tsx','app/shared-cart/page.tsx'])",
-        "riga_nuova": "it('sono zero: il numero scende e non risale') … expect(senzaCaricatore).toEqual([])"
-      }
-    },
-    {
-      "id": "R02-014",
-      "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
-      "esito": "serve_file_altrui",
-      "serve_file_altrui": [
-        {
-          "file": "components/Turnstile.tsx",
-          "modifica": "in window.turnstile.render(...) (riga ~76) aggiungere l'opzione size: window.innerWidth < 340 ? 'compact' : 'normal' (il widget normale è largo 300px e nel riquadro del modulo di app/contact a 280px di schermo, con px-6 + p-6, esce di circa 10px)."
-        }
-      ],
-      "prova": "Già chiusi sulla base dai commit precedenti di R02 (d0def26c e simili): components/Footer.tsx:139-142 COLONNE_DEL_PIEDE (auto-fit con min(100%,…), niente più grid-cols-2 fisso); app/lavora-con-noi/page.tsx:137 'min-w-0 … p-4 sm:p-6'; app/returns/page.tsx:36 'flex flex-wrap … p-4 sm:p-6'; app/faq/page.tsx:265 'px-4 py-8 sm:p-8' e link 'max-w-full'; app/help/page.tsx:106-110 'min-w-0 [overflow-wrap:anywhere]'; app/contact e app/terms con [overflow-wrap:anywhere] (contact:109, terms:271). Resta solo il Turnstile.",
-      "nota": "Nessuna modifica né commit miei: i file di R02 della voce erano già a posto. Resta solo il Turnstile (file non di R02, nemmeno app/contact).",
-      "verificato_da": "qa-sonnet revC: Playwright (chromium) a 320px con html font-size 200%: /, /lavora-con-noi, /returns, /faq, /help, /terms, /contact hanno scrollWidth 320 = clientWidth, nessun elemento oltre il bordo; Turnstile non verificato (widget non caricato in dev)."
-    },
-    {
-      "id": "R02-015",
-      "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
-      "esito": "gia_riparato_prima",
-      "prova": "app/admin/sponsored/page.tsx:21-23 (home_top → 'In cima alla home', ecc.), :146 e :273 usano etichettaStato(), :233-240 intestazioni in italiano (Posizione, Periodo, Budget al giorno, Speso, Visualizzazioni, Clic su 100 visualizzazioni, Stato, Azioni); già così alla base 2d19787b (git show 2d19787b:app/admin/sponsored/page.tsx riga 21 e 146).",
-      "verificato_da": "qa-sonnet revC: letto app/admin/sponsored/page.tsx (mappa POSIZIONE righe ~16-20, intestazioni 231-239 in italiano) e la base risulta uguale secondo il referto."
-    },
-    {
-      "id": "R02-016",
-      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
-      "esito": "parziale",
-      "cosa_resta": "public/manifest.json ha già \"id\": \"/\" (riga 5) e \"display_override\": [\"standalone\",\"minimal-ui\"] (riga 8) e non ha più \"orientation\" (grep orientation: nessun risultato); nessuna modifica necessaria. Manca solo \"screenshots\": in public/ non ci sono schermate vere (solo icone e marker). Servono almeno 2 PNG reali dell'app: una form_factor \"narrow\" (telefono, es. 1080x1920 o 540x960, home e scheda prodotto) e una form_factor \"wide\" (computer, es. 1280x720 o più, home), poi aggiungere in manifest.json screenshots:[{src,sizes,type:'image/png',form_factor,label}].",
-      "prova": "grep -n 'orientation\\|\"id\"\\|display_override' public/manifest.json → solo id (5) e display_override (8)",
-      "verificato_da": "qa-sonnet revC: public/manifest.json ha id '/' e display_override, nessun orientation (gia' cosi' sulla base 2d19787b), ma manca 'screenshots' e in public/ non ci sono schermate.",
-      "difetti_del_revisore": [
-        "public/manifest.json — manca la chiave screenshots (narrow e wide), meta' della voce resta aperta"
-      ]
-    },
-    {
-      "id": "R02-002",
-      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
-      "esito": "parziale",
-      "cosa_resta": "components/ui/Card.tsx è già allineato (radius di base 'xl' = 16px, '2xl' per prodotto/negozio, 'lg' per riquadri interni; tailwind.config.ts borderRadius xl=1rem): nessuna modifica. Restano le card scritte a mano in file altrui. Conteggio: grep -rEoh \"bg-white border border-(cream-300|surface-200)[^\\\"'`]*rounded-(lg|xl|2xl|md|3xl)\\b\" app components --include=*.tsx | grep -Eo 'rounded-[a-z0-9]+$' | sort | uniq -c → 78 rounded-2xl, 56 rounded-xl, 15 rounded-lg (149 in 73 file; 13 file importano Card). Regola di sostituzione: il div → <Card variant=\"bordered\" radius=\"…\">: rounded-xl → <Card> (di base), rounded-2xl → <Card radius=\"2xl\"> se è una card prodotto/negozio, altrimenti <Card> (16px); rounded-lg → <Card radius=\"lg\"> solo se è un riquadro dentro un'altra card; il padding p-4/p-6 → padding=\"md\"/\"lg\" e le classi restanti in className."
-    },
-    {
-      "id": "R02-022",
-      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
-      "esito": "parziale",
-      "commit": "1b418f27",
-      "file_toccati": [
-        "app/admin/orders/page.tsx",
-        "app/orders/[id]/page.tsx",
-        "app/orders/page.tsx",
-        "app/seller/analytics/page.tsx",
-        "app/seller/dashboard/page.tsx",
-        "app/seller/orders/page.tsx",
-        "app/seller/products/page.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r02-etichette-maiuscole-lotto3.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-etichette-maiuscole-lotto3.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b418f27^ --file app/admin/orders/page.tsx,app/orders/[id]/page.tsx,app/orders/page.tsx,app/seller/analytics/page.tsx,app/seller/dashboard/page.tsx,app/seller/orders/page.tsx,app/seller/products/page.tsx --prove tests/unit/riparazione-r02-etichette-maiuscole-lotto3.test.ts --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nelle 7 pagine di R02 con righe uppercase le spaziature wide/wider/widest/[0.0Xem] sono ora tracking-label (8 righe). tailwind.config.ts non toccato (label 0.04em, wide già allineato a 0.04em).",
-      "cosa_resta": "Fuori dai file di R02 restano 62 righe uppercase con spaziatura diversa dal valore del design. Comando: grep -rnE \"uppercase\" app components --include=*.tsx | grep -E \"tracking-(wider|widest|\\[0\\.0[0-9]*em\\])\" → 34 tracking-wider, 2 tracking-widest, 14 [0.03em], 5 [0.05em], 4 [0.04em], 2 [0.06em], 1 [0.08em]. Sostituzione: su ogni riga con uppercase, quelle classi → tracking-label (tracking-wide vale già 0.04em, resta lecito). Esclusi i codici non etichetta (es. tracking-[0.3em]/[0.5em] senza uppercase).",
-      "verificato_da": "qa-sonnet revB: riletto il diff (8 righe, tracking-label esiste in tailwind.config letterSpacing 0.04em) e rilanciato il comando di cosa_resta: 62 righe, scomposizione 34/2/14/5/4/2/1 torna; prova verde.",
-      "difetti_del_revisore": [
-        "app/orders/[id]/page.tsx — «Codice consegna» passa da tracking-widest (0.1em) a 0.04em: cambio visibile voluto per uniformare, non è una spaziatura da codice; nessun punto con spaziatura voluta rovinato nelle 7 pagine",
-        "il conto cosa_resta conta solo le righe con uppercase e tracking sulla stessa riga: 40 file in tutto hanno tracking-wider/widest/[0.0Xem], quelli con className su più righe non sono contati; la voce resta parziale come dichiarato"
-      ]
-    },
-    {
-      "id": "R02-017",
-      "chiave": "performance|quasi tutte le pagine del sito nascono vuote e le riempie il browser con chiamate al database, non solo la home e la scheda prodotto",
-      "esito": "non_fatto",
-      "nota": "Stato: app/page.tsx (209 righe) e app/seller/page.tsx (8 righe) sono già senza 'use client'; le altre cinque (orders, orders/[id], seller/orders, seller/dashboard, admin/orders) sono client con useQuery e supabase browser. Strada: per ogni pagina, in quest'ordine di rischio crescente: 1) app/orders/page.tsx: spostare fetchOrders (righe 57-70) in una funzione server con il client Supabase server (cookie di sessione) e passare gli ordini iniziali come initialData al componente client, che tiene filtri, tab e rilettura; 2) seller/orders e admin/orders, stesso schema, con il controllo del ruolo già fatto sul server; 3) orders/[id] (921 righe: pagamento, ritiro, recesso, chat) e seller/dashboard (632 righe): prima spezzare la pagina in guscio server + isole client (codice di consegna, azioni, grafici), poi spostare le letture. Non si fa in un giro di minori: ogni pagina è un file grosso a uso misto lettura/azioni sui soldi, serve l'autenticazione lato server (RLS con la sessione dell'utente, redirect se non loggato) e prove per ciascuna, e le prove esistenti leggono quei file per nome (prove comuni che qui non si toccano). Meglio una voce per pagina, con prova e controllo a mano del flusso ordine."
+     "file": "tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts",
+     "cosa_cambia": "stessa attesa notifyBuyer true → false; importa solo lib/ordini/annulla, gli altri moduli solo in vi.mock; nessuna asserzione tolta",
+     "motivo": "stessa attesa notifyBuyer true → false; importa solo lib/ordini/annulla, gli altri moduli solo in vi.mock; nessuna asserzione tolta. Per la guardia-ramo sono comuni: la firma la chiede la regia a Nicola (21/11)."
     }
-  ],
-  "nuovi_difetti_visti": [
-    {
-      "titolo": "La scheda prodotto aperta oltre la fine della promozione continua a mostrare il prezzo scontato",
-      "dimensione": "frontend-ux",
-      "severita": "minore",
-      "file": "app/product/[id]/page.tsx:340-352",
-      "descrizione": "Lo sconto si rilegge solo al ritorno sulla pagina, non quando la promozione scade; cassa e rotta dei contanti rileggono e restano il presidio."
-    },
-    {
-      "titolo": "Un tasso di conversione fra il 50% e il 99% resta verde anche se gonfiato dal consenso ai cookie",
-      "dimensione": "frontend-ux",
-      "severita": "minore",
-      "file": "app/seller/analytics/page.tsx:362-366",
-      "descrizione": "Una soglia per il colore è una scelta di Nicola."
-    },
-    {
-      "titolo": "Le collezioni scelte a mano non passano il prezzo barrato del negozio",
-      "dimensione": "frontend-ux",
-      "severita": "minore",
-      "file": "components/store-sections/CollectionSection.tsx",
-      "descrizione": "Non passa compareAtPrice a ProductCard, mentre ProductGrid sì (components/ProductGrid.tsx:661)."
-    },
-    {
-      "titolo": "Il commento del cron delle notifiche dice che il nuovo ordine manda la push subito, ma oggi nessun file lo fa",
-      "dimensione": "deploy-sre",
-      "severita": "minore",
-      "file": "app/api/cron/send-push/route.ts:23-28",
-      "descrizione": "lib/push/subito.ts (mandaSubitoLaPushDelNuovoOrdine) non è chiamato da nessuna rotta; vedi R02-003 serve_file_altrui."
-    }
-  ],
-  "domande_per_nicola": [
-    "Colore del tasso di conversione del negozio: oggi resta verde anche fra il 50% e il 99% su pochi dati (app/seller/analytics/page.tsx:362-367). Serve una soglia?"
-  ],
-  "conto": {
-    "agenti": 6,
-    "nota": "3 lotti (1 opus, 2 sonnet) + 3 revisori sonnet. R02-004, R02-005 e la correzione di R02-009 fatte dal capo squadra dopo la firma di Nicola, senza un settimo subagente. Spesa letta con get_session a fine lavoro: 23,82 $.",
-    "subagenti": 6
+   ]
   },
-  "costo_usd": 23.82
+  {
+   "id": "R02-002",
+   "chiave": "architettura|il carrello in contanti si ritrova solo dalla tabella contro il doppio clic: senza quella riga la regola del negozio che rifiuta non scatta e nessuno lo sa",
+   "esito": "serve_file_altrui",
+   "cosa_ho_fatto": "Fatta e provata nel commit 34cd633e (migrazione 640, letture della chiave in annulla e nel freno, due testi, prova unit rossa 4/7 senza la correzione, prova SQL rossa 8/8 senza la 640, lib/database.types.ts rigenerato), poi TOLTA dal ramo col revert e8f65c46 su richiesta della regia: la 640 chiede i tipi generati, che in questo giro non sono di nessuno. Sul ramo annulla.ts e veloce-non-confermata.ts sono tornati identici a prima di quel commit.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/database.types.ts",
+     "modifica": "npm run db:types dopo la 640: 3 righe carrello_contanti in Row/Insert/Update di orders (file generato, di nessuno in questo giro). Diff esatto: `git show 34cd633e -- lib/database.types.ts` (anche nel campo diff di questa voce)."
+    },
+    {
+     "file": "lib/ordini/annulla.ts",
+     "modifica": "ordiniDelCarrello: se la riga del tentativo manca o non si legge, il carrello sono gli ordini dello stesso cliente con la stessa carrello_contanti non vuota (almeno 2); ripiego senza guasti se la colonna manca (42703/PGRST204). Più i due testi dell'avviso agli amministratori (l'ordine «si sta annullando»; un ordine vicino la cui riga non si legge non è chiamato «senza riga»). Diff esatto: `git show 34cd633e -- lib/ordini/annulla.ts` (anche nel campo diff di questa voce)."
+    },
+    {
+     "file": "lib/ordini/veloce-non-confermata.ts",
+     "modifica": "ordiniDelCarrello del freno: stessa ricerca per chiave con lo stesso ripiego; una riga illeggibile senza chiave lancia come prima. Diff esatto: `git show 34cd633e -- lib/ordini/veloce-non-confermata.ts` (anche nel campo diff di questa voce)."
+    },
+    {
+     "file": "migrations/640_il_carrello_in_contanti_ha_la_sua_chiave_sugli_ordini.sql",
+     "modifica": "migrazione nuova (fascia 640-649): orders.carrello_contanti text NULL con commento, indice parziale (user_id, carrello_contanti) WHERE NOT NULL, idempotente. Sul database vero solo con l'«ok migrazioni» di Nicola. Diff esatto: `git show 34cd633e -- migrations/640_il_carrello_in_contanti_ha_la_sua_chiave_sugli_ordini.sql` (anche nel campo diff di questa voce)."
+    },
+    {
+     "file": "tests/sql/rls/riparazione-r02-carrello-contanti.test.sql",
+     "modifica": "prova SQL nuova (8 controlli): colonna, indice, ricerca per cliente e chiave, il browser non scrive la chiave; rossa senza la 640. Diff esatto: `git show 34cd633e -- tests/sql/rls/riparazione-r02-carrello-contanti.test.sql` (anche nel campo diff di questa voce)."
+    },
+    {
+     "file": "tests/unit/riparazione-r02-carrello-contanti-chiave.test.ts",
+     "modifica": "prova nuova (7 casi): rossa 4/7 senza le letture. Diff esatto: `git show 34cd633e -- tests/unit/riparazione-r02-carrello-contanti-chiave.test.ts` (anche nel campo diff di questa voce)."
+    },
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "(A) Subito prima del commento `// #172 — Si registra il tentativo: …` (riga 1904) aggiungere: `// 21/11/2026 (R02-002) — La chiave del carrello in contanti anche sugli ordini (migrazione 640): se la riga del tentativo manca o non si legge, annullo e freno della veloce ritrovano il carrello da qui. Scrittura a parte: se la colonna non c'è ancora l'ordine resta com'è.\\n    let chiaveSugliOrdini = createdOrderIds.length < 2;\\n    if (createdOrderIds.length > 1) {\\n      const { error: errChiaveOrdini } = await admin.from('orders').update({ carrello_contanti: chiaveCarrello }).in('id', createdOrderIds).eq('user_id', user.id);\\n      chiaveSugliOrdini = !errChiaveOrdini;\\n      if (errChiaveOrdini) logger.warn('[cod] chiave del carrello non scritta sugli ordini', { chiave: chiaveCarrello, ordini: createdOrderIds, message: errChiaveOrdini.message });\\n    }\\n    const avvisaCarrelloSenzaRiga = (chiave: string | null) => createdOrderIds.length < 2 ? Promise.resolve() : notifyAdmins('⚠️ Carrello in contanti senza la sua riga', `Gli ordini ${createdOrderIds.map((id) => `#${id.slice(0, 6).toUpperCase()}`).join(', ')} sono nati insieme, ma la riga del loro carrello non si è scritta: ${chiaveSugliOrdini ? 'il carrello si ritrova comunque dalla chiave scritta sugli ordini.' : 'se un negozio rifiuta, la consegna degli altri non si rifà da sola: guardali tu.'}`, '/admin/orders').then(() => undefined).catch((err) => logger.error('[cod] avviso agli amministratori non partito', { chiave, err }));`. (B) Dentro `if (errChiave) {` (riga 1930), dopo la chiusura del `logger.error('[cod] prova del tentativo NON scritta…', {…});` (riga 1937): `await avvisaCarrelloSenzaRiga(chiaveTentativo);`. (C) Dentro `if (errCarrello) {` (riga 1950), dopo il `logger.warn(…)`: `await avvisaCarrelloSenzaRiga(chiaveCarrello);`. notifyAdmins è già importato (riga 39). CONDIZIONE (revisore): la chiave scritta sugli ordini è chiaveCarrello dopo il cambio di generazione (`chiave~N`, righe ~457-458) o il `cod-<uuid>`, su tutti gli ordini dello stesso invio; MAI l'intestazione idempotency-key così com'è: dopo 12 ore due carrelli diversi avrebbero la stessa chiave e la ricerca li unirebbe."
+    }
+   ],
+   "cosa_resta": "Tutta la voce: applicare il diff di 34cd633e (codice, migrazione, prove, tipi) più la scrittura della chiave nella rotta dei contanti (app/api/orders/cod/route.ts, sotto).",
+   "nota": "La migrazione 640 entra sul database vero solo con l'«ok migrazioni» di Nicola. Con il diff applicato e lib/database.types.ts rigenerato le 3 guardie di schema sono verdi (19 prove). Senza la scrittura nella rotta la colonna resta vuota e il codice fa come oggi. Giudizio del revisore del lotto A su f8e6c95a (stesso codice): vedi verificato_da. Lievi (revisore): la 640 non ha `NOTIFY pgrst, 'reload schema'` (lo hanno 40 delle 55 migrazioni che aggiungono colonne): aggiungerlo quando si applica; i due testi sistemati non hanno una prova leggera.",
+   "diff": "diff --git a/lib/database.types.ts b/lib/database.types.ts\nindex 48053bff..f83996a8 100644\n--- a/lib/database.types.ts\n+++ b/lib/database.types.ts\n@@ -1430,6 +1430,7 @@ export interface Database {\n           rider_payout_claimed_at: string | null;\n           stock_restored_at: string | null;\n           coupon_released_at: string | null;\n+          carrello_contanti: string | null;\n         };\n         Insert: {\n           id?: string;\n@@ -1502,6 +1503,7 @@ export interface Database {\n           rider_payout_claimed_at?: string | null;\n           stock_restored_at?: string | null;\n           coupon_released_at?: string | null;\n+          carrello_contanti?: string | null;\n         };\n         Update: {\n           id?: string;\n@@ -1574,6 +1576,7 @@ export interface Database {\n           rider_payout_claimed_at?: string | null;\n           stock_restored_at?: string | null;\n           coupon_released_at?: string | null;\n+          carrello_contanti?: string | null;\n         };\n         Relationships: [];\n       };\ndiff --git a/lib/ordini/annulla.ts b/lib/ordini/annulla.ts\nindex 315f413b..4e5a9e76 100644\n--- a/lib/ordini/annulla.ts\n+++ b/lib/ordini/annulla.ts\n@@ -857,6 +857,9 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise\n     .contains('order_ids', JSON.stringify([{ id: o.id }]))\n     .limit(1);\n   if (errT || !Array.isArray(tentativi) || tentativi.length === 0) {\n+    // 21/11/2026 (R02-002) — Senza la riga il carrello si ritrova dalla chiave scritta sugli ordini.\n+    const dallaChiave = await ordiniDallaChiaveDelCarrello(admin, o);\n+    if (dallaChiave) return dallaChiave;\n     // 21/11/2026 (R04-007) — Senza la riga non si sposta niente, ma non in silenzio.\n     await segnalaIlCarrelloSenzaRiga(admin, o, !!errT);\n     return null;\n@@ -872,6 +875,47 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise\n   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);\n }\n \n+/**\n+ * 21/11/2026 (R02-002) — IL CARRELLO IN CONTANTI SI RITROVA ANCHE SENZA LA RIGA DEL TENTATIVO.\n+ *\n+ * Dalla migrazione 640 la rotta dei contanti scrive su ogni ordine dello stesso invio la stessa\n+ * chiave (`orders.carrello_contanti`). Se la riga del tentativo manca o non si legge, il carrello è\n+ * fatto dagli ordini dello stesso cliente con la stessa chiave non vuota: la regola del negozio che\n+ * rifiuta scatta come con la riga. Prima della 640 la colonna non c'è (42703 / PGRST204): si fa come\n+ * prima, senza guasti. Una chiave che non c'è, o un ordine da solo, non è un carrello: `null`.\n+ */\n+async function ordiniDallaChiaveDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise<RigaDelGiro[] | null> {\n+  if (!o.user_id) return null;\n+  try {\n+    const { data: sua, error: errSua } = await admin.from('orders').select('carrello_contanti').eq('id', o.id).maybeSingle();\n+    if (errSua) {\n+      if (!colonnaDelCarrelloMancante(errSua)) {\n+        logger.warn('[ricalcolaLaConsegnaDelGiro] chiave del carrello in contanti non letta', { orderId: o.id, message: (errSua as { message?: string }).message });\n+      }\n+      return null;\n+    }\n+    const chiave = String((sua as { carrello_contanti?: unknown } | null)?.carrello_contanti ?? '').trim();\n+    if (!chiave) return null;\n+    const { data, error } = await leggiIlGiro('carrello-chiave', (c) =>\n+      admin.from('orders').select(c).eq('user_id', o.user_id).eq('carrello_contanti', chiave));\n+    if (error || !Array.isArray(data)) return null;\n+    const righe = data as unknown as RigaDelGiro[];\n+    if (righe.length < 2 || !righe.some((r) => r.id === o.id)) return null;\n+    return righe.sort(\n+      (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),\n+    );\n+  } catch (err) {\n+    logger.warn('[ricalcolaLaConsegnaDelGiro] chiave del carrello in contanti non letta', { orderId: o.id, err });\n+    return null;\n+  }\n+}\n+\n+/** La colonna della 640 non c'è ancora: PostgreSQL (42703) o la cache di PostgREST (PGRST204). */\n+function colonnaDelCarrelloMancante(e: unknown): boolean {\n+  const { code, message } = (e ?? {}) as { code?: string; message?: string };\n+  return code === '42703' || code === 'PGRST204' || /carrello_contanti/.test(String(message ?? ''));\n+}\n+\n /**\n  * 21/11/2026 (R04-007) — IL CARRELLO IN CONTANTI SENZA LA SUA RIGA NON PASSA PIU' IN SILENZIO.\n  *\n@@ -912,6 +956,9 @@ async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaDelGiro,\n       !r.stripe_session_id?.trim() && !r.pickup_in_store && r.delivery_status !== 'CANCELED' && r.delivery_status !== 'DELIVERED'\n       && Math.abs(Date.parse(String(r.created_at ?? '')) - nato) <= VICINI_ENTRO_MS);\n     const senzaRiga: RigaDelGiro[] = [];\n+    // 21/11/2026 (R02-002) — Un ordine vicino la cui riga non si è potuta leggere non è «senza riga»:\n+    // l'avviso lo nomina a parte, per quello che è.\n+    const nonLetti: RigaDelGiro[] = [];\n     for (const r of vicini) {\n       const { data: suaRiga, error: errR } = await admin\n         .from('cod_checkout_attempts')\n@@ -919,31 +966,40 @@ async function segnalaIlCarrelloSenzaRiga(admin: SupabaseClient, o: RigaDelGiro,\n         .eq('user_id', o.user_id)\n         .contains('order_ids', JSON.stringify([{ id: r.id }]))\n         .limit(1);\n-      if (!errR && Array.isArray(suaRiga) && suaRiga.length > 0) continue;\n+      if (errR) { nonLetti.push(r); continue; }\n+      if (Array.isArray(suaRiga) && suaRiga.length > 0) continue;\n       senzaRiga.push(r);\n     }\n-    if (senzaRiga.length === 0) return;\n-    const gruppo = [o, ...senzaRiga].sort(\n+    const daGuardare = [...senzaRiga, ...nonLetti];\n+    if (daGuardare.length === 0) return;\n+    const gruppo = [o, ...daGuardare].sort(\n       (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),\n     );\n     const conto = contoDelCarrello(o, gruppo, o.id);\n-    const adesso = senzaRiga\n+    const cifre = (righe: RigaDelGiro[]) => righe\n       .map((r) => `${codiceDi(r.id)} (${r.delivery_status}: consegna ${euro(Number(r.delivery_fee_cents ?? 0))}, fattorino ${euro(Number(r.rider_fee_cents ?? 0))}, totale ${euro(centesimi(r.total_price))})`)\n       .join(', ');\n+    const adesso = [\n+      senzaRiga.length > 0 ? `senza una riga di carrello: ${cifre(senzaRiga)}` : '',\n+      nonLetti.length > 0 ? `di cui la riga di carrello non si è potuta leggere: ${cifre(nonLetti)}` : '',\n+    ].filter(Boolean).join('; e altri ');\n     const seLoStesso = conto\n       ? ` Se sono davvero lo stesso carrello, la regola darebbe: ${conto.rimasti\n         .map((riga) => {\n-          const r = senzaRiga.find((x) => x.id === riga.id);\n+          const r = daGuardare.find((x) => x.id === riga.id);\n           return `${codiceDi(riga.id)} consegna ${euro(riga.deliveryFeeCents)} e fattorino ${euro(riga.riderFeeCents)}${r ? `, totale ${euro(Math.max(0, centesimi(r.total_price) + riga.deltaCents))}` : ''}`;\n         })\n         .join('; ')}.`\n       : ' Le loro cifre non tornano con un carrello solo: probabilmente sono carrelli diversi, ma guardalo tu.';\n     await notifyAdmins(\n       '⚠️ Annullo in contanti: carrello da controllare a mano',\n-      `L'ordine ${codiceDi(o.id)} è annullato, ma ${rigaNonLetta ? 'la riga del suo carrello non si è potuta leggere' : 'la riga del suo carrello non c’è'}: ` +\n+      // 21/11/2026 (R02-002) — «Si sta annullando»: il giro degli scaduti rimette l'ordine in coda se il\n+      // rimborso sulla carta non riesce, e allora l'ordine non è annullato.\n+      `L'ordine ${codiceDi(o.id)} si sta annullando, ma ${rigaNonLetta ? 'la riga del suo carrello non si è potuta leggere' : 'la riga del suo carrello non c’è'}: ` +\n         'la consegna degli altri ordini dello stesso carrello NON è stata rifatta, e il sito non li unisce da solo. ' +\n-        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e senza una riga di carrello: ${adesso}.${seLoStesso} ` +\n-        'Se sono lo stesso carrello, sistema tu consegna, fattorino e totale e avvisa il cliente del conto nuovo; se no, non serve fare niente.',\n+        `Lo stesso cliente ha altri ordini in contanti nati entro due minuti e ${adesso}.${seLoStesso} ` +\n+        'Se sono lo stesso carrello, sistema tu consegna, fattorino e totale e avvisa il cliente del conto nuovo; se no, non serve fare niente. ' +\n+        'Se l’ordine poi non risulta annullato (il rimborso sulla carta non è riuscito e il giro l’ha rimesso in coda), questo avviso non vale.',\n       '/admin/orders',\n       { unaVoltaPer: `carrello-senza-riga-${o.id}` },\n     );\ndiff --git a/lib/ordini/veloce-non-confermata.ts b/lib/ordini/veloce-non-confermata.ts\nindex 9a24d503..8062c04f 100644\n--- a/lib/ordini/veloce-non-confermata.ts\n+++ b/lib/ordini/veloce-non-confermata.ts\n@@ -190,6 +190,36 @@ export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCent\n   return `${inizio}. L’euro della veloce te lo rendiamo a mano entro un giorno. ${fine}`;\n }\n \n+/**\n+ * 21/11/2026 (R02-002) — Gli ordini del carrello in contanti dalla chiave scritta su ogni ordine dello\n+ * stesso invio (`orders.carrello_contanti`, migrazione 640): lo stesso cliente, la stessa chiave non\n+ * vuota. Prima della 640 la colonna non c'è (42703 / PGRST204): `null`, e si fa come prima. Anche una\n+ * chiave assente, un ordine da solo o una lettura caduta danno `null`.\n+ */\n+async function idsDallaChiaveDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<string[] | null> {\n+  if (!o.user_id) return null;\n+  try {\n+    const { data: sua, error: errSua } = await admin.from('orders').select('carrello_contanti').eq('id', o.id).maybeSingle();\n+    const chiave = errSua ? '' : String((sua as { carrello_contanti?: unknown } | null)?.carrello_contanti ?? '').trim();\n+    if (errSua && !colonnaDelCarrelloMancante(errSua)) {\n+      logger.warn('[veloce-non-confermata] chiave del carrello in contanti non letta', { orderId: o.id, message: errSua.message });\n+    }\n+    if (!chiave) return null;\n+    const { data, error } = await admin.from('orders').select('id').eq('user_id', o.user_id).eq('carrello_contanti', chiave);\n+    if (error || !Array.isArray(data)) return null;\n+    const ids = (data as Array<{ id: string }>).map((r) => r.id);\n+    return ids.length >= 2 && ids.includes(o.id) ? ids : null;\n+  } catch (err) {\n+    logger.warn('[veloce-non-confermata] chiave del carrello in contanti non letta', { orderId: o.id, err });\n+    return null;\n+  }\n+}\n+\n+/** La colonna della 640 non c'è ancora: PostgreSQL (42703) o la cache di PostgREST (PGRST204). */\n+function colonnaDelCarrelloMancante(e: { code?: string; message?: string }): boolean {\n+  return e.code === '42703' || e.code === 'PGRST204' || /carrello_contanti/.test(String(e.message ?? ''));\n+}\n+\n async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<RigaVeloce[] | null> {\n   let righe: RigaVeloce[] | null = null;\n   const sessione = o.stripe_session_id?.trim();\n@@ -206,9 +236,13 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<\n       .eq('user_id', o.user_id)\n       .contains('order_ids', JSON.stringify([{ id: o.id }]))\n       .limit(1);\n-    if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);\n-    if (!Array.isArray(tentativi) || tentativi.length === 0) return null;\n-    const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;\n+    const senzaRiga = !!errT || !Array.isArray(tentativi) || tentativi.length === 0;\n+    // 21/11/2026 (R02-002) — Senza la riga (o con la riga che non si legge) il carrello si ritrova\n+    // dalla chiave scritta sugli ordini (migrazione 640). Senza chiave si fa come prima.\n+    const dallaChiave = senzaRiga ? await idsDallaChiaveDelCarrello(admin, o) : null;\n+    if (errT && !dallaChiave) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);\n+    if (senzaRiga && !dallaChiave) return null;\n+    const elenco = dallaChiave ?? (tentativi as Array<{ order_ids: unknown }>)[0].order_ids;\n     const ids = Array.isArray(elenco)\n       ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)\n       : [];\ndiff --git a/migrations/640_il_carrello_in_contanti_ha_la_sua_chiave_sugli_ordini.sql b/migrations/640_il_carrello_in_contanti_ha_la_sua_chiave_sugli_ordini.sql\nnew file mode 100644\nindex 00000000..841660f7\n--- /dev/null\n+++ b/migrations/640_il_carrello_in_contanti_ha_la_sua_chiave_sugli_ordini.sql\n@@ -0,0 +1,56 @@\n+-- =============================================================================\n+-- 640 — IL CARRELLO IN CONTANTI HA LA SUA CHIAVE SUGLI ORDINI (R02-002)\n+-- =============================================================================\n+--\n+-- NON APPLICATA. La applica Nicola.\n+--\n+-- ── Cosa c'e' che non va, in parole semplici ─────────────────────────────────\n+-- Un carrello pagato con la carta si ritrova dalla sessione di pagamento\n+-- (`stripe_session_id`, uguale su tutti gli ordini del carrello). Un carrello\n+-- in contanti no: sugli ordini non c'e' niente che li leghi. Si ritrova solo\n+-- dalla riga della tabella contro il doppio clic (`cod_checkout_attempts`).\n+-- Se quella riga manca (la rotta della cassa non l'ha potuta scrivere) o non\n+-- si legge, il sito tratta ogni ordine come un carrello da solo:\n+--   · un negozio rifiuta e la consegna degli altri negozi non si rifa'\n+--     (lib/ordini/annulla.ts, `ricalcolaLaConsegnaDelGiro`);\n+--   · il freno della veloce sposta un ordine solo e dice al cliente un conto a\n+--     meta' (lib/ordini/veloce-non-confermata.ts).\n+-- Pane 15 € + frutta 12 € in contanti, senza la riga: il forno rifiuta, e la\n+-- frutta resta a 1 € di consegna invece di 3. Oggi lo sanno gli amministratori,\n+-- ma la regola non scatta.\n+--\n+-- ── Cosa fa ──────────────────────────────────────────────────────────────────\n+-- Aggiunge `orders.carrello_contanti` (testo, vuoto di norma): la stessa chiave\n+-- su tutti gli ordini nati dallo stesso invio della cassa in contanti. La\n+-- scrive la rotta dei contanti (app/api/orders/cod/route.ts) con la chiave\n+-- del carrello che ha gia'. Chi cerca il carrello e non trova la riga del\n+-- tentativo cerca gli ordini dello stesso cliente con la stessa chiave.\n+-- L'indice (user_id, carrello_contanti) serve proprio a quella ricerca, ed e'\n+-- parziale: gli ordini senza chiave (la carta, i vecchi) non ci entrano.\n+--\n+-- Il codice regge anche prima di questa migrazione: se la colonna non c'e'\n+-- (42703 / PGRST204) fa come prima, senza guasti.\n+--\n+-- Permessi: nessuno nuovo. La colonna non e' fra quelle che il guardiano degli\n+-- ordini (`enforce_order_update_rules`, 179) lascia scrivere dal browser: la\n+-- scrive solo il server. La legge chi legge gia' l'ordine.\n+--\n+-- ── Che rischio ha ───────────────────────────────────────────────────────────\n+-- Nessuno sui dati: una colonna nuova vuota e un indice. Riapplicabile.\n+-- Sulla tabella degli ordini l'ALTER prende un blocco breve (colonna senza\n+-- valore predefinito: nessuna riscrittura della tabella).\n+-- REVERSIBILE:\n+--   DROP INDEX IF EXISTS public.orders_user_carrello_contanti_idx;\n+--   ALTER TABLE public.orders DROP COLUMN IF EXISTS carrello_contanti;\n+-- e il codice torna da solo a fare come prima.\n+-- La prova: tests/sql/rls/riparazione-r02-carrello-contanti.test.sql\n+-- =============================================================================\n+\n+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS carrello_contanti text;\n+\n+COMMENT ON COLUMN public.orders.carrello_contanti IS\n+  'Chiave del carrello in contanti: uguale su tutti gli ordini nati dallo stesso invio della cassa (la scrive solo il server). Vuota sugli ordini con la carta e su quelli nati prima della 640.';\n+\n+CREATE INDEX IF NOT EXISTS orders_user_carrello_contanti_idx\n+  ON public.orders (user_id, carrello_contanti)\n+  WHERE carrello_contanti IS NOT NULL;\ndiff --git a/tests/sql/rls/riparazione-r02-carrello-contanti.test.sql b/tests/sql/rls/riparazione-r02-carrello-contanti.test.sql\nnew file mode 100644\nindex 00000000..a2b91b0a\n--- /dev/null\n+++ b/tests/sql/rls/riparazione-r02-carrello-contanti.test.sql\n@@ -0,0 +1,179 @@\n+-- =============================================================================\n+-- R02-002 — Il carrello in contanti ha la sua chiave sugli ordini\n+--           (orders.carrello_contanti, migrations/640)\n+-- =============================================================================\n+-- Gira contro un database ricostruito dalle migrazioni vere (Postgres usa e getta):\n+--   tests/sql/harness/apply.sh mycity_test\n+--   psql -X -v ON_ERROR_STOP=1 -d mycity_test -f tests/sql/rls/riparazione-r02-carrello-contanti.test.sql\n+--\n+-- Maria ordina in contanti pane e frutta in un invio solo (chiave «k-maria-1»), poi il latte in un\n+-- altro invio («k-maria-2»). Luca, per caso, ha un ordine con la stessa chiave del primo carrello\n+-- di Maria. Si prova che:\n+--   ① la colonna c'è, è testo e resta vuota se nessuno la scrive (la carta, gli ordini di prima);\n+--   ② c'è l'indice (user_id, carrello_contanti), solo sugli ordini con la chiave;\n+--   ③ la ricerca del codice (stesso cliente, stessa chiave) trova pane e frutta, non il latte\n+--      dell'altro invio né l'ordine di Luca;\n+--   ④ il browser non la scrive (il guardiano degli ordini, 179), il server sì.\n+-- Le istruzioni che nominano la colonna passano da EXECUTE: senza la 640 il controllo dice\n+-- «NO» con il motivo, invece di fermarsi al primo errore di sintassi.\n+-- Tutto in transazione con ROLLBACK: non lascia dati.\n+-- =============================================================================\n+\n+BEGIN;\n+\n+SET LOCAL mycity.allow_profile_write = '1';\n+SET LOCAL mycity.allow_order_write   = '1';\n+\n+CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;\n+GRANT ALL ON esiti TO anon, authenticated, service_role;\n+\n+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES\n+  ('e6400000-0000-0000-0000-000000000001', 'forno-r02-002@test.it',  '{\"role\":\"seller\"}'),\n+  ('e6400000-0000-0000-0000-000000000002', 'frutta-r02-002@test.it', '{\"role\":\"seller\"}'),\n+  ('e6400000-0000-0000-0000-000000000003', 'maria-r02-002@test.it',  '{\"role\":\"buyer\"}'),\n+  ('e6400000-0000-0000-0000-000000000004', 'luca-r02-002@test.it',   '{\"role\":\"buyer\"}');\n+\n+INSERT INTO public.orders (\n+  id, user_id, seller_id, total_price, gross_total_cents, payment_method, payment_status, delivery_status,\n+  delivery_fee_cents, rider_fee_cents, delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip\n+) VALUES\n+  ('e6400000-0000-0000-0000-0000000000a1', 'e6400000-0000-0000-0000-000000000003', 'e6400000-0000-0000-0000-000000000001',\n+   18, 1800, 'cod', 'PENDING', 'NEW', 300, 300, 'Maria', '333', 'Via A 1', 'Piacenza', '29121'),\n+  ('e6400000-0000-0000-0000-0000000000a2', 'e6400000-0000-0000-0000-000000000003', 'e6400000-0000-0000-0000-000000000002',\n+   13, 1300, 'cod', 'PENDING', 'NEW', 100, 100, 'Maria', '333', 'Via A 1', 'Piacenza', '29121'),\n+  ('e6400000-0000-0000-0000-0000000000a3', 'e6400000-0000-0000-0000-000000000003', 'e6400000-0000-0000-0000-000000000002',\n+   12, 1200, 'cod', 'PENDING', 'NEW', 300, 300, 'Maria', '333', 'Via A 1', 'Piacenza', '29121'),\n+  ('e6400000-0000-0000-0000-0000000000b1', 'e6400000-0000-0000-0000-000000000004', 'e6400000-0000-0000-0000-000000000001',\n+   16, 1600, 'cod', 'PENDING', 'NEW', 300, 300, 'Luca', '334', 'Via B 2', 'Piacenza', '29121'),\n+  ('e6400000-0000-0000-0000-0000000000c1', 'e6400000-0000-0000-0000-000000000003', 'e6400000-0000-0000-0000-000000000001',\n+   20, 2000, 'card', 'PAID', 'NEW', 300, 300, 'Maria', '333', 'Via A 1', 'Piacenza', '29121');\n+\n+RESET mycity.allow_profile_write;\n+RESET mycity.allow_order_write;\n+\n+-- ① La colonna.\n+INSERT INTO esiti\n+SELECT '1a la colonna carrello_contanti c è, testo, e può restare vuota',\n+       count(*) = 1 AND bool_and(data_type = 'text' AND is_nullable = 'YES' AND column_default IS NULL),\n+       coalesce(string_agg(data_type || ' nullable=' || is_nullable || ' default=' || coalesce(column_default, '—'), '; '), 'colonna assente')\n+  FROM information_schema.columns\n+ WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'carrello_contanti';\n+\n+-- ② L'indice della ricerca.\n+INSERT INTO esiti\n+SELECT '2a l indice (user_id, carrello_contanti) c è, solo sugli ordini con la chiave',\n+       count(*) = 1\n+         AND bool_and(indexdef ILIKE '%(user_id, carrello_contanti)%' AND indexdef ILIKE '%WHERE (carrello_contanti IS NOT NULL)%'),\n+       coalesce(string_agg(indexdef, '; '), 'indice assente')\n+  FROM pg_indexes\n+ WHERE schemaname = 'public' AND tablename = 'orders' AND indexdef ILIKE '%carrello_contanti%';\n+\n+-- La cassa in contanti scrive la chiave (come service_role, la rotta dei contanti).\n+SET LOCAL ROLE service_role;\n+SET LOCAL request.jwt.claims = '{\"role\":\"service_role\"}';\n+DO $$\n+DECLARE dettaglio text := 'scritta';\n+BEGIN\n+  BEGIN\n+    EXECUTE $q$UPDATE public.orders SET carrello_contanti = 'k-maria-1'\n+                WHERE id IN ('e6400000-0000-0000-0000-0000000000a1', 'e6400000-0000-0000-0000-0000000000a2',\n+                             'e6400000-0000-0000-0000-0000000000b1')$q$;\n+    EXECUTE $q$UPDATE public.orders SET carrello_contanti = 'k-maria-2'\n+                WHERE id = 'e6400000-0000-0000-0000-0000000000a3'$q$;\n+  EXCEPTION WHEN OTHERS THEN dettaglio := SQLSTATE || ' ' || SQLERRM;\n+  END;\n+  INSERT INTO esiti VALUES ('4a il server scrive la chiave del carrello', dettaglio = 'scritta', dettaglio);\n+END $$;\n+RESET ROLE;\n+RESET request.jwt.claims;\n+\n+-- ① bis: chi non la scrive (la carta) resta vuoto.\n+DO $$\n+DECLARE vuoti int; dettaglio text;\n+BEGIN\n+  BEGIN\n+    EXECUTE $q$SELECT count(*) FROM public.orders\n+                WHERE id = 'e6400000-0000-0000-0000-0000000000c1' AND carrello_contanti IS NULL$q$ INTO vuoti;\n+    dettaglio := vuoti || ' righe vuote';\n+  EXCEPTION WHEN OTHERS THEN vuoti := -1; dettaglio := SQLSTATE || ' ' || SQLERRM;\n+  END;\n+  INSERT INTO esiti VALUES ('1b l ordine con la carta resta senza chiave', vuoti = 1, dettaglio);\n+END $$;\n+\n+-- ③ La ricerca del codice: lo stesso cliente, la stessa chiave non vuota.\n+DO $$\n+DECLARE trovati text; dettaglio text;\n+BEGIN\n+  BEGIN\n+    EXECUTE $q$SELECT string_agg(right(id::text, 2), ',' ORDER BY id) FROM public.orders\n+                WHERE user_id = 'e6400000-0000-0000-0000-000000000003' AND carrello_contanti = 'k-maria-1'$q$ INTO trovati;\n+    dettaglio := coalesce(trovati, 'nessuno');\n+  EXCEPTION WHEN OTHERS THEN trovati := NULL; dettaglio := SQLSTATE || ' ' || SQLERRM;\n+  END;\n+  INSERT INTO esiti VALUES ('3a il carrello di Maria è pane e frutta: non il latte dell altro invio, non l ordine di Luca',\n+                            trovati IS NOT DISTINCT FROM 'a1,a2', dettaglio);\n+END $$;\n+\n+-- ④ Il browser non la scrive: né Maria sul suo ordine, né il negozio sull'ordine che ha ricevuto.\n+SET LOCAL ROLE authenticated;\n+SET LOCAL request.jwt.claims = '{\"sub\":\"e6400000-0000-0000-0000-000000000003\",\"role\":\"authenticated\"}';\n+DO $$\n+DECLARE codice text := 'nessun errore';\n+BEGIN\n+  BEGIN\n+    EXECUTE $q$UPDATE public.orders SET carrello_contanti = 'k-falsa'\n+                WHERE id = 'e6400000-0000-0000-0000-0000000000a3'$q$;\n+  EXCEPTION WHEN OTHERS THEN codice := SQLSTATE;\n+  END;\n+  -- Il cliente l'ordine non lo aggiorna proprio (RLS: niente toccato) o lo ferma il guardiano (42501).\n+  INSERT INTO esiti VALUES ('4b il cliente non cambia la chiave dal browser', codice IN ('42501', 'nessun errore'), codice);\n+END $$;\n+RESET ROLE;\n+RESET request.jwt.claims;\n+\n+SET LOCAL ROLE authenticated;\n+SET LOCAL request.jwt.claims = '{\"sub\":\"e6400000-0000-0000-0000-000000000002\",\"role\":\"authenticated\"}';\n+DO $$\n+DECLARE codice text := 'nessun errore';\n+BEGIN\n+  BEGIN\n+    EXECUTE $q$UPDATE public.orders SET carrello_contanti = 'k-maria-1'\n+                WHERE id = 'e6400000-0000-0000-0000-0000000000a3'$q$;\n+  EXCEPTION WHEN OTHERS THEN codice := SQLSTATE;\n+  END;\n+  -- Il negozio può trovare l'ordine (RLS) ma non la colonna: 42501 dal guardiano, o niente toccato.\n+  INSERT INTO esiti VALUES ('4c il negozio non sposta un ordine in un altro carrello', codice IN ('42501', 'nessun errore'), codice);\n+END $$;\n+RESET ROLE;\n+RESET request.jwt.claims;\n+\n+DO $$\n+DECLARE chiave text; dettaglio text;\n+BEGIN\n+  BEGIN\n+    EXECUTE $q$SELECT carrello_contanti FROM public.orders WHERE id = 'e6400000-0000-0000-0000-0000000000a3'$q$ INTO chiave;\n+    dettaglio := coalesce(chiave, 'vuota');\n+  EXCEPTION WHEN OTHERS THEN chiave := NULL; dettaglio := SQLSTATE || ' ' || SQLERRM;\n+  END;\n+  INSERT INTO esiti VALUES ('4d dopo i tentativi del browser il latte ha ancora la sua chiave', chiave IS NOT DISTINCT FROM 'k-maria-2', dettaglio);\n+END $$;\n+\n+-- ── Verdetto ──────────────────────────────────────────────────────────────\n+DO $$\n+DECLARE r record; rossi int := 0;\n+BEGIN\n+  FOR r IN SELECT * FROM esiti ORDER BY nome LOOP\n+    IF r.ok THEN\n+      RAISE INFO 'ok  %', r.nome;\n+    ELSE\n+      rossi := rossi + 1;\n+      RAISE INFO 'NO  % — %', r.nome, r.dettaglio;\n+    END IF;\n+  END LOOP;\n+  IF rossi > 0 THEN\n+    RAISE EXCEPTION 'R02-002: % controllo/i rosso/i sulla chiave del carrello in contanti', rossi;\n+  END IF;\n+  RAISE INFO 'R02-002: % controlli verdi sulla chiave del carrello in contanti', (SELECT count(*) FROM esiti);\n+END $$;\n+\n+ROLLBACK;\ndiff --git a/tests/unit/riparazione-r02-carrello-contanti-chiave.test.ts b/tests/unit/riparazione-r02-carrello-contanti-chiave.test.ts\nnew file mode 100644\nindex 00000000..bd32cc21\n--- /dev/null\n+++ b/tests/unit/riparazione-r02-carrello-contanti-chiave.test.ts\n@@ -0,0 +1,265 @@\n+import { describe, it, expect, vi, beforeEach, afterEach } from \"vitest\";\n+import { ETICHETTA_ADESSO } from \"@/lib/quando-arriva\";\n+import { annullaERimborsa } from \"@/lib/ordini/annulla\";\n+import { finto, carrello, type Riga } from \"./carrello-finto\";\n+\n+/**\n+ * R02-002 — Il carrello in contanti si ritrova anche senza la riga del tentativo di cassa.\n+ *\n+ * Dalla migrazione 640 ogni ordine nato dallo stesso invio della cassa in contanti porta la stessa\n+ * chiave (`orders.carrello_contanti`). Se la riga di `cod_checkout_attempts` manca o non si legge, il\n+ * carrello è fatto dagli ordini dello stesso cliente con la stessa chiave: la regola del negozio che\n+ * rifiuta scatta (lib/ordini/annulla.ts) e il freno della veloce sposta tutto il carrello\n+ * (lib/ordini/veloce-non-confermata.ts). Prima della 640 la colonna non c'è: si fa come prima.\n+ * (Banchi di prova: tests/unit/carrello-finto.ts per l'annullo, e quello di\n+ * riparazione-r04-veloce-carrello-a-meta.test.ts per il freno.)\n+ */\n+\n+const db: Record<string, Riga[]> = {};\n+/** Il database di prima della 640: chiedere la chiave del carrello fa fallire l istruzione intera. */\n+const prima640 = { attivo: false };\n+const prima: { update?: () => void } = {};\n+const guasto: { fascia: boolean; ordine: string | null } = { fascia: false, ordine: null };\n+const sendEmailMock = vi.fn(async (_m: unknown) => ({ ok: true }));\n+const chiaviAvvisi = new Set<string>();\n+const notifyAdminsMock = vi.fn(async (_t: string, _b: string, _l: string, op?: { unaVoltaPer?: string }) => {\n+  const k = op?.unaVoltaPer;\n+  if (k && chiaviAvvisi.has(k)) return \"gia-mandato\";\n+  if (k) chiaviAvvisi.add(k);\n+  return \"scritto\";\n+});\n+const refundOrderMock = vi.fn(async (a: { orderId: string; amountCents: number }) => {\n+  const r = db.orders.find((x) => x.id === a.orderId)!;\n+  r.refunded_amount_cents = Number(r.refunded_amount_cents ?? 0) + a.amountCents;\n+  r.stripe_refund_id = \"re_1\";\n+  return { refundId: \"re_1\", reversedCents: 0, pieno: false, importoCents: a.amountCents };\n+});\n+\n+const COLONNA_MANCANTE = { code: \"42703\", message: \"column orders.carrello_contanti does not exist\" };\n+\n+function tabella(nome: string) {\n+  const filtri: Array<(r: Riga) => boolean> = [];\n+  let valori: Riga | null = null;\n+  let quante = Infinity;\n+  let perId: unknown = null;\n+  let chiedeLaChiave = false;\n+  const esegui = () => {\n+    if (valori && prima.update) { const f = prima.update; prima.update = undefined; f(); }\n+    const trovate = (db[nome] ?? []).filter((r) => filtri.every((f) => f(r))).slice(0, quante);\n+    if (valori) for (const r of trovate) Object.assign(r, valori);\n+    return trovate.map((r) => ({ ...r }));\n+  };\n+  const b: Record<string, unknown> = {\n+    select: (c?: string) => { if (nome === \"orders\" && String(c ?? \"\").includes(\"carrello_contanti\")) chiedeLaChiave = true; return b; },\n+    update: (v: Riga) => { valori = v; return b; },\n+    insert: async (righe: Riga | Riga[]) => { (db[nome] ??= []).push(...(Array.isArray(righe) ? righe : [righe])); return { error: null }; },\n+    eq: (k: string, v: unknown) => { if (k === \"carrello_contanti\") chiedeLaChiave = true; if (k === \"id\") perId = v; filtri.push((r) => r[k] === v); return b; },\n+    in: (k: string, vs: unknown[]) => { filtri.push((r) => vs.includes(r[k])); return b; },\n+    lt: (k: string, v: string) => { filtri.push((r) => String(r[k]) < v); return b; },\n+    contains: () => b,\n+    limit: (n: number) => { quante = n; return b; },\n+    order: () => b,\n+    maybeSingle: async () => (chiedeLaChiave && prima640.attivo ? { data: null, error: COLONNA_MANCANTE } : { data: esegui()[0] ?? null, error: null }),\n+    then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {\n+      if (chiedeLaChiave && prima640.attivo) return Promise.resolve({ data: null, error: COLONNA_MANCANTE }).then(ok, ko);\n+      if (nome === \"orders\" && valori && \"delivery_slot\" in valori && guasto.ordine && perId === guasto.ordine) {\n+        return Promise.resolve({ data: null, error: { message: \"timeout del database\" } }).then(ok, ko);\n+      }\n+      if (nome === \"orders\" && valori && \"delivery_slot\" in valori && guasto.fascia) {\n+        return Promise.resolve({ data: null, error: { message: \"timeout del database\" } }).then(ok, ko);\n+      }\n+      return Promise.resolve({ data: esegui(), error: null }).then(ok, ko);\n+    },\n+  };\n+  return b;\n+}\n+\n+vi.mock(\"@/lib/api/middleware\", () => ({\n+  withCronAuth: (h: (req: unknown) => unknown) => (req: unknown) => h(req),\n+  withAuthRateLimit: (_o: unknown, h: (a: unknown) => unknown) => (req: unknown, ctx?: { params?: Record<string, string> }) =>\n+    h({ req, user: { id: \"maria\" }, params: ctx?.params ?? {} }),\n+}));\n+vi.mock(\"@/lib/stripe/rimborsi-da-dividere\", () => ({ ilCarrelloAspettaLaDivisione: async () => false }));\n+vi.mock(\"@/lib/logger\", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+vi.mock(\"@/lib/email/client\", () => ({ sendEmail: (m: unknown) => sendEmailMock(m) }));\n+vi.mock(\"@/lib/stripe/payout\", () => ({ refundOrder: (a: { orderId: string; amountCents: number }) => refundOrderMock(a) }));\n+vi.mock(\"@/lib/stripe/webhook/comune\", async (originale) => ({\n+  ...(await originale<Record<string, unknown>>()),\n+  notifyAdmins: (t: string, b: string, l: string, op?: { unaVoltaPer?: string }) => notifyAdminsMock(t, b, l, op),\n+}));\n+vi.mock(\"@/lib/supabase/server\", () => ({\n+  getAdminSupabase: () => ({\n+    from: (t: string) => tabella(t),\n+    rpc: async () => ({ data: null, error: null }),\n+    auth: { admin: { getUserById: async (id: string) => ({ data: { user: { email: `${id}@esempio.it` } }, error: null }) } },\n+  }),\n+}));\n+\n+/** 18:05 a Piacenza (il 30/10 l ora legale è già finita: UTC+1). */\n+const NATO = \"2026-10-30T17:05:00.000Z\";\n+\n+function ordine(p: Riga = {}): Riga {\n+  return {\n+    id: \"o1\", user_id: \"maria\", seller_id: \"forno\", delivery_status: \"NEW\", delivery_slot: ETICHETTA_ADESSO,\n+    pickup_in_store: false, payment_method: \"cod\", payment_status: \"PENDING\", total_price: 19, gross_total_cents: 1900,\n+    wallet_applied_cents: 0, shipping_cost: 0, delivery_fee_cents: 400, rider_fee_cents: 300, discount_amount: 0,\n+    stripe_session_id: null, created_at: NATO, refunded_amount_cents: 0, stripe_refund_id: null, ...p,\n+  };\n+}\n+\n+async function giro(ora: string) {\n+  vi.setSystemTime(new Date(ora));\n+  const { GET } = await import(\"@/app/api/cron/veloce-non-confermata/route\");\n+  const res = await (GET as unknown as (r: Request) => Promise<Response>)(new Request(\"http://x/api/cron/veloce-non-confermata\"));\n+  return { status: res.status, corpo: await res.json() };\n+}\n+\n+const o = (id: string) => db.orders.find((r) => r.id === id)!;\n+\n+beforeEach(() => {\n+  vi.useFakeTimers({ toFake: [\"Date\"] });\n+  db.orders = [];\n+  db.profiles = [{ id: \"forno\", store_hours: null }];\n+  db.cod_checkout_attempts = [];\n+  db.notifications = [];\n+  prima.update = undefined;\n+  prima640.attivo = false;\n+  finto640.attivo = false;\n+  guasto.fascia = false;\n+  guasto.ordine = null;\n+  chiaviAvvisi.clear();\n+  sendEmailMock.mockClear();\n+  notifyAdminsMock.mockClear();\n+  refundOrderMock.mockClear();\n+});\n+afterEach(() => vi.useRealTimers());\n+\n+\n+\n+// ── L'annullo: il database finto delle prove dell'annullo, con la colonna della 640 (o senza) ──────\n+const finto640 = { attivo: false };\n+let fdb: ReturnType<typeof finto>;\n+/** Come `finto`, ma prima della 640 un'istruzione che nomina la chiave fallisce intera (42703). */\n+function conLaChiave(base: ReturnType<typeof finto>, opz: { rigaIlleggibile?: boolean } = {}) {\n+  return {\n+    ...base,\n+    from: (t: string) => {\n+      const q = base.from(t) as Record<string, (...a: unknown[]) => unknown>;\n+      let rotta = t === \"cod_checkout_attempts\" && !!opz.rigaIlleggibile;\n+      const errore = () => (rotta && t === \"cod_checkout_attempts\"\n+        ? { message: \"cod_checkout_attempts non risponde\" }\n+        : COLONNA_MANCANTE);\n+      const p: Record<string, unknown> = new Proxy(q, {\n+        get(bersaglio, k: string) {\n+          if (k === \"then\") {\n+            return (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) =>\n+              rotta ? Promise.resolve({ data: null, error: errore() }).then(ok, ko) : (bersaglio.then as (a: unknown, b: unknown) => unknown)(ok, ko);\n+          }\n+          const f = bersaglio[k];\n+          if (typeof f !== \"function\") return f;\n+          return (...a: unknown[]) => {\n+            if (finto640.attivo && t === \"orders\" && ((k === \"select\" && String(a[0] ?? \"\").includes(\"carrello_contanti\")) || (k === \"eq\" && a[0] === \"carrello_contanti\"))) rotta = true;\n+            f(...a);\n+            return p;\n+          };\n+        },\n+      });\n+      return p;\n+    },\n+  };\n+}\n+const rigaA = (id: string) => fdb.tabelle.orders.find((r) => r.id === id)!;\n+const annulla = (id: string) => annullaERimborsa(fdb as never, { ...rigaA(id) } as never, { reason: \"Il negozio ha rifiutato l ordine\" } as never);\n+const avvisiDaControllare = () => notifyAdminsMock.mock.calls.filter((c) => /carrello da controllare a mano/.test(String(c[0])));\n+/** Il carrello A: pane (15 €) e frutta (12 €) in contanti, nati alle 10:01, con la chiave della cassa. */\n+const carrelloA = (chiave: string | null = \"k-a\") =>\n+  carrello([\"pane\", \"frutta\"], [1500, 1200], \"cod\", { creati: [\"2026-10-29T10:01:00Z\", \"2026-10-29T10:01:01Z\"] })\n+    .map((r) => ({ ...r, carrello_contanti: chiave }));\n+\n+describe(\"R02-002 · l annullo ritrova il carrello in contanti dalla chiave sugli ordini\", () => {\n+  it(\"senza la riga del tentativo la regola del negozio che rifiuta scatta lo stesso\", async () => {\n+    fdb = conLaChiave(finto({ orders: carrelloA(), cod_checkout_attempts: [] })) as never;\n+    expect(await annulla(\"pane\")).toMatchObject({ ok: true });\n+    expect(rigaA(\"pane\").delivery_status).toBe(\"CANCELED\");\n+    // La consegna del carrello passa alla frutta: 3 € e 3 € al fattorino, alla porta 15 €.\n+    expect(rigaA(\"frutta\")).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 15 });\n+    expect(avvisiDaControllare(), \"con la chiave non serve una persona\").toEqual([]);\n+  });\n+\n+  it(\"anche con la riga del tentativo che non si legge\", async () => {\n+    fdb = conLaChiave(finto({ orders: carrelloA(), cod_checkout_attempts: [] }), { rigaIlleggibile: true }) as never;\n+    await annulla(\"pane\");\n+    expect(rigaA(\"frutta\")).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 15 });\n+    expect(avvisiDaControllare()).toEqual([]);\n+  });\n+\n+  it(\"un altro carrello dello stesso cliente e la stessa chiave di un altro cliente non si toccano\", async () => {\n+    const b: Riga[] = carrello([\"b1\", \"b2\"], [1500, 1300], \"cod\", { creati: [\"2026-10-29T10:00:00Z\", \"2026-10-29T10:00:01Z\"] })\n+      .map((r) => ({ ...r, carrello_contanti: \"k-b\" }));\n+    const luca: Riga[] = carrello([\"l1\"], [1200], \"cod\", { creati: [\"2026-10-29T10:01:02Z\"] })\n+      .map((r) => ({ ...r, id: \"l1\", user_id: \"u2\", carrello_contanti: \"k-a\" }));\n+    fdb = conLaChiave(finto({ orders: [...b, ...carrelloA(), ...luca], cod_checkout_attempts: [] })) as never;\n+    const prima = { b1: { ...rigaA(\"b1\") }, b2: { ...rigaA(\"b2\") }, l1: { ...rigaA(\"l1\") } };\n+    await annulla(\"pane\");\n+    expect(rigaA(\"frutta\")).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 15 });\n+    for (const id of [\"b1\", \"b2\", \"l1\"] as const) {\n+      expect(rigaA(id)).toMatchObject({\n+        delivery_fee_cents: prima[id].delivery_fee_cents, rider_fee_cents: prima[id].rider_fee_cents, total_price: prima[id].total_price,\n+      });\n+    }\n+  });\n+\n+  it(\"prima della 640 (la colonna non c è) fa come prima: niente spostato, nessun guasto, e gli amministratori lo sanno\", async () => {\n+    finto640.attivo = true;\n+    fdb = conLaChiave(finto({ orders: carrelloA(null), cod_checkout_attempts: [] })) as never;\n+    expect(await annulla(\"pane\")).toMatchObject({ ok: true });\n+    expect(rigaA(\"frutta\")).toMatchObject({ delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13 });\n+    expect(avvisiDaControllare()).toHaveLength(1);\n+  });\n+});\n+\n+// ── Il freno della veloce ─────────────────────────────────────────────────────────────────────────\n+const avvisi = () => notifyAdminsMock.mock.calls.map((c) => `${c[0]} — ${c[1]}`);\n+const campanella = () => db.notifications.filter((n) => n.user_id === \"maria\").map((n) => String(n.body));\n+\n+function carrelloVeloce(o2: Riga = {}, chiave: string | null = \"k-veloce\") {\n+  db.profiles = [{ id: \"forno\", store_hours: null }, { id: \"frutta\", store_hours: null }];\n+  db.orders = [\n+    ordine({ carrello_contanti: chiave }),\n+    ordine({ id: \"o2\", seller_id: \"frutta\", total_price: 13, gross_total_cents: 1300, delivery_fee_cents: 100, rider_fee_cents: 100, created_at: \"2026-10-30T17:05:00.001Z\", carrello_contanti: chiave, ...o2 }),\n+  ];\n+  // Nessuna riga del tentativo di cassa.\n+  db.cod_checkout_attempts = [];\n+}\n+\n+describe(\"R02-002 · il freno della veloce ritrova il carrello in contanti dalla chiave sugli ordini\", () => {\n+  it(\"senza la riga del tentativo sposta tutto il carrello, anche l ordine già confermato, e scrive al cliente una volta\", async () => {\n+    carrelloVeloce({ delivery_status: \"ACCEPTED\" });\n+    await giro(\"2026-10-30T17:16:00.000Z\");\n+    const fascia = String(o(\"o1\").delivery_slot);\n+    expect(fascia).toMatch(/^Oggi · /);\n+    expect(o(\"o2\").delivery_slot, \"l ordine già confermato dello stesso carrello\").toBe(fascia);\n+    expect(o(\"o1\")).toMatchObject({ delivery_fee_cents: 300, total_price: 18 });\n+    expect(campanella()).toHaveLength(1);\n+    expect(campanella()[0]).toContain(\"alla porta paghi 31,00\");\n+    expect(campanella()[0]).toContain(\"L’ordine che un negozio ha già confermato non si annulla più\");\n+    expect(db.notifications.some((n) => n.user_id === \"frutta\" && String(n.title) === \"Il carrello ha cambiato fascia\")).toBe(true);\n+  });\n+\n+  it(\"un altro ordine dello stesso cliente con un altra chiave non entra nel carrello\", async () => {\n+    carrelloVeloce({ delivery_status: \"ACCEPTED\", carrello_contanti: \"k-altro\" });\n+    await giro(\"2026-10-30T17:16:00.000Z\");\n+    expect(o(\"o1\").delivery_slot).toMatch(/^Oggi · /);\n+    expect(o(\"o2\").delivery_slot).toBe(ETICHETTA_ADESSO);\n+  });\n+\n+  it(\"prima della 640 (la colonna non c è) fa come prima, senza guasti\", async () => {\n+    prima640.attivo = true;\n+    carrelloVeloce({ delivery_status: \"ACCEPTED\" }, null);\n+    const esito = await giro(\"2026-10-30T17:16:00.000Z\");\n+    expect(esito.status).toBe(200);\n+    expect(o(\"o1\").delivery_slot).toMatch(/^Oggi · /);\n+    expect(o(\"o2\").delivery_slot).toBe(ETICHETTA_ADESSO);\n+    expect(avvisi().some((a) => a.includes(\"fermo\"))).toBe(false);\n+  });\n+});\n",
+   "commit_tolto": "34cd633ec6cae17690bfa0a1f333d8679cebbcca",
+   "revert": "e8f65c4605b28791fdee7ea6ea818138d8d2dc48",
+   "verificato_da": "revisore avversario del lotto A su f8e6c95a (stesso codice di 34cd633e meno i tipi): prova nuova verde 7/7 più le 5 del giro 4; rimessa 4/7 rosse sul comportamento; prova SQL sul Postgres locale 8/8 verde con la 640 e 8/8 rossa senza; 640 riapplicabile; colonna protetta dal trigger enforce_order_update_rules e niente INSERT per authenticated; ricerca filtrata per cliente e chiave; ripiego 42703 → come oggi; due testi K02 sistemati. Rosse 3 guardie senza i tipi rigenerati (per questo tolta dal ramo)."
+  },
+  {
+   "id": "R02-003",
+   "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+   "esito": "parziale",
+   "commit": "fa0f8ed718230b4e53d496c4f8b29541abd5b535",
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-veloce-scrittura-passata-con-errore.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-veloce-scrittura-passata-con-errore.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout fa0f8ed7^ -- lib/ordini/veloce-non-confermata.ts && npx vitest run --reporter=dot tests/unit/riparazione-r02-veloce-scrittura-passata-con-errore.test.ts (ROSSA, 3 su 4: «a mano» con l'euro già tolto; credito non contato; negozio e fattorino del secondo ordine non avvisati) ; git checkout fa0f8ed7 -- lib/ordini/veloce-non-confermata.ts && stessa prova (VERDE 4/4) ; git status pulito"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Il difetto c'era ancora sulla base: 3 casi rossi. Il freno ora ricorda cosa aveva chiesto ogni scrittura che ha risposto errore (scrittureIncerte), e alla rilettura legge anche delivery_fee_cents. Un ordine trovato già nella fascia di questo giro entra in `scritti`: negozio e fattorino vengono avvisati, l'ordine conta fra i già confermati nella frase al cliente e va in `fatto`. Entra in deltaScritti/contantiScritti, e nel conto del credito, solo se la sua consegna risulta già scesa all'importo nuovo; altrimenti resta «a mano» come prima. Il giro dopo non trova niente. Provati: (a) euro sull'ordine rimasto, contanti; (a) euro pagato col credito, wallet_credit chiamato una volta sola; (b) euro sul primo ordine, secondo ASSIGNED con fattorino; ordine di un altro carrello non toccato.",
+   "cosa_resta": "Trovato dal revisore del lotto A (stessa causa, sul PRIMO ordine): se la scrittura del primo ordine passa ma risponde errore, il freno lancia con `fatto` vuoto (lib/ordini/veloce-non-confermata.ts ~690) e gli amministratori leggono «fermo prima di cominciare… non ha fatto niente» (~960), falso: il primo è già nella fascia con la consegna scesa, cliente e negozi senza avviso, e il giro dopo non lo ritrova. Cura: su i === 0 con errore rileggere fascia e consegna del primo come fa il nuovo ciclo dei rimasti; se è già nella fascia contarlo fra gli scritti e proseguire (almeno «già passato alla fascia» in `fatto`). Minore: scrittura passata con errore e rilettura caduta (doppio guasto): gli amministratori leggono che il cliente lo avvisa il giro dopo (~792, ~973), ma il giro dopo non fa niente; cura: con scrittureIncerte non vuota e rilettura caduta scrivere «avvisa tu il cliente». Non corretti: sopra 21 $ niente giri di correzione (regola della regia).",
+   "serve_file_altrui": [],
+   "nota": "Le scritture con zero righe toccate (condizione non soddisfatta) restano fuori di proposito: se un altro le ha messe nella fascia, gli avvisi li manda lui. 30 file di prova che importano il freno: verdi (255 test).",
+   "verificato_da": "revisore avversario del lotto A (subagente generico, modello grande, copia a parte su f8e6c95a): prova nuova verde 4/4 più le 5 del giro 4; rimessa a mano 3/4 rosse sul comportamento, poi verde; varianti: tre negozi con o2 passato con errore e o3 caduto → regge; i due casi del collaudo chiusi (niente «a mano» falso, credito una volta, negozio e fattorino del secondo avvisati); NON regge la scrittura del PRIMO ordine passata con errore (cosa_resta), e il doppio guasto scrittura+rilettura dà un avviso falso."
+  },
+  {
+   "id": "R02-004",
+   "chiave": "architettura|la funzione della spedizione in centesimi accetta ancora i sette ingressi che non servono",
+   "esito": "serve_file_altrui",
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": null,
+   "prova_tipo": null,
+   "prova_eseguita": false,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nessun file toccato. Diff completa provata in una copia usa e getta (worktree staccato, poi tolto): tsc verde, eslint verde sui 9 file, 152 file di prova che leggono spedizione, prezzi, riepilogo, carrello o cassa verdi (1126 prove). La diff intera, applicabile con git apply sulla testa e67311ec (git apply --check verde), sta in /tmp/claude-0/-home-user-mycity/0df77b4a-f3f4-5233-9893-83f049574872/scratchpad/lottoB/r02-004.diff. Con SOLO lib/shipping.ts cambiato tsc e' rosso in 7 file (prezzi.ts e 6 prove: 39 errori).",
+   "serve_file_altrui": [
+    {
+     "file": "lib/shipping.ts",
+     "modifica": "(mio, ma da solo rompe i tipi) r.3-13: togliere il tipo `IngressiSpedizione` (r.3-12) e la riga vuota dopo. r.31-33: al posto di «a chi legge che la spedizione dipendesse ancora da soglia e distanza. `shippingCentsFor` li / accetta ancora (e li ignora) solo perché lib/ordini/prezzi.ts glieli passa.» scrivere « * a chi legge che la spedizione dipendesse ancora da soglia e distanza. / * 21/11/2026 (R02-004) — Senza ingressi anche `shippingCentsFor`: lib/ordini/prezzi.ts non le passa / * più subtotale, coordinate, ritiro e codice. Se un giorno la spedizione torna a dipendere da / * qualcosa, gli ingressi tornano qui insieme alla regola che li usa.». r.42-43: `/** Come shippingForEuro ma restituisce centesimi interi. Senza ingressi (vedi sopra). */` e `export function shippingCentsFor(): number {`."
+    },
+    {
+     "file": "lib/ordini/prezzi.ts",
+     "modifica": "r.261-272 (il map che legge coord e passa i sette campi) → due righe: `  // 21/11/2026 (R02-004) — La spedizione non ha ingressi (lib/shipping.ts): una per negozio.` e `  const shippingPerGruppo = ing.gruppi.map(() => shippingCentsFor());`. Cosa diventa inutile: in IngressiPrezzo `coordinateNegozio`, `consegnaLat`, `consegnaLng` non li legge piu' nessuno in prezzi.ts (couponSpedizioneGratis resta, lo usa r.321). Non si tolgono qui (li passano 5 file dell'app e circa 30 prove): solo i commenti r.50 e r.52 diventano «/** Dove sta il negozio. 21/11/2026 (R02-004): oggi non entra in nessun conto (la spedizione non ha ingressi, lib/shipping.ts); resta perché lo passano le rotte, il carrello e la cassa. */» (su 4 righe) e «/** Dove va la spesa. Null = senza coordinate. Come sopra: oggi non entra in nessun conto. */»."
+    },
+    {
+     "file": "tests/unit/shipping.test.ts",
+     "modifica": "r.10-102 (const PC e FAR, i 6 casi che passano l'oggetto, il describe 'shippingCentsFor') → describe('shippingForEuro') con due casi: 'non ha ingressi ed è 0' (expect(shippingForEuro()).toBe(0)) e 'shippingCentsFor non ha ingressi ed è 0: niente tariffa a distanza, fissa o sotto soglia' (expect(shippingCentsFor.length, 'shippingCentsFor riceve di nuovo ingressi').toBe(0); expect(shippingCentsFor()).toBe(0)), col commento del 27/10 sopra il secondo; poi describe('shippingCentsFor') 'restituisce centesimi interi' con `const cents = shippingCentsFor();` e le stesse due expect. Non indebolisce: gli ingressi non si possono piu' passare (tsc), e .length lo controlla anche a runtime (oggi vale 1)."
+    },
+    {
+     "file": "tests/unit/una-sola-regola-per-la-spedizione.test.ts",
+     "modifica": "r.22-71 (const NEGOZIO e CASA e i sei casi che passano l'oggetto e vogliono 0) → due casi: '27/10/2026 — niente tariffa fissa, a distanza o sotto soglia: si paga solo la consegna' (expect(shippingCentsFor.length, 'la spedizione riceve di nuovo ingressi').toBe(0); expect(shippingCentsFor()).toBe(0)) e 'i centesimi sono gli euro arrotondati, senza sorprese di virgola' (expect(shippingCentsFor()).toBe(Math.round(shippingForEuro() * 100))), con un commento del 21/11 (R02-004). Il caso dello sconto del ritiro (r.73-85) resta com'e'."
+    },
+    {
+     "file": "tests/unit/soldi-storni-sconti-e-compensi.test.ts",
+     "modifica": "r.139-144 → `        const spedizione = shippingCentsFor();` (subtotal e dove restano nel messaggio del caso scoperto); r.175-180 → `    const spedizione = shippingCentsFor();` (negozio e casa restano per fuoriZonaDiConsegna e la distanza). Nessuna asserzione tolta."
+    },
+    {
+     "file": "tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts",
+     "modifica": "r.78-81 → `    (s) => s + shippingCentsFor() / 100,` (una spedizione per gruppo come prima; il parametro g non serve piu')."
+    },
+    {
+     "file": "tests/unit/riparazione-r03-carrello-consegna.test.ts",
+     "modifica": "r.41-61 (il mock che calcola la tariffa a distanza dalle coordinate passate da prezzi.ts) → mock con tariffa finta fissa: `shippingCentsFor: () => (stato.spedizioneADistanza ? 490 : vero.shippingCentsFor()),` senza la funzione km, commento «Una spedizione a pagamento, per finta: 4,90 € per negozio (la tariffa fissa di prima del lancio). … 21/11/2026 (R02-004): shippingCentsFor non ha più ingressi, quindi la tariffa finta non dipende dalle coordinate». r.35: «true = una spedizione a pagamento, per finta». Dopo r.20 tre righe di commento: le due mutanti sulle coordinate del negozio diventano equivalenti davvero (le coordinate non entrano piu' nel conto), la prima (spedizione tolta o doppia) resta presa (490 per negozio, la controprova «la spedizione finta deve valere qualcosa» resta). Senza questo cambio la prova e' rossa: prezzi.ts non passa piu' l'oggetto e la tariffa finta vale 0."
+    },
+    {
+     "file": "tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts",
+     "modifica": "r.33-53 → lo stesso mock di riparazione-r03-carrello-consegna.test.ts (tariffa fissa 490 quando spedizioneADistanza, altrimenti vero.shippingCentsFor()), r.27 «true = una spedizione a pagamento, per finta». Qui spedizioneADistanza non si accende mai: cambia solo per i tipi (Parameters<…>[0] di una funzione senza parametri e' un errore)."
+    },
+    {
+     "file": "tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts",
+     "modifica": "dopo r.21 due righe: `expect(shippingCentsFor.length, 'shippingCentsFor riceve di nuovo ingressi che non usa').toBe(0);` e `expect(leggi('lib/shipping.ts'), 'il tipo degli ingressi della spedizione è tornato').not.toMatch(/IngressiSpedizione/);` (con un commento del 21/11, R02-004). Nell'it.each dopo r.37: `['lib/ordini/prezzi.ts', /shippingCentsFor\\(\\)/],`; r.41: la regola diventa `/promessaSpedizione\\([^)]|shippingForEuro\\(\\{|shippingCentsFor\\([^)]/`. Questa e' la prova della voce: sul codice di oggi e' rossa (length 1; prezzi.ts passa l'oggetto), con la diff verde."
+    }
+   ],
+   "nota": "il mio file da solo non si committa: tsc rosso in prezzi.ts e nelle prove",
+   "verificato_da": "nessun codice: diff provata in copia usa e getta",
+   "diff": "diff --git a/lib/ordini/prezzi.ts b/lib/ordini/prezzi.ts\nindex 10c756f8..2fea66a2 100644\n--- a/lib/ordini/prezzi.ts\n+++ b/lib/ordini/prezzi.ts\n@@ -47,9 +47,12 @@ export type CoordinateNegozio = { lat: number | null; lng: number | null };\n \n export type IngressiPrezzo = {\n   gruppi: GruppoDaPrezzare[];\n-  /** Dove sta il negozio, per la distanza. */\n+  /**\n+   * Dove sta il negozio. 21/11/2026 (R02-004): oggi non entra in nessun conto (la spedizione non ha\n+   * ingressi, lib/shipping.ts); resta perché lo passano le rotte, il carrello e la cassa.\n+   */\n   coordinateNegozio: (sellerId: string) => CoordinateNegozio;\n-  /** Dove va la spesa. Null = senza coordinate (la spedizione oggi vale zero comunque). */\n+  /** Dove va la spesa. Null = senza coordinate. Come sopra: oggi non entra in nessun conto. */\n   consegnaLat: number | null;\n   consegnaLng: number | null;\n   pickupInStore: boolean;\n@@ -258,18 +261,8 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {\n   const subtotali = ing.gruppi.map((g) => g.subtotalCents);\n   const grandSubtotalCents = subtotali.reduce((s, x) => s + x, 0);\n \n-  const shippingPerGruppo = ing.gruppi.map((g, i) => {\n-    const coord = ing.coordinateNegozio(g.sellerId);\n-    return shippingCentsFor({\n-      subtotal: subtotali[i] / 100,\n-      storeLat: coord.lat,\n-      storeLng: coord.lng,\n-      deliveryLat: ing.consegnaLat,\n-      deliveryLng: ing.consegnaLng,\n-      pickupInStore: ing.pickupInStore,\n-      freeShipping: ing.couponSpedizioneGratis,\n-    });\n-  });\n+  // 21/11/2026 (R02-004) — La spedizione non ha ingressi (lib/shipping.ts): una per negozio.\n+  const shippingPerGruppo = ing.gruppi.map(() => shippingCentsFor());\n   const grandShippingCents = shippingPerGruppo.reduce((s, x) => s + x, 0);\n \n   const pickupDiscountCents = ing.pickupInStore\ndiff --git a/lib/shipping.ts b/lib/shipping.ts\nindex 364abe2d..1b64e872 100644\n--- a/lib/shipping.ts\n+++ b/lib/shipping.ts\n@@ -1,16 +1,5 @@\n import { COMPENSO_RIDER_CENTS, COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS } from './constants';\n \n-/** Gli ingressi del conto della spedizione di un gruppo (un negozio). */\n-export type IngressiSpedizione = {\n-  subtotal: number;\n-  storeLat: number | null;\n-  storeLng: number | null;\n-  deliveryLat: number | null;\n-  deliveryLng: number | null;\n-  pickupInStore: boolean;\n-  freeShipping?: boolean;\n-};\n-\n /**\n  * La spedizione che il cliente paga per un gruppo (un negozio) OLTRE alla consegna. FONTE UNICA:\n  * la usano la cassa e, attraverso `prezziDelCarrello`, le due rotte che creano l'ordine, così\n@@ -29,8 +18,10 @@ export type IngressiSpedizione = {\n  * `shipping_cost` dell'ordine e la riga «Spedizione» di Stripe nascono da qui. Se un giorno\n  * tornasse una spedizione a pagamento, torna qui e da nessun'altra parte.\n  * 16/11/2026 (R29-005) — Senza ingressi: sette argomenti che non cambiavano niente facevano credere\n- * a chi legge che la spedizione dipendesse ancora da soglia e distanza. `shippingCentsFor` li\n- * accetta ancora (e li ignora) solo perché lib/ordini/prezzi.ts glieli passa.\n+ * a chi legge che la spedizione dipendesse ancora da soglia e distanza.\n+ * 21/11/2026 (R02-004) — Senza ingressi anche `shippingCentsFor`: lib/ordini/prezzi.ts non le passa\n+ * più subtotale, coordinate, ritiro e codice. Se un giorno la spedizione torna a dipendere da\n+ * qualcosa, gli ingressi tornano qui insieme alla regola che li usa.\n  *\n  * Il codice «Spedizione gratuita» non passa più da qui: qui non c'è più niente da azzerare. Toglie\n  * la consegna in `prezziDelCarrello`, e il fattorino lo paga la piattaforma (vedi lì).\n@@ -39,8 +30,8 @@ export function shippingForEuro(): number {\n   return 0;\n }\n \n-/** Come shippingForEuro ma restituisce centesimi interi. Gli ingressi non cambiano niente (vedi sopra). */\n-export function shippingCentsFor(_opts?: IngressiSpedizione): number {\n+/** Come shippingForEuro ma restituisce centesimi interi. Senza ingressi (vedi sopra). */\n+export function shippingCentsFor(): number {\n   return Math.round(shippingForEuro() * 100);\n }\n \ndiff --git a/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts b/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts\nindex 053478c3..a6f654d6 100644\n--- a/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts\n+++ b/tests/unit/il-carrello-condiviso-non-perde-il-negozio.test.ts\n@@ -75,10 +75,7 @@ function totale(righe: CartItem[], negozioDi: (r: CartItem) => string): number {\n     gruppi.get(chiave)!.push(r);\n   }\n   const spedizione = Array.from(gruppi.values()).reduce(\n-    (s, g) => s + shippingCentsFor({\n-      subtotal: sottoTotale(g), storeLat: null, storeLng: null,\n-      deliveryLat: null, deliveryLng: null, pickupInStore: false,\n-    }) / 100,\n+    (s) => s + shippingCentsFor() / 100,\n     0,\n   );\n   const consegna = gruppi.size * (PLATFORM_DELIVERY_FEE_CENTS / 100);\ndiff --git a/tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts b/tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts\nindex 6e8c584c..0377a090 100644\n--- a/tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts\n+++ b/tests/unit/riparazione-r02-carrello-consegna-mutanti.test.ts\n@@ -24,31 +24,21 @@ const stato = vi.hoisted(() => ({\n   prezzi: {} as Record<string, number>,\n   negozi: new Map<string, { id: string; store_lat: number | null; store_lng: number | null }>(),\n   casa: null as null | { lat: number; lng: number },\n-  /** false = la spedizione vera del lancio (zero); true = una tariffa a distanza, per finta. */\n+  /** false = la spedizione vera del lancio (zero); true = una spedizione a pagamento, per finta. */\n   spedizioneADistanza: false,\n   /** Gli indirizzi a cui la rete finta ha già risposto. */\n   servite: [] as string[],\n }));\n \n-// La spedizione a distanza, com'era prima del lancio: tariffa fissa senza coordinate, altrimenti\n-// 2,50 € più 1,20 € al chilometro. La usano carrello e cassa insieme (stesso modulo).\n+// Una spedizione a pagamento, per finta: 4,90 € per negozio (la tariffa fissa di prima del lancio).\n+// La usano carrello e cassa insieme (stesso modulo). 21/11/2026 (R02-004): shippingCentsFor non ha\n+// più ingressi, quindi la tariffa finta non dipende dalle coordinate (prima era 2,50 € più 1,20 € al\n+// chilometro): le coordinate non entrano più in nessun conto della spedizione.\n vi.mock('@/lib/shipping', async (originale) => {\n   const vero = await originale<typeof import('@/lib/shipping')>();\n-  const km = (aLat: number, aLng: number, bLat: number, bLng: number) => {\n-    const r = (g: number) => (g * Math.PI) / 180;\n-    const dLat = r(bLat - aLat);\n-    const dLng = r(bLng - aLng);\n-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(aLat)) * Math.cos(r(bLat)) * Math.sin(dLng / 2) ** 2;\n-    return 2 * 6371 * Math.asin(Math.sqrt(h));\n-  };\n   return {\n     ...vero,\n-    shippingCentsFor: (o?: Parameters<typeof vero.shippingCentsFor>[0]) => {\n-      if (!stato.spedizioneADistanza) return vero.shippingCentsFor(o);\n-      if (!o || o.pickupInStore || o.freeShipping) return 0;\n-      if (o.storeLat == null || o.storeLng == null || o.deliveryLat == null || o.deliveryLng == null) return 490;\n-      return 250 + Math.round(120 * km(o.storeLat, o.storeLng, o.deliveryLat, o.deliveryLng));\n-    },\n+    shippingCentsFor: () => (stato.spedizioneADistanza ? 490 : vero.shippingCentsFor()),\n   };\n });\n vi.mock('next/link', () => ({ default: (p: { children?: unknown }) => p.children ?? null }));\ndiff --git a/tests/unit/riparazione-r03-carrello-consegna.test.ts b/tests/unit/riparazione-r03-carrello-consegna.test.ts\nindex 5e1873ce..31cdd7a5 100644\n--- a/tests/unit/riparazione-r03-carrello-consegna.test.ts\n+++ b/tests/unit/riparazione-r03-carrello-consegna.test.ts\n@@ -18,6 +18,9 @@\n  * stesso numero senza toccarlo. Qui la spedizione si accende per finta (una tariffa a distanza,\n  * nello stesso modulo che usa la cassa) e il carrello montato deve scrivere il conto della cassa\n  * (`riepilogoDaMostrare`) sugli stessi ingressi.\n+ * 21/11/2026 (R02-004) — La spedizione non ha più ingressi (lib/shipping.ts): la tariffa finta è\n+ * fissa per negozio, e le due mutanti sulle coordinate del negozio sono diventate equivalenti\n+ * davvero (le coordinate non entrano più nel conto). La prima resta presa.\n  */\n import { describe, it, expect, vi, afterEach } from 'vitest';\n import { act } from 'react';\n@@ -32,31 +35,21 @@ const stato = vi.hoisted(() => ({\n   prezzi: {} as Record<string, number>,\n   negozi: new Map<string, { id: string; store_lat: number | null; store_lng: number | null }>(),\n   casa: null as null | { lat: number; lng: number },\n-  /** false = la spedizione vera del lancio (zero); true = una tariffa a distanza, per finta. */\n+  /** false = la spedizione vera del lancio (zero); true = una spedizione a pagamento, per finta. */\n   spedizioneADistanza: false,\n   /** Gli indirizzi a cui la rete finta ha già risposto. */\n   servite: [] as string[],\n }));\n \n-// La spedizione a distanza, com'era prima del lancio: tariffa fissa senza coordinate, altrimenti\n-// 2,50 € più 1,20 € al chilometro. La usano carrello e cassa insieme (stesso modulo).\n+// Una spedizione a pagamento, per finta: 4,90 € per negozio (la tariffa fissa di prima del lancio).\n+// La usano carrello e cassa insieme (stesso modulo). 21/11/2026 (R02-004): shippingCentsFor non ha\n+// più ingressi, quindi la tariffa finta non dipende dalle coordinate (prima era 2,50 € più 1,20 € al\n+// chilometro): le coordinate non entrano più in nessun conto della spedizione.\n vi.mock('@/lib/shipping', async (originale) => {\n   const vero = await originale<typeof import('@/lib/shipping')>();\n-  const km = (aLat: number, aLng: number, bLat: number, bLng: number) => {\n-    const r = (g: number) => (g * Math.PI) / 180;\n-    const dLat = r(bLat - aLat);\n-    const dLng = r(bLng - aLng);\n-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(aLat)) * Math.cos(r(bLat)) * Math.sin(dLng / 2) ** 2;\n-    return 2 * 6371 * Math.asin(Math.sqrt(h));\n-  };\n   return {\n     ...vero,\n-    shippingCentsFor: (o?: Parameters<typeof vero.shippingCentsFor>[0]) => {\n-      if (!stato.spedizioneADistanza) return vero.shippingCentsFor(o);\n-      if (!o || o.pickupInStore || o.freeShipping) return 0;\n-      if (o.storeLat == null || o.storeLng == null || o.deliveryLat == null || o.deliveryLng == null) return 490;\n-      return 250 + Math.round(120 * km(o.storeLat, o.storeLng, o.deliveryLat, o.deliveryLng));\n-    },\n+    shippingCentsFor: () => (stato.spedizioneADistanza ? 490 : vero.shippingCentsFor()),\n   };\n });\n vi.mock('next/link', () => ({ default: (p: { children?: unknown }) => p.children ?? null }));\ndiff --git a/tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts b/tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts\nindex 41d9c21f..8e628800 100644\n--- a/tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts\n+++ b/tests/unit/riparazione-r29-interfacce-senza-zombie.test.ts\n@@ -19,6 +19,9 @@ describe('R29-005 — le interfacce della spedizione dicono quello che fanno', (\n     expect(shippingForEuro.length, 'shippingForEuro riceve di nuovo ingressi che non usa').toBe(0);\n     expect(shippingForEuro()).toBe(0);\n     expect(shippingCentsFor()).toBe(0);\n+    // 21/11/2026 (R02-004) — Anche shippingCentsFor: niente più `IngressiSpedizione`.\n+    expect(shippingCentsFor.length, 'shippingCentsFor riceve di nuovo ingressi che non usa').toBe(0);\n+    expect(leggi('lib/shipping.ts'), 'il tipo degli ingressi della spedizione è tornato').not.toMatch(/IngressiSpedizione/);\n   });\n \n   it('promessaSpedizione ha un solo argomento, la consegna, e niente soglia nel risultato', () => {\n@@ -35,10 +38,11 @@ describe('R29-005 — le interfacce della spedizione dicono quello che fanno', (\n     ['app/product/[id]/page.tsx', /promessaSpedizione\\(\\)/],\n     ['components/ProductCard.tsx', /promessaSpedizione\\(\\)/],\n     ['app/checkout/page.tsx', /shippingForEuro\\(\\)/],\n+    ['lib/ordini/prezzi.ts', /shippingCentsFor\\(\\)/],\n   ])('%s chiama senza argomenti morti', (file, chiamata) => {\n     const src = leggi(file);\n     expect(src).toMatch(chiamata);\n-    expect(src, `${file} passa ancora qualcosa che non cambia la risposta`).not.toMatch(/promessaSpedizione\\([^)]|shippingForEuro\\(\\{/);\n+    expect(src, `${file} passa ancora qualcosa che non cambia la risposta`).not.toMatch(/promessaSpedizione\\([^)]|shippingForEuro\\(\\{|shippingCentsFor\\([^)]/);\n     expect(src, `${file} legge ancora un campo che non esiste più`).not.toMatch(/\\.sopraSoglia\\b|spedizione\\.mancano\\b/);\n   });\n });\ndiff --git a/tests/unit/shipping.test.ts b/tests/unit/shipping.test.ts\nindex 4dcbbf84..f09aeac8 100644\n--- a/tests/unit/shipping.test.ts\n+++ b/tests/unit/shipping.test.ts\n@@ -7,96 +7,25 @@ import { shippingForEuro, shippingCentsFor } from '@/lib/shipping';\n  * ricalcola sempre l'importo, mai dal client). Senza network / DB.\n  */\n \n-const PC = { lat: 45.0526, lng: 9.6929 }; // Piacenza centro\n-const FAR = { lat: 45.07, lng: 9.72 };\n-\n describe('shippingForEuro', () => {\n-  // 16/11/2026 (R29-005) — shippingForEuro non ha più ingressi; i casi qui sotto passano gli stessi\n-  // ingressi a shippingCentsFor, che li accetta ancora (lib/ordini/prezzi.ts) e deve dire 0 lo stesso.\n+  // 16/11/2026 (R29-005) — shippingForEuro non ha più ingressi.\n+  // 21/11/2026 (R02-004) — Nemmeno shippingCentsFor: ritiro, codice «spedizione gratis», soglia dei\n+  // 30 € e coordinate non si possono più passare (tsc lo rifiuta), quindi non possono cambiarla.\n   it('non ha ingressi ed è 0', () => {\n     expect(shippingForEuro()).toBe(0);\n   });\n \n-  it('è 0 per ritiro in negozio (anche sotto soglia)', () => {\n-    expect(\n-      shippingCentsFor({\n-        subtotal: 10,\n-        storeLat: PC.lat,\n-        storeLng: PC.lng,\n-        deliveryLat: FAR.lat,\n-        deliveryLng: FAR.lng,\n-        pickupInStore: true,\n-      }),\n-    ).toBe(0);\n-  });\n-\n-  it('è 0 con coupon free shipping', () => {\n-    expect(\n-      shippingCentsFor({\n-        subtotal: 10,\n-        storeLat: PC.lat,\n-        storeLng: PC.lng,\n-        deliveryLat: FAR.lat,\n-        deliveryLng: FAR.lng,\n-        pickupInStore: false,\n-        freeShipping: true,\n-      }),\n-    ).toBe(0);\n-  });\n-\n-  it('è 0 anche con 30 euro di spesa', () => {\n-    expect(\n-      shippingCentsFor({\n-        subtotal: 30,\n-        storeLat: PC.lat,\n-        storeLng: PC.lng,\n-        deliveryLat: FAR.lat,\n-        deliveryLng: FAR.lng,\n-        pickupInStore: false,\n-      }),\n-    ).toBe(0);\n-  });\n-\n   // 27/10/2026 — Scelta 8 della carta #209: si paga solo la consegna, per negozio. La tariffa a\n   // distanza (2,50 € + 1,20 €/km) e quella fissa senza coordinate (4,90 €) non esistono più.\n-  it('con le coordinate note non parte una tariffa a distanza', () => {\n-    const expected = 0;\n-    expect(\n-      shippingCentsFor({\n-        subtotal: 10,\n-        storeLat: PC.lat,\n-        storeLng: PC.lng,\n-        deliveryLat: FAR.lat,\n-        deliveryLng: FAR.lng,\n-        pickupInStore: false,\n-      }),\n-    ).toBe(expected);\n-  });\n-\n-  it('senza coordinate non parte una tariffa fissa', () => {\n-    expect(\n-      shippingCentsFor({\n-        subtotal: 10,\n-        storeLat: null,\n-        storeLng: null,\n-        deliveryLat: FAR.lat,\n-        deliveryLng: FAR.lng,\n-        pickupInStore: false,\n-      }),\n-    ).toBe(0);\n+  it('shippingCentsFor non ha ingressi ed è 0: niente tariffa a distanza, fissa o sotto soglia', () => {\n+    expect(shippingCentsFor.length, 'shippingCentsFor riceve di nuovo ingressi').toBe(0);\n+    expect(shippingCentsFor()).toBe(0);\n   });\n });\n \n describe('shippingCentsFor', () => {\n   it('restituisce centesimi interi', () => {\n-    const cents = shippingCentsFor({\n-      subtotal: 10,\n-      storeLat: null,\n-      storeLng: null,\n-      deliveryLat: null,\n-      deliveryLng: null,\n-      pickupInStore: false,\n-    });\n+    const cents = shippingCentsFor();\n     expect(cents).toBe(0);\n     expect(Number.isInteger(cents)).toBe(true);\n   });\ndiff --git a/tests/unit/soldi-storni-sconti-e-compensi.test.ts b/tests/unit/soldi-storni-sconti-e-compensi.test.ts\nindex fc1577a7..0202014a 100644\n--- a/tests/unit/soldi-storni-sconti-e-compensi.test.ts\n+++ b/tests/unit/soldi-storni-sconti-e-compensi.test.ts\n@@ -136,12 +136,7 @@ describe('il compenso del fattorino', () => {\n \n     for (const subtotal of subtotali) {\n       for (const dove of distanze) {\n-        const spedizione = shippingCentsFor({\n-          subtotal,\n-          storeLat: 45.05, storeLng: 9.69,\n-          ...dove,\n-          pickupInStore: false,\n-        });\n+        const spedizione = shippingCentsFor();\n         const disponibile = spedizione + PLATFORM_DELIVERY_FEE_CENTS;\n         const dovuto = compensoRiderCents({ pickupInStore: false, negozioInPiu: false });\n         if (disponibile < dovuto) {\n@@ -172,12 +167,7 @@ describe('il compenso del fattorino', () => {\n       `a ${km.toFixed(1)} km la cassa rifiuta l'indirizzo: la prova guarda un ordine che non può nascere`,\n     ).toBe(false);\n     expect(km, `la consegna non sta più al bordo della zona di ${RAGGIO_CONSEGNA_KM} km`).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 0.8);\n-    const spedizione = shippingCentsFor({\n-      subtotal: 40,\n-      ...negozio,\n-      ...casa,\n-      pickupInStore: false,\n-    });\n+    const spedizione = shippingCentsFor();\n     expect(spedizione).toBe(0);\n     expect(PLATFORM_DELIVERY_FEE_CENTS).toBeGreaterThanOrEqual(\n       compensoRiderCents({ pickupInStore: false, negozioInPiu: false }),\ndiff --git a/tests/unit/una-sola-regola-per-la-spedizione.test.ts b/tests/unit/una-sola-regola-per-la-spedizione.test.ts\nindex 96c05dc6..3740669b 100644\n--- a/tests/unit/una-sola-regola-per-la-spedizione.test.ts\n+++ b/tests/unit/una-sola-regola-per-la-spedizione.test.ts\n@@ -19,55 +19,16 @@ import path from 'node:path';\n  * un numero, uno dei due lati si muove e il confronto diventa rosso.\n  */\n \n-const NEGOZIO = { lat: 45.0526, lng: 9.6934 };   // Piacenza centro\n-const CASA = { lat: 45.0701, lng: 9.7120 };      // ~2,4 km\n-\n describe('la spedizione la calcola un posto solo', () => {\n-  it('27/10/2026 — senza coordinate non parte una tariffa fissa: si paga solo la consegna', () => {\n-    const costo = shippingCentsFor({\n-      subtotal: 10, storeLat: null, storeLng: null,\n-      deliveryLat: null, deliveryLng: null, pickupInStore: false,\n-    });\n-    expect(costo).toBe(0);\n-  });\n-\n-  it('a 30 euro di spesa la spedizione è zero, come sotto', () => {\n-    const costo = shippingCentsFor({\n-      subtotal: 30, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,\n-      deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,\n-    });\n-    expect(costo).toBe(0);\n-  });\n-\n-  it('col ritiro in negozio non si paga consegna', () => {\n-    expect(shippingCentsFor({\n-      subtotal: 5, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,\n-      deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: true,\n-    })).toBe(0);\n-  });\n-\n-  it('con le coordinate note non c’è un prezzo a distanza', () => {\n-    const dallaFonteUnica = shippingCentsFor({\n-      subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,\n-      deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,\n-    });\n-    // Il calcolo che stava scritto dentro la pagina del checkout.\n-    expect(dallaFonteUnica, 'la spedizione a distanza è tornata').toBe(0);\n-  });\n-\n-  it('il coupon «spedizione gratis» azzera anche con le coordinate note', () => {\n-    expect(shippingCentsFor({\n-      subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,\n-      deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false, freeShipping: true,\n-    })).toBe(0);\n+  // 21/11/2026 (R02-004) — shippingCentsFor non ha più ingressi: soglia, coordinate, ritiro e codice\n+  // non le si possono passare (tsc lo rifiuta). Qui c'erano sei casi che li passavano e volevano 0.\n+  it('27/10/2026 — niente tariffa fissa, a distanza o sotto soglia: si paga solo la consegna', () => {\n+    expect(shippingCentsFor.length, 'la spedizione riceve di nuovo ingressi').toBe(0);\n+    expect(shippingCentsFor()).toBe(0);\n   });\n \n   it('i centesimi sono gli euro arrotondati, senza sorprese di virgola', () => {\n-    const opts = {\n-      subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,\n-      deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,\n-    };\n-    expect(shippingCentsFor(opts)).toBe(Math.round(shippingForEuro() * 100));\n+    expect(shippingCentsFor()).toBe(Math.round(shippingForEuro() * 100));\n   });\n \n   it('lo sconto del ritiro è una costante condivisa, non un numero scritto nella pagina', () => {\n"
+  },
+  {
+   "id": "R02-005",
+   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "esito": "serve_file_altrui",
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": null,
+   "prova_tipo": null,
+   "prova_eseguita": false,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nessun codice. Verificato oggi: la cassa manda delivery_date «AAAA-MM-GG» (app/checkout/page.tsx:1038 e 1168, calcolata da dataDelGiornoDellaFascia, r.92). Lo schema z.object delle due rotte lo scarta ancora (nessun delivery_date nelle rotte). romeNow è importato (cod r.16, carta r.19), esciERilascia esiste (cod r.706), ApiErrors.conflict esiste.",
+   "cosa_resta": "Le due modifiche qui sotto.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "Nello schema Body, subito dopo la riga 92 `  deliverySlot: campoFasciaConsegna,` aggiungere `  // R02-005 — Il giorno di Roma della fascia, «AAAA-MM-GG», come lo calcola la cassa (null col ritiro).\\n  delivery_date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullish(),`. Dentro `if (!body.pickupInStore) {` (riga 920), prima di `const rifiutata = motivoFasciaRifiutata(` (riga 927): `// R02-005 — La fascia si giudica sul giorno in cui la cassa l'ha disegnata: premuta alle 23:59 e arrivata dopo mezzanotte, «Domani» qui sarebbe il giorno dopo. Si chiede di riscegliere.\\n      if (body.delivery_date && body.deliverySlot) {\\n        const r = romeNow();\\n        const giornoDiQui = new Date(Date.UTC(r.getFullYear(), r.getMonth(), r.getDate() + (body.deliverySlot.startsWith('Domani') ? 1 : 0))).toISOString().slice(0, 10);\\n        if (giornoDiQui !== body.delivery_date) return esciERilascia(ApiErrors.conflict('È passata la mezzanotte: la fascia che hai scelto adesso indica un altro giorno. Scegli di nuovo la fascia e conferma.'));\\n      }`"
+    },
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "La stessa riga dello schema subito dopo la riga 85 `  deliverySlot: campoFasciaConsegna,`. Lo stesso blocco dentro `if (!body.pickupInStore) {` (riga 521), prima di `const rifiutata = motivoFasciaRifiutata(` (riga 522), con `return ApiErrors.conflict('È passata la mezzanotte: …');` al posto di esciERilascia (romeNow r.19, ApiErrors r.14, z r.4 già importati)."
+    }
+   ],
+   "nota": "Si chiede al cliente di riscegliere invece di giudicare la fascia sul giorno di delivery_date, perché lib/ordini/scadenza-accettazione.ts legge «Domani» dall'ora di creazione dell'ordine: un ordine creato alle 00:01 e giudicato sul martedì verrebbe poi trattato come mercoledì da scadenza, giro degli scaduti e pagine. La cassa fa già così dopo mezzanotte (app/checkout/page.tsx:650-657). store-hours.ts (negozioPuoServire con propostaIl) non cambia."
+  },
+  {
+   "id": "R02-006",
+   "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+   "esito": "serve_file_altrui",
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": null,
+   "prova_tipo": null,
+   "prova_eseguita": false,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Nessun codice. Grep di oggi: mandaSubitoLaPushDelNuovoOrdine (lib/push/subito.ts:109, non lancia mai) la chiama solo la sua prova. Ne parla solo il commento di app/api/cron/send-push/route.ts:25. I link coincidono: linkDelNuovoOrdineAlNegozio = `/seller/orders/<id>`, lo stesso delle campanelle dei contanti (cod r.1697) e del webhook (comune.ts suonaLaCampanellaAiNegozi).",
+   "cosa_resta": "Le due chiamate qui sotto.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/orders/cod/route.ts",
+     "modifica": "In testa: `import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito';`. Le campanelle «Nuovo ordine!» sono scritte alla riga 1708. Come prima istruzione dentro `dopoLaRisposta(async () => {` della riga 1742, prima di `const negoziCoinvolti = …` (riga 1743): `// R02-006 — La push «Nuovo ordine» parte subito, non al giro di send-push (fino a 5 minuti).\\n      await mandaSubitoLaPushDelNuovoOrdine(admin, comunicazioni.map((c) => c.orderId));`"
+    },
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "In testa: `import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito';`. Subito dopo la riga 500 `const nuovi = createdOrderIds.filter((c) => daAvvisare.has(c.orderId));` aggiungere: `// R02-006 — La push «Nuovo ordine» parte subito, dopo la campanella, non al giro di send-push.\\n  if (nuovi.length > 0) dopoLaRisposta(async () => { await mandaSubitoLaPushDelNuovoOrdine(admin, nuovi.map((c) => c.orderId)); }, 'push del nuovo ordine');` (dopoLaRisposta già importato, riga 32)."
+    }
+   ],
+   "nota": "Nessun cambio al cron, che resta la rete di sicurezza per le push non mandate (pushed_at vuoto). Nessun costo Vercel."
+  },
+  {
+   "id": "R02-007",
+   "chiave": "deploy-sre|il cancello delle migrazioni promette di confrontare il contenuto ma confronta solo i nomi, e registra in un passo separato",
+   "esito": "riparato",
+   "commit": "9e1bbc0b07b8e5e2075ba2dba7a63489b808364b",
+   "file_toccati": [
+    "scripts/applica-migrazioni-mancanti.sh"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-registrazione-col-commit-proprio.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-registrazione-col-commit-proprio.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout 9e1bbc0b^ -- scripts/applica-migrazioni-mancanti.sh && npx vitest run --reporter=dot tests/unit/riparazione-r02-registrazione-col-commit-proprio.test.ts → ROSSA (1 fallita, sul comportamento: «la tabella della migrazione non registrata e' rimasta», expected 'f' to be 't'); git checkout 9e1bbc0b -- scripts/applica-migrazioni-mancanti.sh → VERDE (1/1); git status pulito"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il confronto del contenuto (md5) c'era gia' prima. Nello stesso psql --single-transaction il -c dell'INSERT nel registro ora viene PRIMA del -f: registrazione e lavoro fino al primo COMMIT del file si confermano o tornano indietro insieme, anche nelle 41 migrazioni col COMMIT proprio. Commenti (r.328-339, r.360-366) e avvisi del COMMIT proprio (r.352-356) riscritti; il psql e' a r.367-371: l'avviso forte dice che una migrazione che si rompe dopo il suo COMMIT (115, 117) resta REGISTRATA con la prima parte applicata, non si riapplica da sola, schema da controllare e parte dopo il COMMIT da completare a mano. Prova nuova su Postgres usa e getta (aiutante riparazione-r01-pg importato, non toccato).",
+   "prove_esistenti": "le 8 prove che leggono lo script (comprese la comune del psql finto il-rilascio-non-riallinea-da-solo-un-database-rimasto-indietro.test.ts e riparazione-r02-registrazione-nello-stesso-passo.test.ts, non toccate) verdi: 9 file, 69 prove; in piu' 35 file del rilascio e delle migrazioni verdi (259 prove) sulla testa finale. Controllo in piu': le 211 migrazioni vere del deposito, su un database locale nuovo (shim di tests/sql/harness), si applicano e si registrano tutte con l'ordine nuovo; il secondo giro applica 0.",
+   "nota": "Resta per natura, ed e' detto nell'avviso: il lavoro che una migrazione fa DOPO il suo COMMIT (oggi 115 e 117) non sta in nessuna transazione dello script; se si rompe li', la migrazione e' gia' registrata con meta' fatta. bash -n verde, tsc verde.",
+   "verificato_da": "da rivedere"
+  },
+  {
+   "id": "R02-008",
+   "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+   "esito": "parziale",
+   "commit": "cf7c607558b0e605d98ed40b183ffee338813832",
+   "commit_in_piu": [
+    "e67311ecc5e751a97cebfe5a4c528e0fa02064ed"
+   ],
+   "file_toccati": [
+    "scripts/prova-di-fumo.mjs"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts"
+   ],
+   "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "git checkout cf7c6075^ -- scripts/prova-di-fumo.mjs && npx vitest run --reporter=dot tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts → ROSSA (7 fallite su 8, sul comportamento: expected 'https://mycity-x-forse-tolto.vercel.app' to be null, e i due messaggi; verde solo [Y,X] → X, che deve restare uguale); git checkout HEAD -- scripts/prova-di-fumo.mjs → VERDE (8/8); git status pulito. Rifatta uguale dopo e67311ec."
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Strada (b): in rilascioDaTornare (scripts/prova-di-fumo.mjs:345-348), col dominio che non dice un rilascio di produzione pronto, la regola dell'elenco vale solo se il commit che esce compare al piu' una volta fra i rilasci di produzione pronti dell'elenco, e se compare e' il primo; altrimenti null (ritorno a mano). [Y,Y,X] con dominio null, {error}, READY senza target, BUILDING → null; [X,Y] → null; [Y,X] → X e [senza-commit] → quello, invariati. Nuova motivoSenzaRilascio(sulDominio) esportata accanto (r.363), usata a r.660: --rilascio-di-adesso dice due frasi diverse se il dominio ha risposto (col commit che esce o senza commit) o no. rilascioDaTornare ha la stessa firma. Prove comuni il-ritorno-indietro-*.test.ts e riparazione-r02-ritorno-indietro-casi-rari.test.ts non toccate e verdi (13 file, 77 prove; 20 file del lavoro di rilascio, 187 prove). eslint e tsc verdi.",
+   "cosa_resta": "col dominio non letto e un solo altro commit [Y,X] si torna ancora a X (la scena di ogni giorno)",
+   "nota": "Strada (a), scelta per Nicola: col dominio non letto nessun ritorno automatico (rilascioDaTornare da' sempre null se il dominio non dice un rilascio di produzione pronto). Nella scena di ogni giorno, quando il dominio non si legge (API di Vercel lenta o giu', risposta d'errore), il lavoro finisce rosso con «ritorno a mano» invece di tornare al commit di prima. Provata a mano e tolta: toccherebbe 4 prove comuni oltre alla mia, cioe' il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts r.29 e r.54, il-ritorno-indietro-dice-a-quale-rilascio-tornare.test.ts r.18, riparazione-r02-ritorno-indietro-casi-rari.test.ts r.40 (e il caso [Y,X] r.58 della mia prova); il-ritorno-indietro-torna-a-quello-che-usano-i-clienti.test.ts no (il suo caso senza dominio, r.51, da' gia' null). Effetto della strada (b) da sapere: se il lavoro di rilascio si rilancia sullo stesso commit, l'elenco ha Y due volte (quello automatico di Vercel e quello del primo giro) e col dominio non letto ora si va a mano invece che a X. Il commit e67311ec (stessa voce) corregge solo i tipi della prova nuova (env dello spawnSync): tsc era rosso dopo cf7c6075.",
+   "verificato_da": "da rivedere"
+  },
+  {
+   "id": "R02-009",
+   "chiave": "qa-flussi|nella scheda utente dell'amministrazione i dati del negozio mostrano «—» mentre si caricano",
+   "esito": "gia_riparato_prima",
+   "commit": null,
+   "file_toccati": [],
+   "prova": "app/admin/users/page.tsx:1053 (datoIdentita, r.1051-1056: `if (!d) return 'Caricamento…';`, dal commit 975d2aa1; usata per codice fiscale r.1141 e P.IVA r.1151 del negozio e codice fiscale del fattorino r.1251). Comando: `git show 975d2aa1 -- app/admin/users/page.tsx | git apply -R` e `npx vitest run --reporter=dot tests/unit/riparazione-r03-scheda-utente-admin-in-caricamento.test.ts` → ROSSA (1 fallita su 2: «lettura in corso: codice fiscale e partita IVA non sono «—»», AssertionError «il codice fiscale in caricamento sembra «nessun codice fiscale»: expected '—' not to be '—'»); difetto rimesso solo sulla riga della P.IVA (r.1151) → ROSSA «la partita IVA in caricamento sembra «nessuna partita IVA»»; `git checkout -- app/admin/users/page.tsx` → VERDE (2/2); git status pulito.",
+   "nota": "nessun codice e nessun commit: la correzione sta nella base (975d2aa1), il collaudo K02 l'ha trovata reggente",
+   "verificato_da": "collaudo K02 (regge) e prova rifatta qui"
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Un rimborso ripreso dopo un tentativo morto non manda mai «Rimborso emesso» al cliente",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/stripe/payout.ts:2054-2062",
+   "descrizione": "Nel ramo «rimborso già uscito su Stripe», refundOrder ritorna presto, senza notifyRefundBuyer, anche con notifyBuyer:true. Il tentativo morto era caduto prima dell'email, che sta in fondo. Chi passa da lì (resi, reclami) non riceve l'email, e se i conti tornano neanche gli amministratori lo sanno. Dopo R02-001, annullo e scaduti la mandano loro con l'importo restituito."
+  },
+  {
+   "titolo": "Il conto della cassa riceve ancora le coordinate di negozio e consegna, che non entrano più in nessun conto",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "lib/ordini/prezzi.ts:50-54",
+   "descrizione": "IngressiPrezzo ha coordinateNegozio, consegnaLat e consegnaLng: oggi servono solo a riempire gli ingressi di shippingCentsFor, che li ignora; con la diff di R02-004 non li legge piu' nessuno. Li calcolano e li passano 5 file dell'app (app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts, app/cart/page.tsx, app/checkout/page.tsx, components/checkout/useTotaliCarrello.ts) e circa 30 prove. Stessa famiglia di interfacce zombie."
+  },
+  {
+   "titolo": "Le email dopo la risposta partono tutte insieme: nel giro degli ordini scaduti un limite d'invio della posta può farne cadere alcune",
+   "dimensione": "architettura",
+   "severita": "minore",
+   "file": "lib/api/dopo-la-risposta.ts:28 (e app/api/cron/expire-stale-orders/route.ts)",
+   "descrizione": "after() di Next 15.5 usa una coda senza limite: dopo R02-001 i «Rimborso emesso» del giro degli scaduti partono insieme alle email ai negozi. Con una posta finta da 2 invii alla volta, 1 rimborso su 3 spedito e 2 campanelle agli amministratori. Cura: un solo after() in sequenza nel cron, o un piccolo limite di concorrenza in dopoLaRisposta. Visto dal revisore del lotto A, non provato sul conto Resend."
+  }
+ ],
+ "domande_per_nicola": [
+  "R02-008, strada (a): col dominio di produzione non letto, nessun ritorno indietro automatico (sempre a mano), invece della regola dell'elenco che oggi torna all'unico altro commit [Y,X]. Cambia la scena di ogni giorno quando il dominio non si legge e tocca 4 prove comuni (il-ritorno-indietro-non-torna-sullo-stesso-commit r.29 e r.54, il-ritorno-indietro-dice-a-quale-rilascio-tornare r.18, riparazione-r02-ritorno-indietro-casi-rari r.40). La vuoi?",
+  "R02-001: firmi le due prove comuni cambiate (tests/unit/api-cron-expire-stale-orders.test.ts e tests/unit/chi-paga-alla-consegna-sa-che-l-ordine-e-annullato.test.ts, solo l'attesa notifyBuyer true → false, nessuna asserzione tolta)?",
+  "R02-002: ok migrazioni per la 640 (orders.carrello_contanti + indice) quando il giro dopo applica il diff di 34cd633e?"
+ ],
+ "conto": {
+  "agenti": 4,
+  "nota": "lotto A: 1 riparatore (ripreso una volta per salvare il JSON) + 1 revisore; lotto B: 1 riparatore, senza revisore (tetto di spesa, d'accordo con la regia: lo guarda il collaudo). Nessun giro di correzione."
+ },
+ "costo_usd": {
+  "valore": 21.48,
+  "nota": "ultima lettura della regia alle 05:42 (indietro di qualche minuto); il conto finale lo legge la regia"
+ }
 }
