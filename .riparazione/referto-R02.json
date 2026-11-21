@@ -1,6 +1,6 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-21 04:20",
+  "aggiornato": "2026-11-21 04:30",
   "finita": false,
   "testa": "e4be3aa9fb4b1f827edc4526be796a61b83b9f8d",
   "verifica": {
@@ -25,8 +25,15 @@
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "non_applicabile",
-        "nota": "la correzione è la prova stessa"
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "WT=$(mktemp -d); git worktree add --detach $WT 1085eda6^ && ln -s $PWD/node_modules $WT/node_modules && for v in 998_r02_finta 998b_r02_finta; do echo 'select 1;' > $WT/migrations/$v.sql; done && (cd $WT && npx vitest run tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts --reporter=dot; echo senza=$?; git checkout 1085eda6 -- tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts && npx vitest run tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts --reporter=dot; echo con=$?); git worktree remove --force $WT",
+        "a_mano": {
+          "comando": "WT=$(mktemp -d); git worktree add --detach $WT 1085eda6^ && ln -s $PWD/node_modules $WT/node_modules && for v in 998_r02_finta 998b_r02_finta; do echo 'select 1;' > $WT/migrations/$v.sql; done && (cd $WT && npx vitest run tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts --reporter=dot; echo senza=$?; git checkout 1085eda6 -- tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts && npx vitest run tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts --reporter=dot; echo con=$?); git worktree remove --force $WT",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        },
+        "nota": "prova-rimessa.mjs non si applica: la correzione è la prova stessa, e con le migrazioni di oggi sort -V e LC_ALL=C sort danno lo stesso ordine (difetto latente). Rimessa a mano in un worktree a parte con due migrazioni finte 998_ e 998b_: senza la correzione 1 rossa su 37 («conta senza applicare niente, e riconosce l'elenco dello script vero»), con la correzione 37/37. Serve la deroga firmata «rimessa_a_mano» insieme alla firma della prova comune."
       },
       "prova_comune": {
         "file": "tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts",
