@@ -245,10 +245,14 @@
         {
           "file": "app/api/admin/branding/route.ts",
           "modifica": "dopo il salvataggio riuscito di site_settings.branding chiamare revalidateTag('sito-precarico') (import da 'next/cache'), così il branding precaricato cambia subito e non dopo 60 secondi (serve solo insieme alla modifica di lib/queries/precarico.ts)."
+        },
+        {
+          "file": "app/categorie/page.tsx",
+          "modifica": "Righe 20-30: sostituire `const { data: cats = [], isLoading, isError, refetch } = useQuery({ queryKey: ['all-categories-tree'], queryFn: async (): Promise<Cat[]> => { const { data, error } = await supabase.from('categories').select('id, slug, name, icon, parent_id').order('name'); if (error) throw error; return (data ?? []) as Cat[]; }, });` con `const { data: cats = [], isLoading, isError, refetch } = useQuery(domandaAlberoCategorie(supabase));` e aggiungere in cima `import { domandaAlberoCategorie } from '@/components/CategoryBar';`. È la stessa domanda (chiave ['categories','tree'], colonne id, slug, name, parent_id, icon, ordine per nome, staleTime 10 minuti) di menu, piede, ricerca e pagina di categoria, che il precarico del sito riempie già. Se il tipo Cat locale non combacia con quello della domanda, usare il tipo restituito dalla domanda. Prova suggerita: come tests/unit/riparazione-r16-letture-condivise.test.tsx, montare CategoryBar + Footer + CategoriePage con un client finto e controllare una sola lettura di categories."
         }
       ],
-      "cosa_resta": "branding e promo attive si leggono ancora dal browser alla prima pagina di ogni visitatore (una lettura ciascuno, condivisa nella pagina): per servirli dalla cache del server uguale per tutti serve la modifica di lib/queries/precarico.ts qui sotto (file non mio).",
-      "verificato_da": "revisore A (sonnet): rilanciata la prova (3/3 verde), confrontate le colonne dei consumatori della chiave ['categories','tree'] (CategoryBar, Footer, ChipDelleCategorie, precarico, ricerca, categoria): tutti 'id, slug, name, parent_id, icon', nessuna rottura silenziosa. — verdetto: parziale · rilievi: app/search/page.tsx:127: La ricerca tiene una copia della lettura con le stesse colonne ma sulla chiave condivisa: se qualcuno cambia le colonne in un posto solo, chi arriva primo riempie la cache con la forma sbagliata (la prova comune controlla solo il testo nel sorgente). | components/home-sections/ChipDelleCategorie.tsx:17: Resta una quarta copia della stessa domanda scritta a mano, non migrata a domandaAlberoCategorie. | app/category/[slug]/page.tsx:62: Tolto il .limit(500): ora vale il tetto di default del database (1000), senza finestre; innocuo con poche decine di categorie. Voce dichi"
+      "cosa_resta": "branding e promo attive si leggono ancora dal browser alla prima pagina di ogni visitatore (una lettura ciascuno, condivisa nella pagina): per servirli dalla cache del server uguale per tutti serve la modifica di lib/queries/precarico.ts qui sotto (file non mio). Resta anche app/categorie/page.tsx:20-30 (file non mio, visto dal collaudo K06): legge lo stesso albero dal browser con la sua chiave ['all-categories-tree'] e le stesse colonne, quindi su /categorie le categorie si leggono ancora due volte (menu e piede da una parte, pagina dall'altra) e senza il precarico.",
+      "verificato_da": "revisore A (sonnet): rilanciata la prova (3/3 verde), confrontate le colonne dei consumatori della chiave ['categories','tree'] (CategoryBar, Footer, ChipDelleCategorie, precarico, ricerca, categoria): tutti 'id, slug, name, parent_id, icon', nessuna rottura silenziosa. — verdetto: parziale · rilievi: app/search/page.tsx:127: La ricerca tiene una copia della lettura con le stesse colonne ma sulla chiave condivisa: se qualcuno cambia le colonne in un posto solo, chi arriva primo riempie la cache con la forma sbagliata (la prova comune controlla solo il testo nel sorgente). | components/home-sections/ChipDelleCategorie.tsx:17: Resta una quarta copia della stessa domanda scritta a mano, non migrata a domandaAlberoCategorie. | app/category/[slug]/page.tsx:62: Tolto il .limit(500): ora vale il tetto di default del database (1000), senza finestre; innocuo con poche decine di categorie. Voce dichi · collaudo K06: non regge come «parziale» perché il cosa_resta non nominava app/categorie/page.tsx; aggiunto ora a cosa_resta e serve_file_altrui."
     },
     {
       "id": "R16-010",
@@ -362,7 +366,7 @@
     "subagenti": 5,
     "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) + 3 revisori sonnet in parallelo; nessun Workflow, nessuno fermato"
   },
-  "aggiornato": "2026-11-22 18:55",
+  "aggiornato": "2026-11-22 19:20",
   "testa": "5a804dbe99f7b855371ba755897113ff1da79b1f",
   "verifica": {
     "comando": "npm run verify",
