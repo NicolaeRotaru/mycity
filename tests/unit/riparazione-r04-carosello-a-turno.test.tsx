@@ -10,6 +10,12 @@
  *
  * Il carosello si monta con un Supabase finto che risponde come PostgREST: prima i filtri (anche
  * `not.in` e l'aggancio `!inner` alla vista dei negozi in vetrina), poi l'ordine e il tetto.
+ *
+ * Giro 3 (collaudo): tre negozi con più di 30 storie nascondevano tutti gli altri, perché le letture
+ * erano tre in tutto. Ora la funzione 662 (`storie_attive_per_negozio`, chiamata con `.rpc`) dà al
+ * massimo 30 storie PER NEGOZIO in una lettura sola: ogni negozio con storie compare, e con più di 30
+ * negozi i 30 posti sono 30 negozi diversi. Il finto qui sotto simula la funzione come è scritta nella
+ * migrazione (negozi in vetrina, non scadute, 30 negozi più recenti, 30 storie a testa).
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, createElement } from 'react';
@@ -23,6 +29,8 @@ const mondo = vi.hoisted(() => ({
   storie: [] as Array<Record<string, unknown>>,
   /** false: il servizio dati non conosce l'aggancio storia → vista (si passa dal ripiego). */
   agganciAllaVista: true,
+  /** false: la funzione 662 non c'è ancora (migrazione non applicata) → il sito legge come prima. */
+  funzione: true,
   letture: [] as Array<{ tabella: string; select: string }>,
 }));
 
@@ -110,7 +118,23 @@ vi.mock('@/lib/supabase/client', () => {
   return {
     supabase: {
       from: (t: string) => domanda(t),
-      rpc: () => Promise.resolve({ data: null, error: null }),
+      rpc: (nome: string, args?: { p_per_negozio?: number; p_negozi?: number }) => {
+        mondo.letture.push({ tabella: `rpc:${nome}`, select: JSON.stringify(args ?? {}) });
+        if (nome !== 'storie_attive_per_negozio' || !mondo.funzione) {
+          return Promise.resolve({ data: null, error: { code: '42883', message: `function ${nome} does not exist` } });
+        }
+        const perNegozio = Math.min(Math.max(args?.p_per_negozio ?? 30, 1), 30);
+        const negozi = Math.min(Math.max(args?.p_negozi ?? 30, 1), 30);
+        const inVetrina = new Set(vetrina().map((n) => String(n.id)));
+        const vive = visibili('seller_stories')
+          .filter((r) => inVetrina.has(String(r.seller_id)))
+          .sort((x, y) => (String(x.created_at) < String(y.created_at) ? 1 : -1));
+        const gruppi = new Map<string, R[]>();
+        for (const r of vive) gruppi.set(String(r.seller_id), [...(gruppi.get(String(r.seller_id)) ?? []), r]);
+        const scelti = [...gruppi.values()].slice(0, negozi); // già in ordine di storia più recente
+        const righe = scelti.flatMap((g) => g.slice(0, perNegozio)).sort((x, y) => (String(x.created_at) < String(y.created_at) ? 1 : -1));
+        return Promise.resolve({ data: righe, error: null });
+      },
       auth: { getUser: async () => ({ data: { user: null } }) },
     },
   };
@@ -166,12 +190,20 @@ async function accendi(): Promise<{ radice: HTMLElement; qc: QueryClient }> {
 const bolle = (radice: HTMLElement) => Array.from(radice.querySelectorAll('button')).map((b) => (b.querySelector('span')?.textContent ?? '').trim());
 const storieLette = (qc: QueryClient) => (qc.getQueryData(queryKeys.seller.storiesActive) ?? []) as Array<{ id: string; seller_id: string }>;
 const lettureStorie = () => mondo.letture.filter((l) => l.tabella === 'seller_stories');
+/** Le domande che portano storie: letture della tabella e chiamate della funzione 662. */
+const domandeDiStorie = () => mondo.letture.filter((l) => l.tabella === 'seller_stories' || l.tabella === 'rpc:storie_attive_per_negozio');
+
+/** Il tetto dichiarato: con la funzione 662 le storie arrivano in UNA lettura, in ogni caso. */
+const LETTURE_MAX_CON_FUNZIONE = 1;
+/** Il tetto del ripiego (funzione non applicata): aggancio che cade, 200 storie, al massimo due riletture. */
+const LETTURE_MAX_RIPIEGO = 4;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(ADESSO);
   mondo.profili = PROFILI;
   mondo.agganciAllaVista = true;
+  mondo.funzione = true;
   mondo.letture = [];
 });
 
@@ -181,7 +213,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('R04-010 · un negozio solo non riempie il carosello delle storie', () => {
+describe('R04-010 · ripiego senza la funzione 662 · un negozio solo non riempie il carosello', () => {
+  beforeEach(() => { mondo.funzione = false; });
+
   it('un negozio con 200 storie nelle 24 ore non spinge fuori gli altri negozi', async () => {
     mondo.storie = [...delGrande(200), storia('pane-1', PANE, fa(180)), storia('fiori-1', FIORI, fa(240)), storia('pane-2', PANE, fa(300))];
     const { radice, qc } = await accendi();
@@ -213,7 +247,7 @@ describe('R04-010 · un negozio solo non riempie il carosello delle storie', () 
     expect(storieLette(qc).map((s) => s.id)).toEqual(['pane-1', 'fiori-1', 'pane-2']);
   });
 
-  it.each([[true], [false]])('con 40 negozi da 40 storie le letture sono al massimo 3 e il carosello mostra più negozi (aggancio alla vista: %s)', async (aggancio) => {
+  it.each([[true], [false]])('ripiego, 40 negozi da 40 storie: letture fisse e almeno i negozi che quelle letture portano (aggancio alla vista: %s)', async (aggancio) => {
     mondo.agganciAllaVista = aggancio;
     const negozi = Array.from({ length: 40 }, (_, k) => ({ id: `n-${k}`, role: 'seller', is_approved: true, store_name: `Negozio ${k}`, store_logo: null }));
     mondo.profili = negozi;
@@ -223,9 +257,56 @@ describe('R04-010 · un negozio solo non riempie il carosello delle storie', () 
     );
     const { radice } = await accendi();
 
-    // Nel ripiego la prima domanda (con l'aggancio) cade senza dare righe: non è una lettura.
-    const lette = lettureStorie().filter((l) => aggancio || !/negozio:seller_public_profiles/.test(l.select));
-    expect(lette.length, 'letture delle storie').toBeLessThanOrEqual(3);
-    expect(bolle(radice).length, 'negozi nel carosello').toBeGreaterThan(1);
+    // Nel ripiego la prima domanda (con l'aggancio) può cadere senza dare righe: la si conta lo stesso.
+    expect(lettureStorie().length, 'letture delle storie nel ripiego').toBeLessThanOrEqual(LETTURE_MAX_RIPIEGO);
+    // Limite DICHIARATO del ripiego: tre letture portano tre negozi. Il caso intero (ogni negozio) è della
+    // funzione 662, provato qui sotto: senza funzione non si può leggere «poche storie per negozio».
+    expect(bolle(radice).length, 'negozi nel carosello (ripiego)').toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('R04-010 · con la funzione 662 ogni negozio con storie compare', () => {
+  const negozio = (k: number) => ({ id: `n-${k}`, role: 'seller', is_approved: true, store_name: `Negozio ${String(k).padStart(2, '0')}`, store_logo: null });
+
+  it('il caso del collaudo: 3 negozi da 40+ storie e 12 negozi da 1-2 storie → compaiono TUTTI e 15, e nessun altro', async () => {
+    const grandi = [0, 1, 2];
+    const piccoli = Array.from({ length: 12 }, (_, i) => 3 + i);
+    mondo.profili = [...grandi, ...piccoli].map(negozio);
+    mondo.storie = [
+      ...grandi.flatMap((k) => Array.from({ length: 45 }, (_, i) => storia(`n-${k}-${i}`, `n-${k}`, new Date(ADESSO.getTime() - (i + 1 + k) * 1000).toISOString()))),
+      ...piccoli.flatMap((k) => Array.from({ length: 1 + (k % 2) }, (_, i) => storia(`n-${k}-${i}`, `n-${k}`, fa(600 + k * 10 + i)))),
+    ];
+    const { radice, qc } = await accendi();
+
+    const attesi = [...grandi, ...piccoli].map((k) => `Negozio ${String(k).padStart(2, '0')}`).sort();
+    expect([...bolle(radice)].sort(), 'l’insieme esatto dei negozi in carosello').toEqual(attesi);
+    expect(new Set(storieLette(qc).map((s) => s.seller_id)), 'negozi fra le storie').toEqual(new Set([...grandi, ...piccoli].map((k) => `n-${k}`)));
+    expect(storieLette(qc).length).toBeLessThanOrEqual(30);
+    // La più recente di ogni negozio viene prima della seconda di chiunque.
+    expect(storieLette(qc).slice(0, 15).map((s) => s.seller_id).sort()).toEqual([...grandi, ...piccoli].map((k) => `n-${k}`).sort());
+    expect(domandeDiStorie().length, 'letture delle storie').toBeLessThanOrEqual(LETTURE_MAX_CON_FUNZIONE);
+    expect(lettureStorie(), 'nessuna lettura diretta della tabella').toHaveLength(0);
+  });
+
+  it('40 negozi da 40 storie → i 30 posti sono 30 negozi diversi', async () => {
+    mondo.profili = Array.from({ length: 40 }, (_, k) => negozio(k));
+    mondo.storie = mondo.profili.flatMap((n, k) =>
+      Array.from({ length: 40 }, (_, i) => storia(`${n.id}-${i}`, n.id as string, new Date(ADESSO.getTime() - (k * 40 + i + 1) * 1000).toISOString())),
+    );
+    const { radice, qc } = await accendi();
+
+    const lette = storieLette(qc);
+    expect(lette).toHaveLength(30);
+    expect(new Set(lette.map((s) => s.seller_id)).size, 'negozi diversi nei 30 posti').toBe(30);
+    expect(bolle(radice)).toHaveLength(30);
+    expect(domandeDiStorie().length, 'letture delle storie').toBeLessThanOrEqual(LETTURE_MAX_CON_FUNZIONE);
+  });
+
+  it('un negozio solo con 200 storie e altri due piccoli: compaiono tutti e tre, in una lettura sola', async () => {
+    mondo.storie = [...delGrande(200), storia('pane-1', PANE, fa(180)), storia('fiori-1', FIORI, fa(240)), storia('sospesa-1', SOSPESO, fa(250))];
+    const { radice } = await accendi();
+
+    expect([...bolle(radice)].sort()).toEqual(['Bazar Grande', 'Fiori di Bea', 'Pane di Ada']);
+    expect(domandeDiStorie().length).toBeLessThanOrEqual(LETTURE_MAX_CON_FUNZIONE);
   });
 });
