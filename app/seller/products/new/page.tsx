@@ -235,7 +235,6 @@ function NewProductInner() {
     }
     return snapshotToInitial(leggiBozzaDi<Snapshot>(AUTOSAVE_KEY)?.bozza ?? {});
     // `bozzaScartata`: tolta la bozza di un altro, il modulo si rifà vuoto.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- serve a rileggere la bozza tolta
   }, [imported, fromId, source, sourceVariants, bozzaScartata]);
 
   /**
