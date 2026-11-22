@@ -85,6 +85,10 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
   // due campi con lo stesso `id` fanno leggere al lettore di schermo sempre il primo.
   const idSlogan = useId();
+  // R10-012 — Le etichette del logo e dei due gruppi della vetrina erano scollegate dal loro campo.
+  const idLogo = useId();
+  const idInEvidenza = useId();
+  const idAnnuncio = useId();
 
   const showBranding = mode !== 'contact';
   const showContact = mode !== 'branding';
@@ -313,7 +317,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         <>
           {/* Logo upload */}
           <div>
-            <label className="block text-sm font-medium text-ink-700 mb-2">Logo del negozio</label>
+            <label htmlFor={idLogo} className="block text-sm font-medium text-ink-700 mb-2">Logo del negozio</label>
             <div className="flex items-center gap-4">
               <StoreAvatar logoUrl={logoUrl} storeName={storeName || defaultValues?.storeName} size="lg" />
               <div
@@ -322,7 +326,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                   isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
                 } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                <input {...getInputProps({ 'aria-label': 'Carica il logo del negozio' })} />
+                <input {...getInputProps({ id: idLogo, 'aria-label': 'Carica il logo del negozio' })} />
                 {uploadingLogo ? (
                   <LoadingState variant="inline" />
                 ) : logoUrl ? (
@@ -457,15 +461,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
           </CustomizationSection>
 
           <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
-            <div>
-              <label className="block text-sm font-medium text-ink-700 mb-2">Prodotti in evidenza</label>
+            <div role="group" aria-labelledby={idInEvidenza}>
+              <p id={idInEvidenza} className="block text-sm font-medium text-ink-700 mb-2">Prodotti in evidenza</p>
               <FeaturedProductsPicker
                 value={custom.featuredProductIds}
                 onChange={(next) => setCustom({ ...custom, featuredProductIds: next })}
               />
             </div>
-            <div className="border-t border-cream-200 pt-4">
-              <label className="block text-sm font-medium text-ink-700 mb-2">Banner annuncio</label>
+            <div role="group" aria-labelledby={idAnnuncio} className="border-t border-cream-200 pt-4">
+              <p id={idAnnuncio} className="block text-sm font-medium text-ink-700 mb-2">Banner annuncio</p>
               <AnnouncementEditor value={custom.announcement} onChange={(next) => setCustom({ ...custom, announcement: next })} />
             </div>
             <div className="border-t border-cream-200 pt-4">

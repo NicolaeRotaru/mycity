@@ -203,7 +203,7 @@ export default function SellerProfilePage() {
 
       {/* Consegna Express a livello negozio (default per i prodotti) — impostazione operativa */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
-        <label className="flex items-start justify-between gap-4 cursor-pointer">
+        <label htmlFor="profilo-consegna-express" className="flex items-start justify-between gap-4 cursor-pointer">
           <div>
             <p className="font-bold text-ink-900 flex items-center gap-2">
               <Zap size={18} strokeWidth={2.4} className="text-amber-500" aria-hidden /> Offro consegna Express
@@ -213,6 +213,7 @@ export default function SellerProfilePage() {
             </p>
           </div>
           <input
+            id="profilo-consegna-express"
             type="checkbox"
             className="mt-1 h-5 w-5 shrink-0 accent-amber-500"
             checked={Boolean((profile as { offers_express?: boolean } | undefined)?.offers_express)}
