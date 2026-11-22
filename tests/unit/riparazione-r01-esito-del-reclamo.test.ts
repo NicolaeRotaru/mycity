@@ -5,8 +5,10 @@
  * R01-006 — L'esito del reclamo si legge nella pagina dell'ordine.
  *
  * La campanella dell'esito porta a /orders/<id>, ma la pagina dell'ordine non leggeva la tabella
- * dei reclami: niente esito, «Apri reclamo» sempre lì, e la pagina del reclamo riproponeva il modulo
- * sopra un reclamo già chiuso. Qui le due pagine vere, montate, con un database finto.
+ * dei reclami: niente esito. Adesso l'esito si legge nelle due pagine, e «Apri reclamo» si nasconde
+ * solo mentre un reclamo è aperto ('open' o 'under_review'), come fa il server: l'indice unico tiene
+ * un reclamo aperto per ordine (migrations/063) e /api/disputes ne accetta un altro dopo la
+ * chiusura. Qui le due pagine vere, montate, con un database finto.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createElement, act } from 'react';
@@ -83,7 +85,7 @@ afterEach(() => {
 });
 
 describe('R01-006 — la pagina dell ordine dice com è finito il reclamo', () => {
-  it('reclamo risolto a favore del cliente: esito, rimborso e note; niente «Apri reclamo»', async () => {
+  it('reclamo risolto a favore del cliente: esito, rimborso e note; «Apri reclamo» resta', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-20T10:00:00Z'));
     reclamiNelDatabase = [RISOLTO_PER_ME];
@@ -94,8 +96,42 @@ describe('R01-006 — la pagina dell ordine dice com è finito il reclamo', () =
     expect(testo).toContain('12/11/2026');
     expect(testo, 'il rimborso non dice che viene dal reclamo').toMatch(/Rimborso deciso con il reclamo: 12,50/);
     expect(testo).toContain('ti rimborsiamo la pagnotta');
-    expect(testo, 'con un reclamo già chiuso resta il pulsante per aprirne un altro').not.toContain('Apri reclamo');
-    expect(document.querySelector(`a[href="/orders/${ORDINE}/dispute"]`)?.textContent).toContain('Vedi il reclamo');
+    const link = [...document.querySelectorAll(`a[href="/orders/${ORDINE}/dispute"]`)].map((a) => a.textContent ?? '');
+    expect(link.some((t) => t.includes('Vedi il reclamo'))).toBe(true);
+    expect(
+      link.some((t) => t.includes('Apri reclamo')),
+      'con il reclamo chiuso il server accetta un nuovo reclamo: il pulsante non deve sparire',
+    ).toBe(true);
+    s.smonta();
+  }, 60000);
+
+  it('reclamo respinto: «Apri reclamo» resta, accanto all esito', async () => {
+    reclamiNelDatabase = [{ status: 'rejected', created_at: '2026-11-12T09:00:00Z', resolution_notes: null, refund_cents: null }];
+    const s = await apriOrdine();
+    const testo = testoVisibile(document.body);
+    expect(testo).toContain('Reclamo respinto');
+    expect(testo, 'con il reclamo chiuso il pulsante per aprirne un altro deve restare').toContain('Apri reclamo');
+    s.smonta();
+  }, 60000);
+
+  it('reclamo aperto: lo stato si vede e «Apri reclamo» sparisce', async () => {
+    reclamiNelDatabase = [{ status: 'open', created_at: '2026-11-12T09:00:00Z', resolution_notes: null, refund_cents: null }];
+    const s = await apriOrdine();
+    const testo = testoVisibile(document.body);
+    expect(testo).toContain('Reclamo aperto');
+    expect(testo, 'con un reclamo aperto il server rifiuta il secondo: il pulsante non va mostrato').not.toContain('Apri reclamo');
+    s.smonta();
+  }, 60000);
+
+  it('un reclamo chiuso e uno aperto: conta quello aperto, «Apri reclamo» sparisce', async () => {
+    reclamiNelDatabase = [
+      { ...RISOLTO_PER_ME, status: 'rejected', created_at: '2026-11-12T09:00:00Z' },
+      { status: 'open', created_at: '2026-11-15T09:00:00Z', resolution_notes: null, refund_cents: null },
+    ];
+    const s = await apriOrdine();
+    const testo = testoVisibile(document.body);
+    expect(testo).toContain('Reclamo aperto');
+    expect(testo).not.toContain('Apri reclamo');
     s.smonta();
   }, 60000);
 
@@ -118,15 +154,18 @@ describe('R01-006 — la pagina dell ordine dice com è finito il reclamo', () =
   }, 60000);
 });
 
-describe('R01-006 — la pagina del reclamo non ripropone il modulo sopra un reclamo chiuso', () => {
-  it('reclamo respinto: si legge l esito, il modulo non c è', async () => {
+describe('R01-006 — la pagina del reclamo mostra l esito del reclamo chiuso e lascia aprirne un altro', () => {
+  it('reclamo respinto: si legge l esito, e il modulo per un nuovo reclamo c è', async () => {
     reclamiNelDatabase = [{ status: 'rejected', created_at: '2026-11-12T09:00:00Z', resolution_notes: 'Le foto mostrano la merce integra.', refund_cents: null }];
     const s = await apriPaginaDelReclamo();
     const testo = testoVisibile(document.body);
     expect(testo).toContain('Reclamo respinto');
     expect(testo).toContain('Le foto mostrano la merce integra.');
-    expect(document.querySelector('form'), 'sopra un reclamo chiuso la pagina ripropone il modulo').toBeNull();
-    expect(document.querySelector('input[name="reason"]')).toBeNull();
+    expect(testo).toContain('Questo reclamo è chiuso');
+    expect(
+      document.querySelector('input[name="reason"]'),
+      'il server accetta un nuovo reclamo dopo la chiusura: il modulo deve restare',
+    ).toBeTruthy();
     s.smonta();
   }, 60000);
 
@@ -136,7 +175,16 @@ describe('R01-006 — la pagina del reclamo non ripropone il modulo sopra un rec
     const testo = testoVisibile(document.body);
     expect(testo).toContain('Reclamo risolto a tuo favore');
     expect(testo).toMatch(/Rimborso deciso: 12,50/);
-    expect(document.querySelector('form')).toBeNull();
+    expect(document.querySelector('input[name="reason"]')).toBeTruthy();
+    s.smonta();
+  }, 60000);
+
+  it('reclamo aperto: niente modulo, si dice che c è già', async () => {
+    reclamiNelDatabase = [{ status: 'under_review', created_at: '2026-11-12T09:00:00Z', resolution_notes: null, refund_cents: null }];
+    const s = await apriPaginaDelReclamo();
+    const testo = testoVisibile(document.body);
+    expect(testo).toContain('Hai già un reclamo aperto su questo ordine');
+    expect(document.querySelector('input[name="reason"]')).toBeNull();
     s.smonta();
   }, 60000);
 

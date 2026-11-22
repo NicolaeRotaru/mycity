@@ -111,7 +111,8 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const [tentativo, setTentativo] = useState(0);
   // 5/11/2026 — Il database tiene un solo reclamo aperto per ordine: se c'è già, lo si dice.
   const [reclamoAperto, setReclamoAperto] = useState<{ created_at: string; status: string } | null>(null);
-  // Un reclamo già chiuso su questo ordine: si mostra l'esito, non il modulo per aprirne un altro.
+  // Un reclamo già chiuso su questo ordine: si mostra l'esito, e sotto il modulo resta, perché il
+  // server accetta un nuovo reclamo dopo la chiusura (ne rifiuta solo uno con un altro ancora aperto).
   const [reclamoChiuso, setReclamoChiuso] = useState<RigaReclamo | null>(null);
   // R01-003 — Il server ha risposto «non sei più dentro»: si dice di rientrare, e la bozza è salva.
   const [sessioneScaduta, setSessioneScaduta] = useState(false);
@@ -280,29 +281,6 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
     );
   }
 
-  if (reclamoChiuso) {
-    return (
-      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-2xl">
-        <Link href={`/orders/${params.id}`} className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-800 mb-2">
-          <ArrowLeft size={14} /> Torna all'ordine
-        </Link>
-        <div className="bg-cream-50 border border-cream-300 rounded-2xl p-5 mt-5 text-sm text-ink-700">
-          <p className="font-semibold mb-1">{RECLAMO_TITOLO[reclamoChiuso.status]}</p>
-          <p>
-            {reclamoChiuso.created_at ? `L'hai aperto il ${new Date(reclamoChiuso.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}. ` : ''}
-            {reclamoChiuso.status === 'resolved_buyer' && reclamoChiuso.refund_cents
-              ? `Rimborso deciso: ${formatPrice(reclamoChiuso.refund_cents / 100)}.`
-              : ''}
-          </p>
-          {reclamoChiuso.resolution_notes && <p className="mt-2 whitespace-pre-line">{reclamoChiuso.resolution_notes}</p>}
-          <p className="mt-3">
-            Il reclamo su questo ordine è chiuso. Se c&apos;è altro, <Link href="/contact" className="text-primary-700 hover:underline font-semibold">scrivici dai Contatti</Link>.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const selectedReason = REASONS.find((r) => r.value === reason);
   // R01-002 — Il bottone spento adesso dice cosa manca, a chi guarda e a chi ascolta: prima
   // restava grigio senza un perché, e i messaggi di `submit` non scattavano mai (il bottone
@@ -328,6 +306,22 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       <p className="text-sm text-ink-500 mt-1">
         Ordine #{params.id.slice(0, 8)} · {order.seller?.store_name ?? 'Negozio'}
       </p>
+
+      {reclamoChiuso && (
+        <div role="status" className="bg-cream-50 border border-cream-300 rounded-2xl p-5 mt-5 text-sm text-ink-700">
+          <p className="font-semibold mb-1">{RECLAMO_TITOLO[reclamoChiuso.status]}</p>
+          <p>
+            {reclamoChiuso.created_at ? `L'hai aperto il ${new Date(reclamoChiuso.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}. ` : ''}
+            {reclamoChiuso.status === 'resolved_buyer' && reclamoChiuso.refund_cents
+              ? `Rimborso deciso: ${formatPrice(reclamoChiuso.refund_cents / 100)}.`
+              : ''}
+          </p>
+          {reclamoChiuso.resolution_notes && <p className="mt-2 whitespace-pre-line">{reclamoChiuso.resolution_notes}</p>}
+          <p className="mt-3">
+            Questo reclamo è chiuso. Se il problema non è risolto puoi aprirne un altro qui sotto.
+          </p>
+        </div>
+      )}
 
       <div className="bg-accent-50 border border-accent-200 rounded-2xl p-4 mt-5 text-sm text-ink-700">
         <p className="font-semibold mb-1">Prima di aprire un reclamo</p>

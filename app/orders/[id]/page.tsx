@@ -155,6 +155,8 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
  * R01-006 — Il reclamo dell'ordine, come lo vede chi l'ha aperto (tabella `disputes`): quello aperto,
  * se c'è, se no il più recente. I titoli sono quelli della campanella dell'esito
  * (app/api/admin/disputes/[id]/resolve), che porta a questa pagina.
+ * «Aperto» è quello che conta per il server: 'open' o 'under_review' (l'indice unico
+ * disputes_one_open_per_order, migrations/063; il giro dei bonifici, OPEN_DISPUTE_STATUSES).
  */
 type RigaReclamo = { status: string; created_at: string | null; resolution_notes?: string | null; refund_cents?: number | null };
 const RECLAMO_TITOLO: Record<string, string> = {
@@ -590,7 +592,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 <Undo2 size={15} strokeWidth={2.2} aria-hidden /> Richiedi reso
               </Link>
             )}
-            {!reclamo && (
+            {/* Si nasconde solo mentre c'è un reclamo aperto (open / under_review): il server ne
+                tiene uno aperto per ordine e ne accetta un altro dopo la chiusura. */}
+            {!(reclamo && reclamoAncoraAperto(reclamo)) && (
               <Link
                 href={`/orders/${id}/dispute`}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
