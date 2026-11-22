@@ -48,21 +48,24 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
   return (
     <Link
       href={href}
-      className="group flex items-center gap-3 rounded-2xl border border-surface-200 bg-white p-3 shadow-card transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-warm sm:gap-4"
+      className="group flex flex-wrap items-center gap-3 rounded-2xl border border-surface-200 bg-white p-3 shadow-card transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-warm sm:gap-4"
     >
       <div className="shrink-0">
         <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="lg" />
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-24">
         {/* R12-009 — Senza max-w-full un nome lungo senza spazi allargava il titolo e la pagina
-            sul telefono: ora il titolo resta nella scheda e il nome si taglia coi puntini. */}
+            sul telefono: ora il titolo resta nella scheda e il nome si taglia coi puntini.
+            R12-009 (giro 2) — La riga può andare a capo (flex-wrap) e la colonna del nome ha una larghezza
+            minima vera (basis-24): col testo al 200% a 280 px la colonna era larga 0 e il nome spariva;
+            ora, se non c'è posto, il nome va sotto l'avatar e il resto sotto il nome. */}
         <h3 className="inline-flex max-w-full items-center gap-1.5 truncate text-base font-bold text-ink-900 group-hover:text-primary-700">
           <span className="truncate">{store.store_name}</span>
           {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
         </h3>
         {street && <p className="truncate text-xs text-ink-400">{street}</p>}
-        <div className="mt-1 flex items-center gap-3 text-xs">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
           {reviews ? (
             <span className="inline-flex items-center gap-1 font-bold text-ink-800">
               <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
@@ -104,7 +107,7 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
         </div>
       )}
 
-      <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+      <div className="flex max-w-full shrink-0 flex-col items-end gap-1 text-right">
         {km && <span className="text-sm font-bold text-ink-900">{km}</span>}
         {consegna && (
           <span className="rounded-full bg-olive-100 px-2 py-0.5 text-xs font-bold text-olive-700">

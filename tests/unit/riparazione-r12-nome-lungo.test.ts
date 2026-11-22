@@ -32,3 +32,20 @@ describe('R12-009 — il titolo col nome del negozio resta dentro la scheda', ()
     });
   }
 });
+
+describe('R12-009 (giro 2) — a 280 px col testo al 200% la colonna del nome ha una larghezza vera', () => {
+  const src = readFileSync('components/StoreListRow.tsx', 'utf8');
+  it('la riga va a capo: avatar, nome e distanza non stanno più per forza sulla stessa riga', () => {
+    const riga = src.match(/<Link\s+href=\{href\}\s+className="([^"]*)"/)![1].split(/\s+/);
+    expect(riga).toContain('flex-wrap');
+  });
+  it('la colonna del nome ha una larghezza di partenza (basis-24) oltre a min-w-0', () => {
+    const colonna = src.match(/<div className="(min-w-0 flex-1[^"]*)">\s*\{\/\* R12-009/)![1].split(/\s+/);
+    expect(colonna).toContain('min-w-0');
+    expect(colonna).toContain('basis-24');
+  });
+  it('«Nuovo · Chiuso» va a capo e la colonna della distanza non supera la riga', () => {
+    expect(src).toMatch(/mt-1 flex flex-wrap items-center/);
+    expect(src).toMatch(/flex max-w-full shrink-0 flex-col items-end/);
+  });
+});
