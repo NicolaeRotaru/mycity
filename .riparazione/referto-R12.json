@@ -1,0 +1,381 @@
+{
+  "sessione": "R12",
+  "aggiornato": "2026-11-22 02:00",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R12-005",
+      "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "prova": "components/Footer.tsx:142 usa già COLONNE_DEL_PIEDE (griglia auto-fit con min(100%,…), non più grid-cols-2); lavora-con-noi, resi e faq hanno già min-w-0/flex-wrap/break-words; misurato in Chrome a 280 px con html{font-size:200%}: /about, /faq, /returns, /lavora-con-noi hanno scrollWidth 280; app/help/page.tsx:109 ha già min-w-0 [overflow-wrap:anywhere]",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file la voce è già chiusa sulla base (piede, lavora con noi, resi, faq). Resta solo il riquadro anti-robot di app/contact, che non è mio.",
+      "cosa_resta": "Il widget Turnstile di app/contact (iframe largo 300 px) non si stringe sotto i 300 px: non misurato a pagina viva perché serve una chiave pubblica vera. Il pezzo «app/te…» della voce è troncato nel registro: non si sa quale file sia (se è app/terms, nel sorgente non c'è un difetto visibile).",
+      "serve_file_altrui": [
+        {
+          "file": "components/Turnstile.tsx",
+          "modifica": "nella chiamata window.turnstile.render (circa riga 76) aggiungere l'opzione size: (typeof window !== 'undefined' && window.innerWidth < 340) ? 'compact' : 'normal' (il widget compatto è largo 150 px)"
+        },
+        {
+          "file": "app/contact/page.tsx",
+          "modifica": "riga 191: il wrapper <div className=\"flex justify-center\"> diventa <div className=\"flex justify-center max-w-full overflow-hidden\">, così un widget da 300 px non allarga la pagina"
+        }
+      ]
+    },
+    {
+      "id": "R12-006",
+      "chiave": "layout-responsive|sul tablet col testo al 200% «dichiarazione accessibilità» esce dal piede e la pagina scorre di lato",
+      "esito": "riparato",
+      "commit": "87941fbf",
+      "file_toccati": [
+        "components/Footer.tsx",
+        "tests/unit/riparazione-r12-footer.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-footer.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-footer.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 87941fbf^ --file components/Footer.tsx --prove tests/unit/riparazione-r12-footer.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La prima correzione (be7e78bd, che cambiava md:grid-cols-5 e due prove comuni) è stata tolta con il commit b99da806: le due prove comuni sono di nuovo come sulla base. Nuova correzione 87941fbf (con cf774c57, che sistema solo la lettura delle classi nella prova): md:grid-cols-5 resta, e la griglia del piede ha [&>div]:min-w-0 [&_h3]:break-words [&_a]:break-words. Col testo al 200% le voci lunghe vanno a capo dentro la colonna. Misurato in Chromium su /about al 200%: a 768, 820 e 900 px scrollWidth uguale alla larghezza, «Dichiarazione accessibilità» dentro il piede. Al 100% a 768 e 1440 px niente cambia.",
+      "nota": "Commit della voce: b99da806 (ripristino), 87941fbf (correzione), cf774c57 (prova). A 1024 px al 200% la pagina scorre ancora, ma non per il piede: il link sta dentro il piede, lo scorrimento viene dalla fascia che scorre in alto ed è uguale col piede nascosto (vedi nuovi_difetti_visti)."
+    },
+    {
+      "id": "R12-010",
+      "chiave": "navigazione-gerarchia|il piè di pagina passa dall h1 all h3 su ogni pagina pubblica senza un h2 nel contenuto",
+      "esito": "riparato",
+      "commit": "0bb8e7ef",
+      "file_toccati": [
+        "components/Footer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-footer.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-footer.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0bb8e7ef^ --file components/Footer.tsx --prove tests/unit/riparazione-r12-footer.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunto un h2 sr-only «Informazioni sul sito» nel blocco del marchio, prima dei titoli h3 del piede: la gerarchia non salta più, l'aspetto non cambia."
+    },
+    {
+      "id": "R12-001",
+      "chiave": "layout-responsive|in chi siamo a 280 px col testo al 200% il titolo «come siamo arrivati qui» entra nel margine destro",
+      "esito": "riparato",
+      "commit": "50f5b47e",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50f5b47e^ --file app/about/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel blocco «Come siamo arrivati qui» la colonna ha min-w-0 e il titolo break-words hyphens-auto, come il blocco sopra. Misurato in Chrome a 280 px al 200%: prima la colonna usciva dalla sezione, dopo no."
+    },
+    {
+      "id": "R12-002",
+      "chiave": "layout-responsive|a 280 px col testo al 200% scorrono di lato anche faq, negozi, resi e lavora con noi",
+      "esito": "parziale",
+      "commit": "b04a677d",
+      "file_toccati": [
+        "app/stores/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b04a677d^ --file app/stores/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Faq, resi e lavora con noi hanno già scrollWidth 280 sulla base (misurato in Chrome a 280 px al 200%). In /stores il bottone «Aperti ora» (whitespace-nowrap) e il menu dell'ordinamento uscivano dalla riga: tolto nowrap e messo max-w-full, ora stanno nella scheda dei filtri.",
+      "cosa_resta": "/stores scorre ancora di lato (scrollWidth 381) per l'h1 «Negozi di Piacenza» di components/CollectionHeader.tsx, che non è mio.",
+      "serve_file_altrui": [
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "riga 80: aggiungere break-words hyphens-auto alle classi dell'h1 (className=\"mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px] break-words hyphens-auto\"), come negli h1 di resi e lavora con noi"
+        }
+      ]
+    },
+    {
+      "id": "R12-004",
+      "chiave": "layout-responsive|in lavora con noi, a 280 px col testo grande, le righe delle posizioni restano strettissime: il titolo e «candidati» vanno quasi una lettera per riga",
+      "esito": "riparato",
+      "commit": "6a87c607",
+      "file_toccati": [
+        "app/lavora-con-noi/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a87c607^ --file app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sotto i 300 px la cornice delle posizioni e il link «Candidati» passano da px-6 a px-3 e il link può andare a capo: a 280 px al 200% la riga guadagna 48 px utili, il titolo sta in 2 righe e «Candidati» in una. Sopra i 300 px nulla cambia."
+    },
+    {
+      "id": "R12-011",
+      "chiave": "qa-flussi|altre due ancore sommano il loro scroll-mt allo scroll-padding da md in su",
+      "esito": "gia_riparato_prima",
+      "file_toccati": [],
+      "prova": "app/faq/page.tsx:231 className=\"scroll-mt-24 md:scroll-mt-0\" e app/lavora-con-noi/page.tsx:181 id=\"posizioni\" className=\"py-14 scroll-mt-24 md:scroll-mt-0\": da md le due ancore azzerano scroll-mt dove app/globals.css:200 dà scroll-padding-top; c'è già tests/unit/riparazione-r02-ancore-faq.test.ts",
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Niente: già a posto sulla base."
+    },
+    {
+      "id": "R12-012",
+      "chiave": "qa-flussi|nella pagina dei negozi le categorie per negozio si leggono senza finestre: sopra i mille negozi con prodotti alcuni perderebbero le loro categorie nel filtro",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx",
+          "modifica": "nel vi.mock di @/lib/supabase/client sostituire `rpc: async (nome: string) => { …tre return… }` con `rpc: (nome: string) => { const risposta = async () => { …gli stessi tre return… }; const q: Record<string, unknown> = { order: () => q, range: () => q, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => risposta().then(ok, ko) }; return q; }`, come nel commit 8f8973f3 del ramo. Dati e controlli restano uguali."
+        },
+        {
+          "file": "app/stores/page.tsx",
+          "modifica": "nel Promise.all di fetchStoresData sostituire `supabase.rpc(categorie_per_negozio),` con `leggiTutteLeRighe<{ seller_id: string; categorie: string[] | null }>((da, a) => supabase.rpc(categorie_per_negozio).order(seller_id).range(da, a)),`, come nel commit 7f539404 del ramo (import già presente), e rimettere in tests/unit/riparazione-r12-negozi-categorie.test.tsx il caso «più di 1000 righe» com era a 7f539404 (la sua prova rimessa reggeva, uscita 0). File di R12: va fatto insieme alla modifica della prova comune."
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il difetto c è sulla base: categorie_per_negozio si legge con una rpc senza finestre, quindi oltre le 1000 righe si taglia. La correzione era pronta e provata: lettura a finestre con l aiutante già esistente leggiTutteLeRighe (commit 7f539404, prova rimessa uscita 0). Però rompe il client finto della prova comune r02-negozi-categorie-a-pagine, che la regia vuole com era. Correzione tolta con il commit 63e85883, prova comune di nuovo identica alla base: va rimessa insieme alle due modifiche qui sotto.",
+      "nota": "Commit sul ramo: 7f539404 (correzione), 8f8973f3 (client finto della prova comune), 63e85883 (tutte e due tolte). La strada (b) era annunciata alla regia quarta, senza risposta prima della fine della correzione del piede."
+    },
+    {
+      "id": "R12-013",
+      "chiave": "qa-flussi|nella pagina dei negozi, se la lettura delle categorie cade, i filtri spariscono senza avviso",
+      "esito": "riparato",
+      "commit": "c3162108d747eab390743c75c5ca10900035a6c4",
+      "file_toccati": [
+        "app/stores/page.tsx",
+        "tests/unit/riparazione-r12-negozi-categorie.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-negozi-categorie.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-negozi-categorie.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c3162108^ --file app/stores/page.tsx --prove tests/unit/riparazione-r12-negozi-categorie.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando cade la lettura delle categorie o quella delle categorie per negozio, nel riquadro dei filtri compare un avviso breve (role=status): «Non siamo riusciti a leggere i settori dei negozi: i filtri per settore possono mancare.» Prove: errore categorie → avviso e niente filtri; errore categorie per negozio → avviso; tutto letto → nessun avviso."
+    },
+    {
+      "id": "R12-009",
+      "chiave": "layout-responsive|basta un negozio col nome lungo e sul telefono la home, l'elenco negozi e «vicino a te» diventano più larghe dello schermo",
+      "esito": "riparato",
+      "commit": "c2b7c9f0032a08a8687a34ad1876fc183b654604",
+      "file_toccati": [
+        "components/StorePreviewCard.tsx",
+        "components/StoreListRow.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-nome-lungo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-nome-lungo.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c2b7c9f0^ --file components/StorePreviewCard.tsx,components/StoreListRow.tsx --prove tests/unit/riparazione-r12-nome-lungo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Misurato in Chromium a 320 px con un nome di 70 lettere senza spazi: pagina larga 590 px su home ed elenco, 690 su «vicino a te». La causa era il titolo inline-flex senza tetto di larghezza: max-w-full sui due h3, ora 320 px su tutte e tre le pagine. StoreShowcase, stores e near non vanno cambiati.",
+      "nota": "Il tetto dei caratteri c'era già: app/api/seller/apply/route.ts:86 ha storeName .max(80, …) anche alla base, coperto da tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx. La rotta non è stata toccata."
+    },
+    {
+      "id": "R12-003",
+      "chiave": "layout-responsive|col testo al 200% sul telefono la barra a schede è più alta del margine in fondo: l ultima parte della pagina finisce sotto la barra",
+      "esito": "riparato",
+      "commit": "c62fdea63ef02a05aa115d9890769e007fee35fe",
+      "file_toccati": [
+        "app/globals.css",
+        "components/MobileTabBar.tsx",
+        "tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-barre.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-barre.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c62fdea6^ --file app/globals.css --prove tests/unit/riparazione-r12-barre.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Misurato in Chromium: col testo al 200% la barra è alta 75,5 px e il margine restava 58. --tabbar-altezza-vera ora somma le stesse unità della barra (calc(1px + 2 * 0.5rem + 22px + 0.125rem + 11px * 1.5)): 57,5 col testo normale, 75,5 al 200%. In MobileTabBar.tsx solo un commento che rimanda alla somma.",
+      "nota": "Prova esistente modificata, dichiarato: tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts legge globals.css e MobileTabBar.tsx per nome, e ora calcola la dichiarazione a 16 px invece di cercare «NNpx», con la stessa tolleranza ±1 px (guardia-ramo non la segnala)."
+    },
+    {
+      "id": "R12-007",
+      "chiave": "layout-responsive|la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "esito": "riparato",
+      "commit": "83fe990327717610fe5762abae7f6130ed9c6d5b",
+      "file_toccati": [
+        "components/home/HowItWorks.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-testo-grande.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83fe9903^ --file components/home/HowItWorks.tsx --prove tests/unit/riparazione-r12-testo-grande.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Misurato in Chromium a 320 px col testo al 200%: pagina larga 367 px per i titoli h3 dei tre passi accanto al cerchio. La riga ora ha flex-wrap e l'h3 min-w-0 grow basis-24 break-words: col testo normale resta accanto al cerchio, al 200% va sotto e la pagina torna a 320 px."
+    },
+    {
+      "id": "R12-008",
+      "chiave": "layout-responsive|barra mobile a 280 px col testo al 200%: la pillola del luogo si stringe a zero e sparisce",
+      "esito": "riparato",
+      "commit": "ce3441c5b2f47d8a237c3df73115c06589ebfb40",
+      "file_toccati": [
+        "components/Navbar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-testo-grande.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ce3441c5^ --file components/Navbar.tsx --prove tests/unit/riparazione-r12-testo-grande.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Misurato in Chromium a 280 e 320 px al 200%: il contenitore della pillola era largo 0 e la pillola finiva sopra il logo. La riga mobile ora ha flex-wrap e il contenitore flex-1 basis-auto: la pillola va a capo intera. Col testo normale da 280 a 767 px resta su una riga come prima.",
+      "nota": "A 280 px al 200% la testata diventa di tre righe (logo / pillola / Accedi): più alta, ma tutto si vede."
+    },
+    {
+      "id": "R12-014",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "parziale",
+      "commit": "b5f62937c0907003989df46f337a8e6cfdc3a62d",
+      "file_toccati": [
+        "components/StorePreviewCard.tsx",
+        "components/StoreListRow.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-scala-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-scala-testo.test.ts --reporter=dot",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b5f62937^ --file components/StorePreviewCard.tsx,components/StoreListRow.tsx --prove tests/unit/riparazione-r12-scala-testo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "ProductCard era già sulla scala alla base (resta solo un text-[11px] in un commento, riga 239). Portate sulla scala le otto misure a mano delle schede negozio (11→text-xs, 13→text-sm, 15→text-base, come già fatto per ProductCard). La prova controlla ProductCard, StorePreviewCard e StoreListRow senza commenti.",
+      "cosa_resta": "232 occorrenze di text-[N px|rem] in 79 file non miei (il conto prende anche qualche commento). In MobileTabBar.tsx restano apposta text-[11px] dell'etichetta e text-[9px] del numerino: la scala non ha 9, 11, 13 e 15 px, e portarli in rem cambia l'altezza della barra (entra nella somma del margine in fondo). Serve una scelta di disegno.",
+      "domanda": "La scala non ha i passi 9, 11, 13 e 15 px: si sale sempre al passo sopra anche per l'etichetta della barra a schede, che col testo al 200% diventerebbe più alta e più larga?"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "In chi siamo altri due titoli h2 non hanno break-words né min-w-0, come quello riparato",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/about/page.tsx:171 · app/about/page.tsx:222",
+      "descrizione": "Stessa causa del titolo «Come siamo arrivati qui». A 280 px al 200% oggi non fanno scorrere la pagina (scrollWidth 280), ma non sono stati misurati uno per uno."
+    },
+    {
+      "titolo": "Il titolo grande di CollectionHeader esce dalla riga a 280 px col testo al 200%",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/CollectionHeader.tsx:80",
+      "descrizione": "L h1 non va a capo e allarga la pagina (in /stores scrollWidth 381 su 280). Tocca ogni pagina che usa CollectionHeader. La modifica esatta è nel serve_file_altrui della voce sui negozi. Misurato anche dal secondo lotto: in /stores a 320 px al 200% la pagina va a 381 px; c è anche un sm:text-[32px] fuori scala."
+    },
+    {
+      "titolo": "In «Vicino a te» col testo al 200% a 320 px il selettore elenco/mappa allarga la pagina a 360 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/near/page.tsx:328",
+      "descrizione": "inline-flex w-fit con due bottoni che non vanno a capo. Misurato in Chromium."
+    },
+    {
+      "titolo": "In home a 280 px col testo al 200% la fascia «Hai un negozio a Piacenza?» esce di 18 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/home-sections/HomeSectionRenderer.tsx:380",
+      "descrizione": "La riga icona + testo dentro un contenitore flex-col items-start supera lo schermo di 18 px. Misurato in Chromium."
+    },
+    {
+      "titolo": "La pagina 404 a 280 px col testo al 200% esce di 5 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/not-found.tsx:36",
+      "descrizione": "«404» in text-7xl senza contenimento. Misurato in Chromium."
+    },
+    {
+      "titolo": "Col testo al 200% le schede negozio tagliano «Nuovo negozio» e «Chiuso ora»",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/StorePreviewCard.tsx:130 · components/StoreListRow.tsx:57-70",
+      "descrizione": "In home a due colonne (schede di circa 136 px) avatar, «Nuovo negozio» e la pillola «Chiuso ora» escono dalla scheda e overflow-hidden li taglia; nella riga di «Vicino a te» «Nuovo» e «Chiuso» escono dalla riga. C era già alla base."
+    },
+    {
+      "titolo": "A 1024 px col testo al 200% le pagine pubbliche scorrono di lato per la fascia animata in alto, non per il piede",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "(la fascia con animate-marquee, file da individuare)",
+      "descrizione": "Su /about e /contact a 1024 px al 200% scrollWidth 1256. Resta uguale col piede nascosto: lo scorrimento viene dalla fascia animate-marquee e da altro contenuto fuori dal piede. Misurato in Chromium."
+    }
+  ],
+  "domande_per_nicola": [
+    "Scala del testo: mancano i passi 9, 11, 13 e 15 px. Si sale sempre al passo sopra anche per l etichetta della barra a schede del telefono, che col testo al 200% diventerebbe più alta e più larga?"
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": "lotto A (sonnet), lotto B (grande, ripreso per togliere la lettura a finestre), correzione del piede (sonnet)"
+  }
+}
