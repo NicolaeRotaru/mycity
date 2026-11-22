@@ -88,17 +88,15 @@ function tabella(nome: string): unknown {
 }
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => ({ from: (t: string) => tabella(t) }) }));
 
-// Moduli ricaricati a ogni prova (vedi beforeEach): il conto degli errori del logger tiene in memoria
-// la sua finestra, e una prova non deve trovarsi la finestra aperta da quella prima.
-let logger: typeof import('@/lib/logger').logger;
-let salute: typeof import('@/app/api/health/route').GET;
-let sorvegliante: typeof import('@/app/api/cron/operational-alerts/route').POST;
-let sendEmail: typeof import('@/lib/email/client').sendEmail;
+import { logger } from '@/lib/logger';
+import { GET as salute } from '@/app/api/health/route';
+import { POST as sorvegliante } from '@/app/api/cron/operational-alerts/route';
+import { sendEmail } from '@/lib/email/client';
 
 const UPSTASH = 'https://upstash-finto.test';
 const salvato = { ...process.env };
 
-/** Upstash finto: INCR, INCRBY, EXPIRE e GET in memoria, sulla stessa strada /pipeline del sito. */
+/** Upstash finto: INCR, EXPIRE e GET in memoria, sulla stessa strada /pipeline del sito. */
 const redis = new Map<string, number>();
 const chiamateUpstash: unknown[][][] = [];
 let upstashGiu = false;
@@ -108,10 +106,9 @@ function fetchFinto(url: string | URL, init?: RequestInit): Promise<Response> {
   if (upstashGiu) return Promise.resolve(new Response('giù', { status: 500 }));
   const comandi = JSON.parse(String(init?.body)) as unknown[][];
   chiamateUpstash.push(comandi);
-  const risposte = comandi.map(([cmd, chiave, quanti]) => {
+  const risposte = comandi.map(([cmd, chiave]) => {
     const k = String(chiave);
     if (cmd === 'INCR') { redis.set(k, (redis.get(k) ?? 0) + 1); return { result: redis.get(k) }; }
-    if (cmd === 'INCRBY') { redis.set(k, (redis.get(k) ?? 0) + Number(quanti)); return { result: redis.get(k) }; }
     if (cmd === 'EXPIRE') return { result: 1 };
     if (cmd === 'GET') return { result: redis.has(k) ? String(redis.get(k)) : null };
     return { error: 'comando sconosciuto' };
@@ -119,12 +116,7 @@ function fetchFinto(url: string | URL, init?: RequestInit): Promise<Response> {
   return Promise.resolve(new Response(JSON.stringify(risposte), { status: 200 }));
 }
 
-beforeEach(async () => {
-  vi.resetModules();
-  ({ logger } = await import('@/lib/logger'));
-  ({ GET: salute } = await import('@/app/api/health/route'));
-  ({ POST: sorvegliante } = await import('@/app/api/cron/operational-alerts/route'));
-  ({ sendEmail } = await import('@/lib/email/client'));
+beforeEach(() => {
   for (const v of ['NEXT_PUBLIC_SENTRY_DSN', 'SENTRY_DSN', 'VERCEL_ENV', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']) delete process.env[v];
   process.env.SUPPORT_EMAIL = 'nicola@mycity.test';
   process.env.LAVORI_A_ORARIO = 'accesi';

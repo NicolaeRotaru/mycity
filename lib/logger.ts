@@ -134,16 +134,23 @@ function chiaveErroriDellOra(ms: number): string {
  * tempesta di errori partiva una richiesta per errore, senza limite, e una chiamata che non
  * rispondeva restava appesa quanto voleva. Adesso:
  * - la chiamata si interrompe dopo `ERRORI_TEMPO_MASSIMO_MS`;
- * - gli errori si sommano in memoria e partono al più UNA volta per finestra (`ERRORI_FINESTRA_MS`):
- *   il primo errore dopo una finestra quieta parte subito (insieme a quelli dello stesso giro), gli
- *   altri della finestra partono tutti insieme, con INCRBY, quando la finestra si chiude.
- * Il primo errore non aspetta: l'allarme del sorvegliante scatta già con uno. Se la funzione si
- * chiude prima della fine della finestra, si perde solo il numero esatto, non l'allarme.
+ * - gli errori dello stesso giro si sommano in memoria e partono in UNA richiesta sola (una pipeline);
+ * - le richieste hanno un tetto: una piccola scorta (`ERRORI_SCORTA`) che si ricarica di una ogni
+ *   `ERRORI_FINESTRA_MS`. Finché c'è scorta il primo errore parte subito (l'allarme del sorvegliante
+ *   scatta già con uno); a scorta finita gli errori si sommano e partono tutti insieme, in una
+ *   richiesta, appena se ne ricarica una. Così in una tempesta le richieste restano poche e contate.
+ * Il numero si manda con comandi INCR ripetuti nella stessa pipeline (INCRBY solo per pacchetti grandi).
+ * Se la funzione si chiude prima di mandare il resto, si perde il numero esatto, non l'allarme.
  */
 const ERRORI_FINESTRA_MS = 10_000;
 const ERRORI_TEMPO_MASSIMO_MS = 3_000;
+const ERRORI_SCORTA = 5;
+const ERRORI_INCR_RIPETUTI_MAX = 20;
 const erroriDaMandare = new Map<string, number>();
-let finestraDegliErrori: ReturnType<typeof setTimeout> | null = null;
+let erroriScorta = ERRORI_SCORTA;
+let erroriUltimaRicarica = 0;
+let erroriMandoPronto = false;
+let erroriAttesa: ReturnType<typeof setTimeout> | null = null;
 
 function chiamaUpstash(u: { url: string; token: string }, comandi: unknown[][]): Promise<void> {
   const freno = new AbortController();
@@ -170,20 +177,43 @@ function mandaErroriSommati(): void {
     return;
   }
   const comandi: unknown[][] = [];
-  for (const [chiave, quanti] of erroriDaMandare) comandi.push(['INCRBY', chiave, quanti], ['EXPIRE', chiave, ERRORI_DURATA_SECONDI]);
+  for (const [chiave, quanti] of erroriDaMandare) {
+    if (quanti <= ERRORI_INCR_RIPETUTI_MAX) for (let i = 0; i < quanti; i++) comandi.push(['INCR', chiave]);
+    else comandi.push(['INCRBY', chiave, quanti]);
+    comandi.push(['EXPIRE', chiave, ERRORI_DURATA_SECONDI]);
+  }
   erroriDaMandare.clear();
   void chiamaUpstash(u, comandi);
 }
 
-/** A fine finestra: se nel frattempo sono arrivati errori partono insieme e si apre la finestra dopo. */
-function apriFinestraDegliErrori(): void {
-  finestraDegliErrori = setTimeout(() => {
-    finestraDegliErrori = null;
+/** Ricarica la scorta di una richiesta ogni finestra trascorsa (e non si fa ingannare da un orologio che torna indietro). */
+function ricaricaScorta(adesso: number): void {
+  const passato = adesso - erroriUltimaRicarica;
+  if (passato < 0) {
+    erroriUltimaRicarica = adesso;
+    return;
+  }
+  const nuove = Math.floor(passato / ERRORI_FINESTRA_MS);
+  if (nuove > 0) {
+    erroriScorta = Math.min(ERRORI_SCORTA, erroriScorta + nuove);
+    erroriUltimaRicarica += nuove * ERRORI_FINESTRA_MS;
+  }
+}
+
+/** Scorta finita: gli errori aspettano la prossima ricarica e poi partono insieme. */
+function aspettaLaRicarica(adesso: number): void {
+  if (erroriAttesa) return;
+  const attesa = Math.max(1, ERRORI_FINESTRA_MS - (adesso - erroriUltimaRicarica));
+  erroriAttesa = setTimeout(() => {
+    erroriAttesa = null;
     if (erroriDaMandare.size === 0) return;
-    apriFinestraDegliErrori();
+    const ora = Date.now();
+    ricaricaScorta(ora);
+    if (erroriScorta < 1) return aspettaLaRicarica(ora);
+    erroriScorta--;
     mandaErroriSommati();
-  }, ERRORI_FINESTRA_MS);
-  (finestraDegliErrori as { unref?: () => void }).unref?.();
+  }, attesa);
+  (erroriAttesa as { unref?: () => void }).unref?.();
 }
 
 /** Conta un errore del server. Nel browser e senza Upstash non fa niente; non lancia mai. */
@@ -193,9 +223,15 @@ function contaErroreDelSito(adesso: number = Date.now()): void {
   try {
     const chiave = chiaveErroriDellOra(adesso);
     erroriDaMandare.set(chiave, (erroriDaMandare.get(chiave) ?? 0) + 1);
-    if (finestraDegliErrori) return;
-    apriFinestraDegliErrori();
-    queueMicrotask(mandaErroriSommati);
+    if (erroriMandoPronto) return;
+    ricaricaScorta(adesso);
+    if (erroriScorta < 1) return aspettaLaRicarica(adesso);
+    erroriScorta--;
+    erroriMandoPronto = true;
+    queueMicrotask(() => {
+      erroriMandoPronto = false;
+      mandaErroriSommati();
+    });
   } catch {
     // Un conteggio perso non ferma il logger.
   }

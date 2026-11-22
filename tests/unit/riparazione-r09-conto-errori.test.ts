@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 describe('il conto degli errori del sito non fa una richiesta per errore', () => {
-  it('cinquanta errori in fila: una richiesta sola nella finestra, e il numero arriva intero', async () => {
+  it('cinquanta errori nello stesso giro fanno una richiesta sola; una tempesta lunga ne fa poche e il numero resta intero', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: Init) => {
       chiamate.push({ url: String(url), init });
       return new Response('[]', { status: 200 });
@@ -63,22 +63,26 @@ describe('il conto degli errori del sito non fa una richiesta per errore', () =>
 
     for (let i = 0; i < 50; i++) logger.error(new Error(`guasto ${i}`));
     await giraIMicrotask();
-    // Altri errori nella stessa finestra, dopo che la prima richiesta è già tornata.
-    for (let i = 0; i < 20; i++) logger.error(new Error(`ancora ${i}`));
-    await giraIMicrotask();
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(chiamate.length, `${chiamate.length} richieste a Upstash per 70 errori nella stessa finestra`).toBe(1);
+    expect(chiamate.length, `${chiamate.length} richieste a Upstash per 50 errori dello stesso giro`).toBe(1);
     expect(chiamate[0].url).toBe(`${UPSTASH}/pipeline`);
 
-    // A finestra chiusa partono tutti gli altri insieme, in una richiesta.
+    // Duecentocinquanta errori, ognuno in un giro suo, nella stessa finestra: non duecentocinquanta richieste.
+    for (let i = 0; i < 250; i++) {
+      logger.error(new Error(`ancora ${i}`));
+      await giraIMicrotask();
+    }
+    expect(chiamate.length, `${chiamate.length} richieste per 300 errori in una finestra`).toBeLessThanOrEqual(5);
+
+    // A finestra chiusa parte il resto, tutto insieme.
     await vi.advanceTimersByTimeAsync(FINESTRA_LARGA_MS);
-    expect(chiamate.length).toBe(2);
-    expect(erroriPortati(), 'il conto ha perso o raddoppiato degli errori').toBe(70);
+    expect(chiamate.length).toBeLessThanOrEqual(6);
+    expect(erroriPortati(), 'il conto ha perso o raddoppiato degli errori').toBe(300);
     expect(JSON.stringify(chiamate.map((c) => c.init.body))).not.toMatch(/guasto|ancora/);
 
     // Finestre quiete dopo: nessuna richiesta in più.
+    const fatte = chiamate.length;
     await vi.advanceTimersByTimeAsync(FINESTRA_LARGA_MS * 3);
-    expect(chiamate.length).toBe(2);
+    expect(chiamate.length).toBe(fatte);
   });
 
   it('dopo una finestra quieta il primo errore parte subito: l\'allarme non aspetta', async () => {
@@ -87,14 +91,19 @@ describe('il conto degli errori del sito non fa una richiesta per errore', () =>
       return new Response('[]', { status: 200 });
     }));
     const logger = await caricaLogger();
-    logger.error(new Error('uno'));
-    await giraIMicrotask();
-    expect(chiamate.length).toBe(1);
+    // Si consuma la scorta con una tempesta lunga.
+    for (let i = 0; i < 30; i++) {
+      logger.error(new Error('x'));
+      await giraIMicrotask();
+    }
+    const prima = chiamate.length;
     await vi.advanceTimersByTimeAsync(FINESTRA_LARGA_MS);
+    const dopoLaTempesta = chiamate.length;
     logger.error(new Error('due'));
     await giraIMicrotask();
-    expect(chiamate.length).toBe(2);
-    expect(erroriPortati()).toBe(2);
+    expect(chiamate.length, 'il primo errore dopo la quiete non è partito subito').toBe(dopoLaTempesta + 1);
+    expect(prima).toBeLessThan(30);
+    expect(erroriPortati()).toBe(31);
   });
 
   it('una chiamata a Upstash che non risponde si interrompe entro il tetto, e il logger non lancia', async () => {
