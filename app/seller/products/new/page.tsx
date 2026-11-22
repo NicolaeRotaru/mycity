@@ -226,13 +226,16 @@ function NewProductInner() {
    * diventa un «no» indovinato solo perché la risposta arriva dopo.
    */
   const chiaveDelModulo = fromId ?? '';
-  const [aperto, setAperto] = useState<{ per: string; offre: boolean | undefined; consegnaNonLetta: boolean; taglie: string; volta: number } | null>(null);
+  const [aperto, setAperto] = useState<{ per: string; offre: boolean | undefined; consegnaNonLetta: boolean; taglie: string; sorgente: string; volta: number } | null>(null);
   const giaAperto = aperto !== null && aperto.per === chiaveDelModulo ? aperto : null;
   const caricamento = (fromId && (loadingSource || loadingVariants || (sorgenteInLettura && !sorgenteRiletta) || (taglieInLettura && !taglieRilette))) || consegnaInLettura || categorieInLettura;
   const categorieMancanti = (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0;
   const moduloPronto = !caricamento && !categorieMancanti && !sorgenteNonArrivata && !taglieNonArrivate;
   const firmaDelleTaglie = fromId && Array.isArray(sourceVariants) ? JSON.stringify(sourceVariants.map((v) => [v.id ?? null, v.options, v.label])) : '';
-  if (!giaAperto && moduloPronto) setAperto({ per: chiaveDelModulo, offre: offersExpress, consegnaNonLetta, taglie: firmaDelleTaglie, volta: 0 });
+  // R14-012: come le taglie, anche la spunta del recesso e gli altri valori della sorgente il modulo li legge
+  // solo all'apertura: aperta sulla sorgente della memoria (rilettura caduta, senza rete), si confrontano.
+  const firmaDellaSorgente = fromId && source ? JSON.stringify({ ...initialValues, variants: undefined }) : '';
+  if (!giaAperto && moduloPronto) setAperto({ per: chiaveDelModulo, offre: offersExpress, consegnaNonLetta, taglie: firmaDelleTaglie, sorgente: firmaDellaSorgente, volta: 0 });
   const consegnaDelModulo = giaAperto ?? { offre: offersExpress, consegnaNonLetta };
   /**
    * LA COPIA APERTA SENZA RETE NON NASCE SULLE TAGLIE DELLA MEMORIA.
@@ -246,6 +249,7 @@ function NewProductInner() {
     || sorgenteNonLetta || variantiNonLette
   );
   const taglieDellaCopiaCambiate = !!fromId && !copiaNonRiletta && giaAperto !== null && giaAperto.taglie !== firmaDelleTaglie;
+  const sorgenteDellaCopiaCambiata = !!fromId && !copiaNonRiletta && giaAperto !== null && giaAperto.sorgente !== firmaDellaSorgente;
   const copiaFerma = copiaNonRiletta
     ? sorgenteFetchStatus === 'paused' || taglieFetchStatus === 'paused'
       ? 'Senza rete non posso salvare la copia: quello che hai scritto resta qui, salva quando torna la connessione.'
@@ -254,7 +258,9 @@ function NewProductInner() {
         : 'Sto rileggendo il prodotto da duplicare: salva fra un momento, quello che hai scritto resta qui.'
     : taglieDellaCopiaCambiate
       ? 'Le taglie del prodotto da duplicare sono cambiate da quando hai aperto la copia: riaprila con le taglie aggiornate prima di salvare.'
-      : null;
+      : sorgenteDellaCopiaCambiata
+        ? 'Il prodotto da duplicare è cambiato da quando hai aperto la copia (per esempio la spunta «escluso dal recesso»): riaprila con i dati aggiornati prima di salvare.'
+        : null;
 
   // Dopo un inserimento riuscito il modulo resta chiuso fino al cambio di pagina: `create.isPending`
   // torna falso prima che router.push porti via, e un clic in quel momento creava un secondo prodotto.
@@ -376,13 +382,13 @@ function NewProductInner() {
               Riprova
             </button>
           )}
-          {taglieDellaCopiaCambiate && giaAperto && (
+          {(taglieDellaCopiaCambiate || sorgenteDellaCopiaCambiata) && giaAperto && (
             <button
               type="button"
-              onClick={() => setAperto({ ...giaAperto, taglie: firmaDelleTaglie, volta: giaAperto.volta + 1 })}
+              onClick={() => setAperto({ ...giaAperto, taglie: firmaDelleTaglie, sorgente: firmaDellaSorgente, volta: giaAperto.volta + 1 })}
               className="mt-2 font-semibold text-amber-800 underline"
             >
-              Riapri la copia con le taglie aggiornate (perdi quello che non hai salvato)
+              {taglieDellaCopiaCambiate ? 'Riapri la copia con le taglie aggiornate' : 'Riapri la copia con i dati aggiornati'} (perdi quello che non hai salvato)
             </button>
           )}
         </div>
