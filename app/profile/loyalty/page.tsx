@@ -290,8 +290,8 @@ export default function LoyaltyPage() {
             { n: '+20 pt', t: 'a 7 giorni di visite consecutive' },
             { n: '+100 pt', t: 'a 30 giorni di fila' },
             { n: '+500 pt', t: 'a 100 giorni di fila' },
-            { n: '+50 pt', t: 'per ogni amico che si iscrive con il tuo codice di invito' },
-            { n: formatPrice(POINTS_REDEEM_VALUE_CENTS / 100), t: `puoi convertire ${POINTS_REDEEM_RATE} punti in un buono spendibile alla cassa` },
+            { n: '+50 pt', t: 'per ogni amico che si iscrive con il tuo codice' },
+            { n: formatPrice(POINTS_REDEEM_VALUE_CENTS / 100), t: `puoi convertire ${POINTS_REDEEM_RATE} punti in un buono spendibile in cassa` },
           ].map((r) => (
             <li key={r.t} className="flex items-baseline gap-3">
               <span className="text-primary-700 font-bold w-20 shrink-0">{r.n}</span>

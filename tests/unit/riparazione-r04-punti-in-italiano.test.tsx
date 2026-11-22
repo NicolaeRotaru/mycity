@@ -73,13 +73,14 @@ describe('la pagina dei punti, vista da chi la apre', () => {
     expect(testo).not.toMatch(INGLESE);
   });
 
-  it('la lista «Come accumuli punti», quando i punti si riaccendono, dice «cassa» e «codice di invito»', () => {
+  it('la lista «Come accumuli punti», quando i punti si riaccendono, dice «in cassa» e «il tuo codice»', () => {
     const src = readFileSync(join(__dirname, '..', '..', 'app', 'profile', 'loyalty', 'page.tsx'), 'utf8');
     const blocco = src.slice(src.indexOf('Come accumuli punti'));
     const frasi = Array.from(blocco.matchAll(/t: [`'](.*?)[`'] \}/g)).map((m) => m[1]);
     expect(frasi.length).toBeGreaterThanOrEqual(6);
     for (const f of frasi) expect(f, f).not.toMatch(INGLESE);
-    expect(frasi.join(' | ')).toMatch(/alla cassa/);
-    expect(frasi.join(' | ')).toMatch(/codice di invito/);
+    expect(frasi.join(' | ')).toMatch(/in cassa/);
+    expect(frasi.join(' | ')).toMatch(/con il tuo codice( \||$)/);
+    expect(frasi.join(' | ')).not.toMatch(/alla cassa|codice di invito/);
   });
 });
