@@ -5,6 +5,7 @@ import { fraseComeArriva } from '@/lib/promesse-pubbliche';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
+import { notFound } from 'next/navigation';
 
 export const revalidate = 600;
 
@@ -93,6 +94,17 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   };
 }
 
-export default function CategoryLayout({ children }: { children: React.ReactNode }) {
+/**
+ * R10-001 — Una categoria che non esiste risponde 404 davvero. La pagina è del browser: il suo
+ * «notFound()» arrivava dopo la risposta, che era già partita con «tutto ok». Qui, nel guscio e
+ * senza nessuna attesa sopra, la 404 parte prima. La riga è la stessa dei metadati (una lettura
+ * sola); un guasto non è «non trovato», e la pagina resta quella di prima col suo «Riprova».
+ */
+export default async function CategoryLayout(
+  { children, params }: { children: React.ReactNode; params: Promise<{ slug: string }> },
+) {
+  const { slug } = await params;
+  const cat = await fetchCategory(slug).catch(() => undefined);
+  if (cat === null) notFound();
   return children;
 }

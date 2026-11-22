@@ -4,7 +4,7 @@
  * Ogni blocco nomina la scheda che difende.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const leggi = (p: string) => readFileSync(p, 'utf8');
 
@@ -217,9 +217,12 @@ describe('scheda di un prodotto nelle griglie (components/ProductCard.tsx)', () 
 });
 
 describe('1550 — mentre la pagina carica non resta una schermata bianca', () => {
-  it('la scritta «Stiamo caricando…» si vede, non è solo per il lettore di schermo', () => {
-    const src = leggi('app/loading.tsx');
-    expect(src).toMatch(/<p className="mt-6 text-center text-sm text-ink-500">Stiamo caricando…<\/p>/);
-    expect(src).not.toMatch(/<span className="sr-only">Stiamo caricando…<\/span>/);
+  // 21/11/2026 (R10-001) — La schermata «Stiamo caricando…» era `app/loading.tsx`, e la sua attesa
+  // avvolgeva ogni pagina del sito: la risposta partiva con «tutto ok» prima che il guscio sapesse se
+  // il prodotto, il negozio o la categoria esistono, e nessuna pagina poteva più rispondere 404. Il
+  // file non c'è più: senza attesa della radice il browser tiene la pagina di prima finché arriva la
+  // nuova, quindi non resta nessuna schermata quasi bianca da coprire.
+  it('non c\'è un\'attesa della radice che lasci la pagina quasi bianca (né che spenga la 404)', () => {
+    expect(existsSync('app/loading.tsx'), 'l\'attesa della radice è tornata: la 404 risponde di nuovo «tutto ok»').toBe(false);
   });
 });

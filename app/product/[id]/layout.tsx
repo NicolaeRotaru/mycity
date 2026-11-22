@@ -5,8 +5,37 @@ import { sizedImage } from '@/lib/image-url';
 import { precaricoFoto } from '@/lib/preload-foto';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaProdotto } from '@/lib/queries/precarico';
+import { notFound } from 'next/navigation';
+import { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 export const revalidate = 300; // 5 min ISR sui metadata
+
+/**
+ * R10-001 — UN PRODOTTO CHE NON ESISTE RISPONDE 404, NON «TUTTO OK».
+ *
+ * La lettura pubblica vede solo i prodotti in vendita di un negozio approvato: «niente» vuol dire
+ * sia «non esiste» sia «esiste ma ora non si vende» (finito per oggi, in bozza, negozio sospeso).
+ * Il secondo caso deve restare la pagina «Prodotto non disponibile», che spiega cosa succede; solo
+ * il primo è una 404. Qui si chiede l'id e basta, senza le regole di lettura: vero solo se la riga
+ * non c'è proprio. Se non si riesce a chiederlo si risponde «non lo so» (false): la pagina resta
+ * quella di prima, mai una 404 per un guasto.
+ */
+async function prodottoInesistente(id: string): Promise<boolean> {
+  try {
+    const { data, error } = await getAdminSupabase().from('products').select('id').eq('id', id).maybeSingle();
+    // 22P02 = un id che non è nemmeno un UUID: un prodotto così non c'è.
+    if (error) {
+      if ((error as { code?: string }).code === '22P02') return true;
+      logger.warn('[scheda] non so se il prodotto esiste: niente 404', { id, code: (error as { code?: string }).code });
+      return false;
+    }
+    return !data;
+  } catch (e) {
+    logger.warn('[scheda] non so se il prodotto esiste: niente 404', { id, errore: e instanceof Error ? e.message : 'errore' });
+    return false;
+  }
+}
 
 // 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`: prima, con le variabili
 // mancanti, questa pagina rispondeva «prodotto non trovato» senza dire niente a nessuno.
@@ -86,6 +115,9 @@ export default async function ProductLayout(
   // sopra non conta. Il guscio gira a OGNI visita: ogni viaggio in piu' lo paga chi
   // apre la scheda.
   const [product, precarico] = await Promise.all([fetchProduct(params.id), precaricaProdotto(params.id)]);
+  // R10-001 — Qui, nel guscio e senza nessuna attesa sopra (niente app/loading.tsx), la 404 arriva
+  // prima che parta la risposta: Google e chi apre il link ricevono «non trovato» davvero.
+  if (!product && (await prodottoInesistente(params.id))) notFound();
 
   const schema = product && {
     '@context': 'https://schema.org',

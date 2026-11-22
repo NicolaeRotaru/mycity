@@ -4,6 +4,7 @@ import { fraseComeArriva } from '@/lib/promesse-pubbliche';
 import { descrizioneDelNegozio } from '@/lib/queries/metadati-vetrina';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaNegozio } from '@/lib/queries/precarico';
+import { notFound } from 'next/navigation';
 
 export const revalidate = 300;
 
@@ -93,7 +94,15 @@ export default async function StoreLayout(
   props: { children: React.ReactNode; params: Promise<{ id: string }> },
 ) {
   const params = await props.params;
+  // R10-001 — La stessa riga dei metadati (una lettura sola, vedi lettura-per-metadati.ts). Un
+  // guasto non è «non trovato»: si lascia la pagina com'era, e il suo «Riprova».
+  const lettura = fetchStore(params.id).catch(() => undefined);
   const precarico = await precaricaNegozio(params.id);
+  const store = await lettura;
+  // R10-001 — Un negozio che non c'è risponde 404 davvero: qui siamo nel guscio, e sopra non c'è più
+  // nessuna attesa (né app/loading.tsx né app/store/loading.tsx) che faccia partire la risposta con
+  // «tutto ok» prima di saperlo. La condizione è quella con cui la pagina dice «Negozio non trovato».
+  if (store === null || (store && (store.role !== 'seller' || !store.is_approved || !store.store_name))) notFound();
 
   return <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>;
 }
