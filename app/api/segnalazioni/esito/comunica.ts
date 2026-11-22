@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
@@ -77,18 +76,6 @@ async function venditoreDi(admin: ClientServizio, s: Segnalazione): Promise<stri
 }
 
 async function notifica(admin: ClientServizio, userId: string, title: string, body: string, link: string | null, s: Segnalazione): Promise<Canale> {
-  // R03-012 R03-013 — Stessa notifica già scritta (stesso destinatario, titolo, testo e link):
-  // non si riscrive. Così un secondo «comunica» o il tentativo dopo un errore parziale non
-  // rimanda i canali già arrivati. Se la lettura non riesce si scrive lo stesso: meglio un
-  // doppione che un esito mai comunicato.
-  try {
-    let q = admin.from('notifications').select('id').eq('user_id', userId).eq('title', title).eq('body', body).eq('category', 'system');
-    q = link === null ? q.is('link', null) : q.eq('link', link);
-    const { data: gia, error: errLettura }: Risposta<Array<{ id: string }>> = await q.limit(1);
-    if (!errLettura && Array.isArray(gia) && gia.length > 0) return 'inviata';
-  } catch {
-    // lettura non disponibile: si scrive
-  }
   const { error } = await admin.from('notifications').insert({
     user_id: userId, title, body, link, category: 'system',
   });
@@ -130,10 +117,6 @@ export async function comunicaEsito(admin: ClientServizio, id: string): Promise<
         `<p>${escapeHtml(COME_CONTESTARE)}</p>`,
       text: `Decisione: ${decisione}.\nMotivazione: ${motivazione}\n\n${COME_CONTESTARE}`,
       tipo: 'transazionale',
-      // R03-012 R03-013 — Una chiave per questa decisione e questa motivazione: la stessa email
-      // rimandata (secondo «comunica», tentativo dopo un errore parziale) la posta la riconosce e
-      // non la rispedisce; una decisione o una motivazione cambiate sono un'email nuova.
-      idempotencyKey: `esito-segnalazione:${s.id}:${createHash('sha256').update(`${s.stato}\n${motivazione}`).digest('hex').slice(0, 32)}`,
     });
     segnalanteEmail = r.ok ? 'inviata' : 'fallita';
     if (!r.ok) logger.error(new Error('[segnalazioni] email dell\'esito non partita'), { segnalazione: s.id });
