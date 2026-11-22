@@ -220,7 +220,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
                     <span className="w-7 h-7 rounded-full bg-olive-100 text-olive-700 flex items-center justify-center text-xs font-bold">
                       R
                     </span>
-                    <span className="text-xs text-olive-700 font-semibold uppercase tracking-wider">
+                    <span className="text-xs text-olive-700 font-semibold uppercase tracking-label">
                       Risposta del venditore
                     </span>
                     {/* 5/11/2026 — Qui c'era il bollino «Venditore verificato» per tutti: sul sito
@@ -235,7 +235,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
                 </div>
               ) : isSellerOfThis ? (
                 <div className="pl-9 border-l-2 border-accent-300 ml-3">
-                  <p className="text-xs font-semibold text-accent-700 mb-2 uppercase tracking-wider">Rispondi a questa domanda</p>
+                  <p className="text-xs font-semibold text-accent-700 mb-2 uppercase tracking-label">Rispondi a questa domanda</p>
                   <textarea
                     rows={2}
                     value={answerText[q.id] ?? ''}
