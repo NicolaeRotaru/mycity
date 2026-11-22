@@ -1,13 +1,13 @@
 {
   "sessione": "R12",
-  "aggiornato": "2026-11-22 02:00",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-22 02:55",
+  "finita": true,
+  "testa": "63e85883f438d3e959f029d18294a29548049976",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "d029523ae7bedddaaf37f496adb687c68c41ccf1",
+    "nota": "typecheck 0 errori, lint 0 errori (126 avvisi già presenti), vitest 1918 file passati e 1 saltato (11853 casi). Girato su d029523a, che dopo 63e85883 tocca solo il referto."
   },
   "voci": [
     {
@@ -28,7 +28,8 @@
           "file": "app/contact/page.tsx",
           "modifica": "riga 191: il wrapper <div className=\"flex justify-center\"> diventa <div className=\"flex justify-center max-w-full overflow-hidden\">, così un widget da 300 px non allarga la pagina"
         }
-      ]
+      ],
+      "verificato_da": "revisore 2 (sonnet, sola lettura): sulla base i pezzi nei miei file avevano già le correzioni (lavora-con-noi:128-145, returns:33-43, faq:262-272, Footer:142); conferma da lettura della base, la misura in Chromium non era conclusiva senza database"
     },
     {
       "id": "R12-006",
@@ -43,7 +44,7 @@
         "tests/unit/riparazione-r12-footer.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-footer.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -52,7 +53,9 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "La prima correzione (be7e78bd, che cambiava md:grid-cols-5 e due prove comuni) è stata tolta con il commit b99da806: le due prove comuni sono di nuovo come sulla base. Nuova correzione 87941fbf (con cf774c57, che sistema solo la lettura delle classi nella prova): md:grid-cols-5 resta, e la griglia del piede ha [&>div]:min-w-0 [&_h3]:break-words [&_a]:break-words. Col testo al 200% le voci lunghe vanno a capo dentro la colonna. Misurato in Chromium su /about al 200%: a 768, 820 e 900 px scrollWidth uguale alla larghezza, «Dichiarazione accessibilità» dentro il piede. Al 100% a 768 e 1440 px niente cambia.",
-      "nota": "Commit della voce: b99da806 (ripristino), 87941fbf (correzione), cf774c57 (prova). A 1024 px al 200% la pagina scorre ancora, ma non per il piede: il link sta dentro il piede, lo scorrimento viene dalla fascia che scorre in alto ed è uguale col piede nascosto (vedi nuovi_difetti_visti)."
+      "nota": "Commit della voce: b99da806 (ripristino), 87941fbf (correzione), cf774c57 (prova). A 1024 px al 200% la pagina scorre ancora, ma non per il piede: il link sta dentro il piede, lo scorrimento viene dalla fascia che scorre in alto ed è uguale col piede nascosto (vedi nuovi_difetti_visti).",
+      "prova_come": "la prova rende il componente (renderToStaticMarkup) e controlla cosa esce",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): varianti Tailwind 3.4 valide, prove comuni identiche alla base e verdi, in Chromium nessuno scorrimento del piede su /accessibility, /faq, /about, /returns a 280-1280 px al 200% e al 100% (lo scorrimento a 1024 al 200% viene dalla fascia animata)"
     },
     {
       "id": "R12-010",
@@ -66,7 +69,7 @@
         "tests/unit/riparazione-r12-footer.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-footer.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -74,7 +77,9 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0bb8e7ef^ --file components/Footer.tsx --prove tests/unit/riparazione-r12-footer.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Aggiunto un h2 sr-only «Informazioni sul sito» nel blocco del marchio, prima dei titoli h3 del piede: la gerarchia non salta più, l'aspetto non cambia."
+      "cosa_ho_fatto": "Aggiunto un h2 sr-only «Informazioni sul sito» nel blocco del marchio, prima dei titoli h3 del piede: la gerarchia non salta più, l'aspetto non cambia.",
+      "prova_come": "la prova rende il componente (renderToStaticMarkup) e controlla cosa esce",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): h2 sr-only primo titolo del piede, gli altri restano h3, aspetto invariato, prova verde"
     },
     {
       "id": "R12-001",
@@ -88,7 +93,7 @@
         "tests/unit/riparazione-r12-pagine-200.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -96,7 +101,9 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50f5b47e^ --file app/about/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nel blocco «Come siamo arrivati qui» la colonna ha min-w-0 e il titolo break-words hyphens-auto, come il blocco sopra. Misurato in Chrome a 280 px al 200%: prima la colonna usciva dalla sezione, dopo no."
+      "cosa_ho_fatto": "Nel blocco «Come siamo arrivati qui» la colonna ha min-w-0 e il titolo break-words hyphens-auto, come il blocco sopra. Misurato in Chrome a 280 px al 200%: prima la colonna usciva dalla sezione, dopo no.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): /about a 280 px al 200% senza scorrimento laterale in Chromium, prova verde"
     },
     {
       "id": "R12-002",
@@ -110,7 +117,7 @@
         "tests/unit/riparazione-r12-pagine-200.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -125,7 +132,9 @@
           "file": "components/CollectionHeader.tsx",
           "modifica": "riga 80: aggiungere break-words hyphens-auto alle classi dell'h1 (className=\"mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px] break-words hyphens-auto\"), come negli h1 di resi e lavora con noi"
         }
-      ]
+      ],
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): parziale confermato; faq, resi, lavora con noi non scorrono a 280 al 200%; /stores scorre ancora (381 px) per l h1 di CollectionHeader, fuori dai nostri file"
     },
     {
       "id": "R12-004",
@@ -139,7 +148,7 @@
         "tests/unit/riparazione-r12-pagine-200.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -147,7 +156,9 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6a87c607^ --file app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sotto i 300 px la cornice delle posizioni e il link «Candidati» passano da px-6 a px-3 e il link può andare a capo: a 280 px al 200% la riga guadagna 48 px utili, il titolo sta in 2 righe e «Candidati» in una. Sopra i 300 px nulla cambia."
+      "cosa_ho_fatto": "Sotto i 300 px la cornice delle posizioni e il link «Candidati» passano da px-6 a px-3 e il link può andare a capo: a 280 px al 200% la riga guadagna 48 px utili, il titolo sta in 2 righe e «Candidati» in una. Sopra i 300 px nulla cambia.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): varianti max-[300px] valide in Tailwind 3.4, /lavora-con-noi senza scorrimento a 280 al 200%, prova verde"
     },
     {
       "id": "R12-011",
@@ -156,7 +167,9 @@
       "file_toccati": [],
       "prova": "app/faq/page.tsx:231 className=\"scroll-mt-24 md:scroll-mt-0\" e app/lavora-con-noi/page.tsx:181 id=\"posizioni\" className=\"py-14 scroll-mt-24 md:scroll-mt-0\": da md le due ancore azzerano scroll-mt dove app/globals.css:200 dà scroll-padding-top; c'è già tests/unit/riparazione-r02-ancore-faq.test.ts",
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Niente: già a posto sulla base."
+      "cosa_ho_fatto": "Niente: già a posto sulla base.",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): sulla base faq/page.tsx:231 e lavora-con-noi/page.tsx:181 hanno già scroll-mt-24 md:scroll-mt-0, globals.css:200-205 ha lo scroll-padding da md",
+      "nota": "Il registro nomina solo app/faq/page.tsx:229: le «due ancore» sono lette come faq e lavora con noi. Fuori dai miei file resta un ancora che somma ancora lo scroll-mt: components/seller/DatiPerIBonifici.tsx:65 (vedi nuovi_difetti_visti)."
     },
     {
       "id": "R12-012",
@@ -198,7 +211,9 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c3162108^ --file app/stores/page.tsx --prove tests/unit/riparazione-r12-negozi-categorie.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Quando cade la lettura delle categorie o quella delle categorie per negozio, nel riquadro dei filtri compare un avviso breve (role=status): «Non siamo riusciti a leggere i settori dei negozi: i filtri per settore possono mancare.» Prove: errore categorie → avviso e niente filtri; errore categorie per negozio → avviso; tutto letto → nessun avviso."
+      "cosa_ho_fatto": "Quando cade la lettura delle categorie o quella delle categorie per negozio, nel riquadro dei filtri compare un avviso breve (role=status): «Non siamo riusciti a leggere i settori dei negozi: i filtri per settore possono mancare.» Prove: errore categorie → avviso e niente filtri; errore categorie per negozio → avviso; tutto letto → nessun avviso.",
+      "verificato_da": "revisore 3 (sonnet, sola lettura): 12 file di prove verdi, prova comune identica alla base, avviso solo con .error valorizzato, negozi visibili; nota minore: data null senza error o un throw non mostrano l avviso (il throw manda la pagina nello stato d errore come alla base)",
+      "prova_come": "la prova rende il componente (renderToStaticMarkup) e controlla cosa esce"
     },
     {
       "id": "R12-009",
@@ -213,7 +228,7 @@
         "tests/unit/riparazione-r12-nome-lungo.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-nome-lungo.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -222,7 +237,9 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Misurato in Chromium a 320 px con un nome di 70 lettere senza spazi: pagina larga 590 px su home ed elenco, 690 su «vicino a te». La causa era il titolo inline-flex senza tetto di larghezza: max-w-full sui due h3, ora 320 px su tutte e tre le pagine. StoreShowcase, stores e near non vanno cambiati.",
-      "nota": "Il tetto dei caratteri c'era già: app/api/seller/apply/route.ts:86 ha storeName .max(80, …) anche alla base, coperto da tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx. La rotta non è stata toccata."
+      "nota": "Il tetto dei caratteri c'era già: app/api/seller/apply/route.ts:86 ha storeName .max(80, …) anche alla base, coperto da tests/unit/riparazione-r28-nome-negozio-troppo-lungo.test.tsx. La rotta non è stata toccata.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 2 (sonnet, sola lettura): schede e righe col CSS compilato, nome di 80 lettere senza spazi, 280-768 px al 100% e 200%: sempre dentro coi puntini; senza la correzione sfora la riga di «Vicino a te»; tetto .max(80) confermato in app/api/seller/apply/route.ts:86; app/stores/page.tsx:379 del registro punta ai filtri, la griglia regge senza modifiche"
     },
     {
       "id": "R12-003",
@@ -238,7 +255,7 @@
         "tests/unit/riparazione-r12-barre.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-barre.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -247,7 +264,9 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Misurato in Chromium: col testo al 200% la barra è alta 75,5 px e il margine restava 58. --tabbar-altezza-vera ora somma le stesse unità della barra (calc(1px + 2 * 0.5rem + 22px + 0.125rem + 11px * 1.5)): 57,5 col testo normale, 75,5 al 200%. In MobileTabBar.tsx solo un commento che rimanda alla somma.",
-      "nota": "Prova esistente modificata, dichiarato: tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts legge globals.css e MobileTabBar.tsx per nome, e ora calcola la dichiarazione a 16 px invece di cercare «NNpx», con la stessa tolleranza ±1 px (guardia-ramo non la segnala)."
+      "nota": "Prova esistente modificata, dichiarato: tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts legge globals.css e MobileTabBar.tsx per nome, e ora calcola la dichiarazione a 16 px invece di cercare «NNpx», con la stessa tolleranza ±1 px (guardia-ramo non la segnala).",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 2 (sonnet, sola lettura): in Chromium a 280/320/375/414 barra e margine 57,5 px al 100% e 75,5 al 200%; safe-area ancora sommata (globals.css:350); la prova r04 non è indebolita (stessa tolleranza, cambia solo il parser del calc)"
     },
     {
       "id": "R12-007",
@@ -261,7 +280,7 @@
         "tests/unit/riparazione-r12-testo-grande.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -269,7 +288,9 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83fe9903^ --file components/home/HowItWorks.tsx --prove tests/unit/riparazione-r12-testo-grande.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Misurato in Chromium a 320 px col testo al 200%: pagina larga 367 px per i titoli h3 dei tre passi accanto al cerchio. La riga ora ha flex-wrap e l'h3 min-w-0 grow basis-24 break-words: col testo normale resta accanto al cerchio, al 200% va sotto e la pagina torna a 320 px."
+      "cosa_ho_fatto": "Misurato in Chromium a 320 px col testo al 200%: pagina larga 367 px per i titoli h3 dei tre passi accanto al cerchio. La riga ora ha flex-wrap e l'h3 min-w-0 grow basis-24 break-words: col testo normale resta accanto al cerchio, al 200% va sotto e la pagina torna a 320 px.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 2 (sonnet, sola lettura): markup di HowItWorks col CSS compilato a 280/320/375/768 al 100% e al 200%, scrollWidth uguale allo schermo; nota: al 200% il titolo va sempre sotto il cerchio (compromesso, non overflow)"
     },
     {
       "id": "R12-008",
@@ -283,7 +304,7 @@
         "tests/unit/riparazione-r12-testo-grande.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -292,7 +313,9 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Misurato in Chromium a 280 e 320 px al 200%: il contenitore della pillola era largo 0 e la pillola finiva sopra il logo. La riga mobile ora ha flex-wrap e il contenitore flex-1 basis-auto: la pillola va a capo intera. Col testo normale da 280 a 767 px resta su una riga come prima.",
-      "nota": "A 280 px al 200% la testata diventa di tre righe (logo / pillola / Accedi): più alta, ma tutto si vede."
+      "nota": "A 280 px al 200% la testata diventa di tre righe (logo / pillola / Accedi): più alta, ma tutto si vede.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 2 (sonnet, sola lettura): su /stores vera, al 100% da 280 a 767 px una riga sola; al 200% la pillola va a capo e tiene 232 px; nota: a 280 px al 100% la riga riempie 256 px su 256, margine zero ma niente overflow"
     },
     {
       "id": "R12-014",
@@ -307,7 +330,7 @@
         "tests/unit/riparazione-r12-scala-testo.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r12-scala-testo.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -316,8 +339,10 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "ProductCard era già sulla scala alla base (resta solo un text-[11px] in un commento, riga 239). Portate sulla scala le otto misure a mano delle schede negozio (11→text-xs, 13→text-sm, 15→text-base, come già fatto per ProductCard). La prova controlla ProductCard, StorePreviewCard e StoreListRow senza commenti.",
-      "cosa_resta": "232 occorrenze di text-[N px|rem] in 79 file non miei (il conto prende anche qualche commento). In MobileTabBar.tsx restano apposta text-[11px] dell'etichetta e text-[9px] del numerino: la scala non ha 9, 11, 13 e 15 px, e portarli in rem cambia l'altezza della barra (entra nella somma del margine in fondo). Serve una scelta di disegno.",
-      "domanda": "La scala non ha i passi 9, 11, 13 e 15 px: si sale sempre al passo sopra anche per l'etichetta della barra a schede, che col testo al 200% diventerebbe più alta e più larga?"
+      "cosa_resta": "237 occorrenze di text-[N px|rem] in 82 file (grep -rEo \"text-\\[[0-9.]+(px|rem)\\]\" app components): 217 in 76 file non miei; nei miei file ne restano 20: app/about/page.tsx 8, app/lavora-con-noi/page.tsx 6, app/returns/page.tsx 1, app/globals.css 2, components/MobileTabBar.tsx 2 (text-[11px] dell etichetta e text-[9px] del numerino, lasciate apposta: portarle in rem cambia l altezza della barra), components/ProductCard.tsx 1 in un commento. La scala non ha 9, 11, 13 e 15 px: per le pagine e la barra serve una scelta di disegno.",
+      "domanda": "La scala non ha i passi 9, 11, 13 e 15 px: si sale sempre al passo sopra anche per l'etichetta della barra a schede, che col testo al 200% diventerebbe più alta e più larga?",
+      "verificato_da": "revisore 3 (sonnet, sola lettura): passi della scala confermati (2xs=10, xs=12, sm=14, base=16), la prova cade se si rimette una misura a mano; conto corretto da 232/79 a 217/76 non miei",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi"
     }
   ],
   "nuovi_difetti_visti": [
@@ -369,13 +394,23 @@
       "severita": "minore",
       "file": "(la fascia con animate-marquee, file da individuare)",
       "descrizione": "Su /about e /contact a 1024 px al 200% scrollWidth 1256. Resta uguale col piede nascosto: lo scorrimento viene dalla fascia animate-marquee e da altro contenuto fuori dal piede. Misurato in Chromium."
+    },
+    {
+      "titolo": "Nell area venditore l ancora dei dati per i bonifici somma ancora lo scroll-mt allo scroll-padding da md in su",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/DatiPerIBonifici.tsx:65",
+      "descrizione": "form id=\"bonifici\" con scroll-mt-24 senza md:scroll-mt-0: da md in su, dove globals.css dà già scroll-padding-top, il salto all ancora si ferma più in basso. Stessa correzione di faq e lavora con noi (aggiungere md:scroll-mt-0)."
     }
   ],
   "domande_per_nicola": [
     "Scala del testo: mancano i passi 9, 11, 13 e 15 px. Si sale sempre al passo sopra anche per l etichetta della barra a schede del telefono, che col testo al 200% diventerebbe più alta e più larga?"
   ],
   "conto": {
-    "agenti": 3,
-    "nota": "lotto A (sonnet), lotto B (grande, ripreso per togliere la lettura a finestre), correzione del piede (sonnet)"
-  }
+    "agenti": 6,
+    "subagenti": 6,
+    "costo_usd": 18.69,
+    "nota": "lotto A (sonnet), lotto B (grande, ripreso una volta per togliere la lettura a finestre senza aprire un subagente nuovo), correzione del piede (sonnet), 3 revisori in sola lettura (sonnet). Costo da get_session prima della consegna."
+  },
+  "costo_usd": 18.69
 }
