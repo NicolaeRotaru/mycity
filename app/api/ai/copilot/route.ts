@@ -119,6 +119,10 @@ function idDelFiltro(filtro: unknown, products: ProductRow[], categories: Catego
   const { stato, categoria } = filtro as { stato?: unknown; categoria?: unknown };
   const conStato = typeof stato === 'string' && STATI_FILTRO.has(stato) ? stato : null;
   const nomeCat = typeof categoria === 'string' ? categoria.trim().toLowerCase() : '';
+  // Giro di correzione (22/11) — Un criterio scritto ma non valido (uno stato fuori
+  // elenco, una categoria vuota o non testo) non si salta: saltarlo allargava il
+  // filtro («Available» + Abbigliamento sceglieva tutta la categoria). Non sceglie niente.
+  if ((stato !== undefined && !conStato) || (categoria !== undefined && !nomeCat)) return [];
   if (!conStato && !nomeCat) return [];
   let categorieOk: Set<string> | null = null;
   if (nomeCat) {
@@ -299,11 +303,17 @@ ${list}`;
 
     // Valida: solo product_id realmente del venditore e patch non vuoti.
     const owned = new Set(products.map((p) => p.id));
-    const singole = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
+    const singoleValide = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
       .filter((c): c is { product_id: string; patch: AiProductPatch } =>
         !!c && typeof c.product_id === 'string' && owned.has(c.product_id) &&
-        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0)
-      .slice(0, MAX_VOCI_SINGOLE);
+        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0);
+    const singole = singoleValide.slice(0, MAX_VOCI_SINGOLE);
+    // Giro di correzione (22/11) — Il tetto delle voci singole non taglia in silenzio:
+    // il riepilogo del modello parla di tutte, il negoziante deve sapere quante sono entrate.
+    const avvisoVociTagliate =
+      singoleValide.length > MAX_VOCI_SINGOLE
+        ? `Ne ho preparate ${MAX_VOCI_SINGOLE} su ${singoleValide.length}: per le altre chiedimi con un filtro.`
+        : '';
     // R04-007 — La regola si espande qui, sui dati veri; una voce singola sullo
     // stesso prodotto si aggiunge sopra (vince lei sui campi che tocca).
     // R03-005 — Anche la regola, con duecento id da 20-25 token l'uno, non entrava nel tetto di
@@ -327,7 +337,7 @@ ${list}`;
 
     const reply = typeof toolInput?.reply === 'string' ? toolInput.reply : '';
     return NextResponse.json({
-      reply: avvisoCatalogoTagliato ? `${reply}${reply ? ' ' : ''}${avvisoCatalogoTagliato}` : reply,
+      reply: [reply, avvisoVociTagliate, avvisoCatalogoTagliato].filter(Boolean).join(' '),
       changes,
     });
   } catch (err) {

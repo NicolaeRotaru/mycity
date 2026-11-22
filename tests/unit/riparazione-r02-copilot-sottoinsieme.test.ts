@@ -4,6 +4,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * Il Copilot su un sottoinsieme grande («tutti i disponibili», 150 su 200) scriveva gli id uno per
  * uno e il negoziante leggeva «Riprova». Ora il modello dice il criterio (stato e/o categoria) e gli
  * id li sceglie il server; le voci singole oltre le 40 il server le taglia.
+ * Giro di correzione (22/11): un criterio scritto ma non valido non sceglie niente (prima si
+ * saltava e il filtro si allargava), e quando il tetto delle 40 taglia la risposta lo dice.
  */
 
 const FAKE_USER = { id: 'seller-1', email: 's@x.com' };
@@ -75,7 +77,7 @@ describe('un sottoinsieme grande del catalogo si dice con un criterio', () => {
     createMock.mockResolvedValue(rispostaDelModello(input));
     const res = await POST(makeReq({ instruction: 'x' }));
     expect(res.status).toBe(200);
-    return (await res.json()) as { changes: { product_id: string; patch: { price?: number } }[] };
+    return (await res.json()) as { reply: string; changes: { product_id: string; patch: { price?: number } }[] };
   }
 
   it('«tutti i disponibili»: 150 modifiche, gli id li mette il server', async () => {
@@ -96,6 +98,15 @@ describe('un sottoinsieme grande del catalogo si dice con un criterio', () => {
     expect((await chiedi({ reply: 'ok', regola: { filtro: {}, prezzo_percentuale: -10 } })).changes).toHaveLength(0);
   });
 
+  it('un criterio scritto ma non valido non allarga il filtro: non sceglie niente', async () => {
+    // «Available» non e' uno stato: prima si saltava e restava tutta l'abbigliamento (66 prodotti).
+    expect((await chiedi({ reply: 'ok', regola: { filtro: { stato: 'Available', categoria: 'Abbigliamento' }, prezzo_percentuale: -10 } })).changes).toHaveLength(0);
+    // Una categoria vuota o non testo accanto a uno stato valido: prima restavano tutti i 150 disponibili.
+    expect((await chiedi({ reply: 'ok', regola: { filtro: { stato: 'available', categoria: '' }, prezzo_percentuale: -10 } })).changes).toHaveLength(0);
+    expect((await chiedi({ reply: 'ok', regola: { filtro: { stato: 'available', categoria: 7 }, prezzo_percentuale: -10 } })).changes).toHaveLength(0);
+    expect((await chiedi({ reply: 'ok', regola: { filtro: { stato: 'available', categoria: '   ' }, prezzo_percentuale: -10 } })).changes).toHaveLength(0);
+  });
+
   it('lo strumento offre il criterio e il prompt lo spiega', async () => {
     createMock.mockResolvedValue(rispostaDelModello({ reply: 'ok' }));
     await POST(makeReq({ instruction: 'x' }));
@@ -112,5 +123,20 @@ describe('un sottoinsieme grande del catalogo si dice con un criterio', () => {
     const changes = PRODUCTS.slice(0, 100).map((p) => ({ product_id: p.id, patch: { stock: 3 } }));
     const json = await chiedi({ reply: 'ok', changes });
     expect(json.changes).toHaveLength(40);
+  });
+
+  it('quando il tetto taglia, la risposta lo dice: 40 su 55, e per le altre un filtro', async () => {
+    const changes = PRODUCTS.slice(0, 55).map((p) => ({ product_id: p.id, patch: { stock: 3 } }));
+    const json = await chiedi({ reply: 'Ho preparato 55 modifiche.', changes });
+    expect(json.changes).toHaveLength(40);
+    expect(json.reply).toContain('Ho preparato 55 modifiche.');
+    expect(json.reply).toContain('Ne ho preparate 40 su 55: per le altre chiedimi con un filtro.');
+  });
+
+  it('sotto il tetto la risposta resta quella del modello', async () => {
+    const changes = PRODUCTS.slice(0, 30).map((p) => ({ product_id: p.id, patch: { stock: 3 } }));
+    const json = await chiedi({ reply: 'Ho preparato 30 modifiche.', changes });
+    expect(json.changes).toHaveLength(30);
+    expect(json.reply).toBe('Ho preparato 30 modifiche.');
   });
 });
