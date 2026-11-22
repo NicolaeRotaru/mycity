@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { CHIAVE_BOZZA_NUOVO_PRODOTTO, togliBozzaSeNonDi } from '@/lib/hooks/useFormAutosave';
 import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
 
 /**
@@ -15,6 +16,10 @@ import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
  *   aspettano il rientro.
  * - Quando entra qualcuno si tolgono quelle scritte da un altro.
  * Le altre chiavi della scheda non si toccano.
+ *
+ * La bozza del nuovo prodotto (`CHIAVE_BOZZA_NUOVO_PRODOTTO`, nella memoria del browser) segue la
+ * stessa regola: all'uscita voluta si toglie, quando entra qualcuno si toglie se l'ha scritta un
+ * altro. All'uscita non chiesta resta per il rientro di chi l'ha scritta.
  */
 const PREFISSO_BOZZA = 'mycity:bozza-reclamo:';
 type Bozza = { utente?: unknown; perIlRientro?: unknown } | null;
@@ -142,8 +147,10 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         uscitaVoluta = false;
         if (voluta) contaUscitaVoluta();
         togliBozze((b) => voluta || b?.perIlRientro !== true);
+        if (voluta) togliBozzaSeNonDi(CHIAVE_BOZZA_NUOVO_PRODOTTO, null);
       } else if (chi) {
         togliBozze((b) => b?.utente !== chi);
+        togliBozzaSeNonDi(CHIAVE_BOZZA_NUOVO_PRODOTTO, chi);
       }
       if (chi) {
         ultimo = chi;

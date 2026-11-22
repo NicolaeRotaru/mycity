@@ -440,10 +440,11 @@ describe('«Modifica prodotto»: torna la rete, il modulo resta', () => {
 
 describe('«Nuovo prodotto» e «Duplica»: torna la rete, il modulo resta', () => {
   it('Nuovo aperto senza rete: tornata la rete il testo resta, e la consegna non letta non si scrive', async () => {
-    localStorage.setItem('mc_new_product_draft', JSON.stringify({
+    // La bozza nel browser porta l'id di chi l'ha scritta (lib/hooks/useFormAutosave.ts).
+    localStorage.setItem('mc_new_product_draft', JSON.stringify({ autore: 'negozio-1', bozza: {
       name: 'Vaso in ceramica', description: 'Vaso in ceramica smaltata a mano, alto venti centimetri.',
       price: 18, stock: 2, category_id: 'c-casa', imageUrls: ['https://x/vaso.jpg'], attributes: {}, tags: [], unit: 'pezzo',
-    }));
+    } }));
     onlineManager.setOnline(false);
     const { radice } = await apriNuovo((qc) => qc.setQueryData(queryKeys.categories.form, CATEGORIE));
     const campo = campoNome(radice);
