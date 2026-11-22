@@ -27,7 +27,14 @@
 #   - STORAGE_SYNC_DEST     remote rclone di destinazione, es. "b2:mycity-foto"
 #   - STORAGE_SYNC_BUCKETS  quali secchi copiare (default: products stories reviews)
 #   - STORAGE_SYNC_STORICO  dove finiscono i file spariti dall'origine
-#                           (default: "<STORAGE_SYNC_DEST>-storico"). Vedi in
+#                           (default: "<STORAGE_SYNC_DEST>-storico"; con una
+#                           cartella dentro il secchio il «-storico» va sul
+#                           secchio: "b2:mycity-foto/copie" diventa
+#                           "b2:mycity-foto-storico/copie"; un percorso
+#                           assoluto resta com'e': "nas:/mnt/x" diventa
+#                           "nas:/mnt/x-storico"; un remote alla radice,
+#                           "cifrata:", non ha default e la notte e' rossa
+#                           finche' non la si imposta). Vedi in
 #                           fondo, R180 secondo giro: senza, la copia e' uno
 #                           specchio e ripete la cancellazione invece di
 #                           proteggerla.
@@ -312,17 +319,20 @@ while [[ "$DEST_PULITA" == */ && ${#DEST_PULITA} -gt 1 ]]; do
 done
 # Destinazione con una cartella dentro il secchio ("b2:mycity-foto/copie"): il «-storico» va
 # attaccato al nome del SECCHIO ("b2:mycity-foto-storico/copie"), non alla cartella, altrimenti lo
-# storico finisce nello stesso secchio della copia. Se non c'e' un secchio da cui ricavarlo
-# (remote usato alla radice, "cifrata:" o "cifrata:/x"), il predefinito non esiste: la notte e' rossa
-# finche' non si imposta STORAGE_SYNC_STORICO.
+# storico finisce nello stesso secchio della copia. Un percorso assoluto dopo i due punti
+# ("nas:/mnt/x", un remote senza secchi) non ha un secchio: resta come prima, "<destinazione>-storico"
+# con la barra iniziale ("nas:/mnt/x-storico"). Se non c'e' niente dopo i due punti (remote usato
+# alla radice, "cifrata:" o "cifrata:/"), il predefinito non esiste: la notte e' rossa finche' non
+# si imposta STORAGE_SYNC_STORICO.
 STORICO_SENZA_SECCHIO=""
 STORICO_PREDEFINITO="${DEST_PULITA}-storico"
 if [[ "$DEST_PULITA" == *:* ]]; then
   _remote="${DEST_PULITA%%:*}"
   _resto="${DEST_PULITA#*:}"
-  _resto="${_resto#/}"
   _secchio="${_resto%%/*}"
-  if [[ -z "$_secchio" ]]; then
+  if [[ "$_resto" == /* ]]; then
+    : # percorso assoluto: resta "<destinazione>-storico"
+  elif [[ -z "$_secchio" ]]; then
     STORICO_SENZA_SECCHIO=1
   elif [[ "$_resto" == */* ]]; then
     STORICO_PREDEFINITO="${_remote}:${_secchio}-storico/${_resto#*/}"

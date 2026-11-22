@@ -36,6 +36,19 @@ describe('R09 · lo storico predefinito sta in un secchio diverso dalla copia', 
     expect(r.out).not.toContain('copiate e riaperte')
   })
 
+  it('percorso assoluto senza secchi ("nas:/mnt/x"): come prima, "nas:/mnt/x-storico", con la barra iniziale', () => {
+    const m = mondoFinto()
+    m.file('src:products', 'a.jpg')
+    m.file('nas:mnt/x/products', 'a.jpg')
+    m.file('nas:mnt/x/products', 'cancellata.jpg')
+    const r = m.lancia({ STORAGE_SYNC_SOURCE: 'src:', STORAGE_SYNC_DEST: 'nas:/mnt/x', STORAGE_SYNC_BUCKETS: 'products' })
+    expect(r.uscita).toBe(0)
+    expect(r.out).toContain('storico in nas:/mnt/x-storico;')
+    expect(r.out).not.toContain('nas:mnt-storico')
+    expect(elenco(join(m.radice, 'nas', 'mnt', 'x-storico'))).toEqual(['T1/products/cancellata.jpg'])
+    expect(existsSync(join(m.radice, 'nas', 'mnt-storico'))).toBe(false)
+  })
+
   it('destinazione semplice "b2:mycity-foto": come prima, "b2:mycity-foto-storico"', () => {
     const m = mondoFinto()
     m.file('src:products', 'a.jpg')
