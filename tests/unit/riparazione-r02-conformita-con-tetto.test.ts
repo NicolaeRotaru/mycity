@@ -83,7 +83,7 @@ describe('i controlli di conformita del copilot in blocco hanno un tetto', () =>
     stato.massimo = 0;
   });
 
-  it('con 60 nomi cambiati non ne partono piu di 8 insieme, e ogni verdetto va al suo prodotto', async () => {
+  it('con 60 nomi cambiati ne partono al massimo 5 insieme, e ogni verdetto va al suo prodotto', async () => {
     const changes = PRODOTTI.map((p, i) => ({ productId: p.id, patch: { name: `Nuovo ${i}` } }));
     const res = await POST(
       new Request('http://localhost/api/ai/catalog-apply-bulk', {
@@ -96,8 +96,10 @@ describe('i controlli di conformita del copilot in blocco hanno un tetto', () =>
       applied: number;
       results: { productId: string; ok: boolean; motivo?: string }[];
     };
-    expect(stato.massimo, 'prima partivano tutti e 60 insieme').toBeLessThanOrEqual(8);
-    expect(stato.massimo).toBeGreaterThan(1);
+    // Giro di correzione (22/11): il tetto e' 5, non «al massimo 8». Con 60 voci il gruppo
+    // si riempie: in volo ce ne sono esattamente 5, ne' 6 ne' 8 (prima partivano tutti e 60).
+    expect(changes.length).toBeGreaterThan(5);
+    expect(stato.massimo, 'prima partivano tutti e 60 insieme').toBe(5);
     expect(json.applied).toBe(58);
     expect(scritture).not.toContain('p7');
     expect(scritture).not.toContain('p9');
