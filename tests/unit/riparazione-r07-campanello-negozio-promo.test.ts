@@ -19,6 +19,8 @@ type Opzioni = { queryKey: unknown[]; queryFn?: () => Promise<unknown> };
 const mondo = vi.hoisted(() => ({
   tabelle: {} as Record<string, Array<Record<string, unknown>>>,
   letture: [] as Array<{ queryKey: unknown[]; queryFn?: () => Promise<unknown> }>,
+  /** Tabelle la cui lettura di una riga sola (`maybeSingle`) risponde con un errore. */
+  rotte: [] as string[],
 }));
 
 /** Un pezzetto di PostgREST: select, eq, neq, in, maybeSingle e il conteggio «head». */
@@ -31,7 +33,10 @@ function tabella(nome: string) {
     eq: (c: string, v: unknown) => { filtri.push((r) => r[c] === v); return q; },
     neq: (c: string, v: unknown) => { filtri.push((r) => r[c] !== v); return q; },
     in: (c: string, v: unknown[]) => { filtri.push((r) => v.includes(r[c])); return q; },
-    maybeSingle: async () => ({ data: righe()[0] ?? null, error: null }),
+    maybeSingle: async () =>
+      mondo.rotte.includes(nome)
+        ? { data: null, error: { message: 'lettura non riuscita' } }
+        : { data: righe()[0] ?? null, error: null },
     then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) =>
       Promise.resolve(soloConto ? { count: righe().length, error: null } : { data: righe(), error: null }).then(ok, ko),
   };
@@ -65,6 +70,7 @@ afterEach(() => {
   smonta = null;
   mondo.letture = [];
   mondo.tabelle = {};
+  mondo.rotte = [];
 });
 
 const NOTIFICHE: Riga[] = [
@@ -100,5 +106,17 @@ describe('R07-010 · il campanello del negozio non conta le promozioni di chi le
 
   it('promozioni accese: la promozione non letta si conta', async () => {
     expect(await numeroDelCampanello(true)).toBe(3);
+  });
+
+  // Se la preferenza non si legge, non si sa se le promozioni sono accese: il pallino resta
+  // acceso per l ordine e l avviso di servizio non letti, e la promozione non si conta.
+  it('errore nella lettura della preferenza (promozioni spente nel profilo): il conto c è, senza le promozioni', async () => {
+    mondo.rotte = ['profiles'];
+    expect(await numeroDelCampanello(false)).toBe(2);
+  });
+
+  it('errore nella lettura della preferenza (promozioni accese nel profilo): il conto c è, senza le promozioni', async () => {
+    mondo.rotte = ['profiles'];
+    expect(await numeroDelCampanello(true)).toBe(2);
   });
 });
