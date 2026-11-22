@@ -103,10 +103,10 @@ describe('R10-007 — il conferma dice di cosa si tratta', () => {
     a.href = '/seller/orders';
     document.body.appendChild(a);
     const ev = { defaultPrevented: false, button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, target: a };
-    const c1 = vi.fn(() => false);
+    const c1 = vi.fn((_m: string) => false);
     clicDaFermare(ev, true, '/seller/site', c1);
     expect(c1.mock.calls[0]?.[0]).toContain('modifiche alla vetrina non salvate');
-    const c2 = vi.fn(() => false);
+    const c2 = vi.fn((_m: string) => false);
     clicDaFermare(ev, true, '/seller/profile', c2, 'al profilo');
     expect(c2.mock.calls[0]?.[0]).toContain('modifiche al profilo non salvate');
   });
