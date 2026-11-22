@@ -67,7 +67,7 @@ const fetchStoresData = async () => {
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);
   if (storeIds.length === 0) {
-    return { stores: [], productsByStore: {}, reviewsByStore: {}, countByStore: {}, categoriesByStore: {}, categories: [] };
+    return { stores: [], productsByStore: {}, reviewsByStore: {}, countByStore: {}, categoriesByStore: {}, categories: [], categorieMancanti: false };
   }
 
   /**
@@ -195,7 +195,10 @@ const fetchStoresData = async () => {
     reviewsByStore[r.store_id] = { avg: Number(r.avg), count: Number(r.count) };
   }
 
-  return { stores, productsByStore, reviewsByStore, countByStore, categoriesByStore, categories };
+  // R12-013 — Se la lettura delle categorie cade, i filtri per settore spariscono: la pagina lo dice.
+  const categorieMancanti = Boolean(categoriesRes.error || categoriePerNegozioRes.error);
+
+  return { stores, productsByStore, reviewsByStore, countByStore, categoriesByStore, categories, categorieMancanti };
 };
 
 export default function StoresPage() {
@@ -220,6 +223,7 @@ export default function StoresPage() {
   const countByStore = useMemo(() => data?.countByStore ?? {}, [data?.countByStore]);
   const categoriesByStore = useMemo(() => data?.categoriesByStore ?? {}, [data?.categoriesByStore]);
   const categories = data?.categories ?? [];
+  const categorieMancanti = data?.categorieMancanti ?? false;
 
   // L'ora di Piacenza, che batte al minuto come quella delle schede: con «Aperti ora» acceso l'elenco
   // si rifà quando un negozio chiude (prima restava com'era alla prima resa, con la scheda che
@@ -372,6 +376,11 @@ export default function StoresPage() {
             <option value="name">A-Z</option>
           </select>
         </div>
+        {categorieMancanti && (
+          <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Non siamo riusciti a leggere i settori dei negozi: i filtri per settore possono mancare.
+          </p>
+        )}
         {categories.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             <button

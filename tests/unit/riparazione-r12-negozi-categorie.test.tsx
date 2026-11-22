@@ -10,6 +10,9 @@
  *    categorie e col filtro del loro settore sparivano. Qui il finto taglia a mille come quello vero:
  *    1.101 righe, e il negozio in vetrina sta dopo la millesima.
  *
+ * 2. Se la lettura delle categorie cadeva, i filtri per settore sparivano e la pagina non diceva
+ *    niente: chi cercava «Panificio» non capiva perché il filtro non c'era. Adesso un avviso breve.
+ *
  * La pagina si monta col react-query vero: la lettura dei dati gira davvero.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -35,7 +38,7 @@ const righeCategorie: Riga[] = [
   { seller_id: 'z-lontano', categorie: ['m-pan'] },
 ];
 
-const stato = { erroreCategorie: false };
+const stato = { erroreCategorie: false, errorePerNegozio: false };
 const pg = creaPostgrestColTetto({
   categories: categorie,
   seller_public_profiles: [negozio('a-vicino', 'Forno Vicino'), negozio('z-lontano', 'Forno Lontano')],
@@ -51,6 +54,9 @@ function rpcCategorie() {
     range(da: number, a: number) { finestra = [da, a]; return q; },
     then<T>(risolvi: (v: { data: Riga[]; error: null }) => T, rifiuta?: (e: unknown) => unknown) {
       lettureRpc.push({ finestra, ordini: [...ordini] });
+      if (stato.errorePerNegozio) {
+        return Promise.resolve({ data: null, error: { message: 'servizio dati giù' } }).then(risolvi as never, rifiuta);
+      }
       let righe = [...righeCategorie];
       if (ordini.includes('seller_id')) righe.sort((x, y) => String(x.seller_id).localeCompare(String(y.seller_id)));
       if (finestra) righe = righe.slice(finestra[0], finestra[1] + 1);
@@ -114,6 +120,7 @@ async function montaLaPagina() {
 
 beforeEach(() => {
   stato.erroreCategorie = false;
+  stato.errorePerNegozio = false;
   lettureRpc.length = 0;
   document.body.innerHTML = '';
 });
@@ -131,6 +138,35 @@ describe('R12-012 — le categorie per negozio si leggono a finestre', () => {
       radice.textContent,
       'il negozio dopo la millesima riga di categorie_per_negozio è sparito dal filtro: la lettura si è fermata a mille',
     ).toContain('Forno Lontano');
+    smonta();
+  }, 60000);
+});
+
+describe('R12-013 — se la lettura delle categorie cade, la pagina lo dice', () => {
+  const avviso = (radice: HTMLElement) =>
+    [...radice.querySelectorAll('[role="status"]')].find((n) => /settori/i.test(n.textContent ?? ''));
+
+  it('controprova: con le categorie lette non c\'è nessun avviso', async () => {
+    const { radice, smonta } = await montaLaPagina();
+    expect(radice.textContent).toContain('Forno Vicino');
+    expect(avviso(radice)).toBeUndefined();
+    smonta();
+  }, 60000);
+
+  it('le categorie non arrivano: i filtri non ci sono, ma un avviso visibile lo spiega', async () => {
+    stato.erroreCategorie = true;
+    const { radice, smonta } = await montaLaPagina();
+    expect(radice.textContent, 'controprova: i negozi si vedono lo stesso').toContain('Forno Vicino');
+    expect([...radice.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Panificio')).toBe(false);
+    expect(avviso(radice), 'i filtri per settore sono spariti senza nessun avviso').toBeTruthy();
+    smonta();
+  }, 60000);
+
+  it('le categorie dei negozi non arrivano: anche qui l\'avviso', async () => {
+    stato.errorePerNegozio = true;
+    const { radice, smonta } = await montaLaPagina();
+    expect(radice.textContent, 'controprova: i negozi si vedono lo stesso').toContain('Forno Vicino');
+    expect(avviso(radice), 'il filtro per settore non trova più i negozi e la pagina non lo dice').toBeTruthy();
     smonta();
   }, 60000);
 });
