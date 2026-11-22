@@ -118,7 +118,12 @@ export async function fetchSellerPublicMap(
   const voli = voliDi(supabase);
   if (!voli || unique.length === 0) return leggiDallaVista(supabase, unique, select);
 
-  const chiave = (id: string) => `${select}|${id}`;
+  // 22/11/2026 (R15-007) — La chiave sono le colonne che la domanda chiede davvero, senza badare
+  // all'ordine: «id, store_name» (Drop del giorno, Ordina di nuovo) e «id, store_name, is_approved»
+  // (le fasce) diventano la stessa domanda (`conColonneIndispensabili` aggiunge is_approved a tutte),
+  // e si uniscono. Colonne diverse restano domande diverse.
+  const colonne = [...new Set(conColonneIndispensabili(select).split(',').map((c) => c.trim()))].sort().join(',');
+  const chiave = (id: string) => `${colonne}|${id}`;
   const daChiedere = unique.filter((id) => !voli.has(chiave(id)));
   if (daChiedere.length > 0) {
     const lettura = leggiDallaVista(supabase, daChiedere, select);
