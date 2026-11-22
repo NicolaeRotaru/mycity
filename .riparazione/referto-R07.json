@@ -1,6 +1,6 @@
 {
   "sessione": "R07",
-  "aggiornato": "2026-11-22 01:05",
+  "aggiornato": "2026-11-22 01:10",
   "finita": true,
   "testa": "4681b479fb1f97687438cee48e33b12e5b86cb5e",
   "verifica": {
@@ -242,6 +242,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "lotto A sul modello grande (4 voci), lotto B su sonnet (5 voci), un giro su sonnet per R07-002, due revisori (A grande, B sonnet) nella loro copia separata, un giro di correzione sul modello grande (R07-010, R07-006, R07-002, R07-007). Tetto di 6 raggiunto."
-  }
+    "nota": "lotto A sul modello grande (4 voci), lotto B su sonnet (5 voci), un giro su sonnet per R07-002, due revisori (A grande, B sonnet) nella loro copia separata, un giro di correzione sul modello grande (R07-010, R07-006, R07-002, R07-007). Tetto di 6 raggiunto. Costo letto da get_session (usage.cost_usd) prima della consegna: 22,92 $ (65% del tetto di 35 $).",
+    "subagenti": 6
+  },
+  "costo_usd": 22.92
 }
