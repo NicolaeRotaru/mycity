@@ -16,3 +16,15 @@ describe('ci.yml: il lavoro delle prove unitarie', () => {
     expect(l.indexOf('playwright install')).toBeLessThan(l.indexOf('run: npm run test'));
   });
 });
+
+describe('package.json: le librerie usate dalle prove sono dichiarate', () => {
+  it('@testing-library/dom, attr-accept ed esbuild stanno in devDependencies alla versione del lock', () => {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    const lock = JSON.parse(readFileSync(join(process.cwd(), 'package-lock.json'), 'utf8'));
+    for (const nome of ['@testing-library/dom', 'attr-accept', 'esbuild']) {
+      const versione = lock.packages[`node_modules/${nome}`].version;
+      expect(pkg.devDependencies[nome], nome).toBe(versione);
+      expect(lock.packages[''].devDependencies[nome], nome).toBe(versione);
+    }
+  });
+});
