@@ -69,6 +69,9 @@ vi.mock('@/components/ProductGrid', () => ({ default: () => null }));
 vi.mock('@/components/SponsoredCarousel', () => ({ default: () => null }));
 
 import SearchPage from '@/app/search/page';
+import { aspettaLaCronologia, installaCronologia } from './riparazione-r07-cronologia';
+
+installaCronologia();
 
 const g = globalThis as Record<string, unknown>;
 let root: Root | null = null;
@@ -83,11 +86,9 @@ function popstateDiNext() {
   for (const f of next.iscritti) f();
 }
 
-/** Lascia arrivare i popstate che jsdom manda dopo history.back(), e i giri che seguono. */
+/** Aspetta il popstate vero di ogni history.back() e i giri che seguono, senza un tempo fisso. */
 async function lascia() {
-  await act(async () => {
-    await new Promise((fatto) => setTimeout(fatto, 30));
-  });
+  await aspettaLaCronologia();
 }
 
 /** Conclude i replace in volo: quello non scartato scrive l'indirizzo sulla voce di cronologia di quel momento. */
@@ -116,7 +117,7 @@ const indirizzo = () => new URLSearchParams(window.location.search);
 beforeEach(async () => {
   window.history.replaceState({ dove: 'home' }, '', '/');
   window.history.pushState({ dove: 'pagina' }, '', '/search?q=pane');
-  await new Promise((fatto) => setTimeout(fatto, 30));
+  await aspettaLaCronologia();
   next.confermato = '/search?q=pane';
   next.registro = [];
   next.inVolo = [];

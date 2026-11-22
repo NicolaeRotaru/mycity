@@ -18,15 +18,16 @@ import { StrictMode, act, createElement, useRef, useState } from 'react';
 import { accendi, clicca, premi } from './aiuti/schermo';
 import { monta } from './aiuti/monta-componente';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
+import { aspettaLaCronologia, installaCronologia } from './riparazione-r07-cronologia';
+
+installaCronologia();
 
 const g = globalThis as Record<string, unknown>;
 let schermo: ReturnType<typeof accendi> | null = null;
 
-/** Lascia arrivare il popstate che jsdom manda dopo history.back(). */
+/** Aspetta il popstate vero di ogni history.back() e i giri che seguono, senza un tempo fisso. */
 async function lasciaTornare() {
-  await act(async () => {
-    await new Promise((fatto) => setTimeout(fatto, 20));
-  });
+  await aspettaLaCronologia();
 }
 
 beforeEach(async () => {
