@@ -101,11 +101,14 @@ export default function ProductViewTracker({ productId, price, category, sellerI
           // statistiche di un rivale gli sparava venti visite al minuto: da li' in poi quelle vere
           // venivano buttate. Un freno che si puo' usare per fare il danno che doveva impedire non
           // e' un freno.
-          const { error } = await supabase.from('product_views').insert({
+          // 21/11/2026 — `count` dice se la riga è entrata: 0 vuol dire che il trigger
+          // product_views_dedup l'ha scartata (già una visita nell'ora, anche da un altro
+          // dispositivo), e allora la visita non si annuncia a PostHog.
+          const { error, count } = await supabase.from('product_views').insert({
             product_id: productId,
             user_id: userId,
             view_fingerprint: userId ? null : improntaSessione(),
-          });
+          }, { count: 'exact' });
           if (error) throw error;
 
           // recently_viewed (solo loggati) — upsert con touch viewed_at.
@@ -117,6 +120,7 @@ export default function ProductViewTracker({ productId, price, category, sellerI
                 { onConflict: 'user_id,product_id' },
               );
           }
+          return count !== 0;
         },
       });
     };

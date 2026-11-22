@@ -1,0 +1,268 @@
+{
+  "sessione": "R08",
+  "aggiornato": "2026-11-22 01:40",
+  "finita": true,
+  "testa": "509ada508f3a901e2b83ed439a1cb9674c42f69f",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "509ada508f3a901e2b83ed439a1cb9674c42f69f",
+    "nota": "Dopo il secondo giro (collaudo K03): typecheck 0 errori, lint 0 errori (126 avvisi già presenti), vitest 1919 file e 11848 prove verdi. Prove SQL di tests/sql/rls tutte verdi sul Postgres locale ricostruito con 701 e 702. guardia-ramo verde."
+  },
+  "voci": [
+    {
+      "id": "R08-001",
+      "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge «nessuna recensione», e le etichette sono in inglese",
+      "esito": "parziale",
+      "commit": "7e25e7e1",
+      "file_toccati": [
+        "app/seller/analytics/page.tsx",
+        "tests/unit/riparazione-r08-analisi-in-italiano.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-analisi-in-italiano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-analisi-in-italiano.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9febd830^ --file app/seller/analytics/page.tsx --prove tests/unit/riparazione-r08-analisi-in-italiano.test.tsx --json ; correzione del collaudo: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9dffbe1a^ --file app/seller/analytics/page.tsx --prove tests/unit/riparazione-r08-analisi-in-italiano.test.tsx --json (uscita 0) ; secondo giro (collaudo K03): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7e25e7e1^ --file app/seller/analytics/page.tsx --prove tests/unit/riparazione-r08-analisi-in-italiano.test.tsx --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Solo le etichette, come deciso dalla regista: «Insight» → «Consigli», «Rating medio» → «Voto medio», «30gg» → «30 giorni», «lo stock pronto» → «tieni pronta la merce». «Conversion rate» era già in italiano sulla base. Nessuna migrazione. Dopo il collaudo anche «ultimi 7gg» → «ultimi 7 giorni» e «il tuo best-seller» → «il tuo prodotto più visto» (dopo il collaudo K03: il consiglio si basa sulle visite, la prova fissa la frase vera e rifiuta «più venduto»).",
+      "cosa_resta": "Il voto medio e il conteggio delle recensioni in andamento_del_negozio (ultima definizione migrations/260:93-94): contano ancora solo public.reviews sui prodotti.",
+      "domanda": "Il voto medio in Analisi deve contare solo le recensioni al negozio (store_reviews, come la pagina Recensioni) o sommarle a quelle dei prodotti in una media unica?",
+      "verificato_da": "collaudo C1: le cinque etichette nominate dalla voce sono a posto, rimessa uscita 0, 11 prove che leggono la pagina verdi. Trovati «ultimi 7gg» e «best-seller» rimasti: corretti nel giro di correzione. Dopo la correzione: il capo squadra ha rilanciato la rimessa (uscita 0). Collaudo K03 della regia: la scritta di riserva doveva dire «più visto», corretto nel secondo giro; il capo squadra ha rilanciato la rimessa (uscita 0)."
+    },
+    {
+      "id": "R08-002",
+      "chiave": "dati-analytics|strutturasenzaindirizzi in caso di eccezione lascia passare il valore originale",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano)"
+    },
+    {
+      "id": "R08-003",
+      "chiave": "dati-analytics|le visite al prodotto si contano con due regole diverse: posthog conta ogni nuova scheda, il database una per persona all'ora",
+      "esito": "parziale",
+      "commit": "dcbceab2",
+      "file_toccati": [
+        "lib/analytics/visita-prodotto.ts",
+        "components/ProductViewTracker.tsx",
+        "tests/unit/riparazione-r08-visita-come-il-database.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-visita-come-il-database.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-visita-come-il-database.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dcbceab2^ --file lib/analytics/visita-prodotto.ts,components/ProductViewTracker.tsx --prove tests/unit/riparazione-r08-visita-come-il-database.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La scrittura in product_views chiede il conto delle righe entrate. Se il trigger della 119 ha scartato la riga (conto 0), la visita non va a PostHog e il freno locale non si mette: decide il database, una per persona e prodotto all'ora. La 119 non è toccata.",
+      "nota": "Che PostgREST restituisca conto 0 su un INSERT scartato dal trigger non è provato contro un PostgREST vero; se il conto non arriva (null) la visita si annuncia come prima. La definizione nel GLOSSARIO-KPI che la voce chiede non sta nel deposito del sito: la scrive la regista. Anche il view_item di GA4 parte insieme all annuncio PostHog: sul secondo dispositivo nella stessa ora non parte più nemmeno quello.",
+      "verificato_da": "collaudo C1: prova e rimessa rilanciate (uscita 0, cade togliendo uno qualunque dei due file); trigger della 119 scarta con RETURN NULL (unico BEFORE INSERT, mai ridefinito); scrittura alla PostgREST rifatta a mano da collegato e da anonimo: 1 poi 0 senza errori; rifiuto 42501 resta «non riuscita». Collaudo K03 della regia: col conto nullo si torna a contare come prima, e manca la voce nel glossario. Secondo giro: il subagente ha provato il codice col conto nullo, sullo stesso dispositivo già 1 annuncio; fra due dispositivi serve una scelta: segnata parziale.",
+      "cosa_resta": "Due pezzi, dal collaudo K03. (1) La voce nel GLOSSARIO-KPI, che sta in ad-mycity (MyCity-Vault/07-Agenti/GLOSSARIO-KPI.md), fuori dal deposito del sito: la scrive la regia, testo proposto: «Visita al prodotto (tabella product_views; evento product_viewed per PostHog, view_item per GA4): una per persona (utente collegato, o impronta del visitatore) e per prodotto, al massimo una all ora. Il database scarta le doppie (trigger product_views_dedup, migrazione 119) e la pagina annuncia la visita a PostHog e GA4 solo quando il database ha contato la riga.» (2) Il caso del conto nullo: sullo stesso dispositivo il freno locale per prodotto e ora già dà 1 annuncio (provato: una prova lì non torna rossa); fra due dispositivi, col conto nullo, la pagina non può sapere della visita dell altro e annuncia come prima. Cura esatta, da scegliere: o con conto nullo non si annuncia affatto (rischio: niente annunci se il conto non arriva mai), o si legge l esito con insert(...).select() (vuoto se il trigger scarta), che però vuole una regola di lettura su product_views.",
+      "domanda": "R08-003: con il conto nullo (il database non dice se ha contato la visita), la pagina deve non annunciare la visita a PostHog, oppure si aggiunge una regola di lettura su product_views per leggere l esito con insert().select()?"
+    },
+    {
+      "id": "R08-004",
+      "chiave": "qa-flussi|il menu «aggiungi a lista» mostra il titolo vecchio dopo una rinomina",
+      "esito": "riparato",
+      "commit": "c8a01245",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c8a01245^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo la rinomina si invalida anche queryKeys.lists.mineMin, la chiave che legge il menu (AddToListButton.tsx:39-41). La prova monta il pulsante e la pagina nello stesso QueryClient, rinomina e riapre il menu.",
+      "verificato_da": "collaudo C2 (subagente diverso): prova e rimessa rilanciate (uscita 0), 31 prove vicine verdi; col database lento il titolo vecchio si vede solo durante la rilettura (nit)."
+    },
+    {
+      "id": "R08-005",
+      "chiave": "qa-flussi|tolto un prodotto da una lista, il menu «aggiungi a lista» lo segna ancora dentro",
+      "esito": "riparato",
+      "commit": "17f83f1d",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5ff73ab4^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx --json ; correzione del collaudo: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 17f83f1d^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due commit della stessa voce. Tolto un prodotto, la lista sparisce subito dalla cache containing(productId) (setQueryData, come la pagina fa già per mineMin) e la famiglia containing si invalida per prefisso, anche con un id in maiuscolo. La prova copre anche il database lento: riaprendo il menu durante la rilettura la lista non è segnata.",
+      "verificato_da": "collaudo C2: rimessa uscita 0, ma resta una finestra col database lento in cui il menu segna ancora la lista e il tocco fa una DELETE a vuoto: corretto nel giro di correzione. Dopo la correzione: il capo squadra ha rilanciato la rimessa (uscita 0)."
+    },
+    {
+      "id": "R08-006",
+      "chiave": "qa-flussi|tornando indietro dopo l eliminazione la lista eliminata ricompare per 30 secondi",
+      "esito": "riparato",
+      "commit": "48f962fa",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b0d1e34f^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx --json ; secondo giro (collaudo K03): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 48f962fa^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx --json (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Eliminata la lista, la cache del dettaglio diventa null (come una lista che non c'è) e quella delle righe []. Tornando indietro la pagina non mostra più la lista eliminata, neanche col database lento. Secondo giro: prima di scrivere null e [] si aspettano i cancelQueries di lists.detail(id) e lists.items(id), così una rilettura in volo (dopo una rinomina o un cambio di visibilità) non rimette in memoria la lista eliminata.",
+      "nota": "Nel breve istante fra l'eliminazione e la navigazione la pagina mostra «Lista non trovata» al posto della lista.",
+      "verificato_da": "collaudo C2: prova e rimessa rilanciate (uscita 0); la voce chiede il dettaglio e le righe, fatti; mineMin già filtrato. Collaudo K03 della regia: mancava cancelQueries, corretto nel secondo giro; il capo squadra ha rilanciato la rimessa (uscita 0)."
+    },
+    {
+      "id": "R08-007",
+      "chiave": "qa-flussi|una lista si può salvare col titolo vuoto",
+      "esito": "riparato",
+      "commit": "9b7d6d16",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "migrations/702_una_lista_non_ha_il_titolo_vuoto.sql",
+        "tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx",
+        "tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx",
+        "tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx --reporter=dot ; tests/sql/harness/apply.sh r08_prova && psql -X -q -v ON_ERROR_STOP=1 -d r08_prova -f tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 94b293f0^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f793fafbd01110ac7984fcee8df70957a6bb7784^ --file migrations/702_una_lista_non_ha_il_titolo_vuoto.sql --prove tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql --sql r08_rimessa --json (uscita 0 tutte e due) ; correzione del collaudo: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9b7d6d16^ --file migrations/702_una_lista_non_ha_il_titolo_vuoto.sql --prove tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql --sql r08_rimessa --json (uscita 0), e di nuovo con --base f793fafb^ (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tre commit della stessa voce. 94b293f0: la pagina spegne Salva a titolo vuoto e la modifica rifiuta il titolo vuoto prima di scrivere. f793fafb + 9b7d6d16: migrazione 702 nuova, un trigger BEFORE INSERT OR UPDATE OF title (errore 23514, non SECURITY DEFINER, search_path fisso, rilanciabile) rifiuta un titolo vuoto o di soli spazi (gli stessi di trim() della creazione); un UPDATE che non cambia il titolo passa anche su una riga vecchia col titolo vuoto, così resta possibile renderla privata.",
+      "verificato_da": "collaudo C2: rimesse pagina e 702 uscita 0, 212 migrazioni e 79 prove SQL verdi, spazi della 702 uguali a JS trim. Trovato: il CHECK bloccava gli UPDATE (rendere privata) su righe vecchie col titolo vuoto: corretto nel giro di correzione. Dopo la correzione: il capo squadra ha rilanciato le due rimesse della 702 (uscita 0 e 0); prova SQL a 8 controlli, tutte le prove SQL verdi (compresa la 14)."
+    },
+    {
+      "id": "R08-008",
+      "chiave": "qa-flussi|il finto di react-query non ha setqueriesdata",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finti/react-query.mjs",
+          "modifica": "Dentro l'oggetto restituito da useQueryClient, subito dopo setQueryData, aggiungere: `setQueriesData: (filtro, valore) => { if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([filtro?.queryKey ?? filtro, valore]); },` (il filtro può arrivare come {queryKey} o come chiave nuda; la forma registrata è quella di setQueryData)."
+        }
+      ],
+      "nota": "Difetto ancora presente sulla base (useQueryClient del finto espone solo invalidateQueries, setQueryData, getQueryData e cancelQueries). Le riparazioni di R08 non usano setQueriesData. Collaudo C2: difetto confermato sulla base, la riga proposta provata su una copia fuori dal deposito (sulla base «qc.setQueriesData is not a function», con la riga niente errore)."
+    },
+    {
+      "id": "R08-009",
+      "chiave": "qa-flussi|una prova col nome del collaudo",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/zz-collaudo-termini-chi.test.tsx",
+          "modifica": "git mv tests/unit/zz-collaudo-termini-chi.test.tsx tests/unit/i-termini-nominano-chi-gestisce-senza-dati-inventati.test.tsx, senza cambiare il contenuto"
+        }
+      ],
+      "nota": "La prova importa solo @/app/terms/page, nessun file di R08, e nessun file del deposito nomina il vecchio percorso. Una rinomina dentro un ramo da riparatore guardia-ramo la legge come cancellazione di una prova esistente: va fatta dalla regista o da Nicola. Collaudo C1: seguite le importazioni a catena (24 file), nessun file di R08."
+    },
+    {
+      "id": "R08-010",
+      "chiave": "stati-ui|il doppio tocco su «partecipa» mostra un messaggio d'errore, e un evento appena finito resta premibile per quasi un minuto",
+      "esito": "riparato",
+      "commit": "1b6643ce",
+      "file_toccati": [
+        "app/events/page.tsx",
+        "migrations/701_non_ci_si_iscrive_a_un_evento_finito.sql",
+        "tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx",
+        "tests/sql/rls/riparazione-r08-evento-finito.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx",
+        "tests/sql/rls/riparazione-r08-evento-finito.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx --reporter=dot ; tests/sql/harness/apply.sh r08_prova && psql -X -q -v ON_ERROR_STOP=1 -d r08_prova -f tests/sql/rls/riparazione-r08-evento-finito.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d645382^ --file app/events/page.tsx --prove tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d645382^ --file migrations/701_non_ci_si_iscrive_a_un_evento_finito.sql --prove tests/sql/rls/riparazione-r08-evento-finito.test.sql --sql r08_rimessa --json (uscita 0 tutte e due) ; correzione del collaudo: timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base afed864c^ --file app/events/page.tsx --prove tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx --json (uscita 0) ; secondo giro (collaudo K03): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b6643ce^ --file migrations/701_non_ci_si_iscrive_a_un_evento_finito.sql --prove tests/sql/rls/riparazione-r08-evento-finito.test.sql --sql r08_rimessa --json (uscita 0), e con --base 0d645382^ (uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il secondo tocco su un evento che sta già lavorando non parte, e il doppione 23505 vale «già iscritto». L'ora si controlla al tocco: un evento finito non scrive niente e sparisce subito. Migrazione 701 nuova: una regola RESTRICTIVE solo sull'INSERT di event_rsvps (l'evento deve essere scheduled o live, e non finito); la 034 non è toccata. Dopo il collaudo: al tocco si guarda anche lo stato (solo scheduled o live, come la 701); con un altro stato, o se il database rifiuta con 42501, la pagina dice «Questo evento è chiuso: non ci si può più iscrivere.» e rilegge gli eventi. Secondo giro: la 701 ha anche una regola RESTRICTIVE solo per l UPDATE (WITH CHECK): un iscrizione non si sposta su un evento finito o annullato; un UPDATE che non cambia evento su un evento aperto passa, la cancellazione resta ammessa. La 701 resta da non applicare.",
+      "verificato_da": "collaudo C1 (subagente diverso): prova e rimessa rilanciate (pagina e 701 con --sql, uscita 0), prove SQL tutte verdi, 701 rilanciata due volte, service_role e admin ancora ammessi, cancellazione da evento finito ammessa, ref sbloccato dopo un errore. Trovato: al tocco non si guardava lo stato (evento chiuso con fine nel futuro → 42501 «Non hai i permessi»): corretto nel giro di correzione. Dopo la correzione: il capo squadra ha rilanciato la rimessa (uscita 0). Collaudo K03 della regia: con un UPDATE si spostava un iscrizione su un evento finito, corretto nel secondo giro; il capo squadra ha rilanciato le due rimesse della 701 (uscita 0 e 0)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il traguardo «venditore più votato» guarda solo le recensioni ai prodotti, mai quelle al negozio",
+      "dimensione": "dati-analytics",
+      "severita": "minore",
+      "file": "migrations/032_auto_achievements_cross_device_cart_republish.sql:88-95",
+      "descrizione": "Il trigger sta solo su public.reviews (riga 105): le recensioni al negozio non contano per il traguardo seller_top_rated. Stessa radice del voto medio in Analisi."
+    },
+    {
+      "titolo": "Il finto di react-query mette mutationFn e onSuccess nello stesso try: un errore in onSuccess finisce in onError e nasconde difetti nelle prove",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/aiuti/finti/react-query.mjs:75-80",
+      "descrizione": "Col finto, il TypeError di app/notifications/page.tsx:200 (setQueriesData che non c è) va in onError e le riletture di :205-206 non partono; la prova riparazione-r22-campanello passa lo stesso."
+    },
+    {
+      "titolo": "Eliminata una lista, la pagina «Le mie liste» la mostra ancora finché la rilettura non torna",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:216",
+      "descrizione": "deleteList.onSuccess invalida mine, public e inVetrina ma non toglie subito la lista dalla cache mine; c era già prima e la voce sull eliminazione non lo chiede. Cliccandola si vede «Lista non trovata»."
+    },
+    {
+      "titolo": "Falla di sicurezza da chiudere (privacy): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "sicurezza-auth",
+      "severita": "minore",
+      "file": "(nel referto privato)",
+      "riservato": true
+    }
+  ],
+  "domande_per_nicola": [
+    "R08-001: il voto medio in Analisi conta solo le recensioni al negozio (store_reviews) o le somma a quelle dei prodotti in una media unica?",
+    "R08-010: il database deve vietare anche di togliere l iscrizione a un evento già finito? Oggi la migrazione 701 lo ammette; la pagina non lo lascia più fare.",
+    "R08-010: su un evento chiuso o annullato dalla regia, chi era iscritto non può più togliersi dalla pagina (il database lo lascerebbe fare): va bene così?",
+    "R08-003: con il conto nullo (il database non dice se ha contato la visita), la pagina deve non annunciare la visita a PostHog, oppure si aggiunge una regola di lettura su product_views per leggere l esito con insert().select()?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "6 subagenti: 2 riparatori di lotto, 1 completamento (702), 2 collaudi in parallelo su copie separate, 1 giro di correzione. Il secondo giro, chiesto dalla regia dopo il collaudo K03, l ha fatto lo stesso subagente del primo giro, ripreso con un messaggio: nessun subagente nuovo. Il secondo giro ha portato la spesa sopra il 70% (24,5 $): la regia ne era informata.",
+    "subagenti": 6,
+    "costo_usd": 27.16
+  },
+  "costo_usd": 27.16
+}

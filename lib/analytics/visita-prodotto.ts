@@ -23,8 +23,11 @@ export interface DipendenzeVisita {
   segnaContata: (chiave: string) => void;
   /** L'evento verso i sistemi di misura (PostHog, GA4). */
   annuncia: () => void;
-  /** La riga in `product_views` (più «visti di recente» per chi ha l'account). */
-  registra: () => Promise<void>;
+  /**
+   * La riga in `product_views` (più «visti di recente» per chi ha l'account). `false` vuol dire
+   * che il database l'ha scartata: quella persona ha già una visita a quel prodotto nell'ultima ora.
+   */
+  registra: () => Promise<boolean | void>;
 }
 
 export const chiaveDellaVisita = (productId: string) => `mc_viewed_${productId}`;
@@ -34,13 +37,19 @@ export async function contaLaVisita(productId: string, d: DipendenzeVisita): Pro
   const chiave = chiaveDellaVisita(productId);
   if (d.giaContata(chiave)) return 'gia-contata';
 
+  let entrata: boolean | void;
   try {
-    await d.registra();
+    entrata = await d.registra();
   } catch {
     // Niente freno e niente annuncio: per il conteggio è come se non fosse successo, e alla
     // prossima occasione (un altro disegno, o l'arrivo del consenso) si riprova.
     return 'non-riuscita';
   }
+
+  // 21/11/2026 — Il database l'ha scartata (trigger product_views_dedup: una visita per persona e
+  // prodotto all'ora): è già contata, magari da un altro dispositivo. Niente annuncio, così PostHog
+  // conta le stesse visite del database; niente freno, così la prossima volta decide di nuovo lui.
+  if (entrata === false) return 'gia-contata';
 
   d.segnaContata(chiave);
   d.annuncia();
