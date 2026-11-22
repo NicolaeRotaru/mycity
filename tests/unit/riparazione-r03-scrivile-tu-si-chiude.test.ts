@@ -39,20 +39,20 @@ const TITOLO = "Spiegazione dell'attesa non partita per email";
 
 type Amministrativo = { rpc: (nome: string) => Promise<unknown>; from: (t: string) => unknown };
 
-function ilMondo(persone: string[], notifiche: Riga[] = [], altriProfili: Riga[] = []) {
+function ilMondo(persone: string[], notifiche: Riga[] = [], altriProfili: Riga[] = [], chiestaIl = CHIESTA_IL) {
   const giro = fintoGiroNotturno({
     tabelle: {
       profiles: [
         { id: 'admin-1', role: 'admin' },
         { id: 'admin-2', role: 'admin' },
-        ...persone.map((p) => ({ id: p, role: 'rider', deletion_requested_at: CHIESTA_IL })),
+        ...persone.map((p) => ({ id: p, role: 'rider', deletion_requested_at: chiestaIl })),
         ...altriProfili,
       ],
       notifications: notifiche,
       audit_logs: [],
       cron_heartbeats: [],
     },
-    rpc: { process_expired_deletions: { data: persone.map((p) => ({ user_id: p, deleted_at: CHIESTA_IL })), error: null } },
+    rpc: { process_expired_deletions: { data: persone.map((p) => ({ user_id: p, deleted_at: chiestaIl })), error: null } },
     indirizzi: Object.fromEntries(persone.map((p) => [p, `${p.slice(-2)}@example.it`])),
     chiaviUniche: true,
   });
@@ -158,6 +158,26 @@ describe('R03-006 · «scrivile tu» si chiude se la persona esce dall elenco de
     m.lista([]);
     await unaNotte(2);
     expect(m.allarmiDi(PRIMA).map((n) => n.is_read)).toEqual([false]);
+  });
+
+  it('chi è oltre il mese e aspetta ancora tiene anche «scrivile tu» del termine scaduto, non solo quello del rinvio', async () => {
+    // Oltre il mese la stessa persona ha due spiegazioni ferme (rinvio e termine scaduto), due allarmi.
+    const oltreIlMese = new Date(ADESSO - 35 * GIORNO).toISOString();
+    const m = ilMondo([PRIMA], [], [], oltreIlMese);
+    const allarmeDella = (tappa: 'rinviata' | 'termine-scaduto') => {
+      const idAllarme = identificativoAvviso(`${identificativoAvviso(chiaveAvviso(PRIMA, oltreIlMese, tappa))}:email-ferma:admin-1`);
+      return m.giro.righe('notifications').find((n) => n.id === idAllarme);
+    };
+    await unaNotte(0);
+    await unaNotte(1);
+    expect(allarmeDella('termine-scaduto'), 'la rotta non ha scritto «scrivile tu» del termine scaduto: la prova non prova niente').toBeDefined();
+    expect(allarmeDella('rinviata')).toBeDefined();
+    expect(allarmeDella('termine-scaduto')?.is_read, 'chiuso la notte stessa con l email del termine scaduto ancora ferma').toBe(false);
+    // Stanotte la lista non la porta, ma la richiesta c'è ancora: tutti e due restano aperti.
+    m.lista([]);
+    await unaNotte(2);
+    expect(allarmeDella('termine-scaduto')?.is_read, 'chi aspetta oltre il mese perde «scrivile tu» del termine scaduto').toBe(false);
+    expect(allarmeDella('rinviata')?.is_read).toBe(false);
   });
 });
 
