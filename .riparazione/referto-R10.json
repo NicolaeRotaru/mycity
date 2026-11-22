@@ -1,6 +1,6 @@
 {
  "sessione": "R10",
- "aggiornato": "2026-11-22 03:25",
+ "aggiornato": "2026-11-22 03:30",
  "finita": true,
  "testa": "38a1e1ac06e51e0169053c088cc215379b42e2dd",
  "verifica": {
@@ -444,9 +444,11 @@
  "domande_per_nicola": [],
  "conto": {
   "agenti": 6,
-  "nota": "6 subagenti, il tetto: 2 riparatori (lotto 1 col modello grande, lotto 2 col piccolo), 3 revisori (V1 grande, V2 e V3 piccoli), 1 correttore piccolo per le smentite di V2 e V3. La correzione della guardia del lotto 1 (5af84074) e l'unione con strategia ours (eed11a6d) le ho fatte io, a mano con git."
+  "nota": "6 subagenti, il tetto: 2 riparatori (lotto 1 col modello grande, lotto 2 col piccolo), 3 revisori (V1 grande, V2 e V3 piccoli), 1 correttore piccolo per le smentite di V2 e V3. La correzione della guardia del lotto 1 (5af84074) e l'unione con strategia ours (eed11a6d) le ho fatte io, a mano con git. Spesa letta da get_session (usage.cost_usd) alla consegna: 22,96 $, aggiornata alle 00:53 UTC; tetto 35 $, consegna al 70% = 24,5 $.",
+  "subagenti": 6
  },
  "passaggio_storia": {
   "nota": "Ramo rifatto in fila sopra c1ee2695, senza l'unione eed11a6d, e spinto con --force-with-lease su decisione della regia quarta. Mappa dei vecchi SHA del giro di correzione verso i nuovi: 57d01eb0→c084252d, 0e997235→549c56cc, 8e87d4e2→b09b7f26, cce74444→2042bdab, a53dc208→b2049829, 0be5ec03→38a1e1ac. Albero finale identico."
- }
+ },
+ "costo_usd": 22.96
 }
