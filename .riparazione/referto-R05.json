@@ -1,13 +1,13 @@
 {
   "sessione": "R05",
-  "aggiornato": "2026-11-22 01:00",
-  "finita": false,
-  "testa": "",
+  "aggiornato": "2026-11-22 02:25",
+  "finita": true,
+  "testa": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
+    "nota": "typecheck, lint e 1916 file di prova (11848 prove) verdi, 1 saltato; SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -46,7 +46,8 @@
       ],
       "commit_altri": [
         "7722074757ca67b94b885f15483b9383f4c53122"
-      ]
+      ],
+      "verificato_da": "revisore lotto 1 (smentita: tetto contato dall'ingresso in fila, corretto) + revisore lotti 2-3: prova 7/7, sonda con orologio finto: raffica di 6 lavori mai più di 1 insieme, lancio sincrono non blocca la fila, ripiego e ritorno come prima"
     },
     {
       "id": "R05-005",
@@ -84,7 +85,7 @@
     {
       "id": "R05-007",
       "chiave": "architettura|l'email trova il collegamento cercando la stringa '/contact' dentro una frase scritta in un altro modulo",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "81425a384da024f017372b98d56169caeb192d29",
       "file_toccati": [
         "lib/privacy/avvisi-a-chi-aspetta.ts"
@@ -100,9 +101,11 @@
         "uscita": 0,
         "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81425a384da024f017372b98d56169caeb192d29^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "L'email non cerca più «/contact» dentro la frase di titolare: il testo resta quello del pannello e sotto c'è la riga «Il modulo dei contatti, sul sito: <url>» costruita da recapitoPrivacy(). La prova cambia la frase (mock di recapitoInUnaFrase senza percorso) e controlla il collegamento giusto in html e testo.",
-      "nota": "Era dato già riparato prima; il collaudo del lotto 1 l'ha smentito e la riparazione è stata fatta nel lotto 2."
+      "nota": "Era dato già riparato prima; il collaudo del lotto 1 l'ha smentito e la riparazione è stata fatta nel lotto 2.",
+      "cosa_resta": "L'email non cerca più nella frase, ma la frase di titolare resta con «(pagina /contact)» nudo, senza dominio, in html (avvisi-a-chi-aspetta.ts:474) e testo (:482-489), e sotto c'è la riga col collegamento intero: lo stesso recapito compare due volte, uno non cliccabile. Cura: titolare.ts dà anche una versione della frase senza percorso (o la frase e il percorso separati) e l'email usa quella.",
+      "verificato_da": "revisore lotti 2-3: prova 3/3, nessuna ricerca nella frase, casella vera senza riga aggiunta, html escapato (iniezione <img onerror> esce escapata); declassata a parziale per il recapito ripetuto e nudo"
     },
     {
       "id": "R05-016",
@@ -125,14 +128,16 @@
       "id": "R05-009",
       "chiave": "architettura|da controllare sui dati: un negozio che oggi ha salvato 7 giorni vuoti diventa chiuso sempre appena esce la modifica",
       "esito": "non_codice",
-      "nota": "La modifica è la regola del 31/10 in orariImpostati, già sulla base (lib/store-hours.ts:265-275): 4-7 giorni scritti tutti vuoti valgono «chiuso». Nel codice la scelta è giusta (riapre le ferie; l'editor scrive sempre 7 giorni e mostra «Chiuso» su ognuno). Resta il controllo sui dati: Nicola lancia in sola lettura: select id, store_name, store_hours from profiles where jsonb_typeof(store_hours)='object' and (select count(*) from jsonb_each(store_hours) d where d.key in ('mon','tue','wed','thu','fri','sat','sun') and jsonb_typeof(d.value)='array') >= 4 and not exists (select 1 from jsonb_each(store_hours) d where d.key in ('mon','tue','wed','thu','fri','sat','sun') and jsonb_typeof(d.value)='array' and jsonb_array_length(d.value) > 0); ogni riga è un negozio trattato come chiuso sempre: se non è in ferie, si sistemano gli orari col negoziante. Query provata su un Postgres locale usa e getta con righe finte."
+      "nota": "La modifica è la regola del 31/10 in orariImpostati, già sulla base (lib/store-hours.ts:265-275): 4-7 giorni scritti tutti vuoti valgono «chiuso». Nel codice la scelta è giusta (riapre le ferie; l'editor scrive sempre 7 giorni e mostra «Chiuso» su ognuno). Resta il controllo sui dati: Nicola lancia in sola lettura: select id, store_name, store_hours from profiles where jsonb_typeof(store_hours)='object' and (select count(*) from jsonb_each(store_hours) d where d.key in ('mon','tue','wed','thu','fri','sat','sun') and jsonb_typeof(d.value)='array') >= 4 and not exists (select 1 from jsonb_each(store_hours) d where d.key in ('mon','tue','wed','thu','fri','sat','sun') and jsonb_typeof(d.value)='array' and jsonb_array_length(d.value) > 0); ogni riga è un negozio trattato come chiuso sempre: se non è in ferie, si sistemano gli orari col negoziante. Query provata su un Postgres locale usa e getta con righe finte.",
+      "verificato_da": "revisore lotti 2-3: regola 4-7 giorni scritti vuoti = chiuso già su 1ad51b4c (lib/store-hours.ts:265-275, diff base..HEAD vuoto); l'editor scrive i 7 giorni al primo tocco (StoreHoursEditor.tsx:17-22)"
     },
     {
       "id": "R05-010",
       "chiave": "architettura|ferie salvate con l'editor di prima su 3 giorni o meno: il negozio resta aperto a qualunque ora",
       "esito": "scelta_di_nicola",
       "domanda": "Un negozio con 1-3 giorni salvati tutti vuoti (editor di prima) va trattato come «chiuso per ferie» (soglia da 4 a 1: chi ha svuotato un giorno per sbaglio diventa chiuso sempre) o come «orari mai impostati» com'è oggi?",
-      "nota": "Prima contare i casi in sola lettura: stessa query di R05-009 con «between 1 and 3» al posto di «>= 4». Se torna vuota la scelta non serve. L'editor di oggi scrive sempre 7 giorni: riguarda solo dati vecchi. La regola «due giorni vuoti = non lo so» è fissata da tests/unit/ferie-con-la-domenica-mai-scritta-ferma-gli-ordini.test.ts."
+      "nota": "Prima contare i casi in sola lettura: stessa query di R05-009 con «between 1 and 3» al posto di «>= 4». Se torna vuota la scelta non serve. L'editor di oggi scrive sempre 7 giorni: riguarda solo dati vecchi. La regola «due giorni vuoti = non lo so» è fissata da tests/unit/ferie-con-la-domenica-mai-scritta-ferma-gli-ordini.test.ts.",
+      "verificato_da": "revisore lotti 2-3: tests/unit/ferie-con-la-domenica-mai-scritta-ferma-gli-ordini.test.ts:51 fissa «uno o due giorni vuoti = non lo so»; abbassare la soglia non separa una vacanza da un giorno svuotato per sbaglio: è una scelta"
     },
     {
       "id": "R05-011",
@@ -161,7 +166,89 @@
           "file": "app/api/stripe/checkout/route.ts",
           "modifica": "Nello schema Body, dopo deliverySlot (~r.85): delivery_date: z.string().max(40).optional().nullable(). Subito dopo il controllo della fascia mancante (r.142) lo stesso blocco della rotta dei contanti (app/api/orders/cod/route.ts, commit a1073aff): if (!body.pickupInStore && body.deliverySlot && body.delivery_date) { const riportata = fasciaDelGiornoDellaRichiesta(body.deliverySlot, body.delivery_date, new Date()); if (riportata === null) return ApiErrors.conflict('La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.'); body.deliverySlot = riportata; }. La funzione va spostata in lib/ordini/fascia-leggibile.ts accanto a fasciaAlGiornoDellOrdine e importata da tutte e due le rotte. Così impronta (r.216-219), controllo (r.522) e sessione (r.1005) vedono la fascia giusta."
         }
-      ]
+      ],
+      "verificato_da": "revisore lotti 2-3: diff riletto, prova 5/5, ogni uso di body.deliverySlot controllato (il riporto avviene prima di controllo, salvataggio, nota, email e impronta); data malformata o falsa non fa accettare niente in più; senza data identico a prima"
+    },
+    {
+      "id": "R05-001",
+      "chiave": "architettura|la variabile che rende obbligatorie le prove col database in ci non la legge nessuno",
+      "esito": "parziale",
+      "commit": "c599f9d6a169bff30a1ebd205a836caa3fcde977",
+      "file_toccati": [
+        ".github/workflows/ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r05-ci-variabili.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-ci-variabili.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": 3,
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c599f9d6a169bff30a1ebd205a836caa3fcde977^ --file .github/workflows/ci.yml --prove tests/unit/riparazione-r05-ci-variabili.test.ts --json",
+        "nota": "la macchina risponde 3: non decide su .github/workflows/ci.yml (non è codice che le prove importano). Il collaudo rimette a mano la riga tolta."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "PROVE_POSTGRES_OBBLIGATORIE non è letta da nessun file di prova né script: il salto senza Postgres è già con describe.skipIf e il passo «PostgreSQL c'è e risponde» fa fallire la CI se il database manca. Tolta la variabile morta dal passo Test e corretto il commento. La prova controlla che ogni variabile del passo Test compaia nel codice delle prove o negli script.",
+      "cosa_resta": "La variabile morta è tolta (nessun file l'ha mai letta: git log -S), ma la prova guardiana guarda solo tests/ e scripts/, non i file di configurazione in radice (vitest.config.*, setup): una variabile letta solo lì risulterebbe «morta», e il commento nuovo in ci.yml:137-139 è più largo di quello che la prova controlla. Da allargare la prova alla radice.",
+      "verificato_da": "revisore lotti 2-3: grep su tutto il deposito (la variabile c'è solo nella prova), git log -S, lettura delle skipIf (coperte dal passo «Le prove col database vero non si possono saltare»); riga rimessa a mano nel worktree → prova rossa, tolta → verde"
+    },
+    {
+      "id": "R05-002",
+      "chiave": "architettura|commenti delle rotte della veloce dicono ancora «un fattorino approvato e online»",
+      "esito": "riparato",
+      "commit": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts"
+      ],
+      "prova_file": [],
+      "prova_comando": "grep -rn 'approvato e online' app/api (nessuna riga)",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "nota": "solo commento, nessun comportamento"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il commento in app/api/orders/cod/route.ts:1004 dice la condizione vera di veloceSiPuo e contaFattoriniOnline (ore 8-21, negozi aperti ancora per un quarto d'ora, fattorino approvato, interruttore acceso e libero). In app/api/consegna/veloce/route.ts la frase vecchia non c'era più.",
+      "verificato_da": "revisore lotti 2-3: lettura di veloceSiPuo e contaFattoriniOnline, grep di «fattorino online» e «approvato e online»: il commento nuovo dice la condizione vera, in consegna/veloce/route.ts non resta il vecchio significato"
+    },
+    {
+      "id": "R05-008",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "non_fatto",
+      "nota": "Dato prima come serve_file_altrui, smentito dal collaudo: la cura sta anche nel lettore, che è di R05, e il tetto dei subagenti era raggiunto. Cosa fare: in lib/queries/seller-public-profiles.ts la chiave delle domande in volo (`select|id`, ~:95-130) usa la stringa grezza delle colonne; va costruita sulle colonne normalizzate da conColonneIndispensabili (:73-79), ordinate, così 'id, store_name' (DropOfDay.tsx:91), 'id, store_name, store_logo' (storie, negozio del mese) e 'id, store_name, is_approved' (fasce-prodotti.ts:136, 187, 328) si uniscono in una domanda sola (chiedendo l'unione delle colonne). Poi, per «ogni fascia compare un giro più tardi», le sezioni della home (components/home/StoriesCarousel.tsx, DropOfDay.tsx, TrendingNow.tsx e le altre) leggono i negozi una volta nel genitore o con lo stesso queryKey. Niente memoria nel modulo fra richieste diverse sul server.",
+      "verificato_da": "revisore lotti 2-3: lettura di seller-public-profiles.ts:73-146 e grep delle select in components/home e lib/queries: stesso client, colonne diverse, chiave sulla stringa grezza → l'unione in volo non scatta in home"
+    },
+    {
+      "id": "R05-012",
+      "chiave": "architettura|due migrazioni citano una migrazione 426 sui profili che nel deposito non c'è",
+      "esito": "non_fatto",
+      "nota": "Deciso dalla regia: le migrazioni esistenti non si toccano. Righe da correggere: migrations/422_la_regola_dell_amministratore_non_ferma_la_lettura_degli_eventi.sql:8 e migrations/425_i_permessi_del_sito_sono_scritti_nelle_migrazioni.sql:16, dove «migrazione 426» dovrebbe dire «migrazione 541» (migrations/541_i_visitatori_non_leggono_la_tabella_dei_profili.sql scrive la revoca di SELECT su profiles ad anon)."
+    },
+    {
+      "id": "R05-013",
+      "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+      "esito": "scelta_di_nicola",
+      "domanda": "Le falle degli strumenti (in particolare webpack-dev-middleware 6.1.3 portato da @storybook/builder-webpack5 e @storybook/nextjs) si chiudono solo con un salto di maggiore (webpack-dev-middleware 6→7.4.5 o un'altra maggiore di Storybook): lo facciamo?",
+      "nota": "npm audit oggi: 18 falle (5 basse, 9 medie, 4 alte); undici, js-yaml e fast-uri non ci sono più. `npm audit fix` (solo patch) non ne chiude nessuna e ne aggiunge una: lock ripristinato, nessun commit.",
+      "verificato_da": "revisore lotti 2-3: npm audit --json (18: 5 basse, 9 medie, 4 alte) e npm view per la stessa maggiore di zod, resend, minimatch, glob, webpack-dev-middleware: nessuna versione chiude l'avviso; Storybook senza correzione"
+    },
+    {
+      "id": "R05-014",
+      "chiave": "architettura|zod, resend, @sentry/nextjs, minimatch e glob, librerie che vanno nel sito, hanno 10 avvisi pubblici di npm audit (zod alto) che si chiudono solo con aggiornamenti che rompono",
+      "esito": "scelta_di_nicola",
+      "domanda": "Si fanno i salti di maggiore zod 3.25.76→4.x, resend 3.5→6.x (porta glob, minimatch, editorconfig, js-beautify, @react-email/render) e @sentry/nextjs 10.78→11.x?",
+      "nota": "Per nessun pacchetto della voce c'è un aggiornamento senza salto di maggiore che chiuda l'avviso: nessun commit. Nota del collaudo: per @sentry/nextjs l'intervallo vulnerabile parte da 10.76.2 (installato 10.78.0): fissare ≤10.76.1 toglierebbe l'avviso senza salto di maggiore, ma è un arretramento, non una cura.",
+      "verificato_da": "revisore lotti 2-3: npm audit --json (18: 5 basse, 9 medie, 4 alte) e npm view per la stessa maggiore di zod, resend, minimatch, glob, webpack-dev-middleware: nessuna versione chiude l'avviso; Storybook senza correzione"
+    },
+    {
+      "id": "R05-015",
+      "chiave": "architettura|i dati demo del sito non si caricano più sul database di oggi: tutte e quattro le semine si fermano",
+      "esito": "gia_riparato_prima",
+      "prova": "tests/sql/harness/riparazione-r12-le-semine-girano.sh (commit 609b8a02, nella base 1ad51b4c) ricostruisce il database dalle migrazioni e carica tutte le semine due volte: lanciato su Postgres 16 locale usa e getta, uscita 0 («le semine girano (due volte) sullo schema di oggi»). Le quattro semine non sono cambiate dalla base.",
+      "verificato_da": "revisore lotti 2-3: tests/sql/harness/riparazione-r12-le-semine-girano.sh lanciato sulla base 1ad51b4c su Postgres 16 usa e getta: uscita 0, applica seeds/00*.sql (001-007) con ON_ERROR_STOP; nel db 18 utenti demo"
     }
   ],
   "nuovi_difetti_visti": [
@@ -185,11 +272,18 @@
       "severita": "minore",
       "file": "components/seller/StoreHoursEditor.tsx",
       "descrizione": "Lo vede («Chiuso» su ogni giorno, sparisce l'avviso «non impostati»), ma è facile da fare per sbaglio: servirebbe una conferma o un ritorno a «non impostati»."
+    },
+    {
+      "titolo": "la frase vecchia «un fattorino approvato e online» resta in altri commenti e testi fuori dalla voce",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "app/api/stripe/checkout/route.ts:370, :530 · app/cart/page.tsx:196 · app/checkout/page.tsx:661 · components/checkout/DeliverySlotPicker.tsx:50",
+      "descrizione": "La condizione vera della veloce è: ore 8-21, negozi aperti ancora per un quarto d'ora, fattorino approvato, acceso e libero (come ora in app/api/orders/cod/route.ts:1004-1006)."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
-    "agenti": 3,
-    "nota": ""
+    "agenti": 6,
+    "nota": "3 riparatori (lotto 1 e 2 modello grande, lotto 3 piccolo) + 3 revisori (lotto 1 grande, lotti 2 e 3 piccolo): tetto raggiunto; R05-001, R05-007 e R05-008 restano senza giro di correzione"
   }
 }
