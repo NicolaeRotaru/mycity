@@ -230,6 +230,8 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
         sort={sort}
         maxColumns={4}
         onCount={onCount}
+        // La griglia è l'ultima sezione della home del negozio: sta sotto la piega, niente foto «urgenti».
+        prioritaPrimeFoto={false}
         // Stato vuoto su misura: distingue "nessun risultato per la ricerca" dal
         // generico, e offre un'azione per azzerare ricerca + filtri.
         emptyTitle={termine ? `Nessun risultato per «${termine}»` : undefined}
