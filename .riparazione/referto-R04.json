@@ -1,0 +1,308 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-22 01:30",
+  "finita": true,
+  "testa": "38baad8c221a7ada984a09eef3857df09adc5077",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "38baad8c221a7ada984a09eef3857df09adc5077",
+    "nota": "typecheck, lint e test: 1921 file, 11875 prove verdi; SHA preso con git rev-parse HEAD nello stesso comando"
+  },
+  "voci": [
+    {
+      "id": "R04-008",
+      "chiave": "qa-flussi|i 14 giorni per rispedire la merce del reso si contano ancora a blocchi di 24 ore",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano: i 14 giorni del reso decidono chi ha diritto al rimborso, quindi soldi)"
+    },
+    {
+      "id": "R04-001",
+      "chiave": "api-backend|la memoria degli allarmi (operational_alert_log) non si pulisce mai",
+      "esito": "riparato",
+      "commit": "98e4568f36d00c04ff58699da84c32466a8dda05",
+      "file_toccati": [
+        "migrations/660_la_memoria_degli_allarmi_si_pulisce_da_sola.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r04-allarmi.test.sql"
+      ],
+      "prova_comando": "bash tests/sql/harness/apply.sh r04_prova && psql -X -d r04_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r04-allarmi.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 98e4568f^ --file migrations/660_la_memoria_degli_allarmi_si_pulisce_da_sola.sql --prove tests/sql/rls/riparazione-r04-allarmi.test.sql --sql r04_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione nuova 660: un trigger FOR EACH STATEMENT dopo INSERT/UPDATE su operational_alert_log cancella le righe con last_sent_at più vecchio di 24 ore (SKIP LOCKED). Le 24 ore sono l'attesa più lunga che il codice legge in quella memoria (ATTESA_DI_UN_GIORNO_ORE=24, ORE_SILENZIO_CARRELLO=24). Esclusa 'ai-tetto-condiviso:ripiego-da' (lib/ai/tettoSpesa.ts), che deve durare quanto il guasto. Niente pg_cron (il deposito non lo usa). EXECUTE revocato a PUBLIC, anon, authenticated. Non applicata: lo decide Nicola.",
+      "verificato_da": "subagente revisore (lotto 1): rimessa rilanciata --sql r04_rev_rimessa uscita 0; letti tutti gli usi di operational_alert_log (finestre 6h, 24h, 24h, 6h, SOS 10 min: nessuna oltre 24h); due sessioni Postgres in parallelo, nessun blocco o stallo con upsert; permessi: niente SECURITY DEFINER, search_path fisso, authenticated rifiutato. Regge."
+    },
+    {
+      "id": "R04-007",
+      "chiave": "qa-flussi|sulla bacheca del fattorino un «accetta» perso lascia l'ordine in elenco fino a un minuto, e fa girare tutti i pulsanti insieme",
+      "esito": "riparato",
+      "commit": "0dd2c82a13b772f1b8d99e575cb4e31a37fe2311",
+      "file_toccati": [
+        "app/rider/page.tsx",
+        "migrations/661_la_presa_persa_dice_se_l_ha_preso_un_altro.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-presa-ordine.test.tsx",
+        "tests/sql/rls/riparazione-r04-presa-persa.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-presa-ordine.test.tsx --reporter=dot ; psql -X -d r04_prova -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r04-presa-persa.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0dd2c82a^ --file app/rider/page.tsx --prove tests/unit/riparazione-r04-presa-ordine.test.tsx --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0dd2c82a^ --file migrations/661_la_presa_persa_dice_se_l_ha_preso_un_altro.sql --prove tests/sql/rls/riparazione-r04-presa-persa.test.sql --sql r04_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In pagina una presa persa (GIA_PRESO o NON_PIU_DISPONIBILE) toglie subito l'ordine dalla bacheca in memoria e la rilegge; gira solo il pulsante dell'ordine premuto, gli altri restano spenti senza rotella (una presa alla volta, come alla base). Migrazione nuova 661: prendi_ordine dice GIA_PRESO solo se l'ordine ha un altro fattorino, NON_PIU_DISPONIBILE negli altri casi; la presa atomica e i controlli NON_FATTORINO e DOCUMENTI_SCADUTI restano uguali alla 270. Due prove rimesse (vitest e SQL), tutte e due uscita 0. Finché la 661 non è applicata, un ordine annullato risponde ancora GIA_PRESO.",
+      "verificato_da": "subagente revisore (lotto 1): due rimesse rilanciate, uscita 0; prendi_ordine con e senza 661 confrontata sul database ricostruito: ultima definizione è la 270, corpo identico tranne il blocco dichiarato, stessi permessi, owner, search_path e commento; varianti errore di rete, DOCUMENTI_SCADUTI, motivo sconosciuto, risposta vuota. Regge."
+    },
+    {
+      "id": "R04-011",
+      "chiave": "stati-ui|sulla bacheca del fattorino, se la lettura dello stato online cade, la pagina scrive «sei offline» invece di dire che non lo sa; anche il voto ignora l’errore",
+      "esito": "riparato",
+      "commit": "f6dc1586cbee0127cbf392e1af7ed1cd6044d33b",
+      "file_toccati": [
+        "app/rider/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-stato-online.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-stato-online.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f6dc1586^ --file app/rider/page.tsx --prove tests/unit/riparazione-r04-stato-online.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Lo stato online ha tre valori (online, offline, non-so): senza un dato letto non si scrive mai «Sei offline». Lettura caduta = isError, failureCount > 0 o fetchStatus 'paused': la pagina dice «Non so se sei online» con «Riprova»; durante la prima lettura «Controllo se sei online…». Il voto segue la stessa regola. Alla base 4 casi su 5 della prova sono rossi.",
+      "verificato_da": "subagente revisore (lotto 1): rimessa rilanciata uscita 0; pagina montata coi tentativi del QueryProvider: primo tentativo caduto e secondo riuscito torna giusta, il fattorino offline vede ancora l’interruttore, il voto caduto e poi riuscito si vede. Regge."
+    },
+    {
+      "id": "R04-006",
+      "chiave": "qa-flussi|due ordini dello stesso carrello possono finire a due fattorini diversi, e il secondo fa un viaggio intero per 1 euro",
+      "esito": "scelta_di_nicola",
+      "domanda": "Gli ordini dello stesso carrello devono andare allo stesso fattorino (la bacheca li mostra come un giro solo e un «Accetta» li prende tutti: serve una migrazione con la chiave del carrello nella vista e una presa di gruppo), oppure restano presi uno alla volta e va cambiato il compenso del secondo fattorino?",
+      "nota": "La regola nel codice non c'è: la vista ordini_disponibili_rider (161) non ha la chiave del carrello, prendi_ordine (270) assegna un ordine alla volta, la pagina non raggruppa. C'è solo il compenso «il giro è uno» (lib/shipping.ts:68, lib/ordini/prezzi.ts:136 e 310-316: 3 euro al primo negozio, 1 agli altri), che dà per scontato un fattorino solo. Nessun codice toccato (regola della regista al piano)."
+    },
+    {
+      "id": "R04-010",
+      "chiave": "rls-database|il carosello delle storie legge 200 storie e poi taglia a 30: un solo negozio approvato con 200 storie in 24 ore spingerebbe fuori gli altri",
+      "esito": "parziale",
+      "commit": "38baad8c221a7ada984a09eef3857df09adc5077",
+      "file_toccati": [
+        "components/home/StoriesCarousel.tsx",
+        "migrations/662_il_carosello_delle_storie_legge_poche_storie_per_negozio.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-carosello-a-turno.test.tsx",
+        "tests/sql/rls/riparazione-r04-carosello.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-carosello-a-turno.test.tsx --reporter=dot ; bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r04-carosello.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "in_parte",
+        "uscita": 3,
+        "comando": "codice, uscita 0 (regge): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c63d879a^ --file components/home/StoriesCarousel.tsx --prove tests/unit/riparazione-r04-carosello-a-turno.test.tsx --json ; migrazione, uscita 3 (rosso_strutturale): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c63d879a^ --file migrations/662_il_carosello_delle_storie_legge_poche_storie_per_negozio.sql --prove tests/sql/rls/riparazione-r04-carosello.test.sql --sql r04_rimessa --json ; tsx e 662 insieme con la prova vitest: uscita 1 (la 662 da sola non cambia la vitest, che simula la funzione)",
+        "nota": "il codice regge con la rimessa vera; la 662 crea una funzione nuova, che la prova SQL deve nominare, quindi senza la 662 la prova cade per struttura"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun numero nuovo: prima del taglio a 30 le storie vanno a turno fra i negozi (la più recente di ognuno, poi la seconda, …). Se una lettura torna piena si rilegge escludendo i negozi già visti finché arrivano negozi nuovi (al massimo 30 negozi; se una rilettura cade si tiene quello che c'è); stesso per il ripiego da 200. Con poche storie resta una lettura sola. Restano verdi le 7 prove esistenti sul carosello. Giro di correzione (f4f58e6c): al massimo 2 riletture dopo la prima (3 letture in tutto), anche nel ripiego; la prova conta le letture con 40 negozi da 40 storie (≤ 3) e vuole storie di più negozi. Giro del collaudo K02 (38baad8c): con un tetto di 3 letture, tre negozi da più di 30 storie nascondevano gli altri. Migrazione nuova 662: funzione storie_attive_per_negozio(p_per_negozio, p_negozi), SECURITY INVOKER, search_path fisso, stessi filtri (non scadute, negozio in seller_public_profiles, ordine per data), al massimo 30 storie per negozio e 30 negozi; grant ad anon e authenticated. Il carosello la chiama con .rpc (1 lettura), poi alterna i negozi e taglia a 30; se la funzione manca legge come prima (al massimo 3 letture con l’aggancio, 4 senza). Prova vitest: 3 negozi da 45 storie e 12 da 1-2 → compaiono esattamente i 15 negozi; 40 da 40 → 30 negozi diversi; tetto delle letture dichiarato. Prova SQL: 11 controlli verdi (13 negozi esatti con 3 grandi, 30 negozi su 40, scadute, sospesi e non-negozi esclusi, anon e authenticated, parametri limitati). Difetto del collaudo rimesso a mano (risposta della funzione ignorata): i 3 casi nuovi rossi.",
+      "verificato_da": "subagente revisore (lotto 1): rimessa rilanciata uscita 0; indirizzo postgrest seller_id=not.in.(…) giusto; filtri originali tenuti; tetto delle riletture reale ma alto nel caso estremo (fino a 30 letture), corretto nel giro di correzione. Dopo il giro: rimessa sull’intera correzione (base c63d879a^) uscita 0; 6 prove esistenti sul carosello verdi. Collaudo K02: caso di un negozio solo chiuso; il tetto di 3 letture lasciava fuori negozi, corretto in 38baad8c (non ricollaudato).",
+      "commit_precedenti": [
+        "c63d879a86097b9be7ac9c5507457ba151a1d4a1",
+        "f4f58e6c00f6b5700e19b09b66c5e40050e60d24"
+      ],
+      "cosa_resta": "La 662 si prova solo con la rimessa SQL, che esce 3 (rossa per struttura, perché la prova nomina la funzione nuova): per chiudere serve la deroga rimessa_a_mano. La 662 è scritta e NON applicata: finché Nicola non la applica, in produzione il carosello usa il ripiego, dove tre negozi da più di 30 storie possono ancora nascondere gli altri."
+    },
+    {
+      "id": "R04-002",
+      "chiave": "microcopy|nella pagina dei punti restano «streak», «referral» e «checkout»",
+      "esito": "riparato",
+      "commit": "3e6e71a8e56c596cacae0942ae31ff8bccbc7c0b",
+      "file_toccati": [
+        "app/profile/loyalty/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-punti-in-italiano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-punti-in-italiano.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0e025881^ --file app/profile/loyalty/page.tsx --prove tests/unit/riparazione-r04-punti-in-italiano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Streak diventa «giorni di fila» (scheda, record, movimenti, «Come accumuli punti»), referral «amico invitato» / «codice di invito», checkout «alla cassa». La prova disegna la pagina vera e legge il testo visibile; per la lista «Come accumuli punti», accesa solo coi punti accesi, legge le frasi dal sorgente. Giro di correzione (3e6e71a8): «in cassa» come nel resto del sito, «con il tuo codice» come in app/profile/referral.",
+      "verificato_da": "subagente revisore (lotto 2): rimessa rilanciata uscita 0; nessun’altra parola inglese visibile; «alla cassa» e «codice di invito» non allineati al sito, corretti nel giro di correzione. Dopo il giro: rimessa sull’intera correzione (base 0e025881^) uscita 0; 5 prove esistenti sulla pagina verdi.",
+      "commit_precedenti": [
+        "0e02588176fe2b83e3c160a86e71e4f640f36870"
+      ]
+    },
+    {
+      "id": "R04-003",
+      "chiave": "microcopy|alcuni errori di zod arrivano ancora in inglese: «invalid input» di un'unione, chiavi non riconosciute, literal sbagliato, refine senza messaggio",
+      "esito": "riparato",
+      "commit": "8ef975e4d27ea8695fe58ee7ae746ee02376dc38",
+      "file_toccati": [
+        "lib/zod-i18n.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-zod-in-italiano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-zod-in-italiano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8ef975e4d27ea8695fe58ee7ae746ee02376dc38^ --file lib/zod-i18n.ts --prove tests/unit/riparazione-r04-zod-in-italiano.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Messaggi italiani per invalid_union e invalid_literal («Valore non valido»), unrecognized_keys («C’è un campo che non serve qui» / «Ci sono N campi che non servono qui», senza nominare le chiavi) e custom senza messaggio. Un refine col suo messaggio resta il suo. Prova con schemi zod veri (unione, strict, literal, refine, superRefine).",
+      "verificato_da": "subagente revisore (lotto 2): rimessa rilanciata uscita 0; zod 3.25.76: i 4 codici coperti; refine con messaggio (stringa, funzione, oggetto) e .strict(msg) restano il loro; 4 prove esistenti verdi. Regge."
+    },
+    {
+      "id": "R04-004",
+      "chiave": "qa-flussi|una voce della chat sul campanello può restare accesa anche se la chat è stata letta mentre era aperta",
+      "esito": "riparato",
+      "commit": "023a2977863071ab77080801fb57d0bcc9fe10cf",
+      "file_toccati": [
+        "app/api/chat/messages/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-campanella-letta-nel-mezzo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-campanella-letta-nel-mezzo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46b8f43f^ --file app/api/chat/messages/route.ts --prove tests/unit/riparazione-r04-campanella-letta-nel-mezzo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo aver scritto la voce del campanello la rotta rilegge il contatore dei non letti: se è a 0 (chat letta nel frattempo) spegne la voce appena scritta. Se la lettura arriva dopo, la spegne mark-read, che azzera il contatore prima di spegnere le voci. Prova sulla rotta vera con supabase finto, con la lettura che cade tra la lettura del contatore e la scrittura della voce. Giro di correzione (023a2977): la voce nuova ha un id generato dalla rotta (crypto.randomUUID()) e lo spegnimento filtra solo per quell’id, così una voce arrivata nel frattempo non si spegne; la prova copre anche rilettura caduta, contatore riletto a 2 e voce arrivata nel frattempo. Mutanti a mano: null come zero → rosso; <= 2 → rosso; filtro largo senza id → rosso.",
+      "verificato_da": "subagente revisore (lotto 2): rimessa rilanciata uscita 0; contatore giusto, due messaggi in fila tengono la voce, errore di rilettura non fa cadere l’invio; due mutanti restavano verdi (lettura nulla come zero, soglia <= 2) e una gara di pochi ms: corretti nel giro di correzione. Dopo il giro: rimessa sull’intera correzione (base 46b8f43f^) uscita 0; il capo ha rimesso a mano il filtro largo senza id e la prova è caduta (1 su 6).",
+      "commit_precedenti": [
+        "46b8f43f3371e1faf69e2edc9fbfac49352b9c4d"
+      ]
+    },
+    {
+      "id": "R04-005",
+      "chiave": "qa-flussi|le prove delle frasi pubbliche cercano parole nel codice: sette mutanti che rimettono i difetti restano verdi",
+      "esito": "parziale",
+      "commit": "0222d20dcb264e8c8072bc161658c419c225925c",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r04-frasi-pubbliche.test.tsx",
+        "tests/unit/riparazione-r04-dialogo-di-conferma.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-frasi-pubbliche.test.tsx tests/unit/riparazione-r04-dialogo-di-conferma.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "in_parte",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e414ab3f^ --file \"app/product/[id]/page.tsx\",app/rider/help/page.tsx,components/home-sections/HomeSectionRenderer.tsx,components/seller/AttributesFields.tsx --prove tests/unit/riparazione-r04-frasi-pubbliche.test.tsx --json (uscita 0) ; node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e414ab3f^ --file components/ConfirmDialog.tsx --prove tests/unit/riparazione-r04-dialogo-di-conferma.test.tsx --json (uscita 0) ; app/cart/page.tsx: nessun commit correttore, rimessa vera impossibile",
+        "nota": "rimessa vera (strada a) a uscita 0 per 5 file su 6; il carrello solo con mutante a mano"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prove nuove che disegnano le pagine vere (scheda prodotto, carrello, home con orologio finto, aiuto fattorini, campi del negozio) e il dialogo vero (Tab, Maiusc+Tab, ritorno del fuoco) e leggono il testo visibile. Commit correttore storico e414ab3f: rimessa vera a uscita 0 per scheda prodotto, aiuto fattorini, home, campi del negozio e dialogo. Mutanti a mano, uno alla volta: 1, 1b, 2, 3, 4, 5, 6, 7 rossi; resta verde il 2b (carrello con una frase scritta a mano identica a quella vera: a video non c'è differenza).",
+      "cosa_resta": "Il carrello (app/cart/page.tsx) non ha un commit correttore (usava già frasePagamento() prima di e414ab3f), quindi la rimessa vera non esiste: chiusura con rimessa a mano, serve la deroga rimessa_a_mano. Il mutante a mano «frase con la carta» sul carrello è rosso.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/le-frasi-pubbliche-seguono-la-cassa-e-la-realta.test.tsx",
+          "modifica": "Facoltativa, ora coperta dalla prova nuova: togliere il controllo a testo /<DeliveryCutoff[^>]*senzaNegozio/ (riga ~93, caso «la home passa il banner senza negozio…»), il test «la descrizione per i non vedenti non finisce nella griglia» (le readFileSync di product/[id]/page.tsx e AttributesFields, ~169-175) e la regex /0523 ?000000/ (~141). Non toccata: legge anche app/checkout/page.tsx, app/page.tsx e app/contact/page.tsx, che non sono di R04."
+        }
+      ],
+      "verificato_da": "subagente revisore (lotto 2): rimessa vera rilanciata (ConfirmDialog, base e414ab3f^) uscita 0; 6 mutanti a mano, tutti rossi tranne il mutante equivalente del carrello; stabile su 3 lanci (11/11). Parziale giusto."
+    },
+    {
+      "id": "R04-009",
+      "chiave": "qa-flussi|due guardie sulla veloce controllano il testo del sorgente e non il comportamento",
+      "esito": "parziale",
+      "commit": "8ec4485d807ed3e6e476226397868d28a20f1d62",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r04-veloce.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-veloce.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "in_parte",
+        "uscita": 3,
+        "comando": "guardia 1, uscita 0: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5be50559^ --file components/checkout/DeliverySlotPicker.tsx,app/checkout/page.tsx --prove tests/unit/riparazione-r04-veloce.test.ts --json ; guardia 2, uscita 3: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c614b26b^ --file app/checkout/page.tsx --prove tests/unit/riparazione-r04-veloce.test.ts --json",
+        "nota": "guardia 1 regge con la rimessa vera; guardia 2 rossa per struttura"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La prova nuova monta la cassa intera: (1) la cassa chiede la veloce per il negozio del carrello, «Adesso» si offre col sì del server e non col no o col guasto; (2) la riga sotto le mattonelle dice i minuti con «Adesso» e la fascia scelta con «Domani». Commit correttore della guardia 1: 5be50559, rimessa vera a uscita 0. Mutanti a mano: A1 (expressSiPuo senza il sì del server), A2 (altro indirizzo), A3 (veloceDisponibile={true}), B1 (riga fissa «In 30-60 min…»): tutti rossi.",
+      "cosa_resta": "Guardia 2 (la riga sotto le mattonelle): il commit correttore c614b26b è del 24/8 e app/checkout/page.tsx da allora è cambiato troppo: la rimessa vera dà uscita 3. Chiusura con rimessa a mano: serve la deroga rimessa_a_mano. Il mutante a mano B1 è rosso.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts",
+          "modifica": "Togliere l'intero it('la cassa offre «Adesso» solo con il sì del server', …), righe 135-145 (le readFileSync di DeliverySlotPicker.tsx e checkout/page.tsx con i toContain testuali), e gli import rimasti inutilizzati: ora lo prova sul comportamento riparazione-r04-veloce.test.ts."
+        },
+        {
+          "file": "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+          "modifica": "Togliere l'intero it('la riga sotto le mattonelle non è più un testo fisso', …), righe 314-325 (la slice dopo '>{VOCE_CONSEGNA}</p>' col toMatch /rigaQuandoArriva\\(consegna\\)/): ora lo prova sul comportamento riparazione-r04-veloce.test.ts."
+        }
+      ],
+      "verificato_da": "subagente revisore (lotto 2): rimessa vera rilanciata (base 5be50559^) uscita 0 con ② rossa su tutti e due i file; mutanti A1 e B1 rossi; stabile su 3 lanci (5/5). Parziale giusto."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "alcuni errori di zod restano in inglese: discriminatedUnion, multipleOf, finite, startsWith, datetime",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/zod-i18n.ts:99-110",
+      "descrizione": "Fuori dai 4 casi della voce: per esempio «Invalid discriminator value. Expected …» con gli schemi discriminatedUnion di lib/store-site.ts:131,168,227,263,278. lib/errors.ts:216 fa da rete di sicurezza."
+    },
+    {
+      "titolo": "sulla bacheca del fattorino un doppio tocco su un ordine già suo dice «non è più disponibile» invece di «è già tuo»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/rider/page.tsx:372",
+      "descrizione": "Con la migrazione 661 un ordine già assegnato a chi lo prende risponde NON_PIU_DISPONIBILE (prima GIA_PRESO, peggio). Servirebbe un codice GIA_TUO nella funzione e il suo testo in pagina."
+    },
+    {
+      "titolo": "sulla bacheca del fattorino, se l’interruttore online riesce ma la rilettura dopo cade, la scheda resta sul vecchio stato",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/rider/page.tsx:429",
+      "descrizione": "Dato vecchio, non un «offline» inventato: fuori dalla voce sullo stato online."
+    },
+    {
+      "titolo": "la pulizia degli allarmi tiene esattamente 24 ore, senza margine, e non ha un indice su last_sent_at",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "migrations/660_la_memoria_degli_allarmi_si_pulisce_da_sola.sql:43",
+      "descrizione": "24 ore è la finestra più lunga letta oggi: un’attesa futura più lunga si romperebbe in silenzio, e uno sfasamento fra l’orologio del sito e quello del database fa ripartire un avviso giornaliero qualche secondo prima. Ogni scrittura legge tutta la tabella (che resta piccola). La prima scrittura dopo il rilascio cancella tutto l’arretrato."
+    }
+  ],
+  "domande_per_nicola": [
+    "R04-006: gli ordini dello stesso carrello devono andare allo stesso fattorino (un giro solo in bacheca e un «Accetta» che li prende tutti, con una migrazione), oppure restano presi uno alla volta e va cambiato il compenso del secondo fattorino?",
+    "R04-001: la pulizia degli allarmi tiene 24 ore, cioè la finestra più lunga che il codice legge oggi; la voce suggeriva «qualche giorno». Vuoi un margine più largo (per esempio 7 giorni)?",
+    "R04-001, R04-007 e R04-010: le migrazioni 660, 661 e 662 sono scritte ma non applicate. La 661 ridefinisce prendi_ordine: finché non è applicata, un ordine annullato risponde ancora «già preso da un altro». Senza la 662 il carosello usa il ripiego, dove tre negozi grandi possono nascondere gli altri."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet), 2 revisori (lotto 1 modello grande, lotto 2 sonnet), 2 giri di correzione (sonnet: uno interno, uno chiesto dal collaudo K02 su R04-010). Costo 22,51 $ letto con get_session prima della consegna.",
+    "subagenti": 6
+  },
+  "costo_usd": 22.51
+}

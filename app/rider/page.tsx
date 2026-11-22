@@ -114,6 +114,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /** 5/11/2026 — Le consegne del fattorino ancora aperte: tutto tranne consegnato e annullato. */
 const STATI_DELLE_MIE_CONSEGNE_APERTE = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
 
+/**
+ * R04-007 — La presa è persa perché l'ordine non si può più prendere: l'ha preso un altro
+ * fattorino (GIA_PRESO) o non è più pronto (NON_PIU_DISPONIBILE, migrazione 661). Non è solo un
+ * messaggio: quell'ordine in bacheca è un dato vecchio, e si toglie.
+ */
+class OrdineNonPiuPrendibile extends Error {}
+
 export default function RiderDashboardPage() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -214,8 +221,17 @@ export default function RiderDashboardPage() {
     staleTime: 30_000,
   });
   const pref = letturaPref.data;
-  const statoOnlineIgnoto = !pref && letturaPref.isError;
-  const online = pref?.online ?? false;
+  /**
+   * R04-011 — Una lettura senza dato è CADUTA anche prima che `isError` si accenda: durante
+   * l'attesa del nuovo tentativo (il QueryProvider rifà una volta, dopo un secondo) e quando senza
+   * rete la lettura resta in pausa. In quei momenti la scheda scriveva «Sei offline».
+   */
+  const letturaCaduta = (q: { isError: boolean; failureCount: number; fetchStatus: string }) =>
+    q.isError || q.failureCount > 0 || q.fetchStatus === 'paused';
+  // R04-011 — Tre valori, non due: senza un dato letto lo stato non è «offline», è «non so».
+  const statoOnline: 'online' | 'offline' | 'non-so' = pref ? (pref.online ? 'online' : 'offline') : 'non-so';
+  const statoOnlineIgnoto = statoOnline === 'non-so' && letturaCaduta(letturaPref);
+  const online = statoOnline === 'online';
   const zones = pref?.zones ?? [];
 
   // Rating del rider (media + conteggio) per il badge in testata.
@@ -234,7 +250,8 @@ export default function RiderDashboardPage() {
     staleTime: 60_000,
   });
   const rating = letturaVoto.data;
-  const votoIgnoto = !rating && letturaVoto.isError;
+  // R04-011 — Anche il voto: il nuovo tentativo dopo un errore non è «nessuna recensione».
+  const votoIgnoto = !rating && letturaCaduta(letturaVoto);
 
   /**
    * 15/10/2026 (R33) — I CONTANTI ANCORA DA DICHIARARE.
@@ -350,18 +367,21 @@ export default function RiderDashboardPage() {
       if (error) throw error;
       const esito = data as { ok: boolean; id?: string; motivo?: string } | null;
       if (!esito?.ok || !esito.id) {
+        // R04-007 — Già preso da un altro, o non più pronto (annullato, tornato in preparazione).
+        if (esito?.motivo === 'GIA_PRESO') throw new OrdineNonPiuPrendibile('Ordine già preso da un altro rider');
+        if (esito?.motivo === 'NON_PIU_DISPONIBILE') {
+          throw new OrdineNonPiuPrendibile('Questo ordine non è più disponibile: non è più tra quelli pronti da prendere');
+        }
         throw new Error(
           esito?.motivo === 'NON_FATTORINO'
             ? 'Il tuo profilo fattorino non è ancora approvato'
             // R03-018 (migrazione 270) — patente o polizza scadute, o mancanti per scooter e auto.
             : esito?.motivo === 'DOCUMENTI_SCADUTI'
               ? 'Patente o polizza RC scadute: carica il documento nuovo dal profilo per tornare a prendere consegne'
-              // R03-009 — «Già preso» solo quando `prendi_ordine` lo dice (GIA_PRESO, migrazione 270).
+              // R03-009 — «Già preso» solo quando `prendi_ordine` lo dice (GIA_PRESO, qui sopra).
               // Una risposta vuota, storta o con un motivo che non conosciamo non è «l'ha preso un
               // altro»: si dice che la presa non è riuscita, senza inventare il perché.
-              : esito?.motivo === 'GIA_PRESO'
-                ? 'Ordine già preso da un altro rider'
-                : "Non siamo riusciti a prendere l'ordine. Riprova.",
+              : "Non siamo riusciti a prendere l'ordine. Riprova.",
         );
       }
       const data2 = { id: esito.id };
@@ -380,7 +400,17 @@ export default function RiderDashboardPage() {
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // R04-007 — Un «Accetta» perso perché l'ordine non si può più prendere: esce subito
+    // dall'elenco e la bacheca si rilegge, invece di restare lì col suo «Accetta» fino al giro dopo.
+    onError: (err: unknown, orderId: string) => {
+      if (err instanceof OrdineNonPiuPrendibile) {
+        qc.setQueryData<typeof letturaBacheca.data>(queryKeys.rider.orders, (prima) =>
+          prima ? { ...prima, liberi: prima.liberi.filter((o) => o.id !== orderId) } : prima,
+        );
+        void qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+      }
+      toast.error(friendlyError(err));
+    },
   });
 
   // Toggle online/offline: stesso update profilo della pagina Disponibilità.
@@ -463,6 +493,13 @@ export default function RiderDashboardPage() {
             >
               Riprova
             </Button>
+          </div>
+        ) : statoOnline === 'non-so' ? (
+          // R04-011 — La prima lettura sta ancora arrivando: non si dice «Sei offline» e non si
+          // offre l'interruttore finché lo stato non si sa.
+          <div aria-live="polite" className="rounded-2xl border border-cream-300 bg-surface-0 px-5 py-[18px] text-ink-900">
+            <p className="font-serif text-[18px] font-extrabold">Controllo se sei online…</p>
+            <p className="mt-0.5 text-xs text-ink-500">Un momento: sto leggendo il tuo stato.</p>
           </div>
         ) : (
         <div
@@ -658,10 +695,13 @@ export default function RiderDashboardPage() {
                       <p className="text-[11px] text-ink-400">Compenso</p>
                       <p className="font-serif text-lg font-extrabold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</p>
                     </div>
+                    {/* R04-007 — Gira solo il pulsante dell'ordine che si sta prendendo; gli altri
+                        restano fermi e spenti finché la presa non torna (una presa alla volta). */}
                     <Button
                       variant="accent"
                       onClick={() => claim.mutate(o.id)}
-                      loading={claim.isPending}
+                      loading={claim.isPending && claim.variables === o.id}
+                      disabled={claim.isPending && claim.variables !== o.id}
                     >
                       Accetta
                     </Button>
@@ -695,7 +735,7 @@ export default function RiderDashboardPage() {
             </div>
           )}
         </div>
-      ) : statoOnlineIgnoto ? null : (
+      ) : statoOnline !== 'offline' ? null : (
         <div className="px-4">
           <div className="rounded-xl border border-cream-300 bg-surface-0 px-5 py-8 text-center">
             <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-olive-50">

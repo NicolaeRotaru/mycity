@@ -39,6 +39,8 @@ type Story = {
 
 const STORIE_LETTE = 200;
 const STORIE_MOSTRATE = 30;
+/** Storie lette per ogni negozio dalla funzione 662: tanti quanti i posti del carosello. */
+const STORIE_PER_NEGOZIO = STORIE_MOSTRATE;
 
 /** Le storie raggruppate per negozio (nell'ordine in cui il negozio compare) e una bolla a testa. */
 export function unaBollaPerNegozio<T extends { seller_id: string }>(storie: T[]): {
@@ -54,6 +56,52 @@ export function unaBollaPerNegozio<T extends { seller_id: string }>(storie: T[])
     inSequenza.push(...gruppo);
   }
   return { inSequenza, bolle };
+}
+
+/**
+ * R04-010 — Le storie a turno fra i negozi: la più recente di ogni negozio, poi la seconda di
+ * ognuno, e così via (i negozi nell'ordine della loro storia più recente). Prima del taglio a 30
+ * le storie stavano in fila per data, e un negozio con tante storie nelle 24 ore prendeva tutti i
+ * posti. Nessun tetto nuovo per negozio: solo l'alternanza.
+ */
+function aTurnoFraINegozi<T extends { seller_id: string }>(storie: T[]): T[] {
+  const perNegozio = new Map<string, T[]>();
+  for (const s of storie) perNegozio.set(s.seller_id, [...(perNegozio.get(s.seller_id) ?? []), s]);
+  const gruppi = [...perNegozio.values()];
+  const aTurno: T[] = [];
+  for (let giro = 0; aTurno.length < storie.length; giro += 1) {
+    for (const gruppo of gruppi) if (giro < gruppo.length) aTurno.push(gruppo[giro]);
+  }
+  return aTurno;
+}
+
+/**
+ * R04-010 — Una lettura tornata piena (tante righe quanto il suo tetto) può essere tutta di un
+ * negozio solo: le storie degli altri restavano fuori prima ancora dell'alternanza. Allora si
+ * rilegge senza i negozi già visti, finché arrivano negozi nuovi (al massimo due riletture, tre letture in tutto). Una rilettura caduta tiene quello che c'è.
+ */
+async function conGliAltriNegozi<T extends { seller_id: string }>(
+  prime: T[],
+  tetto: number,
+  senzaQuesti: (esclusi: string) => PromiseLike<{ data: unknown; error: unknown }>,
+): Promise<T[]> {
+  let righe = prime;
+  let ultima = prime;
+  const visti = new Set(prime.map((s) => s.seller_id));
+  // Al massimo due riletture dopo la prima lettura: tre letture in tutto, anche con 30 negozi da 30 storie.
+  for (let rilette = 0; rilette < 2 && ultima.length >= tetto && visti.size < STORIE_MOSTRATE; rilette += 1) {
+    const { data, error } = await senzaQuesti(`(${[...visti].join(',')})`);
+    if (error) {
+      logger.warn('[storie] rilettura senza i negozi già visti non riuscita: restano le storie lette', { error });
+      break;
+    }
+    ultima = (data ?? []) as T[];
+    const primaDelGiro = visti.size;
+    for (const s of ultima) visti.add(s.seller_id);
+    if (visti.size === primaDelGiro) break;
+    righe = [...righe, ...ultima];
+  }
+  return righe;
 }
 
 export default function StoriesCarousel() {
@@ -79,27 +127,66 @@ export default function StoriesCarousel() {
       // POI ordina e taglia a 30. Il filtro qui sotto resta come seconda cintura e dà nome e logo.
       const colonne = 'id, seller_id, image_url, caption, link_url, view_count, expires_at';
       const adesso = new Date().toISOString();
-      const filtrate = await supabase
-        .from('seller_stories')
-        .select(`${colonne}, negozio:seller_public_profiles!inner(id)`)
-        .gt('expires_at', adesso)
-        .order('created_at', { ascending: false })
-        .limit(STORIE_MOSTRATE);
-      let righe = filtrate.data as Array<Omit<Story, 'seller'> & { negozio?: unknown }> | null;
-      const codice = (filtrate.error as { code?: string } | null)?.code;
-      if (codice === 'PGRST200' || codice === 'PGRST201') {
-        // Il servizio dati non conosce l'aggancio storia → vista: si legge come prima (200, poi il
-        // filtro), che non mostra mai un negozio fuori vetrina, invece di spegnere il carosello.
-        logger.warn('[storie] aggancio alla vista dei negozi non riconosciuto: filtro dopo il tetto', { codice });
-        const vecchia = await supabase
+      // R04-010 (giro 3) — Prima scelta: la funzione 662 dà al massimo STORIE_PER_NEGOZIO storie PER
+      // NEGOZIO (e al massimo STORIE_MOSTRATE negozi) in UNA lettura, con gli stessi filtri di sotto
+      // (non scadute, negozio della vista in vetrina, dalla più recente). Ogni negozio con storie arriva
+      // in pagina, qualunque sia il numero di storie degli altri. Se la funzione non c'è ancora (la
+      // migrazione non è applicata) o la chiamata cade, si legge come prima (ripiego qui sotto: al
+      // massimo tre letture delle storie, mai un ciclo senza tetto).
+      let righe: Array<Omit<Story, 'seller'> & { negozio?: unknown; created_at?: string }> | null = null;
+      try {
+        const perNegozio = await supabase.rpc('storie_attive_per_negozio', {
+          p_per_negozio: STORIE_PER_NEGOZIO,
+          p_negozi: STORIE_MOSTRATE,
+        });
+        if (!perNegozio.error && Array.isArray(perNegozio.data)) righe = perNegozio.data;
+      } catch (e) {
+        logger.warn('[storie] funzione storie_attive_per_negozio non chiamabile: si legge come prima', { error: e });
+      }
+      if (righe === null) {
+        const filtrate = await supabase
           .from('seller_stories')
-          .select(colonne)
+          .select(`${colonne}, negozio:seller_public_profiles!inner(id)`)
           .gt('expires_at', adesso)
           .order('created_at', { ascending: false })
-          .limit(STORIE_LETTE);
-        righe = vecchia.data as Array<Omit<Story, 'seller'>> | null;
+          .limit(STORIE_MOSTRATE);
+        righe = filtrate.data as Array<Omit<Story, 'seller'> & { negozio?: unknown }> | null;
+        // R04-010 — Le righe degli altri negozi, se la lettura torna piena (vedi `conGliAltriNegozi`).
+        let tetto = STORIE_MOSTRATE;
+        let senzaQuesti: (esclusi: string) => PromiseLike<{ data: unknown; error: unknown }> = (esclusi) => supabase
+          .from('seller_stories')
+          .select(`${colonne}, negozio:seller_public_profiles!inner(id)`)
+          .gt('expires_at', adesso)
+          .not('seller_id', 'in', esclusi)
+          .order('created_at', { ascending: false })
+          .limit(STORIE_MOSTRATE);
+        const codice = (filtrate.error as { code?: string } | null)?.code;
+        if (codice === 'PGRST200' || codice === 'PGRST201') {
+          // Il servizio dati non conosce l'aggancio storia → vista: si legge come prima (200, poi il
+          // filtro), che non mostra mai un negozio fuori vetrina, invece di spegnere il carosello.
+          logger.warn('[storie] aggancio alla vista dei negozi non riconosciuto: filtro dopo il tetto', { codice });
+          const vecchia = await supabase
+            .from('seller_stories')
+            .select(colonne)
+            .gt('expires_at', adesso)
+            .order('created_at', { ascending: false })
+            .limit(STORIE_LETTE);
+          righe = vecchia.data as Array<Omit<Story, 'seller'>> | null;
+          tetto = STORIE_LETTE;
+          senzaQuesti = (esclusi) => supabase
+            .from('seller_stories')
+            .select(colonne)
+            .gt('expires_at', adesso)
+            .not('seller_id', 'in', esclusi)
+            .order('created_at', { ascending: false })
+            .limit(STORIE_LETTE);
+        }
+        righe = await conGliAltriNegozi(righe ?? [], tetto, senzaQuesti);
       }
-      const storie = (righe ?? []).map(({ negozio: _negozio, ...storia }) => storia);
+      // R04-010 — A turno fra i negozi PRIMA del taglio a 30: un negozio solo non riempie il carosello.
+      const storie = aTurnoFraINegozi(
+        (righe ?? []).map(({ negozio: _negozio, created_at: _creata, ...storia }) => storia),
+      );
       const conNegozio = (await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo')).slice(0, STORIE_MOSTRATE);
       return conNegozio.map(({ profiles, ...storia }) => ({
         ...storia,

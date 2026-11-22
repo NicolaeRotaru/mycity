@@ -50,6 +50,10 @@ export const FRASI_ZOD = {
   uuid: 'ID non valido',
   formato: 'Formato non valido',
   scelta: 'Valore non valido: scegline uno fra quelli proposti',
+  // R04-003 — i quattro casi che restavano in inglese («Invalid input», «Unrecognized key(s)…»).
+  // Non nominano le chiavi interne: al cliente non dicono niente.
+  valoreNonValido: 'Valore non valido',
+  campiInPiu: (n: number) => (n === 1 ? 'C’è un campo che non serve qui' : `Ci sono ${n} campi che non servono qui`),
 };
 
 z.setErrorMap((issue, ctx) => {
@@ -94,9 +98,17 @@ z.setErrorMap((issue, ctx) => {
     case z.ZodIssueCode.invalid_enum_value:
       return { message: FRASI_ZOD.scelta };
 
+    case z.ZodIssueCode.invalid_union:
+    case z.ZodIssueCode.invalid_literal:
+      return { message: FRASI_ZOD.valoreNonValido };
+
+    case z.ZodIssueCode.unrecognized_keys:
+      return { message: FRASI_ZOD.campiInPiu(issue.keys.length) };
+
     case z.ZodIssueCode.custom:
-      // Per messaggi custom dello schema, ritorna quello originale
-      break;
+      // Un refine con il suo messaggio non passa di qui (Zod usa quello dello schema):
+      // arriva solo il caso senza messaggio, che resterebbe «Invalid input».
+      return { message: FRASI_ZOD.valoreNonValido };
   }
 
   return { message: ctx.defaultError };
