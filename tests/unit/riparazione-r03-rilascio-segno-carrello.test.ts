@@ -36,11 +36,6 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (c: string, v: unknown) => (filtri.push(`eq:${c}=${String(v)}`), q),
         is: (c: string, v: unknown) => (filtri.push(`is:${c}=${String(v)}`), q),
         lt: (c: string, v: unknown) => (filtri.push(`lt:${c}=${String(v)}`), q),
-        // R18-001 — La rivendicazione del carrello (segno solo se vuoto) rende la riga presa.
-        maybeSingle: async () => {
-          if (tabella === 'abandoned_carts' && valori) stato.scritture.push({ valori, filtri: [...filtri] });
-          return { data: { user_id: 'u1' }, error: null };
-        },
         then: (ok: (x: unknown) => unknown) => {
           if (tabella === 'abandoned_carts' && valori) stato.scritture.push({ valori, filtri: [...filtri] });
           return Promise.resolve({ data: [], error: null }).then(ok);

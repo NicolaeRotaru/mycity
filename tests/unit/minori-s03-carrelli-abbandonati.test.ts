@@ -22,8 +22,6 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (...a: unknown[]) => (filtri.push(['eq', a]), q),
         lt: (...a: unknown[]) => (filtri.push(['lt', a]), q),
         is: (...a: unknown[]) => (filtri.push(['is', a]), q),
-        // R18-001 — La rivendicazione del carrello (segno solo se vuoto) rende la riga presa.
-        maybeSingle: async () => ({ data: { user_id: 'u1' }, error: null }),
         then: (ok: (x: unknown) => unknown) => {
           stato.cancellate.push(Object.fromEntries(filtri.map(([m, a]) => [`${m}:${String(a[0])}`, a[1]])));
           return Promise.resolve({ data: [], error: null }).then(ok);
