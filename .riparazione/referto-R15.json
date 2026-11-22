@@ -1,0 +1,354 @@
+{
+  "sessione": "R15",
+  "aggiornato": "2026-11-22 18:05",
+  "finita": true,
+  "testa": "923bcb31e36bed92015239bce8a08f2301974e16",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "923bcb31e36bed92015239bce8a08f2301974e16",
+    "nota": "typecheck pulito; lint 0 errori (122 avvisi); vitest 2002 file passati, 1 saltato (12300 casi passati, 1 saltato). Un primo verify verde era girato su 24ca8692, prima che il passo Chromium venisse tolto."
+  },
+  "voci": [
+    {
+      "id": "R15-004",
+      "chiave": "architettura|il codice pgrst204 su una colonna della 124 ora fa scattare il ripiego per tutti: con la cache dello schema di postgrest vecchia, la scrittura salta gross_total_cents anche a migrazione applicata",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata"
+    },
+    {
+      "id": "R15-005",
+      "chiave": "architettura|avvisi-a-chi-aspetta.ts tiene insieme pannello, lucchetto email, indirizzo, html e invio; l'email parte solo se il pannello riesce",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata"
+    },
+    {
+      "id": "R15-006",
+      "chiave": "architettura|email partita ma non segnata: la notte dopo riparte, e se fallisce l'allarme dice «non partita» per un'email già arrivata",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata"
+    },
+    {
+      "id": "R15-012",
+      "chiave": "deploy-sre|manca il tasto per fermare tutti gli ordini in un colpo: oggi si può solo sospendere il negozio, e il fornaio riceve un avviso brusco",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata"
+    },
+    {
+      "id": "R15-014",
+      "chiave": "frontend-ux|il cliente legge «il tuo rider» e il negozio legge «cliente» al posto dei nomi, perché le due strade nuove per i nomi non esistono nel database vero",
+      "esito": "parziale",
+      "commit": "1e223b94395fc49e94a070ddd24eb71eabec069d",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-nomi-senza-le-funzioni-nuove.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-nomi-senza-le-funzioni-nuove.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1e223b94395fc49e94a070ddd24eb71eabec069d^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r15-nomi-senza-le-funzioni-nuove.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova fetchNomiDeiClienti: chiama la funzione della 181 e, solo se manca (PGRST202/42883), legge user_id e delivery_full_name da orders col client di chi guarda (le sue regole: il negozio vede solo i suoi ordini, gli stessi nomi delle pagine Ordini e Clienti). Non legge mai profiles; un guasto diverso da «funzione mancante» non fa scattare il ripiego.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/queries/controparte-della-chat.ts",
+          "modifica": "Riga 2: aggiungere fetchNomiDeiClienti all'import da '@/lib/queries/seller-public-profiles' → `import { fetchNomiDeiClienti, fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-public-profiles';`. Righe 45-55 (il corpo di nomiDeiClienti, da `const unici = [...new Set(ids)];` alla `}` che chiude il catch) → `return fetchNomiDeiClienti(supa, ids);`. logger resta usato (righe 72 e 234), NOMI_DEI_CLIENTI resta esportata."
+        },
+        {
+          "file": "app/seller/reviews/page.tsx",
+          "modifica": "Riga 16 `import { logger } from '@/lib/logger';` → `import { fetchNomiDeiClienti, type LettoreConFunzioni } from '@/lib/queries/seller-public-profiles';` (logger non ha altri usi). Righe 55-65 (da `const nomi = new Map<string, string>();` alla `}` che chiude `if (autori.length > 0)`) → `const nomi = await fetchNomiDeiClienti(supabase as unknown as LettoreConFunzioni, righe.map((r) => r.user_id));`"
+        },
+        {
+          "file": "tests/unit/i-nomi-dei-clienti-che-il-negozio-vede.test.ts",
+          "modifica": "Va cambiata insieme alle due righe sopra, perché senza la 181 Maria adesso ha il suo nome. Riga 210: titolo «senza la 181 la chat resta in piedi e dice il nome di consegna dei suoi ordini, non «Utente» — %s». Riga 214: `toContain('Cliente')` → `toContain('Maria Rossi')`. Riga 219: `toBe('Cliente')` → `toBe('Maria Rossi')`. Riga 237: titolo «senza la 181 la recensione resta leggibile, firmata col nome di consegna dei suoi ordini — %s». Riga 242: `expect(testo).toContain('Cliente');` → `expect(testo).toContain('Maria Rossi');` più una riga nuova `expect(testo).not.toContain('Carlo Estraneo');`."
+        }
+      ],
+      "cosa_resta": "Il nome del fattorino («Il tuo rider» per il cliente, «Rider assegnato» per il negozio) non ha un ripiego sicuro: nessuna tabella che cliente o negozio leggono già porta il nome del fattorino, e leggerlo dal server con la chiave di servizio mostrerebbe più dati di prima. Torna solo con la 164. I tre file in serve_file_altrui vanno cambiati per collegare il ripiego del negozio.",
+      "nota": "Nicola: applicare in produzione la migrazione 164 (vista nomi_pubblici, solo authenticated; va con la 161 o dopo) e la 181 (funzione nomi_dei_clienti_del_negozio). Senza la 164 il nome del fattorino resta generico; senza la 181, una volta collegato il ripiego, il negozio vede il nome di consegna di chi ha ordinato da lui, e «Cliente» per chi gli ha solo scritto in chat.",
+      "prova": "Rimessa uscita 3: la prova chiama un nome che la base non ha (fetchNomiDeiClienti, nuova). Controllo a mano sul comportamento: col ramo del ripiego spento (`false && funzioneNonAncoraCreata(error)`) 3 casi su 6 diventano rossi su un'asserzione. Le modifiche ai tre file altrui provate in un worktree di prova poi tolto: tsc pulito, eslint 0 errori, 20 file di prova su chat e recensioni con 187 casi su 187 verdi.",
+      "verificato_da": "revisore v1: rilanciata la prova (6/6); ripiego spento → 3 casi rossi su un'asserzione; ripiego su ogni errore → rosso il caso guasto; le tre modifiche dei file altrui messe sulle righe della base in un worktree: tsc pulito, 129 file/928 casi verdi, senza collegamento la prova dei nomi ha 4 casi rossi"
+    },
+    {
+      "id": "R15-007",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "parziale",
+      "commit": "2cc025854ea56d6b7f99dce16e557393806cfb8f",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-vetrina-stesse-colonne.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-vetrina-stesse-colonne.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2cc025854ea56d6b7f99dce16e557393806cfb8f^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r15-vetrina-stesse-colonne.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le domande alla vetrina già in volo si univano solo se la select era scritta identica. Adesso la chiave è l'insieme ordinato delle colonne chieste davvero: 'id, store_name' e COLONNE_NEGOZIO_IN_VETRINA chiedono le stesse colonne e diventano una domanda sola; lo stesso vale per storie e negozio del mese. La prova conta le domande.",
+      "cosa_resta": "(1) Una memoria che resti dopo l'arrivo: la prova comune tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts:59-64 la vieta apposta («a volo atterrato la domanda successiva torna al database»); una memoria di N secondi lascerebbe in vetrina un negozio sospeso fino alla scadenza: è una scelta. (2) Il secondo giro di rete di ogni fascia (prima i prodotti, poi la vetrina) resta: si toglie precaricando i negozi sul server (lib/queries/precarico.ts, precaricaHome) o con la cache di React Query nei componenti, file non miei. (3) Colonne davvero diverse restano domande separate.",
+      "nota": "Domanda per Nicola: una memoria di qualche secondo per negozio nella vetrina del browser, sapendo che un negozio sospeso resta visibile fino alla scadenza? Se sì, quanti secondi?",
+      "verificato_da": "revisore v1: rilanciata la prova (3/3); con la chiave vecchia 2 casi rossi; controllate le select di tutti i chiamanti (niente alias né agganci); r06-vetrina-una-volta-sola e le altre prove della vetrina verdi"
+    },
+    {
+      "id": "R15-003",
+      "chiave": "architettura|le email dopo la risposta partono tutte insieme: nel giro degli ordini scaduti un limite d'invio della posta può farne cadere alcune",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Controllato sulla base: in lib/ordini/annulla.ts la funzione privata dopoLaRisposta (righe 503-510) chiama ancora `after(lavoro);` alla riga 505. nellaFila esiste in lib/api/dopo-la-risposta.ts:44 e mette davvero in fila. La rotta del cron non chiama after() e non manda email da sé: nei miei file non c'è altro da cambiare.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ordini/annulla.ts",
+          "modifica": "Riga 505, dentro dopoLaRisposta (503-510): `    after(lavoro);` → `    after(() => nellaFila(lavoro));`. Dopo la riga 2 (`import { after } from 'next/server';`) aggiungere `import { nellaFila } from '@/lib/api/dopo-la-risposta';`. Il ritorno booleano e il ripiego `await lavoro()` restano come sono."
+        }
+      ],
+      "cosa_resta": "Solo la modifica sopra, in un file che non è mio.",
+      "prova": "Sonda in un worktree di prova poi tolto: giro degli scaduti con 3 ordini pagati con la carta e after() finto. Sulla base 8 lavori dopo la risposta, tutti e 8 insieme; con la modifica mai più di 1 alla volta. Con la modifica: 79 file di prova su annulla, cron e dopo-la-risposta verdi (548 casi), tsc ed eslint puliti.",
+      "verificato_da": "revisore v1: controllata la riga 505 e l'export di nellaFila; grep di after() in lib e app; modifica messa in un worktree: 80 file/551 casi verdi, tsc pulito"
+    },
+    {
+      "id": "R15-013",
+      "chiave": "flussi-conversione|il cliente con la carta riceve un'email in più, quasi vuota, quando il suo carrello scade tutto nello stesso giro",
+      "esito": "riparato",
+      "commit": "3391e94815857f321bad207e5202de2319bfc15c",
+      "file_toccati": [
+        "app/api/cron/expire-stale-orders/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-carrello-carta-scaduto-una-email.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-carrello-carta-scaduto-una-email.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3391e94815857f321bad207e5202de2319bfc15c^ --file app/api/cron/expire-stale-orders/route.ts --prove tests/unit/riparazione-r15-carrello-carta-scaduto-una-email.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nell'invio a fine giro la condizione `!x.isCardPaid || carrello` diventa `!x.isCardPaid || (avviso && avviso.rimasti.length > 0)`: con la carta l'email di annullo parte solo se nomina ordini del carrello che restano; se il carrello è scaduto tutto arriva solo «Rimborso emesso», uno per ordine. Contanti, rimborsi e annulli come prima. Prova sulla rotta vera con ordini finti e orologio finto.",
+      "verificato_da": "revisore v1: rilanciata la prova (3/3); controllati i rimborsi falliti, la carta non pagata, i contanti, il carrello di tre ordini; sonda carta+credito: nessuna email nomina più il credito tornato (con un ordine solo era già così)"
+    },
+    {
+      "id": "R15-001",
+      "chiave": "architettura|la variabile che rende obbligatorie le prove col database in ci non la legge nessuno",
+      "esito": "gia_riparato_prima",
+      "commit": null,
+      "prova": ".github/workflows/ci.yml:~140 dice già che nessuna variabile serve: il passo «Le prove col database vero non si possono saltare» fa da guardia; `grep -rn PROVE_POSTGRES_OBBLIGATORIE` trova solo tests/unit/riparazione-r05-ci-variabili.test.ts:25, che asserisce che la variabile non c'è più (`not.toContain`). Variabile tolta sulla base, senso coperto dal passo guardia.",
+      "verificato_da": "revisore v2: variabile assente sulla base, guardia presente e coerente con gli aiutanti delle prove col database, riparazione-r05-ci-variabili verde"
+    },
+    {
+      "id": "R15-016",
+      "chiave": "qa-flussi|il lavoro «unit tests» della ci non installa chromium: la misura vera di r19-007 lì si salta",
+      "esito": "gia_riparato_prima",
+      "commit": null,
+      "prova": "git grep -n -i -E \"chromium|from ['\\\"]playwright\" b57195e2 -- tests/unit: nessuna prova unitaria apre il browser (solo commenti «misurato in Chromium» e testi della config e2e). La misura vera nel browser nominata dalla voce era già stata tolta dalle prove unitarie prima della base.",
+      "nota": "Nel lotto 2 era stato aggiunto il passo «npx playwright install --with-deps chromium» al lavoro unit-tests (153e1ab9); il revisore ha mostrato che nessuna prova unitaria lo usa e che allungava solo un lavoro col tetto di 15 minuti. Tolto con 923bcb31: ci.yml è identico alla base, la prova tests/unit/riparazione-r15-ci.test.ts tiene solo il blocco di R15-009.",
+      "verificato_da": "revisore v2: nessuna prova unitaria usa Chromium sulla base; passo inutile, voce da gia_riparato_prima (accolto: passo tolto)"
+    },
+    {
+      "id": "R15-009",
+      "chiave": "architettura|tre librerie usate dalle prove non sono dichiarate in package.json",
+      "esito": "riparato",
+      "commit": "3af74b30cbb94ade8c8897dc5243a25064bbd81c",
+      "file_toccati": [
+        "package.json",
+        "package-lock.json",
+        "tests/unit/riparazione-r15-ci.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-ci.test.ts"
+      ],
+      "prova_comando": "npm ls @testing-library/dom attr-accept esbuild && npx vitest run tests/unit/riparazione-r15-ci.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3af74b30cbb94ade8c8897dc5243a25064bbd81c^ --file package.json,package-lock.json --prove tests/unit/riparazione-r15-ci.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le tre librerie dichiarate in devDependencies, in ordine alfabetico, alle versioni già nel lock (@testing-library/dom 10.4.2, attr-accept 2.2.5, esbuild 0.28.1). `npm install --package-lock-only --ignore-scripts`: il diff di package-lock.json sono solo 3 righe aggiunte nell'elenco devDependencies della radice. npm ls e npm ci --dry-run ok.",
+      "verificato_da": "revisore v2: lock con 3 sole righe nella radice, versioni uguali a node_modules, npm ls pulito, prove che leggono package.json e chi importa le tre librerie verdi (35 file)"
+    },
+    {
+      "id": "R15-015",
+      "chiave": "performance|la velocità del sito vista dai clienti veri non la misura nessuno",
+      "esito": "parziale",
+      "commit": "24ca8692ee214bffbdb931cf702afada3754e601",
+      "file_toccati": [
+        "lib/analytics/posthog.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r15-velocita-clienti-veri.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r15-velocita-clienti-veri.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 24ca8692ee214bffbdb931cf702afada3754e601^ --file lib/analytics/posthog.tsx --prove tests/unit/riparazione-r15-velocita-clienti-veri.test.tsx --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "web-vitals (già dichiarata e nel lock, nessuna libreria nuova) non parte più solo con la chiave di PostHog: si accende dopo il consenso statistico e manda la misura a PostHog (se acceso) e a GA4 via gtag, con lo stesso readConsent. Senza consenso non parte niente.",
+      "cosa_resta": "Se GA4 resta senza ID e PostHog spento, nessun posto riceve ancora le misure. Strada propria: far accettare 'web_vital' a /api/track (file non mio).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/track/route.ts",
+          "modifica": "In ALLOWED_EVENTS (riga ~38) aggiungere `web_vital: 'visitor'` e in SUMMARY `web_vital: () => 'Misura di velocità'`; validare in metadata solo metric (CLS|LCP|INP|FCP|TTFB), value numerico finito, rating (good|needs-improvement|poor). Poi in lib/analytics/posthog.tsx mandaMisuraDiVelocita può chiamare l'aiutante di lib/analytics/registro-accessi.ts (sendBeacon a ROTTA_DEL_REGISTRO) con event 'web_vital' (secondo giro di R15)."
+        }
+      ],
+      "nota": "Per Nicola (non è codice): per misurare subito basta NEXT_PUBLIC_GA_MEASUREMENT_ID (ID GA4, G-XXXXXXXXXX; lo legge components/GoogleAnalytics.tsx:10) fra le variabili Production di Vercel, più il consenso statistico del visitatore; per PostHog servirebbero POSTHOG_ACCESO=true (lib/funzioni-al-lancio.ts) e NEXT_PUBLIC_POSTHOG_KEY.",
+      "verificato_da": "revisore v2: prova R15 e 103 file che importano posthog, events o GoogleAnalytics verdi (542 prove); varianti su revoca del consenso, consenso tardivo, PostHog spento con chiave, senza gtag; rossa senza correzione; tsc ed eslint puliti; nota corretta sul nome della variabile (NEXT_PUBLIC_GA_MEASUREMENT_ID)"
+    },
+    {
+      "id": "R15-008",
+      "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file la parte c'è già sulla base: lib/store-hours.ts:229-247 (finestraDelRitiro) e :307-321 (negozioPuoServire) hanno già il parametro propostaIl; app/api/orders/cod/route.ts:65-75 e :400-410 (fasciaDelGiornoDellaRichiesta, con delivery_date) riportano la fascia al giorno della richiesta prima di ogni controllo. Prove già presenti: tests/unit/riparazione-r23-fascia-domani-dopo-mezzanotte.test.ts e tests/unit/riparazione-r05-fascia-domani-dopo-mezzanotte.test.ts.",
+      "prova": "lib/store-hours.ts:307-321 negozioPuoServire accetta propostaIl; app/api/orders/cod/route.ts:403-410 chiama fasciaDelGiornoDellaRichiesta con body.delivery_date.",
+      "cosa_resta": "La rotta della carta non fa lo stesso: lo schema zod di app/api/stripe/checkout/route.ts (riga ~85) non ha delivery_date (la cassa lo manda, app/checkout/page.tsx:1168), quindi lo scarta, e motivoFasciaRifiutata (riga ~519) giudica «Domani» sull'ora d'arrivo.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "Dopo `deliverySlot: campoFasciaConsegna,` (riga 85) aggiungere `delivery_date: z.string().max(40).optional().nullable(),`. Subito dopo la lettura del corpo (dopo la riga 142, prima di ogni uso della fascia: l'impronta del carrello alla riga 216 la legge già) riportare la fascia come nella rotta dei contanti (app/api/orders/cod/route.ts:403-410): se `body.deliverySlot && body.delivery_date`, `riportata = fasciaDelGiornoDellaRichiesta(...)`; se null → ApiErrors.conflict('La fascia che hai scelto è già passata...'), altrimenti body.deliverySlot = riportata. Così anche motivoFasciaRifiutata (riga ~522) giudica la fascia riportata. Prova: vi.useFakeTimers, 23:59→00:01 Europe/Rome sulla rotta della carta."
+        },
+        {
+          "file": "lib/ordini/fascia-leggibile.ts",
+          "modifica": "Perché la funzione sia condivisa: spostare qui fasciaDelGiornoDellaRichiesta (oggi privata in app/api/orders/cod/route.ts:65-75) ed esportarla; poi la rotta dei contanti (mio file) la importa da qui al posto della copia privata."
+        }
+      ],
+      "verificato_da": "revisore v2: prove r23 e r05 verdi (10/10); carta senza delivery_date (Body :69-93) e giudizio a :522 confermati; inserimento anticipato dopo :142"
+    },
+    {
+      "id": "R15-002",
+      "chiave": "architettura|commenti delle rotte della veloce dicono ancora «un fattorino approvato e online»",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "file_toccati": [],
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "prova": "grep -n 'approvato e online\\|fattorino online' app/api/consegna/veloce/route.ts app/api/orders/cod/route.ts → nessuna riga; app/api/orders/cod/route.ts:1004-1006 dice già «negozi aperti adesso (e ancora per un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero». Il senso è quello del codice (lib/ordini/consegna-veloce.ts).",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei due file il senso è già giusto: nessuna modifica. Le righe della scheda per gli altri quattro file verificate sulla base (tre numeri scorsi di una riga).",
+      "cosa_resta": "Quattro file altrui con il senso vecchio.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "Righe 529-530: «8-21, negozi aperti adesso, un» / «fattorino approvato e online. La stessa decisione…» → «8-21, negozi aperti adesso (e ancora per un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero (non ha già in mano tutte le veloci che può portare). La stessa decisione…». Righe 369-370: «(8-21, negozi aperti,» / «fattorino online): alle 21:30…» → «fattorino approvato, acceso e libero): alle 21:30…»."
+        },
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "Righe 660-661: «negozi aperti, un fattorino approvato e online (`veloceSiPuo`,» → «negozi aperti ancora per un quarto d'ora, almeno un fattorino approvato, con l'interruttore acceso e libero (`veloceSiPuo`,»."
+        },
+        {
+          "file": "app/cart/page.tsx",
+          "modifica": "Riga 95: «senza un fattorino online il carrello» → «senza un fattorino approvato, acceso e libero il carrello». Riga 196: «(negozi aperti, 8-21, un fattorino online)» → «(negozi aperti ancora per un quarto d'ora, 8-21, un fattorino approvato, acceso e libero)»."
+        },
+        {
+          "file": "components/checkout/DeliverySlotPicker.tsx",
+          "modifica": "Righe 49-50: «aperti e un fattorino online. Senza,» → «aperti ancora per un quarto d'ora, 8-21, e un fattorino approvato, acceso e libero. Senza,»."
+        },
+        {
+          "file": "app/api/consegna/veloce/negozi/route.ts",
+          "modifica": "Riga 18: «(negozi approvati, fattorini online, una volta per tutti)» → «(negozi approvati, fattorini approvati, accesi e liberi, una volta per tutti)»."
+        }
+      ],
+      "verificato_da": "revisore v2: nessun commento vecchio nei due file R15 (in veloce/route.ts:94 resta solo il log «fattorini online non letti», nome della funzione); righe dei 4 file altrui esatte sulla base"
+    },
+    {
+      "id": "R15-011",
+      "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts",
+          "modifica": "Riga 44 (verificata sulla base): togliere `  cod_reconciliations: 'quadratura della cassa contanti: registro contabile',` da FUORI_DALL_EXPORT. L'export la legge già (app/api/account/export/route.ts:215) e la tabella esiste (migrations/024:120)."
+        }
+      ],
+      "nota": "La prova legge solo migrazioni e app/api/account/export/route.ts, nessun file di R15: non toccata."
+    },
+    {
+      "id": "R15-010",
+      "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+      "esito": "serve_file_altrui",
+      "commit": null,
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+          "modifica": "Righe verificate sulla base (1035 righe): togliere adminDiProva (righe 70-129) e da `stato` i quattro interruttori (33-54, reset 195-198); getAdminSupabase (riga 138) rende stato.mondo.admin; il mondo nasce con fintoGiroNotturno({ indirizzi: {'rider-1':'rider@example.com','rider-2':'rider2@example.com'} }); rifiutaAvvisiA=X → guasti.push({tabella:'notifications',azione:'insert',messaggio:'permission denied',seRiga:r=>r.user_id===X}); rifiutaLetturaDi=ID → {tabella:'notifications',azione:'select',messaggio:'canceling statement due to statement timeout',seFiltro:['id',ID]}; registroInviiRotto → due guasti su audit_logs (select e insert) 'permission denied for table audit_logs'; registroInviiRifiutaLeRighe → {tabella:'audit_logs',azione:'insert',messaggio:'new row for relation \"audit_logs\" violates check constraint \"audit_logs_action_check\"',codice:'23514'}."
+        },
+        {
+          "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+          "modifica": "Spostare la scansione readdirSync (describe 562-578) in un file suo, estesa a components/. Spostare in un file della notte i describe 267-321, 481-560, 672-836, 878-896, 925-1035 più i casi 455-474 (dentro il describe 429); togliere la copia del caso «la posta dice di no la prima notte» (riga 482), già in la-spiegazione-…:78. Nel file restano le rotte account/delete, export e contact."
+        }
+      ],
+      "nota": "La prova importa avvisi-a-chi-aspetta.ts solo con un import dinamico (riga 971), ma il riordino è grande, dipende da tests/unit/aiuti/finto-giro-notturno.ts (non di R15) e dalle rotte di altre sessioni, e le voci su avvisi-a-chi-aspetta.ts sono state tolte dalla regia: non toccata."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "con la carta e il credito MyCity, quando il carrello scade tutto nessuna email dice che il credito è tornato",
+      "dimensione": "flussi-conversione",
+      "severita": "minore",
+      "file": "app/api/cron/expire-stale-orders/route.ts:448",
+      "descrizione": "L'email «Rimborso emesso» per un ordine pagato con la carta non nomina il credito MyCity restituito. Con un ordine solo era già così; dopo la riparazione dell'email vuota del carrello vale anche per il carrello scaduto tutto, dove prima lo diceva l'email di annullo. Va aggiunta la riga sul credito all'email del rimborso (lib/ordini/annulla.ts o il modello dell'email)."
+    },
+    {
+      "titolo": "nel ripiego dei nomi dei clienti il limite di 1000 ordini vale per tutti gli id insieme",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/queries/seller-public-profiles.ts:335",
+      "descrizione": "Su un negozio con molti ordini, un cliente che ha recensito tanto tempo fa può restare «Cliente» finché manca la 181. Vale solo finché la migrazione non è applicata."
+    },
+    {
+      "titolo": "senza la 181 ogni apertura della chat o delle recensioni del negozio scrive un avviso nel registro",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/queries/seller-public-profiles.ts:309",
+      "descrizione": "Il ripiego registra un avviso a ogni chiamata finché la funzione manca: rumore nel registro. Sparisce applicando la 181."
+    },
+    {
+      "titolo": "il README nomina la variabile di Google Analytics con il nome vecchio",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "README.md:82",
+      "descrizione": "Il README dice NEXT_PUBLIC_GA_ID, ma il codice legge NEXT_PUBLIC_GA_MEASUREMENT_ID (components/GoogleAnalytics.tsx:10, .env.example:112): chi segue il README imposta la variabile sbagliata e GA4 resta spento."
+    },
+    {
+      "titolo": "la misura della velocità manda a GA4 da una porta sua, fuori dall'aiutante comune",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/analytics/posthog.tsx:452",
+      "descrizione": "mandaMisuraDiVelocita chiama gtag direttamente invece di passare da ga() di lib/analytics/events.ts, come sconsiglia il commento in components/GoogleAnalytics.tsx:105-121. Il consenso lo legge comunque. Con consenso dato ma GA4 e PostHog spenti, web-vitals si carica senza mandare niente."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "subagenti": 4,
+    "nota": "lotto 1 sul modello grande, lotto 2 sul modello piccolo, due revisori sul modello grande; nessun Workflow"
+  },
+  "costo_usd": 18.67,
+  "costo_nota": "usage.cost_usd di get_session senza id, letto prima della consegna (aggiornato dal servizio alle 17:44)"
+}

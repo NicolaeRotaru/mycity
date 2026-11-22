@@ -442,7 +442,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   for (const x of alCliente) {
     const avviso = x.avviso ? avvisoAFineGiro(x.avviso, avvisiDelGiro, spediti, annullatiNelGiro) : null;
     const carrello = avviso ? { avviso, come: x.come } : null;
-    if (!x.isCardPaid || carrello) {
+    // 22/11/2026 (R15-013) — Con la carta «Rimborso emesso» è già partito: l'email di annullo serve
+    // solo se dice gli ordini del carrello che restano. Se il carrello è scaduto tutto in questo giro
+    // ripeteva il rimborso senza nessuna riga del carrello. I soldi non cambiano: solo quale email parte.
+    if (!x.isCardPaid || (avviso && avviso.rimasti.length > 0)) {
       await avvisaIlClienteDellAnnullo(admin, x.perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
     }
     if (avviso && avviso.rimasti.length > 0) await avvisaLaCampanellaDelCarrello(admin, x.o.user_id, avviso, x.come);
