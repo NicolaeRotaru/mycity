@@ -1,45 +1,20 @@
 {
   "sessione": "R18",
-  "aggiornato": "2026-11-22 18:06",
+  "aggiornato": "2026-11-22 18:47",
   "finita": true,
-  "testa": "de01e1ac10ef9b0547bad437fda4e662ca65926d",
+  "testa": "ffbda6c2128bb72fe63836c2d0ac38afc72d9e9b",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "de01e1ac10ef9b0547bad437fda4e662ca65926d",
-    "nota": "typecheck, lint e test: 2001 file di prova passati e 1 saltato; 12299 prove passate e 1 saltata. SHA preso con git rev-parse HEAD nello stesso comando. guardia-ramo resta rossa solo sulle 6 prove condivise di R18-001: rosso noto, segnato dalla regia, in attesa della firma di Nicola sulla deroga prove_comuni."
+    "testa": "ffbda6c2128bb72fe63836c2d0ac38afc72d9e9b",
+    "nota": "Sul commit di ritorno di R18-001: typecheck, lint e test, con 2000 file di prova passati e 1 saltato, 12297 prove passate e 1 saltata. SHA preso con git rev-parse HEAD nello stesso comando. guardia-ramo VERDE: rotta e 6 prove comuni di nuovo come alla base. Prima del ritorno il verify era verde anche su de01e1ac."
   },
   "voci": [
     {
       "id": "R18-001",
       "chiave": "deploy-sre|due giri partiti insieme possono ancora mandare due volte il promemoria del carrello alla stessa persona",
-      "esito": "riparato",
-      "commit": "57f2e330f8afa1ce3f23b19a6e247f29076adecb",
-      "file_toccati": [
-        "app/api/cron/abandoned-carts/route.ts",
-        "tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts",
-        "tests/unit/la-posta-in-coda-non-promette-regali-e-non-si-butta-via.test.ts",
-        "tests/unit/minori-s03-carrelli-abbandonati.test.ts",
-        "tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts",
-        "tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts",
-        "tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts",
-        "tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 57f2e330f8afa1ce3f23b19a6e247f29076adecb^ --file app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il giro rivendica il carrello da solo con una scrittura condizionata (update recovery_email_sent_at where user_id=… and recovery_email_sent_at is null → select → maybeSingle) e spedisce solo se ha preso la riga lui: due giri insieme mandano un solo promemoria, con o senza la migrazione 166 applicata. Prima la risposta vuota della funzione vecchia valeva «preso».",
-      "nota": "prove_comuni: 6 prove adattate, in attesa della firma di Nicola: tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts, tests/unit/la-posta-in-coda-non-promette-regali-e-non-si-butta-via.test.ts, tests/unit/minori-s03-carrelli-abbandonati.test.ts, tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts, tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts, tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts. Le prove adattate non sono spente né indebolite: il loro finto impara la scrittura condizionata (maybeSingle), e r30 controlla quella al posto della chiamata rpc. Se Nicola dice no, all'unione la regia toglie il commit 57f2e330f8afa1ce3f23b19a6e247f29076adecb e la voce diventa serve_file_altrui con il diff completo qui sotto (campo diff_se_no, uno per file: rotta, prova nuova e 6 ritocchi da applicare insieme).",
-      "diff_se_no": [
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
         {
           "file": "app/api/cron/abandoned-carts/route.ts",
           "modifica": "diff --git a/app/api/cron/abandoned-carts/route.ts b/app/api/cron/abandoned-carts/route.ts\nindex f70f7cc1..d5007ec3 100644\n--- a/app/api/cron/abandoned-carts/route.ts\n+++ b/app/api/cron/abandoned-carts/route.ts\n@@ -180,16 +180,24 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {\n     // scriveva il segno anche se c'era gia', e non diceva niente. Due giri\n     // partiti insieme (Vercel e cron-job.org alla stessa ora) leggevano lo\n     // stesso carrello, lo «rivendicavano» tutti e due e spedivano due volte.\n-    // Dalla migrazione 166 la funzione segna solo se il segno non c'era e\n-    // risponde vero o falso: chi riceve «falso» lascia perdere. Una risposta\n-    // vuota (la funzione vecchia, senza risposta) vale come prima.\n-    const { data: preso, error: errClaim } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });\n+    // R18-001 — La 166 (la funzione che risponde vero o falso) il 5/11 in produzione\n+    // non c'era: la funzione vecchia risponde vuoto, e il vuoto valeva «preso». Ora la\n+    // rivendicazione la scrive il giro, con la condizione dentro la scrittura:\n+    // segna solo se il segno non c'e' e rende la riga solo a chi l'ha segnata.\n+    // Il secondo giro non prende niente e non spedisce, con la 166 o senza.\n+    const { data: preso, error: errClaim } = await supa\n+      .from('abandoned_carts')\n+      .update({ recovery_email_sent_at: new Date().toISOString() })\n+      .eq('user_id', c.user_id)\n+      .is('recovery_email_sent_at', null)\n+      .select('user_id')\n+      .maybeSingle();\n     if (errClaim) {\n       logger.error('[abandoned-carts] rivendicazione fallita, non spedisco', errClaim);\n       errors++;\n       continue;\n     }\n-    if (preso === false) {\n+    if (!preso) {\n       giaPresi++;\n       continue;\n     }\n"
@@ -73,7 +48,7 @@
           "modifica": "diff --git a/tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts b/tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts\nindex d712131d..6e89df44 100644\n--- a/tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts\n+++ b/tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts\n@@ -40,6 +40,11 @@ vi.mock('@/lib/supabase/server', () => ({\n         eq: (c: string, v: unknown) => (filtri.push(`eq:${c}=${String(v)}`), q),\n         is: (c: string, v: unknown) => (filtri.push(`is:${c}=${String(v)}`), q),\n         lt: (c: string, v: unknown) => (filtri.push(`lt:${c}=${String(v)}`), q),\n+        // R18-001 — La rivendicazione del carrello (segno solo se vuoto) rende la riga presa.\n+        maybeSingle: async () => {\n+          if (tabella === 'abandoned_carts' && valori) stato.scritture.push({ valori, filtri: [...filtri] });\n+          return { data: { user_id: 'u1' }, error: null };\n+        },\n         then: (ok: (x: unknown) => unknown) => {\n           if (tabella === 'abandoned_carts' && valori) stato.scritture.push({ valori, filtri: [...filtri] });\n           return Promise.resolve({ data: [], error: null }).then(ok);\n@@ -82,8 +87,12 @@ describe('R30-003 — il giro chiude il carrello senza consenso con un segno che\n   it('controprova: con il consenso il promemoria si rivendica e parte come prima', async () => {\n     stato.profili = [{ id: 'u1', email_marketing: true }];\n     stato.carrelli = [{ ...stato.carrelli[0], last_activity: '2026-11-17T05:00:00.000000+00:00' }];\n-    await giro();\n-    expect(stato.rpc.map((r) => r.nome)).toContain('mark_abandoned_cart_email_sent');\n+    const res = await (await giro()).json();\n+    // R18-001 — La rivendicazione la scrive il giro: segno con l'ora del giro, solo se il segno è vuoto.\n+    const presa = stato.scritture.find((s) => s.filtri.includes('is:recovery_email_sent_at=null') && s.valori.recovery_email_sent_at !== stato.carrelli[0].last_activity);\n+    expect(presa, 'il promemoria è partito senza rivendicare il carrello').toBeDefined();\n+    expect(presa?.filtri).toContain('eq:user_id=u1');\n+    expect(res.sent).toBe(1);\n   });\n });\n \n"
         }
       ],
-      "verificato_da": "revisore (subagente 3, modello grande): prova rimessa con uscita 0; 185 su 185 delle 15 prove che leggono la rotta o lib/carrelli-abbandonati verdi; 6 varianti verdi in un file temporaneo: invio fallito, invio saltato, due giri col primo fallito, tre giri, due persone, segno non scambiato per chiusura. Controllati anche user_id PRIMARY KEY (027:185), service_role con UPDATE e lo scarto now()/new Date(). REGGE."
+      "nota": "K06: regge; le 6 prove comuni non indebolite; si rimette con git revert del ritorno se Nicola firma. La riparazione era il commit 57f2e330, tolto dal ramo col commit di ritorno ffbda6c2 (rotta e 6 prove di nuovo identiche alla base, guardia-ramo verde). Se Nicola firma la deroga prove_comuni basta `git revert ffbda6c2`. Altrimenti si applicano insieme le 8 modifiche di serve_file_altrui: la rotta e la prova nuova, che sono file di R18, più i finti delle 6 prove comuni: il-promemoria-del-carrello-parte-una-volta-e-in-tempo, la-posta-in-coda-non-promette-regali-e-non-si-butta-via, minori-s03-carrelli-abbandonati, riparazione-r03-rilascio-segno-carrello, riparazione-r04-005-promemoria-non-partiti, riparazione-r30-carrelli-chiusi-senza-email. Cosa faceva la riparazione: Il giro rivendica il carrello da solo con una scrittura condizionata (update recovery_email_sent_at where user_id=… and recovery_email_sent_at is null → select → maybeSingle) e spedisce solo se ha preso la riga lui: due giri insieme mandano un solo promemoria, con o senza la migrazione 166 applicata. Prima la risposta vuota della funzione vecchia valeva «preso». Verifiche fatte quando era sul ramo: prova rimessa con uscita 0 (rossa alla base, sul comportamento); revisore (subagente 3, modello grande): prova rimessa con uscita 0; 185 su 185 delle 15 prove che leggono la rotta o lib/carrelli-abbandonati verdi; 6 varianti verdi in un file temporaneo: invio fallito, invio saltato, due giri col primo fallito, tre giri, due persone, segno non scambiato per chiusura. Controllati anche user_id PRIMARY KEY (027:185), service_role con UPDATE e lo scarto now()/new Date(). REGGE."
     },
     {
       "id": "R18-002",
@@ -290,13 +265,13 @@
     }
   ],
   "domande_per_nicola": [
-    "R18-001 e R18-006: firmi la deroga prove_comuni? R18-001 adatta i finti di 6 prove condivise (già sul ramo). R18-006 ritocca 2 prove condivise (patch nel referto, non sul ramo).",
+    "R18-001 e R18-006: firmi la deroga prove_comuni? R18-001 adatta i finti di 6 prove condivise: tolto dal ramo col ritorno ffbda6c2, si rimette con git revert ffbda6c2. R18-006 ritocca 2 prove condivise: la patch è nel referto.",
     "R18-004: i segreti VERCEL_TOKEN, VERCEL_ORG_ID e VERCEL_PROJECT_ID sono nei segreti di GitHub, e un rilascio di prova da deploy-dopo-ci.yml è andato a buon fine? Se sì, in vercel.json git.deploymentEnabled.main passa a false."
   ],
   "conto": {
     "agenti": 5,
-    "nota": "5 subagenti su 6: lotto A (grande), lotto B (sonnet), revisore 1 (grande), giro di correzione (grande), revisore 2 (sonnet). Nessun Workflow. Costo letto con get_session senza id alle 17:42 UTC (usage.cost_usd 17,29 $), prima della consegna.",
+    "nota": "5 subagenti su 6: lotto A (grande), lotto B (sonnet), revisore 1 (grande), giro di correzione (grande), revisore 2 (sonnet). Nessun Workflow. Costo letto con get_session senza id alle 18:45 UTC (usage.cost_usd 18,61 $), prima della consegna.",
     "subagenti": 5
   },
-  "costo_usd": 17.29
+  "costo_usd": 18.61
 }
