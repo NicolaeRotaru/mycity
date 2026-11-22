@@ -94,7 +94,7 @@ beforeEach(() => {
 
 const VIA_ROMA = { id: 'a-1', label: 'Casa', full_name: 'Anna', phone: '3', address: 'Via Roma 1', city: 'Piacenza', zip: '29121', notes: null, lat: 45.0517, lng: 9.699, is_default: true };
 
-async function modificaESalva(nuovaVia: string | null) {
+async function modificaESalva(nuovaVia: string | null, nuovoTelefono: string | null = null) {
   stato.esiti.user_addresses = (op) => (op.azione === 'select' ? { data: [VIA_ROMA], error: null } : { data: null, error: null });
   const { default: Pagina } = await import('@/app/profile/addresses/page');
   const s = accendi(conQuery(Pagina as ComponentType));
@@ -111,6 +111,15 @@ async function modificaESalva(nuovaVia: string | null) {
     });
     await aspetta();
   }
+  if (nuovoTelefono) {
+    const tel = Array.from(s.radice.querySelectorAll('input')).find((i) => (i as HTMLInputElement).value === VIA_ROMA.phone) as HTMLInputElement;
+    s.agisci(() => {
+      const imposta = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      imposta.call(tel, nuovoTelefono);
+      tel.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    await aspetta();
+  }
   const form = s.radice.querySelector('form')!;
   s.agisci(() => { form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); });
   await aspetta();
@@ -124,5 +133,21 @@ describe('R03-014 — un 429 non salva senza coordinate', () => {
     expect(scritto, 'l\'indirizzo è stato salvato senza coordinate').toBeUndefined();
     expect(stato.ops.some((o) => o.azione === 'update' || o.azione === 'insert')).toBe(false);
     expect(stato.toast.some((t) => t.tipo === 'error' && /riprova/i.test(t.testo))).toBe(true);
+  });
+
+  it('stesso indirizzo con coordinate buone, cambia solo il telefono: non si cerca, il 429 non blocca', async () => {
+    const cercate: string[] = [];
+    (globalThis as Record<string, unknown>).fetch = async (url: string) => {
+      cercate.push(String(url));
+      return new Response(JSON.stringify({ lat: null, lng: null, error: 'rate_limited' }), { status: 429 });
+    };
+    const scritto = await modificaESalva(null, '333 1234567');
+    expect(scritto, 'il 429 di una ricerca che non serviva ha bloccato il salvataggio').toBeDefined();
+    expect(scritto.phone).toBe('333 1234567');
+    expect(scritto.lat).toBe(VIA_ROMA.lat);
+    expect(scritto.lng).toBe(VIA_ROMA.lng);
+    expect(cercate, 'la posizione è stata cercata anche se l\'indirizzo non è cambiato').toEqual([]);
+    expect(stato.toast.some((t) => t.tipo === 'error')).toBe(false);
+    expect(stato.toast.some((t) => t.tipo === 'success')).toBe(true);
   });
 });

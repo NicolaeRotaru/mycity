@@ -71,7 +71,10 @@ export default function AddressesPage() {
         !!prima && prima.address === form.address && prima.city === form.city && prima.zip === form.zip;
       let lat: number | null = stessoIndirizzo ? form.lat : null;
       let lng: number | null = stessoIndirizzo ? form.lng : null;
-      try {
+      // R03-014 — Stesso indirizzo con le coordinate già buone (cambia solo il telefono, il nome…):
+      // la ricerca non serve, quindi non si fa e un suo 429 non blocca il salvataggio.
+      const daCercare = lat == null || lng == null;
+      if (daCercare) try {
         // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
         const res = await fetch('/api/geocode', {
           method: 'POST',
