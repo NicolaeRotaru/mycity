@@ -6,6 +6,7 @@ import { List, Map as MapIcon, MapPin, RadioTower } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Card } from '@/components/ui/Card';
 import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
@@ -292,7 +293,7 @@ export default function NearMePage() {
       {/* L'invito, prima del permesso: si dice a cosa serve, e il riquadro di sistema arriva DOPO il
           gesto. Chi non lo tocca vede comunque tutti i negozi. */}
       {!pos && !motivo && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-cream-300 bg-surface-0 px-4 py-3 text-sm text-ink-700">
+        <Card variant="surface" padding="none" className="mb-4 flex flex-wrap items-center gap-3 px-4 py-3 text-sm text-ink-700">
           <MapPin size={18} strokeWidth={2.2} className="shrink-0 text-primary-700" aria-hidden />
           <span className="min-w-0 flex-1">Per ordinarli dal più vicino serve sapere dove sei. Il telefono te lo chiederà.</span>
           <button
@@ -303,7 +304,7 @@ export default function NearMePage() {
           >
             {cerco ? 'Cerco…' : 'Ordina per vicinanza'}
           </button>
-        </div>
+        </Card>
       )}
 
       {motivo && (
