@@ -5,6 +5,19 @@ import FeaturedProductsPicker from '@/components/seller/FeaturedProductsPicker';
 import type { SiteSection } from '@/lib/store-site';
 import CategorySelect from './CategorySelect';
 
+/**
+ * R10-008 R10-009 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che
+ * si incollava oltre il tetto (stesso schema di R09-008 sulla home). Il testo resta intero e, oltre
+ * il tetto che lo schema rifiuta al salvataggio, l'errore lo dice sotto il campo. Si conta come lo
+ * schema (`z.string().trim().max(n)`).
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 type CollectionSec = Extract<SiteSection, { type: 'collection' }>;
 type Cfg = CollectionSec['config'];
 
@@ -21,7 +34,7 @@ export default function CollectionFields({ section, onChange }: { section: Colle
       <Input
         label="Titolo"
         value={c.heading ?? ''}
-        maxLength={120}
+        error={sopraIlTetto(c.heading, 120)}
         onChange={(e) => set({ heading: e.target.value })}
         placeholder="Es. I più venduti"
       />
