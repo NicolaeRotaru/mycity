@@ -315,26 +315,54 @@ export function announcementActive(c?: StoreCustomization | null, now: Date = ne
 
 export type SocialLink = { key: string; label: string; href: string };
 
-const PERCORSI_CHE_NON_SONO_UN_PROFILO = new RegExp(
-  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|explore|direct|accounts|tv|t|tag|discover|fundraisers|live|reviews|lite)$',
+/**
+ * R10-014 — Il primo pezzo del percorso che non è un nome cambia da un social all'altro: un elenco
+ * unico fermava anche un profilo vero di Instagram o TikTok chiamato «live», «help» o «business».
+ */
+const RISERVATI_FACEBOOK = new RegExp(
+  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu)$',
   'i',
 );
+const RISERVATI_INSTAGRAM = /^(?:p|reel|reels|stories|explore|direct|accounts|tv|share|about|legal|developer|web)$/i;
+const RISERVATI_TIKTOK = /^(?:t|tag|discover|video|music|search|share|embed|explore|live|foryou|following)$/i;
+
+/**
+ * R10-014 — Su Facebook un elenco di esclusioni non chiude la classe («home.php», «/notes/x»,
+ * «/recover/initiate», «/places/x» si salvavano come nome). Il link è di un profilo solo se il nome
+ * non è una pagina .php e, quando dopo il nome c'è altro percorso, il pezzo successivo è una
+ * sottopagina di un profilo («/pane-quotidiano/posts/1»).
+ */
+const SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK =
+  /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map)$/i;
+function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
+  if (/\.php$/i.test(nome)) return false;
+  const pezzi = resto.split('/').filter(Boolean);
+  return pezzi.length === 0 || SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK.test(pezzi[0]);
+}
+
+type RegolaDelSocial = {
+  dominio: RegExp;
+  riservati: RegExp;
+  percorsoDiUnProfilo?: (nome: string, resto: string) => boolean;
+};
 
 /**
  * 295 — Il negoziante incolla il link del profilo, non il nome: da
  * «https://www.instagram.com/panequotidiano/» si tiene «panequotidiano».
  */
-function handleDaLink(v: string | undefined, dominio: RegExp): string | undefined {
+function handleDaLink(v: string | undefined, regola: RegolaDelSocial): string | undefined {
   if (v === undefined) return v;
   const t = v.trim();
-  const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)(?=$|[\\/?#])`, 'i'));
+  const m = t.match(
+    new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${regola.dominio.source}\\/@?([A-Za-z0-9._-]+)(?=$|[\\/?#])([^?#]*)`, 'i'),
+  );
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
-  // R10-014 — Anche gli altri percorsi di Facebook (people, events, photo, marketplace…): il
-  // primo pezzo del percorso non è un nome, e non deve diventare il «nome profilo».
   // R10-010 — Il link copiato dall'app porta dietro «?igsh=…» o «?hl=it»: dopo il nome del profilo
   // la coda non conta, si tiene il nome (prima ogni «?» fermava anche un profilo vero).
-  if (m && PERCORSI_CHE_NON_SONO_UN_PROFILO.test(m[1])) return t;
+  if (m && (regola.riservati.test(m[1]) || (regola.percorsoDiUnProfilo && !regola.percorsoDiUnProfilo(m[1], m[2])))) {
+    return t;
+  }
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
@@ -358,9 +386,13 @@ export function numeroWhatsappItaliano(v: string | undefined | null): string {
 export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustomization['socials'] {
   if (!s) return s;
   const out = { ...s };
-  out.instagram = handleDaLink(s.instagram, /instagram\.com/);
-  out.facebook = handleDaLink(s.facebook, /(?:facebook|fb)\.com/);
-  out.tiktok = handleDaLink(s.tiktok, /tiktok\.com/);
+  out.instagram = handleDaLink(s.instagram, { dominio: /instagram\.com/, riservati: RISERVATI_INSTAGRAM });
+  out.facebook = handleDaLink(s.facebook, {
+    dominio: /(?:facebook|fb)\.com/,
+    riservati: RISERVATI_FACEBOOK,
+    percorsoDiUnProfilo: percorsoDiUnProfiloFacebook,
+  });
+  out.tiktok = handleDaLink(s.tiktok, { dominio: /tiktok\.com/, riservati: RISERVATI_TIKTOK });
   if (s.website !== undefined) {
     const w = s.website.trim();
     out.website = w && !/^https?:\/\//i.test(w) && /\./.test(w) ? `https://${w}` : w;

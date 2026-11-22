@@ -48,3 +48,47 @@ describe('R10-014 — i percorsi di Facebook che non sono un profilo', () => {
     expect(fb('@panequotidiano')).toBe('panequotidiano');
   });
 });
+
+/**
+ * Collaudo K04: l'elenco non chiudeva la classe. «home.php», «/notes/x», «/recover/initiate»,
+ * «/places/x» si salvavano come nome; e lo stesso elenco fermava profili veri di Instagram e TikTok
+ * chiamati «live», «help», «business»…
+ */
+describe('R10-014 — la classe dei percorsi che non sono un profilo, non solo un elenco', () => {
+  const ALTRI_NON_PROFILO = [
+    'https://www.facebook.com/home.php',
+    'https://www.facebook.com/notes/pane/123',
+    'https://www.facebook.com/recover/initiate',
+    'https://www.facebook.com/places/Piacenza',
+    'https://www.facebook.com/qualcosa.php?x=1',
+    'https://www.facebook.com/panequotidiano/qualcosa-di-strano',
+  ];
+  it.each(ALTRI_NON_PROFILO)('%s resta com\'è ed è fermato con l\'errore su Facebook', (url) => {
+    expect(fb(url)).toBe(url);
+    const r = storeCustomizationSchema.safeParse({ socials: { facebook: fb(url) } });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(campoDellErrore(r.error.issues[0].path)).toBe('Facebook');
+  });
+
+  it('le sottopagine di un profilo vero tengono il nome', () => {
+    expect(fb('https://www.facebook.com/panequotidiano/photos/?ref=page')).toBe('panequotidiano');
+    expect(fb('https://www.facebook.com/nome.cognome?mibextid=ZbWKwL')).toBe('nome.cognome');
+    expect(fb('https://m.facebook.com/panequotidiano/about/')).toBe('panequotidiano');
+  });
+
+  const ig = (url: string) => normalizzaSocials({ instagram: url })?.instagram;
+  const tk = (url: string) => normalizzaSocials({ tiktok: url })?.tiktok;
+  it.each(['live', 'help', 'business', 'media', 'search', 'public'])(
+    'un profilo Instagram vero chiamato «%s» si salva col suo nome',
+    (nome) => {
+      expect(ig(`https://www.instagram.com/${nome}/`)).toBe(nome);
+    },
+  );
+  it.each(['help', 'business', 'media', 'public'])('un profilo TikTok vero chiamato «%s» si salva', (nome) => {
+    expect(tk(`https://www.tiktok.com/@${nome}`)).toBe(nome);
+  });
+  it('i percorsi di Instagram e TikTok che non sono un profilo restano fermati', () => {
+    expect(ig('https://www.instagram.com/explore/tags/pane/')).toBe('https://www.instagram.com/explore/tags/pane/');
+    expect(tk('https://www.tiktok.com/tag/pane')).toBe('https://www.tiktok.com/tag/pane');
+  });
+});
