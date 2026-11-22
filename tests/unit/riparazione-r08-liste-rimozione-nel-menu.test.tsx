@@ -96,11 +96,6 @@ async function aspetta(cond: () => boolean, cosa: string) {
   await vi.waitFor(() => { expect(cond(), cosa).toBe(true); }, { timeout: 3000, interval: 10 });
 }
 
-function scrivi(campo: HTMLInputElement, valore: string) {
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(campo, valore);
-  campo.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
 const FOCACCIA = { id: 'p-focaccia', name: 'Focaccia', price: 3, images: null, status: 'available' };
 
 describe('tolto un prodotto da una lista, il menu «Aggiungi a lista» non lo segna più dentro', () => {
