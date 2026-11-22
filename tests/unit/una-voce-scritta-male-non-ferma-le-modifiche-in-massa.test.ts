@@ -210,6 +210,7 @@ describe('le rotte vere che applicano in massa', () => {
     };
     const { status, json } = await chiama('@/app/api/ai/catalog-batch/apply/route', '/api/ai/catalog-batch/apply', {
       jobId: 'lavoro-1',
+      productIds: ['p1', 'p2', 'p3'],
     });
     expect(status).toBe(200);
     expect(json.applied).toBe(3);

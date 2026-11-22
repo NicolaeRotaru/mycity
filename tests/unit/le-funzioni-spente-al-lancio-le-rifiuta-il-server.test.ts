@@ -210,7 +210,7 @@ describe('«Traduci» sul catalogo: un lotto di traduzione non riscrive l\'itali
   it('lavoro «translate»: 400 e nessuna scrittura sui prodotti', async () => {
     const scritture: unknown[] = [];
     stato.admin = dbConLavoro('translate', scritture);
-    const res = await applicaLotto(richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1' }));
+    const res = await applicaLotto(richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1', productIds: ['p1'] }));
     expect(res.status, 'il lotto di traduzione si applica ancora').toBe(400);
     expect(scritture, 'il nome italiano è stato sostituito con quello inglese').toEqual([]);
   });
@@ -218,7 +218,7 @@ describe('«Traduci» sul catalogo: un lotto di traduzione non riscrive l\'itali
   it('controprova: un lavoro «improve» si applica ancora', async () => {
     const scritture: unknown[] = [];
     stato.admin = dbConLavoro('improve', scritture);
-    const res = await applicaLotto(richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1' }));
+    const res = await applicaLotto(richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1', productIds: ['p1'] }));
     expect(res.status).toBe(200);
     expect(scritture.length).toBeGreaterThan(0);
   });

@@ -291,6 +291,7 @@ describe('il lavoro massivo «Migliora tutto»', () => {
     };
     const res = await chiama('@/app/api/ai/catalog-batch/apply/route', '/api/ai/catalog-batch/apply', {
       jobId: 'job-1',
+      productIds: ['focaccia'],
     });
     expect(res.status).toBe(200);
     const prodotti = db.scritture.filter((s) => s.tabella === 'products');
@@ -323,6 +324,7 @@ describe('il lotto e i campi obbligatori (R36)', () => {
     };
     const res = await chiama('@/app/api/ai/catalog-batch/apply/route', '/api/ai/catalog-batch/apply', {
       jobId: 'job-2',
+      productIds: ['tagliere'],
     });
     expect(res.status).toBe(200);
     expect(db.scritture.filter((s) => s.tabella === 'products')).toEqual([]);
@@ -351,6 +353,7 @@ describe('il lotto e i campi obbligatori (R36)', () => {
     };
     const res = await chiama('@/app/api/ai/catalog-batch/apply/route', '/api/ai/catalog-batch/apply', {
       jobId: 'job-3',
+      productIds: ['focaccia'],
     });
     expect(res.status).toBe(200);
     const scritte = db.scritture.filter((s) => s.tabella === 'products');

@@ -99,7 +99,7 @@ const prodotto = (id: string, over: Record<string, unknown> = {}) => ({
   images: ['https://mycity.test/f.jpg'], tags: [], has_variants: false, category_id: 'casa', attributes: {}, ...over,
 });
 
-const applica = async (corpo: Record<string, unknown> = { jobId: 'l1' }) => {
+const applica = async (corpo: Record<string, unknown> = { jobId: 'l1', productIds: ((db.lavoro?.results ?? []) as Array<{ product_id: string }>).map((r) => r.product_id) }) => {
   const res = await POST(
     new Request('http://localhost/api/ai/catalog-batch/apply', {
       method: 'POST',
