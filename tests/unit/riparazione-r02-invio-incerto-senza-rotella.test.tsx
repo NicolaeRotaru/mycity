@@ -169,6 +169,13 @@ describe('R02-005 · la pagina non mostra la rotella su un invio senza risposta'
     expect(testo).not.toMatch(/tra poco lo vedi partire/);
     expect(document.querySelector('.animate-spin')).toBeNull();
     expect(testo).toMatch(/non ha avuto risposta/);
+    // Giro di correzione: passati i 3 minuti nessuno fa piu' partire la riga.
+    // Il riquadro non promette che «se parte lo vedi qui» né che basta aspettare:
+    // dice che non partira' piu' da solo e che si scarta.
+    expect(testo).not.toMatch(/se parte lo vedi qui/i);
+    expect(testo).not.toMatch(/si chiude da solo/);
+    expect(testo).toMatch(/non partirà\s+più da solo/);
+    expect(testo).toMatch(/Scartalo/);
     s.smonta();
   });
 
