@@ -1,13 +1,13 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-22 01:40",
+  "aggiornato": "2026-11-22 03:50",
   "finita": true,
-  "testa": "a95dbdc6d89cdf58ef93b82c5273f31a10e71394",
+  "testa": "bfc33235a459e450b89f152eca00642dca920b72",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "a95dbdc6d89cdf58ef93b82c5273f31a10e71394",
-    "nota": "typecheck, lint e vitest: 1919 file, 11850 prove verdi; uscita 0"
+    "testa": "bfc33235a459e450b89f152eca00642dca920b72",
+    "nota": "typecheck, lint e vitest: 1918 file verdi e 1 saltato (11862 prove verdi, 1 saltata), uscita 0. La prova saltata è un salto condizionato già esistente: il diff del ramo non aggiunge nessuno skip."
   },
   "voci": [
     {
@@ -44,15 +44,16 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "«Dati vecchi non cancellati» ha ora un identificativo ricavato da quali pulizie falliscono: stesso guasto nessuna riga nuova, guasto diverso un allarme nuovo; il 500 resta. L'altro dei due allarmi (persone non avvisate) è chiuso dal commit di R03-003, e la prova li guarda insieme.",
       "nota": "I due allarmi sono quelli che il referto S01b nomina (:295-300 e :543-549). Metà della voce sta nel commit di R03-003 (stessa riga): se quel commit si toglie, la metà «persone non avvisate» si riapre.",
-      "verificato_da": "revisore 1 (grande): REGGE. Chiave fissa tra le notti (etichette fisse in lib/privacy/potature-ritenzione.ts), un allarme per amministratore; rimessa a mano 3/3 rossi; 33 file vicini verdi (282 casi)"
+      "verificato_da": "revisore 1 (grande): REGGE. Chiave fissa tra le notti (etichette fisse in lib/privacy/potature-ritenzione.ts), un allarme per amministratore; rimessa a mano 3/3 rossi; 33 file vicini verdi (282 casi) · collaudo K04: regge"
     },
     {
       "id": "R03-003",
       "chiave": "api-backend|allarme 'persone non avvisate' riscritto ogni notte, senza dire chi: la stessa classe chiusa per le email resta aperta qui",
-      "esito": "parziale",
-      "commit": "665234dd129d9777a9ad8ddc682e131e14e3cebc",
+      "esito": "riparato",
+      "commit": "bfc33235a459e450b89f152eca00642dca920b72",
       "file_toccati": [
-        "app/api/cron/process-deletions/route.ts"
+        "app/api/cron/process-deletions/route.ts",
+        "tests/unit/riparazione-r03-persone-non-avvisate.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r03-persone-non-avvisate.test.ts"
@@ -63,21 +64,24 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 665234dd^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-persone-non-avvisate.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bfc33235^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-persone-non-avvisate.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Come per le email ferme: un allarme per avviso non recapitato, con id derivato dall'avviso (<idAvviso>:non-avvisata, per amministratore), e nel testo l'utente e quale spiegazione (rinvio o termine scaduto). Tre notti con lo stesso guasto: un allarme solo.",
-      "nota": "Lo stato della notte resta 500 finché qualcuno non è avvisato (la voce non lo nomina). Le email ferme invece tornano verdi dalla seconda notte: se la regista vuole la stessa regola anche qui è una riga sullo stato.",
-      "verificato_da": "revisore 1 (grande): DUBBIO → parziale. L'allarme non si moltiplica e dice chi aspetta, ma non si chiude mai (route.ts:308-315) e la notte resta 500 ogni notte (route.ts:394), a differenza della classe delle email. Giro di correzione aperto",
-      "cosa_resta": "La metà «senza dire chi» e il «riscritto ogni notte» sono chiusi (un allarme per avviso, id derivato, nel testo chi aspetta). Resta la parte «come la classe delle email»: l'allarme non si chiude mai da solo quando la persona viene avvisata o non aspetta più (app/api/cron/process-deletions/route.ts:308-315; la chiusura nuova a :821 guarda solo il titolo «scrivile tu»), e la notte resta 500 ogni notte finché qualcuno non è avvisato (:394), mentre per le email è rossa solo la prima notte. Non fatto per il tetto di spesa della sessione (consegna al 70%)."
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Completata la parte «come la classe delle email»: (a) la chiusura degli allarmi aperti (quella dello «scrivile tu», ora con titolo e segno come parametri, ognuna legge solo il suo titolo) chiude anche «Persone non avvisate» (id <idAvviso>:non-avvisata:<admin>) quando la persona non aspetta più o la spiegazione è nel suo pannello, in tutti e due i percorsi della notte; (b) avvisaAmministratori dice se l'allarme è nuovo o non scritto, e la notte è 500 solo quando un «Persone non avvisate» nasce o non si scrive (prima: avvisi.falliti > 0 ogni notte); nella risposta c'è allarmiNonAvvisateNuovi, avvisiFalliti resta.",
+      "nota": "La prova esistente non chiedeva il 500 ogni notte su più notti: a :118 (caso di una notte sola) il 500 resta perché l'allarme nasce quella notte; ho cambiato solo il messaggio ('la notte in cui nasce l allarme … è rossa') e dichiaro di aver adeguato l'aiuto laNotte (profili delle persone con la richiesta, is_read=false alle righe nuove, lista e rifiuti cambiabili fra le notti, posta accendibile). (b) non tocca cosa si cancella, chi, quando né i tetti: il battito si scrive comunque (lib/api/middleware.ts:687-715), cambia solo il codice della risposta e la sua eco (pannello di Vercel, riga d'errore). Prova: rossa alla testa di prima (5 rosse su 11), verde con la correzione. Mutanti provati a mano: senza «spiegazione nel pannello» → 2 rosse; stato con avvisi.falliti > 0 → 1 rossa (tre notti); senza nonScritti nello stato → 1 rossa (allarme non scritto). Le 26 prove che importano la rotta: 251 verdi (minori-s03-cancellazioni legge il file per nome: il commento di avvisaAmministratori deve restare sopra la funzione, rispettato senza toccarla).",
+      "verificato_da": "collaudo K04: parziale confermato; giro di correzione (a)+(b) con mutanti a mano rossi (senza «nel pannello», stato su avvisi.falliti, senza nonScritti). Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "665234dd129d9777a9ad8ddc682e131e14e3cebc",
+      "collaudo": {
+        "K04": "parziale"
+      }
     },
     {
       "id": "R03-006",
       "chiave": "api-backend|l'allarme «scrivile tu» resta aperto per sempre se la persona esce dall'elenco della notte",
       "esito": "riparato",
-      "commit": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "commit": "5ea27bdf63fc91cd9703e7058004b36bf6bceda2",
       "file_toccati": [
-        "app/api/cron/process-deletions/route.ts"
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
@@ -91,19 +95,21 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cc4248b^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nuova chiusura chiamata ogni notte, anche senza nessuno in lista: chiude gli allarmi «scrivile tu» di chi non aspetta più (profilo sparito, richiesta annullata, richiesta rifatta con altra data), rileggendo la richiesta nel profilo; chi aspetta ancora lo tiene. Non lancia, gira dopo le email, non tocca cancellazioni né tetti.",
-      "insieme_a": [
-        "R03-007"
-      ],
-      "verificato_da": "revisore 1 (grande): REGGE (varianti: due admin, oltre il mese, profilo illeggibile, cursore che chiude mentre legge). Buchi della prova: restano verdi un mutante senza filtro su titolo/is_read e uno che guarda solo la tappa «rinviata». Giro di correzione aperto sulla prova"
+      "cosa_ho_fatto": "Commit di sola prova: nuovo caso con una persona oltre il mese (due spiegazioni ferme, due «scrivile tu»): quello del termine scaduto resta aperto la notte in cui nasce e la notte dopo in cui la lista non la porta. ilMondo prende la data della richiesta come parametro facoltativo.",
+      "nota": "Codice nel commit 3cc4248bc8a6d960ec78beb1cc043f8a61c8936d (già a referto), prova in questo commit di sola prova. Mutante provato a mano «confronta solo la tappa rinviata» (['rinviata'] al posto di ['rinviata','termine-scaduto'] in chiudiGliAllarmiDiChiNonAspettaPiu): 1 rossa (il caso nuovo), 6 verdi; alla testa 7 verdi. La rimessa contro 3cc4248b^ dà 0 con 5 rosse (i casi di chiusura); il caso nuovo lì è verde perché senza chiusura niente si chiude: morde sul mutante, non sulla base. Il programma non ha rifiutato anche se dopo 3cc4248b il file ha un altro commit (f9a54ab5): la versione di base riporta indietro anche quello.",
+      "verificato_da": "collaudo K04: codice giusto, prova debole; il caso nuovo morde il mutante «solo la tappa rinviata» (1 rossa), verde alla testa. Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "collaudo": {
+        "K04": "parziale"
+      }
     },
     {
       "id": "R03-007",
       "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
       "esito": "riparato",
-      "commit": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "commit": "e4ecc08b458e1e8658a79f656154bbc1759ffcb7",
       "file_toccati": [
-        "app/api/cron/process-deletions/route.ts"
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
@@ -117,12 +123,13 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cc4248b^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La chiusura di R03-006 legge solo gli allarmi aperti di quel titolo per amministratore, in ordine di id, a pagine da 200 fino in fondo (cursore che deve avanzare), senza tetto. Prove: 300 avvisi letti o d'altro tipo davanti, e 210 aperti validi prima di quello da chiudere.",
-      "insieme_a": [
-        "R03-006"
-      ],
-      "nota": "Sulla base la chiusura per chi esce dall'elenco non c'era affatto: la voce descrive il vincolo che quella chiusura deve rispettare, quindi sta nello stesso commit. Due mutanti provati a mano: una pagina sola filtrata (1 rossa), 200 righe senza filtro (2 rosse).",
-      "verificato_da": "revisore 1 (grande): REGGE (pagina sola → rosso, senza gt → rosso). Buco della prova sul filtro titolo/is_read, come la voce sorella. Giro di correzione aperto sulla prova"
+      "cosa_ho_fatto": "Commit di sola prova: nuovo caso in cui il pannello della persona rifiuta la spiegazione, la rotta vera scrive «Persone non avvisate» (testo con «Chi aspetta: l'utente X.»), la persona aspetta ancora e non è avvisata: per due notti, dopo la chiusura dello «scrivile tu», l'allarme resta aperto.",
+      "nota": "Codice nel commit 3cc4248bc8a6d960ec78beb1cc043f8a61c8936d (già a referto), prova in questo commit di sola prova. Mutante provato a mano «senza filtro sul titolo» (tolto .eq('title', TITOLO_EMAIL_FERMA) in chiudiGliAllarmiDiChiNonAspettaPiu): 1 rossa (il caso nuovo), 7 verdi; alla testa 8 verdi. La rimessa contro 3cc4248b^ dà 0 con 5 rosse (i casi di chiusura); il caso nuovo lì è verde perché senza chiusura niente si chiude: morde sul mutante, non sulla base. Resta il minore visto da K04 (la chiusura non ha tetto di tempo e gira dopo il tetto delle email): non toccato.",
+      "verificato_da": "collaudo K04: codice giusto, prova debole; il caso nuovo morde il mutante «senza filtro sul titolo» (1 rossa), verde alla testa. Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "collaudo": {
+        "K04": "parziale"
+      }
     },
     {
       "id": "R03-008",
@@ -146,7 +153,7 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "A tempo delle email finito, prima di contare e di scrivere l'allarme si tolgono le spiegazioni con «email_partita» nel registro degli invii; conto (avvisiEmailSenzaTempo), testo e chiave dicono solo le altre; se non ne resta nessuna, niente allarme. Il pannello si scrive per tutte come prima.",
       "nota": "La stringa del segno «privacy.avviso_cancellazione.email_partita» è privata nella libreria: è copiata in una costante della rotta. La prova la incrocia con la libreria vera (che scrive il segno la prima notte), quindi una deriva diventa rossa.",
-      "verificato_da": "revisore 1 (grande): REGGE. Stesso segno, tabella e target_id di lib/privacy/avvisi-a-chi-aspetta.ts:349-365; registro illeggibile → contata come non partita (lato prudente); rimessa a mano 2/2 rossi"
+      "verificato_da": "revisore 1 (grande): REGGE. Stesso segno, tabella e target_id di lib/privacy/avvisi-a-chi-aspetta.ts:349-365; registro illeggibile → contata come non partita (lato prudente); rimessa a mano 2/2 rossi · collaudo K04: regge"
     },
     {
       "id": "R03-009",
@@ -170,7 +177,7 @@
       "id": "R03-001",
       "chiave": "api-backend|con taglie alla stessa posizione la traccia può segnare un riordino che non c'è",
       "esito": "riparato",
-      "commit": "419926551f0d308035e0c5ee0471e730d9e9e939",
+      "commit": "9dbcc052db20bc3f964757864cb105b1bb2f11ff",
       "file_toccati": [
         "app/api/admin/products/route.ts",
         "tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts"
@@ -184,12 +191,16 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 41992655^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9dbcc052^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Le taglie lette per la traccia si ordinano per posizione e poi per contenuto (non per id): lo stesso insieme con id riscritti non segna più un riordino.",
-      "verificato_da": "revisore 3 (sonnet): diff, mutante, 26 file di prove esistenti verdi. DUBBIO sulla prova: col mutante «nessuno spareggio a parità di posizione» la prova resta verde (giro di correzione aperto)",
-      "nota": "La prova non fissa lo spareggio per contenuto: col mutante «nessuno spareggio» resta verde perché le due liste arrivano nello stesso ordine (da rafforzare in un giro dopo)."
+      "cosa_ho_fatto": "La traccia non confronta più le due liste ordinate (lo spareggio per contenuto inventava un ordine a parità di posizione): segna le taglie se cambia l'insieme (nome, opzioni, scorta) o se due taglie con posizioni di prima strettamente diverse arrivano invertite. La prova finge il salvataggio vero (posizioni 0..n-1, id tenuti) con M e L a posizione 0 nei due ordini d'arrivo, tre taglie, un riordino vero a posizioni distinte e una scorta cambiata.",
+      "nota": "Prova rossa alla testa di prima (spareggio per contenuto: 1 rossa, M,L) e con route.ts della base 41992655^ (spareggio per id: 2 rosse, L,M e tre taglie), verde con la correzione. Mutante provato a mano «nessun riordino mai» (solo l'insieme): 2 rosse. La forma di prima/dopo nella traccia non cambia (nome, opzioni, scorta); le 8 prove che importano la rotta: 39 verdi.",
+      "verificato_da": "collaudo K04: non_regge (spareggio per contenuto); giro di correzione con prova riscritta sullo scenario realistico del collaudo, rossa sia con la testa di prima sia con la base, mutante «nessun riordino mai» rosso; diff riletto dal capo squadra (confronto per coppie di posizioni di prima strettamente diverse). Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "419926551f0d308035e0c5ee0471e730d9e9e939",
+      "collaudo": {
+        "K04": "non_regge"
+      }
     },
     {
       "id": "R03-002",
@@ -213,7 +224,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il rilascio del segno dopo un invio saltato aggiunge il filtro sull'ultima attività letta: se il carrello è cambiato il suo segno non si cancella.",
-      "verificato_da": "revisore 3 (sonnet): mutante senza filtro last_activity → prova rossa; caso normale e last_activity null controllati; 26 file di prove esistenti verdi"
+      "verificato_da": "revisore 3 (sonnet): mutante senza filtro last_activity → prova rossa; caso normale e last_activity null controllati; 26 file di prove esistenti verdi · collaudo K04: regge"
     },
     {
       "id": "R03-010",
@@ -282,8 +293,8 @@
     {
       "id": "R03-014",
       "chiave": "api-backend|un rifiuto per troppe richieste della ricerca indirizzi fa salvare l'indirizzo senza coordinate per sempre",
-      "esito": "riparato",
-      "commit": "b1f99d1dcc1d87e409f56a2cea9f4c063d3be181",
+      "esito": "parziale",
+      "commit": "81ba580d144a1e0e0769d6de8f428ad9478e107c",
       "file_toccati": [
         "app/profile/addresses/page.tsx",
         "tests/unit/riparazione-r03-indirizzo-429.test.tsx"
@@ -297,11 +308,23 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b1f99d1d^ --file app/profile/addresses/page.tsx --prove tests/unit/riparazione-r03-indirizzo-429.test.tsx --comando \"npx vitest run {prove} --reporter=dot\" --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81ba580d^ --file app/profile/addresses/page.tsx --prove tests/unit/riparazione-r03-indirizzo-429.test.tsx --comando \"npx vitest run {prove} --reporter=dot\" --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sul 429 della ricerca l'indirizzo non si salva: la mutazione torna con troppeRichieste, il modulo resta aperto e un avviso dice di riprovare fra qualche secondo.",
-      "verificato_da": "revisore 3 (sonnet): mutante senza il ramo 429 → prova rossa; altri errori come prima; doppio clic coperto (page.tsx:227)"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel profilo, con lo stesso indirizzo e le coordinate già buone la ricerca della posizione non si fa più, quindi un 429 non blocca il salvataggio (es. cambia solo il telefono); il 429 blocca solo quando la ricerca serve (via nuova o coordinate mancanti). Nuovo caso nella prova: telefono cambiato con 429 armato → salvato con le coordinate di prima, nessuna ricerca, nessun errore.",
+      "cosa_resta": "La metà del negoziante: components/StoreLocationPicker.tsx:169-172, sul 429 della ricerca il negoziante legge ancora «Indirizzo non trovato» (la rotta /api/geocode risponde {lat:null,lng:null,error:'rate_limited'} con 429). Il file non è di R03.",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreLocationPicker.tsx",
+          "modifica": "In searchAddress, subito dopo la fetch a /api/geocode e prima di `const data = await res.json();` (riga 170) aggiungere:\n+      if (res.status === 429) {\n+        setError('Troppe ricerche in questo momento: riprova fra qualche secondo o sposta il pin sulla mappa.');\n+        return;\n+      }\nCosì il 429 non si legge più come «Indirizzo non trovato» (il finally rimette searching a false). Prova suggerita: montare StoreLocationPicker con fetch che risponde 429, cliccare la ricerca, attendersi il testo «Troppe ricerche» e nessun onChange."
+        }
+      ],
+      "nota": "Prova rossa alla testa di prima (il nuovo caso: 1 rossa, 1 verde), verde con la correzione. Le 5 prove che leggono la pagina degli indirizzi: 35 verdi (tra cui «stesso indirizzo: le coordinate restano» di riparazione-r03-rubrica-via-nuova).",
+      "verificato_da": "collaudo K04: parziale; giro di correzione per lo stesso indirizzo, caso nuovo rosso alla testa di prima. Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "b1f99d1dcc1d87e409f56a2cea9f4c063d3be181",
+      "collaudo": {
+        "K04": "parziale"
+      }
     },
     {
       "id": "R03-015",
@@ -359,10 +382,10 @@
     "R03-010: con il freno unico a 1 richiesta al secondo verso Nominatim, chi ha la precedenza tra la ricerca indirizzi pubblica e la cassa (o si passa a un servizio con chiave e cache)?"
   ],
   "conto": {
-    "agenti": 5,
-    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) e 3 revisori (2 grandi, 1 sonnet); il sesto, per il giro di correzione, non l'ho lanciato: spesa letta da get_session a 21,51 $ prima della consegna, oltre il 70% di 35 $ con il giro. Giri aperti: R03-003 (parziale), R03-012/013 (da rifare), prove di R03-001 e R03-006/007 da rafforzare.",
-    "subagenti": 5,
-    "costo_usd": 21.51
+    "agenti": 6,
+    "subagenti": 6,
+    "costo_usd": 29.67,
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet), 3 revisori (2 grandi, 1 sonnet), 1 giro di correzione dopo il collaudo K04 (modello grande). Spesa letta da get_session: 21,51 $ alla prima consegna, 29,67 $ dopo il giro. Restano da fare in un'altra sessione R03-012/013 (da rifare) e le parti in file altrui di 009, 011, 014, 015."
   },
-  "costo_usd": 21.51
+  "costo_usd": 29.67
 }
