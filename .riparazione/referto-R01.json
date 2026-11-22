@@ -1,6 +1,6 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-22 00:55",
+  "aggiornato": "2026-11-22 01:00",
   "finita": true,
   "testa": "ad49df0df24aa3a9dda3088d9cc48b4927ea4ad5",
   "verifica": {
@@ -235,7 +235,7 @@
   "nuovi_difetti_visti": [
     {
       "riservato": true,
-      "titolo": "Falla di sicurezza da chiudere (preferenze di notifica): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (privacy): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "rls-database",
       "severita": "minore",
       "file": "(nel referto privato)"
@@ -279,6 +279,9 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 5,
-    "nota": "2 riparatori (A modello grande, B sonnet), 2 revisori (A grande, B sonnet), 1 correzione della prova di R01-001 (sonnet)"
-  }
+    "nota": "2 riparatori (A modello grande, B sonnet), 2 revisori (A grande, B sonnet), 1 correzione della prova di R01-001 (sonnet)",
+    "subagenti": 5,
+    "costo_usd": 12
+  },
+  "costo_usd": 12
 }
