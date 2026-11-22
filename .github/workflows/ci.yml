@@ -134,6 +134,11 @@ jobs:
           fi
           echo "PostgreSQL c'e' e risponde: le prove col database vero girano."
 
+      # La misura vera della foto/vetrina gira in un browser: senza Chromium qui si saltava
+      # dichiarandolo e restava solo la prova delle classi. Stesso comando degli altri lavori.
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
       # Unit test + guardia integrita' file migration + le prove col database vero.
       # Che PostgreSQL ci sia e risponda lo garantisce il passo qui sopra (fallisce se manca):
       # nessuna variabile serve a rendere obbligatorie le prove, nessun file di prova ne legge una.
