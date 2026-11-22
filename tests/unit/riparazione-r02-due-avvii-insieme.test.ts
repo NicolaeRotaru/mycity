@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
  * R02-004 · R02-013 — Due avvii insieme del lavoro AI sul catalogo (doppio
@@ -8,6 +8,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * il database finto fa lo stesso, e la rotta deve dire al secondo avvio «c'è
  * già un lavoro aperto» (409 con il suo id), non «non sono riuscito, riprova»
  * (502), che rimette il pulsante e invita a un terzo avvio.
+ *
+ * Giro di correzione (22/11) — Mentre /apply scrive, il suo lavoro e' gia'
+ * 'applied' (prenotato, con updated_at all'ora della prenotazione). Un avvio in
+ * quel momento faceva nascere un lavoro aperto, e il «rimetti pronto»
+ * dell'applica cadeva sull'indice (23505): il lavoro pagato restava chiuso.
+ * Finche' l'applica puo' ancora girare (120 s, vercel.json) l'avvio si rifiuta.
  */
 
 const FAKE_USER = { id: 'seller-1', email: 's@x.com' };
@@ -28,7 +34,7 @@ const PRODUCTS = [{
 }];
 
 // Il database finto, con lo stato condiviso fra le due richieste.
-type Riga = { id: string; seller_id: string; status: string };
+type Riga = { id: string; seller_id: string; status: string; updated_at?: string };
 const APERTI = ['submitting', 'processing', 'ready'];
 let righe: Riga[] = [];
 let prossimoId = 1;
@@ -56,7 +62,7 @@ vi.mock('@/lib/supabase/server', () => ({
                   lettureAperti += 1;
                   if (lettureAperti === 2) apriCancello();
                   if (lettureAperti <= 2) await cancello;
-                  const data = righe.filter((r) => r.seller_id === seller && stati.includes(r.status)).map((r) => ({ id: r.id, status: r.status }));
+                  const data = righe.filter((r) => r.seller_id === seller && stati.includes(r.status)).map((r) => ({ id: r.id, status: r.status, updated_at: r.updated_at }));
                   return { data, error: null };
                 },
               }),
@@ -117,6 +123,9 @@ describe('due avvii insieme del lavoro sul catalogo', () => {
     __resetRateLimitBuckets();
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
   });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('ne parte uno solo, e il secondo sente «hai già un lavoro aperto» con il suo id', async () => {
     const risposte = await Promise.all([POST(richiesta()), POST(richiesta())]);
@@ -130,5 +139,32 @@ describe('due avvii insieme del lavoro sul catalogo', () => {
 
     expect(submitBatchMock).toHaveBeenCalledTimes(1);
     expect(righe.filter((r) => APERTI.includes(r.status))).toHaveLength(1);
+  });
+
+  it('mentre un\'applicazione gira (lavoro «applied» prenotato 30 s fa) l\'avvio è rifiutato: 409, nessun lotto, nessuna riga', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T10:00:00Z'));
+    cancello = Promise.resolve();
+    righe = [{ id: 'job-a', seller_id: 'seller-1', status: 'applied', updated_at: '2026-11-22T09:59:30Z' }];
+
+    const r = await POST(richiesta());
+    expect(r.status).toBe(409);
+    const corpo = (await r.json()) as { error: { code: string; message: string; details?: { jobId?: string } } };
+    expect(corpo.error.code).toBe('CONFLICT');
+    expect(corpo.error.message).toMatch(/applicazione .*in corso/);
+    expect(corpo.error.details?.jobId).toBe('job-a');
+    expect(submitBatchMock).not.toHaveBeenCalled();
+    expect(righe).toHaveLength(1);
+  });
+
+  it('passata la durata massima dell\'applica (prenotato 3 minuti fa), il lavoro nuovo parte', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T10:00:00Z'));
+    cancello = Promise.resolve();
+    righe = [{ id: 'job-a', seller_id: 'seller-1', status: 'applied', updated_at: '2026-11-22T09:57:00Z' }];
+
+    const r = await POST(richiesta());
+    expect(r.status).toBe(200);
+    expect(submitBatchMock).toHaveBeenCalledTimes(1);
   });
 });
