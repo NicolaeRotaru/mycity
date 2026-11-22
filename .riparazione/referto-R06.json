@@ -1,13 +1,13 @@
 {
   "sessione": "R06",
-  "aggiornato": "2026-11-22 01:05",
+  "aggiornato": "2026-11-22 01:45",
   "finita": true,
-  "testa": "d2c8a9ccedd917492dcff2295f26b55d3a347df2",
+  "testa": "0968f1813404318c7342a7fb0ea619b58353b080",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "311e734f85696bf40e764f535ec3538eb7094f49",
-    "nota": "typecheck pulito, lint 0 errori (126 avvisi già presenti), vitest 1912 file e 11829 prove verdi; girato su 311e734f, che dopo la testa tocca solo il referto"
+    "testa": "0968f1813404318c7342a7fb0ea619b58353b080",
+    "nota": "typecheck pulito, lint 0 errori (126 avvisi già presenti), vitest 1913 file e 11835 prove verdi, sulla testa"
   },
   "voci": [
     {
@@ -62,21 +62,21 @@
       "commit": "d2c8a9ccedd917492dcff2295f26b55d3a347df2",
       "file_toccati": [
         "app/profile/page.tsx",
-        "tests/unit/riparazione-r06-etichette-maiuscole.test.ts"
+        "tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r06-etichette-maiuscole.test.ts"
+        "tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r06-etichette-maiuscole.test.ts --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts --reporter=dot",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2c8a9cc^ --file app/profile/page.tsx --prove tests/unit/riparazione-r06-etichette-maiuscole.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2c8a9cc^ --file app/profile/page.tsx --prove tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nei miei 4 file l'unica etichetta maiuscola fuori misura era app/profile/page.tsx:99 (uppercase tracking-[0.05em] → tracking-label). La prova legge i 4 file per nome e rifiuta ogni classe con uppercase e una spaziatura diversa da tracking-label. tailwind.config.ts non toccato: cambiarne la scala toccherebbe anche ciò che non è un'etichetta.",
+      "cosa_ho_fatto": "Nei miei 4 file l'unica etichetta maiuscola fuori misura era app/profile/page.tsx:99 (uppercase tracking-[0.05em] → tracking-label). La prova legge i 4 file per nome e rifiuta ogni classe con uppercase e una spaziatura diversa da tracking-label. tailwind.config.ts non toccato: cambiarne la scala toccherebbe anche ciò che non è un'etichetta. Il primo commit aveva scritto la prova sopra una prova esistente con lo stesso nome (di un R06 di una campagna passata, che guarda altri 5 file): il commit 0968f181 la rimette intera, e la mia prova sta in un file nuovo; guardia-ramo verde.",
       "cosa_resta": "90 etichette maiuscole in 52 file non miei usano ancora una delle otto spaziature (tracking-wide 30, tracking-wider 33, tracking-widest 2, tracking-[0.03em] 14, [0.04em] 4, [0.05em] 4, [0.06em] 2, [0.08em] 1): elenco esatto in serve_file_altrui.",
       "serve_file_altrui": [
         {
@@ -366,9 +366,9 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) + 2 revisori sonnet in sola lettura; costo da get_session alle 01:05 del 22/11: 8,98 $",
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) + 2 revisori sonnet in sola lettura; costo da get_session alle 01:45 del 22/11: 9,96 $",
     "subagenti": 4,
-    "costo_usd": 8.98
+    "costo_usd": 9.96
   },
-  "costo_usd": 8.98
+  "costo_usd": 9.96
 }
