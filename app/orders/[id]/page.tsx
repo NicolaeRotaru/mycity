@@ -151,6 +151,29 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
   return conFattorino as unknown as OrderRow;
 };
 
+/**
+ * R01-006 — Il reclamo dell'ordine, come lo vede chi l'ha aperto (tabella `disputes`): quello aperto,
+ * se c'è, se no il più recente. I titoli sono quelli della campanella dell'esito
+ * (app/api/admin/disputes/[id]/resolve), che porta a questa pagina.
+ * «Aperto» è quello che conta per il server: 'open' o 'under_review' (l'indice unico
+ * disputes_one_open_per_order, migrations/063; il giro dei bonifici, OPEN_DISPUTE_STATUSES).
+ */
+type RigaReclamo = { status: string; created_at: string | null; resolution_notes?: string | null; refund_cents?: number | null };
+const RECLAMO_TITOLO: Record<string, string> = {
+  open: 'Reclamo aperto',
+  under_review: 'Reclamo in esame',
+  resolved_buyer: 'Reclamo risolto a tuo favore',
+  resolved_seller: 'Reclamo risolto a favore del venditore',
+  rejected: 'Reclamo respinto',
+};
+const reclamoAncoraAperto = (r: RigaReclamo) => r.status === 'open' || r.status === 'under_review';
+function reclamoDaMostrare(righe: RigaReclamo[] | null | undefined): RigaReclamo | null {
+  const noti = (righe ?? []).filter((r) => !!r && Object.prototype.hasOwnProperty.call(RECLAMO_TITOLO, r.status));
+  if (noti.length === 0) return null;
+  return noti.find(reclamoAncoraAperto)
+    ?? [...noti].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
+}
+
 // Timestamp del singolo step della timeline (se registrato).
 /** L'ora di una tappa, sull'orologio di Piacenza: giorno, mese, ore e minuti (i secondi non servono). */
 const ORA_DELLA_TAPPA: Intl.DateTimeFormatOptions = {
@@ -260,6 +283,23 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     },
   });
   const reso = statoDelReso(resi);
+
+  // Il reclamo di questo ordine: la campanella dell'esito porta qui, e qui l'esito si deve leggere.
+  // Se la lettura non riesce resta «Apri reclamo»: il server rifiuta comunque un secondo reclamo aperto.
+  const { data: reclami } = useQuery({
+    queryKey: [...queryKeys.orders.detail(id), 'reclami'],
+    enabled: !!status,
+    refetchOnMount: 'always',
+    queryFn: async (): Promise<RigaReclamo[]> => {
+      const { data, error } = await supabase
+        .from('disputes')
+        .select('status, created_at, resolution_notes, refund_cents')
+        .eq('order_id', id);
+      if (error) throw error;
+      return (data ?? []) as RigaReclamo[];
+    },
+  });
+  const reclamo = reclamoDaMostrare(reclami);
 
   const cancel = useMutation({
     mutationFn: async () => {
@@ -552,13 +592,40 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 <Undo2 size={15} strokeWidth={2.2} aria-hidden /> Richiedi reso
               </Link>
             )}
-            <Link
-              href={`/orders/${id}/dispute`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
-            >
-              <AlertTriangle size={15} strokeWidth={2.2} aria-hidden /> Apri reclamo
-            </Link>
+            {/* Si nasconde solo mentre c'è un reclamo aperto (open / under_review): il server ne
+                tiene uno aperto per ordine e ne accetta un altro dopo la chiusura. */}
+            {!(reclamo && reclamoAncoraAperto(reclamo)) && (
+              <Link
+                href={`/orders/${id}/dispute`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+              >
+                <AlertTriangle size={15} strokeWidth={2.2} aria-hidden /> Apri reclamo
+              </Link>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* IL RECLAMO: stato ed esito, con il rimborso deciso e le note di chi l'ha chiuso. */}
+      {reclamo && (
+        <div role="status" className="mt-4 rounded-xl border-2 border-cream-300 bg-white p-4 text-sm text-ink-700">
+          <p className="inline-flex items-center gap-1.5 font-semibold text-ink-900">
+            <AlertTriangle size={15} strokeWidth={2.2} aria-hidden /> {RECLAMO_TITOLO[reclamo.status]}
+          </p>
+          <p className="mt-1">
+            {reclamo.created_at ? `Aperto il ${new Date(reclamo.created_at).toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA })}. ` : ''}
+            {reclamoAncoraAperto(reclamo)
+              ? 'Ti scriviamo noi appena c\'è una decisione.'
+              : reclamo.status === 'resolved_buyer' && reclamo.refund_cents
+                ? `Rimborso deciso con il reclamo: ${formatPrice(reclamo.refund_cents / 100)}.`
+                : ''}
+          </p>
+          {!reclamoAncoraAperto(reclamo) && reclamo.resolution_notes && (
+            <p className="mt-1 whitespace-pre-line">{reclamo.resolution_notes}</p>
+          )}
+          <Link href={`/orders/${id}/dispute`} className="mt-2 inline-block font-semibold text-primary-700 hover:underline">
+            Vedi il reclamo
+          </Link>
         </div>
       )}
 

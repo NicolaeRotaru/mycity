@@ -1,0 +1,306 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-22 01:25",
+  "finita": true,
+  "testa": "f5836cc53745fe47e535f796aa4ab10bfe28c503",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "f5836cc53745fe47e535f796aa4ab10bfe28c503",
+    "nota": "dopo il giro di correzione del collaudo K01: typecheck e lint senza errori (126 avvisi già presenti), 1915 file di prove passati e 1 saltato (11850 casi)"
+  },
+  "voci": [
+    {
+      "id": "R01-010",
+      "chiave": "rls-database|chi apre un reclamo può indirizzarlo a un negozio qualunque, e il negozio giusto non lo vede",
+      "esito": "non_fatto",
+      "nota": "permessi: va all'onda dei delicati, con ultracode (decisione della regista, 21/11 23:24)"
+    },
+    {
+      "id": "R01-006",
+      "chiave": "qa-flussi|il cliente non trova l'esito del reclamo nella pagina del suo ordine",
+      "esito": "riparato",
+      "commit": "31451f1b1090601e358a1a2316d1f5ccf9d4350e",
+      "commit_prima": "54fec5e1bc74a714721ac210726cbadbdb9de311",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-esito-del-reclamo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-esito-del-reclamo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54fec5e1bc74a714721ac210726cbadbdb9de311^ --file app/orders/[id]/page.tsx,app/orders/[id]/dispute/page.tsx --prove tests/unit/riparazione-r01-esito-del-reclamo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina dell'ordine legge i reclami e mostra stato, esito, rimborso e note. Nasconde «Apri reclamo» solo mentre c'è un reclamo aperto ('open' o 'under_review'), come il server; con un reclamo chiuso lo lascia accanto all'esito. La pagina del reclamo, su un reclamo chiuso, mostra l'esito e sotto il modulo per aprirne uno nuovo; con un reclamo aperto dice che ce n'è già uno.",
+      "verificato_da": "revisore A sulla prima versione; collaudo K01 rompe_altro (pulsante nascosto anche a reclamo chiuso), corretto nel giro di correzione e allineato al server (migrations/063:80-81, app/api/cron/release-payouts/route.ts:84); 33 file vicini verdi; nessun revisore nuovo dopo la correzione (tetto dei 6 subagenti), torna a K01"
+    },
+    {
+      "id": "R01-004",
+      "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "(file di R01, da applicare insieme alle prove sotto) righe 74-76: `if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Scegli i prodotti a cui applicare le modifiche.'); const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));` e nel filtro dei risultati (riga 97) `(r) => r.product_id && onlyIds.has(r.product_id)`."
+        },
+        {
+          "file": "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
+          "modifica": ":116 `{ jobId: 'job-1' }` → `{ jobId: 'job-1', productIds: ['p1', 'p2'] }`"
+        },
+        {
+          "file": "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts",
+          "modifica": "dopo jobId aggiungere: :293 `productIds: ['focaccia']`, :325 `productIds: ['tagliere']`, :353 `productIds: ['focaccia']`"
+        },
+        {
+          "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+          "modifica": ":213 e :221 `{ jobId: 'job-1' }` → `{ jobId: 'job-1', productIds: ['p1'] }` (anche la :213, se no il 400 del translate arriva per l'elenco mancante)"
+        },
+        {
+          "file": "tests/unit/minori-s10-lotto-applica.test.ts",
+          "modifica": ":102 corpo predefinito → `{ jobId: 'l1', productIds: ((db.lavoro?.results ?? []) as Array<{ product_id: string }>).map((r) => r.product_id) }`"
+        },
+        {
+          "file": "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
+          "modifica": ":212 aggiungere `productIds: ['p1', 'p2', 'p3']`"
+        },
+        {
+          "file": "tests/unit/riparazione-r01-lotto-senza-elenco.test.ts (nuova)",
+          "modifica": "con solo jobId la rotta risponde 400, non scrive niente e il lavoro resta «ready»; con productIds ['p1'] scrive solo p1"
+        }
+      ],
+      "nota": "Il difetto c'è ancora. Con la sola rotta corretta diventano rosse 13 prove in 5 file comuni (simulano lib/ai/moderation.ts, lib/funzioni-al-lancio.ts, lib/logger.ts di altre sessioni). La proposta intera, provata nell'albero e poi tolta, dà 8 file e 89 prove verdi; la prova nuova è rossa senza la rotta corretta. L'unica pagina che chiama la rotta manda già productIds.",
+      "verificato_da": "revisore A: difetto confermato in route.ts:75-77 e 97-99, i 13 casi rossi contati nei 5 file comuni, unica chiamante app/seller/products/ai-batch/page.tsx:443 manda già productIds"
+    },
+    {
+      "id": "R01-008",
+      "chiave": "qa-flussi|la consegna veloce si vende a tutti insieme anche con un solo fattorino: nessuno conta quante veloci ha già in mano",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/ordini/consegna-veloce.ts:46 `VELOCI_PER_FATTORINO = 1` e :161-165 contaFattoriniOnline toglie chi ha già una veloce; la chiamano app/api/consegna/veloce/route.ts:93, app/api/consegna/veloce/negozi/route.ts:68, app/api/orders/cod/route.ts:973, app/api/stripe/checkout/route.ts. `npx vitest run tests/unit/riparazione-r04-una-veloce-per-fattorino.test.ts` verde (6/6).",
+      "nota": "Resta la corsa di due clienti nello stesso istante: servirebbe una prenotazione atomica nelle rotte cod/checkout o nel database, file non di R01.",
+      "verificato_da": "revisore A: righe e chiamanti confermati, prova r04 verde 6/6"
+    },
+    {
+      "id": "R01-005",
+      "chiave": "qa-flussi|la campanella del sito mostra le promozioni anche a chi le ha spente",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/notifications/page.tsx",
+          "modifica": "(file di R01, da applicare insieme agli altri due) :124-129 prima di leggere le notifiche: `const { data: preferenze, error: errPreferenze } = await supabase.from('profiles').select('notif_promos').eq('id', user.id).maybeSingle(); if (errPreferenze) throw errPreferenze; let lettura = supabase.from('notifications').select('*').eq('user_id', user.id); if (preferenze?.notif_promos !== true) lettura = lettura.neq('category', 'promo');` poi `await lettura.order('created_at', { ascending: false }).limit(quante)`"
+        },
+        {
+          "file": "components/hooks/useNotificationsCount.ts",
+          "modifica": ":32-36 la stessa lettura di notif_promos per userId (errore → throw), poi `.neq('category','promo')` sul conteggio quando notif_promos !== true"
+        },
+        {
+          "file": "components/seller/SellerShell.tsx",
+          "modifica": ":113-117 (useNotifUnread) la stessa cosa (errore → return 0, come oggi)"
+        }
+      ],
+      "nota": "Il difetto c'è ancora (page.tsx:124-129 legge tutto). Correggere solo la pagina farebbe contare ai campanelli (Navbar, AccountShell, AdminSidebar, SellerShell) promozioni che la lista non mostra più. category è NOT NULL DEFAULT 'order' (115:210), notif_promos NOT NULL (054).",
+      "verificato_da": "revisore A: page.tsx:124-129 senza filtro, contatori in useNotificationsCount.ts:31-35 e SellerShell.tsx:105-117, colonne confermate nelle migrazioni"
+    },
+    {
+      "id": "R01-001",
+      "chiave": "accessibilita|la trappola del fuoco delle finestre conta anche i campi con tabindex -1",
+      "esito": "riparato",
+      "commit": "bf9d30d0520164f5e8dd9423c906b96aeafc62b7",
+      "file_toccati": [
+        "components/ui/Modal.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-fuoco-modal.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-fuoco-modal.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bf9d30d0^ --file components/ui/Modal.tsx --prove tests/unit/riparazione-r01-fuoco-modal.test.tsx --json (dopo ad49df0d)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Un solo elenco di elementi attivabili per il primo fuoco e per la trappola, che esclude ogni [tabindex=-1]. La prova: Tab dall'ultimo campo raggiungibile torna al primo, Shift+Tab fa il giro opposto.",
+      "verificato_da": "revisore B (sonnet): la modifica regge sulle varianti (link, campi, div con tabindex -1; tabindex 0 resta), ma la prova era instabile (1 rosso su 3); corretta in ad49df0d (orologio finto), verde 15 su 15, rimessa 0, 4 file che importano Modal verdi",
+      "commit_prova_corretta": "ad49df0df24aa3a9dda3088d9cc48b4927ea4ad5"
+    },
+    {
+      "id": "R01-002",
+      "chiave": "microcopy|il cliente e l'email leggono ancora «un rider passa a prenderlo», mentre il pulsante del negozio ora dice «fattorino»",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/orders/[id]/page.tsx",
+          "modifica": "(file di R01, da applicare insieme alle due prove sotto) nella mappa delle frasi di stato: READY 'Pronto in negozio · un fattorino passa a prenderlo a breve', ASSIGNED 'Un fattorino sta arrivando in negozio', PICKED_UP 'Il fattorino ha ritirato il tuo ordine', OUT_FOR_DELIVERY 'Il fattorino è in viaggio verso di te'; e la riga del codice di consegna 'Il fattorino ne ha bisogno per chiudere la consegna.'"
+        },
+        {
+          "file": "lib/email/templates.ts",
+          "modifica": "(file di R01) orderReadyTemplate, html (:381) e testo (:397): «un rider passa a prenderlo» → «un fattorino passa a prenderlo»; commento :377 uguale."
+        },
+        {
+          "file": "tests/unit/minori-s04-ordine-pronto-dice-una-cosa-sola.test.ts",
+          "modifica": ":11 titolo «dice «un fattorino passa a prenderlo», come l’email»; :14 expect(riga).toMatch(/un fattorino passa a prenderlo/)"
+        },
+        {
+          "file": "tests/unit/la-guida-del-secondo-giorno-non-promette-il-ritiro-spento.test.ts",
+          "modifica": ":150 nella regex PAROLE_DEL_RITIRO `(?<!rider\\s)` → `(?<!(?:rider|fattorino)\\s)` (commento :148 «il «rider» (o «fattorino») davanti»); dopo :238 aggiungere `expect('un fattorino passa a prenderlo a breve').not.toMatch(PAROLE_DEL_RITIRO);`"
+        },
+        {
+          "file": "tests/unit/riparazione-r01-parola-fattorino.test.ts (nuova)",
+          "modifica": "la riga READY della pagina e l'email (html e testo) dicono «un fattorino passa a prenderlo» e non «rider»"
+        }
+      ],
+      "nota": "Il difetto c'è ancora. La correzione è stata fatta e provata (commit 8ba951e4, rimessa 0, prove vicine verdi), ma toccava due prove comuni che la guardia riserva alla regista: tolta dal ramo con un commit di ripristino. La campanella «ordine pronto» (migrations/215) dice ancora «rider»: va allineata con una migrazione nuova, o la pagina ed email cambiano da sole.",
+      "verificato_da": "guardia-ramo: la correzione toccava due prove comuni, tolta dal ramo"
+    },
+    {
+      "id": "R01-003",
+      "chiave": "microcopy|resta «rider in arrivo» a video per lo stato assigned",
+      "esito": "riparato",
+      "commit": "cc4a776464f2497fa69249319c7776d5a193a03d",
+      "file_toccati": [
+        "lib/order-status.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-stato-assegnato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-stato-assegnato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cc4a776464f2497fa69249319c7776d5a193a03d^ --file lib/order-status.ts --prove tests/unit/riparazione-r01-stato-assegnato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ORDER_STATUS_LABEL.ASSIGNED passa da «Rider in arrivo» a «Fattorino in arrivo».",
+      "verificato_da": "revisore B: nessun «Rider in arrivo» resta in order-status.ts, 7 file che lo importano verdi"
+    },
+    {
+      "id": "R01-011",
+      "chiave": "stati-ui|un lavoro sul catalogo «in invio» incerto promette «tra poco lo vedi partire» per 24 ore, e a riga chiusa dice «puoi avviarne un altro» mentre il motivo dice di chiedere all'assistenza",
+      "esito": "parziale",
+      "commit": "f5836cc53745fe47e535f796aa4ab10bfe28c503",
+      "commit_prima": "d01e2ab007d44436d4e544fc9557a750a4ddbb49",
+      "file_toccati": [
+        "lib/ai/statoLavoroCatalogo.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-testo-lavoro-incerto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-testo-lavoro-incerto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d01e2ab007d44436d4e544fc9557a750a4ddbb49^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-testo-lavoro-incerto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "testoStatoLavoro dice incerto un lavoro «in invio» solo quando la riga col motivo «invio senza risposta» ha più di 120 s (la vita massima della rotta di avvio): prima dice ancora «tra poco lo vedi partire», dopo dice che potrebbe essere già partito, di non riavviarlo e di chiedere all'assistenza se in 24 ore non succede niente. Senza l'ora di nascita della riga dice una frase vera in tutti e due i casi; a riga chiusa con un motivo che cita l'assistenza non aggiunge «Puoi avviarne un altro».",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/status/route.ts",
+          "modifica": "in serialize() (righe 243-252) aggiungere `createdAt: job.created_at ?? null,` all'oggetto restituito; created_at è già letto in COLONNE (riga 81). La pagina app/seller/products/ai-batch/page.tsx non cambia: passa a testoStatoLavoro l'oggetto JSON intero."
+        }
+      ],
+      "cosa_resta": "Finché la rotta di stato non manda createdAt, una riga «in invio» col motivo mostra la frase neutra (di solito parte in pochi secondi; se resta così potrebbe essere già partito, non riavviarlo, chiedi all'assistenza): non dice più come un fatto che l'invio non ha avuto risposta e non promette la partenza, ma la frase precisa per ciascun caso arriva solo con la riga in serialize(). Il motivo alla nascita (start/route.ts:159) non va tolto: protegge da un secondo lotto pagato se la funzione si spegne dopo l'invio.",
+      "verificato_da": "revisore B sulla prima versione; collaudo K01 rompe_altro (ogni lavoro nasce col motivo, start/route.ts:159), corretto nel giro di correzione con la prova sullo stato vero prodotto dal server e orologio finto; 9 file vicini verdi; nessun revisore nuovo dopo la correzione (tetto dei 6 subagenti), torna a K01"
+    },
+    {
+      "id": "R01-007",
+      "chiave": "qa-flussi|le domande dei clienti sotto i prodotti non arrivano a nessuno, ma al cliente diciamo che riceverà una notifica",
+      "esito": "parziale",
+      "cosa_resta": "La promessa della notifica è già tolta sulla base (components/ProductQA.tsx:96 e :137, commit 4522a81d): nel file di R01 non c'è niente da cambiare, quindi nessun commit. Resta che la domanda non arriva al negozio e al cliente non arriva niente quando il negozio risponde. Serve una migrazione nuova (funzione SECURITY DEFINER con trigger AFTER INSERT su product_questions che notifica products.seller_id, e AFTER UPDATE OF answer che notifica author_id), con la sua prova SQL, più un elenco «Domande da rispondere» nell'area del negozio. La migrazione non l'ha scritta R01: un trigger SECURITY DEFINER sulle notifiche tocca i permessi, come la voce rimandata all'onda dei delicati.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/questions/page.tsx (nuovo) oppure una sezione in app/seller/products/page.tsx",
+          "modifica": "Elenco «Domande da rispondere» per il negozio (select su product_questions dei propri prodotti con answer null), collegato dal menu del venditore."
+        }
+      ],
+      "verificato_da": "revisore B: ProductQA.tsx senza promessa di notifica sulla base; nessun trigger né pagina del negozio per product_questions"
+    },
+    {
+      "id": "R01-009",
+      "chiave": "qa-flussi|l'aiutante di prova accendi non regge due montaggi di una pagina con use(params) dopo un invio",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/schermo.ts",
+          "modifica": "Riga 7: `import { act, createElement, Suspense, type ComponentType } from 'react';`. In accendi(): `root.render(createElement(componente as ComponentType<Record<string, unknown>>, proprieta));` diventa `root.render(createElement(Suspense, { fallback: null }, createElement(componente as ComponentType<Record<string, unknown>>, proprieta)));`"
+        }
+      ],
+      "nota": "Il difetto c'è ancora. In una copia fuori dal deposito: un componente con use(params), montato con monta(), poi invio, smontaggio e secondo montaggio, dà «A component suspended while responding to synchronous input». Con la diff sopra la stessa prova è verde.",
+      "verificato_da": "revisore B: schermo.ts:24 root.render senza Suspense, la diff proposta è coerente con il file"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "riservato": true,
+      "titolo": "Falla di sicurezza da chiudere (privacy): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "dimensione": "rls-database",
+      "severita": "minore",
+      "file": "(nel referto privato)"
+    },
+    {
+      "titolo": "la campanella «ordine pronto» dice ancora «un rider passa a prenderlo a breve», mentre pagina ed email ora dicono fattorino",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "migrations/215_minori_s04_database.sql",
+      "descrizione": "Il testo sta in una migrazione già applicata ed è fissato da tests/unit/minori-s04-ordine-pronto-dice-una-cosa-sola.test.ts: per allinearlo serve una migrazione nuova."
+    },
+    {
+      "titolo": "altri «rider» rivolti al cliente restano nella pagina dell'ordine e in quella del negozio",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/orders/[id]/page.tsx:702 · app/seller/orders/[id]/page.tsx",
+      "descrizione": "«Il tuo rider», «al rider» ed etichetta della mappa: li fissano prove comuni, serve un giro a parte per una parola sola in tutto il sito."
+    },
+    {
+      "titolo": "a riga chiusa con il motivo «chiedi all'assistenza» il pulsante «Avvia» resta",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "lib/ai/statoLavoroCatalogo.ts (puoAvviareLavoro)",
+      "descrizione": "La voce parlava del testo: il pulsante continua a invitare a riavviare."
+    },
+    {
+      "titolo": "se la lettura dei reclami fallisce, la pagina del reclamo ripropone il modulo e un secondo reclamo su uno chiuso passa",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/orders/[id]/dispute/page.tsx:176-181 · app/orders/[id]/page.tsx:285",
+      "descrizione": "L'indice unico vale solo per i reclami aperti (063:80): con un reclamo chiuso e una lettura fallita il cliente può aprirne un secondo. Visto dal revisore, fuori dalla voce."
+    },
+    {
+      "titolo": "il conteggio delle veloci in mano non ha filtro di data e oltre 1000 righe esce basso",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "lib/ordini/consegna-veloce.ts:191",
+      "descrizione": "La query senza filtro su created_at si ferma al tetto di righe; restano anche la corsa non atomica e le casse con carta aperte che non contano."
+    }
+  ],
+  "domande_per_nicola": [
+    "Dopo la chiusura di un reclamo il cliente può aprirne un altro sullo stesso ordine (il server lo accetta e il nuovo reclamo ferma di nuovo il bonifico al negozio): va bene così, o il server deve rifiutarlo? Oggi la pagina dell'ordine segue il server e rimostra «Apri reclamo» a reclamo chiuso."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "2 riparatori (A modello grande, B sonnet), 2 revisori (A grande, B sonnet), 1 correzione della prova di R01-001 (sonnet), 1 giro di correzione del collaudo K01 (modello grande)",
+    "subagenti": 6,
+    "costo_usd": 16.1
+  },
+  "costo_usd": 16.1,
+  "giro_correzione": {
+    "collaudo": "K01",
+    "voci": [
+      "R01-006",
+      "R01-011"
+    ],
+    "regia": "session_015BmpnZUFb1f4oPiVC94n2Z"
+  }
+}

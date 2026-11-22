@@ -12,6 +12,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Textarea } from '@/components/ui/Field';
 import { useTranslations } from 'next-intl';
 import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
+import { formatPrice } from '@/lib/format';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'not_received',      label: 'Non l\'ho ricevuto',          hint: 'L\'ordine risulta consegnato ma non l\'hai ricevuto.' },
@@ -21,6 +22,27 @@ const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'seller_unreachable',label: 'Venditore non risponde',       hint: 'Hai provato a contattarlo ma non risponde.' },
   { value: 'other',             label: 'Altro motivo',                 hint: 'Descrivi nei dettagli qui sotto.' },
 ];
+
+/**
+ * R01-006 — Il reclamo dell'ordine, come lo vede chi l'ha aperto (tabella `disputes`): quello aperto,
+ * se c'è, se no il più recente. I titoli sono quelli della campanella dell'esito
+ * (app/api/admin/disputes/[id]/resolve), come nella pagina dell'ordine.
+ */
+type RigaReclamo = { status: string; created_at: string | null; resolution_notes?: string | null; refund_cents?: number | null };
+const RECLAMO_TITOLO: Record<string, string> = {
+  open: 'Reclamo aperto',
+  under_review: 'Reclamo in esame',
+  resolved_buyer: 'Reclamo risolto a tuo favore',
+  resolved_seller: 'Reclamo risolto a favore del venditore',
+  rejected: 'Reclamo respinto',
+};
+const reclamoAncoraAperto = (r: RigaReclamo) => r.status === 'open' || r.status === 'under_review';
+function reclamoDaMostrare(righe: RigaReclamo[] | null | undefined): RigaReclamo | null {
+  const noti = (righe ?? []).filter((r) => !!r && Object.prototype.hasOwnProperty.call(RECLAMO_TITOLO, r.status));
+  if (noti.length === 0) return null;
+  return noti.find(reclamoAncoraAperto)
+    ?? [...noti].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
+}
 
 /**
  * R01-003 — LA BOZZA DEL RECLAMO, SE LA SESSIONE SCADE MENTRE LO SCRIVI.
@@ -89,6 +111,9 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const [tentativo, setTentativo] = useState(0);
   // 5/11/2026 — Il database tiene un solo reclamo aperto per ordine: se c'è già, lo si dice.
   const [reclamoAperto, setReclamoAperto] = useState<{ created_at: string; status: string } | null>(null);
+  // Un reclamo già chiuso su questo ordine: si mostra l'esito, e sotto il modulo resta, perché il
+  // server accetta un nuovo reclamo dopo la chiusura (ne rifiuta solo uno con un altro ancora aperto).
+  const [reclamoChiuso, setReclamoChiuso] = useState<RigaReclamo | null>(null);
   // R01-003 — Il server ha risposto «non sei più dentro»: si dice di rientrare, e la bozza è salva.
   const [sessioneScaduta, setSessioneScaduta] = useState(false);
   // R01-003 — Chi ha aperto il modulo: la bozza porta il suo id.
@@ -148,13 +173,15 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         .catch(() => [{ ...riga, seller: null }]);
       // Se questa lettura cade si mostra il modulo: il database rifiuta comunque il doppione,
       // e il messaggio qui sotto (submit) lo dice con parole vere.
-      const { data: aperti } = await supabase
+      const { data: reclami } = await supabase
         .from('disputes')
-        .select('created_at, status')
+        .select('created_at, status, resolution_notes, refund_cents')
         .eq('order_id', params.id)
-        .in('status', ['open', 'under_review'])
-        .limit(1);
-      setReclamoAperto(((aperti as Array<{ created_at: string; status: string }> | null) ?? [])[0] ?? null);
+        .in('status', Object.keys(RECLAMO_TITOLO))
+        .limit(50);
+      const reclamo = reclamoDaMostrare(reclami as RigaReclamo[] | null);
+      setReclamoAperto(reclamo && reclamoAncoraAperto(reclamo) ? { created_at: reclamo.created_at ?? '', status: reclamo.status } : null);
+      setReclamoChiuso(reclamo && !reclamoAncoraAperto(reclamo) ? reclamo : null);
       setOrder(conNegozio as unknown as typeof order);
     })();
   }, [params.id, router, tentativo]);
@@ -279,6 +306,22 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       <p className="text-sm text-ink-500 mt-1">
         Ordine #{params.id.slice(0, 8)} · {order.seller?.store_name ?? 'Negozio'}
       </p>
+
+      {reclamoChiuso && (
+        <div role="status" className="bg-cream-50 border border-cream-300 rounded-2xl p-5 mt-5 text-sm text-ink-700">
+          <p className="font-semibold mb-1">{RECLAMO_TITOLO[reclamoChiuso.status]}</p>
+          <p>
+            {reclamoChiuso.created_at ? `L'hai aperto il ${new Date(reclamoChiuso.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}. ` : ''}
+            {reclamoChiuso.status === 'resolved_buyer' && reclamoChiuso.refund_cents
+              ? `Rimborso deciso: ${formatPrice(reclamoChiuso.refund_cents / 100)}.`
+              : ''}
+          </p>
+          {reclamoChiuso.resolution_notes && <p className="mt-2 whitespace-pre-line">{reclamoChiuso.resolution_notes}</p>}
+          <p className="mt-3">
+            Questo reclamo è chiuso. Se il problema non è risolto puoi aprirne un altro qui sotto.
+          </p>
+        </div>
+      )}
 
       <div className="bg-accent-50 border border-accent-200 rounded-2xl p-4 mt-5 text-sm text-ink-700">
         <p className="font-semibold mb-1">Prima di aprire un reclamo</p>

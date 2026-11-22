@@ -17,6 +17,19 @@ import { cn } from '@/lib/cn';
  *   mobile, fade desktop."
  */
 
+// R01-001 — Un campo con tabindex="-1" non si raggiunge con Tab: non deve contare ne' come primo
+// ne' come ultimo della trappola del fuoco, altrimenti il fuoco esce dalla finestra.
+const ATTIVABILI = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]',
+]
+  .map((s) => `${s}:not([tabindex="-1"])`)
+  .join(', ');
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -70,7 +83,7 @@ export function Modal({
       // R18-009 — Chi lo chiede con `data-autofocus` ha il fuoco iniziale sul suo campo; gli altri
       // dialoghi restano com'erano (primo elemento attivabile).
       const first = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])') ?? dialogRef.current?.querySelector<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ATTIVABILI,
       );
       first?.focus();
     }, 10);
@@ -91,7 +104,7 @@ export function Modal({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Tab' && dialogRef.current) {
         const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ATTIVABILI,
         );
         if (focusables.length === 0) return;
         const first = focusables[0];

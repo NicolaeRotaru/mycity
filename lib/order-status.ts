@@ -49,7 +49,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   NEW:              'Ordine ricevuto',
   ACCEPTED:         'In preparazione',
   READY:            etichettaPronto(),
-  ASSIGNED:         'Rider in arrivo',
+  ASSIGNED:         'Fattorino in arrivo',
   PICKED_UP:        'Ritirato',
   OUT_FOR_DELIVERY: 'In consegna',
   DELIVERED:        'Consegnato',
