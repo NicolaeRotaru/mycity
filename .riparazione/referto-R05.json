@@ -1,13 +1,13 @@
 {
   "sessione": "R05",
-  "aggiornato": "2026-11-22 02:30",
+  "aggiornato": "2026-11-22 02:25",
   "finita": true,
-  "testa": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
+  "testa": "89ef220ecede75291da3c8e2d020cd989617c8e7",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
-    "nota": "typecheck, lint e 1916 file di prova (11848 prove) verdi, 1 saltato; SHA preso con git rev-parse HEAD nello stesso comando"
+    "testa": "89ef220ecede75291da3c8e2d020cd989617c8e7",
+    "nota": "typecheck, lint e 1917 file di prova (11850 prove) verdi, 1 saltato; SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -53,9 +53,10 @@
       "id": "R05-005",
       "chiave": "architettura|avvisi-a-chi-aspetta.ts tiene insieme pannello, lucchetto email, indirizzo, html e invio; l'email parte solo se il pannello riesce",
       "esito": "gia_riparato_prima",
-      "prova": "lib/privacy/avvisi-a-chi-aspetta.ts:201 sulla base: il catch del pannello non salta più l'email (niente continue) e :211-212 chiamano emailDovuta per ogni avviso (commit 6d652eab del 5/11). Prova esistente verde: npx vitest run tests/unit/minori-s08-avvisi.test.ts -t \"pannello della prima persona\".",
-      "nota": "La parte di struttura (un modulo che tiene tutto) resta com'è: la voce si chiude sul comportamento, il modulo non si riscrive.",
-      "verificato_da": "revisore lotto 1: prova minori-s08-avvisi -t \"pannello della prima persona\" verde sulla base 1ad51b4c e rossa rimettendo `continue` a :203"
+      "prova": "Il comportamento della voce («l'email parte solo se il pannello riesce») era già riparato alla base 1ad51b4c: lib/privacy/avvisi-a-chi-aspetta.ts:201-203 non ha più `continue` nel catch del pannello e :211-212 chiamano emailDovuta per ogni avviso (commit 6d652eab del 5/11); prova esistente verde: npx vitest run tests/unit/minori-s08-avvisi.test.ts -t \"pannello della prima persona\".",
+      "nota": "Resta aperta solo la parte di struttura: avvisi-a-chi-aspetta.ts tiene ancora insieme pannello, lucchetto email, indirizzo, html e invio in un modulo solo.",
+      "verificato_da": "revisore lotto 1: prova minori-s08-avvisi -t \"pannello della prima persona\" verde sulla base 1ad51b4c e rossa rimettendo `continue` a :203; collaudo K02: comportamento già riparato alla base, resta solo la struttura",
+      "cosa_resta": "la parte di struttura: separare pannello, lucchetto email, indirizzo, html e invio (riordino, nessun comportamento da cambiare)"
     },
     {
       "id": "R05-006",
@@ -85,27 +86,30 @@
     {
       "id": "R05-007",
       "chiave": "architettura|l'email trova il collegamento cercando la stringa '/contact' dentro una frase scritta in un altro modulo",
-      "esito": "parziale",
-      "commit": "81425a384da024f017372b98d56169caeb192d29",
+      "esito": "riparato",
+      "commit": "89ef220ecede75291da3c8e2d020cd989617c8e7",
+      "commit_altri": [
+        "81425a384da024f017372b98d56169caeb192d29"
+      ],
       "file_toccati": [
         "lib/privacy/avvisi-a-chi-aspetta.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts"
+        "tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts",
+        "tests/unit/riparazione-r05-collegamento-salvato.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts tests/unit/riparazione-r05-collegamento-salvato.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81425a384da024f017372b98d56169caeb192d29^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts --json"
+        "comando": "cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81425a384da024f017372b98d56169caeb192d29^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r05-collegamento-dal-recapito.test.ts,tests/unit/riparazione-r05-collegamento-salvato.test.ts --json",
+        "nota": "rimessa dell'intera voce (due commit) e, a parte, della sola correzione: cd /home/user/mycity && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 89ef220ecede75291da3c8e2d020cd989617c8e7^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r05-collegamento-salvato.test.ts --json → uscita 0"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "L'email non cerca più «/contact» dentro la frase di titolare: il testo resta quello del pannello e sotto c'è la riga «Il modulo dei contatti, sul sito: <url>» costruita da recapitoPrivacy(). La prova cambia la frase (mock di recapitoInUnaFrase senza percorso) e controlla il collegamento giusto in html e testo.",
-      "nota": "Era dato già riparato prima; il collaudo del lotto 1 l'ha smentito e la riparazione è stata fatta nel lotto 2.",
-      "cosa_resta": "L'email non cerca più nella frase, ma la frase di titolare resta con «(pagina /contact)» nudo, senza dominio, in html (avvisi-a-chi-aspetta.ts:474) e testo (:482-489), e sotto c'è la riga col collegamento intero: lo stesso recapito compare due volte, uno non cliccabile. Cura: titolare.ts dà anche una versione della frase senza percorso (o la frase e il percorso separati) e l'email usa quella.",
-      "verificato_da": "revisore lotti 2-3: prova 3/3, nessuna ricerca nella frase, casella vera senza riga aggiunta, html escapato (iniezione <img onerror> esce escapata); declassata a parziale per il recapito ripetuto e nudo"
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il collegamento al modulo dei contatti non dipende più dalle parole della frase di titolare: se il testo salvato porta la pagina (costante condivisa PAGINA_DEI_CONTATTI) quella diventa l'indirizzo intero e cliccabile; se non la porta e non c'è una casella privacy, sotto si aggiunge la riga del modulo presa da recapitoPrivacy(). Così un testo salvato con «(pagina /contact)» resta cliccabile anche se la casella si configura dopo il pannello, senza parola nuda e senza la stessa strada due volte. Il giro di correzione l'ha fatto la capo squadra (tetto dei subagenti raggiunto).",
+      "verificato_da": "revisore lotti 2-3 (recapito ripetuto e nudo) e collaudo K02 (rompe_altro: testo salvato + casella configurata dopo = niente collegamento): la prova nuova fissa i due casi; la correzione torna a K02 per il nuovo collaudo"
     },
     {
       "id": "R05-016",
@@ -197,7 +201,7 @@
     {
       "id": "R05-002",
       "chiave": "architettura|commenti delle rotte della veloce dicono ancora «un fattorino approvato e online»",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
       "file_toccati": [
         "app/api/orders/cod/route.ts"
@@ -212,9 +216,28 @@
         "comando": "prima=$(git show a3c58389^:app/api/orders/cod/route.ts | grep -c \"approvato e online\"); dopo=$(git show a3c58389:app/api/orders/cod/route.ts | grep -c \"approvato e online\"); [ \"$prima\" -ge 1 ] && [ \"$dopo\" -eq 0 ]",
         "nota": "solo commento: rimessa fatta a mano dalla capo squadra (prima=1, dopo=0, uscita 0); prova-rimessa.mjs non giudica un commento"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il commento in app/api/orders/cod/route.ts:1004 dice la condizione vera di veloceSiPuo e contaFattoriniOnline (ore 8-21, negozi aperti ancora per un quarto d'ora, fattorino approvato, interruttore acceso e libero). In app/api/consegna/veloce/route.ts la frase vecchia non c'era più.",
-      "verificato_da": "revisore lotti 2-3: lettura di veloceSiPuo e contaFattoriniOnline, grep di «fattorino online» e «approvato e online»: il commento nuovo dice la condizione vera, in consegna/veloce/route.ts non resta il vecchio significato"
+      "verificato_da": "revisore lotti 2-3: lettura di veloceSiPuo e contaFattoriniOnline, grep di «fattorino online» e «approvato e online»: il commento nuovo dice la condizione vera, in consegna/veloce/route.ts non resta il vecchio significato; collaudo K02: la gemella della carta e le pagine dicono ancora il senso vecchio → parziale",
+      "cosa_resta": "Il commento della rotta dei contanti è vero; lo stesso senso vecchio («un fattorino approvato e online», «un fattorino online») resta nella rotta gemella della carta e nelle pagine della cassa e del carrello, che non sono file di R05.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/stripe/checkout/route.ts",
+          "modifica": "Righe 529-530: «8-21, negozi aperti adesso, un / fattorino approvato e online.» → «8-21, negozi aperti adesso (e ancora per un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero (non ha già in mano tutte le veloci che può portare).» Riga 370: «fattorino online» → «un fattorino approvato, acceso e libero»."
+        },
+        {
+          "file": "app/checkout/page.tsx",
+          "modifica": "Riga 661: «negozi aperti, un fattorino approvato e online» → «negozi aperti ancora per un quarto d'ora, almeno un fattorino approvato, con l'interruttore acceso e libero»."
+        },
+        {
+          "file": "app/cart/page.tsx",
+          "modifica": "Riga 95: «senza un fattorino online» → «senza un fattorino approvato, acceso e libero». Riga 196: «(negozi aperti, 8-21, un fattorino online)» → «(negozi aperti ancora per un quarto d'ora, 8-21, un fattorino approvato, acceso e libero)»."
+        },
+        {
+          "file": "components/checkout/DeliverySlotPicker.tsx",
+          "modifica": "Riga 50: «negozi / aperti e un fattorino online» → «negozi aperti ancora per un quarto d'ora, 8-21, e un fattorino approvato, acceso e libero»."
+        }
+      ]
     },
     {
       "id": "R05-008",
@@ -250,7 +273,7 @@
       "chiave": "architettura|i dati demo del sito non si caricano più sul database di oggi: tutte e quattro le semine si fermano",
       "esito": "gia_riparato_prima",
       "prova": "tests/sql/harness/riparazione-r12-le-semine-girano.sh (commit 609b8a02, nella base 1ad51b4c) ricostruisce il database dalle migrazioni e carica tutte le semine due volte: lanciato su Postgres 16 locale usa e getta, uscita 0 («le semine girano (due volte) sullo schema di oggi»). Le quattro semine non sono cambiate dalla base.",
-      "verificato_da": "revisore lotti 2-3: tests/sql/harness/riparazione-r12-le-semine-girano.sh lanciato sulla base 1ad51b4c su Postgres 16 usa e getta: uscita 0, applica seeds/00*.sql (001-007) con ON_ERROR_STOP; nel db 18 utenti demo"
+      "verificato_da": "revisore lotti 2-3: tests/sql/harness/riparazione-r12-le-semine-girano.sh lanciato sulla base 1ad51b4c su Postgres 16 usa e getta: uscita 0, applica seeds/00*.sql (001-007) con ON_ERROR_STOP; nel db 18 utenti demo; collaudo K02: regge"
     }
   ],
   "nuovi_difetti_visti": [
@@ -274,21 +297,14 @@
       "severita": "minore",
       "file": "components/seller/StoreHoursEditor.tsx",
       "descrizione": "Lo vede («Chiuso» su ogni giorno, sparisce l'avviso «non impostati»), ma è facile da fare per sbaglio: servirebbe una conferma o un ritorno a «non impostati»."
-    },
-    {
-      "titolo": "la frase vecchia «un fattorino approvato e online» resta in altri commenti e testi fuori dalla voce",
-      "dimensione": "architettura",
-      "severita": "minore",
-      "file": "app/api/stripe/checkout/route.ts:370, :530 · app/cart/page.tsx:196 · app/checkout/page.tsx:661 · components/checkout/DeliverySlotPicker.tsx:50",
-      "descrizione": "La condizione vera della veloce è: ore 8-21, negozi aperti ancora per un quarto d'ora, fattorino approvato, acceso e libero (come ora in app/api/orders/cod/route.ts:1004-1006)."
     }
   ],
   "domande_per_nicola": [],
   "conto": {
     "agenti": 6,
-    "nota": "3 riparatori (lotto 1 e 2 modello grande, lotto 3 piccolo) + 3 revisori (lotto 1 grande, lotti 2 e 3 piccolo): tetto raggiunto; R05-001, R05-007 e R05-008 restano senza giro di correzione",
+    "nota": "3 riparatori (lotto 1 e 2 modello grande, lotto 3 piccolo) + 3 revisori (lotto 1 grande, lotti 2 e 3 piccolo): tetto raggiunto; R05-001, R05-007 e R05-008 restano senza giro di correzione; il giro di correzione chiesto dal collaudo K02 (R05-007) l'ha fatto la capo squadra, senza un settimo subagente",
     "subagenti": 6,
-    "costo_nota": "usage.cost_usd di get_session senza id, letto il 22/11 alle 01:28 prima della consegna (19,94 $)"
+    "costo_nota": "usage.cost_usd di get_session senza id, letto il 22/11 alle 02:09 prima della consegna (22,11 $)"
   },
-  "costo_usd": 19.94
+  "costo_usd": 22.11
 }
