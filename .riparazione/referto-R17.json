@@ -1,6 +1,6 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-22 19:15",
+  "aggiornato": "2026-11-22 19:17",
   "finita": true,
   "testa": "3fcec934b3e3d042094ef9daa65c55cce64c1f1b",
   "verifica": {
@@ -323,6 +323,8 @@
   ],
   "conto": {
     "agenti": 3,
-    "nota": "lotto A (modello grande), lotto B (sonnet), 1 revisore (sonnet). Spesa letta dalla regia: 19,83 $ alle 18:47."
-  }
+    "subagenti": 3,
+    "nota": "3 subagenti aperti in tutto: lotto A (modello grande), lotto B (sonnet), 1 revisore (sonnet). costo_usd letto con get_session senza id alle 19:17 (usage.cost_usd 21,6165)."
+  },
+  "costo_usd": 21.62
 }
