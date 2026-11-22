@@ -1,13 +1,13 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-22 01:20",
+  "aggiornato": "2026-11-22 01:35",
   "finita": true,
-  "testa": "7cf637354bb9ae3def21299025703502d3c5c095",
+  "testa": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "7cf637354bb9ae3def21299025703502d3c5c095",
-    "nota": "typecheck, lint e vitest verdi: 1923 file passati e 1 saltato (1924), 11866 prove; il file saltato è uno skip condizionale già presente alla base, nessuna prova di R02 usa skip; lanciato sulla testa e aspettato"
+    "testa": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
+    "nota": "typecheck, lint e vitest verdi (file: 1923 passed | 1 skipped (1924); prove: 11864 passed | 1 skipped (11865)); un eventuale file saltato è uno skip condizionale già alla base, nessuna prova di R02 usa skip; lanciato sulla testa e aspettato"
   },
   "voci": [
     {
@@ -96,15 +96,15 @@
       "insieme_a": [
         "R02-013"
       ],
-      "commit": "713d46ff",
+      "commit": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
       "file_toccati": [],
       "prova_file": [],
       "prova_comando": "",
       "prova_tipo": "comando",
       "prova_eseguita": false,
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nessun commit nuovo: la riga catalog_ai_jobs non cambia a fine applicazione riuscita (apply/route.ts:108 scrive status applied e updated_at alla prenotazione, :345 non scrive niente se non ripetibile), quindi start/route.ts non ha nessun segno per distinguere «in corso» da «finita». Il blocco di 120 s di start/route.ts:122-140 resta dopo ogni applicazione.",
-      "cosa_resta": "Dopo ogni applicazione riuscita «Avvia» è rifiutato per circa 120 s (409). Va chiuso con un segno di fine scritto da apply/route.ts.",
+      "cosa_ho_fatto": "La gara fra due avvii è chiusa: migrazione 640 (indice unico parziale su catalog_ai_jobs per gli stati aperti, guardia to_regclass, doppioni chiusi tenendo ready, poi processing con batch_id, poi il più recente) e 409 sul 23505 nella rotta di avvio. Il blocco dell avvio per 120 s dopo ogni applicazione (713d46ff) è stato tolto in 23e86543 su decisione della regia: toccava tutti i negozi a ogni applicazione.",
+      "cosa_resta": "Il «rimetti pronto» di apply/route.ts può ricevere 23505 dalla 640 se il negozio avvia un lavoro mentre un applicazione è in corso (gara rara, già possibile alla base con due lavori aperti). Cura intera: (1) apply/route.ts scrive un segno di fine a fine applicazione e lo azzera in rimettiPronto, e legge l errore di rimettiPronto dicendo il 23505 al negozio; (2) una colonna nuova nullable (es. applicazione_finita_il timestamptz) in una migrazione della fascia 641-649, che la regia porta a Nicola; (3) start/route.ts dà 409 solo se l ultimo lavoro applied ha quel segno nullo e updated_at entro 120 s.",
       "serve_file_altrui": [
         {
           "file": "app/api/ai/catalog-batch/apply/route.ts",
@@ -116,7 +116,12 @@
         }
       ],
       "nota": "Senza migrazione l'unica alternativa è riscrivere updated_at a fine applicazione, ma rompe l'ordine dei lavori e la 640: sconsigliata. Resta anche il 23505 di rimettiPronto (serve_file_altrui già dichiarato).",
-      "verificato_da": "revisore A (opus): prova SQL e vitest verdi, 640 su db con doppioni, rimessa regge; difetti (rimettiPronto 23505, to_regclass, scelta doppioni) corretti in 713d46ff e ricontrollati da revisore B: 409 se applied <120s, SQL 640 letto; collaudo K02: blocco di 120 s dopo ogni applicazione = rompe_altro, resta per mancanza di un segno di fine (serve_file_altrui)"
+      "verificato_da": "revisore A (opus): prova SQL e vitest verdi, 640 su db con doppioni, rimessa regge; difetti (rimettiPronto 23505, to_regclass, scelta doppioni) corretti in 713d46ff e ricontrollati da revisore B: 409 se applied <120s, SQL 640 letto; collaudo K02: blocco di 120 s dopo ogni applicazione = rompe_altro, resta per mancanza di un segno di fine (serve_file_altrui)",
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-due-avvii-insieme.test.ts --json (la parte SQL della 640 regge con --sql r02_rimessa_c, invariata dal commit 713d46ff)"
+      }
     },
     {
       "id": "R02-005",
@@ -312,15 +317,15 @@
       "insieme_a": [
         "R02-004"
       ],
-      "commit": "713d46ff",
+      "commit": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
       "file_toccati": [],
       "prova_file": [],
       "prova_comando": "",
       "prova_tipo": "comando",
       "prova_eseguita": false,
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Come R02-004: nessun commit nuovo, stesso segno mancante.",
-      "cosa_resta": "Come R02-004: il blocco di 120 s dopo ogni applicazione riuscita, e il 23505 di rimettiPronto in apply/route.ts:124-131.",
+      "cosa_ho_fatto": "La gara fra due avvii è chiusa: migrazione 640 (indice unico parziale su catalog_ai_jobs per gli stati aperti, guardia to_regclass, doppioni chiusi tenendo ready, poi processing con batch_id, poi il più recente) e 409 sul 23505 nella rotta di avvio. Il blocco dell avvio per 120 s dopo ogni applicazione (713d46ff) è stato tolto in 23e86543 su decisione della regia: toccava tutti i negozi a ogni applicazione.",
+      "cosa_resta": "Il «rimetti pronto» di apply/route.ts può ricevere 23505 dalla 640 se il negozio avvia un lavoro mentre un applicazione è in corso (gara rara, già possibile alla base con due lavori aperti). Cura intera: (1) apply/route.ts scrive un segno di fine a fine applicazione e lo azzera in rimettiPronto, e legge l errore di rimettiPronto dicendo il 23505 al negozio; (2) una colonna nuova nullable (es. applicazione_finita_il timestamptz) in una migrazione della fascia 641-649, che la regia porta a Nicola; (3) start/route.ts dà 409 solo se l ultimo lavoro applied ha quel segno nullo e updated_at entro 120 s.",
       "serve_file_altrui": [
         {
           "file": "app/api/ai/catalog-batch/apply/route.ts",
@@ -332,7 +337,12 @@
         }
       ],
       "nota": "",
-      "verificato_da": "revisore A (opus) e revisore B (sonnet): stessa cura di R02-004 (indice 640 + 409 sul 23505 + attesa di un applicazione in corso), prove verdi, rimessa regge; collaudo K02: stesso esito di R02-004"
+      "verificato_da": "revisore A (opus) e revisore B (sonnet): stessa cura di R02-004 (indice 640 + 409 sul 23505 + attesa di un applicazione in corso), prove verdi, rimessa regge; collaudo K02: stesso esito di R02-004",
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-due-avvii-insieme.test.ts --json (la parte SQL della 640 regge con --sql r02_rimessa_c, invariata dal commit 713d46ff)"
+      }
     }
   ],
   "nuovi_difetti_visti": [
@@ -353,5 +363,5 @@
     "nota": "6 subagenti aperti (L1 opus, L2 sonnet, revisori A opus, B e C sonnet, correzione opus); per il giro K02 ripresi L2 e il revisore B, nessun subagente nuovo",
     "subagenti": 6
   },
-  "costo_usd": 26.13
+  "costo_usd": 27.67
 }
