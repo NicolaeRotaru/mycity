@@ -62,10 +62,14 @@ function finto() {
     from: (tabella: string) => ({
       select: () => ({ in: async () => ({ data: tabella === 'profiles' ? profili : [], error: null }) }),
       update: (valori: Record<string, unknown>) => ({
-        eq: async (_colonna: string, chiave: unknown) => {
-          scritture.push({ tabella, valori, chiave });
-          return { error: null };
-        },
+        eq: (_colonna: string, chiave: unknown) => ({
+          then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
+            scritture.push({ tabella, valori, chiave });
+            return Promise.resolve({ error: null }).then(ok, ko);
+          },
+          // R18-001 — La rivendicazione del carrello (segno solo se vuoto) rende la riga presa.
+          is: () => ({ select: () => ({ maybeSingle: async () => ({ data: { user_id: chiave }, error: null }) }) }),
+        }),
       }),
     }),
   };
