@@ -1,6 +1,6 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-22 20:10",
+  "aggiornato": "2026-11-22 20:15",
   "finita": true,
   "testa": "aa1292c5a8b0d4b03b965fe52ba69c1c13d84fa3",
   "verifica": {
@@ -46,8 +46,9 @@
           "modifica": "cancellarlo: sta sopra app/store/[id]/[slug]/layout.tsx, quindi /store/<id>/<pagina che non c'è> risponde ancora 200. Insieme: in tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts togliere la riga 57 (expect(nomi).toContain('app/store/[id]/loading.tsx')) e rinominare la riga 53 in «la rotta del negozio ha la pagina e il guscio»; nella prova nuova aggiungere a PAGINE { indirizzo: '/store/<id>/<pagina che non c’è>', chiDecide: 'app/store/[id]/[slug]/layout.tsx' } e togliere il paragrafo «Non qui»"
         }
       ],
-      "nota": "La 404 vera in rete (next build, next start e curl) non l'ho fatta, per decisione del capo squadra sulla spesa.",
-      "verificato_da": "nessun revisore: voce senza riparazione nel ramo (solo diff per file altrui, ricontrollati sulla base da chi li ha scritti)"
+      "nota": "La 404 vera in rete (next build, next start e curl) non l'ho fatta, per decisione del capo squadra sulla spesa. Collaudo K06 (7fb1894a) sulla ricetta: non completa così com è: la patch r17-002-radice-e-prova non si applica più alla testa per due pezzi di commento (app/product/[id]/layout.tsx:115, app/store/[id]/layout.tsx:113, contesto cambiato da R17-007) e va applicata a mano; le due prove comuni perdono il controllo del segnale d attesa invece di adeguarlo. Decisione della regia (22/11 19:47): resta serve_file_altrui con la domanda a Nicola.",
+      "verificato_da": "nessun revisore: voce senza riparazione nel ramo (solo diff per file altrui, ricontrollati sulla base da chi li ha scritti)",
+      "domanda": "404 vera o segnale d attesa? Con la ricetta di R17-002 più R17-003 (togliere app/loading.tsx, app/store/loading.tsx e app/store/[id]/loading.tsx) le pagine inesistenti rispondono 404 vere, ma il collaudo K06 ha misurato, col server rallentato a 2,5 s, la home ferma 4-5 s senza nessun segnale e lo scheletro del negozio assente per oltre 1,5 s; restano senza attesa /, /about, /status, /category, /u e i gusci di prodotto e negozio."
     },
     {
       "id": "R17-003",
@@ -75,8 +76,9 @@
           "diff": "### r17-003-prova-aprendo.patch\ndiff --git a/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts b/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts\nindex 6b583bca..93128ba4 100644\n--- a/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts\n+++ b/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts\n@@ -87,22 +87,20 @@ describe('mentre il negozio arriva si vede una cosa sola', () => {\n     }\n   });\n \n-  it('il sipario copre anche il guscio, non solo la pagina', () => {\n-    // Da quando il guscio legge il negozio sul server, è LUI a fermarsi per\n-    // primo. Un'attesa scritta dentro il guscio non può fargli da sipario: la\n-    // trova solo chi è già entrato. Senza una schermata di attesa sopra, chi\n-    // apre un negozio vede il sipario generale del sito — che ha la forma di\n-    // una pagina qualsiasi — e poi il negozio: il salto torna, spostato in su.\n+  it('sopra il guscio del negozio non c’è nessuna attesa, e il guscio chiama notFound()', () => {\n+    // 22/11/2026 — Qui si pretendeva `app/store/loading.tsx`, il sipario col volto del negozio\n+    // SOPRA il guscio. Ma un'attesa sopra il guscio lo avvolge in un Suspense: la risposta parte\n+    // con «tutto ok» prima che il guscio sappia se il negozio esiste, e il suo notFound() arriva a\n+    // risposta già partita (un negozio inesistente rispondeva 200). Adesso sopra il guscio del\n+    // negozio non c'è nessuna attesa: il browser tiene la pagina di prima finché arriva il negozio,\n+    // già pieno grazie al precarico. Lo scheletro resta sotto il guscio (`app/store/[id]/loading.tsx`)\n+    // e nella pagina.\n     const guscio = ROTTA.find((f) => f.nome === 'app/store/[id]/layout.tsx')!.src;\n-    const gusciofermo = /export default async function/.test(guscio) && /await\\s+precarica/.test(guscio);\n-    if (!gusciofermo) return; // il guscio non aspetta niente: nessun sipario da pretendere\n-\n-    const sopra = ROTTA.find((f) => f.nome === 'app/store/loading.tsx');\n+    expect(guscio, 'il guscio non decide più la 404 del negozio').toMatch(/\\bnotFound\\(\\)/);\n     expect(\n-      sopra?.src,\n-      'il guscio del negozio si ferma a leggere sul server, ma sopra di lui non c’è nessuna ' +\n-        'schermata di attesa col volto del negozio: serve app/store/loading.tsx',\n-    ).toMatch(/<ScheletroNegozio\\s*\\/>/);\n+      ROTTA.map((f) => f.nome),\n+      'il sipario sopra il guscio del negozio è tornato: un negozio che non esiste risponde «tutto ok»',\n+    ).not.toContain('app/store/loading.tsx');\n   });\n \n   it('lo scheletro non è un cerchietto travestito', () => {\n"
         }
       ],
-      "nota": "guardia-ramo: la prova è comune (non è di nessuna sessione), la tocca solo la regista. Con la firma prove_comuni la cura si rimette con git revert 4c619346.",
-      "verificato_da": "revisore sonnet (subagente 3, diverso da chi ha riparato), worktree a 3fcec934: rimessa uscita 0; verdetto parziale: la 404 resta bloccata da app/loading.tsx (app/store/[id]/layout.tsx:142-143 lo dice), la prova modificata (righe 90-104) controlla solo l assenza del file e ha perso il caso «se il guscio aspetta, sopra c è uno scheletro»."
+      "nota": "guardia-ramo: la prova è comune (non è di nessuna sessione), la tocca solo la regista. Con la firma prove_comuni la cura si rimette con git revert 4c619346. Collaudo K06 (7fb1894a) sulla ricetta: non completa così com è: la patch r17-002-radice-e-prova non si applica più alla testa per due pezzi di commento (app/product/[id]/layout.tsx:115, app/store/[id]/layout.tsx:113, contesto cambiato da R17-007) e va applicata a mano; le due prove comuni perdono il controllo del segnale d attesa invece di adeguarlo. Decisione della regia (22/11 19:47): resta serve_file_altrui con la domanda a Nicola.",
+      "verificato_da": "revisore sonnet (subagente 3, diverso da chi ha riparato), worktree a 3fcec934: rimessa uscita 0; verdetto parziale: la 404 resta bloccata da app/loading.tsx (app/store/[id]/layout.tsx:142-143 lo dice), la prova modificata (righe 90-104) controlla solo l assenza del file e ha perso il caso «se il guscio aspetta, sopra c è uno scheletro».",
+      "domanda": "404 vera o segnale d attesa? Con la ricetta di R17-002 più R17-003 (togliere app/loading.tsx, app/store/loading.tsx e app/store/[id]/loading.tsx) le pagine inesistenti rispondono 404 vere, ma il collaudo K06 ha misurato, col server rallentato a 2,5 s, la home ferma 4-5 s senza nessun segnale e lo scheletro del negozio assente per oltre 1,5 s; restano senza attesa /, /about, /status, /category, /u e i gusci di prodotto e negozio."
     },
     {
       "id": "R17-004",
@@ -313,7 +315,8 @@
     }
   ],
   "domande_per_nicola": [
-    "R17-010: il precarico delle categorie (unstable_cache 60 s, await nel layout radice, HydrationBoundary) resta per tutte le pagine, /admin e /seller comprese, o si toglie da quelle?"
+    "R17-010: il precarico delle categorie (unstable_cache 60 s, await nel layout radice, HydrationBoundary) resta per tutte le pagine, /admin e /seller comprese, o si toglie da quelle?",
+    "R17-002 e R17-003: 404 vera o segnale d attesa? Con la ricetta di R17-002 più R17-003 (togliere app/loading.tsx, app/store/loading.tsx e app/store/[id]/loading.tsx) le pagine inesistenti rispondono 404 vere, ma il collaudo K06 ha misurato, col server rallentato a 2,5 s, la home ferma 4-5 s senza nessun segnale e lo scheletro del negozio assente per oltre 1,5 s; restano senza attesa /, /about, /status, /category, /u e i gusci di prodotto e negozio."
   ],
   "conto": {
     "agenti": 3,
