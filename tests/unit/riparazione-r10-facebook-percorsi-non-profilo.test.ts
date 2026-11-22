@@ -25,6 +25,11 @@ describe('R10-014 — i percorsi di Facebook che non sono un profilo', () => {
     'https://www.facebook.com/hashtag/panefresco',
     'https://www.facebook.com/stories/123',
     'https://www.facebook.com/sharer/sharer.php?u=x',
+    'https://www.facebook.com/fundraisers/123',
+    'https://www.facebook.com/live',
+    'https://www.facebook.com/reviews/?id=1',
+    'https://www.facebook.com/lite/',
+    'https://m.facebook.com/live/producer/1',
   ];
   it.each(NON_PROFILO)('%s resta com\'è, non diventa il nome', (url) => {
     expect(fb(url)).toBe(url);
