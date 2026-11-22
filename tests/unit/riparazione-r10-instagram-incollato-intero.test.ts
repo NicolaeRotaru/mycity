@@ -50,4 +50,47 @@ describe('R10-010 — link incollati e sito senza https', () => {
     expect(r.success).toBe(false);
     if (!r.success) expect(campoDellErrore(r.error.issues[0].path)).toBe('Sito web');
   });
+
+  // Dopo il nome sono ammessi solo «/», «?…», «#…» o la fine: il resto non è un nome.
+  it.each([
+    ['https://instagram.com/nome<script>?igsh=1', 'instagram'],
+    ['https://instagram.com/nome<script>', 'instagram'],
+    ['https://www.instagram.com/caffè?igsh=1', 'instagram'],
+    ['https://www.instagram.com/caffè', 'instagram'],
+    ['https://www.tiktok.com/@nome<b>?lang=it', 'tiktok'],
+    ['https://www.facebook.com/nome"x?ref=1', 'facebook'],
+  ])('«%s» non diventa un nome: resta com\'è e il controllo lo ferma', (url, campo) => {
+    const { n, r } = salva({ [campo]: url });
+    expect((n as Record<string, string>)[campo]).toBe(url);
+    expect(r.success).toBe(false);
+  });
+
+  it.each([
+    'https://instagram.com/nome?igsh=1',
+    'https://instagram.com/nome/?hl=it',
+    'https://instagram.com/nome#top',
+    'https://instagram.com/nome/',
+    'https://instagram.com/nome',
+  ])('«%s» si salva come «nome»', (url) => {
+    const { n, r } = salva({ instagram: url });
+    expect(n?.instagram).toBe('nome');
+    expect(r.success).toBe(true);
+  });
+
+  it.each([
+    'https://www.instagram.com/explore/tags/pane/',
+    'https://www.instagram.com/explore',
+    'https://www.instagram.com/direct/inbox/',
+    'https://www.instagram.com/accounts/login/',
+    'https://www.instagram.com/tv/Cxyz123/',
+    'https://www.tiktok.com/t/ZTRabc/',
+    'https://www.tiktok.com/tag/pane',
+    'https://www.tiktok.com/discover',
+  ])('«%s» non è un profilo: resta com\'è e il controllo lo ferma', (url) => {
+    const campo = url.includes('tiktok') ? 'tiktok' : 'instagram';
+    const { n, r } = salva({ [campo]: url });
+    expect((n as Record<string, string>)[campo]).toBe(url);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(campoDellErrore(r.error.issues[0].path)).toBe(campo === 'tiktok' ? 'TikTok' : 'Instagram');
+  });
 });
