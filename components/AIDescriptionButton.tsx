@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -36,6 +36,14 @@ export function messaggioDelRisultato(currentText: string | undefined): string {
 
 export default function AIDescriptionButton({ productName, categoryName, currentText, onResult }: Props) {
   const [loading, setLoading] = useState(false);
+  // Giro di correzione (22/11) — Il campo resta modificabile mentre si aspetta, e ProductForm
+  // decide fra proposta e testo nel campo col valore di quando arriva la risposta (getValues):
+  // il messaggio guarda lo stesso momento, non il testo di quando si e' premuto. ProductForm
+  // passa il valore vivo (watch), quindi basta tenerne l'ultimo.
+  const testoAttuale = useRef(currentText);
+  useEffect(() => {
+    testoAttuale.current = currentText;
+  }, [currentText]);
 
   const generate = async () => {
     if (!productName.trim()) {
@@ -59,8 +67,9 @@ export default function AIDescriptionButton({ productName, categoryName, current
       });
       const json = await res.json();
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
+      const messaggio = messaggioDelRisultato(testoAttuale.current);
       onResult(json.description);
-      toast.success(messaggioDelRisultato(currentText));
+      toast.success(messaggio);
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
