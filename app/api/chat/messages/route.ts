@@ -141,7 +141,10 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
         await avvisaNegozioMessaggioNuovo(admin, { conversationId, senderId: mittente });
       }, 'email al negozio per un messaggio nuovo');
     }
+    // Id deciso qui: lo spegnimento qui sotto tocca solo questa voce, non un'altra arrivata nel frattempo.
+    const idVoce = crypto.randomUUID();
     const { error: errN } = await admin.from('notifications').insert({
+      id: idVoce,
       category: 'system',
       user_id: destinatario,
       title: titolo,
@@ -167,9 +170,7 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
       const { error: errSpegni } = await admin
         .from('notifications')
         .update({ is_read: true })
-        .eq('user_id', destinatario)
-        .eq('link', link)
-        .eq('is_read', false);
+        .eq('id', idVoce);
       if (errSpegni) {
         logger.warn('[chat/messages] voce della campanella non spenta dopo la lettura', { conversationId, message: errSpegni.message });
       }

@@ -15,12 +15,19 @@ const SELLER = '22222222-2222-4222-8222-222222222222';
 const CONV = '33333333-3333-4333-8333-333333333333';
 
 type Riga = Record<string, unknown>;
-const db: { utente: { id: string }; conv: Riga; notifiche: Riga[]; ruoli: Riga[]; quando: 'mai' | 'prima-della-voce' | 'dopo-la-voce' } = {
+const db: {
+  utente: { id: string }; conv: Riga; notifiche: Riga[]; ruoli: Riga[];
+  quando: 'mai' | 'prima-della-voce' | 'dopo-la-voce';
+  rilettura: 'ok' | 'cade' | 'due-in-fila';
+  voceAltrui: boolean;
+} = {
   utente: { id: BUYER },
   conv: {},
   notifiche: [],
   ruoli: [],
   quando: 'mai',
+  rilettura: 'ok',
+  voceAltrui: false,
 };
 
 vi.mock('@/lib/email/avviso-messaggio-negozio', () => ({ avvisaNegozioMessaggioNuovo: async () => undefined }));
@@ -72,7 +79,17 @@ function client() {
         };
       }
       if (tavola === 'conversations') {
-        return { select: () => catena(() => [db.conv]), update: (v: Riga) => catena(() => [db.conv], (r) => Object.assign(r, v)) };
+        return { select: () => {
+          const c = catena(() => [db.conv]);
+          // La rilettura del contatore (dopo la voce) può cadere o trovare due messaggi in fila.
+          if (db.notifiche.length > 0 && db.rilettura === 'cade') {
+            c.maybeSingle = async () => ({ data: null, error: { message: 'lettura caduta' } });
+          }
+          if (db.notifiche.length > 0 && db.rilettura === 'due-in-fila') {
+            c.maybeSingle = async () => ({ data: { ...db.conv, seller_unread_count: 2, buyer_unread_count: 2 }, error: null });
+          }
+          return c;
+        }, update: (v: Riga) => catena(() => [db.conv], (r) => Object.assign(r, v)) };
       }
       if (tavola === 'profiles') {
         return { select: () => catena(() => db.ruoli, undefined, () => { if (db.quando === 'prima-della-voce') ilNegozioApreLaChat(); }) };
@@ -83,6 +100,10 @@ function client() {
           insert: async (r: Riga) => {
             db.notifiche.push({ is_read: false, ...r });
             if (db.quando === 'dopo-la-voce') ilNegozioApreLaChat();
+            if (db.voceAltrui) {
+              // un messaggio nuovo, con la sua voce, arriva tra la rilettura e lo spegnimento
+              db.notifiche.push({ is_read: false, id: 'altra-voce', user_id: SELLER, link: `/messages/${CONV}` });
+            }
             return { error: null };
           },
           update: (v: Riga) => catena(() => db.notifiche, (r) => Object.assign(r, v)),
@@ -109,6 +130,8 @@ const vociAccese = () => db.notifiche.filter((n) => n.user_id === SELLER && n.li
 
 beforeEach(() => {
   db.quando = 'mai';
+  db.rilettura = 'ok';
+  db.voceAltrui = false;
   db.utente = { id: BUYER };
   db.conv = { id: CONV, buyer_id: BUYER, seller_id: SELLER, buyer_unread_count: 0, seller_unread_count: 0 };
   db.ruoli = [{ id: BUYER, role: 'buyer' }, { id: SELLER, role: 'seller' }];
@@ -132,5 +155,25 @@ describe('R04-004 · la voce della campanella e la chat letta nel mezzo', () => 
     db.quando = 'dopo-la-voce';
     expect((await manda()).status).toBe(200);
     expect(vociAccese()).toBe(0);
+  });
+
+  it('se la rilettura del contatore cade, la voce resta accesa', async () => {
+    db.rilettura = 'cade';
+    expect((await manda()).status).toBe(200);
+    expect(vociAccese()).toBe(1);
+  });
+
+  it('se il contatore riletto è maggiore di zero (due messaggi in fila), la voce resta accesa', async () => {
+    db.rilettura = 'due-in-fila';
+    expect((await manda()).status).toBe(200);
+    expect(vociAccese()).toBe(1);
+  });
+
+  it('lo spegnimento tocca solo la voce di questa richiesta, non una arrivata nel frattempo', async () => {
+    db.quando = 'dopo-la-voce';
+    db.voceAltrui = true;
+    expect((await manda()).status).toBe(200);
+    expect(db.notifiche.find((n) => n.id === 'altra-voce')?.is_read).toBe(false);
+    expect(db.notifiche.filter((n) => n.id !== 'altra-voce').every((n) => n.is_read === true)).toBe(true);
   });
 });
