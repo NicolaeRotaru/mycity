@@ -1,38 +1,38 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-22 01:00",
+  "aggiornato": "2026-11-22 01:20",
   "finita": true,
-  "testa": "04991f1e9c7725cf27227b73b32018d2677328aa",
+  "testa": "7cf637354bb9ae3def21299025703502d3c5c095",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "04991f1e9c7725cf27227b73b32018d2677328aa",
-    "nota": "typecheck, lint e vitest verdi: 1923 file di prova, 11866 prove; lanciato sulla testa e aspettato nello stesso turno"
+    "testa": "7cf637354bb9ae3def21299025703502d3c5c095",
+    "nota": "typecheck, lint e vitest verdi: 1923 file passati e 1 saltato (1924), 11866 prove; il file saltato è uno skip condizionale già presente alla base, nessuna prova di R02 usa skip; lanciato sulla testa e aspettato"
   },
   "voci": [
     {
       "id": "R02-001",
       "chiave": "ai-endpoints|i controlli di conformità del copilot in blocco partono tutti insieme, fino a 200, senza un tetto",
       "esito": "riparato",
-      "commit": "62cfe3864f8f64eafb779a4eaea9d190b8e65a73",
+      "commit": "7cf637354bb9ae3def21299025703502d3c5c095",
       "file_toccati": [
         "app/api/ai/catalog-apply-bulk/route.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r02-conformita-con-tetto.test.ts"
+        "tests/unit/riparazione-r02-conformita-con-tetto.test.ts",
+        "tests/unit/riparazione-r02-conformita-entro-i-120-secondi.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r02-conformita-con-tetto.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-conformita-con-tetto.test.ts tests/unit/riparazione-r02-conformita-entro-i-120-secondi.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b084b5c094ca07219211e1a70e640c25535d317^ --file app/api/ai/catalog-apply-bulk/route.ts --prove tests/unit/riparazione-r02-conformita-con-tetto.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b084b5c094ca07219211e1a70e640c25535d317^ --file app/api/ai/catalog-apply-bulk/route.ts --prove tests/unit/riparazione-r02-conformita-con-tetto.test.ts,tests/unit/riparazione-r02-conformita-entro-i-120-secondi.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "I controlli di conformità del copilot in blocco partono al massimo 5 alla volta (pool a lavoratori), con risultati nello stesso ordine (3b084b5c). Giro di correzione (62cfe386): la prova controllava «<= 8» e restava verde anche col tetto a 8; ora con 60 voci il massimo in volo deve essere esattamente 5 (provato: con FILTRI_INSIEME = 8 la prova è rossa; cinque giri di fila verdi).",
-      "verificato_da": "revisore B (sonnet), due giri: ordine ed errori letti; prova debole (<=8) trovata, poi corretta a toBe(5): con tetto 8 ora cade; route invariata",
-      "nota": "Commit della voce: 3b084b5c (codice) e 62cfe386 (solo la prova). Rimessa nuova /tmp/claude-0/corr-rimessa-R02-001.json, uscita 0."
+      "cosa_ho_fatto": "Tetto di 5 controlli in volo (commit 3b084b5c) più un tetto di tempo: i controlli nuovi smettono di partire dopo 70 s, le scritture dopo 105 s, così la rotta finisce prima dei 120 s di app/api/ai/**. Le voci non controllate o non scritte restano intatte, hanno motivo «rimandalo» nei results e la risposta le elenca in `rimaste`. Prova con orologio finto: 200 voci a 8 s l'una finiscono sotto i 110 s.",
+      "verificato_da": "revisore B (sonnet), tre giri: tetto di 5 provato; giro K02 7cf63735 letto: controlli entro ~80 s, scritture entro 105 s, rimaste mai scritte, ordine e primo errore invariati; 2 prove verdi"
     },
     {
       "id": "R02-002",
@@ -92,37 +92,31 @@
     {
       "id": "R02-004",
       "chiave": "ai-endpoints|due avvii insieme di un lavoro sul catalogo superano entrambi il controllo dei lavori aperti",
-      "esito": "riparato",
-      "commit": "713d46ff472b3e46c1fb1603b4a8c2b99ab2507e",
-      "file_toccati": [
-        "migrations/640_un_solo_lavoro_ai_aperto_per_negozio.sql",
-        "app/api/ai/catalog-batch/start/route.ts"
-      ],
-      "prova_file": [
-        "tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql",
-        "tests/unit/riparazione-r02-due-avvii-insieme.test.ts"
-      ],
-      "prova_comando": "bash tests/sql/harness/apply.sh r02_prova_c && psql -X -q -d r02_prova_c -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql && npx vitest run tests/unit/riparazione-r02-due-avvii-insieme.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a930117b09a94cb44bcf6daca77d83188^ --file migrations/640_un_solo_lavoro_ai_aperto_per_negozio.sql --prove tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql --sql r02_rimessa_c --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a930117b09a94cb44bcf6daca77d83188^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-due-avvii-insieme.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
+      "esito": "parziale",
       "insieme_a": [
         "R02-013"
       ],
-      "cosa_ho_fatto": "Migrazione nuova 640: indice unico parziale su catalog_ai_jobs(seller_id) per gli stati aperti (submitting, processing, ready) e la rotta di avvio che trasforma il 23505 in 409 CONFLICT col lavoro aperto (commit 4897836a). Giro di correzione (713d46ff): (a) l'avvio rifiuta con 409 «un'applicazione è in corso» quando il negozio ha un lavoro 'applied' prenotato da meno di 120 s (updated_at, che apply/route.ts:108 scrive alla prenotazione; 120 s = maxDuration di app/api/ai/** in vercel.json): così il rimettiPronto dell'applica non cade più sull'indice per un avvio fatto mentre scrive; la lettura ha la stessa forma delle altre (select/eq/in/order/limit), le 15 prove che importano la rotta restano verdi. (b) La 640 è un solo DO $$ con IF to_regclass('public.catalog_ai_jobs') IS NULL → NOTICE e niente; lucchetto, chiusura dei doppioni e indice con EXECUTE. (c) Coi doppioni resta aperto prima un 'ready', poi un 'processing' con batch_id, poi il resto; a parità il più recente (row_number per negozio). Prove: SQL invariata (sei casi sull'indice), vitest con due casi nuovi a orologio finto (prenotato 30 s fa → 409 senza lotto né riga; 3 minuti fa → parte).",
-      "nota": "Rimesse nuove: /tmp/claude-0/corr-rimessa-R02-004-sql.json e /tmp/claude-0/corr-rimessa-R02-004-ts.json, tutte e due uscita 0. I doppioni e il database senza tabella non si fanno con la ricostruzione (apply.sh applica la 640 su una tabella vuota, e la prova non può includere la migrazione senza nominarla: rimessa 3). Provati a mano su r02_doppioni_c e r02_senzatabella_c (cancellati): 5 negozi con doppioni misti, 14/14 controlli verdi (ready tenuto contro processing e submitting più recenti, processing col lotto contro submitting più recente, due ready → il più recente, senza lotto → il più recente, uno solo aperto → niente cambia, batch_id e motivo restano), rilanciata non fallisce; senza tabella esce 0 con un NOTICE. La 640 di prima sugli stessi dati: 9/14, e senza tabella ERROR. Resta la piccola gara fra il controllo dell'avvio e la prenotazione dell'applica, e il messaggio al negozio quando rimettiPronto riceve 23505: va in apply/route.ts (serve_file_altrui). La migrazione non è applicata al database vero: lo decide Nicola.",
-      "verificato_da": "revisore A (opus): prova SQL e vitest verdi, 640 su db con doppioni, rimessa regge; difetti (rimettiPronto 23505, to_regclass, scelta doppioni) corretti in 713d46ff e ricontrollati da revisore B: 409 se applied <120s, SQL 640 letto",
+      "commit": "713d46ff",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "",
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun commit nuovo: la riga catalog_ai_jobs non cambia a fine applicazione riuscita (apply/route.ts:108 scrive status applied e updated_at alla prenotazione, :345 non scrive niente se non ripetibile), quindi start/route.ts non ha nessun segno per distinguere «in corso» da «finita». Il blocco di 120 s di start/route.ts:122-140 resta dopo ogni applicazione.",
+      "cosa_resta": "Dopo ogni applicazione riuscita «Avvia» è rifiutato per circa 120 s (409). Va chiuso con un segno di fine scritto da apply/route.ts.",
       "serve_file_altrui": [
         {
           "file": "app/api/ai/catalog-batch/apply/route.ts",
-          "modifica": "rimettiPronto (righe 124-129) va letto: nei tre punti che lo chiamano (:131, :188, :345) scrivere `const { error: errRimetti } = await rimettiPronto();`. Se `errRimetti?.code === '23505'` (mentre questo lavoro si applicava il negozio ne ha avviato un altro e l'indice della migrazione 640 ne tiene aperto uno solo): logger.error('catalog-batch apply: rimetti pronto rifiutato, c\\'è un altro lavoro aperto', { jobId: job.id, sellerId: user.id }) e dirlo al negozio con «Non ho potuto rimettere questo lavoro fra quelli da applicare: nel frattempo ne hai avviato un altro. I prodotti saltati restano su questo lavoro: scarta quello nuovo e riprova, o chiedi all'assistenza.» — alle righe 131 e 188 al posto del messaggio della risposta 503 («Riprova fra poco: non ho cambiato niente»), alla riga 345 nella risposta JSON come campo `avviso` con `ripetibile: false`. Per ogni altro errore di rimettiPronto basta il logger.error."
+          "modifica": "a fine applicazione (riga ~345, dopo `if (ripetibile) await rimettiPronto();`), se non ripetibile, scrivere un segno di fine sulla riga: `await admin.from('catalog_ai_jobs').update({ applicazione_finita_il: new Date().toISOString() }).eq('id', job.id).eq('seller_id', user.id)`; e rimettere a null lo stesso campo dentro rimettiPronto (riga 124-128)."
+        },
+        {
+          "file": "migrations/<numero nella fascia R02>_catalog_ai_jobs_applicazione_finita_il.sql",
+          "modifica": "aggiungere `applicazione_finita_il timestamptz` nullable a catalog_ai_jobs (non toccare la 640). Poi in start/route.ts (mio) il 409 vale solo se l'ultimo 'applied' ha applicazione_finita_il null e updated_at più recente di 120 s: lo faccio io appena il segno esiste."
         }
-      ]
+      ],
+      "nota": "Senza migrazione l'unica alternativa è riscrivere updated_at a fine applicazione, ma rompe l'ordine dei lavori e la 640: sconsigliata. Resta anche il 23505 di rimettiPronto (serve_file_altrui già dichiarato).",
+      "verificato_da": "revisore A (opus): prova SQL e vitest verdi, 640 su db con doppioni, rimessa regge; difetti (rimettiPronto 23505, to_regclass, scelta doppioni) corretti in 713d46ff e ricontrollati da revisore B: 409 se applied <120s, SQL 640 letto; collaudo K02: blocco di 120 s dopo ogni applicazione = rompe_altro, resta per mancanza di un segno di fine (serve_file_altrui)"
     },
     {
       "id": "R02-005",
@@ -225,7 +219,7 @@
     {
       "id": "R02-009",
       "chiave": "ai-endpoints|la conformità dei prodotti (classifyproductpolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "a4d97723844008a1d628920717072963939263a3",
       "file_toccati": [
         "lib/ai/moderation.ts"
@@ -241,9 +235,16 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a4d97723844008a1d628920717072963939263a3^ --file lib/ai/moderation.ts --prove tests/unit/riparazione-r02-conformita-prodotti-tempo.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "classifyProductPolicy ha un tentativo da 10 s senza ritentativi, come assertSafeText; allo scadere lancia e i chiamanti negano il prodotto come per ogni altro errore. Prova con timer finti e client finto che scade come l'SDK.",
-      "verificato_da": "revisore B (sonnet): prova verde; client.ts maxRetries=0 e catch dei 5 chiamanti letti; 40 prove vicine verdi"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "classifyProductPolicy ha 10 s e nessun ritentativo. I giri di fila in catalog-apply-bulk sono coperti dal commit 7cf63735 (voce R02-001: tetto di tempo di 70 s sui controlli e 105 s sulle scritture, voci rimaste fuori dette nella risposta); non è la stessa riga, quindi nessun insieme_a.",
+      "cosa_resta": "catalog-batch/apply/route.ts (righe 41-53 e 222) chiama il filtro a gruppi da 5 su fino a 200 righe senza tetto di tempo: con 10 s a controllo sfora i 120 s della rotta.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "dare ad `aGruppi` una scadenza: `const inizio = Date.now()` all'inizio dell'handler; in aGruppi, prima di ogni gruppo, `if (Date.now() > scadenza) break` (le voci non controllate restano senza esito); alla chiamata di riga ~222 passare `inizio + 70_000`; chi non ha verdetto (verdetti[i] undefined) va nei saltati con motivo «non controllato in tempo: rimandalo», e la risposta lo dice. Stesso schema di catalog-apply-bulk/route.ts."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): prova verde; client.ts maxRetries=0 e catch dei 5 chiamanti letti; 40 prove vicine verdi; collaudo K02: i 40 giri restano in catalog-batch/apply (non di R02)"
     },
     {
       "id": "R02-010",
@@ -307,37 +308,31 @@
     {
       "id": "R02-013",
       "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
-      "esito": "riparato",
-      "commit": "713d46ff472b3e46c1fb1603b4a8c2b99ab2507e",
-      "file_toccati": [
-        "migrations/640_un_solo_lavoro_ai_aperto_per_negozio.sql",
-        "app/api/ai/catalog-batch/start/route.ts"
-      ],
-      "prova_file": [
-        "tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql",
-        "tests/unit/riparazione-r02-due-avvii-insieme.test.ts"
-      ],
-      "prova_comando": "bash tests/sql/harness/apply.sh r02_prova_c && psql -X -q -d r02_prova_c -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql && npx vitest run tests/unit/riparazione-r02-due-avvii-insieme.test.ts",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a930117b09a94cb44bcf6daca77d83188^ --file migrations/640_un_solo_lavoro_ai_aperto_per_negozio.sql --prove tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql --sql r02_rimessa_c --json && timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a930117b09a94cb44bcf6daca77d83188^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-due-avvii-insieme.test.ts --json"
-      },
-      "copre_tutta_la_voce": true,
+      "esito": "parziale",
       "insieme_a": [
         "R02-004"
       ],
-      "cosa_ho_fatto": "Sulla base il secondo avvio in sequenza era già rifiutato (start/route.ts, prova riparazione-r04-lotto-aperto); restava la gara fra due avvii simultanei, la stessa riga di R02-004: stessa cura e stessi commit (4897836a, e il giro di correzione 713d46ff: avvio rifiutato con 409 mentre un'applicazione prenotata da meno di 120 s può ancora girare, 640 con la guardia sulla tabella e i doppioni scelti per priorità ready → processing con lotto → il più recente).",
-      "nota": "Non segnato gia_riparato_prima perché la riverifica del 21/11 lo dà riparato a metà: il resto era proprio la gara. Rimesse e prove a mano: vedi R02-004.",
-      "verificato_da": "revisore A (opus) e revisore B (sonnet): stessa cura di R02-004 (indice 640 + 409 sul 23505 + attesa di un applicazione in corso), prove verdi, rimessa regge",
+      "commit": "713d46ff",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "",
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Come R02-004: nessun commit nuovo, stesso segno mancante.",
+      "cosa_resta": "Come R02-004: il blocco di 120 s dopo ogni applicazione riuscita, e il 23505 di rimettiPronto in apply/route.ts:124-131.",
       "serve_file_altrui": [
         {
           "file": "app/api/ai/catalog-batch/apply/route.ts",
-          "modifica": "rimettiPronto (righe 124-129) va letto: nei tre punti che lo chiamano (:131, :188, :345) scrivere `const { error: errRimetti } = await rimettiPronto();`. Se `errRimetti?.code === '23505'` (mentre questo lavoro si applicava il negozio ne ha avviato un altro e l'indice della migrazione 640 ne tiene aperto uno solo): logger.error('catalog-batch apply: rimetti pronto rifiutato, c\\'è un altro lavoro aperto', { jobId: job.id, sellerId: user.id }) e dirlo al negozio con «Non ho potuto rimettere questo lavoro fra quelli da applicare: nel frattempo ne hai avviato un altro. I prodotti saltati restano su questo lavoro: scarta quello nuovo e riprova, o chiedi all'assistenza.» — alle righe 131 e 188 al posto del messaggio della risposta 503 («Riprova fra poco: non ho cambiato niente»), alla riga 345 nella risposta JSON come campo `avviso` con `ripetibile: false`. Per ogni altro errore di rimettiPronto basta il logger.error."
+          "modifica": "come R02-004 (segno di fine applicazione), più gestire il 23505 di rimettiPronto (riga 124-131)."
+        },
+        {
+          "file": "migrations/<numero nella fascia R02>_catalog_ai_jobs_applicazione_finita_il.sql",
+          "modifica": "come R02-004."
         }
-      ]
+      ],
+      "nota": "",
+      "verificato_da": "revisore A (opus) e revisore B (sonnet): stessa cura di R02-004 (indice 640 + 409 sul 23505 + attesa di un applicazione in corso), prove verdi, rimessa regge; collaudo K02: stesso esito di R02-004"
     }
   ],
   "nuovi_difetti_visti": [
@@ -355,8 +350,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "L1 opus (ripreso una volta per la guardia), L2 sonnet, revisori A opus, B e C sonnet, giro di correzione opus",
+    "nota": "6 subagenti aperti (L1 opus, L2 sonnet, revisori A opus, B e C sonnet, correzione opus); per il giro K02 ripresi L2 e il revisore B, nessun subagente nuovo",
     "subagenti": 6
   },
-  "costo_usd": 23.44
+  "costo_usd": 26.13
 }
