@@ -1,0 +1,467 @@
+{
+  "sessione": "R12",
+  "aggiornato": "2026-11-22 04:05",
+  "finita": true,
+  "testa": "16fc7e09f9f9d769c2f01da79848d68c8b9264a6",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "338b1a6661882beadd3ce77c5bfcc37c94794591",
+    "nota": "Dopo il giro K04: typecheck 0 errori, lint 0 errori (126 avvisi già presenti), vitest 1918 file passati e 1 saltato (11866 casi). Girato su 338b1a66, che dopo l ultimo commit di codice 16fc7e09 tocca solo il referto."
+  },
+  "voci": [
+    {
+      "id": "R12-005",
+      "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "prova": "components/Footer.tsx:142 usa già COLONNE_DEL_PIEDE (griglia auto-fit con min(100%,…), non più grid-cols-2); lavora-con-noi, resi e faq hanno già min-w-0/flex-wrap/break-words; misurato in Chrome a 280 px con html{font-size:200%}: /about, /faq, /returns, /lavora-con-noi hanno scrollWidth 280; app/help/page.tsx:109 ha già min-w-0 [overflow-wrap:anywhere]",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei file la voce è già chiusa sulla base (piede, lavora con noi, resi, faq). Resta solo il riquadro anti-robot di app/contact, che non è mio.",
+      "cosa_resta": "Il widget Turnstile di app/contact (iframe largo 300 px) non si stringe sotto i 300 px: non misurato a pagina viva perché serve una chiave pubblica vera. Il pezzo «app/te…» della voce è troncato nel registro: non si sa quale file sia (se è app/terms, nel sorgente non c'è un difetto visibile).",
+      "serve_file_altrui": [
+        {
+          "file": "components/Turnstile.tsx",
+          "modifica": "nella chiamata window.turnstile.render (circa riga 76) aggiungere l'opzione size: (typeof window !== 'undefined' && window.innerWidth < 340) ? 'compact' : 'normal' (il widget compatto è largo 150 px)"
+        },
+        {
+          "file": "app/contact/page.tsx",
+          "modifica": "riga 191: il wrapper <div className=\"flex justify-center\"> diventa <div className=\"flex justify-center max-w-full overflow-hidden\">, così un widget da 300 px non allarga la pagina"
+        }
+      ],
+      "verificato_da": "revisore 2 (sonnet, sola lettura): sulla base i pezzi nei miei file avevano già le correzioni (lavora-con-noi:128-145, returns:33-43, faq:262-272, Footer:142); conferma da lettura della base, la misura in Chromium non era conclusiva senza database"
+    },
+    {
+      "id": "R12-006",
+      "chiave": "layout-responsive|sul tablet col testo al 200% «dichiarazione accessibilità» esce dal piede e la pagina scorre di lato",
+      "esito": "parziale",
+      "commit": "e9a96af4",
+      "file_toccati": [
+        "components/Footer.tsx",
+        "tests/unit/riparazione-r12-footer.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-footer.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-footer.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_come": "la prova rende il componente (renderToStaticMarkup) e controlla cosa esce",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e9a96af4^ --file components/Footer.tsx --prove tests/unit/riparazione-r12-footer.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prima versione be7e78bd tolta (b99da806) perché cambiava due prove comuni. Seconda versione 87941fbf/cf774c57: md:grid-cols-5 resta, colonne min-w-0, testi break-words. K04: lo scorrimento è chiuso, ma «Alimentari», «Elettronica», «Bellezza», «Casa & Cucina» uscivano dalla colonna (link inline-flex). Giro K04 (e9a96af4): [overflow-wrap:anywhere] e hyphens-auto su titoli, link e paragrafi del piede. A 768, 820 e 900 px al 200% nessun testo esce dalla sua colonna; a 768 e 1440 px al 100% colonne invariate (118 e 221 px).",
+      "cosa_resta": "Con cinque colonne da 83 px al 200% titoli e logo si spezzano a metà parola («ESPL/ORA», «My/Cit/y»): non si evita finché md:grid-cols-5 resta, e le due prove comuni lo fissano. A 1024 px al 200% la pagina scorre per la barra in alto (non mia).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r02-piede-280.test.ts",
+          "modifica": "riga 40: expect(griglia).toContain('md:grid-cols-5'); diventa expect(griglia).toContain('md:grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))]');"
+        },
+        {
+          "file": "tests/unit/riparazione-r15-col-testo-grande-la-pagina-non-scorre-di-lato.test.tsx",
+          "modifica": "riga 33: expect(griglia).toContain('md:grid-cols-5'); diventa expect(griglia).toContain('md:grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))]');"
+        },
+        {
+          "file": "components/Footer.tsx (file di R12, da fare dopo le due prove)",
+          "modifica": "nella griglia del piede ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} diventa md:grid-cols-[repeat(auto-fit,minmax(min(100%,6rem),1fr))], come nel commit be7e78bd: col testo normale a 768 px restano cinque colonne da 118 px, al 200% due o tre colonne e niente parole spezzate"
+        },
+        {
+          "file": "(barra in alto: la nav .ml-auto «flex items-center gap-2 text-sm», file da individuare)",
+          "modifica": "a 1024 px al 200% arriva a 1256 px e fa scorrere la pagina: flex-wrap sulla nav, oppure meno voci col testo grande"
+        }
+      ],
+      "nota": "Commit della voce: be7e78bd (tolta), b99da806, 87941fbf, cf774c57, e9a96af4. Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso.",
+      "verificato_da": "seconda versione: revisore 1 (sonnet) e collaudo K04 (scorrimento chiuso). Il giro K04 l'ha misurato solo il riparatore: Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso."
+    },
+    {
+      "id": "R12-010",
+      "chiave": "navigazione-gerarchia|il piè di pagina passa dall h1 all h3 su ogni pagina pubblica senza un h2 nel contenuto",
+      "esito": "riparato",
+      "commit": "0bb8e7ef",
+      "file_toccati": [
+        "components/Footer.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-footer.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-footer.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0bb8e7ef^ --file components/Footer.tsx --prove tests/unit/riparazione-r12-footer.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunto un h2 sr-only «Informazioni sul sito» nel blocco del marchio, prima dei titoli h3 del piede: la gerarchia non salta più, l'aspetto non cambia.",
+      "prova_come": "la prova rende il componente (renderToStaticMarkup) e controlla cosa esce",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): h2 sr-only primo titolo del piede, gli altri restano h3, aspetto invariato, prova verde"
+    },
+    {
+      "id": "R12-001",
+      "chiave": "layout-responsive|in chi siamo a 280 px col testo al 200% il titolo «come siamo arrivati qui» entra nel margine destro",
+      "esito": "riparato",
+      "commit": "50f5b47e",
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50f5b47e^ --file app/about/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel blocco «Come siamo arrivati qui» la colonna ha min-w-0 e il titolo break-words hyphens-auto, come il blocco sopra. Misurato in Chrome a 280 px al 200%: prima la colonna usciva dalla sezione, dopo no.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 1 (sonnet, sola lettura): /about a 280 px al 200% senza scorrimento laterale in Chromium, prova verde"
+    },
+    {
+      "id": "R12-002",
+      "chiave": "layout-responsive|a 280 px col testo al 200% scorrono di lato anche faq, negozi, resi e lavora con noi",
+      "esito": "parziale",
+      "commit": "47bde5b2",
+      "file_toccati": [
+        "app/faq/page.tsx",
+        "app/returns/page.tsx",
+        "app/lavora-con-noi/page.tsx",
+        "app/stores/page.tsx",
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 47bde5b2^ --file app/faq/page.tsx,app/returns/page.tsx,app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro (b04a677d): in /stores il bottone «Aperti ora» e il menu dell'ordinamento non escono più dalla riga. Giro K04 (47bde5b2, più la parte dei resi nel commit 16fc7e09, dichiarata qui): break-words e hyphens-auto sul riquadro «Non hai trovato la risposta?» della faq, sui tre riquadri di lavora con noi e sul contenitore della pagina dei resi. Sui resi la classe va sul contenitore perché due prove comuni leggono le stringhe esatte dei riquadri. A 280 e 320 px al 200% ogni testo di faq, resi e lavora con noi resta nel suo riquadro.",
+      "cosa_resta": "/stores scorre ancora di lato per l'h1 di components/CollectionHeader.tsx:80 (381 px su 280). Il banner dei cookie esce dal suo riquadro a 280 px al 200% (file non cercato, non mio).",
+      "serve_file_altrui": [
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "riga 80: <h1 className=\"mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]\"> diventa <h1 className=\"mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px] break-words hyphens-auto\">"
+        },
+        {
+          "file": "(banner dei cookie, file da individuare: testo «Usiamo cookie tecnici…» e bottone «Personalizza»)",
+          "modifica": "a 280 px al 200% il testo sta a 64-258 su un riquadro 24-256 e «Personalizza» a 96-267 su 64-216: break-words sul testo e max-w-full sul bottone"
+        }
+      ],
+      "nota": "Il commit 16fc7e09 porta l'id della voce sulle posizioni ma contiene anche la versione finale dei resi di questa voce: il primo tentativo in 47bde5b2 rompeva due prove comuni dei resi. Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso.",
+      "verificato_da": "primo giro: revisore 1 (sonnet) e collaudo K04 (parte dichiarata confermata). Il giro K04 l'ha misurato solo il riparatore: Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso."
+    },
+    {
+      "id": "R12-004",
+      "chiave": "layout-responsive|in lavora con noi, a 280 px col testo grande, le righe delle posizioni restano strettissime: il titolo e «candidati» vanno quasi una lettera per riga",
+      "esito": "riparato",
+      "commit": "d6b03f13",
+      "file_toccati": [
+        "app/lavora-con-noi/page.tsx",
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d6b03f13^ --file app/lavora-con-noi/page.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts --json (e per 16fc7e09 con --base 16fc7e09^: uscita 0)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "K04: il primo giro (6a87c607) era un gradino fisso a 300 px, e da 301 a 320 px al 200% «Candidati» si spezzava di nuovo. Correzione continua (d6b03f13 + 16fc7e09): margini px-[min(1.5rem,7.5vw)] per la cornice, px-[min(1.25rem,6.25vw)] per la riga, px-[min(1rem,5vw)] per «Candidati» con flex-wrap; la pillola con max-w-full e senza nowrap; il titolo con break-words hyphens-auto. Misure a 280, 300, 301, 320, 360, 375 e 414 px al 200%: «Candidati» sempre su una riga (prima 7 righe a 301 e 4 a 320), titolo largo 201-298 px, nessuna pillola fuori dalla riga. Al 100% da 320 px in su nulla cambia; sotto i 320 px i margini calano di poco.",
+      "nota": "Commit della voce: 6a87c607, d6b03f13 e 16fc7e09. Il 16fc7e09 contiene anche la versione finale dei resi dell'altra voce sulle pagine (dichiarata lì). Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso.",
+      "verificato_da": "primo giro: revisore 1 (sonnet) e collaudo K04 (a 280 e 300 px riparato). La correzione continua l'ha misurata solo il riparatore: Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso."
+    },
+    {
+      "id": "R12-011",
+      "chiave": "qa-flussi|altre due ancore sommano il loro scroll-mt allo scroll-padding da md in su",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "prova": "app/faq/page.tsx:231 ha già className=\"scroll-mt-24 md:scroll-mt-0\" alla base 1ad51b4c (la parte nei miei file è chiusa)",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/DatiPerIBonifici.tsx",
+          "modifica": "riga 64: <form id=\"bonifici\" onSubmit={salva} className=\"bg-white border border-cream-300 rounded-2xl shadow-warm p-6 scroll-mt-24\"> diventa <form id=\"bonifici\" onSubmit={salva} className=\"bg-white border border-cream-300 rounded-2xl shadow-warm p-6 scroll-mt-24 md:scroll-mt-0\">: da md in su app/globals.css:204 dà già scroll-padding-top a html, e scroll-mt-24 si somma (ci atterra /seller/profile#bonifici da app/seller/earnings/page.tsx:246). Prova suggerita: render del form e controllo che la classe abbia md:scroll-mt-0, come tests/unit/riparazione-r02-ancore-faq.test.ts."
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Corretto dopo il collaudo K04: le due ancore della voce sono app/faq/page.tsx:229 (già a posto alla base, riga 231) e components/seller/DatiPerIBonifici.tsx:65, che non è mio. Nel primo giro avevo citato per sbaglio app/lavora-con-noi/page.tsx:181, che non è nella voce.",
+      "cosa_resta": "l ancora #bonifici di components/seller/DatiPerIBonifici.tsx:64 (file non mio): modifica esatta qui sopra"
+    },
+    {
+      "id": "R12-012",
+      "chiave": "qa-flussi|nella pagina dei negozi le categorie per negozio si leggono senza finestre: sopra i mille negozi con prodotti alcuni perderebbero le loro categorie nel filtro",
+      "esito": "serve_file_altrui",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx",
+          "modifica": "nel vi.mock di '@/lib/supabase/client' sostituire `rpc: async (nome: string) => { …tre return… }` con `rpc: (nome: string) => { const risposta = async () => { …gli stessi tre return… }; const q: Record<string, unknown> = { order: () => q, range: () => q, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => risposta().then(ok, ko) }; return q; }`, come nel commit 8f8973f3 del ramo. Dati e controlli restano uguali."
+        },
+        {
+          "file": "app/stores/page.tsx",
+          "modifica": "nel Promise.all di fetchStoresData sostituire `supabase.rpc('categorie_per_negozio'),` con `leggiTutteLeRighe<{ seller_id: string; categorie: string[] | null }>((da, a) => supabase.rpc('categorie_per_negozio').order('seller_id').range(da, a)),`, come nel commit 7f539404 del ramo (import già presente), e rimettere in tests/unit/riparazione-r12-negozi-categorie.test.tsx il caso «più di 1000 righe» com'era a 7f539404 (la sua prova rimessa reggeva, uscita 0). File di R12: va fatto insieme alla modifica della prova comune."
+        }
+      ],
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il difetto c è sulla base: categorie_per_negozio si legge con una rpc senza finestre, quindi oltre le 1000 righe si taglia. La correzione era pronta e provata: lettura a finestre con l aiutante già esistente leggiTutteLeRighe (commit 7f539404, prova rimessa uscita 0). Però rompe il client finto della prova comune r02-negozi-categorie-a-pagine, che la regia vuole com era. Correzione tolta con il commit 63e85883, prova comune di nuovo identica alla base: va rimessa insieme alle due modifiche qui sotto.",
+      "nota": "Commit sul ramo: 7f539404 (correzione), 8f8973f3 (client finto della prova comune), 63e85883 (tutte e due tolte). La strada (b) era annunciata alla regia quarta, senza risposta prima della fine della correzione del piede."
+    },
+    {
+      "id": "R12-013",
+      "chiave": "qa-flussi|nella pagina dei negozi, se la lettura delle categorie cade, i filtri spariscono senza avviso",
+      "esito": "riparato",
+      "commit": "c3162108d747eab390743c75c5ca10900035a6c4",
+      "file_toccati": [
+        "app/stores/page.tsx",
+        "tests/unit/riparazione-r12-negozi-categorie.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-negozi-categorie.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-negozi-categorie.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c3162108^ --file app/stores/page.tsx --prove tests/unit/riparazione-r12-negozi-categorie.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Quando cade la lettura delle categorie o quella delle categorie per negozio, nel riquadro dei filtri compare un avviso breve (role=status): «Non siamo riusciti a leggere i settori dei negozi: i filtri per settore possono mancare.» Prove: errore categorie → avviso e niente filtri; errore categorie per negozio → avviso; tutto letto → nessun avviso.",
+      "verificato_da": "revisore 3 (sonnet, sola lettura): 12 file di prove verdi, prova comune identica alla base, avviso solo con .error valorizzato, negozi visibili; nota minore: data null senza error o un throw non mostrano l avviso (il throw manda la pagina nello stato d errore come alla base)",
+      "prova_come": "la prova rende il componente (renderToStaticMarkup) e controlla cosa esce"
+    },
+    {
+      "id": "R12-009",
+      "chiave": "layout-responsive|basta un negozio col nome lungo e sul telefono la home, l'elenco negozi e «vicino a te» diventano più larghe dello schermo",
+      "esito": "riparato",
+      "commit": "d90b94db",
+      "file_toccati": [
+        "components/StoreListRow.tsx",
+        "components/StorePreviewCard.tsx",
+        "tests/unit/riparazione-r12-nome-lungo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-nome-lungo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-nome-lungo.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d90b94db^ --file components/StoreListRow.tsx --prove tests/unit/riparazione-r12-nome-lungo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Primo giro (c2b7c9f0): max-w-full sui titoli delle due schede, il nome lungo non allarga più home, elenco e vicino a te. K04: rompe_altro, perché in «vicino a te» a 280 px al 200% la colonna del nome finiva larga 0. Correzione d90b94db: la riga ha flex-wrap, la colonna del nome basis-24 e min-w-0, «Nuovo · Chiuso» flex-wrap, la distanza max-w-full. Misurato col markup della riga nel CSS compilato a 280, 320 e 375 px al 200% e al 100%, con nome corto e con nome di 70 lettere: il nome è largo 166/206/215-261 px al 200% (prima 0), nessuna pagina scorre di lato, al 100% a 375 px non cambia nulla.",
+      "nota": "Commit della voce: c2b7c9f0 e d90b94db. Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso.",
+      "verificato_da": "primo giro: revisore 2 (sonnet) e collaudo K04 (lo scopo della voce regge). La correzione d90b94db l'ha misurata solo il riparatore: Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso."
+    },
+    {
+      "id": "R12-003",
+      "chiave": "layout-responsive|col testo al 200% sul telefono la barra a schede è più alta del margine in fondo: l ultima parte della pagina finisce sotto la barra",
+      "esito": "riparato",
+      "commit": "c62fdea63ef02a05aa115d9890769e007fee35fe",
+      "file_toccati": [
+        "app/globals.css",
+        "components/MobileTabBar.tsx",
+        "tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-barre.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-barre.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c62fdea6^ --file app/globals.css --prove tests/unit/riparazione-r12-barre.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Misurato in Chromium: col testo al 200% la barra è alta 75,5 px e il margine restava 58. --tabbar-altezza-vera ora somma le stesse unità della barra (calc(1px + 2 * 0.5rem + 22px + 0.125rem + 11px * 1.5)): 57,5 col testo normale, 75,5 al 200%. In MobileTabBar.tsx solo un commento che rimanda alla somma.",
+      "nota": "Prova esistente modificata, dichiarato: tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts legge globals.css e MobileTabBar.tsx per nome, e ora calcola la dichiarazione a 16 px invece di cercare «NNpx», con la stessa tolleranza ±1 px (guardia-ramo non la segnala).",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 2 (sonnet, sola lettura): in Chromium a 280/320/375/414 barra e margine 57,5 px al 100% e 75,5 al 200%; safe-area ancora sommata (globals.css:350); la prova r04 non è indebolita (stessa tolleranza, cambia solo il parser del calc)"
+    },
+    {
+      "id": "R12-007",
+      "chiave": "layout-responsive|la home a 320 px col testo al 200% scorre ancora di lato di 18 px",
+      "esito": "parziale",
+      "commit": "83fe9903",
+      "file_toccati": [
+        "components/home/HowItWorks.tsx",
+        "tests/unit/riparazione-r12-testo-grande.test.ts",
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-testo-grande.test.ts",
+        "tests/unit/riparazione-r12-pagine-200.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts tests/unit/riparazione-r12-pagine-200.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 83fe9903^ --file components/home/HowItWorks.tsx --prove tests/unit/riparazione-r12-testo-grande.test.ts --json ; giro K04: --base cf39448a^ --file components/home/HowItWorks.tsx --prove tests/unit/riparazione-r12-pagine-200.test.ts, uscita 0"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro (83fe9903): i titoli dei tre passi vanno a capo e HowItWorks non fa più scorrere la pagina (K04 conferma). Giro K04 (cf39448a): la scheda ha !p-[min(1.5rem,7vw)] invece di 24 px fissi; a 280 px al 200% «Ordina» sta su una riga (titolo 175 px su scheda 216, prima 118 e spezzato). Da 343 px in su il margine è quello di prima; al 100% nessuna differenza.",
+      "cosa_resta": "La home scorre ancora di lato (378 px su 320 secondo K04, 446 px al 200% su /come-funziona) per components/LiveActivityFeed.tsx, che non è mio.",
+      "serve_file_altrui": [
+        {
+          "file": "components/LiveActivityFeed.tsx",
+          "modifica": "righe 55-60 (ScheletroAttivita) e 154-160 (riquadro vero): <div className=\"flex items-center justify-between mb-4\"> diventa <div className=\"flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4\">; all'<h2 className=\"font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5\"> aggiungere min-w-0 [overflow-wrap:anywhere]; allo <span className=\"text-xs text-ink-400 uppercase tracking-wider font-semibold\">Live</span> aggiungere shrink-0. Non misurato con la correzione."
+        }
+      ],
+      "nota": "Commit della voce: 83fe9903 e cf39448a. Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso.",
+      "verificato_da": "primo giro: revisore 2 (sonnet) e collaudo K04 (pezzo nominato chiuso). Il giro K04 l'ha misurato solo il riparatore: Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso."
+    },
+    {
+      "id": "R12-008",
+      "chiave": "layout-responsive|barra mobile a 280 px col testo al 200%: la pillola del luogo si stringe a zero e sparisce",
+      "esito": "riparato",
+      "commit": "ce3441c5b2f47d8a237c3df73115c06589ebfb40",
+      "file_toccati": [
+        "components/Navbar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-testo-grande.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-testo-grande.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ce3441c5^ --file components/Navbar.tsx --prove tests/unit/riparazione-r12-testo-grande.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Misurato in Chromium a 280 e 320 px al 200%: il contenitore della pillola era largo 0 e la pillola finiva sopra il logo. La riga mobile ora ha flex-wrap e il contenitore flex-1 basis-auto: la pillola va a capo intera. Col testo normale da 280 a 767 px resta su una riga come prima.",
+      "nota": "A 280 px al 200% la testata diventa di tre righe (logo / pillola / Accedi): più alta, ma tutto si vede.",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "verificato_da": "revisore 2 (sonnet, sola lettura): su /stores vera, al 100% da 280 a 767 px una riga sola; al 200% la pillola va a capo e tiene 232 px; nota: a 280 px al 100% la riga riempie 256 px su 256, margine zero ma niente overflow"
+    },
+    {
+      "id": "R12-014",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "parziale",
+      "commit": "b5f62937",
+      "file_toccati": [
+        "components/StorePreviewCard.tsx",
+        "components/StoreListRow.tsx",
+        "app/about/page.tsx",
+        "app/lavora-con-noi/page.tsx",
+        "tests/unit/riparazione-r12-scala-testo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-scala-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-scala-testo.test.ts --reporter=dot",
+      "prova_tipo": "lettura-codice",
+      "prova_come": "la prova vitest legge il testo del sorgente (readFileSync) e ne controlla le classi",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b5f62937^ --file components/StorePreviewCard.tsx,components/StoreListRow.tsx --prove tests/unit/riparazione-r12-scala-testo.test.ts --json ; giro K04: --base 6a0558bb^ --file app/about/page.tsx,app/lavora-con-noi/page.tsx, uscita 0"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Primo giro (b5f62937): le schede negozio sulla scala; ProductCard era già sulla scala alla base. Giro K04 (6a0558bb): in chi siamo e lavora con noi le misure a un pixel da un passo portate sulla scala (17→text-lg, 15→text-base, 13→text-sm); la prova copre ora anche about, lavora con noi e resi. Nei miei file non c'è nessun fontSize scritto.",
+      "cosa_resta": "Fuori dai miei file restano circa 217 text-[N px|rem] in 76 file, più i fontSize scritti nei componenti contati da K04. Nei miei file, per scelta di disegno: app/lavora-con-noi/page.tsx:113 lg:text-[54px] (passi vicini text-5xl 48 e text-6xl 60), app/returns/page.tsx:27 sm:text-[32px] (passo vicino text-3xl 30), components/MobileTabBar.tsx:130 text-[9px] e :135 text-[11px] (cambiano l'altezza della barra). Restano solo commenti in app/globals.css:131 e :581 e in components/ProductCard.tsx:239.",
+      "domanda": "La scala non ha i passi 9, 11, 13, 15, 32 e 54 px: si sale al passo sopra, o al più vicino, anche per i titoli grandi e per l'etichetta della barra a schede?",
+      "nota": "Commit della voce: b5f62937 e 6a0558bb. Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso.",
+      "verificato_da": "primo giro: revisore 3 (sonnet) e collaudo K04 (parte dichiarata regge). Il giro K04 l'ha misurato solo il riparatore: Giro di correzione dopo il collaudo K04 (stesso subagente che aveva riparato, sonnet). La spesa era al 70% del tetto: le correzioni di questo giro non sono state ricontrollate da un revisore diverso."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "In chi siamo altri due titoli h2 non hanno break-words né min-w-0, come quello riparato",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/about/page.tsx:171 · app/about/page.tsx:222",
+      "descrizione": "Stessa causa del titolo «Come siamo arrivati qui». A 280 px al 200% oggi non fanno scorrere la pagina (scrollWidth 280), ma non sono stati misurati uno per uno."
+    },
+    {
+      "titolo": "Il titolo grande di CollectionHeader esce dalla riga a 280 px col testo al 200%",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/CollectionHeader.tsx:80",
+      "descrizione": "L h1 non va a capo e allarga la pagina (in /stores scrollWidth 381 su 280). Tocca ogni pagina che usa CollectionHeader. La modifica esatta è nel serve_file_altrui della voce sui negozi. Misurato anche dal secondo lotto: in /stores a 320 px al 200% la pagina va a 381 px; c è anche un sm:text-[32px] fuori scala."
+    },
+    {
+      "titolo": "In «Vicino a te» col testo al 200% a 320 px il selettore elenco/mappa allarga la pagina a 360 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/near/page.tsx:328",
+      "descrizione": "inline-flex w-fit con due bottoni che non vanno a capo. Misurato in Chromium."
+    },
+    {
+      "titolo": "In home a 280 px col testo al 200% la fascia «Hai un negozio a Piacenza?» esce di 18 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/home-sections/HomeSectionRenderer.tsx:380",
+      "descrizione": "La riga icona + testo dentro un contenitore flex-col items-start supera lo schermo di 18 px. Misurato in Chromium."
+    },
+    {
+      "titolo": "La pagina 404 a 280 px col testo al 200% esce di 5 px",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "app/not-found.tsx:36",
+      "descrizione": "«404» in text-7xl senza contenimento. Misurato in Chromium."
+    },
+    {
+      "titolo": "Col testo al 200% le schede negozio tagliano «Nuovo negozio» e «Chiuso ora»",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/StorePreviewCard.tsx:130 · components/StoreListRow.tsx:57-70",
+      "descrizione": "In home a due colonne (schede di circa 136 px) avatar, «Nuovo negozio» e la pillola «Chiuso ora» escono dalla scheda e overflow-hidden li taglia; nella riga di «Vicino a te» «Nuovo» e «Chiuso» escono dalla riga. C era già alla base."
+    },
+    {
+      "titolo": "A 1024 px col testo al 200% le pagine pubbliche scorrono di lato per la fascia animata in alto, non per il piede",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "(la fascia con animate-marquee, file da individuare)",
+      "descrizione": "Su /about e /contact a 1024 px al 200% scrollWidth 1256. Resta uguale col piede nascosto: lo scorrimento viene dalla fascia animate-marquee e da altro contenuto fuori dal piede. Misurato in Chromium."
+    },
+    {
+      "titolo": "Col testo al 200% a 280 px il banner dei cookie esce dal suo riquadro",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "(banner dei cookie, file da individuare)",
+      "descrizione": "Il testo «Usiamo cookie tecnici…» sta a 64-258 su un riquadro 24-256, il bottone «Personalizza» a 96-267 su 64-216. Misurato in Chromium."
+    }
+  ],
+  "domande_per_nicola": [
+    "Scala del testo: mancano i passi 9, 11, 13, 15, 32 e 54 px. Si sale al passo sopra, o al più vicino, anche per i titoli grandi (lavora con noi, resi) e per l'etichetta della barra a schede del telefono, che col testo al 200% diventerebbe più alta e più larga?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "nota": "6 subagenti aperti: lotto A (sonnet, ripreso per il giro K04), lotto B (grande, ripreso una volta), correzione del piede (sonnet), 3 revisori (sonnet). Nel giro K04 nessun subagente nuovo, e nessun revisore perché la spesa era al 70% del tetto.",
+    "costo_usd": 24.82
+  },
+  "costo_usd": 24.82
+}

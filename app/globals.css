@@ -149,8 +149,13 @@
      pavimento di lib/ui/barra-in-fondo.ts); ma il padding in fondo al body
      non galleggia, deve solo far finire la pagina dove finisce la barra. Con 72
      restava una striscia vuota di ~14px in fondo a ogni pagina del telefono.
-     57,5 pixel arrotondati per eccesso (conto qui sopra, components/MobileTabBar.tsx). */
-  --tabbar-altezza-vera: 58px;
+     57,5 pixel arrotondati per eccesso (conto qui sopra, components/MobileTabBar.tsx).
+     R12-003 — Scritta in pixel fissi restava 58 anche col testo al 200%, quando
+     py-2 e gap-0.5 (in rem) raddoppiano e la barra arriva a 75,5: l'ultima parte
+     della pagina finiva sotto la barra. Ora la somma segue le unita' della barra:
+     bordo 1px + py-2 (2 x 0,5rem) + icona 22px + gap-0.5 (0,125rem) + etichetta
+     11px x 1,5. Col testo normale fa 57,5. */
+  --tabbar-altezza-vera: calc(1px + 2 * 0.5rem + 22px + 0.125rem + 11px * 1.5);
   /* ---- Le corsie in fondo allo schermo -----------------------------------
      In fondo allo schermo si accatastano quattro cose scritte in file diversi.
      Ognuna dichiara qui quanto e' alta mentre e' a video; chi le sta sopra

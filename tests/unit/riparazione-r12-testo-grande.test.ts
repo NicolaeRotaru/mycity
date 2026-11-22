@@ -1,0 +1,58 @@
+/**
+ * R12 — IL TELEFONO STRETTO COL TESTO AL 200%.
+ *
+ * Col testo al 200% le misure in rem raddoppiano: un elemento in una riga flessibile che non può
+ * stringersi (min-width automatico = la sua parola più lunga) e non può andare a capo allarga la
+ * pagina, e la pagina scorre di lato. Misurato in Chromium con la radice del testo a 32px.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+const classi = (s: string) => s.split(/\s+/).filter(Boolean);
+
+describe('R12-007 — i tre passi della home non fanno scorrere la pagina di lato', () => {
+  // Misurato: a 320 px col testo al 200% i titoli accanto al cerchio portavano la pagina a 367 px.
+  const src = readFileSync('components/home/HowItWorks.tsx', 'utf8');
+  const m = src.match(/<div className="([^"]*)">\s*<span className=\{`relative shrink-0[\s\S]*?<\/span>\s*<h3 className="([^"]*)">\{s\.title\}<\/h3>/);
+
+  it('il titolo del passo si trova accanto al suo cerchio', () => {
+    expect(m, 'la riga cerchio + titolo dei tre passi non si trova più: la prova va rifatta').toBeTruthy();
+  });
+
+  it('se accanto al cerchio non c\'è posto il titolo va sotto, e le parole vanno a capo', () => {
+    const riga = classi(m![1]);
+    const titolo = classi(m![2]);
+    expect(riga, 'controprova: è una riga flessibile').toContain('flex');
+    expect(riga, 'la riga non va a capo: col testo al 200% il titolo resta accanto al cerchio e allarga la pagina').toContain('flex-wrap');
+    expect(titolo, 'il titolo non si può stringere sotto la sua parola più lunga: la pagina scorre di lato').toContain('min-w-0');
+    expect(titolo, 'una parola più lunga della riga non va a capo').toContain('break-words');
+    // Con flex-wrap e la base automatica il titolo andrebbe sotto anche col testo normale (la sua base
+    // sarebbe la riga intera): una base piccola lo tiene accanto al cerchio finché ci sta.
+    expect(titolo.some((c) => /^basis-/.test(c)), 'il titolo senza base va sotto il cerchio anche col testo normale').toBe(true);
+  });
+});
+
+describe('R12-008 — nella barra del telefono la pillola del luogo non si stringe a zero', () => {
+  // Misurato: a 280 px col testo al 200% il contenitore della pillola era largo 0 e la pillola (155 px)
+  // finiva sopra il logo; a 320 px lo stesso. Con la riga che va a capo la pillola scende sotto il logo.
+  const src = readFileSync('components/Navbar.tsx', 'utf8');
+  const mobile = src.slice(src.indexOf('{/* MOBILE */}'));
+  const riga = mobile.match(/<div className="([^"]*)">\s*<Link href="\/"/);
+  const contenitore = mobile.match(/<div className="([^"]*)">\s*<LocationPill compact \/>/);
+
+  it('la riga del telefono e il contenitore della pillola si trovano', () => {
+    expect(riga, 'la riga logo + pillola del telefono non si trova più: la prova va rifatta').toBeTruthy();
+    expect(contenitore, 'la pillola compatta del telefono non si trova più: la prova va rifatta').toBeTruthy();
+  });
+
+  it('quando non c\'è posto la riga va a capo, e la pillola tiene la sua larghezza', () => {
+    expect(classi(riga![1]), 'controprova: è una riga flessibile').toContain('flex');
+    expect(classi(riga![1]), 'la riga non va a capo: col testo al 200% la pillola non ha posto').toContain('flex-wrap');
+    const c = classi(contenitore![1]);
+    expect(c, 'col min-w-0 il contenitore della pillola si stringe a zero e la pillola sparisce sotto il logo').not.toContain('min-w-0');
+    // Con la base a zero (flex-1 da solo) la riga che va a capo non porterebbe mai la pillola sotto: la base
+    // dev'essere la sua larghezza (basis-auto, che in Tailwind vince su flex-1, o flex-auto).
+    const baseAZero = c.includes('flex-1') && !c.includes('basis-auto');
+    expect(baseAZero, 'con la base a zero la pillola non va mai a capo').toBe(false);
+  });
+});

@@ -141,6 +141,13 @@ const CATEGORIE_DI_RISERVA: Categoria[] = [
  *  (256 px) più i margini (2 × 32) facevano 320, e ogni pagina pubblica scorreva di lato di 8 px. */
 const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]';
 
+/** R12-006 — Col testo al 200% le colonne (cinque da circa 118 px a 768 px) non si allargano: le voci
+ *  lunghe, come «Dichiarazione accessibilità», vanno a capo dentro la loro colonna invece di uscire dal
+ *  piede. min-w-0 sulle colonne (figli della griglia), [overflow-wrap:anywhere] su titoli, link e paragrafi:
+ *  a differenza di break-words riduce anche la larghezza minima, e i link in linea (inline-flex) non
+ *  sbordano più sulla colonna accanto. */
+const COLONNE_A_CAPO = '[&>div]:min-w-0 [&_h3]:[overflow-wrap:anywhere] [&_a]:[overflow-wrap:anywhere] [&_p]:[overflow-wrap:anywhere] [&_h3]:hyphens-auto [&_a]:hyphens-auto [&_p]:hyphens-auto';
+
 const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
@@ -203,9 +210,13 @@ const Footer = () => {
           la pagina scorreva di lato, su ogni pagina pubblica. Adesso una colonna è larga almeno
           8rem (cresce col testo) e al massimo metà riga: due colonne col testo normale, una sola
           col testo grande. Dal computer in su, come prima. */}
-      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
+      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} ${COLONNE_A_CAPO} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-full md:col-span-1">
+          {/* R12-010 — I titoli delle colonne sono h3: su una pagina il cui contenuto non ha un h2 i
+              lettori di schermo passavano dal titolo principale al terzo livello. Un h2 nascosto li
+              precede, e l'aspetto non cambia (un h2 prenderebbe le regole di elemento di globals.css). */}
+          <h2 className="sr-only">Informazioni sul sito</h2>
           {/*
             6/9/2026 — IL MARCHIO ERA DISEGNATO IN QUATTRO MODI DIVERSI.
             Il marchio vero (docs/mockup/assets) è in Fraunces peso 800 con la
