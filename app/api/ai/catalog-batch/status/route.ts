@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { INVIO_SENZA_RISPOSTA, pollBatch, streamBatchResults } from '@/lib/ai/batch';
@@ -32,6 +33,8 @@ type JobRow = {
 };
 
 export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // Spento al lancio (carta #209): il freno vero è la rotta, prima del limite e di ogni lettura.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   // 🟡-17: rate-limit sul polling (ogni chiamata fa poll Anthropic + scritture DB).
   const rl = await rateLimitAsync({ key: `ai-catalog-batch-status:${user.id}`, max: 60, windowMs: 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);

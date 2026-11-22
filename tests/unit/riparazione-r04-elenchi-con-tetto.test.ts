@@ -27,6 +27,7 @@ import { POST as productChat } from '@/app/api/ai/product-chat/route';
 import { POST as barcode } from '@/app/api/ai/barcode-lookup/route';
 import { buildProductContext } from '@/lib/ai/productContext';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const ENORME = 'x'.repeat(200_000);
 const ELENCHI = {

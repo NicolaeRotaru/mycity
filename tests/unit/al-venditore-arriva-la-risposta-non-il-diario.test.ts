@@ -36,6 +36,7 @@ vi.mock('@/lib/ai/moderation', () => ({
 
 import { POST } from '@/app/api/ai/product-chat/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const DIARIO = 'Cerco sul web… ho trovato tre schede simili. Ora confronto i prezzi.';
 const RISPOSTA = 'Ho aggiornato il titolo e aggiunto due tag.';

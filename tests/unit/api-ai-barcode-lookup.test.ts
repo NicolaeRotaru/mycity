@@ -13,6 +13,7 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 import { POST } from '@/app/api/ai/barcode-lookup/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { MODELS } from '@/lib/ai/client';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 function makeReq(body: unknown): never {
   return new Request('http://localhost/api/ai/barcode-lookup', {

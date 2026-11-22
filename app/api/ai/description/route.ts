@@ -3,6 +3,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { tagliaAllUltimaFraseIntera } from '@/lib/ai/taglia-alla-frase';
@@ -45,6 +46,8 @@ Rispondi SOLO con la descrizione, niente preambolo, niente virgolette.
 ${REGOLA_TESTO_DI_TERZI}`;
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // Spento al lancio (carta #209): il freno vero è la rotta, prima del limite e di ogni lettura.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
 
   // Rate limit: 20 calls / giorno per utente

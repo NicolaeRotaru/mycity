@@ -73,6 +73,7 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 
 import { POST as VOICE } from '@/app/api/ai/voice-product/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 function richiestaVocale(corpo: unknown): never {
   return new Request('http://localhost/api/ai/voice-product', {
