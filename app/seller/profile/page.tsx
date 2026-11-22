@@ -203,24 +203,25 @@ export default function SellerProfilePage() {
 
       {/* Consegna Express a livello negozio (default per i prodotti) — impostazione operativa */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
-        <label htmlFor="profilo-consegna-express" className="flex items-start justify-between gap-4 cursor-pointer">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-bold text-ink-900 flex items-center gap-2">
+            <label htmlFor="profilo-consegna-express" className="font-bold text-ink-900 flex items-center gap-2 cursor-pointer">
               <Zap size={18} strokeWidth={2.4} className="text-amber-500" aria-hidden /> Offro consegna Express
-            </p>
-            <p className="text-sm text-ink-500 mt-0.5">
+            </label>
+            <p id="profilo-consegna-express-aiuto" className="text-sm text-ink-500 mt-0.5">
               Per ora non cambia cosa vede il cliente: in cassa sceglie l&apos;ora della consegna, e la {VELOCE_IN_MINUTI} gliela proponiamo solo {QUANDO_SI_PUO_LA_VELOCE}.
             </p>
           </div>
           <input
             id="profilo-consegna-express"
+            aria-describedby="profilo-consegna-express-aiuto"
             type="checkbox"
             className="mt-1 h-5 w-5 shrink-0 accent-amber-500"
             checked={Boolean((profile as { offers_express?: boolean } | undefined)?.offers_express)}
             disabled={updateExpress.isPending}
             onChange={(e) => updateExpress.mutate(e.target.checked)}
           />
-        </label>
+        </div>
       </div>
     </div>
   );

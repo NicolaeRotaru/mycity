@@ -84,4 +84,21 @@ describe('R10-012 — etichette legate al loro campo', () => {
     expect(per, 'htmlFor sulla label').toBeTruthy();
     expect(src).toContain(`id="${per}"`);
   });
+
+  it('la regola jsx-a11y/label-has-associated-control non dà più avvisi sul profilo (la regola resta accesa)', async () => {
+    const { ESLint } = await import('eslint');
+    const eslint = new ESLint();
+    const [r] = await eslint.lintFiles(['app/seller/profile/page.tsx']);
+    const avvisi = r.messages.filter((m) => m.ruleId === 'jsx-a11y/label-has-associated-control');
+    expect(avvisi).toEqual([]);
+    const cfg = await eslint.calculateConfigForFile('app/seller/profile/page.tsx');
+    expect(cfg.rules?.['jsx-a11y/label-has-associated-control']?.[0]).not.toBe(0);
+    expect(cfg.rules?.['jsx-a11y/label-has-associated-control']?.[0]).not.toBe('off');
+    expect(readFileSync('app/seller/profile/page.tsx', 'utf8')).not.toContain('eslint-disable');
+  }, 60000);
+
+  it('nel profilo il testo di «consegna Express» sta dentro la label legata al checkbox', () => {
+    const src = readFileSync('app/seller/profile/page.tsx', 'utf8');
+    expect(src).toMatch(/<label htmlFor="profilo-consegna-express"[^>]*>[^<]*<Zap[^>]*\/>\s*Offro consegna Express\s*<\/label>/);
+  });
 });
