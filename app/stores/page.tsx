@@ -103,7 +103,11 @@ const fetchStoresData = async () => {
     // dal mucchio di prodotti scaricati, e siccome quel mucchio era capato a
     // seicento IN TUTTO, i negozi che non pubblicavano da un po' sparivano dal
     // filtro pur avendo il catalogo pieno.
-    supabase.rpc('categorie_per_negozio'),
+    // R12-012 — Anche queste a finestre di mille, ordinate per negozio: una riga per negozio coi
+    // prodotti, e sopra i mille negozi le righe dopo la millesima si perdevano senza errore.
+    leggiTutteLeRighe<{ seller_id: string; categorie: string[] | null }>((da, a) =>
+      supabase.rpc('categorie_per_negozio').order('seller_id').range(da, a),
+    ),
   ]);
 
   const schede = (schedeRes.data ?? []) as Array<{
