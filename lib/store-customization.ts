@@ -316,7 +316,7 @@ export function announcementActive(c?: StoreCustomization | null, now: Date = ne
 export type SocialLink = { key: string; label: string; href: string };
 
 const PERCORSI_CHE_NON_SONO_UN_PROFILO = new RegExp(
-  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|explore|direct|accounts|tv|t|tag|discover)$',
+  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|explore|direct|accounts|tv|t|tag|discover|fundraisers|live|reviews|lite)$',
   'i',
 );
 
