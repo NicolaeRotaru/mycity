@@ -61,6 +61,11 @@ interface Props {
  * cover reale, logo, nome (sans), un solo stato ("Aperto · consegna oggi" se la cassa può),
  * rating con stella, 3 anteprime ordinate, un solo CTA. Usata nelle rail
  * orizzontali (home). Per le pagine-lista lunghe c'è invece StoreListRow.
+ *
+ * R12-014 — Le misure del testo stanno sulla scala (app/globals.css): erano 11, 13 e 15 pixel
+ * scritti a mano, che la scala non ha. Ognuna sta a un pixel da due passi, e si sale al passo
+ * sopra (11 → text-xs, 13 → text-sm, 15 → text-base), come la scheda prodotto, per non
+ * rimpicciolire un testo piccolo; in rem, crescono anche col testo ingrandito.
  */
 const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false, posto, apertoOra }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
@@ -92,7 +97,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
           fallbackClass="bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600"
         />
         {distanceKm !== undefined && distanceKm !== null && (
-          <span className="absolute right-2.5 top-2.5 z-20 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-bold text-ink-900 shadow-warm">
+          <span className="absolute right-2.5 top-2.5 z-20 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-0.5 text-xs font-bold text-ink-900 shadow-warm">
             <MapPin size={11} strokeWidth={2.4} />
             {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1).replace('.', ',')} km`}
           </span>
@@ -107,7 +112,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         <Link href={storeHref} className="block">
           {/* R12-009 — Senza max-w-full un nome lungo senza spazi allargava il titolo e la pagina
               sul telefono: ora il titolo resta nella scheda e il nome si taglia coi puntini. */}
-          <h3 className="inline-flex max-w-full items-center gap-1.5 truncate text-[15px] font-bold text-ink-900 transition-colors group-hover:text-primary-700">
+          <h3 className="inline-flex max-w-full items-center gap-1.5 truncate text-base font-bold text-ink-900 transition-colors group-hover:text-primary-700">
             <span className="truncate">{store.store_name}</span>
             {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
           </h3>
@@ -127,11 +132,11 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         </div>
 
         {/* Un solo stato chiaro */}
-        <span className={`mt-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${open ? 'bg-olive-100 text-olive-700' : 'bg-ink-100 text-ink-500'}`}>
+        <span className={`mt-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${open ? 'bg-olive-100 text-olive-700' : 'bg-ink-100 text-ink-500'}`}>
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'animate-pulse-soft bg-olive-600' : 'bg-ink-400'}`} />
           {stato}
         </span>
-        <span className="mt-1 block min-h-[1rem] text-[11px] font-semibold text-olive-700">
+        <span className="mt-1 block min-h-[1rem] text-xs font-semibold text-olive-700">
           {consegna ? `consegna ${consegna}` : ''}
         </span>
 
@@ -161,7 +166,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
 
         <Link
           href={storeHref}
-          className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ink-900 px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-ink-800"
+          className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-ink-800"
         >
           Vedi negozio
           <ChevronRight size={15} strokeWidth={2.4} />

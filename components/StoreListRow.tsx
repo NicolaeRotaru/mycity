@@ -23,6 +23,11 @@ interface Props {
  * Riga-lista negozio (modello B) per le pagine con tanti negozi (/stores, /near):
  * stessa identità della card vetrina, ma layout orizzontale compatto, così se ne
  * scorrono molti in poco spazio (stile Glovo/Deliveroo).
+ *
+ * R12-014 — Le misure del testo stanno sulla scala (app/globals.css): erano 11, 13 e 15 pixel
+ * scritti a mano, che la scala non ha. Ognuna sta a un pixel da due passi, e si sale al passo
+ * sopra (11 → text-xs, 13 → text-sm, 15 → text-base), come la scheda prodotto, per non
+ * rimpicciolire un testo piccolo; in rem, crescono anche col testo ingrandito.
  */
 const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
@@ -52,7 +57,7 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
       <div className="min-w-0 flex-1">
         {/* R12-009 — Senza max-w-full un nome lungo senza spazi allargava il titolo e la pagina
             sul telefono: ora il titolo resta nella scheda e il nome si taglia coi puntini. */}
-        <h3 className="inline-flex max-w-full items-center gap-1.5 truncate text-[15px] font-bold text-ink-900 group-hover:text-primary-700">
+        <h3 className="inline-flex max-w-full items-center gap-1.5 truncate text-base font-bold text-ink-900 group-hover:text-primary-700">
           <span className="truncate">{store.store_name}</span>
           {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
         </h3>
@@ -100,9 +105,9 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
       )}
 
       <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-        {km && <span className="text-[13px] font-bold text-ink-900">{km}</span>}
+        {km && <span className="text-sm font-bold text-ink-900">{km}</span>}
         {consegna && (
-          <span className="rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-bold text-olive-700">
+          <span className="rounded-full bg-olive-100 px-2 py-0.5 text-xs font-bold text-olive-700">
             {consegna === 'oggi' ? 'consegna oggi' : 'consegna domani'}
           </span>
         )}
