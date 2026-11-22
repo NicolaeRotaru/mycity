@@ -114,6 +114,11 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
           if (showBranding && d.storeName.trim().length < 3) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storeName'], message: 'Il nome deve essere di almeno 3 caratteri' });
           }
+          // R16-008 — Lo stesso tetto della domanda d'iscrizione (modulo e rotta): da qui il nome si
+          // cambiava senza limite, e un nome lunghissimo tornava nelle schede di home, negozi e «vicino a te».
+          if (showBranding && d.storeName.trim().length > 80) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storeName'], message: 'Il nome del negozio può avere al massimo 80 caratteri: accorcialo' });
+          }
           if (showContact && !telefonoNegozioValido(d.storePhone)) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storePhone'], message: 'Scrivi il numero del negozio, es. 0523 456789' });
           }

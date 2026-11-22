@@ -324,14 +324,18 @@ export default function NearMePage() {
       )}
 
       {/* Controlli: toggle Lista/Mappa + slider raggio */}
+      {/* R16-008 — A 280 e 320 px col testo al 200% la pagina era larga 359 px: il selettore
+          Lista/Mappa (in linea, largo quanto il suo contenuto) e il cursore del raggio (w-40, che non
+          si stringe) uscivano dallo schermo. Adesso il selettore ha un tetto e va a capo, la riga del
+          raggio va a capo e il cursore non supera la riga. Col testo normale non cambia niente. */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex w-fit rounded-xl border border-surface-200 bg-white p-1 shadow-card">
+        <div className="inline-flex w-fit max-w-full flex-wrap rounded-xl border border-surface-200 bg-white p-1 shadow-card">
           {toggleBtn('list', 'Lista', List)}
           {toggleBtn('map', 'Mappa', MapIcon)}
         </div>
 
         {pos && (
-          <label className="flex items-center gap-3 text-sm text-ink-600">
+          <label className="flex flex-wrap items-center gap-3 text-sm text-ink-600">
             <span className="whitespace-nowrap font-semibold">Raggio: {raggioScritto} km</span>
             <input
               type="range"
@@ -342,7 +346,7 @@ export default function NearMePage() {
               step={passoRaggio}
               value={radiusKm}
               onChange={(e) => setRadiusKm(Number(e.target.value))}
-              className="h-2 w-40 cursor-pointer accent-primary-600 sm:w-56"
+              className="h-2 w-40 max-w-full cursor-pointer accent-primary-600 sm:w-56"
               aria-label="Raggio di ricerca in km"
             />
           </label>
