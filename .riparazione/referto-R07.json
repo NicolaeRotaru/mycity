@@ -1,22 +1,25 @@
 {
   "sessione": "R07",
-  "aggiornato": "2026-11-22 01:10",
+  "aggiornato": "2026-11-22 02:10",
   "finita": true,
-  "testa": "4681b479fb1f97687438cee48e33b12e5b86cb5e",
+  "testa": "fc48cfd4e4af68c45d5c8e493619c72b17172af3",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "4681b479fb1f97687438cee48e33b12e5b86cb5e",
-    "nota": "typecheck verde, lint 0 errori (126 avvisi già presenti), vitest 1920 file passati e 1 saltato (già saltato sulla base), 11882 prove passate"
+    "testa": "fc48cfd4e4af68c45d5c8e493619c72b17172af3",
+    "nota": "dopo il giro del collaudo K03: typecheck verde, lint 0 errori (126 avvisi già presenti), vitest 1920 file passati e 1 saltato (già saltato sulla base), 11889 prove passate"
   },
   "voci": [
     {
       "id": "R07-001",
       "chiave": "coerenza-brand|card a mano con bg-surface-0 restano fuori dal conteggio delle card ridisegnate",
-      "esito": "riparato",
-      "commit": "1b974d8c3350350a357701130efce44dd51437dc",
+      "esito": "parziale",
+      "commit": "fc48cfd4e4af68c45d5c8e493619c72b17172af3",
       "file_toccati": [
-        "app/rider/earnings/page.tsx"
+        "app/rider/earnings/page.tsx",
+        "app/rider/orders/[id]/page.tsx",
+        "app/rider/onboarding/page.tsx",
+        "components/ui/Card.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts"
@@ -27,11 +30,50 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b974d8c3350350a357701130efce44dd51437dc^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fc48cfd4e4af68c45d5c8e493619c72b17172af3^ --file \"app/rider/orders/[id]/page.tsx,app/rider/onboarding/page.tsx,components/ui/Card.tsx\" --prove tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Le due card a mano dello storico consegne («Nessuna consegna» e la riga di ogni consegna) sono ora <Card variant=\"surface\" radius=\"lg\" padding=\"none\"> con le stesse classi di prima: resa equivalente. La prova è statica e cade se si rimette la card a mano.",
-      "verificato_da": "revisore sonnet del lotto B: prova e prova rimessa verdi (uscita 0); le classi risultanti delle due card (earnings 214 e 220) sono le stesse di prima, padding none non aggiunge classi, nessun bg-surface-0 a mano rimasto nella pagina."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Due commit (1b974d8c e fc48cfd4). Le card a mano con bg-surface-0, bordo e raggio nei file di R07 diventano Card variant=\"surface\" con le stesse classi: due nello storico dei guadagni, tre nella consegna del fattorino (una è il riquadro «Articoli», per cui la Card accetta as=\"details\"), quattro nella pagina dei documenti. La prova statica cade se in quei tre file torna un contenitore (div, section, article, aside, details) con bg-surface-0, bordo e raggio a mano; i campi di testo con le stesse classi non sono card e restano.",
+      "verificato_da": "revisore sonnet del lotto B: prova e prova rimessa verdi sulle due card dei guadagni. Collaudo K03: «copre tutta la voce» era falso, restavano card a mano con bg-surface-0 in 13 file. Giro di correzione fatto dal capo squadra (tetto di 6 subagenti raggiunto): le 7 card nei file di R07 passano alla Card, le 24 in file altrui vanno in serve_file_altrui, prova rimessa del commit nuovo con uscita 0, verify sulla testa.",
+      "cosa_resta": "24 card a mano con bg-surface-0 in 9 file non di R07 (elenco in serve_file_altrui). Nei file di R07 resta solo il pannello a comparsa delle notifiche in components/seller/SellerShell.tsx:172: non è una card ma una finestra (role=dialog, aria-modal, ref per il focus) e la Card non porta né ref né role, quindi resta scritto a mano.",
+      "serve_file_altrui": [
+        {
+          "file": "app/rider/page.tsx",
+          "modifica": "righe 510, 632, 638, 681, 700 (div) e 579 (Link): da contenitore con bg-surface-0, bordo e raggio a mano a <Card variant=\"surface\"> (il Link con <Card href=…>), radius e padding uguali a quelli di oggi, le altre classi nel className"
+        },
+        {
+          "file": "app/rider/profile/page.tsx",
+          "modifica": "righe 226, 232, 242, 254, 288 (div): <Card variant=\"surface\"> con radius e padding di oggi"
+        },
+        {
+          "file": "app/rider/help/page.tsx",
+          "modifica": "riga 121 (details): <Card as=\"details\" variant=\"surface\" padding=\"none\">; righe 150, 163 (a) e 178 (Link): <Card href=… variant=\"surface\"> (per i link esterni la Card non porta target/rel: restano a mano o la Card va allargata)"
+        },
+        {
+          "file": "app/rider/history/page.tsx",
+          "modifica": "righe 142, 181 (div): <Card variant=\"surface\">; riga 173 (Link): <Card href=… variant=\"surface\">"
+        },
+        {
+          "file": "app/rider/reviews/page.tsx",
+          "modifica": "riga 102 (div): <Card variant=\"surface\">; riga 160 (article): <Card as=\"article\" variant=\"surface\">"
+        },
+        {
+          "file": "app/near/page.tsx",
+          "modifica": "riga 295 (div): <Card variant=\"surface\"> con radius e padding di oggi"
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "modifica": "riga 1271 (div): <Card variant=\"surface\"> con radius e padding di oggi"
+        },
+        {
+          "file": "components/seller/SellerHealthScore.tsx",
+          "modifica": "riga 142 (div): <Card variant=\"surface\"> con radius e padding di oggi"
+        },
+        {
+          "file": "components/seller/SellerOnboardingChecklist.tsx",
+          "modifica": "riga 118 (div): <Card variant=\"surface\"> con radius e padding di oggi"
+        }
+      ]
     },
     {
       "id": "R07-002",
@@ -144,7 +186,7 @@
       "id": "R07-007",
       "chiave": "navigazione-gerarchia|col pannello dei filtri aperto, il tasto indietro fa uscire dalla ricerca invece di chiudere il pannello",
       "esito": "riparato",
-      "commit": "4681b479fb1f97687438cee48e33b12e5b86cb5e",
+      "commit": "fa43cb333b31c8d4eb2816619fa01e9fa897c486",
       "file_toccati": [
         "components/hooks/useBottomSheetA11y.ts",
         "app/search/page.tsx",
@@ -160,12 +202,12 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4681b479fb1f97687438cee48e33b12e5b86cb5e^ --file components/hooks/useBottomSheetA11y.ts,app/search/page.tsx --prove tests/unit/riparazione-r07-indietro-chiude-filtri.test.ts,tests/unit/riparazione-r07-filtri-restano-nell-indirizzo.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 085cc686f74c85c4b858cf51c20202d126a68cd8^ --file components/hooks/useBottomSheetA11y.ts,app/search/page.tsx --prove tests/unit/riparazione-r07-indietro-chiude-filtri.test.ts,tests/unit/riparazione-r07-filtri-restano-nell-indirizzo.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Due commit (085cc686 e 4681b479). Con l'opzione indietroChiude il hook mette una voce di cronologia all'apertura: Indietro la toglie e chiude il pannello, la chiusura normale (X, Esc, «Mostra risultati») la toglie con history.back(). Accesa sui filtri di ricerca e categoria e su «Ordina» della ricerca; gli altri 11 usi del hook non cambiano. Il hook dice se la sua voce c'è ancora: la ricerca non riscrive l'indirizzo finché c'è e lo riscrive una volta sola dopo il popstate, così nessun replace in volo viene scartato dal ritorno indietro e l'indirizzo tiene i filtri. Tornando su una voce lasciata da un pannello aperto, la pagina la toglie da sé (guardia per Strict Mode e per i due pannelli della stessa pagina). La prova nuova usa un router finto che tiene il replace in volo e lo scarta al popstate, come Next.",
+      "cosa_ho_fatto": "Tre commit (085cc686, 4681b479 e fa43cb33, quest ultimo solo sulle prove). Con l'opzione indietroChiude il hook mette una voce di cronologia all'apertura: Indietro la toglie e chiude il pannello, la chiusura normale (X, Esc, «Mostra risultati») la toglie con history.back(). Accesa sui filtri di ricerca e categoria e su «Ordina» della ricerca; gli altri 11 usi del hook non cambiano. Il hook dice se la sua voce c'è ancora: la ricerca non riscrive l'indirizzo finché c'è e lo riscrive una volta sola dopo il popstate, così nessun replace in volo viene scartato dal ritorno indietro e l'indirizzo tiene i filtri. Tornando su una voce lasciata da un pannello aperto, la pagina la toglie da sé (guardia per Strict Mode e per i due pannelli della stessa pagina). La prova nuova usa un router finto che tiene il replace in volo e lo scarta al popstate, come Next. Le due prove non aspettano più 20-30 ms fissi dopo history.back(): un aiutante (tests/unit/riparazione-r07-cronologia.ts) conta ogni back() e ogni popstate e fa girare i compiti finché la cronologia è ferma. Sotto carico (8 giri in parallelo con la CPU occupata): le prove vecchie 5 verdi su 16, le nuove 24 su 24. La prova rimessa è rifatta dalla base di prima della voce: cade togliendo il hook o la ricerca.",
       "nota": "Casi limite noti, fuori dalla voce: se la finestra supera la soglia md col pannello aperto, il pannello resta aperto ma nascosto e l'indirizzo aspetta la chiusura; c'è una riserva di 1,5 s se il popstate non arrivasse.",
-      "verificato_da": "revisore del lotto A (modello grande): 4 varianti in jsdom e lettura del router di Next 15.5: mancava «Ordina» e il history.back() poteva scartare un replace in volo (filtri persi), più una voce orfana uscendo col pannello aperto → parziale; chiusi dal giro di correzione (4681b479) con una prova nuova che tiene il replace in volo; il capo squadra ha rilanciato la prova rimessa del commit nuovo. Nessun secondo revisore: tetto di 6 agenti raggiunto."
+      "verificato_da": "revisore del lotto A (modello grande): 4 varianti in jsdom e lettura del router di Next 15.5: mancava «Ordina» e il history.back() poteva scartare un replace in volo (filtri persi), più una voce orfana uscendo col pannello aperto → parziale; chiusi dal giro di correzione (4681b479) con una prova nuova che tiene il replace in volo; il capo squadra ha rilanciato la prova rimessa del commit nuovo. Nessun secondo revisore: tetto di 6 agenti raggiunto. Collaudo K03: le due prove nuove cadevano sotto carico per l attesa fissa sul popstate (rompe_altro); giro di correzione del capo squadra (fa43cb33), rifatti 24 giri sotto carico tutti verdi e la prova rimessa sulla voce intera con uscita 0."
     },
     {
       "id": "R07-008",
@@ -242,8 +284,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "lotto A sul modello grande (4 voci), lotto B su sonnet (5 voci), un giro su sonnet per R07-002, due revisori (A grande, B sonnet) nella loro copia separata, un giro di correzione sul modello grande (R07-010, R07-006, R07-002, R07-007). Tetto di 6 raggiunto. Costo letto da get_session (usage.cost_usd) prima della consegna: 22,92 $ (65% del tetto di 35 $).",
+    "nota": "lotto A sul modello grande (4 voci), lotto B su sonnet (5 voci), un giro su sonnet per R07-002, due revisori (A grande, B sonnet) in copie separate, un giro di correzione sul modello grande: 6 subagenti, il tetto. Il giro chiesto dal collaudo K03 (R07-007 prove senza attesa fissa, R07-001 card nei file di R07) l ha fatto il capo squadra in sessione, col via della regia. Costo letto da get_session prima della consegna: 26,30 $.",
     "subagenti": 6
   },
-  "costo_usd": 22.92
+  "costo_usd": 26.3
 }
