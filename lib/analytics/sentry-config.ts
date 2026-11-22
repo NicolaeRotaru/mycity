@@ -14,8 +14,7 @@
 
 import { hasConsent } from '@/lib/consent';
 import { ambienteSentry } from './ambiente';
-import { indirizzoSenzaDatiPersonali, VALORE_NASCOSTO } from './indirizzo-senza-dati-personali';
-import { testoSenzaIndirizzi } from './filmato-senza-dati-personali';
+import { indirizzoSenzaDatiPersonali } from './indirizzo-senza-dati-personali';
 
 export const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -142,134 +141,8 @@ export function ripulisciEvento(event: any): any {
     delete event.user.ip_address;
     delete event.user.username;
   }
-  ripulisciIlTestoLibero(event);
   return event;
 }
-
-/**
- * IL TESTO LIBERO DELL'EVENTO. Il messaggio, il valore dell'eccezione, le briciole e i dati
- * aggiunti (`extra` — il registratore ci mette il contesto di ogni avviso —, `tags`, i contesti
- * dell'applicazione) possono portare un'email, un telefono, un indirizzo di casa, un IBAN o una
- * chiave. Le stringhe si ripuliscono con la stessa rete del filmato (email, telefono, indirizzi con
- * parametri) più chiavi, IBAN e indirizzi di casa; un campo che dal nome porta un dato personale o
- * una chiave si nasconde intero. I contesti che scrive l'SDK (sistema, browser, dispositivo,
- * misura) non portano dati scritti da qualcuno e restano come sono.
- */
-const CONTESTI_DELL_SDK = new Set(['trace', 'os', 'browser', 'device', 'runtime', 'app', 'culture', 'cloud_resource']);
-
-function ripulisciIlTestoLibero(event: any): void {
-  try {
-    ripulisciIlTestoLiberoDentro(event);
-  } catch {
-    // Una struttura che non si lascia riscrivere: l'errore parte lo stesso, senza il testo libero.
-    delete event.extra;
-    delete event.breadcrumbs;
-    delete event.logentry;
-    if (event.message) event.message = VALORE_NASCOSTO;
-    for (const eccezione of Array.isArray(event.exception?.values) ? event.exception.values : []) {
-      if (eccezione && typeof eccezione === 'object') eccezione.value = VALORE_NASCOSTO;
-    }
-  }
-}
-
-function ripulisciIlTestoLiberoDentro(event: any): void {
-  const conto = { pezzi: 0 };
-  if (typeof event.message === 'string') event.message = testoPulitoPerSentry(event.message);
-  else if (event.message && typeof event.message === 'object') ripulisciValore(event.message, 0, conto);
-  if (event.logentry && typeof event.logentry === 'object') ripulisciValore(event.logentry, 0, conto);
-  if (Array.isArray(event.exception?.values)) {
-    for (const eccezione of event.exception.values) {
-      if (typeof eccezione?.value === 'string') eccezione.value = testoPulitoPerSentry(eccezione.value);
-      for (const riga of Array.isArray(eccezione?.stacktrace?.frames) ? eccezione.stacktrace.frames : []) {
-        if (riga?.vars && typeof riga.vars === 'object') ripulisciValore(riga.vars, 0, conto);
-      }
-    }
-  }
-  if (Array.isArray(event.breadcrumbs)) {
-    for (const briciola of event.breadcrumbs) {
-      if (typeof briciola?.message === 'string') briciola.message = testoPulitoPerSentry(briciola.message);
-      if (briciola?.data && typeof briciola.data === 'object') ripulisciValore(briciola.data, 0, conto);
-    }
-  }
-  if (event.extra && typeof event.extra === 'object') ripulisciValore(event.extra, 0, conto);
-  if (event.tags && typeof event.tags === 'object') ripulisciValore(event.tags, 0, conto);
-  if (event.contexts && typeof event.contexts === 'object') {
-    for (const nome of Object.keys(event.contexts)) {
-      if (CONTESTI_DELL_SDK.has(nome)) continue;
-      event.contexts[nome] = ripulisciValore(event.contexts[nome], 1, conto);
-    }
-  }
-}
-
-/** Oltre questa profondità e questo numero di pezzi non si scende: si nasconde. */
-const PROFONDITA_MASSIMA = 8;
-const PEZZI_MASSIMI = 5_000;
-
-function ripulisciValore(valore: unknown, profondita: number, conto: { pezzi: number }): unknown {
-  if (typeof valore === 'string') return testoPulitoPerSentry(valore);
-  if (!valore || typeof valore !== 'object') return valore;
-  if (profondita > PROFONDITA_MASSIMA || ++conto.pezzi > PEZZI_MASSIMI) return VALORE_NASCOSTO;
-  const oggetto = valore as Record<string, unknown>;
-  for (const chiave of Object.keys(oggetto)) {
-    const dentro = oggetto[chiave];
-    oggetto[chiave] = !Array.isArray(oggetto) && nomeDaNascondere(chiave) && dentro !== null && dentro !== undefined && dentro !== ''
-      ? VALORE_NASCOSTO
-      : ripulisciValore(dentro, profondita + 1, conto);
-  }
-  return oggetto;
-}
-
-/** I nomi dei campi che portano un dato personale o una chiave, scritti in qualunque forma. */
-const NOMI_DA_NASCONDERE = new Set([
-  'email', 'mail', 'e_mail', 'email_address', 'phone', 'phone_number', 'telefono', 'cellulare', 'tel', 'mobile',
-  'indirizzo', 'address', 'street', 'via', 'civico', 'cap', 'zip', 'zip_code', 'postal_code', 'delivery_address',
-  'token', 'access_token', 'refresh_token', 'id_token', 'api_key', 'apikey', 'password', 'passwd', 'pwd', 'secret',
-  'client_secret', 'segreto', 'authorization', 'cookie', 'cookies', 'set_cookie', 'iban', 'codice_fiscale', 'tax_code',
-  'fiscal_code', 'piva', 'partita_iva', 'vat_number', 'card_number', 'cvc', 'cvv',
-]);
-const FINALI_DA_NASCONDERE = /_(?:email|phone|telefono|token|password|secret|address|indirizzo|iban|cookie)$/;
-
-function nomeDaNascondere(chiave: string): boolean {
-  const nome = chiave
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[-.\s]+/g, '_')
-    .toLowerCase();
-  return NOMI_DA_NASCONDERE.has(nome) || FINALI_DA_NASCONDERE.test(nome);
-}
-
-/**
- * Una stringa ripulita: email, telefoni e indirizzi con parametri come nel filmato
- * (`testoSenzaIndirizzi`), poi le chiavi, l'IBAN e gli indirizzi di casa. Ogni regola qui sotto
- * comincia da una parola intera o da una parola fissa e ha ripetizioni limitate: il tempo cresce
- * con la lunghezza del testo.
- */
-export function testoPulitoPerSentry(testo: string): string {
-  if (!testo) return testo;
-  return testoSenzaIndirizzi(testo)
-    .replace(DOPO_BEARER, (_, parola: string) => `${parola} ${VALORE_NASCOSTO}`)
-    .replace(UN_PEZZO, (pezzo) => (sembraUnaChiave(pezzo) ? VALORE_NASCOSTO : pezzo))
-    .replace(UN_IBAN, VALORE_NASCOSTO)
-    .replace(UN_INDIRIZZO_DI_CASA, VALORE_NASCOSTO);
-}
-
-const DOPO_BEARER = /\b(Bearer|Basic)\s+[^\s"'<>]+/gi;
-// Un pezzo di testo fra spazi e segni (anche «=», «:», «&», «?»): ogni pezzo si guarda intero.
-const UN_PEZZO = /[^\s"'<>(),;=:&?]+/g;
-const FORME_DI_CHIAVE = [
-  /^eyJ[\w-]+\.[\w-]+\.[\w-]*$/, // un token firmato (JWT), come la chiave di Supabase
-  /^(?:sk|rk|pk)_(?:live|test)_[0-9A-Za-z]{8,}$/, // Stripe
-  /^whsec_[0-9A-Za-z]{8,}$/, // il segreto dei webhook di Stripe
-  /_secret_[0-9A-Za-z]{6,}$/, // il segreto di un pagamento di Stripe (pi_…_secret_…)
-  /^sk-[\w-]{16,}$/, // le chiavi «sk-…» dei servizi di AI
-];
-function sembraUnaChiave(pezzo: string): boolean {
-  return FORME_DI_CHIAVE.some((forma) => forma.test(pezzo));
-}
-// IBAN: due lettere maiuscole, due cifre, poi gruppi di quattro (attaccati o con uno spazio).
-const UN_IBAN = /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g;
-// Un indirizzo di casa: «via/viale/piazza/corso/…», un nome di al più sessanta caratteri e il civico.
-const UN_INDIRIZZO_DI_CASA =
-  /\b(?:via|viale|v\.le|piazza|p\.zza|piazzale|corso|c\.so|vicolo|largo|strada|str\.|località|loc\.)\s+[A-Za-zÀ-ÿ'.\s]{2,60}?,?\s*\d{1,4}[A-Za-z]?\b/gi;
 
 /**
  * 17/11/2026 (R32-025) — I campi in cui l'SDK (browser, server, edge) scrive un indirizzo
