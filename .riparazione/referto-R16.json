@@ -383,7 +383,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) + 3 revisori sonnet in parallelo; nessun Workflow"
+    "subagenti": 5,
+    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) + 3 revisori sonnet in parallelo; nessun Workflow, nessuno fermato"
   },
   "aggiornato": "2026-11-22 18:00",
   "testa": "f4974138ab07582b30c9e102fc53353fa76ea966",
@@ -395,5 +396,6 @@
   },
   "domande_per_nicola": [
     "Firma prove_comuni per questo giro: posso applicare io, un commit per prova, le modifiche a tests/unit/riparazione-r02-banner-alt.test.tsx e tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx scritte in R16-004 e R16-011? (chiesta dalla regia)"
-  ]
+  ],
+  "costo_usd": 17.05
 }
