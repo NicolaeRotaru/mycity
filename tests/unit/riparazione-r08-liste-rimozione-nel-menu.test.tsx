@@ -136,4 +136,42 @@ describe('tolto un prodotto da una lista, il menu «Aggiungi a lista» non lo se
     await aspetta(() => voceColazione()?.getAttribute('aria-pressed') === 'false',
       'dopo la rimozione il menu segna ancora il prodotto dentro la lista (aria-pressed true) con 0 righe nel database');
   });
+
+  it('col database lento, riaprendo il menu durante la rilettura la lista non è già più spuntata', async () => {
+    db.liste = [{ ...COLAZIONE }];
+    db.righe = [{ list_id: 'L1', product_id: 'p-focaccia', sort_order: 0, note: null, product: FOCACCIA }];
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    root = createRoot(box);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+    await act(async () => {
+      root!.render(createElement(QueryClientProvider, { client: qc },
+        createElement('div', null,
+          createElement(AddToListButton, { productId: 'p-focaccia' }),
+          createElement(ListDetailPage as never, { params: { id: 'L1' } }))));
+    });
+    const menu = () => box.querySelector('[role="dialog"]') as HTMLElement | null;
+    const avvio = () => [...box.querySelectorAll('button')].find((b) => /Aggiungi a lista/.test(b.textContent ?? '')) as HTMLButtonElement;
+    const voceColazione = () => [...(menu()?.querySelectorAll('li button') ?? [])].find((b) => (b.textContent ?? '').includes('Colazione')) as HTMLButtonElement | undefined;
+    const chiave = ['lists', 'containing', 'p-focaccia'];
+
+    await act(async () => { avvio().click(); });
+    await aspetta(() => voceColazione()?.getAttribute('aria-pressed') === 'true', 'la lista Colazione non risulta spuntata nel menu: la prova non guarda niente');
+    await act(async () => { (menu()!.querySelector('button[aria-label="Chiudi"]') as HTMLButtonElement).click(); });
+    expect(menu()).toBeNull();
+
+    const cestino = () => box.querySelector('button[aria-label="Rimuovi"]') as HTMLButtonElement | null;
+    await aspetta(() => cestino() !== null, 'la pagina della lista non offre «Rimuovi» a chi l’ha creata');
+    // Da qui ogni domanda al database aspetta 400 ms.
+    db.ritardo = 400;
+    await act(async () => { cestino()!.click(); });
+    await aspetta(() => db.righe.length === 0, 'la rimozione non è arrivata al database');
+    await aspetta(() => qc.getQueryState(chiave)?.isInvalidated === true, 'la rimozione non ha segnato da rileggere le liste che contengono il prodotto');
+
+    await act(async () => { avvio().click(); });
+    await aspetta(() => voceColazione() !== undefined, 'la lista Colazione non è più nel menu');
+    expect(qc.isFetching({ queryKey: chiave }), 'il menu non sta rileggendo: la prova non guarda la rilettura').toBe(1);
+    expect(voceColazione()!.getAttribute('aria-pressed'),
+      'durante la rilettura il menu segna ancora il prodotto dentro la lista: un tocco farebbe una cancellazione a vuoto').toBe('false');
+  });
 });

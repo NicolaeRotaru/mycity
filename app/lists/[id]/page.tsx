@@ -180,8 +180,14 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     },
     onSuccess: (_esito, productId) => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
-      // R08-005 — e la spunta del menu «Aggiungi a lista» della scheda di quel prodotto.
-      qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
+      // R08-005 — e la spunta del menu «Aggiungi a lista» della scheda di quel prodotto. Il menu
+      // legge solo quando è aperto: riaperto durante la rilettura mostrerebbe la lista ancora
+      // segnata (e un tocco farebbe una cancellazione a vuoto). La lista si toglie subito dai dati
+      // in memoria, poi si invalida tutta la famiglia «containing» (anche un id scritto diverso).
+      const questaLista = params.id.toLowerCase();
+      qc.setQueryData<string[]>(queryKeys.lists.containing(productId), (dentro) =>
+        dentro ? dentro.filter((id) => id.toLowerCase() !== questaLista) : dentro);
+      qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId).slice(0, 2) });
       // R02-008 — /lists legge il conteggio dei prodotti da queste tre: come quando /lists crea una
       // lista, si rileggono, invece di mostrare il numero vecchio fino a quando scadono.
       qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
