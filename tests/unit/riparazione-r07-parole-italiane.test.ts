@@ -3,8 +3,10 @@
  */
 /**
  * R07-006 — Parole inglesi e da programmatore nell'interfaccia: «Rating minimo» e «Rating 4+» nei
- * filtri di ricerca e categoria, «id_front caricato» al fattorino che carica il documento, l'errore
- * del GPS del negozio col testo inglese del browser («User denied Geolocation»), «Catalog Copilot».
+ * filtri di ricerca e categoria (la voce chiede «Voto minimo» e «Voto 4+», come il resto del sito),
+ * «id_front caricato» al fattorino che carica il documento, e nella stessa pagina «Upload fallito»,
+ * «Errore upload», «KYC approvato!», l'errore del GPS del negozio col testo inglese del browser
+ * («User denied Geolocation»), «Catalog Copilot».
  *
  * Qui i componenti VERI montati in jsdom, e si guarda cosa legge la persona.
  */
@@ -14,6 +16,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 
 const avvisi = vi.hoisted(() => ({ riusciti: [] as string[], errori: [] as string[] }));
+/** Il profilo del fattorino che legge la pagina dei documenti; una prova può aggiungere i documenti già caricati. */
+const fattorino = vi.hoisted(() => {
+  const base = { id: 'f1', role: 'rider', legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_birth_date: '1990-01-01', rider_vehicle_type: 'BIKE' };
+  return { base, profilo: { ...base } as Record<string, unknown> };
+});
 
 vi.mock('sonner', () => ({
   toast: Object.assign(() => undefined, {
@@ -32,16 +39,15 @@ vi.mock('next/navigation', () => {
 });
 vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));
 vi.mock('@/lib/supabase/client', () => {
-  const profilo = { id: 'f1', role: 'rider', legal_first_name: 'Mario', legal_last_name: 'Rossi', legal_birth_date: '1990-01-01', rider_vehicle_type: 'BIKE' };
   const catena: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'update']) catena[m] = () => catena;
-  catena.single = async () => ({ data: profilo, error: null });
-  catena.maybeSingle = async () => ({ data: profilo, error: null });
+  catena.single = async () => ({ data: fattorino.profilo, error: null });
+  catena.maybeSingle = async () => ({ data: fattorino.profilo, error: null });
   return {
     supabase: {
       auth: {
         getUser: async () => ({ data: { user: { id: 'f1', email: 'f@test.it' } } }),
-        getSession: async () => ({ data: { session: { access_token: 't' } } }),
+        getSession: async () => ({ data: { session: { access_token: 't', user: { id: 'f1' } } } }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => undefined } } }),
       },
       from: () => catena,
@@ -75,6 +81,7 @@ afterEach(async () => {
   }
   avvisi.riusciti.length = 0;
   avvisi.errori.length = 0;
+  fattorino.profilo = { ...fattorino.base };
   vi.unstubAllGlobals();
   delete g.__QUERY_FINTA__;
   delete g.__PERCORSO_FINTO__;
@@ -96,27 +103,29 @@ async function accendi(componente: unknown, proprieta: Record<string, unknown> =
   return radice;
 }
 
-describe('R07-006 · filtri: «Valutazione minima», non «Rating»', () => {
-  it('ricerca: il filtro e il chip attivo dicono «Valutazione»', async () => {
+describe('R07-006 · filtri: «Voto minimo», non «Rating»', () => {
+  it('ricerca: il filtro e il chip attivo dicono «Voto», come il resto del sito', async () => {
     g.__PERCORSO_FINTO__ = '/search';
     g.__QUERY_FINTA__ = 'q=pane&stelle=4';
     const mod = await monta('app/search/page.tsx');
     const testo = testoVisibile(await accendi(mod.default));
-    expect(testo).toContain('Valutazione minima');
+    expect(testo).toContain('Voto minimo');
     // Il next-intl finto delle prove non sostituisce {rating}: il chip esce col segnaposto.
-    expect(testo).toMatch(/Valutazione (4|\{rating\})\+/);
+    expect(testo).toMatch(/Voto (4|\{rating\})\+/);
     expect(testo).not.toMatch(/\bRating\b/);
+    expect(testo).not.toMatch(/Valutazione (minima|4\+|\{rating\})/);
   }, 60000);
 
-  it('categoria: il filtro dice «Valutazione minima»', async () => {
+  it('categoria: il filtro dice «Voto minimo»', async () => {
     g.__DATI_QUERY__ = (o: { queryKey: readonly unknown[] }) =>
       o.queryKey[0] === 'category'
         ? { category: { id: 'c-alim', slug: 'alimentari', name: 'Alimentari', icon: null, parent_id: null }, madre: null, subcategories: [] }
         : undefined;
     const mod = await monta('app/category/[slug]/page.tsx');
     const testo = testoVisibile(await accendi(mod.default, { params: { slug: 'alimentari' } }));
-    expect(testo).toContain('Valutazione minima');
+    expect(testo).toContain('Voto minimo');
     expect(testo).not.toMatch(/\bRating\b/);
+    expect(testo).not.toContain('Valutazione minima');
   }, 60000);
 });
 
@@ -134,6 +143,71 @@ describe('R07-006 · il fattorino che carica un documento legge un messaggio in 
 
     expect(avvisi.errori).toEqual([]);
     expect(avvisi.riusciti).toEqual(['Documento d’identità (fronte) caricato']);
+  });
+
+  /** Sceglie un file nel primo campo «documento» della pagina e aspetta la risposta. */
+  async function caricaIlFronte(radice: HTMLElement) {
+    const input = radice.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input, 'manca il campo del documento').not.toBeNull();
+    const file = new File([new Uint8Array(1024)], 'carta.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(input!, 'files', { value: [file], configurable: true });
+    await act(async () => { input!.dispatchEvent(new window.Event('change', { bubbles: true })); });
+    await lascia();
+  }
+
+  it('caricamento rifiutato senza spiegazione: «Caricamento non riuscito», non «Upload fallito»', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } })));
+    const { default: Pagina } = await import('@/app/rider/onboarding/page');
+    await caricaIlFronte(await accendi(Pagina));
+    expect(avvisi.riusciti).toEqual([]);
+    expect(avvisi.errori).toEqual(['Caricamento non riuscito']);
+  });
+
+  it('caricamento caduto per strada: «Errore nel caricamento», non «Errore upload»', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw 'rete assente'; }));
+    const { default: Pagina } = await import('@/app/rider/onboarding/page');
+    await caricaIlFronte(await accendi(Pagina));
+    expect(avvisi.riusciti).toEqual([]);
+    expect(avvisi.errori).toEqual(['Errore nel caricamento']);
+  });
+
+  /** Documenti obbligatori della bici già caricati: si preme «salva e avvia» con la risposta data. */
+  async function avviaLaVerifica(risposta: { status: number; body: unknown }) {
+    fattorino.profilo = { ...fattorino.base, kyc_id_doc_front_url: 'f1/fronte.jpg', kyc_selfie_url: 'f1/selfie.jpg' };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(risposta.body), { status: risposta.status, headers: { 'content-type': 'application/json' } })));
+    const { default: Pagina } = await import('@/app/rider/onboarding/page');
+    const radice = await accendi(Pagina);
+    const pulsante = Array.from(radice.querySelectorAll('button')).find((b) => b.textContent === 'saveAndStart');
+    expect(pulsante, 'manca il pulsante che avvia la verifica').toBeDefined();
+    expect(pulsante!.disabled, 'con i documenti obbligatori caricati il pulsante deve essere attivo').toBe(false);
+    await act(async () => { pulsante!.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+    await lascia();
+    return [...avvisi.riusciti, ...avvisi.errori];
+  }
+
+  it('verifica approvata subito: «Documenti approvati!», non «KYC approvato!»', async () => {
+    expect(await avviaLaVerifica({ status: 200, body: { status: 'APPROVED' } })).toEqual(['Documenti approvati!']);
+  });
+
+  it('verifica in corso: «Documenti inviati: li stiamo verificando», non «KYC inviato»', async () => {
+    expect(await avviaLaVerifica({ status: 200, body: { status: 'PENDING' } })).toEqual(['Documenti inviati: li stiamo verificando']);
+  });
+
+  it('verifica che non parte: nessun avviso con la sigla «KYC»', async () => {
+    const letti = await avviaLaVerifica({ status: 500, body: {} });
+    expect(letti).toHaveLength(1);
+    expect(letti[0]).not.toMatch(/KYC/);
+  });
+
+  it('la pagina dei documenti parla italiano: niente «Onboarding», «se food», «face match», «account rider»', async () => {
+    const { default: Pagina } = await import('@/app/rider/onboarding/page');
+    const testo = testoVisibile(await accendi(Pagina));
+    expect(testo).toContain('Documenti e verifica');
+    expect(testo).toContain('Attestato HACCP');
+    expect(testo).not.toMatch(/onboarding/i);
+    expect(testo).not.toContain('se food');
+    expect(testo).not.toContain('face match');
+    expect(testo).not.toContain('account rider');
   });
 });
 
