@@ -153,3 +153,85 @@ describe("il freno non sposta un ordine veloce già scaduto", () => {
     expect(db.notifications.filter((n) => n.user_id === "maria").length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Collaudo del 22/11 — Un carrello di due negozi, uno scaduto e uno no: prima il freno guardava solo
+ * l'ordine letto per primo, e la ricerca non ha un ordine. Letto prima lo scaduto: niente si spostava.
+ * Letto prima il valido: si spostava tutto, e lo scaduto prendeva una scadenza nuova. Adesso l'esito
+ * è lo stesso nelle due letture: il carrello si sposta tutto insieme o niente (l'euro della veloce sta
+ * su un ordine solo), quindi finché lo scaduto è vivo niente si sposta e nessuno legge niente; annullato
+ * lo scaduto da expire-stale-orders, il giro dopo sposta il valido e avvisa il cliente. Il database finto
+ * rende le righe della ricerca nell'ordine di `db.orders`: qui nei due ordini.
+ */
+const NATO_STASERA = "2026-11-20T19:40:00.000Z"; // venerdì 20/11 alle 20:40 a Piacenza
+const GIRO_DELLE_21_10 = "2026-11-20T20:10:00.000Z";
+const GIRO_DELLE_21_15 = "2026-11-20T20:15:00.000Z";
+const finoAlle23: [string, string][] = [["08:00", "23:00"]];
+const apertoFinoAlle23 = { mon: finoAlle23, tue: finoAlle23, wed: finoAlle23, thu: finoAlle23, fri: finoAlle23, sat: finoAlle23, sun: finoAlle23 };
+
+function carrelloMisto(primoLetto: "scaduto" | "valido") {
+  // Il forno chiude alle 21: la sua veloce è scaduta alle 21:00. La frutta chiude alle 23: la sua no.
+  // La frutta ha la spesa più alta e porta la base con l'euro della veloce.
+  db.profiles = [{ id: "forno", store_hours: chiusoDomenica }, { id: "frutta", store_hours: apertoFinoAlle23 }];
+  const scaduto = ordine({ id: "s1", seller_id: "forno", created_at: NATO_STASERA, total_price: 16, gross_total_cents: 1600, delivery_fee_cents: 100, rider_fee_cents: 100 });
+  const valido = ordine({ id: "v1", seller_id: "frutta", created_at: NATO_STASERA, total_price: 24, gross_total_cents: 2400 });
+  db.orders = primoLetto === "scaduto" ? [scaduto, valido] : [valido, scaduto];
+  db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "s1" }, { id: "v1" }] }];
+  db.notifications = [];
+  chiaviAvvisi.clear();
+  sendEmailMock.mockClear();
+  notifyAdminsMock.mockClear();
+}
+
+/** Gli id nell'ordine in cui la ricerca del freno li rende (il database finto, senza `.order`). */
+async function lettiDallaRicerca(): Promise<string[]> {
+  const q = tabella("orders") as unknown as { select: (c: string) => { eq: (k: string, v: unknown) => PromiseLike<{ data: Riga[] }> } };
+  const { data } = await q.select("*").eq("delivery_status", "NEW");
+  return data.map((r) => String(r.id));
+}
+
+async function primoGiroDelCarrelloMisto(primoLetto: "scaduto" | "valido") {
+  carrelloMisto(primoLetto);
+  const letti = await lettiDallaRicerca();
+  const { corpo } = await giro(GIRO_DELLE_21_10);
+  return {
+    letti,
+    esito: {
+      corpo,
+      righe: db.orders
+        .map((r) => ({ id: r.id, fascia: r.delivery_slot, stato: r.delivery_status, consegna: r.delivery_fee_cents, totale: r.total_price }))
+        .sort((x, y) => String(x.id).localeCompare(String(y.id))),
+      avvisi: db.notifications.map((n) => `${String(n.user_id)} · ${String(n.title)}`).sort(),
+      email: sendEmailMock.mock.calls.length,
+      amministratori: notifyAdminsMock.mock.calls.length,
+    },
+  };
+}
+
+describe("R09-006 · carrello di due negozi, uno scaduto e uno no: lo stesso esito in qualunque ordine li legga", () => {
+  it("letto prima lo scaduto o prima il valido: niente si sposta, nessuno legge niente, e le due letture danno lo stesso esito", async () => {
+    const primaLoScaduto = await primoGiroDelCarrelloMisto("scaduto");
+    const primaIlValido = await primoGiroDelCarrelloMisto("valido");
+    expect(primaLoScaduto.letti).toEqual(["s1", "v1"]);
+    expect(primaIlValido.letti).toEqual(["v1", "s1"]);
+    for (const { esito } of [primaLoScaduto, primaIlValido]) {
+      expect(esito.righe.map((r) => r.fascia), "lo scaduto ha preso una fascia nuova, o il carrello si è spezzato").toEqual([ETICHETTA_ADESSO, ETICHETTA_ADESSO]);
+      expect(esito.corpo).toMatchObject({ ok: true, spostati: 0, giaScaduti: 1, daSistemareAMano: 0 });
+      expect(esito.avvisi, "qualcuno ha letto una fascia nuova").toEqual([]);
+      expect(esito.email).toBe(0);
+    }
+    expect(primaIlValido.esito).toEqual(primaLoScaduto.esito);
+  });
+
+  it.each(["scaduto", "valido"] as const)("letto prima lo %s: annullato lo scaduto, il giro dopo sposta il valido e il cliente lo sa", async (primoLetto) => {
+    await primoGiroDelCarrelloMisto(primoLetto);
+    // expire-stale-orders annulla lo scaduto (il conto della frutta, che porta la base, non cambia).
+    o("s1").delivery_status = "CANCELED";
+    const { corpo } = await giro(GIRO_DELLE_21_15);
+    expect(corpo).toMatchObject({ ok: true, spostati: 1, giaScaduti: 0 });
+    expect(String(o("v1").delivery_slot)).toMatch(/^(Oggi|Domani) · /);
+    expect(o("s1").delivery_slot, "lo scaduto annullato ha preso una fascia").toBe(ETICHETTA_ADESSO);
+    expect(db.notifications.filter((n) => n.user_id === "maria").length).toBeGreaterThan(0);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+});
