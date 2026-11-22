@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
-import { env } from '@/lib/env';
-import { logger } from '@/lib/logger';
+import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -32,28 +31,14 @@ export async function POST(req: Request) {
   }
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
 
+  // R03-010 — Un turno al secondo per tutto il sito, lo stesso della rotta d'ordine (lib/geocodifica.ts).
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
-    const appUrl = env.appUrl();
-    const res = await fetch(url, {
-      headers: {
-        // Nominatim Usage Policy: User-Agent identificativo obbligatorio.
-        'User-Agent': `MyCity/1.0 (${appUrl})`,
-        'Accept-Language': 'it',
-      },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!res.ok) return NextResponse.json({ lat: null, lng: null });
-    const json = (await res.json()) as Array<{ lat?: string; lon?: string }>;
-    const hit = Array.isArray(json) ? json[0] : undefined;
-    const lat = hit?.lat != null ? parseFloat(hit.lat) : null;
-    const lng = hit?.lon != null ? parseFloat(hit.lon) : null;
-    return NextResponse.json({
-      lat: Number.isFinite(lat as number) ? lat : null,
-      lng: Number.isFinite(lng as number) ? lng : null,
-    });
-  } catch {
-    logger.warn('[geocode] Nominatim non raggiungibile', { qlen: q.length });
+    const pos = await coordinateDiUnIndirizzo({ testo: q }, { seOccupato: 'lancia' });
+    return NextResponse.json({ lat: pos?.lat ?? null, lng: pos?.lng ?? null });
+  } catch (e) {
+    if (e instanceof Error && e.message === 'nominatim_occupato') {
+      return NextResponse.json({ lat: null, lng: null, error: 'rate_limited' }, { status: 429 });
+    }
     return NextResponse.json({ lat: null, lng: null });
   }
 }
