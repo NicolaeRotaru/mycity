@@ -171,7 +171,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     };
     // Next non lancia beforeunload per i link interni (il menu del pannello): li ferma questo.
     const alClic = (e: MouseEvent) => {
-      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m))) {
+      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m), 'al profilo')) {
         e.preventDefault();
         e.stopPropagation();
       }

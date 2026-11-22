@@ -37,6 +37,8 @@ export function clicDaFermare(
   dirty: boolean,
   pathname: string,
   conferma: (msg: string) => boolean,
+  // R10-007 — Cosa si perde: la stessa domanda serve alla vetrina e al profilo del negozio.
+  cosa: string = 'alla vetrina',
 ): boolean {
   if (!dirty || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return false;
   const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
@@ -44,5 +46,5 @@ export function clicDaFermare(
   let url: URL;
   try { url = new URL(a.href, window.location.href); } catch { return false; }
   if (url.origin !== window.location.origin || url.pathname === pathname) return false;
-  return !conferma('Hai modifiche alla vetrina non salvate: se esci le perdi. Uscire lo stesso?');
+  return !conferma(`Hai modifiche ${cosa} non salvate: se esci le perdi. Uscire lo stesso?`);
 }
