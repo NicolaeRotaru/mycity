@@ -1,52 +1,70 @@
 /**
- * R18-012 — Il testo di un lavoro sul catalogo «in invio» non si contraddice. La riga nasce già col
- * motivo «invio senza risposta»: un invio appena partito non dice «non ha avuto risposta», uno rimasto
- * senza risposta non promette «tra poco lo vedi partire» per 24 ore, senza l'ora di nascita si dice una
- * frase vera nei due casi. A riga chiusa col motivo «chiedi all'assistenza» non si dice «puoi avviarne un altro».
+ * R18-012 — Il testo di un lavoro sul catalogo non si contraddice.
+ *
+ * A riga chiusa, col motivo che dice di chiedere all'assistenza prima di avviarne un altro, la riga
+ * non dice «Puoi avviarne un altro». Gli altri motivi che nominano l'assistenza (il lotto chiuso dopo
+ * 24 ore, lo scarto) non vietano di ripartire, e la riga continua a dirlo. I motivi sono quelli veri
+ * delle rotte di app/api/ai/catalog-batch/: la prova controlla che ci siano ancora, scritti così.
+ *
+ * La riga «in invio» resta quella di sempre: ogni riga nasce col motivo «invio senza risposta»
+ * (start/route.ts), e un invio rimasto davvero senza risposta la pagina lo mostra nel suo riquadro
+ * (`incerto` dallo stato), non con questa riga.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, it, expect } from 'vitest';
 import { testoStatoLavoro } from '@/lib/ai/statoLavoroCatalogo';
+import { INVIO_SENZA_RISPOSTA } from '@/lib/ai/batch';
 
-const INCERTO = 'invio senza risposta: il lotto potrebbe essere partito, da verificare';
+const rotta = (nome: string) =>
+  readFileSync(join(process.cwd(), 'app', 'api', 'ai', 'catalog-batch', nome, 'route.ts'), 'utf8');
+
+/** status/route.ts: un invio senza risposta chiuso dopo 24 ore. Vieta di ripartire senza chiedere. */
 const CHIUSO_INCERTO =
   "invio senza risposta da 24 ore: il lotto potrebbe essere partito ed essere stato pagato; chiedi all'assistenza prima di avviarne un altro";
-const ADESSO = '2026-11-20T12:00:00.000Z';
-const fa = (ms: number) => new Date(Date.parse(ADESSO) - ms).toISOString();
+/** status/route.ts: un lotto non finito entro 24 ore. Dice dove si recuperano i risultati, non vieta. */
+const LOTTO_SCADUTO =
+  "il lotto non e' finito entro 24 ore: chiuso. Se era partito, i risultati si recuperano con l'assistenza.";
+/** cancel/route.ts: un invio senza risposta scartato dal negozio. */
+const SCARTATO =
+  "scartato dal negozio dopo un invio senza risposta: il lotto potrebbe essere partito ed essere stato pagato; se serve, i risultati si recuperano con l'assistenza";
 
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date(ADESSO));
+const NEL_SORGENTE = (testo: string) => testo.replace(/'/g, "\\'");
+
+describe('R18-012 i motivi usati qui sono quelli delle rotte', () => {
+  it('status e cancel scrivono ancora questi motivi', () => {
+    expect(rotta('status')).toContain(NEL_SORGENTE(CHIUSO_INCERTO));
+    expect(rotta('status')).toContain(NEL_SORGENTE(LOTTO_SCADUTO));
+    expect(rotta('cancel')).toContain(NEL_SORGENTE(SCARTATO));
+  });
 });
-afterEach(() => vi.useRealTimers());
 
-describe('R18-012 il testo del lavoro sul catalogo non si contraddice', () => {
-  it('un invio appena partito (5 secondi) non dice che è rimasto senza risposta', () => {
-    const t = testoStatoLavoro({ status: 'submitting', total: 12, error: INCERTO, createdAt: fa(5_000) })!;
-    expect(t).not.toMatch(/non ha avuto risposta/);
-    expect(t).toMatch(/non riavviarlo/);
-  });
-  it('un invio senza risposta da 10 minuti non promette «tra poco lo vedi partire»', () => {
-    const t = testoStatoLavoro({ status: 'submitting', total: 12, error: INCERTO, createdAt: fa(10 * 60_000) })!;
-    expect(t).not.toContain('tra poco lo vedi partire');
-    expect(t).toMatch(/potrebbe essere già partito/);
-    expect(t).toMatch(/assistenza/);
-  });
-  it('senza l’ora di nascita non promette la partenza e non dà per fatto che non ha risposto', () => {
-    const t = testoStatoLavoro({ status: 'submitting', total: 12, error: INCERTO })!;
-    expect(t).not.toContain('tra poco lo vedi partire');
-    expect(t).not.toMatch(/non ha avuto risposta/);
-    expect(t).toMatch(/non riavviarlo/);
-    expect(t).toMatch(/assistenza/);
-  });
-  it('un invio normale, senza motivo, dice ancora che sta per partire', () => {
-    expect(testoStatoLavoro({ status: 'submitting', total: 12, error: null })).toContain('tra poco lo vedi partire');
-  });
-  it('a riga chiusa col motivo «chiedi all’assistenza» non dice «puoi avviarne un altro»', () => {
+describe('R18-012 a riga chiusa la riga non dice il contrario del motivo', () => {
+  it('motivo «chiedi all’assistenza prima di avviarne un altro»: niente «Puoi avviarne un altro»', () => {
     const t = testoStatoLavoro({ status: 'failed', total: 12, error: CHIUSO_INCERTO })!;
     expect(t).toMatch(/chiedi all'assistenza/);
-    expect(t).not.toMatch(/Puoi avviarne un altro/);
+    expect(t).not.toMatch(/Puoi avviarne un altro/i);
   });
-  it('un errore qualunque dice ancora «puoi avviarne un altro»', () => {
+  it('anche con lo stato «error» e l’apostrofo tipografico', () => {
+    const t = testoStatoLavoro({ status: 'error', total: 12, error: CHIUSO_INCERTO.replace("'", '’') })!;
+    expect(t).not.toMatch(/Puoi avviarne un altro/i);
+  });
+  it('lotto chiuso dopo 24 ore («si recuperano con l’assistenza»): si può ripartire, e lo dice', () => {
+    expect(testoStatoLavoro({ status: 'failed', total: 12, error: LOTTO_SCADUTO })).toMatch(/Puoi avviarne un altro/);
+  });
+  it('lavoro scartato: lo dice annullato e che si può ripartire', () => {
+    expect(testoStatoLavoro({ status: 'canceled', total: 12, error: SCARTATO })).toMatch(/Puoi avviarne un altro/);
+  });
+  it('un errore qualunque, o senza motivo, dice ancora «Puoi avviarne un altro»', () => {
     expect(testoStatoLavoro({ status: 'error', total: 3, error: 'x' })).toMatch(/Puoi avviarne un altro/);
+    expect(testoStatoLavoro({ status: 'failed', total: 3, error: null })).toMatch(/Puoi avviarne un altro/);
+  });
+});
+
+describe('R18-012 la riga «in invio» resta quella di sempre', () => {
+  it('appena nata col motivo «invio senza risposta»: tra poco parte, senza mandare all’assistenza', () => {
+    const t = testoStatoLavoro({ status: 'submitting', total: 12, error: INVIO_SENZA_RISPOSTA })!;
+    expect(t).toContain('tra poco lo vedi partire');
+    expect(t).not.toMatch(/assistenza|24 ore/);
   });
 });
