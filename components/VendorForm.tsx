@@ -175,7 +175,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     };
     // Next non lancia beforeunload per i link interni (il menu del pannello): li ferma questo.
     const alClic = (e: MouseEvent) => {
-      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m), 'al profilo')) {
+      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m), mode === 'branding' ? 'alla vetrina' : 'al profilo')) {
         e.preventDefault();
         e.stopPropagation();
       }
@@ -186,7 +186,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       window.removeEventListener('beforeunload', alLasciare);
       document.removeEventListener('click', alClic, true);
     };
-  }, [dirty]);
+  }, [dirty, mode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
