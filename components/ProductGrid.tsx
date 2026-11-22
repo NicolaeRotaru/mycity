@@ -502,6 +502,22 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     isLoading || domandaAperti.isLoading || domandaVoto.isLoading || domandaPromo.isLoading || domandaScontatiSotto.isLoading;
   const inErrore = isError || filtroInErrore;
 
+  // R11-012 R11-007 — Se le righe mostrate sono zero ma il database dice che ce ne sono altre
+  // (la pagina ne ha lette tante e il filtro sui negozi le ha scartate tutte), la griglia va a
+  // prendere da sola la pagina dopo invece di dire «nessun prodotto» senza il pulsante.
+  // Scelta: lettura automatica e non solo pulsante, perché chi apre la pagina non deve premere per
+  // scoprire che c'erano prodotti. Non gira all'infinito: si ferma quando `hasNextPage` è falso
+  // (le righe lette dell'ultima pagina sono meno del tetto) o quando una lettura sbaglia (isError).
+  const { hasNextPage, isFetching: staLeggendo, fetchNextPage } = domanda;
+  const vuotaMaCeNeSonoAltre = filtered.length === 0 && !!hasNextPage && !isError;
+  // `pagineLette` fra le dipendenze: ogni pagina arrivata ancora tutta scartata rimette in moto il giro.
+  const pagineLette = domanda.data?.pages.length ?? 0;
+  useEffect(() => {
+    if (!vuotaMaCeNeSonoAltre || caricando || staLeggendo) return;
+    void fetchNextPage();
+  }, [vuotaMaCeNeSonoAltre, caricando, staLeggendo, fetchNextPage, pagineLette]);
+
+
   // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
   // il messaggio d'errore.
   useEffect(() => {
@@ -632,6 +648,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   if (filtered.length === 0) {
     // Le sezioni per-sottocategoria spariscono quando non hanno prodotti.
     if (isSection) return null;
+    // R11-012 R11-007 — Non è «nessun prodotto» finché ci sono altre pagine da leggere.
+    if (vuotaMaCeNeSonoAltre) return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
     // Stato vuoto arricchito (opt-in): titolo/descrizione personalizzati,
     // azione "Azzera filtri" e slot "Forse cercavi" + alternative. Quando
     // nessuna delle nuove prop è passata, resta lo stato storico generico.
