@@ -382,11 +382,14 @@ export default function Navbar() {
         {/* MOBILE */}
         <div className="md:hidden">
           <div className="container mx-auto px-3 py-2.5">
-            <div className="flex items-center gap-2">
+            {/* R12-008 — A 280 px col testo al 200% logo, pillola e «Accedi» non stanno in una riga: la
+                pillola si stringeva a zero e finiva sotto il logo. Ora la riga va a capo e la pillola
+                tiene la sua larghezza. */}
+            <div className="flex flex-wrap items-center gap-2">
               <Link href="/" className="relative before:absolute before:inset-x-0 before:-inset-y-3 before:content-[''] shrink-0 text-white hover:text-white text-xl font-serif font-extrabold whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
-              <div className="min-w-0 flex-1 flex justify-center">
+              <div className="flex-1 basis-auto flex justify-center">
                 <LocationPill compact />
               </div>
               {isAuthenticated && canPurchase && (

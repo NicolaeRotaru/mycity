@@ -31,3 +31,28 @@ describe('R12-007 — i tre passi della home non fanno scorrere la pagina di lat
     expect(titolo.some((c) => /^basis-/.test(c)), 'il titolo senza base va sotto il cerchio anche col testo normale').toBe(true);
   });
 });
+
+describe('R12-008 — nella barra del telefono la pillola del luogo non si stringe a zero', () => {
+  // Misurato: a 280 px col testo al 200% il contenitore della pillola era largo 0 e la pillola (155 px)
+  // finiva sopra il logo; a 320 px lo stesso. Con la riga che va a capo la pillola scende sotto il logo.
+  const src = readFileSync('components/Navbar.tsx', 'utf8');
+  const mobile = src.slice(src.indexOf('{/* MOBILE */}'));
+  const riga = mobile.match(/<div className="([^"]*)">\s*<Link href="\/"/);
+  const contenitore = mobile.match(/<div className="([^"]*)">\s*<LocationPill compact \/>/);
+
+  it('la riga del telefono e il contenitore della pillola si trovano', () => {
+    expect(riga, 'la riga logo + pillola del telefono non si trova più: la prova va rifatta').toBeTruthy();
+    expect(contenitore, 'la pillola compatta del telefono non si trova più: la prova va rifatta').toBeTruthy();
+  });
+
+  it('quando non c\'è posto la riga va a capo, e la pillola tiene la sua larghezza', () => {
+    expect(classi(riga![1]), 'controprova: è una riga flessibile').toContain('flex');
+    expect(classi(riga![1]), 'la riga non va a capo: col testo al 200% la pillola non ha posto').toContain('flex-wrap');
+    const c = classi(contenitore![1]);
+    expect(c, 'col min-w-0 il contenitore della pillola si stringe a zero e la pillola sparisce sotto il logo').not.toContain('min-w-0');
+    // Con la base a zero (flex-1 da solo) la riga che va a capo non porterebbe mai la pillola sotto: la base
+    // dev'essere la sua larghezza (basis-auto, che in Tailwind vince su flex-1, o flex-auto).
+    const baseAZero = c.includes('flex-1') && !c.includes('basis-auto');
+    expect(baseAZero, 'con la base a zero la pillola non va mai a capo').toBe(false);
+  });
+});
