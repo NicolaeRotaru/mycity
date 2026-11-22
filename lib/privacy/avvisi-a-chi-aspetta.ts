@@ -42,7 +42,7 @@ import { createHash } from 'node:crypto';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { indirizzoPubblico } from '@/lib/env';
-import { recapitoPrivacy } from '@/lib/legal/titolare';
+import { PAGINA_DEI_CONTATTI, recapitoPrivacy } from '@/lib/legal/titolare';
 import { avvisoCancellazioneTemplate } from '@/lib/email/templates';
 
 export type Risposta = { data: unknown; error: { message: string } | null };
@@ -458,8 +458,20 @@ async function emailDovuta(
  * Ora il testo resta parola per parola quello del pannello, e sotto c'è il collegamento al modulo
  * dei contatti preso dal recapito (`recapitoPrivacy`). Con una casella privacy vera l'indirizzo è
  * già nel testo, e non si aggiunge niente.
+ *
+ * 22/11/2026 (collaudo) — IL TESTO SALVATO PUÒ PORTARE ANCORA LA PAGINA. Il corpo si scrive la notte
+ * del pannello e l'email può partire una notte dopo: se intanto si configura la casella privacy, il
+ * testo salvato dice ancora «(pagina /contact)» mentre il recapito di adesso è una casella. Allora la
+ * pagina scritta nel testo diventa l'indirizzo intero e cliccabile, e la riga del modulo si aggiunge
+ * solo quando il testo non porta la pagina: mai la stessa strada due volte, mai una parola senza
+ * dominio, e il collegamento non dipende dalle parole della frase.
  */
-function rigaDelModulo(): { testo: string; percorso: string } | null {
+const PERCORSO_DEI_CONTATTI = new RegExp(
+  `(?<![\\w/.:])${PAGINA_DEI_CONTATTI.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![\\w/-])`,
+);
+
+function rigaDelModulo(corpo: string): { testo: string; percorso: string } | null {
+  if (PERCORSO_DEI_CONTATTI.test(corpo)) return null;
   const dove = recapitoPrivacy();
   if (dove.eUnaCasella) return null;
   return { testo: `${dove.testo.charAt(0).toUpperCase()}${dove.testo.slice(1)}, sul sito:`, percorso: dove.href };
@@ -471,8 +483,11 @@ export function corpoDellEmail(a: AvvisoAllInteressato): string {
     const url = escapeHtml(`${sito}${percorso}`);
     return `<a href="${url}">${url}</a>`;
   };
-  const testo = escapeHtml(a.corpo).replace(/\n/g, '<br>');
-  const riga = rigaDelModulo();
+  const testo = a.corpo
+    .split(PERCORSO_DEI_CONTATTI)
+    .map((pezzo) => escapeHtml(pezzo).replace(/\n/g, '<br>'))
+    .join(collegamento(PAGINA_DEI_CONTATTI));
+  const riga = rigaDelModulo(a.corpo);
   const modulo = riga ? `<p>${escapeHtml(riga.testo)} ${collegamento(riga.percorso)}</p>` : '';
   const pagina = a.link ? `<p>La tua richiesta, sul sito: ${collegamento(a.link)}</p>` : '';
   return `<p>${testo}</p>${modulo}${pagina}`;
@@ -481,9 +496,9 @@ export function corpoDellEmail(a: AvvisoAllInteressato): string {
 /** Il testo semplice della stessa email: corpo e indirizzi delle pagine, interi. */
 function testoDellEmail(a: AvvisoAllInteressato): string {
   const sito = indirizzoPubblico().url.replace(/\/+$/, '');
-  const riga = rigaDelModulo();
+  const riga = rigaDelModulo(a.corpo);
   return [
-    a.corpo,
+    a.corpo.split(PERCORSO_DEI_CONTATTI).join(`${sito}${PAGINA_DEI_CONTATTI}`),
     riga ? `${riga.testo} ${sito}${riga.percorso}` : null,
     a.link ? `La tua richiesta, sul sito: ${sito}${a.link}` : null,
   ].filter((r): r is string => r !== null).join('\n\n');
