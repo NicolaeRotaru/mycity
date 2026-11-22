@@ -276,3 +276,78 @@ export async function fetchNomiPubblici(
   }
   return nomi;
 }
+
+/**
+ * 22/11/2026 (R15-014) — IL NEGOZIO LEGGE IL NOME DEI SUOI CLIENTI ANCHE PRIMA DELLA 181.
+ *
+ * Il nome del cliente, per il negozio (chat, recensioni), lo dà la funzione della migrazione 181
+ * `nomi_dei_clienti_del_negozio`. Nel database vero la funzione non c'è ancora: PostgREST risponde
+ * «funzione non trovata» e il negoziante legge «Cliente» al posto di Maria.
+ *
+ * Il ripiego, SOLO quando la funzione manca: il nome di consegna scritto sugli ordini
+ * (`orders.delivery_full_name`) di quelle persone. Si legge col client di chi guarda, quindi con le sue
+ * regole: il negozio trova solo gli ordini fatti a lui, cioè i nomi che vede già nelle pagine Ordini e
+ * Clienti. Niente `profiles`, niente tabelle che non leggeva già. Chi gli ha solo scritto in chat, senza
+ * mai ordinare, resta «Cliente» finché la 181 non c'è.
+ *
+ * Un nome è un dettaglio: se la lettura cade, la mappa è vuota e l'errore va nei registri.
+ */
+export const FUNZIONE_NOMI_DEI_CLIENTI = 'nomi_dei_clienti_del_negozio';
+
+/** Come `LettoreVista`, più le funzioni del database. */
+export type LettoreConFunzioni = LettoreVista & {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rpc: (nome: string, argomenti: Record<string, unknown>) => any;
+};
+
+/** La funzione non esiste ancora (migrazione non applicata): PostgREST dice PGRST202, Postgres 42883. */
+function funzioneNonAncoraCreata(errore: unknown): boolean {
+  const code = (errore as { code?: string } | null)?.code;
+  return code === 'PGRST202' || code === '42883';
+}
+
+/** id -> nome del cliente, per le persone che chi guarda ha davanti. Gli id senza nome mancano. */
+export async function fetchNomiDeiClienti(
+  supabase: LettoreConFunzioni,
+  ids: Array<string | null | undefined>,
+): Promise<Map<string, string>> {
+  const unici = [...new Set(ids.filter((i): i is string => !!i))];
+  const nomi = new Map<string, string>();
+  if (unici.length === 0) return nomi;
+
+  let righe: Array<{ id: string; full_name: string | null }>;
+  try {
+    const { data, error } = await supabase.rpc(FUNZIONE_NOMI_DEI_CLIENTI, { p_ids: unici });
+    if (!error) {
+      righe = (data ?? []) as Array<{ id: string; full_name: string | null }>;
+    } else if (funzioneNonAncoraCreata(error)) {
+      logger.warn('[nomi] funzione nomi_dei_clienti_del_negozio assente (migrazione 181 non applicata): leggo il nome di consegna degli ordini', error);
+      const ordini = await supabase
+        .from('orders')
+        .select('user_id, delivery_full_name')
+        .in('user_id', unici)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      if (ordini.error) {
+        logger.warn('[nomi] nomi dei clienti non letti nemmeno dagli ordini: si legge «Cliente»', ordini.error);
+        return nomi;
+      }
+      righe = ((ordini.data ?? []) as Array<{ user_id: string | null; delivery_full_name: string | null }>)
+        .filter((o): o is { user_id: string; delivery_full_name: string | null } => !!o.user_id)
+        .map((o) => ({ id: o.user_id, full_name: o.delivery_full_name }));
+    } else {
+      logger.warn('[nomi] nomi dei clienti non letti: si legge «Cliente»', error);
+      return nomi;
+    }
+  } catch (e) {
+    logger.warn('[nomi] nomi dei clienti non letti: si legge «Cliente»', e);
+    return nomi;
+  }
+
+  // Il primo nome trovato vince: dagli ordini è quello dell'ordine più recente.
+  for (const r of righe) {
+    const nome = (r.full_name ?? '').trim();
+    if (nome && unici.includes(r.id) && !nomi.has(r.id)) nomi.set(r.id, nome);
+  }
+  return nomi;
+}
