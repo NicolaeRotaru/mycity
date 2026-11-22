@@ -18,7 +18,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { MAX_TAGLINE, campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -28,6 +28,17 @@ import BadgePicker from './seller/BadgePicker';
 import StoreHoursEditor from './seller/StoreHoursEditor';
 import { erroreDegliOrari } from './seller/orari-validi';
 import { clicDaFermare } from './seller/site/dove-e-l-errore';
+
+/**
+ * R10-008, R10-009 — Il limite di un campo breve si vede: niente maxLength che taglia in silenzio.
+ * Oltre il tetto il testo resta intero e sotto il campo si legge quanto è lungo.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 type SchemaData = { storeName: string; storePhone: string };
@@ -429,11 +440,17 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                 id={idSlogan}
                 type="text"
                 value={custom.tagline ?? ''}
-                maxLength={80}
+                aria-invalid={sopraIlTetto(custom.tagline, MAX_TAGLINE) ? true : undefined}
+                aria-describedby={sopraIlTetto(custom.tagline, MAX_TAGLINE) ? `${idSlogan}-errore` : undefined}
                 onChange={(e) => setCustom({ ...custom, tagline: e.target.value })}
                 placeholder="Es. Pane fresco tutti i giorni dal 1962"
                 className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
               />
+              {sopraIlTetto(custom.tagline, MAX_TAGLINE) && (
+                <p id={`${idSlogan}-errore`} role="alert" className="text-xs font-medium text-secondary-600 mt-1">
+                  {sopraIlTetto(custom.tagline, MAX_TAGLINE)}
+                </p>
+              )}
             </div>
           </CustomizationSection>
 
