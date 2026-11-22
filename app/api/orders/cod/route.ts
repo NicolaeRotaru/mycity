@@ -1001,8 +1001,9 @@ export const POST = withAuthRateLimit(
       if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));
     }
 
-    // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
-    // fattorino approvato e online. La stessa decisione della cassa (`veloceSiPuo`).
+    // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso (e
+    // ancora per un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero (non ha
+    // già in mano tutte le veloci che può portare). La stessa decisione della cassa (`veloceSiPuo`).
     if (consegnaVeloce) {
       const veloce = veloceSiPuo({
         adesso: romeNow(),
