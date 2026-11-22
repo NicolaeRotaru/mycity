@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
 import { env } from '@/lib/env';
 import { dominioDeiContatti, mittenteFuoriDominio } from '@/lib/contatti-pubblici';
+import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa';
 import {
   sorvegliaCancellazioni,
   type GiornataDiCassa,
@@ -745,6 +746,21 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
         url: '/admin/today',
       });
     }
+  }
+
+  /**
+   * 15) R13-004 (22/11/2026) — IL TETTO DI SPESA AI CONTATO DA UNA COPIA SOLA.
+   *
+   * L'ora di tolleranza del conto condiviso si contava solo nella memoria della copia che serve le
+   * richieste AI: su Vercel le copie vivono poco e l'allarme poteva non arrivare mai. La funzione che
+   * ricorda l'inizio del guasto nel database (lib/ai/tettoSpesa.ts) era pronta, ma non la chiamava
+   * nessuno: adesso la chiama questo giro, ogni volta. Senza tetto configurato non dice niente.
+   */
+  try {
+    alerts.push(...(await allarmiTettoSpesaAiPerIlCron()));
+  } catch (e) {
+    logger.error('[operational-alerts] allarme del tetto di spesa AI non letto', { motivo: e instanceof Error ? e.message : String(e) });
+    controlliSaltati.push('tetto di spesa AI');
   }
 
   /**

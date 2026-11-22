@@ -450,6 +450,10 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   const allarmi = allarmiDelTetto;
   const copie = copieDaAmbiente;
   const tettoEur = opzioni.tettoEur ?? Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
+  // 22/11/2026 (R13-004) — Il cron la chiama a ogni giro (ogni 5 minuti). Senza
+  // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente
+  // sonda, niente righe in operational_alert_log, niente errori nel registro.
+  if (!(tettoEur > 0)) return [];
   const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
   const primo = await sondaContoCondiviso(opzioni.quando);
   try {

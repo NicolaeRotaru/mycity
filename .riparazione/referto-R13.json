@@ -1,0 +1,414 @@
+{
+  "sessione": "R13",
+  "aggiornato": "2026-11-22 18:05",
+  "finita": true,
+  "testa": "f042b55aa1e0b6690bbc8c19f48a0b83787a687f",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "f042b55aa1e0b6690bbc8c19f48a0b83787a687f",
+    "nota": "typecheck, lint e test: 2006 file di prova, 12325 casi passati; SHA preso con git rev-parse HEAD nello stesso comando"
+  },
+  "voci": [
+    {
+      "id": "R13-001",
+      "chiave": "ai-endpoints|due avvii insieme di un lavoro sul catalogo superano entrambi il controllo dei lavori aperti",
+      "esito": "parziale",
+      "insieme_a": [
+        "R13-009"
+      ],
+      "commit": "df9e27d456b57222eea55df275734b855ae54a04",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base df9e27d4^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La gara fra due avvii era già chiusa alla base (640 + 409 sul 23505). La rotta di avvio ora risponde 409 anche quando l'ultimo lavoro applicato del negozio non ha il segno di fine (applicazione_finita_il) ed è di meno di 120 s, cioè mentre /apply sta ancora applicando: così il «rimetti pronto» di /apply non trova un lavoro nuovo aperto. Senza la colonna (42703 o PGRST204) l'avvio va avanti come prima; un altro guasto della lettura dà 502 come la lettura dei lavori aperti. Prova con database finto a stato condiviso e indice della 640: la gara (prenota, avvio, rimetti pronto), applicazione finita, applicato vecchio, colonna assente (42703 e PGRST204), guasto della lettura; 6 verdi, sulla base 2 rosse.",
+      "cosa_resta": "Il segno di fine non esiste ancora: (1) la migrazione 750 (pronta, file nuovo della fascia) non è nel commit perché aggiunge una colonna e i tipi generati (lib/database.types.ts, non miei) vanno rigenerati nello stesso commit, se no due prove R11 dei tipi diventano rosse; (2) /apply deve scrivere il segno a fine applicazione, azzerarlo in rimettiPronto e dire il 23505 al negozio (file di R14). Finché non c'è la colonna la rotta di avvio si comporta come alla base. Ordine: R13-003 su apply, poi questa su apply + finto-catalogo + tipi + 750 + le due prove nuove, tutto insieme; la 750 si applica al database solo dopo che /apply scrive il segno.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "DOPO la modifica di R13-003 (stesso file, il diff qui sotto ha come contesto MOTIVO_NON_CONTROLLATO): COLONNA_ASSENTE e MOTIVI_DI_PASSAGGIO in testa; rimettiPronto (righe 124-133 della base) diventa async, rimette a NULL applicazione_finita_il (senza colonna, 42703/PGRST204, rifà la scrittura come prima), legge l'errore e torna il perché (23505 = un altro lavoro avviato nel frattempo); le due uscite di lettura caduta (categorie riga 130-133, catalogo riga 187-190) dicono quel perché; a fine applicazione (riga 345) se rimettiPronto fallisce il lavoro non è ripetibile, i motivi «di passaggio» dei saltati lo dicono e la risposta porta `avviso`; se non ripetibile si scrive il segno di fine (errore 42703/PGRST204 ignorato). Diff esatto (git apply, dopo quello di R13-003):\n--- a/app/api/ai/catalog-batch/apply/route.ts\n+++ b/app/api/ai/catalog-batch/apply/route.ts\n@@ -50,6 +50,19 @@\n const MOTIVO_NON_CONTROLLATO = 'non controllato in tempo: rimandalo';\n \n /**\n+ * 22/11/2026 (R13-001 · R13-009) — Il segno di fine dell'applicazione\n+ * (applicazione_finita_il) nasce con la migrazione 750: finche' non c'e',\n+ * Postgres risponde 42703 e PostgREST PGRST204, e si fa come prima.\n+ */\n+const COLONNA_ASSENTE = new Set(['42703', 'PGRST204']);\n+/** I motivi dei saltati «di passaggio», quelli che lasciano il lavoro ripetibile. */\n+const MOTIVI_DI_PASSAGGIO = new Set([\n+  'filtro dei contenuti non disponibile: riprova più tardi',\n+  'scrittura non riuscita',\n+  MOTIVO_NON_CONTROLLATO,\n+]);\n+\n+/**\n  * Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. Passata la\n  * `scadenza` nessun gruppo nuovo parte: le sue voci restano senza esito.\n  */\n@@ -136,15 +149,33 @@\n     .order('name');\n   // Revisione S10 — Una lettura caduta non deve chiudere il lavoro: si rimette\n   // «pronto» e si dice di riprovare (come in catalog-apply-bulk).\n-  const rimettiPronto = () =>\n-    admin\n-      .from('catalog_ai_jobs')\n-      .update({ status: 'ready', updated_at: new Date().toISOString() })\n-      .eq('id', job.id)\n-      .eq('seller_id', user.id);\n+  // 22/11/2026 (R13-001 · R13-009) — Rimesso pronto, il lavoro non e' finito: il\n+  // segno di fine (applicazione_finita_il, migrazione 750) torna a NULL; senza la\n+  // colonna (42703 / PGRST204) si rimette pronto come prima. E l'errore si legge:\n+  // il 23505 e' la 640, cioe' nel frattempo il negozio ha avviato un altro\n+  // lavoro, e questo non puo' piu' tornare pronto. Torna il perche', o null.\n+  const rimettiPronto = async (): Promise<string | null> => {\n+    const scrivi = (azzeraSegno: boolean) =>\n+      admin\n+        .from('catalog_ai_jobs')\n+        .update({ status: 'ready', updated_at: new Date().toISOString(), ...(azzeraSegno ? { applicazione_finita_il: null } : {}) })\n+        .eq('id', job.id)\n+        .eq('seller_id', user.id);\n+    let { error } = await scrivi(true);\n+    if (error && COLONNA_ASSENTE.has(String(error.code ?? ''))) ({ error } = await scrivi(false));\n+    if (!error) return null;\n+    logger.error('catalog-batch apply: lavoro non rimesso pronto', { jobId: job.id, status: error.code });\n+    return error.code === '23505'\n+      ? 'nel frattempo hai avviato un altro lavoro sul catalogo, e questo non può più tornare pronto da ripetere'\n+      : 'non sono riuscito a rimettere il lavoro pronto da ripetere';\n+  };\n   if (erroreCategorie) {\n-    await rimettiPronto();\n-    return ApiErrors.unavailable('Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.');\n+    const nonRimesso = await rimettiPronto();\n+    return ApiErrors.unavailable(\n+      nonRimesso\n+        ? `Non riesco a leggere le categorie in questo momento e non ho cambiato niente, ma ${nonRimesso}.`\n+        : 'Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.',\n+    );\n   }\n   const categories = (categoriesData ?? []) as CategoryRow[];\n \n@@ -200,8 +231,12 @@\n         .eq('seller_id', user.id)\n         .in('id', ids);\n       if (erroreProdotti) {\n-        await rimettiPronto();\n-        return ApiErrors.unavailable('Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.');\n+        const nonRimesso = await rimettiPronto();\n+        return ApiErrors.unavailable(\n+          nonRimesso\n+            ? `Non riesco a leggere il catalogo in questo momento e non ho cambiato niente, ma ${nonRimesso}.`\n+            : 'Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.',\n+        );\n       }\n       const current = new Map((rows ?? []).map((r) => [(r as { id: string }).id, r as unknown as ProductRow]));\n \n@@ -362,12 +397,36 @@\n   // Ripetere riscrive anche i prodotti gia' entrati con lo stesso testo (una\n   // riga di audit in piu' e il filtro rifatto): e' il prezzo per non buttare il\n   // lavoro pagato.\n-  if (ripetibile) await rimettiPronto();\n+  let avviso: string | undefined;\n+  if (ripetibile) {\n+    const nonRimesso = await rimettiPronto();\n+    if (nonRimesso) {\n+      // R13-001 — Il lavoro resta chiuso: i saltati «di passaggio» non si\n+      // ripetono piu' da qui, e si dice perche' invece di «riprova».\n+      ripetibile = false;\n+      avviso = nonRimesso;\n+      for (const e of esiti) {\n+        if (e.esito === 'saltato' && e.motivo && MOTIVI_DI_PASSAGGIO.has(e.motivo)) e.motivo = `${e.motivo.split(':')[0]}: ${nonRimesso}`;\n+      }\n+    }\n+  }\n+  if (!ripetibile) {\n+    // R13-001 · R13-009 — Il segno di fine: da qui la rotta di avvio non aspetta\n+    // piu' questo lavoro. Senza la colonna (la 750 non applicata) si salta.\n+    const { error: erroreSegno } = await admin\n+      .from('catalog_ai_jobs')\n+      .update({ applicazione_finita_il: new Date().toISOString() })\n+      .eq('id', job.id)\n+      .eq('seller_id', user.id);\n+    if (erroreSegno && !COLONNA_ASSENTE.has(String(erroreSegno.code ?? ''))) {\n+      logger.error('catalog-batch apply: segno di fine non scritto', { jobId: job.id, status: erroreSegno.code });\n+    }\n+  }\n \n   const saltati = esiti.filter((e) => e.esito === 'saltato').length;\n   if (saltati > 0) {\n     logger.warn('catalog-batch apply: prodotti saltati', { jobId: job.id, sellerId: user.id, saltati, ripetibile });\n   }\n   logger.info('catalog-batch applied', { jobId: job.id, operation: job.operation, applied });\n-  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti });\n+  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti, ...(avviso ? { avviso } : {}) });\n });\n"
+        },
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "Rigenerato con `npm run db:types` dopo la migrazione 750: tre righe (Row, Insert, Update di catalog_ai_jobs). Senza, con la 750 nel ramo diventano rosse tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts e tests/unit/riparazione-r11-viste-nei-tipi.test.ts («il file salvato è quello che il generatore produce»), e la scrittura del segno in apply/route.ts fa rossa nessuna-scrittura-inventa-una-colonna. Diff esatto:\ndiff --git a/lib/database.types.ts b/lib/database.types.ts\nindex 48053bff..c7829042 100644\n--- a/lib/database.types.ts\n+++ b/lib/database.types.ts\n@@ -285,6 +285,7 @@ export interface Database {\n           error: string | null;\n           created_at: string;\n           updated_at: string;\n+          applicazione_finita_il: string | null;\n         };\n         Insert: {\n           id?: string;\n@@ -298,6 +299,7 @@ export interface Database {\n           error?: string | null;\n           created_at?: string;\n           updated_at?: string;\n+          applicazione_finita_il?: string | null;\n         };\n         Update: {\n           id?: string;\n@@ -311,6 +313,7 @@ export interface Database {\n           error?: string | null;\n           created_at?: string;\n           updated_at?: string;\n+          applicazione_finita_il?: string | null;\n         };\n         Relationships: [];\n       };\n"
+        },
+        {
+          "file": "migrations/750_il_lavoro_ai_applicato_ha_il_segno_di_fine.sql",
+          "modifica": "File NUOVO nella fascia di R13 (750 libera), pronto ma non nel commit: va nello stesso commit dei tipi rigenerati, perché da sola fa rosse le due prove R11 dei tipi. Da applicare al database solo insieme alla scrittura del segno in apply/route.ts (con la colonna e senza quella scrittura ogni applicazione fermerebbe l'avvio per 120 s). Diff esatto (file nuovo):\ndiff --git a/migrations/750_il_lavoro_ai_applicato_ha_il_segno_di_fine.sql b/migrations/750_il_lavoro_ai_applicato_ha_il_segno_di_fine.sql\nnew file mode 100644\nindex 00000000..674b193f\n--- /dev/null\n+++ b/migrations/750_il_lavoro_ai_applicato_ha_il_segno_di_fine.sql\n@@ -0,0 +1,48 @@\n+-- =============================================================================\n+-- 750 — Il lavoro AI sul catalogo applicato ha il segno di fine (R13-001 · R13-009)\n+-- =============================================================================\n+-- /apply (app/api/ai/catalog-batch/apply/route.ts) segna il lavoro 'applied'\n+-- quando COMINCIA ad applicarlo, e lo rimette 'ready' se un guasto di passaggio\n+-- lo lascia ripetibile. Se in mezzo il negozio avvia un lavoro nuovo, la 640 (un\n+-- solo lavoro aperto per negozio) rifiuta quel 'ready' con 23505 e il lavoro\n+-- pagato resta chiuso. Da 'applied' da solo non si capisce se l'applicazione è\n+-- finita o è ancora in corso.\n+--\n+-- La colonna nuova applicazione_finita_il (nullable, senza valore di partenza)\n+-- è il segno di fine: /apply la scrive quando ha finito e la rimette a NULL\n+-- quando rimette il lavoro 'ready'. La rotta di avvio\n+-- (app/api/ai/catalog-batch/start/route.ts) risponde 409 solo se l'ultimo\n+-- lavoro 'applied' del negozio ha il segno NULL ed è di meno di 120 s (la durata\n+-- massima di /apply). Le righe che ci sono già restano NULL: sono vecchie, e\n+-- oltre i 120 s non fermano niente.\n+--\n+-- DA APPLICARE INSIEME ALLA SCRITTURA DEL SEGNO IN /apply: con la colonna e\n+-- senza quella scrittura, ogni applicazione fermerebbe l'avvio per 120 s. La\n+-- rotta di avvio regge anche senza la colonna (errore 42703: si va avanti come\n+-- prima della 750).\n+--\n+-- Se public.catalog_ai_jobs non c'è (un database dove la 099 non è passata),\n+-- la migrazione non fa niente e non fallisce.\n+--\n+-- Prova: tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql\n+-- Per tornare indietro:\n+--   ALTER TABLE public.catalog_ai_jobs DROP COLUMN IF EXISTS applicazione_finita_il;\n+-- =============================================================================\n+\n+BEGIN;\n+\n+DO $$\n+BEGIN\n+  IF to_regclass('public.catalog_ai_jobs') IS NULL THEN\n+    RAISE NOTICE '750: public.catalog_ai_jobs non c''è, niente da fare';\n+    RETURN;\n+  END IF;\n+\n+  EXECUTE 'ALTER TABLE public.catalog_ai_jobs ADD COLUMN IF NOT EXISTS applicazione_finita_il timestamptz';\n+  EXECUTE $c$\n+    COMMENT ON COLUMN public.catalog_ai_jobs.applicazione_finita_il IS\n+      'Quando /apply ha finito di applicare il lavoro (NULL: mai applicato, o applicazione in corso, o rimesso pronto). La rotta di avvio aspetta un applicazione senza questo segno di meno di 120 s.'\n+  $c$;\n+END $$;\n+\n+COMMIT;\n\nAGGIUNTA dopo il collaudo: in fondo alla migrazione, dopo l'ALTER TABLE, la riga `NOTIFY pgrst, 'reload schema';` (come le altre 134 migrazioni del deposito). Senza, PostgREST può tenere lo schema vecchio: in /apply la scrittura del segno riceve PGRST204, viene presa per «colonna assente» e ignorata, mentre start vede già la colonna a NULL e blocca l'avvio per 120 s dopo ogni applicazione."
+        },
+        {
+          "file": "tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql",
+          "modifica": "Prova SQL NUOVA della 750 (sei controlli: colonna timestamptz nullable senza valore di partenza, lettura della rotta di avvio con applicazione in corso / finita / vecchia, rimetti pronto col segno a NULL). Eseguita sul Postgres locale: senza la 750 psql esce 3 (P0001, «manca applicazione_finita_il»), con la 750 esce 0. Diff esatto (file nuovo):\ndiff --git a/tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql b/tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql\nnew file mode 100644\nindex 00000000..d44751aa\n--- /dev/null\n+++ b/tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql\n@@ -0,0 +1,120 @@\n+-- =============================================================================\n+-- R13-001 · R13-009 — Il lavoro AI sul catalogo applicato ha il segno di fine (750)\n+-- =============================================================================\n+--   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test\n+--\n+-- Le rotte scrivono con la chiave di servizio: qui si scrive come loro (senza\n+-- RLS) e si guarda cosa tiene il database.\n+-- ① la colonna applicazione_finita_il c'è, è un timestamptz, accetta NULL e non\n+--    ha un valore di partenza (un lavoro nuovo nasce senza segno)\n+-- ② un lavoro appena prenotato da /apply ('applied', senza segno, di adesso) è\n+--    quello che la lettura della rotta di avvio trova «in applicazione»\n+-- ③ scritto il segno di fine, la stessa lettura non trova più niente\n+-- ④ un lavoro applicato senza segno ma vecchio (righe di prima della 750) non\n+--    conta come applicazione in corso\n+-- ⑤ /apply rimette il lavoro 'ready' col segno a NULL, e il database lo accetta\n+-- Senza la 750 ① è rosso, e gli altri non si possono fare. ROLLBACK finale.\n+-- =============================================================================\n+\n+BEGIN;\n+\n+SET LOCAL mycity.allow_profile_write = '1';\n+\n+CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;\n+\n+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES\n+  ('75075075-0000-0000-0000-000000000001', 'bottega-r13-segno@test.it', '{\"role\":\"seller\"}');\n+\n+-- ① la colonna\n+INSERT INTO esiti\n+SELECT 'la colonna del segno di fine c''è, timestamptz, nullable, senza valore di partenza',\n+       coalesce(bool_and(data_type = 'timestamp with time zone' AND is_nullable = 'YES' AND column_default IS NULL), false),\n+       coalesce(string_agg(data_type || ' · nullable ' || is_nullable || ' · default ' || coalesce(column_default, 'nessuno'), '; '),\n+                'manca applicazione_finita_il su catalog_ai_jobs: la 750 non è passata')\n+  FROM information_schema.columns\n+ WHERE table_schema = 'public' AND table_name = 'catalog_ai_jobs' AND column_name = 'applicazione_finita_il';\n+\n+DO $$\n+DECLARE\n+  presente boolean;\n+  trovato uuid;\n+  segno timestamptz;\n+  stato text;\n+  -- La lettura della rotta di avvio: l'ultimo applicato del negozio, poi «senza segno e di meno di 120 s».\n+  lettura constant text := $q$\n+    SELECT id FROM (\n+      SELECT id, updated_at, applicazione_finita_il\n+        FROM public.catalog_ai_jobs\n+       WHERE seller_id = '75075075-0000-0000-0000-000000000001' AND status = 'applied'\n+       ORDER BY updated_at DESC\n+       LIMIT 1\n+    ) ultimo\n+     WHERE applicazione_finita_il IS NULL AND updated_at > now() - interval '120 seconds'\n+  $q$;\n+BEGIN\n+  SELECT EXISTS (\n+    SELECT 1 FROM information_schema.columns\n+     WHERE table_schema = 'public' AND table_name = 'catalog_ai_jobs' AND column_name = 'applicazione_finita_il'\n+  ) INTO presente;\n+  IF NOT presente THEN\n+    RETURN;\n+  END IF;\n+\n+  -- Un lavoro di ieri, applicato senza segno (com'erano tutti prima della 750).\n+  INSERT INTO public.catalog_ai_jobs (id, seller_id, operation, status, created_at, updated_at)\n+  VALUES ('b7507507-0000-0000-0000-000000000001', '75075075-0000-0000-0000-000000000001',\n+          'improve', 'applied', now() - interval '1 day', now() - interval '1 day');\n+  -- ④\n+  EXECUTE lettura INTO trovato;\n+  INSERT INTO esiti VALUES ('un applicato vecchio senza segno non è un applicazione in corso', trovato IS NULL,\n+                            coalesce('trovato ' || trovato::text, 'nessuno'));\n+\n+  -- Un lavoro pronto da rivedere, nato senza segno.\n+  INSERT INTO public.catalog_ai_jobs (id, seller_id, operation, status)\n+  VALUES ('b7507507-0000-0000-0000-000000000002', '75075075-0000-0000-0000-000000000001', 'redescribe', 'ready');\n+  EXECUTE 'SELECT applicazione_finita_il FROM public.catalog_ai_jobs WHERE id = $1'\n+     INTO segno USING 'b7507507-0000-0000-0000-000000000002'::uuid;\n+  INSERT INTO esiti VALUES ('un lavoro nuovo nasce senza segno di fine', segno IS NULL, coalesce(segno::text, 'NULL'));\n+\n+  -- ② /apply lo prenota: 'applied', updated_at adesso, il segno non lo tocca.\n+  UPDATE public.catalog_ai_jobs SET status = 'applied', updated_at = now()\n+   WHERE id = 'b7507507-0000-0000-0000-000000000002' AND status = 'ready';\n+  EXECUTE lettura INTO trovato;\n+  INSERT INTO esiti VALUES ('il lavoro appena prenotato è un applicazione in corso',\n+                            trovato = 'b7507507-0000-0000-0000-000000000002'::uuid,\n+                            coalesce('trovato ' || trovato::text, 'nessuno'));\n+\n+  -- ⑤ un guasto di passaggio: /apply lo rimette pronto col segno a NULL.\n+  BEGIN\n+    EXECUTE 'UPDATE public.catalog_ai_jobs SET status = ''ready'', applicazione_finita_il = NULL, updated_at = now() WHERE id = $1'\n+      USING 'b7507507-0000-0000-0000-000000000002'::uuid;\n+    SELECT status INTO stato FROM public.catalog_ai_jobs WHERE id = 'b7507507-0000-0000-0000-000000000002';\n+    INSERT INTO esiti VALUES ('rimesso pronto col segno a NULL', stato = 'ready', 'stato ' || stato);\n+  EXCEPTION WHEN others THEN\n+    INSERT INTO esiti VALUES ('rimesso pronto col segno a NULL', false, SQLSTATE);\n+  END;\n+\n+  -- ③ riprenotato e finito: /apply scrive il segno.\n+  UPDATE public.catalog_ai_jobs SET status = 'applied', updated_at = now()\n+   WHERE id = 'b7507507-0000-0000-0000-000000000002' AND status = 'ready';\n+  EXECUTE 'UPDATE public.catalog_ai_jobs SET applicazione_finita_il = now() WHERE id = $1'\n+    USING 'b7507507-0000-0000-0000-000000000002'::uuid;\n+  EXECUTE lettura INTO trovato;\n+  INSERT INTO esiti VALUES ('col segno di fine l applicazione non è più in corso', trovato IS NULL,\n+                            coalesce('trovato ' || trovato::text, 'nessuno'));\n+END $$;\n+\n+DO $$\n+DECLARE r record; rossi int;\n+BEGIN\n+  FOR r IN SELECT * FROM esiti ORDER BY nome LOOP\n+    RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;\n+  END LOOP;\n+  SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;\n+  IF rossi > 0 THEN\n+    RAISE EXCEPTION '% controllo/i rosso/i: il lavoro AI applicato non ha il segno di fine', rossi;\n+  END IF;\n+  RAISE INFO 'il segno di fine dell applicazione: % controlli verdi', (SELECT count(*) FROM esiti);\n+END $$;\n+\n+ROLLBACK;\n"
+        },
+        {
+          "file": "tests/unit/aiuti/finto-catalogo.ts",
+          "modifica": "Aiutante comune delle prove: conta come «lavoro segnato applicato» ogni update su catalog_ai_jobs; la scrittura del solo segno di fine a fine lavoro farebbe 2 invece di 1 in tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts:217. Non si conta l'update che scrive SOLO applicazione_finita_il (prenotazione e rimetti pronto restano contati). Diff esatto:\n--- a/tests/unit/aiuti/finto-catalogo.ts\n+++ b/tests/unit/aiuti/finto-catalogo.ts\n@@ -28,7 +28,11 @@\n     if (tabella === 'categories') return { data: stato.categorie, error: null };\n     if (tabella === 'catalog_ai_jobs') {\n       if (d.op === 'update') {\n-        stato.lavoroApplicato += 1;\n+        // R13-001 — Il segno di fine dell'applicazione (applicazione_finita_il,\n+        // scritto da solo a fine lavoro) non segna di nuovo il lavoro: non si conta.\n+        const campi = Object.keys(d.valori ?? {});\n+        const soloSegnoDiFine = campi.length > 0 && campi.every((k) => k === 'applicazione_finita_il');\n+        if (!soloSegnoDiFine) stato.lavoroApplicato += 1;\n         // S10 (5/11/2026) — La rotta prenota il lavoro con un update che\n         // restituisce le righe toccate: una riga = prenotato.\n         return { data: [{ id: stato.lavoro?.id }], error: null };\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r13-applicazione-segno-e-scadenza.test.ts",
+          "modifica": "Prova NUOVA per apply/route.ts (R13-003 e R13-001 insieme), da aggiungere con le due modifiche di apply: 5 casi (scadenza dei 70 s con fornitore lento: 25 controllati, 5 «non controllato in tempo: rimandalo», ripetibile; segno di fine scritto; segno a NULL quando torna pronto; 23505 detto al negozio senza «riprova»; senza colonna si rimette pronto come prima). Provata: con le due modifiche 5/5 verdi; sulla base 4 rosse; con la sola R13-003 3 rosse. Diff esatto (file nuovo):\ndiff --git a/tests/unit/riparazione-r13-applicazione-segno-e-scadenza.test.ts b/tests/unit/riparazione-r13-applicazione-segno-e-scadenza.test.ts\nnew file mode 100644\nindex 00000000..e5d445da\n--- /dev/null\n+++ b/tests/unit/riparazione-r13-applicazione-segno-e-scadenza.test.ts\n@@ -0,0 +1,188 @@\n+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n+\n+/**\n+ * R13-003 — Il filtro dei contenuti nel lavoro massivo sul catalogo ha una scadenza:\n+ * dopo 70 s nessun gruppo nuovo parte, e chi resta fuori si dice («non controllato\n+ * in tempo: rimandalo») e si rimanda (il lavoro torna «pronto»). Prima i 40 gruppi\n+ * partivano tutti e sforavano i 120 s della rotta.\n+ *\n+ * R13-001 · R13-009 — A fine applicazione si scrive il segno di fine\n+ * (applicazione_finita_il, migrazione 750), e «rimetti pronto» lo azzera. L'errore\n+ * di «rimetti pronto» si legge: il 23505 (la 640, un altro lavoro avviato nel\n+ * frattempo) si dice al negozio, invece di promettere «puoi riprovare». Senza la\n+ * colonna (PGRST204) si fa come prima.\n+ */\n+\n+const db = vi.hoisted(() => ({\n+  lavoro: null as Record<string, unknown> | null,\n+  prodotti: [] as Record<string, unknown>[],\n+  aggiornamentiLavoro: [] as Record<string, unknown>[],\n+  erroreSulPronto: null as { code: string } | null,\n+  colonnaAssente: false,\n+  categorie: [{ id: 'casa', name: 'Casa', slug: 'casa', parent_id: null }],\n+}));\n+\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({\n+  ...((await originale()) as Record<string, unknown>),\n+  AI_NEGOZI_ACCESA: true,\n+}));\n+vi.mock('@/lib/api/middleware', () => ({\n+  withSellerAuth: (h: (ctx: { user: { id: string }; req: Request }) => unknown) => (req: Request) =>\n+    h({ user: { id: 'negozio-1' }, req }),\n+}));\n+vi.mock('@/lib/rate-limit', () => ({\n+  rateLimitAsync: vi.fn(async () => ({ allowed: true, retryAfterSec: 0 })),\n+  getClientIp: () => '1.2.3.4',\n+}));\n+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+vi.mock('@/lib/audit', () => ({ writeAudit: async () => undefined }));\n+\n+const filtro = vi.hoisted(() => ({ chiamate: 0, msPerChiamata: 0, cadeSu: new Set<string>() }));\n+vi.mock('@/lib/ai/moderation', () => ({\n+  classifyProductPolicy: async (p: { name: string }) => {\n+    filtro.chiamate++;\n+    // Il fornitore lento: ogni controllo fa passare il tempo.\n+    if (filtro.msPerChiamata) vi.setSystemTime(Date.now() + filtro.msPerChiamata);\n+    if (filtro.cadeSu.has(p.name)) throw new Error('429');\n+    return { allowed: true };\n+  },\n+}));\n+\n+vi.mock('@/lib/supabase/server', () => {\n+  type D = { op: 'select' | 'update'; valori: Record<string, unknown> | null; filtri: Record<string, unknown> };\n+  const risolvi = (tabella: string, d: D, una: boolean) => {\n+    if (tabella === 'categories') return { data: db.categorie, error: null };\n+    if (tabella === 'catalog_ai_jobs') {\n+      if (d.op === 'update') {\n+        const valori = d.valori ?? {};\n+        if (db.colonnaAssente && 'applicazione_finita_il' in valori) return { data: null, error: { code: 'PGRST204' } };\n+        if (valori.status === 'ready' && db.erroreSulPronto) return { data: null, error: db.erroreSulPronto };\n+        if (d.filtri.status !== undefined && db.lavoro?.status !== d.filtri.status) return { data: [], error: null };\n+        db.aggiornamentiLavoro.push(valori);\n+        db.lavoro = { ...db.lavoro, ...valori };\n+        return { data: [{ id: db.lavoro.id }], error: null };\n+      }\n+      return { data: db.lavoro ? { ...db.lavoro } : null, error: null };\n+    }\n+    if (d.op === 'update') return { data: null, error: null };\n+    return { data: una ? null : db.prodotti, error: null };\n+  };\n+  const tabella = (nome: string) => {\n+    const d: D = { op: 'select', valori: null, filtri: {} };\n+    const q = {\n+      select: () => q,\n+      order: () => q,\n+      in: () => q,\n+      eq: (c: string, v: unknown) => {\n+        d.filtri[c] = v;\n+        return q;\n+      },\n+      update: (v: Record<string, unknown>) => {\n+        d.op = 'update';\n+        d.valori = v;\n+        return q;\n+      },\n+      single: async () => risolvi(nome, d, true),\n+      then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(risolvi(nome, d, false)).then(ok, ko),\n+    };\n+    return q;\n+  };\n+  return { getAdminSupabase: () => ({ from: tabella }) };\n+});\n+\n+import { POST } from '@/app/api/ai/catalog-batch/apply/route';\n+\n+const prodotto = (id: string) => ({\n+  id, seller_id: 'negozio-1', name: `Prodotto ${id}`, description: 'Una descrizione abbastanza lunga.',\n+  price: 5, compare_at_price: null, unit: 'pezzo', condition: 'nuovo', stock: 3, status: 'available',\n+  images: ['https://mycity.test/f.jpg'], tags: [], has_variants: false, category_id: 'casa', attributes: {},\n+});\n+\n+const prepara = (quanti: number) => {\n+  const ids = Array.from({ length: quanti }, (_, i) => `p${i + 1}`);\n+  db.prodotti = ids.map(prodotto);\n+  db.lavoro = {\n+    id: 'l1', seller_id: 'negozio-1', operation: 'improve', status: 'ready',\n+    results: ids.map((id) => ({ product_id: id, patch: { name: `Nome nuovo ${id}` } })),\n+  };\n+};\n+\n+const applica = async () => {\n+  const res = await POST(\n+    new Request('http://localhost/api/ai/catalog-batch/apply', {\n+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jobId: 'l1' }),\n+    }) as never,\n+  );\n+  return { status: res.status, json: (await res.json()) as Record<string, unknown> };\n+};\n+type Esito = { productId: string; esito: string; motivo?: string };\n+\n+beforeEach(() => {\n+  vi.useFakeTimers({ toFake: ['Date'] });\n+  vi.setSystemTime(new Date('2026-11-22T10:00:00.000Z'));\n+  db.aggiornamentiLavoro.length = 0;\n+  db.erroreSulPronto = null;\n+  db.colonnaAssente = false;\n+  filtro.chiamate = 0;\n+  filtro.msPerChiamata = 0;\n+  filtro.cadeSu.clear();\n+});\n+afterEach(() => vi.useRealTimers());\n+\n+describe('R13-003 — il filtro del lavoro massivo ha una scadenza', () => {\n+  it('con il fornitore lento, dopo 70 s non parte un gruppo nuovo: chi resta fuori si dice e si rimanda', async () => {\n+    prepara(30);\n+    filtro.msPerChiamata = 3_000; // 15 s a gruppo da 5\n+    const { status, json } = await applica();\n+    expect(status).toBe(200);\n+    expect(filtro.chiamate).toBe(25);\n+    const fuori = (json.esiti as Esito[]).filter((e) => e.motivo === 'non controllato in tempo: rimandalo');\n+    expect(fuori.map((e) => e.productId)).toEqual(['p26', 'p27', 'p28', 'p29', 'p30']);\n+    expect(json.applied).toBe(25);\n+    expect(json.ripetibile).toBe(true);\n+    expect(db.lavoro?.status).toBe('ready');\n+  });\n+});\n+\n+describe('R13-001 · R13-009 — il segno di fine e il «rimetti pronto» letto', () => {\n+  it('a fine applicazione il lavoro ha il segno di fine', async () => {\n+    prepara(3);\n+    const { json } = await applica();\n+    expect(json.ripetibile).toBe(false);\n+    expect(db.lavoro?.status).toBe('applied');\n+    expect(typeof db.lavoro?.applicazione_finita_il).toBe('string');\n+  });\n+\n+  it('rimesso pronto, il segno torna a NULL', async () => {\n+    prepara(3);\n+    filtro.cadeSu.add('Nome nuovo p2');\n+    const { json } = await applica();\n+    expect(json.ripetibile).toBe(true);\n+    expect(db.lavoro?.status).toBe('ready');\n+    expect(db.aggiornamentiLavoro.at(-1)).toMatchObject({ status: 'ready', applicazione_finita_il: null });\n+  });\n+\n+  it('se un altro lavoro e partito nel frattempo (23505), lo si dice invece di «riprova»', async () => {\n+    prepara(3);\n+    filtro.cadeSu.add('Nome nuovo p2');\n+    db.erroreSulPronto = { code: '23505' };\n+    const { status, json } = await applica();\n+    expect(status).toBe(200);\n+    expect(json.ripetibile).toBe(false);\n+    expect(String(json.avviso)).toMatch(/altro lavoro/);\n+    const p2 = (json.esiti as Esito[]).find((e) => e.productId === 'p2');\n+    expect(p2?.motivo).toMatch(/altro lavoro/);\n+    expect(p2?.motivo).not.toMatch(/riprova/);\n+    expect(db.lavoro?.status).toBe('applied');\n+    expect(typeof db.lavoro?.applicazione_finita_il).toBe('string');\n+  });\n+\n+  it('senza la colonna (la 750 non applicata) si rimette pronto come prima', async () => {\n+    prepara(3);\n+    filtro.cadeSu.add('Nome nuovo p2');\n+    db.colonnaAssente = true;\n+    const { json } = await applica();\n+    expect(json.ripetibile).toBe(true);\n+    expect(db.lavoro?.status).toBe('ready');\n+  });\n+});\n"
+        }
+      ],
+      "nota": "Nella rotta di avvio il nome della colonna sta in una costante (select con template) perché tests/unit/nessuna-colonna-che-non-esiste.test.ts confronta le select letterali con lib/database.types.ts, che la colonna non l'ha ancora: rigenerati i tipi si può tornare alla stringa letterale. Prova SQL della 750 non passata da prova-rimessa (la migrazione non è nel commit): fatta a mano sul Postgres locale ricostruito con tests/sql/harness/apply.sh, senza la 750 `psql -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql` esce 3 (P0001), con la 750 esce 0. Con tutte le modifiche proposte applicate in prova (poi tolte): tsc verde, 15 file di prova di apply/finto-catalogo/guardiani delle colonne/tipi R11 verdi (137 prove).",
+      "verificato_da": "revisore A (subagente generico, modello grande): prova_comando 6/6 verdi e 2 rosse sulla base; 17 file che importano start/route più il guardiano delle colonne verdi (82 prove); intreccio a mano fra le due letture di start, la prenotazione e rimettiPronto: con la colonna nessuna finestra; i 6 diff serve_file_altrui passano git apply --check (apply solo dopo quello di R13-003); tutto applicato: tsc verde, 30 file/208 prove verdi; Postgres locale con la 750: prova SQL 6 controlli verdi, 640 verde, 750 rilanciabile. Verdetto: regge (come parziale). Rilievo: alla 750 mancava NOTIFY pgrst, aggiunto nella modifica scritta."
+    },
+    {
+      "id": "R13-002",
+      "chiave": "ai-endpoints|il copilot su un sottoinsieme grande del catalogo (es. «tutti i disponibili», 150 su 200) scrive ancora gli id uno per uno e risponde «riprova»",
+      "esito": "parziale",
+      "commit": "2687402228016aa7d128995c43f9de9e39b24a52",
+      "file_toccati": [
+        "app/api/ai/copilot/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-copilot-filtro-col-campo-vuoto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-copilot-filtro-col-campo-vuoto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 26874022^ --file app/api/ai/copilot/route.ts --prove tests/unit/riparazione-r13-copilot-filtro-col-campo-vuoto.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Alla base la regola del copilot ha già il filtro per stato/categoria con gli id scelti dal server e il tetto delle 40 voci singole fatto rispettare dal server. Restava il buco detto dal giro prima: un campo del filtro lasciato a null dal modello contava come criterio scritto e non valido, e {stato:\"available\", categoria:null} sceglieva 0 prodotti invece di 150. Ora null vale come campo assente; un criterio scritto male (stato fuori elenco, categoria inesistente, vuota o non testo) continua a non scegliere niente. Prova: 150 con categoria null, la categoria con le sottocategorie con stato null, i casi nulli/sbagliati a 0; sulla base 2 rosse.",
+      "verificato_da": "revisore A (modello grande): prova_comando 3/3 verdi, 2 rosse sulla base; 12 file del copilot e delle regole verdi (63 prove); 8 varianti del criterio in copia. Verdetto: parziale: categoria '' (o di soli spazi) e stato '' danno ancora 0 modifiche (app/api/ai/copilot/route.ts:127).",
+      "cosa_resta": "In app/api/ai/copilot/route.ts:127 un campo del criterio vuoto ('' o di soli spazi, per categoria o stato) va trattato come null: oggi {stato:'available', categoria:''} dà ancora 0 modifiche con il riepilogo che ne promette N. C'erano già alla base: route.ts:325-328 con tutti:true più filtro vince «tutti» (200 invece di 150, bozze comprese); route.ts:327-328 con product_ids espliciti e un filtro vuoto gli id vengono buttati (0 modifiche)."
+    },
+    {
+      "id": "R13-003",
+      "chiave": "ai-endpoints|la conformità dei prodotti (classifyproductpolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
+      "esito": "serve_file_altrui",
+      "prova": "lib/ai/moderation.ts:134-145 alla base: classifyProductPolicy passa timeoutMs: TEMPO_FILTRO_PRODOTTI_MS (10 s, riga 91) e senzaRitentativi: true. Il tempo suo c'è già: in moderation.ts non resta niente da riparare.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "aGruppi (righe 43-54 della base) prende una `scadenza` (default Infinity) e prima di ogni gruppo fa `if (Date.now() > scadenza) break` (le voci rimaste senza esito: undefined); `const inizio = Date.now()` in testa all'handler (riga 57); la chiamata di riga 222 passa `inizio + FILTRI_ENTRO_MS` (70_000, come CONTROLLI_ENTRO_MS di catalog-apply-bulk); nel forEach dei verdetti (righe 239-247) chi non ha esito va nei bloccati con MOTIVO_NON_CONTROLLATO = «non controllato in tempo: rimandalo» e rende il lavoro ripetibile (torna «pronto» e si rimanda); la risposta lo dice negli esiti. Diff esatto sulla base (git apply):\n--- a/app/api/ai/catalog-batch/apply/route.ts\n+++ b/app/api/ai/catalog-batch/apply/route.ts\n@@ -40,20 +40,35 @@\n /** Quante chiamate al filtro dei contenuti partono insieme. */\n const FILTRI_INSIEME = 5;\n \n-/** Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. */\n+/**\n+ * 22/11/2026 (R13-003) — La rotta ha 120 s (vercel.json). Con 5 filtri insieme, 200\n+ * righe sono 40 gruppi e a 10 s l'uno si sforava: 504, niente scritto e filtri gia'\n+ * pagati. Come catalog-apply-bulk: dopo 70 s nessun gruppo nuovo parte (quelli in\n+ * volo hanno al massimo 10 s), e chi resta fuori si dice e si rimanda.\n+ */\n+const FILTRI_ENTRO_MS = 70_000;\n+const MOTIVO_NON_CONTROLLATO = 'non controllato in tempo: rimandalo';\n+\n+/**\n+ * Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. Passata la\n+ * `scadenza` nessun gruppo nuovo parte: le sue voci restano senza esito.\n+ */\n async function aGruppi<T, R>(\n   voci: T[],\n   quanti: number,\n   lavoro: (v: T) => Promise<R>,\n-): Promise<PromiseSettledResult<R>[]> {\n-  const esiti: PromiseSettledResult<R>[] = [];\n+  scadenza: number = Infinity,\n+): Promise<(PromiseSettledResult<R> | undefined)[]> {\n+  const esiti: (PromiseSettledResult<R> | undefined)[] = [];\n   for (let i = 0; i < voci.length; i += quanti) {\n+    if (Date.now() > scadenza) break;\n     esiti.push(...(await Promise.allSettled(voci.slice(i, i + quanti).map(lavoro))));\n   }\n   return esiti;\n }\n \n export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {\n+  const inizio = Date.now();\n   // Spento al lancio (carta #209): un lavoro rimasto «pronto» non si applica a\n   // mano. Senza modello il filtro dice «no» a nome e descrizione, e il lavoro si\n   // chiuderebbe «applicato» con dentro solo tag e categoria.\n@@ -232,13 +247,18 @@\n           },\n           'catalog-batch-apply-policy',\n         );\n-      });\n+      }, inizio + FILTRI_ENTRO_MS);\n       // Chi non passa — o su cui il filtro e' caduto — non si scrive: nel\n       // dubbio si nega, come fa il filtro stesso quando risponde.\n       const bloccati = new Map<string, string>();\n       daFiltrare.forEach((r, i) => {\n         const esito = verdetti[i];\n-        if (esito.status === 'rejected') {\n+        if (!esito) {\n+          // R13-003 — Non controllato in tempo: non si scrive, e il lavoro\n+          // torna «pronto» perche' si possa rimandare.\n+          bloccati.set(r.product_id, MOTIVO_NON_CONTROLLATO);\n+          ripetibile = true;\n+        } else if (esito.status === 'rejected') {\n           bloccati.set(r.product_id, 'filtro dei contenuti non disponibile: riprova più tardi');\n           ripetibile = true;\n         } else if (!esito.value.allowed) {\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r13-applicazione-segno-e-scadenza.test.ts",
+          "modifica": "la prova nuova scritta in R13-001.serve_file_altrui (caso «con il fornitore lento, dopo 70 s non parte un gruppo nuovo»): con la sola modifica di R13-003 quel caso è verde, sulla base è rosso (30 controlli invece di 25)."
+        }
+      ],
+      "nota": "Provata applicando il diff in prova e togliendolo: tsc verde, eslint verde, le prove di apply verdi. Il diff di R13-001 su apply va applicato DOPO questo.",
+      "verificato_da": "revisore A (modello grande): il diff su apply/route.ts passa git apply --check e con il diff la prova della scadenza è verde (25 controlli, 5 «rimandalo»); classifyProductPolicy ha già timeoutMs 10 s e senzaRitentativi (lib/ai/moderation.ts:91 e 140-141, run.ts:527-531): in moderation.ts niente da fare. Verdetto: regge."
+    },
+    {
+      "id": "R13-004",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+      "esito": "riparato",
+      "commit": "3ed83b72b84366129041ee9640fee295305032a7",
+      "file_toccati": [
+        "app/api/cron/operational-alerts/route.ts",
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ed83b72^ --file app/api/cron/operational-alerts/route.ts,lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il cron degli avvisi chiama allarmiTettoSpesaAiPerIlCron() (firma vera: opzioni facoltative, torna AllarmeTetto[], compatibile con AlertRow) a ogni giro, dopo gli altri controlli e prima del dedup e dell'uscita «nessuna anomalia»; se lancia, il giro lo dice fra i controlli saltati. In lib/ai/tettoSpesa.ts la funzione esce subito senza tetto configurato (allarmiDelTetto tornerebbe vuoto): niente sonda ogni 5 minuti, niente righe in operational_alert_log, niente errori nel registro (senza questo, la riga del tetto finiva fra le «attese» di l-allarme-che-non-parte-non-si-spaccia-per-spedito). Prova col sorvegliante vero: primo giro ricorda l'inizio nel database, due ore dopo su una copia nuova suona (120 min), al ritorno del conto la riga si toglie, senza tetto niente sonda.",
+      "verificato_da": "revisore A (modello grande): prova_comando 4/4 verdi, 3 rosse sul cron di base; 26 file che importano il cron o tettoSpesa verdi (253 prove); variante in copia: suona a 65 min, tace a 70 min e 3 h, risuona a 7 h (dedup 6 h), un errore della funzione non rompe il cron. Verdetto: regge. Rilievo minore in nuovi_difetti_visti: la riga ripiego-da vecchia non scade (lib/ai/tettoSpesa.ts:464-476)."
+    },
+    {
+      "id": "R13-005",
+      "chiave": "frontend-ux|se il servizio degli indirizzi è giù o limitato, il negozio legge «indirizzo non trovato, prova ad essere più specifico»",
+      "esito": "riparato",
+      "commit": "ccc6e936940b21ff80351f1bc3ec4824d65c2a3e",
+      "file_toccati": [
+        "app/api/geocode/route.ts",
+        "components/StoreLocationPicker.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts",
+        "tests/unit/riparazione-r13-indirizzi-servizio-giu-messaggio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-indirizzi-servizio-giu-rotta.test.ts tests/unit/riparazione-r13-indirizzi-servizio-giu-messaggio.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ccc6e936^ --file app/api/geocode/route.ts,components/StoreLocationPicker.tsx --prove <le due prove> --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta risponde 503 con error servizio_non_disponibile quando Nominatim risponde con errore (429, 5xx, ecc.), non è raggiungibile o scade; «nessun risultato» resta 200 con coordinate nulle. Il picker con 429 o 5xx dice che il servizio non risponde e di riprovare fra poco, e «Indirizzo non trovato» solo quando davvero non c'è. Gli altri due chiamanti (indirizzi del profilo, cassa) leggono solo lat/lng e si comportano come prima.",
+      "verificato_da": "revisore B (subagente generico, sonnet): prove di rotta e picker verdi, 26 file che toccano geocode/StoreLocationPicker/indirizzi/cassa verdi (131 casi); gli altri chiamanti reggono il 503 (app/profile/addresses/page.tsx:79-90, components/checkout/ShippingAddressForm.tsx:72-79); «nessun risultato» resta 200; il limite proprio della rotta resta 429. Verdetto: regge (nit in nuovi_difetti_visti)."
+    },
+    {
+      "id": "R13-006",
+      "chiave": "immagini-media|next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts",
+          "modifica": "Prova comune (importa tests/unit/aiuti/schermo.ts di R14 e legge components/ImageUrlField.tsx di R16): il caso «gli altri tre domini ammessi passano» (righe 72-80) mette placehold.co fra gli ammessi; diventa «gli altri due». Diff esatto:\ndiff --git a/tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts b/tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts\nindex be6b201b..147e4d60 100644\n--- a/tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts\n+++ b/tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts\n@@ -69,10 +69,9 @@ describe('quali indirizzi il sito sa davvero mostrare', () => {\n     expect(esito.messaggio?.toLowerCase()).toContain('carica il file');\n   });\n \n-  it('gli altri tre domini ammessi passano', () => {\n+  it('gli altri due domini ammessi passano', () => {\n     for (const indirizzo of [\n       'https://images.pexels.com/photos/1234/foto.jpeg',\n-      'https://placehold.co/600x400.png',\n       'https://api.iconify.design/mdi/store.svg',\n     ]) {\n       expect(controllaIndirizzoImmagine(indirizzo).stato, indirizzo).toBe('ammesso');\n"
+        },
+        {
+          "file": "tests/unit/un-indirizzo-travestito-da-percorso-del-sito-non-passa.test.ts",
+          "modifica": "Prova comune (legge migrations/159_…): placehold.co sta fra gli INDIRIZZI_BUONI (riga 61) e fra i DOMINI_CHE_POSSIAMO_MOSTRARE (riga 300). Diff esatto:\ndiff --git a/tests/unit/un-indirizzo-travestito-da-percorso-del-sito-non-passa.test.ts b/tests/unit/un-indirizzo-travestito-da-percorso-del-sito-non-passa.test.ts\nindex 05e4bbd0..dce54846 100644\n--- a/tests/unit/un-indirizzo-travestito-da-percorso-del-sito-non-passa.test.ts\n+++ b/tests/unit/un-indirizzo-travestito-da-percorso-del-sito-non-passa.test.ts\n@@ -58,7 +58,6 @@ const INDIRIZZI_BUONI: ReadonlyArray<string> = [\n   '/placeholder.svg',\n   '/immagini/categorie/libri.jpg',\n   'https://images.pexels.com/photos/1435904/pexels-photo.jpeg',\n-  'https://placehold.co/600x400.png',\n ];\n \n describe('dove finisce davvero un indirizzo travestito da percorso del sito', () => {\n@@ -297,7 +296,7 @@ describe('la classe intera, non i casi che ci sono venuti in mente', () => {\n    * I domini che possono ospitare una nostra foto. Sono scritti a mano qui, non importati: una\n    * prova che chiede la risposta proprio alla cosa che sta provando non prova niente.\n    */\n-  const DOMINI_CHE_POSSIAMO_MOSTRARE = ['images.pexels.com', 'placehold.co', 'api.iconify.design'];\n+  const DOMINI_CHE_POSSIAMO_MOSTRARE = ['images.pexels.com', 'api.iconify.design'];\n   const dominioNostro = (host: string) =>\n     DOMINI_CHE_POSSIAMO_MOSTRARE.includes(host) || /^[^.]+\\.supabase\\.co$/.test(host);\n \n"
+        },
+        {
+          "file": "tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts",
+          "modifica": "Prova comune per guardia-ramo (rossa anche questa, nonostante il permesso della regia): riga 151 l'aspettativa su placehold.co passa da true a false, titolo aggiornato. Diff esatto:\ndiff --git a/tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts b/tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts\nindex bb5d258f..78bcf254 100644\n--- a/tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts\n+++ b/tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts\n@@ -146,9 +146,9 @@ describe('il filtro delle foto guarda il NOSTRO archivio, non un archivio qualun\n     vi.unstubAllEnvs();\n   });\n \n-  it('i due host esterni dichiarati restano ammessi', () => {\n+  it('l host esterno dichiarato resta ammesso, placehold.co (che il sito non usa piu) no', () => {\n     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://ilnostroprogetto.supabase.co');\n-    expect(fotoDaHostAmmesso('https://placehold.co/600x400.png')).toBe(true);\n+    expect(fotoDaHostAmmesso('https://placehold.co/600x400.png')).toBe(false);\n     expect(fotoDaHostAmmesso('https://images.pexels.com/photos/1/pane.jpg')).toBe(true);\n     expect(fotoDaHostAmmesso('https://sito-di-un-altro.example/foto.jpg')).toBe(false);\n     vi.unstubAllEnvs();\n"
+        },
+        {
+          "file": "next.config.js",
+          "modifica": "(file mio, da mettere NELLO STESSO commit delle tre prove sopra) togliere la riga 51 di remotePatterns. Diff esatto:\ndiff --git a/next.config.js b/next.config.js\nindex e49f3ca0..ba5555ae 100644\n--- a/next.config.js\n+++ b/next.config.js\n@@ -48,7 +48,6 @@ const nextConfig = {\n         hostname: '*.supabase.co',\n         pathname: '/storage/v1/render/image/public/**',\n       },\n-      { protocol: 'https', hostname: 'placehold.co' },\n       { protocol: 'https', hostname: 'api.iconify.design' },\n       { protocol: 'https', hostname: 'images.pexels.com' },\n     ],\n"
+        },
+        {
+          "file": "middleware.ts",
+          "modifica": "(file mio, stesso commit) togliere https://placehold.co da img-src (riga 313). Diff esatto:\ndiff --git a/middleware.ts b/middleware.ts\nindex 34464b72..e0306e30 100644\n--- a/middleware.ts\n+++ b/middleware.ts\n@@ -310,7 +310,7 @@ function buildCsp(nonce: string, isDev: boolean): string {\n     // meno nella politica di sicurezza e' un posto in meno da cui puo' arrivare\n     // codice, e un destinatario in meno da dichiarare nell'informativa.\n     \"style-src 'self' 'unsafe-inline'\",\n-    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,\n+    `img-src 'self' data: blob: https://${supaHost} https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,\n     \"font-src 'self' data:\",\n     // <video srcObject=MediaStream> per la fotocamera in-app, blob URL anteprime,\n     // e i video MP4 self-hosted della home (Supabase Storage).\n"
+        },
+        {
+          "file": "lib/indirizzo-immagine-ammesso.ts",
+          "modifica": "(file mio, stesso commit) togliere placehold.co da HOST_IMMAGINI_AMMESSI (riga 34). Diff esatto:\ndiff --git a/lib/indirizzo-immagine-ammesso.ts b/lib/indirizzo-immagine-ammesso.ts\nindex e16677cd..cfd9dc4c 100644\n--- a/lib/indirizzo-immagine-ammesso.ts\n+++ b/lib/indirizzo-immagine-ammesso.ts\n@@ -31,7 +31,6 @@\n  */\n export const HOST_IMMAGINI_AMMESSI = [\n   '*.supabase.co',\n-  'placehold.co',\n   'api.iconify.design',\n   'images.pexels.com',\n ] as const;\n"
+        },
+        {
+          "file": "lib/immagine-categoria.ts",
+          "modifica": "(file mio, stesso commit) HOST_FOTO_AMMESSI (riga 47) resta ['images.pexels.com']. Diff esatto:\ndiff --git a/lib/immagine-categoria.ts b/lib/immagine-categoria.ts\nindex ce94385e..6022698f 100644\n--- a/lib/immagine-categoria.ts\n+++ b/lib/immagine-categoria.ts\n@@ -44,7 +44,7 @@ import { indirizzoTravestito, percorsoDelSito } from '@/lib/indirizzo-immagine-a\n  * tiene i due elenchi allineati: se qualcuno toglie un host dalla CSP, la prova\n  * diventa rossa invece di lasciare qui un permesso che non vale più.\n  */\n-export const HOST_FOTO_AMMESSI = ['images.pexels.com', 'placehold.co'] as const;\n+export const HOST_FOTO_AMMESSI = ['images.pexels.com'] as const;\n \n /**\n  * Lo Storage di Supabase: il posto dove finiscono le foto caricate da noi.\n"
+        },
+        {
+          "file": "lib/ai/productContext.ts",
+          "modifica": "(file mio, stesso commit) togliere /^placehold\\.co$/i da HOST_ESTERNI_DICHIARATI (riga 50). Diff esatto:\ndiff --git a/lib/ai/productContext.ts b/lib/ai/productContext.ts\nindex 075b3304..92a641df 100644\n--- a/lib/ai/productContext.ts\n+++ b/lib/ai/productContext.ts\n@@ -47,7 +47,7 @@ const DEFAULT_MAX_IMAGES = 4;\n  * il vecchio comportamento: meglio un filtro largo che le foto dei prodotti\n  * che spariscono da tutte le schede.\n  */\n-const HOST_ESTERNI_DICHIARATI = [/^placehold\\.co$/i, /^images\\.pexels\\.com$/i];\n+const HOST_ESTERNI_DICHIARATI = [/^images\\.pexels\\.com$/i];\n const JOLLY_SUPABASE = /\\.supabase\\.co$/i;\n \n /** L'host del nostro progetto Supabase, o `null` se non e' configurato. */\n"
+        },
+        {
+          "file": "tests/unit/riparazione-r13-placehold-fuori.test.ts",
+          "modifica": "Prova NUOVA dei cinque punti più una ricerca nel codice di app/components/lib/public (commenti esclusi). Provata: tutto applicato 6/6 verdi; ognuno dei cinque file rimesso alla base da solo fa 2 rosse. Diff esatto (file nuovo):\ndiff --git a/tests/unit/riparazione-r13-placehold-fuori.test.ts b/tests/unit/riparazione-r13-placehold-fuori.test.ts\nnew file mode 100644\nindex 00000000..14c8be6c\n--- /dev/null\n+++ b/tests/unit/riparazione-r13-placehold-fuori.test.ts\n@@ -0,0 +1,76 @@\n+import { describe, it, expect, vi, afterEach } from 'vitest';\n+import { readFileSync, readdirSync, statSync } from 'node:fs';\n+import { join } from 'node:path';\n+\n+/**\n+ * R13-006 — Il sito non chiede piu' niente a placehold.co (le foto mancanti usano il ripiego locale),\n+ * ma cinque elenchi lo ammettevano ancora: next.config.js (remotePatterns), la direttiva img-src del\n+ * middleware, l'elenco del campo immagine (lib/indirizzo-immagine-ammesso.ts), quello delle foto di\n+ * categoria (lib/immagine-categoria.ts) e quello delle foto mandate al modello\n+ * (lib/ai/productContext.ts). Un dominio esterno ammesso senza motivo e' una porta in piu': chi lo\n+ * controlla puo' cambiare quello che mostriamo. Qui ognuno dei cinque lo rifiuta.\n+ */\n+\n+import { controllaIndirizzoImmagine, hostImmagineAmmesso } from '@/lib/indirizzo-immagine-ammesso';\n+import { fotoDiCategoria } from '@/lib/immagine-categoria';\n+import { fotoDaHostAmmesso } from '@/lib/ai/productContext';\n+\n+const FOTO = 'https://placehold.co/600x400.png';\n+\n+afterEach(() => vi.unstubAllEnvs());\n+\n+describe('placehold.co non e piu ammesso da nessuna parte', () => {\n+  it('next.config.js non lo mette fra i domini delle immagini', () => {\n+    const sorgente = readFileSync('next.config.js', 'utf8');\n+    const blocco = sorgente.match(/remotePatterns:\\s*\\[([\\s\\S]*?)\\n\\s{4}\\],/);\n+    expect(blocco, 'in next.config.js non trovo remotePatterns').toBeTruthy();\n+    const host = Array.from((blocco as RegExpMatchArray)[1].matchAll(/hostname:\\s*'([^']+)'/g)).map((m) => m[1]);\n+    expect(host.length).toBeGreaterThan(0);\n+    expect(host).not.toContain('placehold.co');\n+  });\n+\n+  it('la politica di sicurezza (img-src) non lo lascia passare', () => {\n+    const riga = readFileSync('middleware.ts', 'utf8').match(/`img-src [^`]+`/);\n+    expect(riga, 'in middleware.ts non trovo la direttiva img-src').toBeTruthy();\n+    expect((riga as RegExpMatchArray)[0]).toContain('images.pexels.com');\n+    expect((riga as RegExpMatchArray)[0]).not.toContain('placehold.co');\n+  });\n+\n+  it('il campo immagine dell amministrazione lo dice non ammesso', () => {\n+    expect(hostImmagineAmmesso('placehold.co')).toBe(false);\n+    expect(controllaIndirizzoImmagine(FOTO).stato).toBe('non_ammesso');\n+    expect(controllaIndirizzoImmagine('https://images.pexels.com/photos/1/foto.jpeg').stato).toBe('ammesso');\n+  });\n+\n+  it('la foto di una categoria da placehold.co non va in pagina', () => {\n+    expect(fotoDiCategoria({ image_url: FOTO }).src).toBeNull();\n+    expect(fotoDiCategoria({ image_url: 'https://images.pexels.com/photos/1/foto.jpeg' }).src).not.toBeNull();\n+  });\n+\n+  it('al modello non arriva una foto da placehold.co', () => {\n+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://ilnostroprogetto.supabase.co');\n+    expect(fotoDaHostAmmesso(FOTO)).toBe(false);\n+    expect(fotoDaHostAmmesso('https://images.pexels.com/photos/1/pane.jpg')).toBe(true);\n+  });\n+\n+  it('nessuna parte del sito chiede ancora placehold.co', () => {\n+    const chiede: string[] = [];\n+    const giro = (cartella: string) => {\n+      for (const voce of readdirSync(cartella)) {\n+        if (voce === 'node_modules' || voce.startsWith('.')) continue;\n+        const percorso = join(cartella, voce);\n+        if (statSync(percorso).isDirectory()) giro(percorso);\n+        else if (/\\.(ts|tsx|js|mjs)$/.test(voce)) {\n+          // Solo il codice: i commenti che raccontano la storia di placehold.co non chiedono niente.\n+          const codice = readFileSync(percorso, 'utf8').replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/(^|[^:\\\\])\\/\\/.*$/gm, '$1');\n+          if (/placehold\\\\?\\.co/.test(codice)) chiede.push(percorso);\n+        }\n+      }\n+    };\n+    for (const c of ['app', 'components', 'lib', 'public']) giro(c);\n+    for (const f of ['middleware.ts', 'next.config.js']) {\n+      if (/placehold\\\\?\\.co/.test(readFileSync(f, 'utf8'))) chiede.push(f);\n+    }\n+    expect(chiede).toEqual([]);\n+  });\n+});\n"
+        }
+      ],
+      "nota": "Grep fatto: nel codice che gira nessuno chiede più placehold.co (restano un commento in lib/image-url.ts:223 e lib/foto-mancante.ts:4, stories/StoreAvatar.stories.tsx:22,34 e seeds/001_piacenza_stores.sql con 240 foto placehold.co). Il commit con tutte e nove le modifiche (91beb6f5, poi tolto) era verde: 73 file di prova legati ai cinque file, 636 prove; ma guardia-ramo l'ha dato rosso per TRE prove comuni, non una: oltre a le-foto-che-arrivano-al-modello-sono-le-nostre (rossa nonostante il permesso), anche l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito e un-indirizzo-travestito-da-percorso-del-sito-non-passa danno placehold.co per ammesso (la scheda non le contava). Senza toccarle nessuno dei cinque elenchi si può togliere da solo (la prima lega HOST_IMMAGINI_AMMESSI a remotePatterns e a img-src; HOST_FOTO_AMMESSI da solo farebbe dire «ammesso» al campo e poi niente in pagina; productContext da solo fa rossa la terza): ho tolto il commit della voce e lasciato il ramo com'era per questi file. Le nove modifiche vanno insieme, in un commit della regista.",
+      "verificato_da": "revisore A (modello grande): i 9 diff passano git apply --check; applicati insieme, le 3 prove comuni corrette e la prova nuova sono verdi (4 file, 57 prove). Verdetto: regge."
+    },
+    {
+      "id": "R13-007",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "esito": "parziale",
+      "cosa_resta": "le schermate per la finestra d'installazione: servono immagini vere del sito (larga e stretta). Il sito locale parte senza chiavi Supabase ma la home esce senza catalogo né negozi, quindi non ho prodotto schermate che mostrino il sito vero. Alla base `orientation` non c'è (mai stato in public/manifest.json), `id` (\"/\") e `display_override` ([\"standalone\",\"minimal-ui\"]) ci sono già: public/manifest.json:5 e :8.",
+      "commit": null,
+      "file_toccati": [],
+      "prova": "public/manifest.json: nessuna chiave orientation; riga 5 \"id\": \"/\"; riga 8 \"display_override\": [\"standalone\", \"minimal-ui\"]; manca solo `screenshots`.",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica: le tre parti di codice erano già a posto alla base; restano gli screenshots.",
+      "verificato_da": "revisore B (sonnet): git show b57195e2:public/manifest.json: orientation assente, id \"/\", display_override presente, screenshots assente. Verdetto: regge come parziale."
+    },
+    {
+      "id": "R13-008",
+      "chiave": "performance|dieci punti del sito fanno rimpicciolire la stessa foto due volte, una da supabase e una da vercel",
+      "esito": "parziale",
+      "commit": "84d0a7656c6a50e274c228a583906058073c2e08",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "app/seller/stories/page.tsx",
+        "app/shop-of-month/page.tsx",
+        "components/MobileAccountSheet.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-foto-una-sola-riduzione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-foto-una-sola-riduzione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 84d0a765^ --file \"app/lists/[id]/page.tsx,app/seller/stories/page.tsx,app/shop-of-month/page.tsx,components/MobileAccountSheet.tsx\" --prove tests/unit/riparazione-r13-foto-una-sola-riduzione.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Alla base cinque dei dieci punti (scheda prodotto, ReviewsSection, StoriesCarousel, StoryViewer, ShopOfMonthHero) avevano già il loader. Gli altri cinque (lista curata, storie del negozio, negozio del mese: copertina e logo, menu account) ora hanno loader (caricatoreFotoRemote / caricatoreLogoNegozio) e src originale: la misura la fa solo Supabase. La prova scorre app/ e components/ e fallisce se un <Image> remoto non ha né loader né unoptimized.",
+      "verificato_da": "revisore B (sonnet): prova verde, rossa togliendo il loader da app/lists/[id]/page.tsx:402; letti i dieci punti uno per uno: nessuna doppia ottimizzazione. Verdetto: parziale: la prova cerca loader=/unoptimized nel testo del tag e un commento /* loader= */ o loader={undefined} la lasciano verde.",
+      "cosa_resta": "I dieci punti sono senza doppia ottimizzazione (verificato a mano), ma la prova tests/unit/riparazione-r13-foto-una-sola-riduzione.test.ts cerca loader=/unoptimized nel testo del tag: un commento /* loader= */ o loader={undefined} la lasciano verde, e il secondo caso (src già trasformata) guarda solo 4 file. Va resa strutturale (leggere l'attributo vero, non il testo)."
+    },
+    {
+      "id": "R13-009",
+      "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
+      "esito": "parziale",
+      "insieme_a": [
+        "R13-001"
+      ],
+      "commit": "df9e27d456b57222eea55df275734b855ae54a04",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base df9e27d4^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r13-avvio-durante-applicazione.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Stessa riga e stesso commit di R13-001: il secondo lavoro era già rifiutato alla base (lavoro aperto → 409, gara → 640 + 409 sul 23505); ora è rifiutato anche mentre un'applicazione è in corso (ultimo applicato senza segno di fine e di meno di 120 s), perché il «rimetti pronto» di /apply non riceva 23505.",
+      "cosa_resta": "Come R13-001: migrazione 750 + tipi rigenerati, scrittura del segno e lettura dell'errore di rimettiPronto in apply/route.ts (R14), aiutante finto-catalogo, prova nuova di apply. Elenco e diff esatti in R13-001.serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "come R13-001 (stesso diff)"
+        },
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "come R13-001 (stesso diff)"
+        },
+        {
+          "file": "migrations/750_il_lavoro_ai_applicato_ha_il_segno_di_fine.sql",
+          "modifica": "come R13-001 (stesso diff)\nAGGIUNTA dopo il collaudo: in fondo alla migrazione, dopo l'ALTER TABLE, la riga `NOTIFY pgrst, 'reload schema';` (come le altre 134 migrazioni del deposito). Senza, PostgREST può tenere lo schema vecchio: in /apply la scrittura del segno riceve PGRST204, viene presa per «colonna assente» e ignorata, mentre start vede già la colonna a NULL e blocca l'avvio per 120 s dopo ogni applicazione."
+        },
+        {
+          "file": "tests/sql/rls/riparazione-r13-segno-di-fine-applicazione.test.sql",
+          "modifica": "come R13-001 (stesso diff)"
+        },
+        {
+          "file": "tests/unit/aiuti/finto-catalogo.ts",
+          "modifica": "come R13-001 (stesso diff)"
+        },
+        {
+          "file": "tests/unit/riparazione-r13-applicazione-segno-e-scadenza.test.ts",
+          "modifica": "come R13-001 (stesso diff)"
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R13-010",
+      "chiave": "qa-flussi|le prove delle frasi pubbliche cercano parole nel codice: sette mutanti che rimettono i difetti restano verdi",
+      "esito": "riparato",
+      "commit": "d8c691ff4c198b2bcaafbdb85376a707f2635e3e",
+      "file_toccati": [
+        "tests/unit/riparazione-r13-frasi-pubbliche.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r13-frasi-pubbliche.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-frasi-pubbliche.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "mutanti a mano (ognuno rimesso nel sorgente, prova nuova rossa, poi git checkout): scheda prodotto frase del pagamento scritta a mano; carrello frase scritta a mano; HomeSectionRenderer senzaNegozio={false}; ConfirmDialog Maiusc+Tab rotto; rider/help tel:+390523000000; AttributesFields checked={!!values[f.key]}; scheda prodotto filtro griglia CHIAVI_FUORI_DALLA_GRIGLIA tolto. Sette su sette rossi (vitest uscita 1)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prova nuova che disegna le pagine e i componenti veri (scheda, carrello, home con orologio finto, dialogo, aiuto fattorini, caratteristiche) e legge il testo a video. Rispetto alla prova del lotto R04 aggiunge il carrello con la carta accesa (finto di funzioni-al-lancio) e la riga esatta del riepilogo: un mutante con la frase del carrello scritta a mano sopravviveva a quella. Nessun file di codice toccato.",
+      "verificato_da": "revisore B (sonnet): prova verde (10 casi); i sette mutanti rimessi uno alla volta in una copia: rossa sette volte su sette; nessun readFileSync, disegna i componenti veri. Verdetto: regge."
+    },
+    {
+      "id": "R13-011",
+      "chiave": "qa-flussi|il finto di react-query non ha setqueriesdata",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finti/react-query.mjs",
+          "modifica": "diff --git a/tests/unit/aiuti/finti/react-query.mjs b/tests/unit/aiuti/finti/react-query.mjs\nindex e71c7ddc..a0988797 100644\n--- a/tests/unit/aiuti/finti/react-query.mjs\n+++ b/tests/unit/aiuti/finti/react-query.mjs\n@@ -105,6 +105,7 @@ export const useQueryClient = () => ({\n   setQueryData: (chiave, valore) => {\n     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([chiave, valore]);\n   },\n+  setQueriesData: (filtro, valore) => { if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([filtro?.queryKey ?? filtro, valore]); },\n   getQueryData: () => undefined,\n   cancelQueries: async (filtro) => {\n     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push(['annulla', filtro?.queryKey]);\n"
+        }
+      ],
+      "prova_eseguita": true,
+      "cosa_ho_fatto": "Applicata la modifica nell'albero, provata (236 file di prova che usano monta-componente + 3 che importano il finto: tutti verdi, 1528+9 casi), poi ripristinata con git checkout. Il diff è nel campo modifica, verificato con git apply --check.",
+      "verificato_da": "revisore B (sonnet): il diff passa git apply --check; applicato, 236 file di prova che usano monta-componente o il finto verdi (1528 casi), poi ripristinato. Verdetto: regge. Nota: il finto registra la funzione di aggiornamento invece di eseguirla (app/notifications/page.tsx:200 la usa); oggi nessuna prova lo chiede."
+    },
+    {
+      "id": "R13-012",
+      "chiave": "qa-flussi|una prova col nome del collaudo",
+      "esito": "gia_riparato_prima",
+      "prova": "git ls-tree --name-only b57195e2 tests/unit/ elenca tests/unit/i-termini-nominano-chi-gestisce-senza-dati-inventati.test.tsx e non tests/unit/zz-collaudo-termini-chi.test.tsx: la prova porta già il nome del comportamento alla base (rinominata da un commit precedente, a4c20495)",
+      "cosa_ho_fatto": "Controllato sulla base che la prova col nome del collaudo non c'è più e c'è quella col nome del comportamento: niente da fare.",
+      "verificato_da": "capo squadra R13: git ls-tree --name-only b57195e2 tests/unit/ mostra il nome nuovo e non il vecchio."
+    },
+    {
+      "id": "R13-013",
+      "chiave": "tipografia|la scala delle dimensioni del testo viene scavalcata circa trecentotrenta volte",
+      "esito": "parziale",
+      "commit": "f042b55aa1e0b6690bbc8c19f48a0b83787a687f",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r13-scheda-prodotto-sulla-scala-del-testo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r13-scheda-prodotto-sulla-scala-del-testo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": "nessun file corretto: ProductCard era già sulla scala alla base; la prova fallisce rimettendo a mano text-[13px] sul nome (provato e ripristinato)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "ProductCard non ha più dimensioni a mano alla base (usa text-2xs/xs/sm; il commento a components/ProductCard.tsx:239 lo dice), la scala in globals.css non manca di gradini che servano lì. Aggiunta una prova che lo tiene fermo.",
+      "cosa_resta": "Dopo il mio commit `grep -rEo \"text-\\[[0-9.]+(px|rem)\\]\" app components | wc -l` dà 201 (in 79 file, alcuni sono commenti), non più ~330. I file con più punti, tutti non miei: app/rider/page.tsx 18, app/rider/profile/page.tsx 11, app/seller/analytics/page.tsx 10, app/seller/earnings/page.tsx 9, app/rider/reviews/page.tsx 9, app/rider/availability/page.tsx 9, components/account/AccountSidebar.tsx 7, app/rider/history/page.tsx 7, app/admin/page.tsx 6, components/ui/AuthShell.tsx 5, components/home/HeroStoreCard.tsx 5. Servono gradini 13 e 11 px (o ricondurli a 12/14 e 10/12): scelta di design, da fare nelle pagine di chi le possiede. Inoltre la prova leggera non vede text-[length:13px] né text-[clamp(...)]: la regex accetta solo cifre fra le quadre.",
+      "verificato_da": "revisore B (sonnet): alla base ProductCard.tsx non ha dimensioni a mano (l'unico text-[11px] è in un commento, riga 239); la prova torna rossa con text-[13px] e text-[0.8rem]. Verdetto: parziale come dichiarato; buco della prova: text-[length:13px] o text-[clamp(...)] passano."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "le prove di sviluppo seminano 240 foto di prodotto da placehold.co",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "seeds/001_piacenza_stores.sql:130-414",
+      "descrizione": "Quando entra la cura di R13-006 (placehold.co tolto da img-src e dagli elenchi) i prodotti creati da questo seme mostrano foto bloccate dal browser negli ambienti seminati; anche stories/StoreAvatar.stories.tsx:22,34 usa loghi placehold.co. Se il database vero ha ancora indirizzi placehold.co, quei prodotti perdono la foto: da controllare lato Nicola prima di applicare R13-006."
+    },
+    {
+      "titolo": "una migrazione che aggiunge una colonna non si può consegnare da sola: i tipi generati vanno rigenerati nello stesso commit",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/riparazione-r11-tipi-che-possono-restare-vuoti.test.ts, tests/unit/riparazione-r11-viste-nei-tipi.test.ts, lib/database.types.ts",
+      "descrizione": "Le due prove pretendono lib/database.types.ts identico all'uscita di scripts/gen-db-types.mjs sulle migrazioni del disco; lib/database.types.ts non è nell'elenco di nessuna sessione, quindi un riparatore con una fascia di migrazioni non può aggiungere una colonna senza far rossa la verifica. Da prevedere nelle schede (tipi rigenerati come file di chi ha la migrazione)."
+    },
+    {
+      "titolo": "Il manifest del sito ha la registrazione vecchia: la voce parlava di orientation portrait che alla base non c'è",
+      "dimensione": "mobile-pwa",
+      "severita": "minore",
+      "file": "public/manifest.json:1",
+      "descrizione": "Il registro dice che alla riga 9 c'è orientation portrait e che mancano id e display_override: alla base orientation non c'è e gli altri due ci sono già. Solo gli screenshots mancano."
+    },
+    {
+      "titolo": "l'allarme del tetto di spesa ai può dire «non risponde da tre giorni» al primo guasto di cinque minuti",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "lib/ai/tettoSpesa.ts:464-476",
+      "descrizione": "La riga ai-tetto-condiviso:ripiego-da di operational_alert_log si legge senza limite d'età e l'uscita senza tetto (riga ~456) non la toglie: rimasta da un guasto vecchio, al primo guasto nuovo l'allarme suona subito con i minuti contati da allora. Il cron che ora la chiama a ogni giro rende vivo il difetto. Cura suggerita: ignorare (e riscrivere) una riga più vecchia di 24 h. File di R13: da fare in un giro dopo."
+    },
+    {
+      "titolo": "il logo del negozio del mese viene ritagliato a quadrato",
+      "dimensione": "immagini-media",
+      "severita": "minore",
+      "file": "components/home/ShopOfMonthHero.tsx:95-101",
+      "descrizione": "Il logo usa caricatoreFotoRemote: con width 256/384 il caricatore sceglie il formato quadrato e aggiunge height=width e resize=cover, quindi un logo con la scritta esce tagliato; logoNegozio(...,176) nel src non lo evita. Dovrebbe usare caricatoreLogoNegozio. C'era già alla base, R13 non l'ha toccato."
+    },
+    {
+      "titolo": "il picker degli indirizzi legge il limite della rotta come «servizio che non risponde»",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "components/StoreLocationPicker.tsx:170",
+      "descrizione": "Il 429 del limite proprio della rotta (30/min per IP, rate_limited) e il 503 del servizio esterno danno lo stesso messaggio: il testo («riprova fra poco») resta giusto, ma non dice che il limite è del negozio stesso."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 4,
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) e 2 revisori (A grande, B sonnet); nessun giro di correzione: spesa a 22,7 $ vicina alla soglia di consegna di 25 $",
+    "subagenti": 4
+  },
+  "costo_usd": 22.73
+}
