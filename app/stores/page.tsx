@@ -314,7 +314,7 @@ export default function StoresPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 break-words">
         {titoloDellaPagina}
         <LoadingState />
       </div>
@@ -323,7 +323,7 @@ export default function StoresPage() {
 
   if (isError) {
     return (
-      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 break-words">
         {titoloDellaPagina}
         <ErrorState
           title="Impossibile caricare i negozi"
@@ -334,7 +334,7 @@ export default function StoresPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 break-words">
       {titoloDellaPagina}
 
       {/* Filtri */}
