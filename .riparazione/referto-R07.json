@@ -1,0 +1,227 @@
+{
+  "sessione": "R07",
+  "aggiornato": "2026-11-22 00:25",
+  "finita": false,
+  "testa": "91dd6815a125b59364c22631ef8c64e6290ffe41",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R07-008",
+      "chiave": "qa-flussi|con «cliente assente» la merce torna subito in vendita sul sito mentre è ancora nello zaino del fattorino",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano, 21/11 23:32)"
+    },
+    {
+      "id": "R07-009",
+      "chiave": "qa-flussi|nella pagina guadagni del fattorino la data nell'elenco delle consegne segue il fuso del telefono",
+      "esito": "riparato",
+      "commit": "4271aca6c6eb14994065cd13c4ec5542d0b98033",
+      "file_toccati": [
+        "app/rider/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-data-consegne-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-data-consegne-fattorino.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4271aca6c6eb14994065cd13c4ec5542d0b98033^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r07-data-consegne-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La data nell'elenco delle consegne ora si scrive con toLocaleDateString('it-IT', { timeZone: FUSO_PIACENZA }), costante già esistente in lib/tempo-piacenza; il formato gg/mm/aaaa non cambia. La prova monta la pagina vera con orologio finto e il telefono su UTC o New York: una consegna alle 00:30 di Piacenza, d'inverno e d'estate, mostra il giorno giusto."
+    },
+    {
+      "id": "R07-010",
+      "chiave": "qa-flussi|il campanello del pannello negozio conta anche le promozioni di chi le ha spente",
+      "esito": "riparato",
+      "commit": "91757a70f6e3d483a502c76ce5acc9d76b325f28",
+      "file_toccati": [
+        "components/seller/SellerShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-campanello-negozio-promo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-campanello-negozio-promo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 91757a70f6e3d483a502c76ce5acc9d76b325f28^ --file components/seller/SellerShell.tsx --prove tests/unit/riparazione-r07-campanello-negozio-promo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "useNotifUnread legge profiles.notif_promos della persona e, se non è true, conta senza category='promo'. Se la preferenza non si legge resta return 0 come prima. La prova monta SellerShell vera e fa girare la lettura del campanello su un database finto che applica i filtri: con le promozioni spente il conto è 2, con quelle accese 3.",
+      "nota": "Il filtro della lista /notifications e di useNotificationsCount (il campanello del sito) non è in questi file: è la voce di R01 su app/notifications/page.tsx. Finché non arriva, il campanello del negozio può contare meno della lista (il numero può essere più basso, mai un pallino che non si spegne)."
+    },
+    {
+      "id": "R07-007",
+      "chiave": "navigazione-gerarchia|col pannello dei filtri aperto, il tasto indietro fa uscire dalla ricerca invece di chiudere il pannello",
+      "esito": "riparato",
+      "commit": "085cc686f74c85c4b858cf51c20202d126a68cd8",
+      "file_toccati": [
+        "components/hooks/useBottomSheetA11y.ts",
+        "app/search/page.tsx",
+        "app/category/[slug]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-indietro-chiude-filtri.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-indietro-chiude-filtri.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 085cc686f74c85c4b858cf51c20202d126a68cd8^ --file components/hooks/useBottomSheetA11y.ts,app/search/page.tsx,app/category/[slug]/page.tsx --prove tests/unit/riparazione-r07-indietro-chiude-filtri.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il hook ha una nuova opzione indietroChiude (spenta di default, gli altri 12 usi non cambiano): all'apertura aggiunge una voce di cronologia sulla stessa pagina copiando lo stato di Next, il popstate chiude il pannello, e se il pannello si chiude in altro modo sullo stesso percorso history.back() toglie la voce. Accesa solo sui pannelli filtri di ricerca e categoria. La prova monta il hook vero e le due pagine vere in jsdom: Indietro chiude il pannello e resta sulla pagina, e dopo la chiusura normale non resta una voce orfana."
+    },
+    {
+      "id": "R07-006",
+      "chiave": "microcopy|parole inglesi e da programmatore nell'interfaccia: «rating minimo» nei filtri, «id_front caricato» al fattorino, errori del gps in inglese",
+      "esito": "riparato",
+      "commit": "6e275ab6922f71fede419fe40ada783916838c47",
+      "file_toccati": [
+        "messages/it.json",
+        "app/rider/onboarding/page.tsx",
+        "components/StoreLocationPicker.tsx",
+        "components/seller/CatalogCopilot.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-parole-italiane.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-parole-italiane.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6e275ab6922f71fede419fe40ada783916838c47^ --file messages/it.json,app/rider/onboarding/page.tsx,components/StoreLocationPicker.tsx,components/seller/CatalogCopilot.tsx --prove tests/unit/riparazione-r07-parole-italiane.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In it.json cambiano solo i valori: «Valutazione minima» e «Valutazione {rating}+». Il toast del fattorino usa una mappa italiana (Documento d'identità (fronte) caricato, Patente caricata, …). L'errore GPS del negozio si scrive in italiano a partire dal codice, senza più err.message; «Catalog Copilot» diventa «Copilot del catalogo». La pagina del fattorino in consegna usava già messaggioErroreGps. La prova monta i componenti veri e cade se si toglie la correzione da uno qualunque dei 4 file."
+    },
+    {
+      "id": "R07-004",
+      "chiave": "coerenza-brand|la primitiva card non può fare da link: le card cliccabili restano scritte a mano",
+      "esito": "riparato",
+      "commit": "6ca972ee335e1a21ff9e7d3ad1f48f0f5c801b89",
+      "file_toccati": [
+        "components/ui/Card.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-card-link.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-card-link.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6ca972ee335e1a21ff9e7d3ad1f48f0f5c801b89^ --file components/ui/Card.tsx --prove tests/unit/riparazione-r07-card-link.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La Card accetta href (e aria-label) e in quel caso rende un Link di Next con le stesse classi; senza href resta il div di prima, con le stesse classi."
+    },
+    {
+      "id": "R07-003",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "esito": "parziale",
+      "commit": "dae233b7e1c24950e8e99d6729495970f6a5b234",
+      "file_toccati": [
+        "components/ui/Card.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-card-varianti.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-card-varianti.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dae233b7e1c24950e8e99d6729495970f6a5b234^ --file components/ui/Card.tsx --prove tests/unit/riparazione-r07-card-varianti.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il raggio per contesto (lg, xl, 2xl) c'era già nella Card; aggiunte le varianti surface (bg-surface-0 con bordo sabbia) e quiet (bordo cream-200 con ombra lieve). Le varianti di prima non cambiano.",
+      "cosa_resta": "Il passaggio delle ~141 card a mano alla Card sta in file non di R07, sparsi in app/ e components/. Nelle righe con bg-white o bg-surface-0 e un bordo, oggi i raggi sono rounded-xl 110, rounded-2xl 97, rounded-lg 38; i bordi cream-300 187, cream-200 14, surface-200 3; le ombre più comuni shadow-warm 48 e shadow-warm-lg 13. La variante bordered copre già il caso più comune."
+    },
+    {
+      "id": "R07-001",
+      "chiave": "coerenza-brand|card a mano con bg-surface-0 restano fuori dal conteggio delle card ridisegnate",
+      "esito": "riparato",
+      "commit": "1b974d8c3350350a357701130efce44dd51437dc",
+      "file_toccati": [
+        "app/rider/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b974d8c3350350a357701130efce44dd51437dc^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r07-guadagni-fattorino-card.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le due card a mano dello storico consegne («Nessuna consegna» e la riga di ogni consegna) sono ora <Card variant=\"surface\" radius=\"lg\" padding=\"none\"> con le stesse classi di prima: resa equivalente. La prova è statica e cade se si rimette la card a mano."
+    },
+    {
+      "id": "R07-005",
+      "chiave": "flussi-conversione|nel pannello del negozio non c'è un posto dove vedere e approvare le anteprime",
+      "esito": "scelta_di_nicola",
+      "domanda": "Vuoi una funzione nuova per vedere e approvare le anteprime nel pannello del negozio? Oggi non c'è né il dato né la rotta (nessuna tabella, API o pagina «da approvare»): ci sono solo l'anteprima di «Migliora tutto il catalogo» in app/seller/products/ai-batch e il campo di anteprima del link, che sono altro."
+    },
+    {
+      "id": "R07-002",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "parziale",
+      "commit": "91dd6815a125b59364c22631ef8c64e6290ffe41",
+      "file_toccati": [
+        "app/category/[slug]/page.tsx",
+        "app/rider/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-scala-tipografica.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-scala-tipografica.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 91dd6815a125b59364c22631ef8c64e6290ffe41^ --file \"app/category/[slug]/page.tsx,app/rider/orders/[id]/page.tsx\" --prove tests/unit/riparazione-r07-scala-tipografica.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "I quattro file nominati dalla voce (SellerShell, rider/earnings, search, AdminSidebar) erano già a zero misure a mano. Sostituite le 17 text-[Npx] negli altri due file di R07 (category/[slug] 10, rider/orders/[id] 7) con i passi della scala: 10px→text-2xs, 11px→text-xs, 12px→text-xs, 13px→text-sm (a pari distanza il passo più grande, così nessun testo rimpicciolisce). Prova statica sui sei file.",
+      "cosa_resta": "227 occorrenze in 82 file non di R07 (i più pesanti: app/rider/page.tsx 17, app/rider/profile/page.tsx 11, app/seller/analytics/page.tsx 10, app/seller/earnings/page.tsx 9, app/rider/reviews/page.tsx 9, app/rider/availability/page.tsx 9, app/about/page.tsx 8, components/account/AccountSidebar.tsx 7), più text-[22px] lasciato di proposito in app/rider/orders/[id]/page.tsx:706 («Consegna completata!»): nessun passo entro 1px (text-xl 20, text-2xl 24)."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "nel caricamento dei documenti del fattorino restano parole inglesi: «Upload fallito», «Errore upload», «Attestato HACCP (se food)»",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "app/rider/onboarding/page.tsx:35",
+      "descrizione": "Gli errori dello stesso caricamento dicono «Upload fallito» ed «Errore upload», e l etichetta del documento dice «(se food)». Non erano nominati nella voce sui testi inglesi, quindi non sono stati toccati."
+    }
+  ],
+  "domande_per_nicola": [
+    "R07-005: vuoi una funzione nuova per vedere e approvare le anteprime nel pannello del negozio? Oggi non c è né il dato né la rotta."
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": "lotto A sul modello grande (4 voci), lotto B su sonnet (5 voci), un giro su sonnet per R07-002 nei due file di R07 rimasti"
+  }
+}
