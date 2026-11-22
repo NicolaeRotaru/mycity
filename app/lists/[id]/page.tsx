@@ -217,7 +217,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       const { error } = await supabase.from('product_lists').delete().eq('id', params.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Lista eliminata');
       rileggiLeListeDiLists();
       // R10-009 — e il menu «Aggiungi a lista» della scheda prodotto: prima la mostrava ancora.
@@ -229,7 +229,12 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
       // R08-006 — la lista eliminata non resta in memoria: col tasto indietro la pagina non la
       // rimostra (con «Modifica» ed «Elimina») per 30 secondi. `null` è quello che la lettura
-      // risponde per una lista che non c'è.
+      // risponde per una lista che non c'è. Prima si annullano le letture in volo (partite dopo una
+      // rinomina o un cambio di visibilità): tornando, rimetterebbero in memoria la lista eliminata.
+      await Promise.all([
+        qc.cancelQueries({ queryKey: queryKeys.lists.detail(params.id) }),
+        qc.cancelQueries({ queryKey: queryKeys.lists.items(params.id) }),
+      ]);
       qc.setQueryData(queryKeys.lists.detail(params.id), null);
       qc.setQueryData(queryKeys.lists.items(params.id), []);
       router.push('/lists');

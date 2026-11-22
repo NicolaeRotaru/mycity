@@ -18,6 +18,8 @@ const db = vi.hoisted(() => ({
   liste: [] as Array<Record<string, unknown>>,
   righe: [] as Array<Record<string, unknown>>,
   ritardo: 0,
+  // Una lettura lenta: legge il database subito e risponde dopo, come una risposta in viaggio.
+  ritardoLettura: 0,
 }));
 
 vi.mock('@/lib/supabase/client', () => {
@@ -51,8 +53,13 @@ vi.mock('@/lib/supabase/client', () => {
     c.update = (v: Record<string, unknown>) => { operazione = 'update'; modifica = v; return c; };
     c.delete = () => { operazione = 'delete'; return c; };
     c.maybeSingle = () => { una = true; return c; };
-    c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) =>
-      (db.ritardo ? new Promise((r) => setTimeout(r, db.ritardo)).then(() => esegui()) : Promise.resolve(esegui())).then(ok, ko);
+    c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
+      if (operazione === 'select' && db.ritardoLettura) {
+        const esito = esegui();
+        return new Promise((r) => setTimeout(r, db.ritardoLettura)).then(() => esito).then(ok, ko);
+      }
+      return (db.ritardo ? new Promise((r) => setTimeout(r, db.ritardo)).then(() => esegui()) : Promise.resolve(esegui())).then(ok, ko);
+    };
     return c;
   }
   return {
@@ -85,6 +92,7 @@ const COLAZIONE = {
 let root: Root | null = null;
 afterEach(() => {
   db.ritardo = 0;
+  db.ritardoLettura = 0;
   if (root) act(() => root!.unmount());
   root = null;
   document.body.innerHTML = '';
@@ -131,5 +139,40 @@ describe('dopo l’eliminazione, tornando indietro la lista eliminata non ricomp
     expect(box2.querySelector('button[aria-label="Modifica"]'), 'tornando indietro ricompare «Modifica»').toBeNull();
     expect(box2.querySelector('button[aria-label="Elimina"]'), 'tornando indietro ricompare «Elimina»').toBeNull();
     expect(box2.textContent ?? '').not.toContain('Colazione');
+  });
+
+  it('una rilettura partita dopo una rinomina, se torna dopo l’eliminazione, non rimette in memoria la lista', async () => {
+    db.liste = [{ ...COLAZIONE }];
+    db.righe = [];
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    root = createRoot(box);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+    await act(async () => {
+      root!.render(createElement(QueryClientProvider, { client: qc },
+        createElement(ListDetailPage as never, { params: { id: 'L1' } })));
+    });
+    const bottone = (etichetta: string) => box.querySelector(`button[aria-label="${etichetta}"]`) as HTMLButtonElement | null;
+    await aspetta(() => bottone('Modifica') !== null, 'la pagina della lista non offre «Modifica» a chi l’ha creata');
+
+    // Rinomina, col database che risponde lento alle letture: la rilettura della lista resta in volo.
+    await act(async () => { bottone('Modifica')!.click(); });
+    const campo = box.querySelector('input[aria-label="Titolo della lista"]') as HTMLInputElement;
+    await act(async () => { scrivi(campo, 'Colazione della domenica'); });
+    db.ritardoLettura = 400;
+    await act(async () => { (campo.parentElement!.querySelector('div button') as HTMLButtonElement).click(); });
+    await aspetta(() => db.liste[0]?.title === 'Colazione della domenica', 'la rinomina non è arrivata al database');
+    await aspetta(() => qc.isFetching({ queryKey: ['lists', 'detail', 'L1'] }) === 1, 'dopo la rinomina la lista non si sta rileggendo: la prova non guarda niente');
+
+    // Si elimina mentre la rilettura è in volo.
+    await aspetta(() => bottone('Elimina') !== null, 'dopo la rinomina la pagina non offre «Elimina»');
+    await act(async () => { bottone('Elimina')!.click(); });
+    await aspetta(() => db.liste.length === 0, 'l’eliminazione non è arrivata al database');
+
+    // La rilettura torna (dopo 400 ms): la memoria della lista resta vuota.
+    await act(async () => { await new Promise((r) => setTimeout(r, 600)); });
+    expect(qc.getQueryData(['lists', 'detail', 'L1']),
+      'la rilettura in volo ha rimesso in memoria la lista eliminata').toBeNull();
+    expect(qc.getQueryData(['lists', 'items', 'L1'])).toEqual([]);
   });
 });
