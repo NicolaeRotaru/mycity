@@ -1,13 +1,13 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-22 00:25",
+  "aggiornato": "2026-11-22 01:45",
   "finita": true,
-  "testa": "546959a85624d1adbf2c3a4a126a8e672fb0b85b",
+  "testa": "1fc65eb2fb41e1570eff6c3c890ac97cfe50c554",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "546959a85624d1adbf2c3a4a126a8e672fb0b85b",
-    "nota": "typecheck, lint e vitest: 1916 file di prova passati (1 saltato già prima), 11841 prove passate; SHA preso con git rev-parse HEAD nello stesso comando"
+    "testa": "1fc65eb2fb41e1570eff6c3c890ac97cfe50c554",
+    "nota": "dopo il giro di correzione K01: typecheck, lint (0 errori) e vitest con 1918 file di prova passati (1 saltato già prima) e 11855 prove passate; SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -17,7 +17,7 @@
       "insieme_a": [
         "R11-007"
       ],
-      "commit": "d4143c9f",
+      "commit": "fa2f15880c4fed87cfc661db471057dfa985b80e",
       "file_toccati": [
         "components/ProductGrid.tsx"
       ],
@@ -30,11 +30,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d4143c9f^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-carica-altri.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa2f15880c4fed87cfc661db471057dfa985b80e^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-carica-altri.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La lettura già attaccava righeLette alla pagina, ma ProductGrid decideva su ultima.length. Ora getNextPageParam e il pulsante «Carica altri» usano righeLette, e structuralSharing:false evita che React Query ricopi la pagina perdendo il conto.",
-      "verificato_da": "qa (subagente revisore del lotto A): rilanciate prova e prova rimessa (0); pagina vuota dopo il filtro, ultima pagina esatta, cache senza righeLette: reggono"
+      "cosa_ho_fatto": "Prima correzione d4143c9f (decidere su righeLette). Giro K01: con zero righe mostrate e hasNextPage vero la griglia non dice «Nessun prodotto», mostra lo scheletro e legge da sola la pagina dopo finché trova righe o finisce, fermandosi su errore. La prova ora monta la griglia vera, preme «Carica altri», controlla le finestre [0,3] [4,7] [8,11] e diventa rossa con getNextPageParam su ultima.length o senza structuralSharing:false.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): nessun giro infinito, stop su hasNextPage falso e su errore, «Nessun prodotto» alla fine con zero prodotti veri; mutazioni ultima.length e senza structuralSharing:false rosse; prova 0, prova rimessa 0"
     },
     {
       "id": "R11-007",
@@ -43,7 +43,7 @@
       "insieme_a": [
         "R11-012"
       ],
-      "commit": "d4143c9f",
+      "commit": "fa2f15880c4fed87cfc661db471057dfa985b80e",
       "file_toccati": [
         "components/ProductGrid.tsx"
       ],
@@ -56,11 +56,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d4143c9f^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-carica-altri.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa2f15880c4fed87cfc661db471057dfa985b80e^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-carica-altri.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Stessa riga della voce gemella: commit unico, la griglia montata decide «ce n'è un'altra» sulle righe lette dal database.",
-      "verificato_da": "qa (subagente revisore del lotto A): come la voce gemella, prova e prova rimessa (0), varianti di paginazione reggono"
+      "cosa_ho_fatto": "Stessa cura della voce gemella (d4143c9f, poi fa2f1588 nel giro K01): anche con la prima pagina tutta filtrata la griglia va avanti da sola invece di dire «Nessun prodotto».",
+      "verificato_da": "qa (subagente revisore del giro di correzione): come la voce gemella; prova 0, prova rimessa 0"
     },
     {
       "id": "R11-010",
@@ -69,7 +69,7 @@
       "insieme_a": [
         "R11-011"
       ],
-      "commit": "b371cf10",
+      "commit": "945b6a1c1ef2be115870caedee3b7c41f2f7a0a3",
       "file_toccati": [
         "lib/queries/griglia-prodotti.ts"
       ],
@@ -82,11 +82,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b371cf10^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 945b6a1c1ef2be115870caedee3b7c41f2f7a0a3^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "contaProdottiDellaGriglia ora aggancia il negozio con seller_public_profiles!inner(id), così conta solo i prodotti dei negozi approvati; su PGRST200/201 ripiega sul conteggio di prima invece di dare null.",
-      "verificato_da": "qa (subagente revisore del lotto A): prova e prova rimessa (0); !inner sulla vista ha un precedente in components/home/StoriesCarousel.tsx:84 e la FK products.seller_id esiste (migrations/005)"
+      "cosa_ho_fatto": "Giro di correzione K01: l'aggancio ora nomina il vincolo (seller_public_profiles!products_seller_id_fkey!inner) e il ripiego senza aggancio scatta su qualsiasi errore, non sul codice, che su una HEAD postgrest-js non dà. La prova usa il createClient vero di supabase-js con un fetch finto che risponde come PostgREST su una HEAD (300 senza vincolo, 400 senza codice): era rossa su 7bc4a923.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): vincolo products_seller_id_fkey giusto (migrations/005), sintassi !vincolo!inner valida, finto con createClient vero e HEAD senza codice, conteggio null solo se falliscono tutte e due le letture; prova 0, prova rimessa 0"
     },
     {
       "id": "R11-011",
@@ -95,7 +95,7 @@
       "insieme_a": [
         "R11-010"
       ],
-      "commit": "b371cf10",
+      "commit": "945b6a1c1ef2be115870caedee3b7c41f2f7a0a3",
       "file_toccati": [
         "lib/queries/griglia-prodotti.ts"
       ],
@@ -108,11 +108,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b371cf10^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 945b6a1c1ef2be115870caedee3b7c41f2f7a0a3^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Stessa radice della voce gemella (il conteggio è lo stesso codice usato dalla pagina Novità, con creatiDal): commit unico, la prova copre anche il caso novità.",
-      "verificato_da": "qa (subagente revisore del lotto A): stesso controllo della voce gemella, caso novità coperto"
+      "cosa_ho_fatto": "Giro di correzione K01, stesso commit della voce gemella: la prova copre il caso novità (creatiDal) e quello in cui anche la lettura col vincolo sbaglia, dove il ripiego dà il numero senza aggancio e mai null; il conteggio della categoria madre usa la stessa funzione.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): come la voce gemella; app/category/[slug]/page.tsx:118-126 riceve un numero; prova 0, prova rimessa 0"
     },
     {
       "id": "R11-008",
@@ -141,25 +141,26 @@
       "id": "R11-009",
       "chiave": "qa-flussi|cercando una parola a metà il sito trova solo una parte dei prodotti, e dentro la vetrina di un negozio può dire «nessun risultato»",
       "esito": "riparato",
-      "commit": "440facaa",
+      "commit": "1fc65eb2fb41e1570eff6c3c890ac97cfe50c554",
       "file_toccati": [
         "lib/queries/griglia-prodotti.ts",
         "tests/unit/cercare-per-pertinenza-non-e-ordinare-per-data.test.ts"
       ],
       "prova_file": [
+        "tests/unit/riparazione-r11-ricerca-piu-pagine.test.ts",
         "tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-ricerca-piu-pagine.test.ts tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 440facaa^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1fc65eb2fb41e1570eff6c3c890ac97cfe50c554^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-ricerca-piu-pagine.test.ts,tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Sul ramo pertinenza il ripiego ilike sul nome ora si aggiunge sempre (prima solo con un filtro che stringe), senza doppioni e dopo i pertinenti; col voto minimo, se nessun pertinente è recensito, si ripiega sul nome invece di return []. Nessuna migrazione. Prova esistente modificata (importa griglia-prodotti): cercare-per-pertinenza-non-e-ordinare-per-data fissava l'esito del difetto, ora attende anche il prodotto trovato per nome.",
-      "verificato_da": "qa (subagente revisore del lotto A): prova verde, finestra e limite di pagina coerenti, caso vetrina (sellerId) coperto; prova rimessa rilanciata dalla sessione R11 con --file lib/queries/griglia-prodotti.ts: regge (0)"
+      "cosa_ho_fatto": "Prima correzione 440facaa (il ripiego per nome sempre, che ha cambiato la prova comune: accettata dalla regia). Giro K01: la lista unita è stabile, cioè i pertinenti filtrati seguiti dai prodotti col nome letti con .range(a-|Pf|, b-|Pf|) e senza i pertinenti già in lista, quindi niente doppioni, niente prodotti persi e nessuna crescita con le pagine; se la lettura per nome sbaglia restano i pertinenti, con console.warn.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): sonda casuale con 40 semi (0-260 pertinenti, 0-150 per nome, più di 100 pertinenti col nome, filtro prezzo): nessun doppione, nessun salto, passaggio esatto fra pertinenti e per nome; or=(id.not.in.(…)) valido e assente con zero da escludere; prove 0, prova rimessa 0"
     },
     {
       "id": "R11-001",
@@ -244,10 +245,26 @@
     {
       "id": "R11-005",
       "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
-      "esito": "gia_riparato_prima",
-      "prova": "app/rider/availability/page.tsx:121-124 saveZones chiama solo persist({ rider_zones }), senza nessun «salvate»; persist (righe 91-96) mostra toast.error se fallisce; il «Preferenze salvate» dei turni esce solo dopo ok (righe 112-119, commento R03-015 alle righe 99-104).",
-      "copre_tutta_la_voce": true,
-      "verificato_da": "qa (subagente revisore del lotto B): nessun «salvate» anticipato per le zone, né nella pagina né in componenti figli (il «salvat» di riga 327 è un testo fisso)"
+      "esito": "parziale",
+      "commit": "50362063d76cb3b6759fec93183e184cd87cfb8f",
+      "file_toccati": [
+        "app/rider/availability/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50362063d76cb3b6759fec93183e184cd87cfb8f^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Giro di correzione K01 (prima era segnata già riparata, a torto): le zone mostrate sono solo quelle scritte davvero, i tocchi vanno in coda sulle zone confermate, quindi su errore la zona non resta spuntata e due tocchi rapidi non si perdono; dopo un errore la riga fissa dice «Non è stato salvato: controlla il collegamento e riprova.» e torna a «salvate» al primo salvataggio riuscito.",
+      "cosa_resta": "La correzione 50362063 apre un bordo nuovo: con 6 zone confermate, se si toglie una zona e la scrittura sbaglia e subito dopo se ne aggiunge un altra che riesce, la coda scrive 7 zone e a schermo compare «7/6». Cura esatta: in app/rider/availability/page.tsx:161 e :170 (e la riga gemella di addCustomZone) la funzione di aggiunta (l) => (l.includes(zone) ? l : [...l, zone]) diventa (l) => (l.includes(zone) || l.length >= 6 ? l : [...l, zone]), con una prova: 6 zone, rimozione in errore, aggiunta subito dopo, mai più di 6 zone scritte.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): prova 0, prova rimessa 0; errore poi ok, stesso tocco due volte, errore poi successo con «salvate» reggono; il limite di 6 zone si supera con la coda (sonda eseguita: 7/6)"
     },
     {
       "id": "R11-006",
@@ -260,18 +277,18 @@
   ],
   "nuovi_difetti_visti": [
     {
-      "titolo": "se il salvataggio delle zone del fattorino fallisce, l errore compare ma la zona resta selezionata sullo schermo",
-      "dimensione": "qa-flussi",
-      "severita": "minore",
-      "file": "app/rider/availability/page.tsx:121-124",
-      "descrizione": "saveZones fa setZones(next) prima di persist e non ripristina le zone di prima se persist torna false, mentre save() per i turni ripristina (setAvail(prima))."
-    },
-    {
       "titolo": "una lista rinominata o eliminata resta com era nel menu «aggiungi a lista»",
       "dimensione": "qa-flussi",
       "severita": "minore",
       "file": "app/lists/[id]/page.tsx:123-127",
       "descrizione": "rileggiLeListeDiLists invalida solo le chiavi mine, public e inVetrina, non mine-min (lib/queries/keys.ts:262), che è quella letta dal menu in components/AddToListButton.tsx:40; mine-min non ha mine come prefisso."
+    },
+    {
+      "titolo": "la lettura automatica della griglia con le pagine tutte filtrate non ha un tetto di pagine",
+      "dimensione": "performance-percepita",
+      "severita": "minore",
+      "file": "components/ProductGrid.tsx (vuotaMaCeNeSonoAltre, commit fa2f1588)",
+      "descrizione": "Conta anche i filtri lato client (promo, disponibili, voto): con un catalogo grande e un limit piccolo può concatenare molte letture prima di trovare righe. È finita, ma senza un tetto."
     }
   ],
   "domande_per_nicola": [
@@ -279,9 +296,9 @@
     "Schermate per l installazione dell app (R11-003): servono due schermate vere, una stretta e una larga, da mettere in public/ e in manifest.screenshots. Chi le fa?"
   ],
   "conto": {
-    "agenti": 4,
-    "nota": "2 subagenti riparatori (lotti A e B) e 2 revisori, tutti col modello piccolo; nessun giro di correzione",
-    "subagenti": 4
+    "agenti": 6,
+    "nota": "2 riparatori (lotti A e B), 2 revisori, 1 riparatore e 1 revisore per il giro di correzione K01, tutti col modello piccolo; tetto di 6 raggiunto",
+    "subagenti": 6
   },
-  "costo_usd": 5.27
+  "costo_usd": 10.19
 }
