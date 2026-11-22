@@ -87,20 +87,22 @@ describe('mentre il negozio arriva si vede una cosa sola', () => {
     }
   });
 
-  it('sopra il guscio del negozio non c’è nessuna attesa, e il guscio chiama notFound()', () => {
-    // 22/11/2026 — Qui si pretendeva `app/store/loading.tsx`, il sipario col volto del negozio
-    // SOPRA il guscio. Ma un'attesa sopra il guscio lo avvolge in un Suspense: la risposta parte
-    // con «tutto ok» prima che il guscio sappia se il negozio esiste, e il suo notFound() arriva a
-    // risposta già partita (un negozio inesistente rispondeva 200). Adesso sopra il guscio del
-    // negozio non c'è nessuna attesa: il browser tiene la pagina di prima finché arriva il negozio,
-    // già pieno grazie al precarico. Lo scheletro resta sotto il guscio (`app/store/[id]/loading.tsx`)
-    // e nella pagina.
+  it('il sipario copre anche il guscio, non solo la pagina', () => {
+    // Da quando il guscio legge il negozio sul server, è LUI a fermarsi per
+    // primo. Un'attesa scritta dentro il guscio non può fargli da sipario: la
+    // trova solo chi è già entrato. Senza una schermata di attesa sopra, chi
+    // apre un negozio vede il sipario generale del sito — che ha la forma di
+    // una pagina qualsiasi — e poi il negozio: il salto torna, spostato in su.
     const guscio = ROTTA.find((f) => f.nome === 'app/store/[id]/layout.tsx')!.src;
-    expect(guscio, 'il guscio non decide più la 404 del negozio').toMatch(/\bnotFound\(\)/);
+    const gusciofermo = /export default async function/.test(guscio) && /await\s+precarica/.test(guscio);
+    if (!gusciofermo) return; // il guscio non aspetta niente: nessun sipario da pretendere
+
+    const sopra = ROTTA.find((f) => f.nome === 'app/store/loading.tsx');
     expect(
-      ROTTA.map((f) => f.nome),
-      'il sipario sopra il guscio del negozio è tornato: un negozio che non esiste risponde «tutto ok»',
-    ).not.toContain('app/store/loading.tsx');
+      sopra?.src,
+      'il guscio del negozio si ferma a leggere sul server, ma sopra di lui non c’è nessuna ' +
+        'schermata di attesa col volto del negozio: serve app/store/loading.tsx',
+    ).toMatch(/<ScheletroNegozio\s*\/>/);
   });
 
   it('lo scheletro non è un cerchietto travestito', () => {
