@@ -37,13 +37,14 @@ describe('R12-010 · il piede non salta dall\'h1 all\'h3', () => {
 });
 
 describe('R12-006 · col testo grande le voci lunghe del piede vanno a capo dentro la loro colonna', () => {
-  it('la griglia tiene md:grid-cols-5, rende le colonne comprimibili (min-w-0) e fa andare a capo titoli e link (break-words)', async () => {
+  it('la griglia tiene md:grid-cols-5, rende le colonne comprimibili (min-w-0) e fa andare a capo titoli, link e paragrafi con overflow-wrap:anywhere (che riduce anche la larghezza minima: i link inline-flex non sbordano)', async () => {
     const html = await rendi();
     const griglia = decodifica(html.match(/<footer[^>]*>\s*<div class="([^"]+)"/)?.[1] ?? '').split(/\s+/);
     expect(griglia).toContain('md:grid-cols-5');
     expect(griglia).toContain('[&>div]:min-w-0');
-    expect(griglia).toContain('[&_h3]:break-words');
-    expect(griglia).toContain('[&_a]:break-words');
+    expect(griglia).toContain('[&_h3]:[overflow-wrap:anywhere]');
+    expect(griglia).toContain('[&_a]:[overflow-wrap:anywhere]');
+    expect(griglia).toContain('[&_p]:[overflow-wrap:anywhere]');
   });
 
   it('nell\'area venditore restano quattro colonne, comprimibili e con le voci a capo', async () => {
@@ -53,7 +54,7 @@ describe('R12-006 · col testo grande le voci lunghe del piede vanno a capo dent
       const griglia = decodifica(html.match(/<footer[^>]*>\s*<div class="([^"]+)"/)?.[1] ?? '').split(/\s+/);
       expect(griglia).toContain('md:grid-cols-4');
       expect(griglia).toContain('[&>div]:min-w-0');
-      expect(griglia).toContain('[&_a]:break-words');
+      expect(griglia).toContain('[&_a]:[overflow-wrap:anywhere]');
     } finally {
       Object.assign(profilo, { isSeller: false });
     }

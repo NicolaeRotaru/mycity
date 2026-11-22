@@ -143,8 +143,10 @@ const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,c
 
 /** R12-006 — Col testo al 200% le colonne (cinque da circa 118 px a 768 px) non si allargano: le voci
  *  lunghe, come «Dichiarazione accessibilità», vanno a capo dentro la loro colonna invece di uscire dal
- *  piede. min-w-0 sulle colonne (figli della griglia), break-words su titoli e link. */
-const COLONNE_A_CAPO = '[&>div]:min-w-0 [&_h3]:break-words [&_a]:break-words';
+ *  piede. min-w-0 sulle colonne (figli della griglia), [overflow-wrap:anywhere] su titoli, link e paragrafi:
+ *  a differenza di break-words riduce anche la larghezza minima, e i link in linea (inline-flex) non
+ *  sbordano più sulla colonna accanto. */
+const COLONNE_A_CAPO = '[&>div]:min-w-0 [&_h3]:[overflow-wrap:anywhere] [&_a]:[overflow-wrap:anywhere] [&_p]:[overflow-wrap:anywhere] [&_h3]:hyphens-auto [&_a]:hyphens-auto [&_p]:hyphens-auto';
 
 const Footer = () => {
   const chiSiamo = titolare();
