@@ -1,13 +1,13 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-22 01:40",
+  "aggiornato": "2026-11-22 02:25",
   "finita": true,
-  "testa": "8048e2b97009d9b8d1f0fa7a1f617778a4697118",
+  "testa": "3e36a739f2ffae5d5705750bebb7268957457660",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "8048e2b97009d9b8d1f0fa7a1f617778a4697118",
-    "nota": "1918 file di prova, 11846 casi verdi; tsc ok; lint 0 errori (126 avvisi già esistenti)"
+    "testa": "3e36a739f2ffae5d5705750bebb7268957457660",
+    "nota": "1918 file di prova, 11850 casi verdi, nessuno saltato (il Postgres locale riacceso dopo il riavvio della macchina); tsc ok; lint 0 errori (126 avvisi già esistenti)"
   },
   "voci": [
     {
@@ -43,7 +43,7 @@
       "id": "R09-006",
       "chiave": "deploy-sre|il giorno che si riaccendono i lavori, il cliente di un ordine veloce vecchio riceve una scadenza già passata",
       "esito": "riparato",
-      "commit": "9de228fbb43816dd7a2fbc8fe1fad1f2d9bd15c9",
+      "commit": "a652438abda907114e65b5f0a9e9a11683f3d66b",
       "file_toccati": [
         "lib/ordini/veloce-non-confermata.ts",
         "tests/unit/minori-s02-freno-della-veloce.test.ts"
@@ -60,8 +60,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9de228fbb43816dd7a2fbc8fe1fad1f2d9bd15c9^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-ordine-di-ieri.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "In spostaIlCarrello, a carrello intatto (nessun ordine fratello già spostato), un ordine veloce oltre la sua scadenzaAccettazione non si sposta più e non si scrive a nessuno: torna «scaduto» e lo annulla expire-stale-orders (la scadenza con gli orari del suo negozio, come il giro notturno). Chiude il caso dell'ordine nato ieri spostato a «Domani · …» e poi annullato. PROVA COMUNE TOCCATA CON IL PERMESSO DELLA REGIA (messaggio del 21/11 alle 23:57): tests/unit/minori-s02-freno-della-veloce.test.ts, caso «2372», nascita alle 22:45 invece che alle 20:45, perché alle 00:05 un ordine di 3 h 20 è già oltre la scadenza e il vecchio caso pretendeva proprio lo spostamento che la voce chiama difetto; il controllo «Domani · …» dopo mezzanotte resta uguale e passa anche sulla base. La modifica sta nello stesso commit del codice (9de228fb, già spinto: separarla avrebbe chiesto di riscrivere la storia). La deroga in guardia la registra la regista.",
-      "verificato_da": "revisore (subagente generico, mandato di smentire): senza la correzione cadono i 2 casi «nato ieri»; il caso 2372 a 22:45 passa anche sulla base; varianti: senza orari 2h59 si sposta e 3h esatte scaduto (stesso confine di expire-stale-orders), forno che chiude alle 21, notte del cambio d'ora, carrello di due negozi in tutti e due gli ordini di lettura; nessun cammino «fascia nuova e poi annullo» né scadenza passata al cliente; 31 prove verdi"
+      "cosa_ho_fatto": "Commit della voce: 9de228fb e il giro di correzione del collaudo a652438a. A carrello intatto spostaIlCarrello guarda la scadenza di OGNI ordine nuovo del carrello, non solo del primo letto: se uno è già scaduto non si sposta niente e non si scrive a nessuno, in qualunque ordine il database renda le righe; expire-stale-orders annulla lo scaduto e il giro dopo il freno sposta il valido e avvisa il cliente. Il carrello si sposta tutto insieme perché l'euro della veloce sta sull'ordine che porta la base (può essere proprio lo scaduto): spostare solo il valido lascerebbe l'euro a mano e confonderebbe consegnaDopoLAnnullo e il giro dopo. Prezzo: il valido resta «Adesso» senza avviso fino al giro di expire (al più 30 minuti), ora uguale in tutte e due le letture. Eccezione lasciata com'era: con un fratello già spostato da un giro caduto a metà, il resto lo segue (la prova esistente riparazione-r09-carrello-spostato-a-meta conta su questo). PROVA COMUNE TOCCATA CON IL PERMESSO DELLA REGIA (21/11 alle 23:57): tests/unit/minori-s02-freno-della-veloce.test.ts, caso «2372», nascita alle 22:45 invece che alle 20:45, perché il vecchio caso pretendeva lo spostamento di un ordine già scaduto; sta nel commit 9de228fb (già spinto: separarla avrebbe chiesto di riscrivere la storia); non toccata nel giro di correzione.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire) sul primo giro: varianti su orari, cambio d'ora, confine delle 3 ore; collaudo K03: rompe_altro per l'ordine di lettura del carrello misto, corretto in a652438a (la prova rende le righe nei due ordini s1,v1 e v1,s1 e controlla esito identico e il giro dopo l'annullo); rimessa dalla base 9de228fb^ uscita 0; 31 file e 261 casi su veloce-non-confermata verdi"
     },
     {
       "id": "R09-001",
@@ -153,7 +153,7 @@
       "id": "R09-008",
       "chiave": "deploy-sre|con una destinazione che ha una cartella dentro il secchio, lo storico predefinito finisce nello stesso secchio della copia senza avviso e la notte resta verde",
       "esito": "riparato",
-      "commit": "975745193d58d963b1d11047bd058456d6976b90",
+      "commit": "3e36a739f2ffae5d5705750bebb7268957457660",
       "file_toccati": [
         "scripts/backup-db.sh"
       ],
@@ -169,8 +169,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 975745193d58d963b1d11047bd058456d6976b90^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r09-backup-storico-secchio.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Lo storico predefinito si ricava dal nome del secchio («b2:mycity-foto/copie» → «b2:mycity-foto-storico/copie»); con un remote usato alla radice non c'è secchio da cui ricavarlo: avviso, riepilogo ed exit 5 (notte rossa) finché non si imposta STORAGE_SYNC_STORICO.",
-      "verificato_da": "revisore (subagente generico, mandato di smentire): derivazione dello storico su 14 destinazioni (cartelle annidate, slash finale e iniziale, spazi, locali, cifrata: e cifrata:/ → exit 5); STORAGE_SYNC_STORICO rispettato; bash -n pulito; togliendo il commit 2 prove nuove su 3 cadono; 21 prove su backup verdi (166 casi)"
+      "cosa_ho_fatto": "Commit della voce: 97574519 e il giro di correzione del collaudo 3e36a739. Lo storico predefinito si ricava dal nome del secchio («b2:mycity-foto/copie» → «b2:mycity-foto-storico/copie»); se dopo i due punti la destinazione comincia con «/» (percorso assoluto, remote senza secchi) torna come sulla base, «<dest>-storico» con la barra iniziale («nas:/mnt/x» → «nas:/mnt/x-storico», prima della correzione diventava «nas:mnt-storico/x»); «cifrata:» o «cifrata:/» senza predefinito: avviso, riepilogo ed exit 5. Commenti alle righe ~30 e ~316 corretti. Limite: un remote a secchi scritto con la barra («b2:/secchio/cartella») conta come percorso assoluto e lo storico resta nello stesso secchio, come sulla base: dalla sola stringa non si distingue.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire) sul primo giro: 14 destinazioni; collaudo K03: rompe_altro per la barra iniziale persa su nas:/mnt/x, corretto in 3e36a739 con il caso nella prova; rimessa dalla base 97574519^ uscita 0; bash -n verde; 19 file e 162 casi sul backup verdi"
     },
     {
       "id": "R09-004",
@@ -225,9 +225,9 @@
     "R09-009: col dominio non leggibile e un solo altro commit, il ritorno indietro si rifiuta sempre (ritorno a mano)?"
   ],
   "conto": {
-    "agenti": 5,
-    "nota": "2 lotti che riparano (A modello grande, B sonnet), 1 giro di correzione (sonnet), 2 revisori (A grande, B sonnet). Nessun Workflow. Costo letto da get_session il 22/11 alle 00:16 UTC: 14,02 $.",
-    "subagenti": 5
+    "agenti": 6,
+    "nota": "2 lotti che riparano (A modello grande, B sonnet), 2 giri di correzione (R09-005 sonnet; collaudo K03 su R09-006/008 modello grande), 2 revisori (A grande, B sonnet). Nessun Workflow. Costo letto da get_session il 22/11 alle 01:21 UTC: 18,71 $.",
+    "subagenti": 6
   },
-  "costo_usd": 14.02
+  "costo_usd": 18.71
 }
