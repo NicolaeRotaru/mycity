@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { useRouter } from 'next/navigation';
 import { Store, Bike, LogOut, X } from 'lucide-react';
 import { getAccountMenuItems, type MenuRole } from '@/lib/account-menu';
@@ -79,7 +80,7 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
           <div className="flex items-center gap-3 min-w-0">
             {isSeller && storeLogo ? (
               <span className="w-11 h-11 rounded-full overflow-hidden bg-white ring-1 ring-ink-100 relative shrink-0">
-                <Image src={storeLogo} alt={displayName} fill sizes="44px" className="object-cover" />
+                <Image src={storeLogo} alt={displayName} fill sizes="44px" loader={caricatoreLogoNegozio} className="object-cover" />
               </span>
             ) : (
               <span className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold uppercase shrink-0 ${
