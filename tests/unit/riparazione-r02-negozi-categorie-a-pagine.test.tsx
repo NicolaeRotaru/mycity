@@ -38,19 +38,10 @@ const pg = creaPostgrestColTetto({ categories: categorie, seller_public_profiles
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: (t: string) => pg.client.from(t),
-    rpc: (nome: string) => {
-      const risposta = async () => {
-        if (nome === 'store_cards') return { data: [{ seller_id: 'n1', prodotti: [], totale: 3 }], error: null };
-        if (nome === 'categorie_per_negozio') return { data: [{ seller_id: 'n1', categorie: ['f-zuc'] }], error: null };
-        return { data: [], error: null };
-      };
-      // R12-012 — la pagina legge categorie_per_negozio a finestre (`.order().range()`), come il client vero.
-      const q: Record<string, unknown> = {
-        order: () => q,
-        range: () => q,
-        then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => risposta().then(ok, ko),
-      };
-      return q;
+    rpc: async (nome: string) => {
+      if (nome === 'store_cards') return { data: [{ seller_id: 'n1', prodotti: [], totale: 3 }], error: null };
+      if (nome === 'categorie_per_negozio') return { data: [{ seller_id: 'n1', categorie: ['f-zuc'] }], error: null };
+      return { data: [], error: null };
     },
   },
 }));

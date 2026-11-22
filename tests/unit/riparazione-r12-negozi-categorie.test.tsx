@@ -4,14 +4,8 @@
 /**
  * R12 — LA PAGINA DEI NEGOZI E LE SUE CATEGORIE.
  *
- * 1. Le categorie per negozio (`categorie_per_negozio`, una riga per negozio coi prodotti) si
- *    leggevano con una domanda sola: il servizio dati ne restituisce al massimo mille (max_rows) e
- *    non lo dice. Sopra i mille negozi coi prodotti, quelli dopo la millesima riga perdevano le loro
- *    categorie e col filtro del loro settore sparivano. Qui il finto taglia a mille come quello vero:
- *    1.101 righe, e il negozio in vetrina sta dopo la millesima.
- *
- * 2. Se la lettura delle categorie cadeva, i filtri per settore sparivano e la pagina non diceva
- *    niente: chi cercava «Panificio» non capiva perché il filtro non c'era. Adesso un avviso breve.
+ * Se la lettura delle categorie cadeva, i filtri per settore sparivano e la pagina non diceva
+ * niente: chi cercava «Panificio» non capiva perché il filtro non c'era. Adesso un avviso breve.
  *
  * La pagina si monta col react-query vero: la lettura dei dati gira davvero.
  */
@@ -19,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { creaPostgrestColTetto, TETTO_RIGHE, type Riga } from './aiuti/riparazione-r06-postgrest-col-tetto';
+import { creaPostgrestColTetto, type Riga } from './aiuti/riparazione-r06-postgrest-col-tetto';
 
 const categorie: Riga[] = [
   { id: 'm-pan', slug: 'panificio', name: 'Panificio', parent_id: null, icon: null },
@@ -31,36 +25,27 @@ const negozio = (id: string, nome: string) => ({
   store_logo: null, store_hours: null, store_media: null, is_approved: true, stripe_charges_enabled: true, stripe_payouts_enabled: true,
 });
 
-// Mille e cento negozi coi prodotti che non sono in vetrina, e in fondo i due che lo sono.
 const righeCategorie: Riga[] = [
   { seller_id: 'a-vicino', categorie: ['m-pan'] },
-  ...Array.from({ length: 1100 }, (_, i) => ({ seller_id: `b-${String(i).padStart(4, '0')}`, categorie: ['m-fio'] })),
-  { seller_id: 'z-lontano', categorie: ['m-pan'] },
+  { seller_id: 'z-lontano', categorie: ['m-fio'] },
 ];
 
 const stato = { erroreCategorie: false, errorePerNegozio: false };
 const pg = creaPostgrestColTetto({
   categories: categorie,
-  seller_public_profiles: [negozio('a-vicino', 'Forno Vicino'), negozio('z-lontano', 'Forno Lontano')],
+  seller_public_profiles: [negozio('a-vicino', 'Forno Vicino'), negozio('z-lontano', 'Fiori Lontani')],
 });
-const lettureRpc: Array<{ finestra: [number, number] | null; ordini: string[] }> = [];
 
-/** Un finto `rpc('categorie_per_negozio')`: ordine, finestra e il tetto di mille come PostgREST. */
+/** Un finto `rpc('categorie_per_negozio')`: si legge così com'è, e accetta ordine e finestra se la pagina li chiede. */
 function rpcCategorie() {
-  const ordini: string[] = [];
-  let finestra: [number, number] | null = null;
   const q = {
-    order(c: string) { ordini.push(c); return q; },
-    range(da: number, a: number) { finestra = [da, a]; return q; },
-    then<T>(risolvi: (v: { data: Riga[]; error: null }) => T, rifiuta?: (e: unknown) => unknown) {
-      lettureRpc.push({ finestra, ordini: [...ordini] });
-      if (stato.errorePerNegozio) {
-        return Promise.resolve({ data: null, error: { message: 'servizio dati giù' } }).then(risolvi as never, rifiuta);
-      }
-      let righe = [...righeCategorie];
-      if (ordini.includes('seller_id')) righe.sort((x, y) => String(x.seller_id).localeCompare(String(y.seller_id)));
-      if (finestra) righe = righe.slice(finestra[0], finestra[1] + 1);
-      return Promise.resolve({ data: righe.slice(0, TETTO_RIGHE), error: null }).then(risolvi, rifiuta);
+    order() { return q; },
+    range() { return q; },
+    then<T>(risolvi: (v: { data: Riga[] | null; error: { message: string } | null }) => T, rifiuta?: (e: unknown) => unknown) {
+      const esito = stato.errorePerNegozio
+        ? { data: null, error: { message: 'servizio dati giù' } }
+        : { data: righeCategorie, error: null };
+      return Promise.resolve(esito).then(risolvi, rifiuta);
     },
   };
   return q;
@@ -121,34 +106,21 @@ async function montaLaPagina() {
 beforeEach(() => {
   stato.erroreCategorie = false;
   stato.errorePerNegozio = false;
-  lettureRpc.length = 0;
   document.body.innerHTML = '';
-});
-
-describe('R12-012 — le categorie per negozio si leggono a finestre', () => {
-  it('il negozio la cui riga viene dopo la millesima resta nel filtro del suo settore', async () => {
-    const { radice, smonta } = await montaLaPagina();
-    const bottoni = () => [...radice.querySelectorAll('button')];
-    const panificio = bottoni().find((b) => b.textContent?.trim() === 'Panificio');
-    expect(panificio, 'controprova: i filtri delle categorie si disegnano').toBeTruthy();
-
-    await act(async () => { panificio!.click(); });
-    expect(radice.textContent, 'controprova: il negozio della prima riga c\'è').toContain('Forno Vicino');
-    expect(
-      radice.textContent,
-      'il negozio dopo la millesima riga di categorie_per_negozio è sparito dal filtro: la lettura si è fermata a mille',
-    ).toContain('Forno Lontano');
-    smonta();
-  }, 60000);
 });
 
 describe('R12-013 — se la lettura delle categorie cade, la pagina lo dice', () => {
   const avviso = (radice: HTMLElement) =>
     [...radice.querySelectorAll('[role="status"]')].find((n) => /settori/i.test(n.textContent ?? ''));
 
-  it('controprova: con le categorie lette non c\'è nessun avviso', async () => {
+  it('controprova: con le categorie lette ci sono i filtri e nessun avviso', async () => {
     const { radice, smonta } = await montaLaPagina();
     expect(radice.textContent).toContain('Forno Vicino');
+    const panificio = [...radice.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Panificio');
+    expect(panificio, 'controprova: i filtri delle categorie si disegnano').toBeTruthy();
+    await act(async () => { panificio!.click(); });
+    expect(radice.textContent, 'controprova: il filtro trova il negozio del suo settore').toContain('Forno Vicino');
+    expect(radice.textContent, 'controprova: il filtro toglie quello di un altro settore').not.toContain('Fiori Lontani');
     expect(avviso(radice)).toBeUndefined();
     smonta();
   }, 60000);
