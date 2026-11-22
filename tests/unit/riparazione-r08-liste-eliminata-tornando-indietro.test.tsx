@@ -81,7 +81,6 @@ vi.mock('next-intl', () => import('./aiuti/finti/next-intl.mjs'));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/components/ConfirmDialog', () => ({ confirmDialog: vi.fn(async () => true) }));
 
-import AddToListButton from '@/components/AddToListButton';
 import ListDetailPage from '@/app/lists/[id]/page';
 
 const COLAZIONE = {
