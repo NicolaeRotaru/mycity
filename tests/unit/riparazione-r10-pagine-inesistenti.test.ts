@@ -41,6 +41,19 @@ vi.mock('@/lib/supabase/lettura-per-metadati', () => ({
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
+  // La sessione di chi apre la pagina: qui un estraneo, che con le regole di lettura non vede la riga.
+  getServerSupabase: async () => ({
+    from: () => {
+      const q = {
+        select: () => q,
+        eq: () => q,
+        maybeSingle: async () => (mondo.erroreDellaDomanda
+          ? { data: null, error: mondo.erroreDellaDomanda }
+          : { data: null, error: null }),
+      };
+      return q;
+    },
+  }),
   getAdminSupabase: () => ({
     from: (tabella: string) => {
       const q = {
@@ -48,9 +61,10 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: () => q,
         maybeSingle: async () => {
           if (tabella === 'products') mondo.domandeSulProdotto++;
-          return mondo.erroreDellaDomanda
-            ? { data: null, error: mondo.erroreDellaDomanda }
-            : { data: mondo.esiste ? { id: 'p1' } : null, error: null };
+          if (mondo.erroreDellaDomanda) return { data: null, error: mondo.erroreDellaDomanda };
+          // La riga che c'è è un prodotto finito per oggi di un negozio approvato.
+          if (tabella === 'profiles') return { data: { role: 'seller', is_approved: true }, error: null };
+          return { data: mondo.esiste ? { id: 'p1', status: 'out_of_stock', seller_id: 'n1' } : null, error: null };
         },
       };
       return q;
