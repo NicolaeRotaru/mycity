@@ -440,6 +440,25 @@ export async function track(event: string, properties?: Record<string, unknown>)
 }
 
 /**
+ * Una misura di velocita' (CLS, LCP, INP, FCP, TTFB) vista da un cliente vero.
+ * Va a PostHog (se e' acceso) e a GA4 (se gtag c'e'); entrambe le strade sono dietro lo stesso
+ * consenso statistico: senza, non parte niente.
+ */
+export function mandaMisuraDiVelocita(name: string, metric: { value: number; rating: string }): void {
+  if (typeof window === 'undefined' || !readConsent()?.analytics) return;
+  void track('web_vital', { metric: name, value: metric.value, rating: metric.rating });
+  if (!window.gtag) return;
+  try {
+    window.gtag('event', 'web_vital', {
+      metric_name: name,
+      value: Math.round(name === 'CLS' ? metric.value * 1000 : metric.value),
+      metric_rating: metric.rating,
+      non_interaction: true,
+    });
+  } catch { /* noop */ }
+}
+
+/**
  * Identifica un utente (al signup/signin). Linka tutti gli eventi anonimi
  * precedenti al user_id.
  */
@@ -603,8 +622,11 @@ export default function PostHogProvider() {
   // Adesso le misure si accendono quando il consenso c'e': subito se c'era gia', altrimenti
   // al suo arrivo. web-vitals legge le voci che il browser ha gia' registrato (buffered), quindi
   // arrivano anche quelle di prima del clic. Prima del consenso non si misura e non parte niente.
+  //
+  // La misura NON dipende piu' da PostHog (spento al lancio): parte comunque dopo il consenso e
+  // va a chi e' acceso fra PostHog e GA4 (vedi `mandaMisuraDiVelocita`). Nessuna libreria nuova:
+  // e' la stessa web-vitals di prima.
   useEffect(() => {
-    if (!POSTHOG_KEY) return;
     let cancelled = false;
     let accese = false;
     const accendi = () => {
@@ -614,7 +636,7 @@ export default function PostHogProvider() {
         const mod = await import('web-vitals').catch(() => null);
         if (!mod || cancelled) return;
         const sendVital = (name: string) => (metric: { value: number; rating: string }) => {
-          track('web_vital', { metric: name, value: metric.value, rating: metric.rating });
+          mandaMisuraDiVelocita(name, metric);
         };
         mod.onCLS(sendVital('CLS'));
         mod.onLCP(sendVital('LCP'));
