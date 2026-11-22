@@ -122,10 +122,12 @@ async function rimettiComEra(
 
 /**
  * R03-002 — Le taglie di un prodotto come stanno in banca dati, in una forma che si confronta:
- * in ordine di posizione, con nome, opzioni e scorta. `null` se non si leggono.
+ * in ordine di posizione, con nome, opzioni, scorta e la posizione letta. `null` se non si leggono.
  */
 type Taglia = { label: unknown; options: unknown; stock: unknown };
-async function taglieInBanca(admin: ReturnType<typeof getAdminSupabase>, id: string): Promise<Taglia[] | null> {
+type TagliaLetta = Taglia & { position: number };
+const contenutoTaglia = (t: Taglia) => JSON.stringify([t.label, t.options, t.stock]);
+async function taglieInBanca(admin: ReturnType<typeof getAdminSupabase>, id: string): Promise<TagliaLetta[] | null> {
   try {
     const { data, error } = await admin
       .from('product_variants')
@@ -135,14 +137,29 @@ async function taglieInBanca(admin: ReturnType<typeof getAdminSupabase>, id: str
     return (data as Array<Record<string, unknown>>)
       .slice()
       .map((r) => ({ label: r.label ?? null, options: r.options ?? null, stock: r.stock ?? null, position: Number(r.position ?? 0) }))
-      // R03-001 — A parità di posizione l'ordine non può dipendere dall'id (le righe riscritte ne
-      // prendono di nuovi): si usa il contenuto, così lo stesso insieme di taglie dà sempre la stessa forma.
-      .sort((a, b) => a.position - b.position
-        || JSON.stringify([a.label, a.options, a.stock]).localeCompare(JSON.stringify([b.label, b.options, b.stock])))
-      .map(({ label, options, stock }) => ({ label, options, stock }));
+      // A parità di posizione l'ordine non dipende dall'id: solo per scrivere la traccia sempre uguale.
+      .sort((a, b) => a.position - b.position || contenutoTaglia(a).localeCompare(contenutoTaglia(b)));
   } catch {
     return null;
   }
+}
+/** Le taglie come entrano nella traccia: nome, opzioni e scorta, nell'ordine letto. */
+const taglieDellaTraccia = (l: TagliaLetta[] | null): Taglia[] | null =>
+  l && l.map(({ label, options, stock }) => ({ label, options, stock }));
+
+/**
+ * R03-001 — Le taglie sono cambiate se cambia l'insieme (nome, opzioni, scorta) o se due taglie
+ * con posizioni di prima DIVERSE arrivano in ordine inverso. Due taglie alla stessa posizione non
+ * avevano un ordine: il salvataggio le riscrive 0..n-1 in un ordine qualunque e non è un riordino.
+ */
+function taglieCambiate(prima: TagliaLetta[], dopo: TagliaLetta[]): boolean {
+  const insieme = (l: TagliaLetta[]) => JSON.stringify(l.map(contenutoTaglia).sort());
+  if (insieme(prima) !== insieme(dopo)) return true;
+  // Ogni taglia di dopo prende la posizione di prima della stessa taglia (due uguali: nell'ordine).
+  const posizioniDiPrima = new Map<string, number[]>();
+  for (const t of prima) posizioniDiPrima.set(contenutoTaglia(t), [...(posizioniDiPrima.get(contenutoTaglia(t)) ?? []), t.position]);
+  const coppie = dopo.map((t) => ({ ora: t.position, prima: posizioniDiPrima.get(contenutoTaglia(t))?.shift() ?? 0 }));
+  return coppie.some((a) => coppie.some((b) => a.ora < b.ora && a.prima > b.prima));
 }
 
 export const POST = withAdminAuth(async ({ user, req }) => {
@@ -314,7 +331,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   // (con `null` dove non si sa), perché il salvataggio delle taglie c'è stato.
   if (variants) {
     const taglieDopo = await taglieInBanca(admin, id);
-    if (taglieDiPrima === null || taglieDopo === null || JSON.stringify(taglieDiPrima) !== JSON.stringify(taglieDopo)) {
+    if (taglieDiPrima === null || taglieDopo === null || taglieCambiate(taglieDiPrima, taglieDopo)) {
       const base: VoceDiTraccia = voce ?? {
         actorId: user.id,
         action: 'product.update',
@@ -327,8 +344,8 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
         metadata: {
           ...base.metadata,
           campi: [...base.metadata.campi, 'variants'],
-          prima: { ...base.metadata.prima, variants: taglieDiPrima },
-          dopo: { ...base.metadata.dopo, variants: taglieDopo },
+          prima: { ...base.metadata.prima, variants: taglieDellaTraccia(taglieDiPrima) },
+          dopo: { ...base.metadata.dopo, variants: taglieDellaTraccia(taglieDopo) },
         },
       };
     }
