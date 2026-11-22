@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { QueryClient, dehydrate, type DehydratedState } from '@tanstack/react-query';
 import { logger } from '@/lib/logger';
 import { domandaCategorie, domandaNegozio, type ClientDiLettura } from '@/lib/queries/catalogo';
@@ -39,6 +40,21 @@ async function clienteDiLettura(): Promise<ClientDiLettura | null> {
 }
 
 type Domanda = { queryKey: readonly unknown[]; queryFn: () => Promise<unknown>; staleTime?: number };
+
+/**
+ * 22/11/2026 — UN PRECARICO PER RICHIESTA, NON UNO PER CHI LO CHIEDE.
+ *
+ * Sulla scheda prodotto e sulla vetrina, `generateMetadata` e il guscio leggevano ognuno la sua
+ * copia della stessa riga: i metadati con `leggiPerMetadati`, il guscio col precarico. Il collaudo
+ * ha contato, in una richiesta, `products` due volte e `seller_public_profiles` due volte sulla
+ * scheda, tre volte sulla vetrina. Adesso i metadati e il guscio prendono i loro campi dalla
+ * risposta del precarico, e il precarico si fa una volta per richiesta: `cache()` di React, che
+ * c'è nei componenti del server (Next usa lì il suo React, il 19) e vale per una richiesta sola.
+ * Dove `cache` non c'è (il React 18 del progetto, nelle prove) si legge e basta, come prima.
+ */
+type Memorizzatore = <F extends (...argomenti: never[]) => unknown>(f: F) => F;
+const cacheDiReact = (React as unknown as { cache?: Memorizzatore }).cache;
+const perRichiesta: Memorizzatore = (f) => (typeof cacheDiReact === 'function' ? cacheDiReact(f) : f);
 
 async function precarica(
   lavoro: (supa: ClientDiLettura, qc: QueryClient) => Promise<unknown>,
@@ -105,11 +121,28 @@ export function precaricaSito(): Promise<DehydratedState> {
  * `prefetchQuery`: il browser rifara' la domanda. Il guasto vero della vista lo
  * scrive gia' chi legge la vista.
  */
-export function precaricaProdotto(id: string): Promise<DehydratedState> {
-  return precarica(async (supa, qc) => {
+export const precaricaProdotto = perRichiesta((id: string): Promise<DehydratedState> =>
+  precarica(async (supa, qc) => {
     const voci = await leggiSchedaPerIlGuscio(supa, id).catch(() => []);
     for (const voce of voci) qc.setQueryData(voce.queryKey, voce.data);
-  });
+  }),
+);
+
+/**
+ * 22/11/2026 — La domanda della vetrina è quella del browser (`domandaNegozio`: stessa chiave,
+ * stesso ripiego della 124), con UNA colonna in più: `role`. Così il guscio e i metadati del
+ * negozio prendono dalla stessa riga anche la condizione della 404 («venditore, approvato, con
+ * un'insegna») invece di rileggerla. Nel browser arriva un campo in più, `role`, che la vetrina
+ * non usa.
+ */
+function domandaVetrina(supa: ClientDiLettura, id: string) {
+  const conIlRuolo: ClientDiLettura = {
+    from: (tabella: string) => {
+      const q = supa.from(tabella);
+      return { select: (colonne: string) => q.select(`${colonne}, role`) };
+    },
+  };
+  return domandaNegozio(conIlRuolo, id);
 }
 
 /**
@@ -122,16 +155,16 @@ export function precaricaProdotto(id: string): Promise<DehydratedState> {
  * c'e' piu', perche' quando il codice della pagina parte la risposta e' gia' in
  * mano.
  */
-export function precaricaNegozio(id: string): Promise<DehydratedState> {
+export const precaricaNegozio = perRichiesta((id: string): Promise<DehydratedState> =>
   // 15/10/2026 (R55) — anche «Venduto da», che la vetrina mostra in fondo: letto
   // qui, l'avviso sulla migrazione 126 finisce nei registri del server.
   // 12/11/2026 (R07-021) — e le stelle del negozio: senza, lo schema per Google usciva dal
   // server senza `aggregateRating` e il browser lo riscriveva con, due script diversi.
-  return precarica((supa, qc) =>
+  precarica((supa, qc) =>
     insieme(qc, [
-      domandaNegozio(supa, id),
+      domandaVetrina(supa, id),
       domandaVendutoDa(supa, id),
       domandaRiepilogoRecensioni(supa as unknown as ClientConFunzioni, id),
     ]),
-  );
-}
+  ),
+);
