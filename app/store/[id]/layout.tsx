@@ -6,7 +6,20 @@ import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaNegozio } from '@/lib/queries/precarico';
 import { notFound } from 'next/navigation';
 
-export const revalidate = 300;
+/**
+ * 21/11/2026 (R10-004) — LA VETRINA SI COSTRUISCE A OGNI VISITA, MAI DA UNA COPIA IN CACHE.
+ *
+ * Qui c'era `revalidate = 300`: una copia della vetrina tenuta fino a cinque minuti, e poi servita
+ * ancora alla prima visita dopo (Next la rifà dietro le quinte, ma a quella visita dà la vecchia).
+ * La vetrina dipende dall'orologio: l'annuncio «fino al 21» vale tutto il 21 a Piacenza e sparisce
+ * a mezzanotte (`announcementActive`, col giorno di Piacenza), e anche «Aperto ora / Chiuso ora».
+ * Una copia fatta alle 23:58 e servita la mattina dopo — dopo una notte senza visite, anche ore
+ * dopo — mostrava l'annuncio già scaduto. Con 0 la pagina si costruisce alla visita, con l'ora di
+ * quella visita; vale anche per le pagine su misura qui sotto (vince il valore più basso).
+ * Oggi `force-dynamic` in app/layout.tsx fa già lo stesso per tutto il sito: questa riga è perché
+ * regga anche quando quella verrà tolta.
+ */
+export const revalidate = 0;
 
 type StoreMeta = {
   id: string;
