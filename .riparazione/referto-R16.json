@@ -99,32 +99,20 @@
       "id": "R16-004",
       "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
       "esito": "serve_file_altrui",
-      "commit": "e4a75059",
-      "file_toccati": [
-        "components/seller/site/BannerFields.tsx",
-        "tests/unit/riparazione-r16-banner-campi-brevi.test.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r16-banner-campi-brevi.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r16-banner-campi-brevi.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e4a75059^ --file components/seller/site/BannerFields.tsx --prove tests/unit/riparazione-r16-banner-campi-brevi.test.tsx --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "BannerFields (vetrina del negozio): tolti i maxLength di Titolo (120), Sottotitolo (200), Testo alternativo (160) e Testo del pulsante (40), con error={sopraIlTetto(…)} copiata da SectionConfigForm.tsx:19-24 (non esportata); i tetti sono quelli di bannerConfig in lib/store-site.ts. Prova: render vero di BannerFields con testo oltre il tetto (niente maxlength, valore intero, errore «N caratteri su T» legato al campo, aria-invalid) e controprova al tetto, per i quattro campi. HomeSectionConfigForm era già a posto sulla base: nessun maxLength (solo nei commenti, righe 14 e 213), tutti i campi brevi hanno già error={sopraIlTetto(…)}.",
+      "cosa_ho_fatto": "BannerFields (vetrina del negozio): tolti i maxLength di Titolo (120), Sottotitolo (200), Testo alternativo (160) e Testo del pulsante (40), con error={sopraIlTetto(…)} copiata da SectionConfigForm.tsx:19-24 (non esportata); i tetti sono quelli di bannerConfig in lib/store-site.ts. Prova: render vero di BannerFields con testo oltre il tetto (niente maxlength, valore intero, errore «N caratteri su T» legato al campo, aria-invalid) e controprova al tetto, per i quattro campi. HomeSectionConfigForm era già a posto sulla base: nessun maxLength (solo nei commenti, righe 14 e 213), tutti i campi brevi hanno già error={sopraIlTetto(…)}. (poi tolto col ritorno 40da5b80)",
       "serve_file_altrui": [
+        {
+          "file": "components/seller/site/BannerFields.tsx",
+          "modifica": "In cima al file aggiungere `function sopraIlTetto(valore: string | undefined, max: number): string | undefined { const n = (valore ?? '').trim().length; return n > max ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.` : undefined; }` (copia di quella di SectionConfigForm.tsx, che non la esporta); poi Titolo: `maxLength={120}` → `error={sopraIlTetto(c.heading, 120)}`; Sottotitolo: `maxLength={200}` → `error={sopraIlTetto(c.subheading, 200)}`; Testo alternativo: `maxLength={160}` → `error={sopraIlTetto(c.alt, 160)}`; Testo del pulsante: `maxLength={40}` → `error={sopraIlTetto(c.cta.label, 40)}`. È esattamente il commit e4a75059, che porta anche la prova nuova tests/unit/riparazione-r16-banner-campi-brevi.test.tsx (rimessa reggeva, uscita 0): si rimette annullando il commit di ritorno 40da5b80 (git revert 40da5b80), insieme alla modifica della prova comune qui sotto."
+        },
         {
           "file": "tests/unit/riparazione-r02-banner-alt.test.tsx",
           "modifica": "Riga 38: sostituire `expect(campo!.maxLength).toBe(160);` con `expect(campo!.maxLength).toBeUndefined();` seguita da `expect(trova(albero({ alt: 'a'.repeat(161) }), 'Testo alternativo della foto')!.error).toMatch(/161 caratteri su 160/);` e `expect(trova(albero({ alt: 'a'.repeat(160) }), 'Testo alternativo della foto')!.error).toBeUndefined();` (il tetto di 160 resta, ma lo dice l'errore invece di tagliare). Va applicata SUBITO: col commit e4a75059 questa prova è ROSSA («expected undefined to be 160»), perché la voce chiede proprio di togliere quel maxLength. Con la modifica è verde (provato in locale, 3/3). Non l'ho potuta toccare io: guardia-ramo la dà «prova esistente che usa anche file di altre sessioni dell'onda»."
         }
       ],
       "cosa_resta": "la modifica della prova comune riparazione-r02-banner-alt.test.tsx (sotto): fino ad allora quella prova è rossa sul ramo.",
-      "verificato_da": "revisore A (sonnet): prova rilanciata (8/8 verde); tetti 120/200/160/40 uguali a bannerConfig in lib/store-site.ts, il salvataggio in SiteEditor.tsx:98 passa da storeSiteSchema.safeParse e lancia errore oltre il tetto (non lascia passare testo lungo); HomeSectionConfigForm senza maxLength e già con error. Prova comune r02-banner-alt rossa nota. — verdetto: regge"
+      "verificato_da": "revisore A (sonnet): prova rilanciata (8/8 verde); tetti 120/200/160/40 uguali a bannerConfig in lib/store-site.ts, il salvataggio in SiteEditor.tsx:98 passa da storeSiteSchema.safeParse e lancia errore oltre il tetto (non lascia passare testo lungo); HomeSectionConfigForm senza maxLength e già con error. Prova comune r02-banner-alt rossa nota. — verdetto: regge",
+      "nota": "Codice fatto nel commit e4a75059 (rimessa uscita 0) ma tolto col ritorno 40da5b80 su decisione della regia: la correzione fa diventare rossa una prova comune che R16 non può toccare, e senza firma prove_comuni il ramo deve avere il verify verde. Codice e prova comune vanno applicati insieme. Se Nicola firma: git revert 40da5b80 più la modifica della prova comune, un commit per prova."
     },
     {
       "id": "R16-005",
@@ -289,32 +277,20 @@
       "id": "R16-011",
       "chiave": "qa-flussi|nella pagina dei negozi le categorie per negozio si leggono senza finestre: sopra i mille negozi con prodotti alcuni perderebbero le loro categorie nel filtro",
       "esito": "serve_file_altrui",
-      "commit": "b94d11b5",
-      "file_toccati": [
-        "app/stores/page.tsx",
-        "tests/unit/riparazione-r16-negozi-categorie.test.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r16-negozi-categorie.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r16-negozi-categorie.test.tsx --reporter=dot",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b94d11b5^ --file app/stores/page.tsx --prove tests/unit/riparazione-r16-negozi-categorie.test.tsx --json"
-      },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nel Promise.all di fetchStoresData categorie_per_negozio si legge con leggiTutteLeRighe, ordinata per seller_id e a finestre di mille. Prova nuova mia: 1.102 righe con un finto che taglia a mille, il negozio dopo la millesima resta nel filtro del suo settore (rossa senza la correzione, sul comportamento). La prova esistente tests/unit/riparazione-r12-negozi-categorie.test.tsx non l'ho toccata: il suo finto accetta già order/range ed è verde.",
+      "cosa_ho_fatto": "Nel Promise.all di fetchStoresData categorie_per_negozio si legge con leggiTutteLeRighe, ordinata per seller_id e a finestre di mille. Prova nuova mia: 1.102 righe con un finto che taglia a mille, il negozio dopo la millesima resta nel filtro del suo settore (rossa senza la correzione, sul comportamento). La prova esistente tests/unit/riparazione-r12-negozi-categorie.test.tsx non l'ho toccata: il suo finto accetta già order/range ed è verde. (poi tolto col ritorno 5a804dbe)",
       "serve_file_altrui": [
+        {
+          "file": "app/stores/page.tsx",
+          "modifica": "Nel Promise.all di fetchStoresData (riga ~106) sostituire `supabase.rpc('categorie_per_negozio'),` con `leggiTutteLeRighe<{ seller_id: string; categorie: string[] | null }>((da, a) => supabase.rpc('categorie_per_negozio').order('seller_id').range(da, a)),` (import già presente). È esattamente il commit b94d11b5, che porta anche la prova nuova tests/unit/riparazione-r16-negozi-categorie.test.tsx (1.102 righe; la sua prova rimessa reggeva, uscita 0): si rimette annullando il commit di ritorno 5a804dbe (git revert 5a804dbe), insieme alla modifica della prova comune qui sotto."
+        },
         {
           "file": "tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx",
           "modifica": "Nel vi.mock di '@/lib/supabase/client' (righe 41-45) sostituire `rpc: async (nome: string) => { if (nome === 'store_cards') return {…}; if (nome === 'categorie_per_negozio') return {…}; return { data: [], error: null }; },` con `rpc: (nome: string) => { const risposta = async () => { …gli stessi tre return… }; const q: Record<string, unknown> = { order: () => q, range: () => q, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => risposta().then(ok, ko) }; return q; },` (identica al commit 8f8973f3). Dati e controlli invariati. Va applicata SUBITO: col commit b94d11b5 questa prova è ROSSA (il finto rpc restituisce una Promise senza .order, la lettura dei negozi cade, «controprova: i filtri delle categorie si disegnano» fallisce). Con la modifica è verde (provato in locale: 5/5 con la r12 e la mia). Non l'ho potuta toccare io: guardia-ramo la dà «prova esistente che usa anche file di altre sessioni dell'onda»."
         }
       ],
       "cosa_resta": "la modifica della prova comune riparazione-r02-negozi-categorie-a-pagine.test.tsx (sopra): fino ad allora quella prova è rossa sul ramo.",
-      "verificato_da": "revisore A (sonnet): rilanciata la prova (1/1 verde), letto il diff: order('seller_id') + leggiTutteLeRighe, stesso helper già usato altrove; la prova comune r02 rossa è nota. — verdetto: regge"
+      "verificato_da": "revisore A (sonnet): rilanciata la prova (1/1 verde), letto il diff: order('seller_id') + leggiTutteLeRighe, stesso helper già usato altrove; la prova comune r02 rossa è nota. — verdetto: regge",
+      "nota": "Codice fatto nel commit b94d11b5 (rimessa uscita 0) ma tolto col ritorno 5a804dbe su decisione della regia: la correzione fa diventare rossa una prova comune che R16 non può toccare, e senza firma prove_comuni il ramo deve avere il verify verde. Codice e prova comune vanno applicati insieme. Se Nicola firma: git revert 5a804dbe più la modifica della prova comune, un commit per prova."
     },
     {
       "id": "R16-012",
@@ -386,16 +362,16 @@
     "subagenti": 5,
     "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) + 3 revisori sonnet in parallelo; nessun Workflow, nessuno fermato"
   },
-  "aggiornato": "2026-11-22 18:00",
-  "testa": "f4974138ab07582b30c9e102fc53353fa76ea966",
+  "aggiornato": "2026-11-22 18:55",
+  "testa": "5a804dbe99f7b855371ba755897113ff1da79b1f",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "rosso",
-    "testa": "f4974138ab07582b30c9e102fc53353fa76ea966",
-    "nota": "typecheck pulito, lint 0 errori (122 avvisi già presenti), test 12321 passati, 1 saltato, 2 rossi: solo le due prove comuni che la regia deve ricucire (tests/unit/riparazione-r02-banner-alt.test.tsx per R16-004, tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx per R16-011). Modifiche esatte nel serve_file_altrui delle due voci; con quelle applicate le due prove sono verdi in locale. Decisione della regia: tenere b94d11b5 ed e4a75059; se manca la firma prove_comuni, all'unione li toglie lei e le due voci diventano serve_file_altrui complete. Log: /tmp/claude-0/r16/verify.log (fuori dal deposito)."
+    "esito": "verde",
+    "testa": "5a804dbe99f7b855371ba755897113ff1da79b1f",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già presenti), test 12314 passati e 1 saltato. Girato dopo i due commit di ritorno 40da5b80 (R16-004) e 5a804dbe (R16-011), voluti dalla regia perché senza firma prove_comuni le due prove comuni r02 restavano rosse. Il verify precedente su f4974138 era rosso solo su quelle due."
   },
   "domande_per_nicola": [
     "Firma prove_comuni per questo giro: posso applicare io, un commit per prova, le modifiche a tests/unit/riparazione-r02-banner-alt.test.tsx e tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx scritte in R16-004 e R16-011? (chiesta dalla regia)"
   ],
-  "costo_usd": 17.05
+  "costo_usd": 17.85
 }
