@@ -332,7 +332,9 @@ function handleDaLink(v: string | undefined, dominio: RegExp): string | undefine
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
   // R10-014 — Anche gli altri percorsi di Facebook (people, events, photo, marketplace…): il
   // primo pezzo del percorso non è un nome, e non deve diventare il «nome profilo».
-  if (m && (PERCORSI_CHE_NON_SONO_UN_PROFILO.test(m[1]) || /\?/.test(t))) return t;
+  // R10-010 — Il link copiato dall'app porta dietro «?igsh=…» o «?hl=it»: dopo il nome del profilo
+  // la coda non conta, si tiene il nome (prima ogni «?» fermava anche un profilo vero).
+  if (m && PERCORSI_CHE_NON_SONO_UN_PROFILO.test(m[1])) return t;
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
