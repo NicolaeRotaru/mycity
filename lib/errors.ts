@@ -228,7 +228,13 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
 
   // Supabase PostgrestError style
   if (typeof err === 'object' && err !== null) {
-    const e = err as { code?: string; message?: string; status?: number };
+    const e = err as { code?: string; message?: string; status?: number; details?: string };
+    // R10-013 — Il vincolo sul nome del prodotto (migrazione 149) ha una frase sua: il 23514
+    // generico diceva solo «Il valore inserito non è valido».
+    if (e.code === '23514' && /products_name_lunghezza/.test(`${e.message ?? ''} ${e.details ?? ''}`)) {
+      trackErrorShown(e.code, e.message ?? '', context?.page);
+      return 'Il nome del prodotto è troppo lungo: al massimo 120 caratteri. Accorcialo e riprova.';
+    }
     if (e.code && SUPABASE_CODE_MAP[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return SUPABASE_CODE_MAP[e.code];

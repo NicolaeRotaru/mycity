@@ -137,6 +137,14 @@ function prezzoScritto(v: unknown): unknown {
   return leggiPrezzo(v);
 }
 
+/** Il tetto del nome del prodotto: lo stesso del vincolo `products_name_lunghezza` nel database. */
+export const NOME_PRODOTTO_MAX = 120;
+
+/** Quanti caratteri conta il database nel nome: `char_length` di quello che si salva (senza spazi ai lati). */
+export function lunghezzaNomeProdotto(nome: string): number {
+  return [...nome.trim()].length;
+}
+
 /**
  * Schema dei campi RHF. `minDescription` differisce tra creazione (30, gate
  * qualità) e modifica (10, non bloccare annunci storici brevi).
@@ -145,7 +153,13 @@ export function createProductSchema(opts?: { minDescription?: number }) {
   const minDesc = opts?.minDescription ?? 10;
   return z
     .object({
-      name: z.string().min(3, 'Almeno 3 caratteri'),
+      // R10-013 — Il nome ha al massimo 120 caratteri (vincolo `products_name_lunghezza`, migrazione
+      // 149): il modulo lo dice prima e, se si supera, lo dice con le parole giuste. Si conta come
+      // Postgres (`char_length` del nome già tagliato dagli spazi), non in unità UTF-16.
+      name: z
+        .string()
+        .min(3, 'Almeno 3 caratteri')
+        .refine((v) => lunghezzaNomeProdotto(v) <= NOME_PRODOTTO_MAX, `Il nome può avere al massimo ${NOME_PRODOTTO_MAX} caratteri: accorcialo.`),
       description: z
         .string()
         .min(
