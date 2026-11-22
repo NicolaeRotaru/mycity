@@ -217,8 +217,6 @@ interface ProductFormProps {
   consegnaDelNegozioNonLetta?: boolean;
   /** create: chiave localStorage per l'autosalvataggio della bozza. */
   autosaveKey?: string;
-  /** create: l'id di chi scrive la bozza; finché non si conosce la bozza non si salva. */
-  autosaveAutore?: string | null;
   /**
    * Gli strumenti AI del modulo. Le pagine non lo passano: vale l'interruttore
    * AI_NEGOZI_ACCESA (carta #209). Lo passano le prove che verificano i
@@ -251,7 +249,6 @@ export default function ProductForm({
   sellerOffersExpress = false,
   consegnaDelNegozioNonLetta = false,
   autosaveKey,
-  autosaveAutore = null,
   aiAccesa = AI_NEGOZI_ACCESA,
 }: ProductFormProps) {
   const schema = useMemo(
@@ -445,7 +442,6 @@ export default function ProductForm({
   );
   useFormAutosave(autosaveKey ?? 'mc_product_unused', snapshot, {
     enabled: mode === 'create' && !!autosaveKey,
-    autore: autosaveAutore,
   });
 
   // ---- Foto AI → immagini prodotto -----------------------------------------

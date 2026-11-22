@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { AlertTriangle, Trash2 } from 'lucide-react';
@@ -18,13 +18,12 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { colonnaDelRecessoPresente } from '@/lib/ordini/recesso';
 import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { trackProductPublished } from '@/lib/analytics/events';
-import { leggiBozzaDi, clearAutosave, CHIAVE_BOZZA_NUOVO_PRODOTTO } from '@/lib/hooks/useFormAutosave';
-import { idUtenteInMemoria } from '@/components/hooks/useUtente';
+import { loadAutosave, clearAutosave } from '@/lib/hooks/useFormAutosave';
 import type { ProductUnit, ProductCondition } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
 
-const AUTOSAVE_KEY = CHIAVE_BOZZA_NUOVO_PRODOTTO;
+const AUTOSAVE_KEY = 'mc_new_product_draft';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -70,30 +69,6 @@ function NewProductInner() {
   const fromId = searchParams.get('from');
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
-
-  /**
-   * LA BOZZA SALVATA IN QUESTO BROWSER È DI CHI L'HA SCRITTA. Si legge chi è collegato dal token già
-   * in memoria (niente rete: la pagina si apre anche senza): da lì in poi la bozza si salva col suo
-   * id, e una bozza scritta da un altro si toglie e il modulo riparte vuoto. Finché non si sa chi è
-   * collegato la bozza non si salva.
-   */
-  const [autore, setAutore] = useState<string | null>(null);
-  const [bozzaScartata, setBozzaScartata] = useState(0);
-  useEffect(() => {
-    let attiva = true;
-    idUtenteInMemoria()
-      .then((id) => {
-        if (!attiva || !id) return;
-        setAutore(id);
-        const letta = leggiBozzaDi(AUTOSAVE_KEY);
-        if (letta && letta.autore !== id) {
-          clearAutosave(AUTOSAVE_KEY);
-          setBozzaScartata((n) => n + 1);
-        }
-      })
-      .catch(() => { /* sessione non leggibile: la bozza resta ferma, non si salva */ });
-    return () => { attiva = false; };
-  }, []);
 
   // R16-021 — Il ripiego `= []` faceva passare una lettura caduta per «non ci sono categorie»:
   // il modulo chiedeva di sceglierne una che non c'era. Come in «Modifica prodotto», senza
@@ -233,9 +208,8 @@ function NewProductInner() {
         nonRecedibile: s.non_recedibile === true,
       };
     }
-    return snapshotToInitial(leggiBozzaDi<Snapshot>(AUTOSAVE_KEY)?.bozza ?? {});
-    // `bozzaScartata`: tolta la bozza di un altro, il modulo si rifà vuoto.
-  }, [imported, fromId, source, sourceVariants, bozzaScartata]);
+    return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
+  }, [imported, fromId, source, sourceVariants]);
 
   /**
    * IL MODULO APERTO RESTA APERTO QUANDO TORNA LA RETE.
@@ -410,7 +384,7 @@ function NewProductInner() {
       )}
       {(giaAperto || moduloPronto) && (
         <ProductForm
-          key={`${chiaveDelModulo}:${importNonce}:${giaAperto?.volta ?? 0}:${bozzaScartata}`}
+          key={`${chiaveDelModulo}:${importNonce}:${giaAperto?.volta ?? 0}`}
           mode="create"
           categories={categories}
           initialValues={initialValues}
@@ -419,7 +393,6 @@ function NewProductInner() {
           consegnaDelNegozioNonLetta={consegnaDelModulo.consegnaNonLetta}
           recessoSegnabile={recessoSegnabileQui}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
-          autosaveAutore={autore}
           // R01-012 — l'invio finisce quando finisce l'inserimento: fino ad allora il modulo
           // non ne fa partire un altro (l'errore lo dice già `onError` della mutazione).
           onSubmit={(payload, ctx) => {

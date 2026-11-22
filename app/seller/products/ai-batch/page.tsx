@@ -8,8 +8,6 @@ import {
   Mic, Camera, ScanBarcode, Link2, ArrowRight, type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { salvaBozzaDi, CHIAVE_BOZZA_NUOVO_PRODOTTO } from '@/lib/hooks/useFormAutosave';
-import { idUtenteInMemoria } from '@/components/hooks/useUtente';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { sizedImage } from '@/lib/image-url';
 import CatalogCopilot from '@/components/seller/CatalogCopilot';
@@ -104,7 +102,7 @@ const TONE: Record<CreateTone, string> = {
 
 // Chiave dell'autosave del form "Nuovo prodotto": scrivendo qui prima di navigare,
 // il form reale ripristina la scheda importata (nessun endpoint finto, nessun handoff fragile).
-const NEW_PRODUCT_AUTOSAVE_KEY = CHIAVE_BOZZA_NUOVO_PRODOTTO;
+const NEW_PRODUCT_AUTOSAVE_KEY = 'mc_new_product_draft';
 
 async function authedFetch(path: string, init?: RequestInit) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -266,23 +264,24 @@ function UrlImportPanel() {
   const router = useRouter();
   const [imported, setImported] = useState<ImportResult | null>(null);
 
-  const continueToForm = async () => {
+  const continueToForm = () => {
     if (!imported) return;
-    // Stesso shape del Snapshot letto da /seller/products/new, salvato col nome di chi è collegato:
-    // la pagina restituisce la bozza solo a lui. Senza sessione leggibile il form parte vuoto.
-    const autore = await idUtenteInMemoria().catch(() => null);
-    if (autore) {
-      salvaBozzaDi(NEW_PRODUCT_AUTOSAVE_KEY, autore, {
-        name: imported.name,
-        description: imported.description,
-        price: imported.suggested_price ?? '',
-        category_id: imported.subcategory_id ?? imported.category_id ?? '',
-        imageUrls: imported.image_urls,
-        attributes: imported.attributes,
-        tags: imported.tags,
-        unit: 'pezzo',
-      });
-    }
+    try {
+      // Stesso shape del Snapshot letto da /seller/products/new (loadAutosave).
+      localStorage.setItem(
+        NEW_PRODUCT_AUTOSAVE_KEY,
+        JSON.stringify({
+          name: imported.name,
+          description: imported.description,
+          price: imported.suggested_price ?? '',
+          category_id: imported.subcategory_id ?? imported.category_id ?? '',
+          imageUrls: imported.image_urls,
+          attributes: imported.attributes,
+          tags: imported.tags,
+          unit: 'pezzo',
+        }),
+      );
+    } catch { /* quota/Safari privata: il form parte vuoto */ }
     router.push('/seller/products/new');
   };
 
