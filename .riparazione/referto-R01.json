@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-22 01:00",
+  "aggiornato": "2026-11-22 01:25",
   "finita": true,
-  "testa": "ad49df0df24aa3a9dda3088d9cc48b4927ea4ad5",
+  "testa": "f5836cc53745fe47e535f796aa4ab10bfe28c503",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "ad49df0df24aa3a9dda3088d9cc48b4927ea4ad5",
-    "nota": "typecheck e lint senza errori (126 avvisi già presenti), 1915 file di prove passati e 1 saltato (11842 casi)"
+    "testa": "f5836cc53745fe47e535f796aa4ab10bfe28c503",
+    "nota": "dopo il giro di correzione del collaudo K01: typecheck e lint senza errori (126 avvisi già presenti), 1915 file di prove passati e 1 saltato (11850 casi)"
   },
   "voci": [
     {
@@ -20,7 +20,8 @@
       "id": "R01-006",
       "chiave": "qa-flussi|il cliente non trova l'esito del reclamo nella pagina del suo ordine",
       "esito": "riparato",
-      "commit": "54fec5e1bc74a714721ac210726cbadbdb9de311",
+      "commit": "31451f1b1090601e358a1a2316d1f5ccf9d4350e",
+      "commit_prima": "54fec5e1bc74a714721ac210726cbadbdb9de311",
       "file_toccati": [
         "app/orders/[id]/page.tsx",
         "app/orders/[id]/dispute/page.tsx"
@@ -37,8 +38,8 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 54fec5e1bc74a714721ac210726cbadbdb9de311^ --file app/orders/[id]/page.tsx,app/orders/[id]/dispute/page.tsx --prove tests/unit/riparazione-r01-esito-del-reclamo.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La pagina dell'ordine legge i reclami dell'ordine e mostra stato, esito, rimborso e note; nasconde «Apri reclamo» se un reclamo c'è già. La pagina del reclamo, su un reclamo chiuso, mostra l'esito al posto del modulo.",
-      "verificato_da": "revisore A (modello grande): prova 6/6, 33 file vicini verdi (299 casi), tsc ed eslint, prova variante con 7 casi (più reclami, note rimaste, errore di lettura, stato sconosciuto) verde; tabella, colonne e policy di lettura controllate nelle migrazioni"
+      "cosa_ho_fatto": "La pagina dell'ordine legge i reclami e mostra stato, esito, rimborso e note. Nasconde «Apri reclamo» solo mentre c'è un reclamo aperto ('open' o 'under_review'), come il server; con un reclamo chiuso lo lascia accanto all'esito. La pagina del reclamo, su un reclamo chiuso, mostra l'esito e sotto il modulo per aprirne uno nuovo; con un reclamo aperto dice che ce n'è già uno.",
+      "verificato_da": "revisore A sulla prima versione; collaudo K01 rompe_altro (pulsante nascosto anche a reclamo chiuso), corretto nel giro di correzione e allineato al server (migrations/063:80-81, app/api/cron/release-payouts/route.ts:84); 33 file vicini verdi; nessun revisore nuovo dopo la correzione (tetto dei 6 subagenti), torna a K01"
     },
     {
       "id": "R01-004",
@@ -185,8 +186,9 @@
     {
       "id": "R01-011",
       "chiave": "stati-ui|un lavoro sul catalogo «in invio» incerto promette «tra poco lo vedi partire» per 24 ore, e a riga chiusa dice «puoi avviarne un altro» mentre il motivo dice di chiedere all'assistenza",
-      "esito": "riparato",
-      "commit": "d01e2ab007d44436d4e544fc9557a750a4ddbb49",
+      "esito": "parziale",
+      "commit": "f5836cc53745fe47e535f796aa4ab10bfe28c503",
+      "commit_prima": "d01e2ab007d44436d4e544fc9557a750a4ddbb49",
       "file_toccati": [
         "lib/ai/statoLavoroCatalogo.ts"
       ],
@@ -199,11 +201,18 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d01e2ab007d44436d4e544fc9557a750a4ddbb49^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-testo-lavoro-incerto.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d01e2ab007d44436d4e544fc9557a750a4ddbb49^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-testo-lavoro-incerto.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "testoStatoLavoro riconosce l'invio incerto e dice che il lavoro potrebbe essere già partito, di non riavviarlo e di chiedere all'assistenza se in 24 ore non succede niente. Se il motivo di una riga chiusa cita l'assistenza, non aggiunge più «Puoi avviarne un altro».",
-      "verificato_da": "revisore B: lib/ai/batch.ts:179 scrive «invio senza risposta», la regex lo riconosce; un submitting normale dice ancora la frase di prima; prove r04 e r01 verdi"
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "testoStatoLavoro dice incerto un lavoro «in invio» solo quando la riga col motivo «invio senza risposta» ha più di 120 s (la vita massima della rotta di avvio): prima dice ancora «tra poco lo vedi partire», dopo dice che potrebbe essere già partito, di non riavviarlo e di chiedere all'assistenza se in 24 ore non succede niente. Senza l'ora di nascita della riga dice una frase vera in tutti e due i casi; a riga chiusa con un motivo che cita l'assistenza non aggiunge «Puoi avviarne un altro».",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/status/route.ts",
+          "modifica": "in serialize() (righe 243-252) aggiungere `createdAt: job.created_at ?? null,` all'oggetto restituito; created_at è già letto in COLONNE (riga 81). La pagina app/seller/products/ai-batch/page.tsx non cambia: passa a testoStatoLavoro l'oggetto JSON intero."
+        }
+      ],
+      "cosa_resta": "Finché la rotta di stato non manda createdAt, una riga «in invio» col motivo mostra la frase neutra (di solito parte in pochi secondi; se resta così potrebbe essere già partito, non riavviarlo, chiedi all'assistenza): non dice più come un fatto che l'invio non ha avuto risposta e non promette la partenza, ma la frase precisa per ciascun caso arriva solo con la riga in serialize(). Il motivo alla nascita (start/route.ts:159) non va tolto: protegge da un secondo lotto pagato se la funzione si spegne dopo l'invio.",
+      "verificato_da": "revisore B sulla prima versione; collaudo K01 rompe_altro (ogni lavoro nasce col motivo, start/route.ts:159), corretto nel giro di correzione con la prova sullo stato vero prodotto dal server e orologio finto; 9 file vicini verdi; nessun revisore nuovo dopo la correzione (tetto dei 6 subagenti), torna a K01"
     },
     {
       "id": "R01-007",
@@ -276,12 +285,22 @@
       "descrizione": "La query senza filtro su created_at si ferma al tetto di righe; restano anche la corsa non atomica e le casse con carta aperte che non contano."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "Dopo la chiusura di un reclamo il cliente può aprirne un altro sullo stesso ordine (il server lo accetta e il nuovo reclamo ferma di nuovo il bonifico al negozio): va bene così, o il server deve rifiutarlo? Oggi la pagina dell'ordine segue il server e rimostra «Apri reclamo» a reclamo chiuso."
+  ],
   "conto": {
-    "agenti": 5,
-    "nota": "2 riparatori (A modello grande, B sonnet), 2 revisori (A grande, B sonnet), 1 correzione della prova di R01-001 (sonnet)",
-    "subagenti": 5,
-    "costo_usd": 12
+    "agenti": 6,
+    "nota": "2 riparatori (A modello grande, B sonnet), 2 revisori (A grande, B sonnet), 1 correzione della prova di R01-001 (sonnet), 1 giro di correzione del collaudo K01 (modello grande)",
+    "subagenti": 6,
+    "costo_usd": 16.1
   },
-  "costo_usd": 12
+  "costo_usd": 16.1,
+  "giro_correzione": {
+    "collaudo": "K01",
+    "voci": [
+      "R01-006",
+      "R01-011"
+    ],
+    "regia": "session_015BmpnZUFb1f4oPiVC94n2Z"
+  }
 }
