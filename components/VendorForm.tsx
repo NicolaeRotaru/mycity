@@ -17,6 +17,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
+import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
 import type { StoreHours } from '@/lib/store-hours';
 import { MAX_TAGLINE, campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
@@ -207,11 +208,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
     // il logo del grafico partiva, saliva e veniva respinto alla fine. Adesso non parte.
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'image/webp': ['.webp'],
-    },
+    // R16-013 — E i sette tipi li detta il magazzino (`mappaAccept`): qui ne erano scritti tre a
+    // mano, e il logo fotografato con l'iPhone (HEIC) restava fuori.
+    accept: mappaAccept(),
     maxFiles: 1,
     // Il filtro qui sopra scarta, ma scartava in silenzio: chi trascinava una foto dell'iPhone
     // (HEIC) la vedeva sparire e non capiva se stesse caricando o no. Stesse parole di
@@ -221,7 +220,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       toast.error(
         troppi
           ? 'Una foto alla volta: trascinane una sola.'
-          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+          : `Formato non accettato: servono foto in ${tipiScrittiPerUmani()}.`,
       );
     },
     onDrop: async (files) => {
@@ -235,7 +234,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
         // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
         const { publicUrl } = await caricaImmagine(supabase, {
-          file,
+          // Un HEIC trascinato da Windows arriva col tipo vuoto: senza il tipo giusto il deposito lo rifiuta.
+          file: fileColTipoGiusto(file),
           userId: user.id,
           cartella: 'logos',
           cacheControl: ANNO_IN_SECONDI,

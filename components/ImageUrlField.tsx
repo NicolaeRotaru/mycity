@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
 import {
   controllaIndirizzoImmagine,
   MESSAGGIO_IMMAGINE_NON_ARRIVATA,
@@ -56,11 +57,10 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
   const mostraAnteprima = esito.stato === 'ammesso' && !nonArriva;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'image/webp': ['.webp'],
-    },
+    // R16-013 — I tipi li detta il magazzino (`mappaAccept`, da lib/storage/regole-secchi.ts): erano
+    // tre scritti qui a mano contro i sette che porta e deposito accettano, e una foto HEIC
+    // dell'iPhone restava fuori.
+    accept: mappaAccept(bucket),
     maxFiles: 1,
     multiple: false,
     disabled: uploading,
@@ -71,7 +71,7 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
       toast.error(
         troppi
           ? 'Una foto alla volta: trascinane una sola.'
-          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+          : `Formato non accettato: servono foto in ${tipiScrittiPerUmani(bucket)}.`,
       );
     },
     onDrop: async (files) => {
@@ -84,7 +84,8 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
         // o `home` per lo staff. Questo campo lo usano tre schermate, tutte di amministrazione,
         // quindi la strada giusta e' l'eccezione dello staff.
         const { publicUrl } = await caricaImmagine(supabase, {
-          file,
+          // Un HEIC trascinato da Windows arriva col tipo vuoto: senza il tipo giusto il deposito lo rifiuta.
+          file: fileColTipoGiusto(file, bucket),
           cartella: pathPrefix,
           staff: true,
           secchio: bucket,
