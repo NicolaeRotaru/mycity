@@ -72,9 +72,8 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
   const jobId = typeof body.jobId === 'string' ? body.jobId : '';
   if (!jobId) return ApiErrors.invalidRequest('Job mancante.');
-  const onlyIds = Array.isArray(body.productIds)
-    ? new Set(body.productIds.filter((s): s is string => typeof s === 'string'))
-    : null;
+  if (!Array.isArray(body.productIds)) return ApiErrors.invalidRequest('Scegli i prodotti a cui applicare le modifiche.');
+  const onlyIds = new Set(body.productIds.filter((s): s is string => typeof s === 'string'));
 
   const admin = getAdminSupabase();
   const { data } = await admin
@@ -95,7 +94,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   const results = (Array.isArray(job.results) ? job.results : []).filter(
-    (r) => r.product_id && (!onlyIds || onlyIds.has(r.product_id)),
+    (r) => r.product_id && onlyIds.has(r.product_id),
   );
   if (results.length === 0) return ApiErrors.invalidRequest('Nessun risultato da applicare.');
 

@@ -1,0 +1,546 @@
+{
+  "sessione": "R14",
+  "aggiornato": "2026-11-22 19:50",
+  "finita": true,
+  "testa": "f663d54711afb4a073ca196a5e3d802d78879a46",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "f663d54711afb4a073ca196a5e3d802d78879a46",
+    "nota": "dopo la firma delle prove comuni (008 e 002 applicate): typecheck pulito; lint 0 errori (122 avvisi); 2003 file di prova passati, 1 saltato (12326 casi passati, 1 saltato)"
+  },
+  "voci": [
+    {
+      "id": "R14-001",
+      "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (va ai delicati, che girano a parte con ultracode)"
+    },
+    {
+      "id": "R14-002",
+      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
+      "esito": "parziale",
+      "commit": "f663d547",
+      "file_toccati": [
+        "app/api/ai/answer-qa/route.ts",
+        "app/api/ai/barcode-lookup/route.ts",
+        "app/api/ai/catalog-batch/cancel/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts",
+        "app/api/ai/description/route.ts",
+        "app/api/ai/diagnose/route.ts",
+        "app/api/ai/improve-product/route.ts",
+        "app/api/ai/product-chat/route.ts",
+        "app/api/ai/reviews-summary/route.ts",
+        "app/api/ai/seo/route.ts",
+        "app/api/ai/variants/route.ts",
+        "app/api/ai/voice-product/route.ts",
+        "tests/unit/al-venditore-arriva-la-risposta-non-il-diario.test.ts",
+        "tests/unit/api-ai-answer-qa.test.ts",
+        "tests/unit/api-ai-barcode-lookup.test.ts",
+        "tests/unit/api-ai-description.test.ts",
+        "tests/unit/api-ai-diagnose.test.ts",
+        "tests/unit/api-ai-improve-product.test.ts",
+        "tests/unit/api-ai-seo.test.ts",
+        "tests/unit/api-ai-variants.test.ts",
+        "tests/unit/api-ai-voice-product.test.ts",
+        "tests/unit/dopo-la-dettatura-il-negoziante-sa-cosa-scrivere-lui.test.ts",
+        "tests/unit/i-tagli-valgono-in-tutti-e-due-i-punti.test.ts",
+        "tests/unit/il-filtro-e-collegato.test.ts",
+        "tests/unit/il-testo-di-altri-sta-nel-recinto.test.ts",
+        "tests/unit/la-cache-copre-il-pezzo-che-pesa.test.ts",
+        "tests/unit/la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto.test.ts",
+        "tests/unit/le-parole-dell-assistente-non-fanno-da-conferma.test.ts",
+        "tests/unit/minori-s10-ai-chat.test.ts",
+        "tests/unit/niente-chiamate-a-vuoto-al-filtro.test.ts",
+        "tests/unit/riparazione-r03-descrizione-proposta.test.tsx",
+        "tests/unit/riparazione-r04-chat-turni-assistente.test.ts",
+        "tests/unit/riparazione-r04-consegna-nel-prompt.test.ts",
+        "tests/unit/riparazione-r04-dettatura-elenchi.test.ts",
+        "tests/unit/riparazione-r04-elenchi-con-tetto.test.ts",
+        "tests/unit/riparazione-r04-lavoro-in-invio.test.ts",
+        "tests/unit/riparazione-r04-lavoro-ritrovato.test.ts",
+        "tests/unit/riparazione-r04-scarta-lavoro.test.ts",
+        "tests/unit/riparazione-r14-codice-storto.test.ts",
+        "tests/unit/riparazione-r22-consegna-nel-prompt.test.ts",
+        "tests/unit/un-corpo-troppo-grande-non-e-un-json-rotto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-ai-spenta-sulla-rotta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-ai-spenta-sulla-rotta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Applicata la patch pronta dopo la firma: le 12 rotte AI dei negozi mie (answer-qa, barcode-lookup, catalog-batch/cancel e status, description, diagnose, improve-product, product-chat, reviews-summary, seo, variants, voice-product) leggono AI_NEGOZI_ACCESA da lib/funzioni-al-lancio.ts, lo stesso valore delle pagine, e se è spento rispondono unavailable prima del freno e di ogni lettura o chiamata. Le 29 prove comuni accendono l'interruttore nel loro mock. Newsletter e caricamento da file erano già frenati sulla rotta (app/api/newsletter/route.ts:52, app/api/seller/products/import/route.ts:36). Prova parametrica 24 casi; 30 file di prova 189/189; rimessa 0, rossa togliendo ognuna delle 12 rotte.",
+      "cosa_resta": "1) app/api/ai/copilot/route.ts e app/api/ai/catalog-chat/route.ts non sono miei (R13): stesso controllo, diff esatto in serve_file_altrui. 2) Classifica inviti: la vista public.referral_leaderboard si legge dal browser (GRANT SELECT a authenticated, migrations/151:84-85), quindi una rotta non frenerebbe niente: va chiusa con una migrazione, decisione di Nicola (domande_per_nicola).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/copilot/route.ts",
+          "modifica": "dopo la riga 6 `import { ApiErrors } from '@/lib/api/responses';` aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';`; come prima riga del gestore POST (riga 149, prima di `if (!env.anthropicKey())` e del rateLimitAsync) `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');`. La pagina che la chiama (app/seller/products/ai-batch/page.tsx:609 → CatalogCopilot) legge già lo stesso interruttore. Le prove che chiamano la rotta (es. api-ai-copilot, riparazione-r04-copilot-regola, niente-chiamate-a-vuoto-al-filtro) vanno accese col mock qui sotto."
+        },
+        {
+          "file": "app/api/ai/catalog-chat/route.ts",
+          "modifica": "dopo la riga 10 `import { ApiErrors } from '@/lib/api/responses';` aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';`; come prima riga del gestore POST (riga 180, prima di `if (!env.anthropicKey())` e del rateLimitAsync) `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');`. L'unico chiamante (components/SupportProductAssistant.tsx, aperto da SupportChatModal solo se canUseAi = role==='seller' && AI_NEGOZI_ACCESA, riga 80) legge già lo stesso interruttore. Le prove che la chiamano (es. minori-s10-catalogo-chat, riparazione-r04-chat-non-inventa) vanno accese col mock qui sotto."
+        }
+      ],
+      "verificato_da": "",
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f663d547^ --file app/api/ai/answer-qa/route.ts,app/api/ai/barcode-lookup/route.ts,app/api/ai/catalog-batch/cancel/route.ts,app/api/ai/catalog-batch/status/route.ts,app/api/ai/description/route.ts,app/api/ai/diagnose/route.ts,app/api/ai/improve-product/route.ts,app/api/ai/product-chat/route.ts,app/api/ai/reviews-summary/route.ts,app/api/ai/seo/route.ts,app/api/ai/variants/route.ts,app/api/ai/voice-product/route.ts --prove tests/unit/riparazione-r14-ai-spenta-sulla-rotta.test.ts --json"
+      },
+      "eccezione_firmata": "prove_comuni dell'onda 2, firmate da Nicola in chat il 22/11 alle 19:45 (piano.json in ad-mycity @ ec176140)"
+    },
+    {
+      "id": "R14-003",
+      "chiave": "api-backend|comunicare due volte l'esito di una segnalazione rimanda la mail e le notifiche, e dopo un errore il nuovo tentativo rimanda anche i canali già riusciti",
+      "esito": "riparato",
+      "commit": "b97d6aa4",
+      "file_toccati": [
+        "app/api/segnalazioni/esito/comunica.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-esito-una-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-esito-una-volta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b97d6aa4^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-una-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "comunicaEsito ricorda canale per canale cosa è arrivato: ogni canale riuscito (mail a chi segnala, notifica a chi segnala, notifica al venditore) scrive una riga in audit_logs (tabella esistente, nessuna colonna nuova) con target_id = id della segnalazione e l'impronta sha256 di destinatario+decisione+motivazione; un canale riparte solo se la sua ULTIMA riga per quella segnalazione ha un'impronta diversa. Così comunicare due volte non rimanda niente, il nuovo tentativo dopo un errore parziale rimanda solo il canale fallito, accolta→respinta→accolta riparte ogni volta e due segnalazioni con la stessa motivazione restano separate (i due casi che avevano fatto bocciare il tentativo precedente). Se audit_logs non si legge si manda come prima (meglio un esito doppio che uno perso).",
+      "insieme_a": [
+        "R14-004"
+      ],
+      "cosa_resta": "Due comunicazioni lanciate nello stesso istante (doppio clic simultaneo) leggono entrambe la memoria vuota e mandano due volte: la voce non lo nomina; chiuderlo davvero vorrebbe un vincolo unico nel database (migrazione).",
+      "verificato_da": "revisore S1 (subagente diverso da chi ha riparato): rilanciata la prova (6/6; contro comunica.ts della base cadono 3 casi su 6), provate 11 varianti fuori albero (decisione cambiata e rimessa con righe in ordine inverso e date PostgREST, stessa motivazione con decisione diversa, due segnalazioni con la stessa motivazione e lo stesso destinatario, memoria che lancia, canale fallito tre volte poi riuscito, venditore cambiato, scrittura del registro rifiutata, metadata potato), client della rotta = chiave di servizio (app/api/segnalazioni/route.ts:224) con SELECT/INSERT su audit_logs (migrations/425:338), colonne controllate (migrations/027:154-163), 43+97 casi vicini verdi, tsc ed eslint puliti",
+      "nota_commit": "Il primo commit (2b0edf4c) citava solo R14-003: tolto con 0233c670 e rifatto identico in b97d6aa4, che cita tutte e due le voci; nessuna riscrittura della storia."
+    },
+    {
+      "id": "R14-004",
+      "chiave": "api-backend|l'esito di una segnalazione si rimanda due volte: dopo un errore parziale la pagina chiede di registrare di nuovo e tutti i canali ripartono, anche quelli già arrivati",
+      "esito": "riparato",
+      "commit": "b97d6aa4",
+      "file_toccati": [
+        "app/api/segnalazioni/esito/comunica.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-esito-una-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-esito-una-volta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b97d6aa4^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-una-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stesso commit di R14-003, stesse righe di comunicaEsito (111-142). La pagina admin, dopo un errore parziale, fa registrare di nuovo la decisione (nuovo deciso_at): la memoria non guarda deciso_at ma destinatario+stato+motivazione, quindi la stessa decisione registrata di nuovo rimanda solo i canali falliti (prova: 'dopo un errore parziale il nuovo tentativo rimanda solo il canale che era fallito').",
+      "insieme_a": [
+        "R14-003"
+      ],
+      "verificato_da": "revisore S1: stesso commit; provato il nuovo tentativo dopo un errore parziale (rimanda solo il canale fallito), controllato che registrare di nuovo non si blocchi (accogli risponde 200 con giaAssente, app/api/admin/segnalazioni/accogli/route.ts:52); il codice nuovo sta a comunica.ts:102-147, usato a 167-207",
+      "nota_commit": "Il primo commit (2b0edf4c) citava solo R14-003: tolto con 0233c670 e rifatto identico in b97d6aa4, che cita tutte e due le voci; nessuna riscrittura della storia."
+    },
+    {
+      "id": "R14-005",
+      "chiave": "api-backend|un rifiuto per troppe richieste della ricerca indirizzi fa salvare l'indirizzo senza coordinate per sempre",
+      "esito": "serve_file_altrui",
+      "prova": "app/profile/addresses/page.tsx:86 `if (res.status === 429) return { posizioneNonTrovata: false, troppeRichieste: true };` e onSuccess (riga ~125) mostra «Troppe richieste in questo momento: l'indirizzo non è stato salvato. Riprova fra qualche secondo.» senza salvare e senza chiudere il modulo: la metà del cliente è già chiusa sulla base (R03-014).",
+      "cosa_resta": "Resta solo la metà del negoziante in components/StoreLocationPicker.tsx.",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreLocationPicker.tsx",
+          "modifica": "In searchAddress, subito dopo la fetch a /api/geocode (finisce alla riga 169) e prima di `const data = await res.json();` (riga 170) aggiungere: `if (res.status === 429) { setError('Troppe ricerche in questo momento: riprova fra qualche secondo o sposta il pin sulla mappa.'); return; }` (il finally rimette searching a false). Righe verificate oggi sulla base b57195e2. Prova suggerita: montare StoreLocationPicker con fetch che risponde 429, cliccare la ricerca, attendersi «Troppe ricerche» e nessun onChange."
+        }
+      ],
+      "verificato_da": "revisore S1: sulla base app/profile/addresses/page.tsx esce sul 429 alla riga 86 prima di ogni scrittura (messaggio a 123-125); diff di StoreLocationPicker applicato a una copia fuori albero e montato con fetch 429: rosso senza («Indirizzo non trovato»), verde con («Troppe ricerche», nessun onChange)"
+    },
+    {
+      "id": "R14-006",
+      "chiave": "api-backend|se il servizio di posta conserva anche le risposte d'errore, una promozione mai partita risulta spedita",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (va ai delicati, che girano a parte con ultracode)"
+    },
+    {
+      "id": "R14-007",
+      "chiave": "qa-flussi|il salvataggio di prodotto e varianti non è una scrittura sola: resta una finestra di millisecondi",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (va ai delicati, che girano a parte con ultracode)"
+    },
+    {
+      "id": "R14-008",
+      "chiave": "qa-flussi|la rotta del lotto sul catalogo, se non riceve l'elenco dei prodotti, applica ancora tutti i risultati",
+      "esito": "riparato",
+      "commit": "3ecde09e",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts",
+        "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts",
+        "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts",
+        "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts",
+        "tests/unit/minori-s10-lotto-applica.test.ts",
+        "tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts",
+        "tests/unit/riparazione-r14-lotto-senza-elenco.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-lotto-senza-elenco.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-lotto-senza-elenco.test.ts tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts tests/unit/le-funzioni-spente-le-ferma-la-rotta-anche-a-mano.test.ts tests/unit/minori-s10-lotto-applica.test.ts tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Applicata la patch pronta dopo la firma: senza productIds la rotta risponde 400, non scrive niente e il lavoro resta «ready»; con l'elenco applica solo i prodotti scelti. Le 5 prove comuni che mandavano solo jobId mandano ora l'elenco; prova nuova riparazione-r14-lotto-senza-elenco. L'unico chiamante (app/seller/products/ai-batch/page.tsx:445-448) manda già productIds. 9 prove della rotta 91/91 verdi; rimessa 0.",
+      "verificato_da": "collaudo K05 sulla patch (si applica pulita, le 8 prove che chiamano la rotta 89/89, le 2 che usano aiuti/finto-catalogo 20/20, unico chiamante che manda già productIds; mancava solo la prova nuova); giro di correzione: prova nuova aggiunta e rimessa che morde (subagente del giro, diverso da chi aveva scritto la patch); applicata dal capo squadra R14 con rimessa 0 sul commit. K05 riguarda la punta nuova.",
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ecde09e^ --file app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r14-lotto-senza-elenco.test.ts,tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts,tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts,tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts,tests/unit/le-funzioni-spente-le-ferma-la-rotta-anche-a-mano.test.ts,tests/unit/minori-s10-lotto-applica.test.ts,tests/unit/riparazione-r02-traccia-porte-ai-catalogo.test.ts,tests/unit/riparazione-r18-lotto-applica-quello-che-si-vede.test.tsx,tests/unit/una-voce-scritta-male-non-ferma-le-modifiche-in-massa.test.ts --json"
+      },
+      "eccezione_firmata": "prove_comuni dell'onda 2, firmate da Nicola in chat il 22/11 alle 19:45 (piano.json in ad-mycity @ ec176140)"
+    },
+    {
+      "id": "R14-009",
+      "chiave": "qa-flussi|le domande dei clienti sotto i prodotti non arrivano a nessuno, ma al cliente diciamo che riceverà una notifica",
+      "esito": "parziale",
+      "prova": "components/ProductQA.tsx:95-96 (commento del 5/11/2026) e toast `Domanda pubblicata: la risposta del negozio comparirà qui sotto.`: il testo al cliente non promette più nessuna notifica; nel file non resta nessun testo che la prometta. Nessun modo per avvisare il negozio esiste nel deposito (nessun trigger o notifica su product_questions).",
+      "cosa_resta": "Chiusa la metà della promessa: alla base components/ProductQA.tsx:96 non promette più la notifica al cliente (gia_riparato_prima per questa metà). Resta vera la metà «non arrivano a nessuno»: il negozio non riceve nessun avviso per le domande (nessuna rotta né trigger su product_questions). Serve una rotta o un trigger (migrazione) che scriva in notifications, più la chiamata da components/ProductQA.tsx: scritto in nuovi_difetti_visti. Esito portato da gia_riparato_prima a parziale dopo il collaudo K05.",
+      "verificato_da": "revisore S1: passati in rassegna tutti i testi visibili di components/ProductQA.tsx sulla base (riga 96: «la risposta del negozio comparirà qui sotto») e i testi del sito sulle domande; nessuna promessa di notifica; nessun trigger di notifica su product_questions nelle migrazioni",
+      "copre_tutta_la_voce": false
+    },
+    {
+      "id": "R14-010",
+      "chiave": "qa-flussi|nel giorno dei 18 anni, fra mezzanotte e l'una, il modulo del fattorino dice sì e il database lo rifiuta con un errore generico",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (va ai delicati, che girano a parte con ultracode)"
+    },
+    {
+      "id": "R14-011",
+      "chiave": "qa-flussi|l'aiutante di prova accendi non regge due montaggi di una pagina con use(params) dopo un invio",
+      "esito": "riparato",
+      "commit": "c319550b",
+      "file_toccati": [
+        "tests/unit/aiuti/schermo.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-accendi-due-volte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-accendi-due-volte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c319550b^ --file tests/unit/aiuti/schermo.ts --prove tests/unit/riparazione-r14-accendi-due-volte.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "accendi() monta il componente dentro un Suspense (fallback null), come da diff della scheda. Prova: pagina finta con use(params), montata due volte con un invio in mezzo. Tutte le 281 prove che importano aiuti/schermo restano verdi (1713 casi).",
+      "verificato_da": "revisore S2: rilanciata la prova; con schermo.ts di c319550b^ la prova è rossa sull'asserzione nominata (errore React «suspended while responding to synchronous input»), non per struttura; 60 file a caso che importano aiuti/schermo: 386 casi verdi"
+    },
+    {
+      "id": "R14-012",
+      "chiave": "stati-ui|«duplica» con la sorgente in memoria da meno di 30 secondi si apre con le taglie e la spunta di prima",
+      "esito": "riparato",
+      "commit": "826984cd",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-duplica-con-sorgente-in-cache.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-duplica-con-sorgente-in-cache.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 173a21ad^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r14-duplica-con-sorgente-in-cache.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "173a21ad: la sorgente e le taglie di «Duplica» hanno staleTime 0 (si rileggono a ogni apertura anche con la memoria fresca del sito) e il modulo non si apre finché le due letture non sono arrivate. 826984cd (giro di correzione dopo il collaudo): se la rilettura cade o all'apertura non c'è rete il modulo si apre ancora sulla sorgente della memoria; ora, come per le taglie, anche la spunta del recesso e gli altri valori che il modulo legge solo all'apertura (la firma di initialValues senza le taglie) si confrontano con quelli riletti: se sono cambiati la copia non si salva e si offre «Riapri la copia con i dati aggiornati». Prova: i 3 casi del collaudo (rilettura della sorgente caduta poi «Riprova»; riletture di sorgente e taglie cadute poi «Riprova»; aperta senza rete poi la rete torna) rossi sul codice di prima e verdi ora, più una controprova (riaperta, la copia ha la spunta vera e si salva esclusa dal recesso). Rimessa regge anche sul solo commit nuovo (--base 826984cd^, uscita 0).",
+      "verificato_da": "revisore S2 (subagente diverso da chi ha riparato): rilanciata la prova e le 13 prove del file (50 casi verdi); provate fuori albero le varianti due prodotti di fila senza smontare, sorgente cambiata altrove, pagina nuova senza ?from, lettura fallita con e senza memoria (il modulo non resta bloccato: copiaFerma impedisce di salvare i valori vecchi e offre Riprova) · Giro di correzione dopo K05 (commit 826984cd): i 3 casi rossi di K05 (rilettura caduta poi Riprova, rilettura di sorgente e taglie cadute poi Riprova, apertura senza rete poi rete tornata) ora sono nella prova e verdi; rimessa sul commit nuovo 0 e sulla voce intera (--base 173a21ad^) 0; diff letto dal capo squadra R14; 56 prove vicine verdi (305 casi). Collaudo K05 di nuovo a seguire.",
+      "commit_precedenti": [
+        "173a21ad"
+      ]
+    },
+    {
+      "id": "R14-013",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "prova": "tailwind.config.ts:151-166: tracking-label (0.04em) c'è già, e `wide` è già rimappato a 0.04em (S10): tracking-wide coincide già con tracking-label come misura; niente da cambiare nel file di configurazione.",
+      "cosa_resta": "Ricontate sulla base b57195e2: 92 righe in 54 file (non 90 in 52); 3 righe in 2 file le ho fatte io, restano 89 righe in 52 file non miei, elenco esatto in serve_file_altrui (righe della base b57195e2).",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/activity/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 465 (tracking-wide), 476 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/coupons/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 238 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/disputes/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 332 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/funnel/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 416 (tracking-[0.04em]), 440 (tracking-wider), 447 (tracking-wider), 451 (tracking-wider), 469 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/orders/[id]/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 289 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/payouts/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 338 (tracking-[0.04em]), 358 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/products/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 177 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/today/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 104 (tracking-[0.04em]), 184 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/admin/users/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 677 (tracking-wide), 1002 (tracking-wide), 1020 (tracking-wide), 1028 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/category/[slug]/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 291 (tracking-wider), 310 (tracking-wider), 337 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/come-funziona/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 56 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/favorites/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 105 (tracking-[0.05em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/profile/achievements/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 155 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/profile/gift-cards/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 226 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/profile/loyalty/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 198 (tracking-wider), 263 (tracking-wider), 273 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/profile/referral/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 126 (tracking-widest), 182 (tracking-wide), 186 (tracking-wide), 190 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/profile/returns/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 42 (tracking-[0.05em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/rider/availability/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 224 (tracking-[0.03em]), 278 (tracking-[0.03em]), 341 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/rider/help/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 116 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/rider/history/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 149 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/rider/orders/[id]/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 528 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/rider/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 110 (tracking-[0.03em]), 549 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/rider/profile/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 253 (tracking-[0.03em]), 282 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/seller/customers/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 107 (tracking-wide), 113 (tracking-wide), 117 (tracking-wide), 177 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/seller/earnings/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 397 (tracking-[0.03em]), 460 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 565 (tracking-widest) (righe della base b57195e2)"
+        },
+        {
+          "file": "app/seller/promotions/page.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 262 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 79 (tracking-[0.05em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/LiveActivityFeed.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 60 (tracking-wider), 158 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/MobileAccountSheet.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 95 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 307 (tracking-wide), 322 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 112 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 126 (tracking-wider), 144 (tracking-wider), 162 (tracking-wider), 189 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/account/AccountSidebar.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 143 (tracking-[0.08em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/admin/AdminUI.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 27 (tracking-[0.06em]), 40 (tracking-[0.03em]), 63 (tracking-[0.04em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/admin/RimborsiDaDividere.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 66 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/admin/home/HomeSectionsEditor.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 60 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/home-sections/HomeSectionRenderer.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 224 (tracking-wider), 316 (tracking-wider), 348 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 179 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/home/HowItWorks.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 62 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/home/PromoDeals.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 43 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 64 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/products/VendutoDa.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 59 (tracking-[0.03em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/ImproveAllPanel.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 206 (tracking-wide), 261 (tracking-wide), 280 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/QuickAiTools.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 155 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/SellerHealthScore.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 172 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/SellerPageTitle.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 37 (tracking-[0.06em]) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/VoiceProductButton.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 170 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/site/PageListEditor.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 93 (tracking-wide), 94 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/seller/site/PageSectionsEditor.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 58 (tracking-wide) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/store-sections/HoursSection.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 58 (tracking-wider) (righe della base b57195e2)"
+        },
+        {
+          "file": "components/ui/QualityMarks.tsx",
+          "modifica": "nelle classi con uppercase sostituire la spaziatura con tracking-label alle righe 66 (tracking-wide) (righe della base b57195e2)"
+        }
+      ],
+      "commit": "c1e4d046",
+      "file_toccati": [
+        "app/profile/addresses/page.tsx",
+        "components/ProductQA.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r14-etichette-maiuscole.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r14-etichette-maiuscole.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c1e4d046^ --file app/profile/addresses/page.tsx,components/ProductQA.tsx --prove tests/unit/riparazione-r14-etichette-maiuscole.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "tailwind.config.ts non cambia: tracking-label (0.04em) c'è già e tracking-wide è già rimappato a 0.04em. Nei miei due file le 3 etichette maiuscole (addresses:163 tracking-[0.05em], ProductQA:223 e 238 tracking-wider) ora usano tracking-label; prova leggera che rilegge i file.",
+      "verificato_da": "revisore S2: grep delle 8 spaziature nei 2 file corretti (nessuna resta); ricontate sulla base 92 righe in 54 file (3 in 2 file fatte, 89 in 52 nell'elenco); 5 voci dell'elenco verificate con git show b57195e2 (righe con uppercase e la spaziatura indicata). Perimetro del conteggio: cartelle app, components, lib"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "le domande dei clienti sotto i prodotti non avvisano il negozio",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/ProductQA.tsx:96",
+      "descrizione": "Il testo al cliente ora è veritiero, ma il negozio non riceve nessun avviso quando arriva una domanda (nessuna notifica, nessun trigger su product_questions): la vede solo aprendo la pagina del prodotto. Per avvisarlo servirebbe una rotta server (o un trigger in una migrazione 760-769) che scriva in notifications, più la chiamata da components/ProductQA.tsx."
+    },
+    {
+      "titolo": "l'aiutante di prova accendi, con la Suspense, rende vuoto in silenzio un componente che resta sospeso per sempre: una prova che controlla un'assenza può passare senza aver provato niente",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/aiuti/schermo.ts:24",
+      "descrizione": "Prima della Suspense un componente sospeso faceva fallire accendi; con fallback null rende vuoto. Le prove che cercano un elemento falliscono comunque, quelle che asseriscono un'assenza (not.toContain, querySelector nullo) potrebbero passare a vuoto. Nessun caso in atto nel campione di 60 file. Cura possibile: un fallback con un segno riconoscibile e un controllo in attendi() che fallisce se il segno resta dopo gli effetti."
+    },
+    {
+      "titolo": "quando è il servizio delle mappe a rispondere «troppe richieste», la rotta della ricerca indirizzi risponde 200 senza coordinate e la pagina salva l'indirizzo come «posizione non trovata»",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/geocode/route.ts:46",
+      "descrizione": "Il 429 di Nominatim diventa 200 con {lat:null,lng:null}: la pagina indirizzi lo legge come indirizzo non trovato e salva senza coordinate (non per sempre: una nuova ricerca le rifà). Cura: inoltrare 429 con error:'rate_limited', come fa già il freno della rotta."
+    },
+    {
+      "titolo": "dopo un errore su un solo canale, la pagina delle segnalazioni dice che l'esito non è partito né a chi ha segnalato né al venditore",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/admin/segnalazioni/page.tsx:149",
+      "descrizione": "La pagina guarda solo r.ok e scrive sempre «a chi ha segnalato e al venditore»; il consiglio di registrare di nuovo ora è giusto (rimanda solo il canale fallito), ma il messaggio dovrebbe nominare il canale caduto."
+    }
+  ],
+  "domande_per_nicola": [
+    "Classifica inviti: la vista public.referral_leaderboard si legge dal browser (GRANT SELECT a authenticated, migrations/151:84-85), quindi CLASSIFICA_INVITI_ACCESA frena solo la pagina. La chiudiamo con una migrazione nuova (la vista restituisce zero righe o si toglie il GRANT finché la classifica è spenta), o resta l'eccezione dichiarata in lib/funzioni-al-lancio.ts?"
+  ],
+  "conto": {
+    "agenti": 5,
+    "subagenti": 5,
+    "costo_usd": 21.9,
+    "nota": "2 riparatori (lotto 1 sul modello grande, lotto 2 su sonnet) + 2 revisori (S1 sul modello grande, S2 su sonnet) + 1 riparatore del giro di correzione dopo K05 (modello grande); nessun Workflow; costo letto con get_session (usage.cost_usd) alle 19:49: 21,90 $; giro dopo la firma delle prove comuni: patch di 008 e 002 applicate dal capo squadra, senza subagenti"
+  },
+  "costo_usd": 21.9
+}

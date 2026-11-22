@@ -55,6 +55,7 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 import { POST as CATALOG_CHAT } from '@/app/api/ai/catalog-chat/route';
 import { POST as PRODUCT_CHAT } from '@/app/api/ai/product-chat/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 function richiesta(url: string, corpo: unknown): never {
   return new Request(url, {

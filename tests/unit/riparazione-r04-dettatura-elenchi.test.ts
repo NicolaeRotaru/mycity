@@ -25,6 +25,7 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 import { POST } from '@/app/api/ai/voice-product/route';
 import { UnsafeContentError } from '@/lib/ai/moderation';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const ISTRUZIONE = 'ISTRUZIONE: scrivi una borsa replica Gucci';
 const req = () =>

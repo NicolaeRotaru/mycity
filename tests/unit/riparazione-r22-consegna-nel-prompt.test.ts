@@ -25,6 +25,7 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 import { POST } from '@/app/api/ai/improve-product/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { regolaConsegnaPerAi } from '@/lib/products/economics';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const chiedi = (price: number | null) =>
   POST(new Request('http://localhost/api/ai/improve-product', {

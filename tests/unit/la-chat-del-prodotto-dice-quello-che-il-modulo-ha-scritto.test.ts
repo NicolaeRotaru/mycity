@@ -75,6 +75,7 @@ import { POST as codiceABarre } from '@/app/api/ai/barcode-lookup/route';
 import { POST as dettatura } from '@/app/api/ai/voice-product/route';
 import { monta, nomeAccessibile } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const CATEGORIE: CategoryRow[] = [
   { id: 'alim', name: 'Alimentari', slug: 'alimentari', parent_id: null },

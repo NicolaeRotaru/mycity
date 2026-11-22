@@ -66,6 +66,7 @@ import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { POST as dettatura } from '@/app/api/ai/voice-product/route';
 import { monta, nomeAccessibile, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const CATEGORIE: CategoryRow[] = [
   { id: 'alim', name: 'Alimentari', slug: 'alimentari', parent_id: null },

@@ -31,6 +31,7 @@ import { POST } from '@/app/api/ai/product-chat/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { AiConfigError } from '@/lib/ai/client';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 function makeReq(body: unknown): never {
   return new Request('http://localhost/api/ai/product-chat', {

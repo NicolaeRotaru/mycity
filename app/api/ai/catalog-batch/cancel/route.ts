@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -43,6 +44,8 @@ const SCARTATO_FORSE_PARTITO =
   'scartato dal negozio dopo un invio senza risposta: il lotto potrebbe essere partito ed essere stato pagato; se serve, i risultati si recuperano con l\'assistenza';
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // Spento al lancio (carta #209): il freno vero è la rotta, prima del limite e di ogni lettura.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   const rl = await rateLimitAsync({ key: `ai-catalog-batch-cancel:${user.id}`, max: 30, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
