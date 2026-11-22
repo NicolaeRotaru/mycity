@@ -1,3 +1,4 @@
+import * as React from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
@@ -24,18 +25,42 @@ import { logger } from '@/lib/logger';
  * ── 27/8/2026 (R082) — LA STESSA RIGA LETTA DUE VOLTE PER OGNI APERTURA ─────────────────────────
  * `app/product/[id]/layout.tsx` chiama questa lettura due volte nello stesso giro: una in
  * `generateMetadata`, una nel componente. Sono due letture vere, sulla pagina più aperta del sito.
- * In React 19 ci sarebbe `cache()`; qui React è ancora il 18 (`typeof React.cache === 'undefined'`),
- * quindi la memoria è questa: due secondi, la stessa domanda, una risposta sola. È una finestra
- * molto più stretta della cache che queste pagine già dichiarano (`revalidate = 300`, cinque
- * minuti), quindi non rende niente più vecchio di quanto già fosse; e le righe qui dentro sono
- * pubbliche — prodotto, negozio, categoria — mai roba di una persona.
+ * La memoria qui sotto: due secondi, la stessa domanda, una risposta sola. Le pagine dichiarano un
+ * `revalidate`, ma `force-dynamic` in app/layout.tsx le rende dinamiche: una cache di cinque minuti
+ * oggi non c'è, e due secondi sono meno di quanto chiunque noti. Le righe qui dentro sono pubbliche
+ * — prodotto, negozio, categoria — mai roba di una persona.
+ *
+ * Nota (collaudo del 22/11): la lettura del precarico (lib/queries/precarico.ts) è una domanda
+ * diversa e NON passa da qui: la stessa riga si legge ancora una volta in più per richiesta.
+ *
+ * ── 21/11/2026 (R10-016) — UNA LETTURA PER RICHIESTA, NON PER DUE SECONDI ──────────────────────
+ * Qui c'era scritto che `cache()` non c'è perché React è il 18. Vale per le prove e per il vecchio
+ * router, non per i componenti del server: lì Next usa il suo React (il 19), e `React.cache` c'è.
+ * Due secondi non sono «una richiesta»: se la prima risposta tarda (un database lento, un avvio a
+ * freddo), il guscio arriva dopo la scadenza e rilegge la stessa riga che `generateMetadata` ha
+ * appena letto. Adesso, sopra la memoria a due secondi, c'è quella di React: per tutta la richiesta
+ * la stessa domanda ha una risposta sola, qualunque cosa duri. La memoria a due secondi resta per
+ * le richieste vicine fra loro. Dove `cache` non c'è (le prove, col React 18 del progetto) la si
+ * salta e basta; fuori dai componenti del server React la lascia passare senza memoria.
  */
+type Memorizzatore = <F extends (...argomenti: never[]) => unknown>(f: F) => F;
+const cacheDiReact = (React as unknown as { cache?: Memorizzatore }).cache;
+const perRichiesta: Memorizzatore = (f) => (typeof cacheDiReact === 'function' ? cacheDiReact(f) : f);
 
 /** Quanto vive la risposta in memoria: il tempo di una richiesta, non di più. */
 const MEMORIA_MS = 2_000;
 
 type VoceDiMemoria = { quando: number; riga: Promise<unknown> };
 const memoria = new Map<string, VoceDiMemoria>();
+
+/**
+ * La stessa domanda nella stessa richiesta: una lettura sola. La chiave è un testo perché `cache`
+ * riconosce gli oggetti per identità, e `dove` è un oggetto nuovo a ogni chiamata.
+ */
+const letturaDellaRichiesta = perRichiesta((chiave: string): Promise<unknown> => {
+  const [tabella, colonne, dove] = JSON.parse(chiave) as [string, string, Record<string, string>];
+  return leggiConMemoria(chiave, tabella, colonne, dove);
+});
 
 export async function leggiPerMetadati<T>(
   tabella: string,
@@ -44,10 +69,23 @@ export async function leggiPerMetadati<T>(
   client?: SupabaseClient,
 ): Promise<T | null> {
   const chiave = JSON.stringify([tabella, colonne, dove]);
+  // Con un client passato da fuori (le anteprime, le prove) la memoria di React non si usa: la
+  // chiave non saprebbe distinguere due client diversi.
+  if (client) return leggiConMemoria(chiave, tabella, colonne, dove, client) as Promise<T | null>;
+  return letturaDellaRichiesta(chiave) as Promise<T | null>;
+}
+
+function leggiConMemoria(
+  chiave: string,
+  tabella: string,
+  colonne: string,
+  dove: Record<string, string>,
+  client?: SupabaseClient,
+): Promise<unknown> {
   const adesso = Date.now();
 
   const gia = memoria.get(chiave);
-  if (gia && adesso - gia.quando < MEMORIA_MS) return gia.riga as Promise<T | null>;
+  if (gia && adesso - gia.quando < MEMORIA_MS) return gia.riga;
 
   const lettura = (async () => {
     const supabase = client ?? creaClientAnonimo();
@@ -65,7 +103,7 @@ export async function leggiPerMetadati<T>(
       logger.warn('[metadati] lettura non riuscita: non la tratto come «non trovato»', { tabella, code: error.code });
       throw error;
     }
-    return (data as T | null) ?? null;
+    return data ?? null;
   })();
 
   // Una lettura fallita non resta in memoria: al prossimo giro si riprova davvero.
@@ -75,7 +113,7 @@ export async function leggiPerMetadati<T>(
   if (memoria.size > 200) {
     for (const [k, v] of memoria) if (adesso - v.quando >= MEMORIA_MS) memoria.delete(k);
   }
-  return lettura as Promise<T | null>;
+  return lettura;
 }
 
 /** Svuota la memoria. Serve alle prove: nel sito vero scade da sola in due secondi. */

@@ -18,7 +18,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { MAX_TAGLINE, campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -28,6 +28,17 @@ import BadgePicker from './seller/BadgePicker';
 import StoreHoursEditor from './seller/StoreHoursEditor';
 import { erroreDegliOrari } from './seller/orari-validi';
 import { clicDaFermare } from './seller/site/dove-e-l-errore';
+
+/**
+ * R10-008, R10-009 — Il limite di un campo breve si vede: niente maxLength che taglia in silenzio.
+ * Oltre il tetto il testo resta intero e sotto il campo si legge quanto è lungo.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 type SchemaData = { storeName: string; storePhone: string };
@@ -85,6 +96,10 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
   // due campi con lo stesso `id` fanno leggere al lettore di schermo sempre il primo.
   const idSlogan = useId();
+  // R10-012 — Le etichette del logo e dei due gruppi della vetrina erano scollegate dal loro campo.
+  const idLogo = useId();
+  const idInEvidenza = useId();
+  const idAnnuncio = useId();
 
   const showBranding = mode !== 'contact';
   const showContact = mode !== 'branding';
@@ -171,7 +186,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     };
     // Next non lancia beforeunload per i link interni (il menu del pannello): li ferma questo.
     const alClic = (e: MouseEvent) => {
-      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m))) {
+      if (clicDaFermare(e, true, window.location.pathname, (m) => window.confirm(m), mode === 'branding' ? 'alla vetrina' : 'al profilo')) {
         e.preventDefault();
         e.stopPropagation();
       }
@@ -182,7 +197,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       window.removeEventListener('beforeunload', alLasciare);
       document.removeEventListener('click', alClic, true);
     };
-  }, [dirty]);
+  }, [dirty, mode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
@@ -258,6 +273,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       }
     }
     let customData: StoreCustomization = custom;
+    let socialNonSalvati = false;
     if (showBranding) {
       // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
       const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
@@ -275,16 +291,39 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // L'errore sta sotto il campo giusto; il riepilogo in fondo nomina il campo e dice dove guardare.
         const primo = parsed.error.issues[0];
         const campo = primo ? campoDellErrore(primo.path) : null;
-        setCustomError(
-          campo ? `${campo}: ${primo.message}` : (altro ?? primo?.message ?? 'Personalizzazione non valida'),
-        );
-        return;
+        // R10-010 — Un social sbagliato non ferma più nome, logo, descrizione e colore: quel social
+        // resta com'era salvato, tutto il resto si salva, e l'errore resta sotto il suo campo.
+        const salvati = (defaultValues?.storeCustomization?.socials ?? {}) as Record<string, string | undefined>;
+        const conISocialDiPrima: StoreCustomization = {
+          ...corretta,
+          socials: {
+            ...corretta.socials,
+            ...Object.fromEntries(Object.keys(sociali).map((k) => [k, salvati[k] ?? ''])),
+          },
+        };
+        const riprova = altro === null ? storeCustomizationSchema.safeParse(conISocialDiPrima) : null;
+        if (!riprova?.success) {
+          setCustomError(
+            campo ? `${campo}: ${primo.message}` : (altro ?? primo?.message ?? 'Personalizzazione non valida'),
+          );
+          return;
+        }
+        customData = riprova.data;
+        const nomi = Object.keys(sociali).map((k) => campoDellErrore(['socials', k]) ?? k).join(', ');
+        socialNonSalvati = true;
+        setCustomError(`${campo}: ${primo.message} Il resto è salvato; ${nomi} è rimasto com'era.`);
+      } else {
+        customData = parsed.data;
       }
-      customData = parsed.data;
     }
-    setCustomError(null);
-    setErroriSocial({});
-    inviata.current = fotografia(showBranding ? { ...custom, socials: normalizzaSocials(custom.socials) } : custom);
+    if (!socialNonSalvati) {
+      setCustomError(null);
+      setErroriSocial({});
+    }
+    // Con un social non salvato la fotografia è quella salvata davvero: il modulo resta «da salvare».
+    inviata.current = fotografia(
+      socialNonSalvati ? customData : showBranding ? { ...custom, socials: normalizzaSocials(custom.socials) } : custom,
+    );
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
@@ -313,7 +352,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         <>
           {/* Logo upload */}
           <div>
-            <label className="block text-sm font-medium text-ink-700 mb-2">Logo del negozio</label>
+            <label htmlFor={idLogo} className="block text-sm font-medium text-ink-700 mb-2">Logo del negozio</label>
             <div className="flex items-center gap-4">
               <StoreAvatar logoUrl={logoUrl} storeName={storeName || defaultValues?.storeName} size="lg" />
               <div
@@ -322,7 +361,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                   isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
                 } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                <input {...getInputProps({ 'aria-label': 'Carica il logo del negozio' })} />
+                <input {...getInputProps({ id: idLogo, 'aria-label': 'Carica il logo del negozio' })} />
                 {uploadingLogo ? (
                   <LoadingState variant="inline" />
                 ) : logoUrl ? (
@@ -425,11 +464,17 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
                 id={idSlogan}
                 type="text"
                 value={custom.tagline ?? ''}
-                maxLength={80}
+                aria-invalid={sopraIlTetto(custom.tagline, MAX_TAGLINE) ? true : undefined}
+                aria-describedby={sopraIlTetto(custom.tagline, MAX_TAGLINE) ? `${idSlogan}-errore` : undefined}
                 onChange={(e) => setCustom({ ...custom, tagline: e.target.value })}
                 placeholder="Es. Pane fresco tutti i giorni dal 1962"
                 className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
               />
+              {sopraIlTetto(custom.tagline, MAX_TAGLINE) && (
+                <p id={`${idSlogan}-errore`} role="alert" className="text-xs font-medium text-secondary-600 mt-1">
+                  {sopraIlTetto(custom.tagline, MAX_TAGLINE)}
+                </p>
+              )}
             </div>
           </CustomizationSection>
 
@@ -457,15 +502,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
           </CustomizationSection>
 
           <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
-            <div>
-              <label className="block text-sm font-medium text-ink-700 mb-2">Prodotti in evidenza</label>
+            <div role="group" aria-labelledby={idInEvidenza}>
+              <p id={idInEvidenza} className="block text-sm font-medium text-ink-700 mb-2">Prodotti in evidenza</p>
               <FeaturedProductsPicker
                 value={custom.featuredProductIds}
                 onChange={(next) => setCustom({ ...custom, featuredProductIds: next })}
               />
             </div>
-            <div className="border-t border-cream-200 pt-4">
-              <label className="block text-sm font-medium text-ink-700 mb-2">Banner annuncio</label>
+            <div role="group" aria-labelledby={idAnnuncio} className="border-t border-cream-200 pt-4">
+              <p id={idAnnuncio} className="block text-sm font-medium text-ink-700 mb-2">Banner annuncio</p>
               <AnnouncementEditor value={custom.announcement} onChange={(next) => setCustom({ ...custom, announcement: next })} />
             </div>
             <div className="border-t border-cream-200 pt-4">

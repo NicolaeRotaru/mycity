@@ -1,0 +1,548 @@
+{
+ "sessione": "R10",
+ "aggiornato": "2026-11-22 04:20",
+ "finita": true,
+ "testa": "502ba6925f0b7af4c7b4176b002aba70b79c0dd1",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "502ba6925f0b7af4c7b4176b002aba70b79c0dd1",
+  "nota": "giro K04: typecheck, lint e 11971 prove verdi (1 saltata, già così sulla base), lanciato e aspettato sull'ultimo commit di codice"
+ },
+ "voci": [
+  {
+   "id": "R10-001",
+   "chiave": "frontend-ux|le pagine di prodotti, negozi e categorie che non esistono rispondono «tutto ok» invece di «non trovato»",
+   "esito": "parziale",
+   "commit": "5af8407442fd37c4393b7471b703c6c9b18f65be",
+   "file_toccati": [
+    "app/product/[id]/layout.tsx",
+    "app/store/[id]/layout.tsx",
+    "app/category/[slug]/layout.tsx",
+    "app/store/[id]/[slug]/layout.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-pagine-inesistenti.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-pagine-inesistenti.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c2d7cbeb^ --file app/product/[id]/layout.tsx,app/store/[id]/layout.tsx,app/category/[slug]/layout.tsx,app/store/[id]/[slug]/layout.tsx --prove tests/unit/riparazione-r10-pagine-inesistenti.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "I gusci (layout) di prodotto, negozio, categoria e pagina su misura chiamano notFound() quando la riga non esiste, con la stessa regola con cui la pagina dice «non trovato»; un guasto della lettura non diventa una 404.",
+   "cosa_resta": "La 404 arriva in rete solo togliendo le attese sopra i gusci: app/loading.tsx e app/store/loading.tsx (miei, ma da togliere insieme alle prove comuni minori-s09-aspetto e aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva, che li leggono per nome) e app/store/[id]/loading.tsx (non mio). Oggi la risposta parte con 200 e notFound() arriva in streaming.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/minori-s09-aspetto.test.ts",
+     "modifica": "nello stesso commit in cui si toglie app/loading.tsx: la prova che legge app/loading.tsx (intorno alla riga 1550) diventa «app/loading.tsx non c'è, perché un'attesa della radice fa partire ogni risposta con 200 prima della 404». Una prima versione è nel commit c2d7cbeb di questo ramo (git show c2d7cbeb -- tests/unit/minori-s09-aspetto.test.ts), ma va rifatta senza togliere asserzioni: la guardia contava 69 → 68"
+    },
+    {
+     "file": "app/store/[id]/loading.tsx",
+     "modifica": "togliere il file: la sua attesa avvolge app/store/[id]/[slug]/layout.tsx, e il notFound() che c'è lì arriva a risposta già partita (200). Lo scheletro resta, perché app/store/[id]/page.tsx e [slug]/page.tsx disegnano già <ScheletroNegozio /> mentre caricano. Aggiornare la riga expect(nomi).toContain('app/store/[id]/loading.tsx') in tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts"
+    },
+    {
+     "file": "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts",
+     "righe": "la richiesta che app/store/loading.tsx esista",
+     "modifica": "nello stesso commit in cui si tolgono app/loading.tsx e app/store/loading.tsx: la richiesta che app/store/loading.tsx esista diventa «sopra il guscio del negozio non c'è nessuna attesa, e il guscio chiama notFound()». La versione pronta è nel commit c2d7cbeb di questo ramo"
+    }
+   ],
+   "insieme_a": [
+    "R10-005"
+   ],
+   "nota": "Primo giro (c2d7cbeb): app/loading.tsx e app/store/loading.tsx tolti e due prove comuni modificate. La guardia-ramo era rossa (prove di nessuno, un'asserzione in meno), quindi in 5af84074 ho rimesso le due attese e le due prove come sulla base. La parte ② della prova (nessuna attesa sopra i gusci) è in c2d7cbeb: la regista la può riprendere quando toglie le attese. La 404 del prodotto scatta solo se la riga non esiste affatto (select id col client di servizio). Un prodotto finito, in bozza o di un negozio sospeso resta la pagina «non disponibile», e senza la chiave di servizio non c'è 404. app/u/[handle]/page.tsx chiamava già notFound(). Il codice 404 è dedotto dalle regole di Next, non l'ho visto in rete. K04: la parte fatta regge (mutante rosso), ma i commenti nei gusci dicevano che sopra non c'era attesa. Corretti in 08b93709. Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "commit_storia": [
+    "c2d7cbeb0cd347852d66790ef6be9cbe829b0080",
+    "5af8407442fd37c4393b7471b703c6c9b18f65be",
+    "08b937098242d21bdcfbcedb3def5b3281e7878e"
+   ],
+   "verificato_da": "qa V1: 4 gusci confrontati con le regole delle pagine e della vista, guasti, maiuscole e accenti, pagina nascosta, client di servizio (legge solo id, risponde sì o no, chiave non NEXT_PUBLIC). Rimessa ripetuta su una copia della base: 6/15 rosse. Regge come parziale · collaudo K04: parziale (parte fatta regge)",
+   "collaudo_K04": "parziale"
+  },
+  {
+   "id": "R10-002",
+   "chiave": "frontend-ux|nel profilo del fattorino il documento risulta «verificato» appena caricato, e l'attestato haccp resta «mancante» anche dopo il caricamento",
+   "esito": "non_fatto",
+   "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano, 21/11)"
+  },
+  {
+   "id": "R10-003",
+   "chiave": "frontend-ux|il link delle storie rifiuta l'indirizzo intero del sito stesso (https://<dominio>/promozioni), che è quello che il negoziante copia dalla barra",
+   "esito": "gia_riparato_prima",
+   "prova": "Sulla base 1ad51b4c app/seller/stories/page.tsx:45 togliOrigineDelSito e la chiamata a :126 (window.location.origin) riducono https://<dominio>/promozioni a /promozioni, anche con http e www; npx vitest run tests/unit/riparazione-r09-storie-link-intero.test.tsx tests/unit/riparazione-r02-link-storie-schema-e-www.test.tsx tests/unit/riparazione-r02-link-storie-controllo-c1.test.ts --reporter=dot: verde sulla base (20 prove), gli altri domini restano rifiutati.",
+   "nota": "Il dominio riconosciuto è quello della barra (window.location.origin), non NEXT_PUBLIC_APP_URL: resta rifiutato solo chi lavora da un indirizzo diverso dal principale (per esempio un'anteprima) e incolla quello principale.",
+   "verificato_da": "qa V1: sulla base 3 prove (20 test) più 18 varianti. Ridotti al percorso https, http, www, maiuscole, :443; rifiutati //evil.com, /\\evil.com, mycity.it.evil.com, user@, ftp, javascript. Regge",
+   "collaudo_K04": "regge"
+  },
+  {
+   "id": "R10-004",
+   "chiave": "frontend-ux|la pagina del negozio in cache può mostrare un annuncio già scaduto dopo la mezzanotte",
+   "esito": "riparato",
+   "commit": "66e3b9247241c9526db5b1e77984c5a86fa4a7d4",
+   "file_toccati": [
+    "app/store/[id]/layout.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-annuncio-scaduto.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-annuncio-scaduto.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 66e3b924^ --file app/store/[id]/layout.tsx --prove tests/unit/riparazione-r10-annuncio-scaduto.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Nel layout del negozio revalidate passa da 300 a 0: vetrina e pagine su misura si costruiscono alla visita e non si servono mai da una copia fatta prima di mezzanotte; l'annuncio resta deciso col giorno di Piacenza (Europe/Rome).",
+   "nota": "Regge anche quando force-dynamic verrà tolto da app/layout.tsx. Prezzo: le pagine dei negozi resteranno senza cache anche dopo (dipendono comunque dall'orologio, come «Aperto ora»). Se si vuole la cache sui negozi, la strada è decidere l'annuncio nel browser dopo l'idratazione in app/store/[id]/page.tsx:78 e app/store/[id]/[slug]/page.tsx:82, file non miei.",
+   "verificato_da": "qa V1: revalidate 0 vale anche per le pagine su misura (vince il più basso); announcementActive usa giornoPiacenza (Europe/Rome); niente generateStaticParams, dynamicIO o PPR; tsc verde. Regge",
+   "collaudo_K04": "regge"
+  },
+  {
+   "id": "R10-005",
+   "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+   "esito": "serve_file_altrui",
+   "cosa_ho_fatto": "Il guscio del negozio ha già il notFound() (lo stesso commit della voce insieme_a). La cura che resta è togliere app/store/loading.tsx, ma rompe una prova comune che lo legge per nome: la tocca solo la regista.",
+   "insieme_a": [
+    "R10-001"
+   ],
+   "nota": "Nel primo giro (c2d7cbeb) app/store/loading.tsx era tolto e la prova comune modificata, con una prova rimessa che reggeva. La guardia-ramo era rossa per la prova comune, quindi in 5af84074 è tutto rimesso come sulla base.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts",
+     "modifica": "nello stesso commit in cui si toglie app/store/loading.tsx (file di R10, che va tolto insieme): la richiesta che app/store/loading.tsx esista («il sipario copre anche il guscio») diventa «sopra il guscio del negozio non c'è nessuna attesa, e il guscio chiama notFound()». La versione pronta è nel commit c2d7cbeb di questo ramo (git show c2d7cbeb -- tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts)"
+    }
+   ]
+  },
+  {
+   "id": "R10-006",
+   "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+   "esito": "serve_file_altrui",
+   "nota": "K04: non regge, perché BannerFields esiste (components/seller/site/) e il referto diceva di no. Prima l'esito era «già riparato prima»; ora è serve_file_altrui con il diff esatto.",
+   "verificato_da": "qa V2 sul solo costruttore della home · collaudo K04: non regge (BannerFields) → serve_file_altrui",
+   "collaudo_K04": "non_regge",
+   "cosa_ho_fatto": "Il costruttore della home (components/admin/home/HomeSectionConfigForm.tsx, mio) era già pulito sulla base 1ad51b4c. La voce cita anche BannerFields.tsx:57,64, cioè components/seller/site/BannerFields.tsx (non mio), che ha ancora quattro maxLength silenziosi: la cura è tutta lì.",
+   "serve_file_altrui": [
+    {
+     "file": "components/seller/site/BannerFields.tsx",
+     "righe": "60, 67, 75, 98",
+     "modifica": "riga 60 (<Input label=\"Titolo\">): togliere `maxLength={120}` e aggiungere `error={sopraIlTetto(c.heading, 120)}`. Riga 67 (<Textarea label=\"Sottotitolo\">): togliere `maxLength={200}` e aggiungere `error={sopraIlTetto(c.subheading, 200)}`. Riga 75 (<Input label=\"Testo alternativo della foto\">): togliere `maxLength={160}` e aggiungere `error={sopraIlTetto(c.alt, 160)}`. Riga 98 (<Input label=\"Testo del pulsante\">): togliere `maxLength={40}` e aggiungere `error={sopraIlTetto(c.cta.label, 40)}`. In cima al file aggiungere la funzione sopraIlTetto copiata da components/seller/site/SectionConfigForm.tsx:19-24 (Input e Textarea di components/ui/Field accettano `error`, come in SectionConfigForm)"
+    }
+   ]
+  },
+  {
+   "id": "R10-007",
+   "chiave": "frontend-ux|il conferma per le modifiche non salvate dice «la vetrina» anche sul profilo",
+   "esito": "riparato",
+   "commit": "b09b7f26de2e942e7926e59d34cd52d243aa2fb2",
+   "file_toccati": [
+    "components/seller/site/dove-e-l-errore.ts",
+    "components/VendorForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-conferma-profilo-o-vetrina.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-conferma-profilo-o-vetrina.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b09b7f26de2e942e7926e59d34cd52d243aa2fb2^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r10-conferma-profilo-o-vetrina.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "clicDaFermare prende un parametro `cosa`. VendorForm sceglie il testo in base a mode: «alla vetrina» con mode=\"branding\" («Dettagli negozio», dentro l'editor della vetrina), «al profilo» negli altri casi (profilo, mode=\"contact\"). La prova monta i moduli veri, cambia un campo, clicca un link e legge il testo passato a window.confirm.",
+   "commit_storia": [
+    "cce7770a376fa3405215fd9ee3652e6fe2aea493",
+    "b09b7f26de2e942e7926e59d34cd52d243aa2fb2"
+   ],
+   "nota": "Primo giro in cce7770a, con «al profilo» scritto fisso. V2 ha trovato che VendorForm con mode=\"branding\" vive anche dentro l'editor della vetrina (StoreDetailsEditor.tsx:82). Corretto in b09b7f26 senza toccare StoreDetailsEditor; b2049829 aggiusta solo i tipi della prova.",
+   "verificato_da": "qa V2 sul primo giro: chiamanti unici SiteEditor.tsx:87 e VendorForm.tsx:178, e ha trovato il caso «Dettagli negozio». Il giro di correzione l'ha chiuso con una prova sul comportamento. Il capo squadra ha rifatto la prova rimessa sul nuovo SHA: uscita 0",
+   "collaudo_K04": "regge"
+  },
+  {
+   "id": "R10-008",
+   "chiave": "frontend-ux|altri campi brevi del sito del negozio tagliano ancora in silenzio con maxlength",
+   "esito": "parziale",
+   "commit": "876a61965b0a36e0907932fdd9aadcbac97262e2",
+   "file_toccati": [
+    "components/VendorForm.tsx",
+    "components/seller/site/CollectionFields.tsx",
+    "components/seller/site/SectionConfigForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-vetrina-campi-brevi.test.tsx",
+    "tests/unit/riparazione-r10-slogan-e-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-vetrina-campi-brevi.test.tsx tests/unit/riparazione-r10-slogan-e-social.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 876a61965b0a36e0907932fdd9aadcbac97262e2^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r10-slogan-e-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "insieme_a": [
+    "R10-009"
+   ],
+   "cosa_ho_fatto": "Tolto maxLength da SectionConfigForm.tsx (righe 54, 132 e 140-178: titoli dei blocchi, domande e risposte FAQ) e da CollectionFields.tsx (titolo): il testo resta intero e oltre il tetto dello schema compare l'errore «Troppo lungo: N caratteri su M…», con lo stesso schema già usato sulla home. Giro K04: anche lo slogan del modulo negozio (VendorForm.tsx, tetto 80) non taglia più: oltre il tetto il testo resta intero e sotto il campo compare l'errore, legato con aria-describedby.",
+   "cosa_resta": "Restano maxLength silenziosi in file non miei: BannerFields.tsx (60, 67, 75, 98), GalleryFields.tsx (99, 119), PageEditor.tsx (89, 110, 111), MenuEditor.tsx (61) e AnnouncementEditor.tsx (34). I diff sono in serve_file_altrui.",
+   "serve_file_altrui": [
+    {
+     "file": "components/seller/site/GalleryFields.tsx",
+     "modifica": "riga 99 (titolo, tetto 120, componente Input): togliere maxLength={120} e aggiungere error={sopraIlTetto(valore, 120)}. Riga 119 (testo alternativo, tetto 120): è un <input> nativo, non il componente Input, quindi error= non esiste. Togliere maxLength={120} e scrivere a mano sotto il campo il messaggio di sopraIlTetto(valore, 120), con aria-invalid e aria-describedby. sopraIlTetto va copiata da SectionConfigForm.tsx (n = valore.trim().length; se n > max, «Troppo lungo: N caratteri su M. Accorcialo, così si salva.»)"
+    },
+    {
+     "file": "components/seller/site/MenuEditor.tsx",
+     "modifica": "riga 61 (etichetta del link, tetto 30): togliere maxLength={30} e aggiungere error={sopraIlTetto(l.label, 30)}, con la stessa funzione"
+    },
+    {
+     "file": "components/seller/site/PageEditor.tsx",
+     "modifica": "riga 89 (titolo pagina, tetto 60): togliere maxLength={60} e aggiungere error={sopraIlTetto(page.title, 60)}; riga 110 (titolo SEO, tetto 70): togliere maxLength={70} e aggiungere error={sopraIlTetto(page.seo?.title, 70)}; riga 111 (descrizione SEO, tetto 180): togliere maxLength={180} e aggiungere error={sopraIlTetto(page.seo?.description, 180)}; con la stessa funzione"
+    },
+    {
+     "file": "components/seller/site/BannerFields.tsx",
+     "modifica": "righe 60, 67, 75, 98 (testo alternativo, titolo, sottotitolo, testo del pulsante; tetti 120, 200, 160, 40): togliere maxLength e aggiungere error={sopraIlTetto(valore, max)} con la funzione sopraIlTetto come in SectionConfigForm.tsx. SectionConfigForm importa BannerFields, quindi il banner è parte dei campi brevi della vetrina"
+    },
+    {
+     "file": "components/seller/AnnouncementEditor.tsx",
+     "righe": "32-39 (riga 34)",
+     "modifica": "la <textarea> del testo dell'annuncio è nativa: togliere `maxLength={MAX_ANNOUNCEMENT}`, poi aggiungere `aria-invalid` e `aria-describedby` e, sotto la textarea, un <p role=\"alert\"> con il testo di sopraIlTetto(text, MAX_ANNOUNCEMENT), con la funzione copiata da components/seller/site/SectionConfigForm.tsx:19-24"
+    }
+   ],
+   "nota": "Il commit 5c964880 (prima versione, già spinta) è stato riscritto in locale come 266a5540. Il ramo è stato poi rifatto in fila sopra c1ee2695, per decisione della regia: 5c964880 e l'unione eed11a6d non ci sono più. La prima prova rimessa (266a5540) reggeva; quella del giro K04 (876a6196) regge sullo slogan. K04: parziale, perché restavano anche VendorForm:432 (corretto) e AnnouncementEditor:35 (aggiunto). Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "verificato_da": "qa V2: in SectionConfigForm e CollectionFields non resta nessun maxLength; gli errori usano i tetti dello schema (120, 200, 1000, con trim); il salvataggio si blocca davvero (SiteEditor.tsx:98-103, safeParse prima del fetch). Ha trovato BannerFields.tsx:60,67,75,98 non elencato (la prova lo nasconde con vi.mock) e GalleryFields:119 che è un input nativo: tutti e due aggiunti a serve_file_altrui. Regge come parziale · collaudo K04: parziale",
+   "collaudo_K04": "parziale",
+   "commit_storia": [
+    "266a554012a0ebd3ae7d795c17a409b1645770a4",
+    "876a61965b0a36e0907932fdd9aadcbac97262e2"
+   ]
+  },
+  {
+   "id": "R10-009",
+   "chiave": "frontend-ux|il costruttore della vetrina ha ancora campi brevi che tagliano in silenzio",
+   "esito": "parziale",
+   "commit": "876a61965b0a36e0907932fdd9aadcbac97262e2",
+   "file_toccati": [
+    "components/VendorForm.tsx",
+    "components/seller/site/CollectionFields.tsx",
+    "components/seller/site/SectionConfigForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-vetrina-campi-brevi.test.tsx",
+    "tests/unit/riparazione-r10-slogan-e-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-vetrina-campi-brevi.test.tsx tests/unit/riparazione-r10-slogan-e-social.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 876a61965b0a36e0907932fdd9aadcbac97262e2^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r10-slogan-e-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "insieme_a": [
+    "R10-008"
+   ],
+   "cosa_ho_fatto": "Stesso commit della voce insieme_a: maxLength tolto da SectionConfigForm.tsx (righe 54, 140, 162, 171, 172) e CollectionFields.tsx (24), sostituito dall'errore sotto il campo oltre il tetto. Giro K04: anche lo slogan del modulo negozio (VendorForm.tsx, tetto 80) non taglia più: oltre il tetto il testo resta intero e sotto il campo compare l'errore, legato con aria-describedby.",
+   "cosa_resta": "Restano maxLength silenziosi in file non miei: BannerFields.tsx (60, 67, 75, 98), GalleryFields.tsx (99, 119), PageEditor.tsx (89, 110, 111), MenuEditor.tsx (61) e AnnouncementEditor.tsx (34). I diff sono in serve_file_altrui.",
+   "serve_file_altrui": [
+    {
+     "file": "components/seller/site/GalleryFields.tsx",
+     "modifica": "riga 99 (titolo, tetto 120, componente Input): togliere maxLength={120} e aggiungere error={sopraIlTetto(valore, 120)}. Riga 119 (testo alternativo, tetto 120): è un <input> nativo, non il componente Input, quindi error= non esiste. Togliere maxLength={120} e scrivere a mano sotto il campo il messaggio di sopraIlTetto(valore, 120), con aria-invalid e aria-describedby. sopraIlTetto va copiata da SectionConfigForm.tsx (n = valore.trim().length; se n > max, «Troppo lungo: N caratteri su M. Accorcialo, così si salva.»)"
+    },
+    {
+     "file": "components/seller/site/PageEditor.tsx",
+     "modifica": "riga 89 (tetto 60), riga 110 (tetto 70), riga 111 (tetto 180): togliere maxLength e aggiungere error={sopraIlTetto(valore, max)} con la stessa funzione"
+    },
+    {
+     "file": "components/seller/site/MenuEditor.tsx",
+     "modifica": "riga 61 (tetto 30): togliere maxLength={30} e aggiungere error={sopraIlTetto(l.label, 30)} con la stessa funzione"
+    },
+    {
+     "file": "components/seller/site/BannerFields.tsx",
+     "modifica": "righe 60, 67, 75, 98 (testo alternativo, titolo, sottotitolo, testo del pulsante; tetti 120, 200, 160, 40): togliere maxLength e aggiungere error={sopraIlTetto(valore, max)} con la funzione sopraIlTetto come in SectionConfigForm.tsx. SectionConfigForm importa BannerFields, quindi il banner è parte dei campi brevi della vetrina"
+    },
+    {
+     "file": "components/seller/AnnouncementEditor.tsx",
+     "righe": "32-39 (riga 34)",
+     "modifica": "la <textarea> del testo dell'annuncio è nativa: togliere `maxLength={MAX_ANNOUNCEMENT}`, poi aggiungere `aria-invalid` e `aria-describedby` e, sotto la textarea, un <p role=\"alert\"> con il testo di sopraIlTetto(text, MAX_ANNOUNCEMENT), con la funzione copiata da components/seller/site/SectionConfigForm.tsx:19-24"
+    }
+   ],
+   "verificato_da": "qa V2: in SectionConfigForm e CollectionFields non resta nessun maxLength; gli errori usano i tetti dello schema (120, 200, 1000, con trim); il salvataggio si blocca davvero (SiteEditor.tsx:98-103, safeParse prima del fetch). Ha trovato BannerFields.tsx:60,67,75,98 non elencato (la prova lo nasconde con vi.mock) e GalleryFields:119 che è un input nativo: tutti e due aggiunti a serve_file_altrui. Regge come parziale · collaudo K04: parziale",
+   "nota": "Il commit 5c964880 (prima versione, già spinta) è stato riscritto in locale come 266a5540. Il ramo è stato poi rifatto in fila sopra c1ee2695, per decisione della regia: 5c964880 e l'unione eed11a6d non ci sono più. La prima prova rimessa (266a5540) reggeva; quella del giro K04 (876a6196) regge sullo slogan. K04: parziale, perché restavano anche VendorForm:432 (corretto) e AnnouncementEditor:35 (aggiunto). Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "collaudo_K04": "parziale",
+   "commit_storia": [
+    "266a554012a0ebd3ae7d795c17a409b1645770a4",
+    "876a61965b0a36e0907932fdd9aadcbac97262e2"
+   ]
+  },
+  {
+   "id": "R10-010",
+   "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+   "esito": "riparato",
+   "commit": "718f6698d11befd8b3a8c51671d1c27391e779d0",
+   "file_toccati": [
+    "lib/store-customization.ts",
+    "components/VendorForm.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-instagram-incollato-intero.test.ts",
+    "tests/unit/riparazione-r10-slogan-e-social.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-instagram-incollato-intero.test.ts tests/unit/riparazione-r10-slogan-e-social.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 718f6698d11befd8b3a8c51671d1c27391e779d0^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r10-slogan-e-social.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il link di Instagram incollato dall'app con la coda «?igsh=…» o «?hl=it» si salva come «nome», e la coda si butta anche per TikTok e Facebook. Il nome finisce solo su «/», «?», «#» o a fine stringa (lookahead), quindi «nome<script>?igsh=1» e «caffè?igsh=1» restano fermati e il controllo nomina il campo. Aggiunti ai percorsi riservati explore, direct, accounts, tv (Instagram) e t, tag, discover (TikTok). Sito senza https ed errore sotto il campo giusto erano già a posto da un'onda precedente. Giro K04: un social sbagliato non ferma più nome, logo, descrizione e colore (VendorForm). Il resto si salva, quel social resta il valore salvato prima, l'errore resta sotto il suo campo e il messaggio dice «Il resto è salvato; Instagram è rimasto com'era». Un errore che non è di un social ferma ancora il salvataggio.",
+   "commit_storia": [
+    "56a0bbff0c18afe3b006b1d90a9fd6dc78e1cadd",
+    "c084252dd453c9e2443820b6b18f30ec8a6e59c6",
+    "718f6698d11befd8b3a8c51671d1c27391e779d0"
+   ],
+   "nota": "Primo giro in 56a0bbff. V3 ha trovato una regressione: la fine del nome non era ancorata, e «nome<script>?igsh=1» diventava «nome». Corretta in c084252d con il giro di correzione, 29 prove che erano rosse sul codice del primo giro. Limite noto: l'elenco dei percorsi riservati è comune ai tre social, quindi un profilo vero che si chiama «t», «tv», «live», «tag» o «direct» si salva scrivendo il nome semplice e non incollando il link. K04: parziale, per il blocco di tutta la vetrina (VendorForm:269-286), chiuso in 718f6698. Limiti noti, fuori dalla frase della voce: i link con il nome dentro (instagr.am/nome, fb.me/nome, facebook.com/pg/nome, host web., it-it. e business.facebook.com) sono ancora rifiutati con l'errore sul campo. Le pagine Facebook con solo l'id (profile.php?id=, /people/Nome/ID/) non si possono salvare: servirebbe salvare il link intero, ed è una scelta di prodotto. Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "verificato_da": "qa V3 sul primo giro (≈90 varianti: igsh/hl, www, slash, sito senza https, /p/ e /reel/) ha trovato la regressione. Il giro di correzione l'ha chiusa. Il capo squadra (tetto di 6 subagenti raggiunto, nessun revisore libero) ha controllato che la prova copra «<script>», «caffè», explore e discover, e ha rifatto la prova rimessa sul nuovo SHA: uscita 0 · collaudo K04: parziale (≈90 varianti su Instagram e sito reggono)",
+   "collaudo_K04": "parziale"
+  },
+  {
+   "id": "R10-011",
+   "chiave": "frontend-ux|mancano «finito per oggi» e «chiuso fino al…», promessi ai negozi della prima ondata",
+   "esito": "scelta_di_nicola",
+   "domanda": "«Finito per oggi» e «chiuso fino al…» non hanno nessun dato dove salvarsi e nessuno li leggerebbe quando decide se il negozio accetta ordini: li vuoi con una colonna nuova e la regola in cassa, in un'onda con migrazione?",
+   "prova": "In migrations/*.sql e lib/database.types.ts non c'è closed_until, paused, vacanza o chiusura temporanea: profiles ha solo store_hours jsonb (migrazione 010); isStoreClosedForOrder (lib/store-hours.ts:112) e negozi_aperti_adesso (migrazioni 127 e 231) leggono solo le fasce orarie.",
+   "nota": "Nessun codice scritto: servirebbero logica in lib/store-hours.ts e nella funzione SQL (file non miei) e una migrazione, esclusa dalla regista.",
+   "verificato_da": "qa V1: nessuna colonna di chiusura temporanea in migrations, database.types.ts e supabase/ (cercati closed_until, paused, vacation, holiday, ferie, sospeso, accepting…); StoreHours ha solo le fasce. Regge"
+  },
+  {
+   "id": "R10-012",
+   "chiave": "frontend-ux|tre etichette del modulo negozio e una del profilo non sono legate al loro campo",
+   "esito": "parziale",
+   "commit": "2042bdab6ae518c2411d611defc5ade81f3d08cc",
+   "file_toccati": [
+    "components/VendorForm.tsx",
+    "app/seller/profile/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-etichette-legate-al-campo.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-etichette-legate-al-campo.test.tsx --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2042bdab6ae518c2411d611defc5ade81f3d08cc^ --file app/seller/profile/page.tsx --prove tests/unit/riparazione-r10-etichette-legate-al-campo.test.tsx --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "«Logo del negozio» ha htmlFor e id (useId) sul campo file. «Prodotti in evidenza» e «Banner annuncio» sono titoli di gruppo (role=group con aria-labelledby), perché i campi stanno in componenti non miei. Nel profilo, <label htmlFor> avvolge solo il titolo «Offro consegna Express», il checkbox ha lo stesso id e aria-describedby punta alla descrizione: l'avviso jsx-a11y alla riga 206 è sparito, con la regola accesa e senza eslint-disable.",
+   "nota": "Primo giro in 87b53c61. V3 ha visto che eslint dava ancora l'avviso 206:9 «A form label must have accessible text». Corretto in 2042bdab, e la prova lancia eslint davvero; 38a1e1ac aggiusta solo la prova. Ora il clic sulla descrizione non attiva più il checkbox: prima sì, perché stava tutta nella label. K04: parziale, per la textarea dell'annuncio senza etichetta. Minore: sul profilo la zona cliccabile della casella Express ora è solo il titolo più la casella.",
+   "commit_storia": [
+    "87b53c61e621f360c80bb417046bd804abc41138",
+    "2042bdab6ae518c2411d611defc5ade81f3d08cc"
+   ],
+   "verificato_da": "qa V3 sul primo giro: logo, gruppi e checkbox legati davvero, id unici; ha trovato l'avviso eslint rimasto. Il giro di correzione l'ha chiuso. Il capo squadra ha rifatto la prova rimessa sul nuovo SHA: uscita 0 · collaudo K04: parziale",
+   "collaudo_K04": "parziale",
+   "cosa_resta": "Il campo vero del «Banner annuncio», la textarea in components/seller/AnnouncementEditor.tsx:32-39 (non mio), resta senza etichetta: il gruppo con il titolo non basta.",
+   "serve_file_altrui": [
+    {
+     "file": "components/seller/AnnouncementEditor.tsx",
+     "righe": "32-39 e 41-43",
+     "modifica": "alla <textarea> (riga 32) aggiungere `aria-label=\"Testo dell'annuncio\"`, oppure un <label htmlFor={idTesto}> con `const idTesto = useId()`. Righe 41-43: l'id fisso \"announcement-until\" diventa `const idFino = useId()`, con `htmlFor={idFino}` sulla label e `id={idFino}` sull'input date, così due editor sulla stessa pagina non hanno lo stesso id"
+    }
+   ]
+  },
+  {
+   "id": "R10-013",
+   "chiave": "frontend-ux|il modulo del prodotto non dice che il nome ha al massimo 120 caratteri: il negozio legge solo «il valore inserito non è valido»",
+   "esito": "parziale",
+   "commit": "502ba6925f0b7af4c7b4176b002aba70b79c0dd1",
+   "file_toccati": [
+    "lib/products/schema.ts",
+    "components/seller/ProductForm.tsx",
+    "lib/errors.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-nome-prodotto-120.test.ts",
+    "tests/unit/riparazione-r10-descrizione-prodotto-4000.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-nome-prodotto-120.test.ts tests/unit/riparazione-r10-descrizione-prodotto-4000.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 502ba6925f0b7af4c7b4176b002aba70b79c0dd1^ --file lib/products/schema.ts,lib/errors.ts --prove tests/unit/riparazione-r10-descrizione-prodotto-4000.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Schema: nome oltre 120 caratteri rifiutato con «Il nome può avere al massimo 120 caratteri: accorcialo.», contato come Postgres (char_length del nome senza spazi, emoji = 1). Modulo: sotto il campo «Al massimo 120 caratteri (n/120)». friendlyError: il 23514 sul vincolo products_name_lunghezza dice «Il nome del prodotto è troppo lungo: al massimo 120 caratteri…»; gli altri 23514 restano generici. Giro K04: anche la descrizione oltre 4000 caratteri dà un messaggio chiaro. Lo schema conta come il vincolo della migrazione 149 (DESCRIZIONE_PRODOTTO_MAX), e friendlyError traduce products_description_lunghezza.",
+   "nota": "app/seller/products/new/page.tsx non toccata: usa già friendlyError e eredita il messaggio. Migrazione 149 non toccata. Il nome del «Duplica» (nome + ' (copia)') può superare 120: ora lo dice il modulo, non il database. K04: parziale. Descrizione e messaggio corretti in 502ba692; il resto è in file altrui. Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "verificato_da": "qa V3: 120 sì e 121 no, anche con spazi ai lati e con emoji (ZWJ contato come char_length); payload trimmato, coerente col vincolo della migrazione 149; friendlyError traduce solo products_name_lunghezza, gli altri 23514 restano generici; new/page.tsx:311 ed edit/page.tsx:292 passano da friendlyError; contatore n/120 in ProductForm.tsx:1067. Regge · collaudo K04: parziale",
+   "collaudo_K04": "parziale",
+   "commit_storia": [
+    "403a66813dd6e8862dc3948669d860b8cdf44ebe",
+    "502ba6925f0b7af4c7b4176b002aba70b79c0dd1"
+   ],
+   "cosa_resta": "Sulla modifica del prodotto il server dà ancora la frase generica, e l'import da file e la rotta admin hanno altri tetti (200 e 8000): sono file non miei, i diff sono in serve_file_altrui.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/products/prontoPerLaVendita.ts",
+     "righe": "222-229",
+     "modifica": "dentro `if (err?.code === '23514') {`, prima di `const tecnico = …`, aggiungere: `if (/products_name_lunghezza/.test(testo)) return { tipo: 'regola', messaggio: 'Il nome del prodotto è troppo lungo: al massimo 120 caratteri. Accorcialo e riprova.' };` e `if (/products_description_lunghezza/.test(testo)) return { tipo: 'regola', messaggio: 'La descrizione del prodotto è troppo lunga: al massimo 4000 caratteri. Accorciala e riprova.' };`. app/api/seller/products/[id]/route.ts:80 restituisce già esito.messaggio così com'è"
+    },
+    {
+     "file": "lib/products/righe-dal-file.ts",
+     "righe": "58",
+     "modifica": "`if (nome.length > 200) errori.push('Nome troppo lungo (max 200)');` → `if ([...nome].length > NOME_PRODOTTO_MAX) errori.push(`Nome troppo lungo (max ${NOME_PRODOTTO_MAX} caratteri)`);`, con `import { NOME_PRODOTTO_MAX } from '@/lib/products/schema'`"
+    },
+    {
+     "file": "app/api/admin/products/route.ts",
+     "righe": "42-43",
+     "modifica": "`name: z.string().trim().min(1).max(200),` → `name: z.string().trim().min(1).refine((v) => [...v].length <= 120, 'Il nome può avere al massimo 120 caratteri'),`. `description: z.string().max(8000).optional(),` → `description: z.string().refine((v) => [...v.trim()].length <= 4000, 'La descrizione può avere al massimo 4000 caratteri').optional(),`"
+    }
+   ]
+  },
+  {
+   "id": "R10-014",
+   "chiave": "frontend-ux|altri percorsi di facebook non elencati possono essere salvati come nome del profilo",
+   "esito": "riparato",
+   "commit": "233037ea233e54d9012f179bcda54648262a4a12",
+   "file_toccati": [
+    "lib/store-customization.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-facebook-percorsi-non-profilo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-facebook-percorsi-non-profilo.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 233037ea233e54d9012f179bcda54648262a4a12^ --file lib/store-customization.ts --prove tests/unit/riparazione-r10-facebook-percorsi-non-profilo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Su Facebook il nome vale solo se il link è di un profilo. Una pagina .php non è un nome (home.php, profile.php…). Dopo il nome può venire solo una sottopagina di un profilo (posts, photos, about, reviews…), quindi /notes/x, /recover/initiate e /places/x restano com'erano e il controllo li ferma nominando Facebook. L'elenco dei percorsi riservati è per social: un profilo vero di Instagram o TikTok chiamato live, help, business, media o public torna valido. Le prove coprono le varianti di K04 e i profili veri (nome.cognome, ?mibextid, m.facebook.com, /nome/photos).",
+   "nota": "K04: non regge, perché la lista di esclusioni non chiudeva la classe e la lista comune fermava profili veri su Instagram e TikTok. Riscritto in 233037ea. Limiti: un nome di una sola parola uguale a un riservato di Facebook (home, notes, places…) resta fermato. I valori sbagliati salvati prima (per esempio «events») restano nei dati: non li correggo. Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "commit_storia": [
+    "6d83434d5e9b92cff2af20ae68de8a0ba2f7e387",
+    "549c56ccb5b7ee35b22f3f3a58fd977851dab13c",
+    "233037ea233e54d9012f179bcda54648262a4a12"
+   ],
+   "verificato_da": "collaudo K04: non regge sulla versione di prima · giro di correzione: prova estesa alle varianti di K04, prova rimessa uscita 0 (capo squadra)",
+   "collaudo_K04": "non_regge"
+  },
+  {
+   "id": "R10-015",
+   "chiave": "microcopy|se il caricamento di una storia fallisce, il negoziante legge «applica la migration 035»",
+   "esito": "riparato",
+   "commit": "c95e210e141a995ee5e0e87430a43279e7c03b5a",
+   "file_toccati": [
+    "app/seller/stories/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-storia-non-caricata.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-storia-non-caricata.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c95e210e^ --file app/seller/stories/page.tsx --prove tests/unit/riparazione-r10-storia-non-caricata.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Quando il magazzino delle foto non risponde il negoziante legge che il problema non è la sua foto e che può riprovare o scrivere all'assistenza; il dettaglio tecnico (storage, migrazione 035) va nei registri con logger.error.",
+   "nota": "lib/errors.ts non toccato: la frase tecnica la scriveva la pagina e friendlyError la lasciava passare. La prova controlla la frase nuova e che un errore correggibile dal negoziante («troppo pesante») passi ancora.",
+   "verificato_da": "qa V1: testo senza gergo, logger.error con redact, «formato non accettato» e «troppo pesante» arrivano ancora, nessun «migration 035» nell'interfaccia. Regge",
+   "collaudo_K04": "regge"
+  },
+  {
+   "id": "R10-016",
+   "chiave": "performance|le pagine di prodotto, negozio e categoria non usano la cache che dichiarano, e rileggono due volte la stessa riga a ogni visita",
+   "esito": "serve_file_altrui",
+   "commit": "719d4380e7d9282185b35a5463b71b03e192bf4d",
+   "file_toccati": [
+    "lib/supabase/lettura-per-metadati.ts",
+    "app/u/[handle]/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r10-lettura-unica.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r10-lettura-unica.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 719d4380^ --file lib/supabase/lettura-per-metadati.ts,app/u/[handle]/page.tsx --prove tests/unit/riparazione-r10-lettura-unica.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Sopra la memoria a due secondi di lettura-per-metadati c'è cache() di React. Però, come dice K04, unisce solo metadati e guscio, che la memoria di 2 s univa già. Nel giro K04 ho corretto il commento falso sulla «cache di cinque minuti» (1378072c).",
+   "cosa_resta": "La doppia lettura vera è nel precarico. Con il precarico vero, in una richiesta la scheda prodotto legge products 2 volte e seller_public_profiles 2 volte, la vetrina seller_public_profiles 3 volte (lib/queries/precarico.ts:108-139, non mio). E force-dynamic in app/layout.tsx annulla ancora le revalidate dichiarate: rimandato per decisione della regia.",
+   "nota": "K04: non regge. Resta più di quanto diceva cosa_resta, e la prova sostituiva il precarico con un finto (riparazione-r10-lettura-unica.test.ts:72-75). Il commento falso è corretto, il resto va in file altrui. Giro di correzione dopo K04, fatto a mano dal capo squadra (subagenti esauriti, autorizzato dalla regia quinta), senza un nuovo collaudo indipendente.",
+   "verificato_da": "qa V1: la memoria a 2 s di modulo tiene solo letture anonime di righe pubbliche e nessun chiamante passa un client; il ripiego senza cache() è corretto; /u/[handle] mostra a tutti le stesse cose di prima. Regge come parziale · collaudo K04: non regge → serve_file_altrui",
+   "collaudo_K04": "non_regge",
+   "commit_storia": [
+    "719d4380e7d9282185b35a5463b71b03e192bf4d",
+    "1378072cfe27182093cda13fec70725a83a23281"
+   ],
+   "serve_file_altrui": [
+    {
+     "file": "lib/queries/precarico.ts",
+     "righe": "108-113 e 129-139 (con lib/queries/scheda-con-venduto-da.ts leggiSchedaPerIlGuscio e lib/queries/catalogo.ts domandaNegozio)",
+     "modifica": "Ricetta, non diff riga per riga: per un diff serve prima progettare la domanda comune. Primo, avvolgere la lettura per id del precarico in una memoria per richiesta: `const leggiSchedaDellaRichiesta = cache((id: string) => leggiSchedaPerIlGuscio(clientAnonimo(), id))`, e lo stesso per la riga del negozio di domandaNegozio e domandaVendutoDa. Poi esportarle e usarle in precaricaProdotto e precaricaNegozio. Infine far leggere a generateMetadata e al guscio (app/product/[id]/layout.tsx e app/store/[id]/layout.tsx, di R10, da fare dopo) i campi dei metadati da quella stessa risposta invece che da leggiPerMetadati. Le colonne del precarico devono comprendere quelle dei metadati: nome, descrizione, immagine, store_name, role, is_approved."
+    }
+   ]
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Una vetrina lasciata aperta oltre mezzanotte continua a mostrare l'annuncio del giorno prima finché la pagina non si ridisegna",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "app/store/[id]/page.tsx:78",
+   "descrizione": "L'annuncio è deciso al disegno della pagina; nel browser nessuno lo ricontrolla al cambio di giorno. Fuori dalla voce sulla cache del server."
+  },
+  {
+   "titolo": "La memoria a due secondi dei metadati usa la stessa chiave anche quando si passa un client da fuori",
+   "dimensione": "performance",
+   "severita": "minore",
+   "file": "lib/supabase/lettura-per-metadati.ts:71",
+   "descrizione": "C'era già sulla base. Oggi non fa danni, perché nessun chiamante in produzione passa un client; se uno lo facesse con una sessione, la riga letta con i suoi permessi finirebbe nella memoria condivisa."
+  },
+  {
+   "riservato": true,
+   "titolo": "Falla di sicurezza da chiudere (dati): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+   "dimensione": "sicurezza",
+   "severita": "minore",
+   "file": "(nel referto privato)"
+  },
+  {
+   "titolo": "Il sito del negozio accetta un indirizzo con schema sbagliato, come ftp:// o http//",
+   "dimensione": "frontend-ux",
+   "severita": "minore",
+   "file": "lib/store-customization.ts:359",
+   "descrizione": "«ftp://pane.it» diventa «https://ftp://pane.it» e passa il controllo dello schema. Fuori dalle voci, non toccato."
+  }
+ ],
+ "domande_per_nicola": [],
+ "conto": {
+  "agenti": 6,
+  "nota": "6 subagenti, il tetto: 2 riparatori (lotto 1 col modello grande, lotto 2 col piccolo), 3 revisori (V1 grande, V2 e V3 piccoli), 1 correttore piccolo per le smentite di V2 e V3. La correzione della guardia del lotto 1 (5af84074) e l'unione con strategia ours (eed11a6d) le ho fatte io, a mano con git. Spesa letta da get_session (usage.cost_usd) alla consegna: 22,96 $, aggiornata alle 00:53 UTC; tetto 35 $, consegna al 70% = 24,5 $. Giro K04 fatto a mano dal capo squadra (il freno ha fermato il settimo subagente; la regia quinta ha autorizzato la strada a mano). Spesa letta da get_session: 28,01 $, valore aggiornato alle 03:05 UTC che non conta ancora tutto il giro; tetto della regia 35 $, soglia di stop 33 $.",
+  "subagenti": 6
+ },
+ "passaggio_storia": {
+  "nota": "Ramo rifatto in fila sopra c1ee2695, senza l'unione eed11a6d, e spinto con --force-with-lease su decisione della regia quarta. Mappa dei vecchi SHA del giro di correzione verso i nuovi: 57d01eb0→c084252d, 0e997235→549c56cc, 8e87d4e2→b09b7f26, cce74444→2042bdab, a53dc208→b2049829, 0be5ec03→38a1e1ac. Albero finale identico."
+ },
+ "costo_usd": 28.01
+}

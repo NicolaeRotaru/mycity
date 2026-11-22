@@ -53,6 +53,8 @@ import {
   CONDITION_LABELS,
   CONDIZIONI_DA_SCEGLIERE,
   condizioneDaScegliere,
+  NOME_PRODOTTO_MAX,
+  lunghezzaNomeProdotto,
   type ProductUnit,
   type ProductCondition,
   type ProductFormValues,
@@ -1062,6 +1064,7 @@ export default function ProductForm({
           label="Nome prodotto"
           {...register('name')}
           placeholder="Es. Pomodori biologici"
+          hint={`Al massimo ${NOME_PRODOTTO_MAX} caratteri (${lunghezzaNomeProdotto(watch('name') ?? '')}/${NOME_PRODOTTO_MAX}).`}
           error={typeof errors.name?.message === 'string' ? errors.name.message : undefined}
         />
 

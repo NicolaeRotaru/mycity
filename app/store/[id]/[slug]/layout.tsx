@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { normalizeSite, pageBySlug } from '@/lib/store-site';
+import { notFound } from 'next/navigation';
 
 export const revalidate = 300;
 
@@ -52,6 +53,19 @@ export async function generateMetadata(props: { params: Promise<{ id: string; sl
   };
 }
 
-export default function StoreSlugLayout({ children }: { children: React.ReactNode }) {
+/**
+ * R10-001 — Una pagina su misura che non c'è dice «non trovata» dal server, con la stessa regola
+ * della pagina (`pageBySlug`, e la pagina nascosta resta aperta col link). Il negozio che non c'è lo
+ * ferma già il guscio sopra (app/store/[id]/layout.tsx). Un guasto non è «non trovato».
+ */
+export default async function StoreSlugLayout(
+  { children, params }: { children: React.ReactNode; params: Promise<{ id: string; slug: string }> },
+) {
+  const { id, slug } = await params;
+  const store = await fetchStore(id).catch(() => undefined);
+  if (store !== undefined) {
+    const page = store ? pageBySlug(normalizeSite(store.store_site), slug) : undefined;
+    if (!page || page.slug === '') notFound();
+  }
   return children;
 }

@@ -137,6 +137,16 @@ function prezzoScritto(v: unknown): unknown {
   return leggiPrezzo(v);
 }
 
+/** Il tetto del nome del prodotto: lo stesso del vincolo `products_name_lunghezza` nel database. */
+export const NOME_PRODOTTO_MAX = 120;
+/** Il tetto della descrizione nel database (migrazione 149, `char_length(description) <= 4000`). */
+export const DESCRIZIONE_PRODOTTO_MAX = 4000;
+
+/** Quanti caratteri conta il database nel nome: `char_length` di quello che si salva (senza spazi ai lati). */
+export function lunghezzaNomeProdotto(nome: string): number {
+  return [...nome.trim()].length;
+}
+
 /**
  * Schema dei campi RHF. `minDescription` differisce tra creazione (30, gate
  * qualità) e modifica (10, non bloccare annunci storici brevi).
@@ -145,7 +155,13 @@ export function createProductSchema(opts?: { minDescription?: number }) {
   const minDesc = opts?.minDescription ?? 10;
   return z
     .object({
-      name: z.string().min(3, 'Almeno 3 caratteri'),
+      // R10-013 — Il nome ha al massimo 120 caratteri (vincolo `products_name_lunghezza`, migrazione
+      // 149): il modulo lo dice prima e, se si supera, lo dice con le parole giuste. Si conta come
+      // Postgres (`char_length` del nome già tagliato dagli spazi), non in unità UTF-16.
+      name: z
+        .string()
+        .min(3, 'Almeno 3 caratteri')
+        .refine((v) => lunghezzaNomeProdotto(v) <= NOME_PRODOTTO_MAX, `Il nome può avere al massimo ${NOME_PRODOTTO_MAX} caratteri: accorcialo.`),
       description: z
         .string()
         .min(
@@ -153,6 +169,12 @@ export function createProductSchema(opts?: { minDescription?: number }) {
           minDesc >= 30
             ? 'Descrivi bene il prodotto: almeno 30 caratteri (materiali, taglia, condizione…)'
             : `Almeno ${minDesc} caratteri`,
+        )
+        // R10-013 — Anche la descrizione ha un tetto nel database: oltre, il negozio leggeva solo
+        // «Il valore inserito non è valido». Contata come Postgres, come il nome.
+        .refine(
+          (v) => lunghezzaNomeProdotto(v) <= DESCRIZIONE_PRODOTTO_MAX,
+          `La descrizione può avere al massimo ${DESCRIZIONE_PRODOTTO_MAX} caratteri: accorciala.`,
         ),
       // 12/11/2026 (R03-022) — Il prezzo si legge all'italiana (`leggiPrezzo`): «1.250,00» è
       // milleduecentocinquanta, non 1,25. Prima `z.coerce.number` e il campo numerico del browser
