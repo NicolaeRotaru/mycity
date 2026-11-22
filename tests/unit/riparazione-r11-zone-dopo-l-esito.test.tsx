@@ -15,10 +15,11 @@ import { accendi } from './aiuti/schermo';
 
 type Esito = { data: unknown; error: { message: string } | null };
 type Op = { azione: string; valori?: unknown };
-const stato: { scrittura: () => Promise<Esito>; ops: Op[]; toast: string[] } = {
+const stato: { scrittura: () => Promise<Esito>; ops: Op[]; toast: string[]; zoneLette: string[] } = {
   scrittura: async () => ({ data: null, error: null }),
   ops: [],
   toast: [],
+  zoneLette: [],
 };
 
 function costruttore() {
@@ -26,7 +27,7 @@ function costruttore() {
   const q: Record<string, unknown> = {};
   for (const m of ['select', 'eq']) q[m] = () => q;
   q.update = (v: unknown) => { op.azione = 'update'; op.valori = v; return q; };
-  q.single = async () => ({ data: { rider_is_online: false, rider_schedule: null, rider_zones: [] }, error: null });
+  q.single = async () => ({ data: { rider_is_online: false, rider_schedule: null, rider_zones: stato.zoneLette }, error: null });
   q.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
     stato.ops.push({ ...op });
     return stato.scrittura().then(ok, ko);
@@ -58,6 +59,7 @@ beforeEach(() => {
   stato.scrittura = async () => ({ data: null, error: null });
   stato.ops = [];
   stato.toast = [];
+  stato.zoneLette = [];
 });
 
 async function monta() {
@@ -118,6 +120,27 @@ describe('R11-005 — le zone dopo l esito', () => {
     expect(zona('Centro storico').getAttribute('aria-pressed')).toBe('true');
     const ultima = stato.ops.filter((o) => o.azione === 'update').pop()!.valori as { rider_zones: string[] };
     expect([...ultima.rider_zones].sort()).toEqual(['Centro storico', 'Stazione']);
+    s.smonta();
+  });
+
+  it('con 6 zone, una rimozione in errore e un aggiunta subito dopo non scrivono mai più di 6 zone', async () => {
+    stato.zoneLette = ['Centro storico', 'Stazione', 'Borgo Faxhall', 'San Lazzaro', 'Roma', 'Manfredi'];
+    let n = 0;
+    stato.scrittura = () => {
+      n += 1;
+      const esito: Esito = n === 1 ? { data: null, error: { message: 'rete giù' } } : { data: null, error: null };
+      return new Promise((r) => setTimeout(() => r(esito), 5));
+    };
+    const { s, zona, tocca } = await monta();
+    expect(zona('Stazione').getAttribute('aria-pressed'), 'controprova: le 6 zone lette sono spuntate').toBe('true');
+    tocca('Stazione');
+    tocca('Besurica');
+    await aspetta();
+    const scritte = stato.ops.filter((o) => o.azione === 'update').map((o) => (o.valori as { rider_zones: string[] }).rider_zones);
+    expect(scritte.length, 'controprova: due scritture in fila').toBe(2);
+    for (const z of scritte) expect(z.length).toBeLessThanOrEqual(6);
+    expect(zona('Besurica').getAttribute('aria-pressed')).toBe('false');
+    expect(s.radice.textContent).toMatch(/Selezionate: 6\/6/);
     s.smonta();
   });
 });

@@ -158,7 +158,7 @@ export default function RiderAvailabilityPage() {
         toast.error('Massimo 6 zone preferite');
         return;
       }
-      cambiaZone((l) => (l.includes(zone) ? l : [...l, zone]));
+      cambiaZone((l) => (l.includes(zone) || l.length >= 6 ? l : [...l, zone]));
     }
   };
 
@@ -167,7 +167,7 @@ export default function RiderAvailabilityPage() {
     if (!z) return;
     if (previste.current.includes(z)) { toast.error('Zona già presente'); return; }
     if (previste.current.length >= 6) { toast.error('Massimo 6 zone'); return; }
-    cambiaZone((l) => (l.includes(z) ? l : [...l, z]));
+    cambiaZone((l) => (l.includes(z) || l.length >= 6 ? l : [...l, z]));
     setCustomZone('');
   };
 
