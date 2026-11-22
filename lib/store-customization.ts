@@ -315,6 +315,11 @@ export function announcementActive(c?: StoreCustomization | null, now: Date = ne
 
 export type SocialLink = { key: string; label: string; href: string };
 
+const PERCORSI_CHE_NON_SONO_UN_PROFILO = new RegExp(
+  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public)$',
+  'i',
+);
+
 /**
  * 295 — Il negoziante incolla il link del profilo, non il nome: da
  * «https://www.instagram.com/panequotidiano/» si tiene «panequotidiano».
@@ -325,7 +330,9 @@ function handleDaLink(v: string | undefined, dominio: RegExp): string | undefine
   const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i'));
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
-  if (m && (/^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1]) || /\?/.test(t))) return t;
+  // R10-014 — Anche gli altri percorsi di Facebook (people, events, photo, marketplace…): il
+  // primo pezzo del percorso non è un nome, e non deve diventare il «nome profilo».
+  if (m && (PERCORSI_CHE_NON_SONO_UN_PROFILO.test(m[1]) || /\?/.test(t))) return t;
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
