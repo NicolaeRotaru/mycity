@@ -44,17 +44,27 @@ describe('R12-002 · /stores, i filtri a 280 px col testo al 200%', () => {
   });
 });
 
-describe('R12-004 · /lavora-con-noi, le righe delle posizioni a 280 px col testo al 200%', () => {
+describe('R12-004 · /lavora-con-noi, le righe delle posizioni a 280 px col testo al 200% (correzione continua)', () => {
   const src = leggi('app/lavora-con-noi/page.tsx');
-  it('i margini della pagina si stringono sotto i 300 px, così il titolo di una riga non va una lettera per riga', () => {
-    const cornice = tagPrima(src, '{/* Posizioni aperte */}', 'div');
-    expect(cornice).toContain('px-6');
-    expect(cornice).toContain('max-[300px]:px-3');
+  it('nessun gradino fisso: niente max-[300px] nelle righe delle posizioni', () => {
+    const da = src.indexOf('{/* Posizioni aperte */}');
+    const a = src.indexOf('{/* CTA finale */}');
+    expect(src.slice(da, a)).not.toContain('max-[');
+    expect(src.slice(da - 900, da)).not.toContain('max-[');
   });
-  it('«Candidati» ha meno margine interno e la freccia può andare sotto invece di spezzare la parola', () => {
+  it('i margini della pagina e della riga si stringono con lo schermo (min(rem, vw))', () => {
+    expect(tagPrima(src, '{/* Posizioni aperte */}', 'div')).toContain('px-[min(1.5rem,7.5vw)]');
+    expect(tagPrima(src, '<div className="flex-1 min-w-[min(200px,100%)]">', 'li')).toContain('px-[min(1.25rem,6.25vw)]');
+  });
+  it('«Candidati» ha il margine che si stringe e la freccia può andare sotto invece di spezzare la parola', () => {
     const link = tagPrima(src, 'Candidati', 'a');
-    expect(link).toContain('max-[300px]:px-3');
-    expect(link).toContain('max-[300px]:flex-wrap');
+    expect(link).toContain('px-[min(1rem,5vw)]');
+    expect(link).toContain('flex-wrap');
+  });
+  it('la pillola del tipo di posizione può andare a capo e non esce dalla riga', () => {
+    const pillola = tagPrima(src, '{job.tag}', 'span');
+    expect(pillola).toContain('max-w-full');
+    expect(pillola).not.toContain('whitespace-nowrap');
   });
 });
 
