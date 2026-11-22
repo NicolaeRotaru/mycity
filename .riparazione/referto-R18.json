@@ -1,0 +1,265 @@
+{
+  "sessione": "R18",
+  "aggiornato": "2026-11-22 18:57",
+  "finita": true,
+  "testa": "1a5b98067d5a5eb4692639c59882332b11bc02ee",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "1a5b98067d5a5eb4692639c59882332b11bc02ee",
+    "nota": "typecheck, lint e test: 2002 file di prova passati e 1 saltato; 12301 prove passate e 1 saltata. SHA preso con git rev-parse HEAD nello stesso comando. guardia-ramo VERDE con l'eccezione firmata da Nicola sulle prove comuni (ad-mycity ec17614)."
+  },
+  "voci": [
+    {
+      "id": "R18-001",
+      "chiave": "deploy-sre|due giri partiti insieme possono ancora mandare due volte il promemoria del carrello alla stessa persona",
+      "esito": "riparato",
+      "commit": "07871ff31cfefea5d39ab50bf7a1b9df88d162f8",
+      "file_toccati": [
+        "app/api/cron/abandoned-carts/route.ts",
+        "tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts",
+        "tests/unit/il-promemoria-del-carrello-parte-una-volta-e-in-tempo.test.ts",
+        "tests/unit/la-posta-in-coda-non-promette-regali-e-non-si-butta-via.test.ts",
+        "tests/unit/minori-s03-carrelli-abbandonati.test.ts",
+        "tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts",
+        "tests/unit/riparazione-r04-005-promemoria-non-partiti.test.ts",
+        "tests/unit/riparazione-r30-carrelli-chiusi-senza-email.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 07871ff31cfefea5d39ab50bf7a1b9df88d162f8^ --file app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r18-promemoria-carrello-una-volta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giro rivendica il carrello da solo con una scrittura condizionata (update recovery_email_sent_at where user_id=… and recovery_email_sent_at is null → select → maybeSingle) e spedisce solo se ha preso la riga lui. Così due giri insieme mandano un solo promemoria, con o senza la migrazione 166 applicata; prima la risposta vuota della funzione vecchia valeva «preso». Storia sul ramo: 57f2e330 (riparazione), ffbda6c2 (ritorno in attesa della firma), 07871ff3 (ritorno annullato dopo la firma).",
+      "nota": "prove_comuni: 6 prove adattate con la firma di Nicola (2026-11-22 19:45, piano.json onda 2): il-promemoria-del-carrello-parte-una-volta-e-in-tempo, la-posta-in-coda-non-promette-regali-e-non-si-butta-via, minori-s03-carrelli-abbandonati, riparazione-r03-rilascio-segno-carrello, riparazione-r04-005-promemoria-non-partiti, riparazione-r30-carrelli-chiusi-senza-email. Non sono indebolite: il loro finto impara la scrittura condizionata, e r30 controlla quella al posto della chiamata rpc. guardia-ramo verde con l'eccezione firmata.",
+      "verificato_da": "revisore 1 (subagente 3, modello grande): REGGE. Prova rimessa con uscita 0; 185/185 delle 15 prove su rotta e carrelli; 6 varianti verdi (invio fallito, invio saltato, due giri col primo fallito, tre giri, due persone, segno non scambiato per chiusura); user_id PRIMARY KEY (027:185), service_role con UPDATE, scarto now()/new Date() innocuo. Collaudo della regia: regge. Dopo la rimessa sul ramo (07871ff3): prova rimessa rifatta con uscita 0 e 10 prove della rotta verdi (165/165)."
+    },
+    {
+      "id": "R18-002",
+      "chiave": "deploy-sre|il commento del cron delle notifiche dice che il nuovo ordine manda la push subito, ma oggi nessun file lo fa",
+      "esito": "riparato",
+      "commit": "de01e1ac10ef9b0547bad437fda4e662ca65926d",
+      "file_toccati": [
+        "app/api/cron/send-push/route.ts",
+        "tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9f8ac9af^ --file app/api/cron/send-push/route.ts --prove tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due commit: 9f8ac9af corregge il commento sul nuovo ordine; de01e1ac sistema anche la nota alle righe 10-13. Oggi la push del nuovo ordine parte solo col giro del cron, entro 5 minuti, e l'aiutante mandaSubitoLaPushDelNuovoOrdine non lo chiama nessuna rotta. La prova legge tutti i commenti in cima e li confronta con i chiamanti veri in app/ e lib/.",
+      "verificato_da": "revisore 1 (subagente 3): REGGE, con un resto sul commento :10-12 → corretto in de01e1ac (subagente 4). Revisore 2 (subagente 5, sonnet): REGGE nel merito. La prova è rossa con le frasi false provate, ma è fragile: (1) falso negativo, perché tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts:44 guarda la frase intera, e «parte subito …, che oggi nessuna rotta chiama» passa; (2) una riformulazione vera senza la radice «chiam» la fa diventare rossa; (3) un import con alias aggira la ricerca del nome a :46. Lasciata così: è una prova di un commento, ed è annotata qui."
+    },
+    {
+      "id": "R18-003",
+      "chiave": "deploy-sre|la notifica sul telefono per un nuovo ordine arriva fino a 5 minuti dopo, non in pochi secondi",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/orders/cod/route.ts",
+          "modifica": "Subito dopo l'insert delle campanelle (righe ~1779-1784, blocco `if (campanelle.length > 0) { const { error: errCampanelle } = await admin.from('notifications').insert(campanelle); ... }`) aggiungere import { mandaSubitoLaPushDelNuovoOrdine } from '@/lib/push/subito'; e, se l'insert non ha dato errore, dopoLaRisposta(async () => { await mandaSubitoLaPushDelNuovoOrdine(admin, comunicazioni.map((c) => c.orderId)); }, 'push nuovo ordine'); (dopoLaRisposta è già importato; l'aiutante non lancia mai e segna pushed_at)."
+        },
+        {
+          "file": "lib/stripe/webhook/ordini.ts",
+          "modifica": "Dopo `const nuovi = createdOrderIds.filter((c) => daAvvisare.has(c.orderId));` (riga ~500) aggiungere dopoLaRisposta(async () => { await mandaSubitoLaPushDelNuovoOrdine(admin, nuovi.map((c) => c.orderId)); }, 'push nuovo ordine'); con import da '@/lib/push/subito'."
+        },
+        {
+          "file": "app/api/cron/send-push/route.ts",
+          "modifica": "(file di R18, dopo il collegamento qui sopra) riportare il commento a «la push del nuovo ordine parte subito, il giro è la rete di sicurezza» e aggiornare tests/unit/riparazione-r18-commento-push-nuovo-ordine.test.ts, che lo controlla contro i chiamanti veri."
+        }
+      ],
+      "nota": "Causa verificata: il cron non ha filtri né attese per la categoria 'order' (CATEGORIE_CHE_ASPETTANO è solo promo/group/newsletter). Il ritardo viene solo dalla cadenza */5 di vercel.json. L'aiutante pronto è lib/push/subito.ts, già provato da tests/unit/riparazione-r02-push-nuovo-ordine-subito.test.ts, ma non collegato. Un cron al minuto invece dipende dal piano Vercel. vercel.json non è stato toccato.",
+      "verificato_da": "revisore (subagente 3): verificati il cron */5 in vercel.json, nessuna attesa per la categoria 'order', aiutante non collegato, agganci cod/route.ts:1778-1784 e lib/stripe/webhook/ordini.ts:500. REGGE."
+    },
+    {
+      "id": "R18-004",
+      "chiave": "deploy-sre|con il rilascio automatico acceso il ritorno indietro automatico non scatta quasi mai",
+      "esito": "scelta_di_nicola",
+      "domanda": "I segreti VERCEL_TOKEN, VERCEL_ORG_ID e VERCEL_PROJECT_ID sono già nei segreti di GitHub, e un rilascio di prova da deploy-dopo-ci.yml è andato a buon fine? Se sì, in vercel.json git.deploymentEnabled.main passa da true a false. Se no, cambiarlo adesso ferma tutti i rilasci.",
+      "nota": "La cura sta in vercel.json (righe 7-9), ma il flag non va girato prima dei segreti: lo dice .github/workflows/deploy-dopo-ci.yml alle righe 41-43 e 267 («al contrario il sito smette di aggiornarsi»). Non è stato cambiato niente. Passi per Nicola: 1) su GitHub, Settings → Secrets and variables → Actions, mettere i tre segreti (il token da Vercel → Account Settings → Tokens, i due id da Vercel → progetto → Settings → General); 2) fare un rilascio di prova da lì con un cambio innocuo; 3) dire a una sessione di mettere main:false in vercel.json, con la prova che legge il file.",
+      "verificato_da": "revisore (subagente 3): vercel.json:6-10 main=true; deploy-dopo-ci.yml:34-43 e :264-267 confermano che il flag va girato dopo i segreti; in vercel.json nessun'altra cura sicura. REGGE."
+    },
+    {
+      "id": "R18-005",
+      "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+      "esito": "parziale",
+      "commit": "59a4632c96f0e7f0252d372bce7369fe10960f1f",
+      "file_toccati": [
+        "components/StoreProductExplorer.tsx",
+        "tests/unit/riparazione-r18-foto-vetrina-non-urgenti.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-foto-vetrina-non-urgenti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-foto-vetrina-non-urgenti.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3eb7213f^ --file components/StoreProductExplorer.tsx --prove tests/unit/riparazione-r18-foto-vetrina-non-urgenti.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Due commit: 3eb7213f spegneva la priorità sempre; 59a4632c, dopo il primo revisore, mette prioritaPrimeFoto={!onCount}. onCount arriva solo quando la griglia sta nelle schede della home del negozio (SectionRenderer.tsx:142, :222), dove è l'ultima sezione. Le pagine [slug] la montano in cima e senza onCount, e lì la priorità resta accesa. Alla base le altre sedi del registro (PromoDeals, CollectionSection, /promozioni, la griglia della home della città) erano già a posto. La prova monta la catena vera SectionRenderer → ProductGridSection → StoreProductExplorer.",
+      "cosa_resta": "La priorità delle prime 4 foto deve dipendere dalla posizione della griglia nella pagina, e la posizione la conosce solo chi monta le sezioni (file non di R18). Restano due casi. (1) Pagine del negozio senza schede (SectionRenderer.tsx:248-256, ramo !tabs, pagine [slug]): onProductCount non arriva, quindi prioritaPrimeFoto={!onCount} vale sempre true. La griglia però può stare in qualunque posizione, non solo in cima: per esempio con testo, due collezioni e poi la griglia la priorità per sezione è [false,false,true], e ci sono 4 foto urgenti sotto la piega (visto dal collaudo). (2) Home con una sola scheda e senza barra (SectionRenderer.tsx:137-145) o senza copertina: onProductCount arriva sempre, quindi la priorità è spenta anche quando la griglia sta in cima. La cura completa è una prop esplicita inCima, calcolata dall'indice della sezione, passata da SectionRenderer a ProductGridSection e a StoreProductExplorer (vedi serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "components/store-sections/SectionRenderer.tsx",
+          "modifica": "RenderSection (righe 40-49): aggiungere la prop `inCima?: boolean` e alla riga 64 passarla: `return <ProductGridSection ctx={ctx} onProductCount={onProductCount} inCima={inCima} />;`. Ramo senza schede (righe 248-256): `{sections.map((s, i) => (<RenderSection key={s.id} section={s} ctx={ctx} inCima={i === 0} />))}`, così la griglia è urgente solo se è la prima sezione della pagina, in qualunque altra posizione no. SectionTabs (riga 122): aggiungere la prop `conHero: boolean`, passata da SectionRenderer a riga ~267 come `<SectionTabs sections={rest} ctx={ctx} conHero={hero.length > 0} />`. Ramo scheda unica senza barra (righe 141-142): `{sections.map((s, i) => (<RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} inCima={!conHero && i === 0} />))}`. Ramo con le schede (righe 221-222): `{groups[t].map((s, i) => (<RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} inCima={!conHero && i === 0} />))}`."
+        },
+        {
+          "file": "components/store-sections/ProductGridSection.tsx",
+          "modifica": "Righe 7-14: aggiungere la prop `inCima?: boolean` (con doc «la griglia è la prima sezione visibile della pagina: le sue prime foto sono urgenti»). Riga 21: `<StoreProductExplorer sellerId={ctx.storeId} onCount={onProductCount} inCima={inCima} />`."
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "(file di R18, da applicare insieme ai due sopra) aggiungere la prop `inCima?: boolean` e sostituire `prioritaPrimeFoto={!onCount}` con `prioritaPrimeFoto={inCima ?? !onCount}`. Aggiornare tests/unit/riparazione-r18-foto-vetrina-non-urgenti.test.ts con tre casi: senza schede con la griglia terza dopo testo e due collezioni → false; senza schede con la griglia prima → true; scheda unica senza copertina con la griglia prima → true."
+        }
+      ],
+      "verificato_da": "revisore 1 (subagente 3): DUBBIO su 3eb7213f (priorità spenta anche nelle pagine [slug] in cima) → corretto in 59a4632c (subagente 4). Revisore 2 (subagente 5, sonnet): DUBBIO. L'unico chiamante è ProductGridSection.tsx:21; le pagine [slug] non passano onCount (corretto); 56 file e 381 prove verdi; resta il caso limite della scheda unica senza barra (SectionRenderer.tsx:141-144) → parziale. Collaudo della regia (ramo ad-mycity claude/settimana-700-regia-k06 @ ec319a1, collaudi/K06.json): NON REGGE come riparazione intera, perché il cosa_resta di prima era incompleto (ramo senza schede ~:252, griglia in qualunque posizione). Nota corretta: resta parziale, con serve_file_altrui inCima anche per il ramo senza schede."
+    },
+    {
+      "id": "R18-006",
+      "chiave": "microcopy|il cliente e l'email leggono ancora «un rider passa a prenderlo», mentre il pulsante del negozio ora dice «fattorino»",
+      "esito": "riparato",
+      "commit": "1a5b98067d5a5eb4692639c59882332b11bc02ee",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "lib/email/templates.ts",
+        "tests/unit/riparazione-r18-parola-fattorino.test.ts",
+        "tests/unit/minori-s04-ordine-pronto-dice-una-cosa-sola.test.ts",
+        "tests/unit/la-guida-del-secondo-giorno-non-promette-il-ritiro-spento.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-parola-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-parola-fattorino.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a5b98067d5a5eb4692639c59882332b11bc02ee^ --file app/orders/[id]/page.tsx,lib/email/templates.ts --prove tests/unit/riparazione-r18-parola-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Pagina dell'ordine: le frasi di stato READY, ASSIGNED, PICKED_UP e OUT_FOR_DELIVERY e la riga del codice di consegna dicono «fattorino». Email orderReadyTemplate (html, testo e commento): «un fattorino passa a prenderlo». Le due prove esistenti sono ritoccate come scritto in scheda, con la firma di Nicola sulle prove comuni (2026-11-22 19:45). È la patch del lotto B applicata tale e quale con git apply.",
+      "verificato_da": "revisore 3 (subagente 6, sonnet), su 1a5b9806: REGGE nel perimetro della voce. Ha rimesso «rider» un punto alla volta (html email, testo email, READY, ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, riga del codice): ogni volta la prova è rossa. Sulla regex PAROLE_DEL_RITIRO ha provato 14 frasi: nessun indebolimento reale. Il buco del lookbehind c'era già con «rider». Le 108 prove che citano i due file sono verdi (750 casi). Debolezza minore: l'email controlla solo la stringa esatta con la «u» minuscola. Gli altri «rider» visibili al cliente fuori dalla voce sono fra i nuovi_difetti_visti."
+    },
+    {
+      "id": "R18-007",
+      "chiave": "microcopy|chi spegne le promozioni continua a vederle nella campanella del sito",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (preferenze delle promozioni, tocca la 115 della privacy); va ai delicati con ultracode"
+    },
+    {
+      "id": "R18-008",
+      "chiave": "qa-flussi|con «cliente assente» la merce torna subito in vendita sul sito mentre è ancora nello zaino del fattorino",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (merce rimessa in vendita, tocca l'annullo); va ai delicati con ultracode"
+    },
+    {
+      "id": "R18-009",
+      "chiave": "qa-flussi|il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (dati personali nei log); va ai delicati con ultracode"
+    },
+    {
+      "id": "R18-010",
+      "chiave": "qa-flussi|i 14 giorni per rispedire la merce del reso si contano ancora a blocchi di 24 ore",
+      "esito": "non_fatto",
+      "nota": "tolta dalla regia: delicata (giorni del reso, rimborso); va ai delicati con ultracode"
+    },
+    {
+      "id": "R18-011",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-rclone.ts",
+          "modifica": "Accanto a FINTO_PGDUMP (riga 74) aggiungere: export const FINTO_PSQL = ['#!/usr/bin/env bash', 'cat >/dev/null', 'echo \"psql: could not connect to server\" >&2', 'exit 2'].join('\\n') + '\\n';"
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+          "modifica": "Riga 34: import { FINTO_RCLONE, FINTO_PGDUMP, FINTO_PSQL } from './aiuti/finto-rclone'; in bancoDiProva, dopo la coppia writeFileSync/chmodSync di rclone (righe 59-60), aggiungere writeFileSync(join(finti, 'psql'), FINTO_PSQL); chmodSync(join(finti, 'psql'), 0o755); (finti è già in testa al PATH). Il ripiego sta in scripts/backup-db.sh: file_nel_database alle righe 395-409 (psql alle 398 e 404, con `|| return 1`) e riga 465 `nel_database=\"$(file_nel_database \"$secchio\")\" || nel_database=\"\"`."
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-non-ripete-la-cancellazione.test.ts, tests/unit/il-lavoro-notturno-accende-davvero-la-copia-delle-foto.test.ts, tests/unit/la-copia-notturna-non-finge-di-aver-salvato-le-foto.test.ts, tests/unit/riparazione-r01-backup-senza-passphrase.test.ts",
+          "modifica": "Da valutare lo stesso stub: lanciano scripts/backup-db.sh con SUPABASE_DB_URL e non hanno un psql finto (la-copia-notturna-sa-che-database-copia e riparazione-r15-rclone-finto.ts ce l'hanno già)."
+        }
+      ],
+      "nota": "La regia ha negato la deroga. Le righe della scheda sono ancora giuste per i due file di prova, mentre lo script si è spostato (la scheda diceva 370-377 e 437)."
+    },
+    {
+      "id": "R18-012",
+      "chiave": "stati-ui|un lavoro sul catalogo «in invio» incerto promette «tra poco lo vedi partire» per 24 ore, e a riga chiusa dice «puoi avviarne un altro» mentre il motivo dice di chiedere all'assistenza",
+      "esito": "riparato",
+      "commit": "83686b8f3aa392d96e248b4d9517f42e389a119b",
+      "file_toccati": [
+        "lib/ai/statoLavoroCatalogo.ts",
+        "tests/unit/riparazione-r18-testo-lavoro-incerto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r18-testo-lavoro-incerto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r18-testo-lavoro-incerto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base adafa0fa^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r18-testo-lavoro-incerto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due commit: adafa0fa, poi corretto da 83686b8f dopo il primo revisore (adafa0fa rompeva riparazione-r02-invio-incerto-senza-rotella). La riga «in invio» resta quella della base, senza createdAt né soglia. A riga chiusa «Puoi avviarne un altro» sparisce solo se il motivo dice «chiedi all'assistenza» (status/route.ts:125), non con i motivi di status/route.ts:240 o di cancel/route.ts:43. La prova controlla anche che i testi veri dei motivi ci siano ancora nelle rotte.",
+      "prova": "La prima metà era già chiusa alla base: la rotella si mostra solo con !job.incerto (app/seller/products/ai-batch/page.tsx:523), l'invio incerto ha il suo riquadro (page.tsx:536-542), e la rotta segna la riga incerta dopo 3 minuti (status/route.ts:86, :141-142, campo incerto a :263). Le 9 prove che importano la pagina o statoLavoroCatalogo sono verdi (45/45), senza toccarle.",
+      "verificato_da": "revisore 1 (subagente 3, modello grande): NON REGGE su adafa0fa, perché rompeva riparazione-r02-invio-incerto-senza-rotella:185 → giro di correzione (subagente 4, commit 83686b8f). Revisore 2 (subagente 5, sonnet), su 83686b8f: REGGE. testoStatoLavoro è usato solo in page.tsx:526 (con !job.incerto) e :555; i motivi che nominano l'assistenza sono solo status:125 (vieta, preso), status:240 e cancel:43 (non vietano, esclusi); 10 file e 50 prove della pagina e di statoLavoroCatalogo verdi."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la campanella «ordine pronto» e quella del ritiro dicono ancora «rider»; la pagina dell'ordine, la cassa e altre pagine del cliente pure",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "migrations/321_l_ordine_pronto_dice_la_fascia.sql:59-77",
+      "descrizione": "Nel database: la funzione della 321 (più recente della 215: migrations/215_minori_s04_database.sql:364-375) scrive «un rider passa a prenderlo»; migrations/540_il_fattorino_sospeso_non_tocca_piu_le_consegne.sql:93 scrive «Il rider ha ritirato il tuo ordine». Serve una migrazione nuova, e tests/unit/minori-s04-ordine-pronto-dice-una-cosa-sola.test.ts:20 fissa la frase della 215. Nella pagina dell'ordine, fuori dalla voce: app/orders/[id]/page.tsx:706 («mostra questo codice al rider»), :801 («Il tuo rider»), :380-381 (mappa «Rider»), :891 e :898 (contanti al rider). Altri punti: components/OrderTimeline.tsx:45, components/checkout/OrderSummary.tsx:220, components/checkout/PaymentMethodSelector.tsx:168, components/checkout/ShippingAddressForm.tsx:324, app/checkout/page.tsx:1659, app/profile/addresses/page.tsx:219, app/orders/[id]/review/page.tsx:274, components/PWAInstallBanner.tsx:203. Nei testi legali (app/terms/page.tsx:183 e :354, app/privacy/page.tsx:248, lib/legal/promessa-cliente-assente.ts:248 e :263-265) «Rider» può essere un termine contrattuale: lo decide Nicola."
+    },
+    {
+      "titolo": "una prova del promemoria del carrello resta verde solo per caso",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/le-email-d-ordine-escono-senza-il-tasto-per-smettere.test.ts:100",
+      "descrizione": "Il suo database finto risponde {data: []} anche a maybeSingle e [] vale vero: se un giorno risponderà null, il promemoria in quella prova non partirà più."
+    },
+    {
+      "titolo": "in un commento del cron delle notifiche resta l'id di un'altra sessione",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/cron/send-push/route.ts:10",
+      "descrizione": "C'era già alla base. Lasciato com'è: va tolto con un commit RNN-varie se la regia vuole."
+    }
+  ],
+  "domande_per_nicola": [
+    "R18-004: i segreti VERCEL_TOKEN, VERCEL_ORG_ID e VERCEL_PROJECT_ID sono nei segreti di GitHub, e un rilascio di prova da deploy-dopo-ci.yml è andato a buon fine? Se sì, in vercel.json git.deploymentEnabled.main passa a false."
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "nota": "6 subagenti su 6: lotto A (grande), lotto B (sonnet), revisore 1 (grande), giro di correzione (grande), revisore 2 (sonnet), revisore 3 di R18-006 (sonnet). Nessun Workflow. Costo da get_session senza id (usage.cost_usd 18,61 $, letto alle 18:47 UTC: è il conto a turno chiuso, senza quest'ultimo turno)."
+  },
+  "costo_usd": 18.61
+}

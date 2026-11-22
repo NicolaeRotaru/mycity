@@ -180,16 +180,24 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     // scriveva il segno anche se c'era gia', e non diceva niente. Due giri
     // partiti insieme (Vercel e cron-job.org alla stessa ora) leggevano lo
     // stesso carrello, lo «rivendicavano» tutti e due e spedivano due volte.
-    // Dalla migrazione 166 la funzione segna solo se il segno non c'era e
-    // risponde vero o falso: chi riceve «falso» lascia perdere. Una risposta
-    // vuota (la funzione vecchia, senza risposta) vale come prima.
-    const { data: preso, error: errClaim } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+    // R18-001 — La 166 (la funzione che risponde vero o falso) il 5/11 in produzione
+    // non c'era: la funzione vecchia risponde vuoto, e il vuoto valeva «preso». Ora la
+    // rivendicazione la scrive il giro, con la condizione dentro la scrittura:
+    // segna solo se il segno non c'e' e rende la riga solo a chi l'ha segnata.
+    // Il secondo giro non prende niente e non spedisce, con la 166 o senza.
+    const { data: preso, error: errClaim } = await supa
+      .from('abandoned_carts')
+      .update({ recovery_email_sent_at: new Date().toISOString() })
+      .eq('user_id', c.user_id)
+      .is('recovery_email_sent_at', null)
+      .select('user_id')
+      .maybeSingle();
     if (errClaim) {
       logger.error('[abandoned-carts] rivendicazione fallita, non spedisco', errClaim);
       errors++;
       continue;
     }
-    if (preso === false) {
+    if (!preso) {
       giaPresi++;
       continue;
     }

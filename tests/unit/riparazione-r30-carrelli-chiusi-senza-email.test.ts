@@ -40,6 +40,11 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (c: string, v: unknown) => (filtri.push(`eq:${c}=${String(v)}`), q),
         is: (c: string, v: unknown) => (filtri.push(`is:${c}=${String(v)}`), q),
         lt: (c: string, v: unknown) => (filtri.push(`lt:${c}=${String(v)}`), q),
+        // R18-001 — La rivendicazione del carrello (segno solo se vuoto) rende la riga presa.
+        maybeSingle: async () => {
+          if (tabella === 'abandoned_carts' && valori) stato.scritture.push({ valori, filtri: [...filtri] });
+          return { data: { user_id: 'u1' }, error: null };
+        },
         then: (ok: (x: unknown) => unknown) => {
           if (tabella === 'abandoned_carts' && valori) stato.scritture.push({ valori, filtri: [...filtri] });
           return Promise.resolve({ data: [], error: null }).then(ok);
@@ -82,8 +87,12 @@ describe('R30-003 — il giro chiude il carrello senza consenso con un segno che
   it('controprova: con il consenso il promemoria si rivendica e parte come prima', async () => {
     stato.profili = [{ id: 'u1', email_marketing: true }];
     stato.carrelli = [{ ...stato.carrelli[0], last_activity: '2026-11-17T05:00:00.000000+00:00' }];
-    await giro();
-    expect(stato.rpc.map((r) => r.nome)).toContain('mark_abandoned_cart_email_sent');
+    const res = await (await giro()).json();
+    // R18-001 — La rivendicazione la scrive il giro: segno con l'ora del giro, solo se il segno è vuoto.
+    const presa = stato.scritture.find((s) => s.filtri.includes('is:recovery_email_sent_at=null') && s.valori.recovery_email_sent_at !== stato.carrelli[0].last_activity);
+    expect(presa, 'il promemoria è partito senza rivendicare il carrello').toBeDefined();
+    expect(presa?.filtri).toContain('eq:user_id=u1');
+    expect(res.sent).toBe(1);
   });
 });
 
