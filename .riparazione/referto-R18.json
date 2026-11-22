@@ -1,6 +1,6 @@
 {
   "sessione": "R18",
-  "aggiornato": "2026-11-22 17:48",
+  "aggiornato": "2026-11-22 18:06",
   "finita": true,
   "testa": "de01e1ac10ef9b0547bad437fda4e662ca65926d",
   "verifica": {
@@ -150,18 +150,22 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Due commit: 3eb7213f spegneva la priorità sempre; 59a4632c, dopo il primo revisore, mette prioritaPrimeFoto={!onCount}. onCount arriva solo quando la griglia sta nelle schede della home del negozio (SectionRenderer.tsx:142, :222), dove è l'ultima sezione. Le pagine [slug] la montano in cima e senza onCount, e lì la priorità resta accesa. Alla base le altre sedi del registro (PromoDeals, CollectionSection, /promozioni, la griglia della home della città) erano già a posto. La prova monta la catena vera SectionRenderer → ProductGridSection → StoreProductExplorer.",
-      "cosa_resta": "Caso limite visto dal revisore 2 nel codice, non eseguito: SectionRenderer.tsx:141-144 (una sola scheda, niente barra) passa comunque onCount. Così un negozio con la sola griglia prodotti, senza copertina, o con la griglia come prima sezione della scheda Prodotti, la ha in cima alla home, e ora le sue prime 4 foto non sono prioritarie: l'LCP peggiora di poco. La cura vuole la posizione della sezione, che conosce solo chi la monta (file non di R18).",
+      "cosa_resta": "La priorità delle prime 4 foto deve dipendere dalla posizione della griglia nella pagina, e la posizione la conosce solo chi monta le sezioni (file non di R18). Restano due casi. (1) Pagine del negozio senza schede (SectionRenderer.tsx:248-256, ramo !tabs, pagine [slug]): onProductCount non arriva, quindi prioritaPrimeFoto={!onCount} vale sempre true. La griglia però può stare in qualunque posizione, non solo in cima: per esempio con testo, due collezioni e poi la griglia la priorità per sezione è [false,false,true], e ci sono 4 foto urgenti sotto la piega (visto dal collaudo). (2) Home con una sola scheda e senza barra (SectionRenderer.tsx:137-145) o senza copertina: onProductCount arriva sempre, quindi la priorità è spenta anche quando la griglia sta in cima. La cura completa è una prop esplicita inCima, calcolata dall'indice della sezione, passata da SectionRenderer a ProductGridSection e a StoreProductExplorer (vedi serve_file_altrui).",
       "serve_file_altrui": [
         {
-          "file": "components/store-sections/ProductGridSection.tsx",
-          "modifica": "riga 21: passare a StoreProductExplorer una prop esplicita `inCima` (boolean), ricevuta da SectionRenderer, al posto di affidarsi alla presenza di onCount; in StoreProductExplorer.tsx (file di R18) sostituire prioritaPrimeFoto={!onCount} con prioritaPrimeFoto={inCima ?? !onCount}."
+          "file": "components/store-sections/SectionRenderer.tsx",
+          "modifica": "RenderSection (righe 40-49): aggiungere la prop `inCima?: boolean` e alla riga 64 passarla: `return <ProductGridSection ctx={ctx} onProductCount={onProductCount} inCima={inCima} />;`. Ramo senza schede (righe 248-256): `{sections.map((s, i) => (<RenderSection key={s.id} section={s} ctx={ctx} inCima={i === 0} />))}`, così la griglia è urgente solo se è la prima sezione della pagina, in qualunque altra posizione no. SectionTabs (riga 122): aggiungere la prop `conHero: boolean`, passata da SectionRenderer a riga ~267 come `<SectionTabs sections={rest} ctx={ctx} conHero={hero.length > 0} />`. Ramo scheda unica senza barra (righe 141-142): `{sections.map((s, i) => (<RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} inCima={!conHero && i === 0} />))}`. Ramo con le schede (righe 221-222): `{groups[t].map((s, i) => (<RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} inCima={!conHero && i === 0} />))}`."
         },
         {
-          "file": "components/store-sections/SectionRenderer.tsx",
-          "modifica": "dove monta le sezioni (righe ~141-144 e ~222 con le schede, ~252 senza): calcolare inCima = (la sezione productGrid è la prima sezione visibile della pagina o della scheda attiva, senza copertina sopra) e passarlo a ProductGridSection."
+          "file": "components/store-sections/ProductGridSection.tsx",
+          "modifica": "Righe 7-14: aggiungere la prop `inCima?: boolean` (con doc «la griglia è la prima sezione visibile della pagina: le sue prime foto sono urgenti»). Riga 21: `<StoreProductExplorer sellerId={ctx.storeId} onCount={onProductCount} inCima={inCima} />`."
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "(file di R18, da applicare insieme ai due sopra) aggiungere la prop `inCima?: boolean` e sostituire `prioritaPrimeFoto={!onCount}` con `prioritaPrimeFoto={inCima ?? !onCount}`. Aggiornare tests/unit/riparazione-r18-foto-vetrina-non-urgenti.test.ts con tre casi: senza schede con la griglia terza dopo testo e due collezioni → false; senza schede con la griglia prima → true; scheda unica senza copertina con la griglia prima → true."
         }
       ],
-      "verificato_da": "revisore 1 (subagente 3): DUBBIO su 3eb7213f (priorità spenta anche nelle pagine [slug] in cima) → corretto in 59a4632c (subagente 4). Revisore 2 (subagente 5, sonnet): DUBBIO. L'unico chiamante è ProductGridSection.tsx:21; le pagine [slug] non passano onCount (corretto); 56 file e 381 prove verdi; resta il caso limite della scheda unica senza barra (SectionRenderer.tsx:141-144) → parziale."
+      "verificato_da": "revisore 1 (subagente 3): DUBBIO su 3eb7213f (priorità spenta anche nelle pagine [slug] in cima) → corretto in 59a4632c (subagente 4). Revisore 2 (subagente 5, sonnet): DUBBIO. L'unico chiamante è ProductGridSection.tsx:21; le pagine [slug] non passano onCount (corretto); 56 file e 381 prove verdi; resta il caso limite della scheda unica senza barra (SectionRenderer.tsx:141-144) → parziale. Collaudo della regia (ramo ad-mycity claude/settimana-700-regia-k06 @ ec319a1, collaudi/K06.json): NON REGGE come riparazione intera, perché il cosa_resta di prima era incompleto (ramo senza schede ~:252, griglia in qualunque posizione). Nota corretta: resta parziale, con serve_file_altrui inCima anche per il ramo senza schede."
     },
     {
       "id": "R18-006",
