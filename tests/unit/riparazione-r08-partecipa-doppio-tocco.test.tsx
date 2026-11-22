@@ -40,7 +40,7 @@ function evento(sopra: Record<string, unknown> = {}) {
 }
 
 /** Le iscrizioni come le tiene Postgres: chiave (persona, evento), il doppione è 23505. */
-function iscrizioni(gia: string[] = [], opzioni: { letturaCaduta?: boolean } = {}) {
+function iscrizioni(gia: string[] = [], opzioni: { letturaCaduta?: boolean; eventoChiusoNelDatabase?: boolean } = {}) {
   const righe = new Set(gia);
   const scritture: string[] = [];
   const client = {
@@ -62,6 +62,10 @@ function iscrizioni(gia: string[] = [], opzioni: { letturaCaduta?: boolean } = {
         }
         if (azione === 'inserisci') {
           scritture.push('insert');
+          // La regola della 701: l'evento, nel database, non è più in programma o in corso.
+          if (opzioni.eventoChiusoNelDatabase) {
+            return { data: null, error: { code: '42501', message: 'new row violates row-level security policy for table "event_rsvps"' } };
+          }
           if (righe.has(String(riga.event_id))) {
             return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "event_rsvps_pkey"' } };
           }
@@ -85,12 +89,14 @@ async function pagina(eventi: unknown[], db: ReturnType<typeof iscrizioni>) {
   const inVolo: Promise<unknown>[] = [];
   g.__MUTAZIONI_IN_VOLO__ = inVolo;
   g.__CLIENT_SUPABASE__ = db.client;
+  const riletture: unknown[] = [];
+  g.__RILETTURE__ = riletture;
   g.__DATI_QUERY__ = (o: { queryKey: unknown[] }) => (o.queryKey[1] === 'public' ? eventi : {});
   const mod = await monta('app/events/page.tsx');
   const s = accendi(mod.default);
   for (let i = 0; i < 4; i++) await attendi();
   const bottone = () => [...s.radice.querySelectorAll('button')].find((b) => /Partecipa|Ci sei/.test(b.textContent ?? ''));
-  return { s, inVolo, bottone };
+  return { s, inVolo, bottone, riletture };
 }
 
 beforeEach(() => {
@@ -100,7 +106,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  for (const k of ['__DATI_QUERY__', '__UTENTE__', '__MUTAZIONI_VERE__', '__MUTAZIONI_IN_VOLO__', '__CLIENT_SUPABASE__']) delete g[k];
+  for (const k of ['__DATI_QUERY__', '__UTENTE__', '__MUTAZIONI_VERE__', '__MUTAZIONI_IN_VOLO__', '__CLIENT_SUPABASE__', '__RILETTURE__']) delete g[k];
   avvisi.ok.length = 0;
   avvisi.ko.length = 0;
   document.body.innerHTML = '';
@@ -147,5 +153,37 @@ describe('«Partecipa» sulla pagina Eventi', () => {
     expect(avvisi.ok.join(' ')).not.toMatch(/Cancellazione/);
     expect([...db.righe]).toEqual(['e1']);
     expect(testoVisibile(s.radice)).not.toContain('Mercatino dal vivo');
+  });
+
+  it('un evento chiuso dall\'amministratore, con la fine ancora nel futuro, non si preme: lo dice e rilegge la lista', async () => {
+    const db = iscrizioni();
+    const { s, inVolo, bottone, riletture } = await pagina([evento({ status: 'ended' })], db);
+    const b = bottone()!;
+    expect(b.textContent).toMatch(/Partecipa/);
+    s.agisci(() => clicca(b));
+    await Promise.all(inVolo);
+    await attendi();
+    expect(db.scritture, 'nessuna scrittura su un evento chiuso').toEqual([]);
+    expect(avvisi.ok.join(' ')).not.toMatch(/Ci sei/);
+    expect(avvisi.ko.join(' ')).toMatch(/evento è chiuso/);
+    expect(avvisi.ko.join(' ')).not.toMatch(/permessi/);
+    expect(riletture, 'la lista degli eventi si rilegge').toContainEqual(['events', 'public']);
+  });
+
+  it('se il database rifiuta l\'iscrizione (42501), la pagina dice che l\'evento è chiuso, non «Non hai i permessi», e rilegge la lista', async () => {
+    // Nella pagina l'evento è ancora in corso (chiuso dopo l'ultima lettura, o orologio del telefono indietro).
+    const db = iscrizioni([], { eventoChiusoNelDatabase: true });
+    const { s, inVolo, bottone, riletture } = await pagina([evento()], db);
+    const b = bottone()!;
+    expect(b.textContent).toMatch(/Partecipa/);
+    s.agisci(() => clicca(b));
+    await Promise.all(inVolo);
+    await attendi();
+    expect(db.scritture, 'la scrittura arriva al database').toEqual(['insert']);
+    expect(avvisi.ok.join(' ')).not.toMatch(/Ci sei/);
+    expect(avvisi.ko.join(' ')).not.toMatch(/permessi/);
+    expect(avvisi.ko.join(' ')).toMatch(/evento è chiuso/);
+    expect(riletture, 'la lista degli eventi si rilegge').toContainEqual(['events', 'public']);
+    expect(testoVisibile(s.radice)).not.toMatch(/Ci sei/);
   });
 });

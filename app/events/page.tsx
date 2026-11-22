@@ -137,6 +137,13 @@ export default function EventsPage() {
   // lavorando non parte: lo ferma questo elenco, che si aggiorna subito, non al prossimo disegno.
   const inCorso = useRef<Set<string>>(new Set());
 
+  // Un evento chiuso o annullato dall'admin con la pagina aperta (o visto con l'orologio del
+  // telefono indietro): lo si dice chiaro, invece di «Non hai i permessi», e si rilegge la lista.
+  const eventoChiuso = () => {
+    toast.error('Questo evento è chiuso: non ci si può più iscrivere.');
+    qc.invalidateQueries({ queryKey: queryKeys.events.public });
+  };
+
   const rsvp = useMutation({
     mutationFn: async (eventId: string) => {
       try {
@@ -166,7 +173,11 @@ export default function EventsPage() {
       // riga «Ci sei» restava sopra «0 partecipanti» fino a un minuto.
       qc.invalidateQueries({ queryKey: queryKeys.events.rsvpCounts });
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => {
+      // 42501: il database (701) rifiuta l'iscrizione a un evento che non è più in programma o in corso.
+      if ((err as { code?: unknown } | null)?.code === '42501') { eventoChiuso(); return; }
+      toast.error(friendlyError(err));
+    },
   });
 
   const { data: rsvpCounts = {} } = useQuery({
@@ -299,6 +310,9 @@ export default function EventsPage() {
                         // L'ora si guarda al tocco, non all'ultimo disegno: un evento finito
                         // mentre la pagina era aperta non si preme più, e la scheda se ne va.
                         if (Date.parse(ev.ends_at) <= Date.now()) { battito((n) => n + 1); return; }
+                        // E lo stato, con la stessa regola del database (701): solo un evento in
+                        // programma o in corso.
+                        if (ev.status !== 'scheduled' && ev.status !== 'live') { eventoChiuso(); return; }
                         if (inCorso.current.has(ev.id)) return;
                         inCorso.current.add(ev.id);
                         rsvp.mutate(ev.id);
