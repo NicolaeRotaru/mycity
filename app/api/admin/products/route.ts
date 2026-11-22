@@ -134,8 +134,12 @@ async function taglieInBanca(admin: ReturnType<typeof getAdminSupabase>, id: str
     if (error || !Array.isArray(data)) return null;
     return (data as Array<Record<string, unknown>>)
       .slice()
-      .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0) || String(a.id ?? '').localeCompare(String(b.id ?? '')))
-      .map((r) => ({ label: r.label ?? null, options: r.options ?? null, stock: r.stock ?? null }));
+      .map((r) => ({ label: r.label ?? null, options: r.options ?? null, stock: r.stock ?? null, position: Number(r.position ?? 0) }))
+      // R03-001 — A parità di posizione l'ordine non può dipendere dall'id (le righe riscritte ne
+      // prendono di nuovi): si usa il contenuto, così lo stesso insieme di taglie dà sempre la stessa forma.
+      .sort((a, b) => a.position - b.position
+        || JSON.stringify([a.label, a.options, a.stock]).localeCompare(JSON.stringify([b.label, b.options, b.stock])))
+      .map(({ label, options, stock }) => ({ label, options, stock }));
   } catch {
     return null;
   }
