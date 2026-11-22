@@ -273,6 +273,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       }
     }
     let customData: StoreCustomization = custom;
+    let socialNonSalvati = false;
     if (showBranding) {
       // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
       const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
@@ -290,16 +291,39 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
         // L'errore sta sotto il campo giusto; il riepilogo in fondo nomina il campo e dice dove guardare.
         const primo = parsed.error.issues[0];
         const campo = primo ? campoDellErrore(primo.path) : null;
-        setCustomError(
-          campo ? `${campo}: ${primo.message}` : (altro ?? primo?.message ?? 'Personalizzazione non valida'),
-        );
-        return;
+        // R10-010 — Un social sbagliato non ferma più nome, logo, descrizione e colore: quel social
+        // resta com'era salvato, tutto il resto si salva, e l'errore resta sotto il suo campo.
+        const salvati = (defaultValues?.storeCustomization?.socials ?? {}) as Record<string, string | undefined>;
+        const conISocialDiPrima: StoreCustomization = {
+          ...corretta,
+          socials: {
+            ...corretta.socials,
+            ...Object.fromEntries(Object.keys(sociali).map((k) => [k, salvati[k] ?? ''])),
+          },
+        };
+        const riprova = altro === null ? storeCustomizationSchema.safeParse(conISocialDiPrima) : null;
+        if (!riprova?.success) {
+          setCustomError(
+            campo ? `${campo}: ${primo.message}` : (altro ?? primo?.message ?? 'Personalizzazione non valida'),
+          );
+          return;
+        }
+        customData = riprova.data;
+        const nomi = Object.keys(sociali).map((k) => campoDellErrore(['socials', k]) ?? k).join(', ');
+        socialNonSalvati = true;
+        setCustomError(`${campo}: ${primo.message} Il resto è salvato; ${nomi} è rimasto com'era.`);
+      } else {
+        customData = parsed.data;
       }
-      customData = parsed.data;
     }
-    setCustomError(null);
-    setErroriSocial({});
-    inviata.current = fotografia(showBranding ? { ...custom, socials: normalizzaSocials(custom.socials) } : custom);
+    if (!socialNonSalvati) {
+      setCustomError(null);
+      setErroriSocial({});
+    }
+    // Con un social non salvato la fotografia è quella salvata davvero: il modulo resta «da salvare».
+    inviata.current = fotografia(
+      socialNonSalvati ? customData : showBranding ? { ...custom, socials: normalizzaSocials(custom.socials) } : custom,
+    );
     onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),

@@ -77,3 +77,44 @@ describe('R10-008 R10-009 — lo slogan dice il suo limite invece di tagliare', 
     expect(radice.textContent).not.toContain('Troppo lungo');
   });
 });
+
+/**
+ * R10-010 — Un link social sbagliato non blocca più il salvataggio di tutta la vetrina: quel social
+ * resta com'era salvato, il resto si salva, e l'errore resta sotto il campo con il suo nome.
+ */
+describe('R10-010 — un social sbagliato non ferma il resto della vetrina', () => {
+  const montaConInstagram = async (onSubmit: ReturnType<typeof vi.fn>) =>
+    monta({
+      onSubmit,
+      mode: 'branding',
+      defaultValues: { storeName: 'Pane', storeDescription: 'Forno di quartiere', storeCustomization: { socials: { instagram: 'vecchio' } } },
+    });
+  const invia = async (radice: HTMLElement) => {
+    await act(async () => { fireEvent.submit(radice.querySelector('form')!); });
+    await aspetta();
+  };
+
+  it('Instagram sbagliato: lo slogan si salva, Instagram resta quello di prima, il messaggio lo dice', async () => {
+    const onSubmit = vi.fn();
+    const radice = await montaConInstagram(onSubmit);
+    const ig = radice.querySelector('#social-instagram') as HTMLInputElement;
+    expect(ig).not.toBeNull();
+    await act(async () => { fireEvent.change(ig, { target: { value: 'https://www.instagram.com/p/Cabc123/' } }); });
+    await act(async () => { fireEvent.change(campoSlogan(radice), { target: { value: 'Pane fresco dal 1962' } }); });
+    await invia(radice);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const dati = onSubmit.mock.calls[0][0] as { storeCustomization: { tagline?: string; socials?: Record<string, string> } };
+    expect(dati.storeCustomization.tagline).toBe('Pane fresco dal 1962');
+    expect(dati.storeCustomization.socials?.instagram).toBe('vecchio');
+    expect(radice.textContent).toContain('Il resto è salvato');
+    expect(radice.querySelector('#social-instagram-errore')?.textContent ?? '').not.toBe('');
+  });
+
+  it('un errore che non è di un social ferma ancora il salvataggio', async () => {
+    const onSubmit = vi.fn();
+    const radice = await montaConInstagram(onSubmit);
+    await act(async () => { fireEvent.change(campoSlogan(radice), { target: { value: 'x'.repeat(85) } }); });
+    await invia(radice);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
