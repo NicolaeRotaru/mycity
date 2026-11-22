@@ -1,0 +1,374 @@
+{
+  "sessione": "R06",
+  "aggiornato": "2026-11-22 01:45",
+  "finita": true,
+  "testa": "0968f1813404318c7342a7fb0ea619b58353b080",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "0968f1813404318c7342a7fb0ea619b58353b080",
+    "nota": "typecheck pulito, lint 0 errori (126 avvisi già presenti), vitest 1913 file e 11835 prove verdi, sulla testa"
+  },
+  "voci": [
+    {
+      "id": "R06-010",
+      "chiave": "rls-database|manca la colonna della scadenza del documento d'identità: si può controllare solo patente e polizza",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano, 21/11)",
+      "verificato_da": "regista, al piano (21/11): delicata, va all'onda dei delicati"
+    },
+    {
+      "id": "R06-003",
+      "chiave": "microcopy|la campanella «ordine pronto» promette il fattorino «a breve» anche quando la consegna è fissata ore dopo",
+      "esito": "gia_riparato_prima",
+      "prova": "migrations/321_l_ordine_pronto_dice_la_fascia.sql:49-60 è l ultima definizione di notify_buyer_on_order_status (nessuna migrazione dopo la 321 la ridefinisce, controllato con grep): con una delivery_slot scelta diversa da «Adesso…» la campanella dice «…nella fascia che hai scelto (11:00–13:00)»; «a breve» resta solo per la consegna veloce. Riprovato sulla base: bash tests/sql/harness/apply.sh r06_x && psql -q -X -d r06_x -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r08-l-ordine-pronto-dice-la-fascia.test.sql → 6/6, uscita 0.",
+      "verificato_da": "qa (subagente generico, sola lettura): la 321 è l'ultima definizione (dopo 086, 106, 122, 150, 215), apply.sh 210/0 e la prova SQL della fascia verde su un database ricostruito"
+    },
+    {
+      "id": "R06-006",
+      "chiave": "qa-flussi|il voto per il negozio del mese dato nelle prime ore del primo giorno non entra nella classifica che si vede",
+      "esito": "gia_riparato_prima",
+      "prova": "app/shop-of-month/page.tsx:58 calcola il mese con primoDelMesePiacenza() (lib/tempo-piacenza.ts:49, Europe/Rome) per il voto (:102) e per leggere il proprio voto (:69); la vista shop_of_month_leaderboard conta con public.mese_di_piacenza() (migrations/322_la_classifica_conta_il_mese_di_piacenza.sql:22-42, ultima definizione). Riprovato sulla base: psql -f tests/sql/rls/riparazione-r08-la-classifica-conta-il-mese-di-piacenza.test.sql → 9/9 (alle 00:30 del 1/12 e del 1/7 il voto entra); npx vitest run tests/unit/orologio-di-piacenza.test.ts → 7/7.",
+      "verificato_da": "qa (subagente generico, sola lettura): prova SQL verde anche con sessione UTC+14 e UTC-11, pg_get_viewdef usa mese_di_piacenza() per colonna e filtro, nessuna ridefinizione dopo la 322 (422/425/541 solo permessi), orologio-di-piacenza 7/7"
+    },
+    {
+      "id": "R06-005",
+      "chiave": "qa-flussi|indirizzo, cap e città del profilo non si correggono più",
+      "esito": "scelta_di_nicola",
+      "domanda": "I campi indirizzo, CAP e città sono stati tolti dal Profilo di proposito (scelta 178: nessun codice li legge, la cassa usa user_addresses) e la domanda «li rimettiamo nel Profilo o cancelliamo le colonne?» è ancora aperta (R33-020, AZIONI-IN-ATTESA.md:46). Quale delle due?",
+      "nota": "La correzione «rimettili» è pronta e provata (app/profile/page.tsx + prova che monta la pagina, rimessa regge, più l adeguamento dichiarato di tests/unit/minori-s08-profilo.test.tsx:182): l ho tolta dal ramo per non anticipare la scelta. Se Nicola dice «rimettili» si rifà in pochi minuti.",
+      "verificato_da": "capo squadra R06: riletti AZIONI-IN-ATTESA.md:46 e consegne/riparazioni/2026-11-12-sito-tutto/referti/R33.json:376: la domanda è ancora aperta"
+    },
+    {
+      "id": "R06-008",
+      "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
+      "esito": "scelta_di_nicola",
+      "domanda": "Il difetto del codice di ritiro è chiuso sulla base: tutti usano order_delivery_codes. confirm_pickup_by_seller è definita solo in 124 e 179 (179:180), l'email «pronto» in 215:432, il cliente in app/orders/[id]/page.tsx:217-220 e :621, il negozio in app/seller/orders/[id]/page.tsx:582-600; provato sul Postgres locale: DELIVERED/CASH_IN_STORE. Accenderlo NON è una riga sola: con lib/ritiro-in-negozio.ts:22 a true cadono 9 prove in 7 file, perché la copia pubblica e le prove sono scritte per «spento» (ritiro-in-negozio-messo-da-parte, le-promesse-che-il-sito-non-mantiene, chiuso-per-ferie-ferma-gli-ordini-e-il-ritiro-spento-non-si-offre, la-posta-in-coda-non-promette-regali-e-non-si-butta-via, le-promesse-della-consegna-cambiano-solo-di-proposito, minori-s07-promesse: la descrizione Google della spesa supera 160 caratteri, una-consegna-a-milano-non-passa-piu-in-cassa); vanno riscritte insieme all'interruttore, dopo aver confermato le migrazioni 124, 179 e 215 in produzione. È già gratis per il cliente (lib/shipping.ts:81). Lo accendiamo, con quel lavoro?",
+      "nota": "Non lavorata per decisione della regista (quarto giro): nessun file toccato.",
+      "verificato_da": "qa (subagente generico, sola lettura): percorso del codice confermato; ha provato l'interruttore in una copia in /tmp: cadono 9 prove in 7 file, quindi «una riga» non basta"
+    },
+    {
+      "id": "R06-007",
+      "chiave": "qa-flussi|la risalita dei genitori delle categorie non ha un tetto",
+      "esito": "scelta_di_nicola",
+      "domanda": "La risalita delle categorie ha il tetto solo in lib/category-attributes.ts:285-310 (e in lib/queries/categorie-piene.ts). Restano senza tetto components/seller/ProductForm.tsx:351-356 (resolveTop: while (cur?.parent_id) senza contatore né insieme dei visti, il modulo prodotto si blocca su un cerchio a→b→a) e la funzione SQL radice_con_obbligo_alimentare (WITH RECURSIVE senza limite), e la tabella categories non vieta i cerchi (app/admin/categories/page.tsx lascia scegliere qualsiasi genitore). La correzione del database di un giro precedente (migrazione 426) è stata tolta perché faceva pubblicare un alimentare senza allergeni (dbb84ebd, 14/11), e la carta 243 dice «terzo giro solo con lui»: come la rifacciamo, e chi la collauda sugli allergeni?",
+      "nota": "Non lavorata: nel mio file il tetto c'è già; il resto è al terzo giro e la carta 243 lo riserva a Nicola. Nessun file toccato.",
+      "verificato_da": "qa (subagente generico, sola lettura): ha smentito il «già riparato»: ha trovato i due cicli senza tetto fuori dal mio file e il revert dbb84ebd"
+    },
+    {
+      "id": "R06-011",
+      "chiave": "tipografia|otto spaziature diverse per la stessa etichetta maiuscola",
+      "esito": "parziale",
+      "commit": "d2c8a9ccedd917492dcff2295f26b55d3a347df2",
+      "file_toccati": [
+        "app/profile/page.tsx",
+        "tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d2c8a9cc^ --file app/profile/page.tsx --prove tests/unit/riparazione-r06-etichette-maiuscole-del-profilo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei miei 4 file l'unica etichetta maiuscola fuori misura era app/profile/page.tsx:99 (uppercase tracking-[0.05em] → tracking-label). La prova legge i 4 file per nome e rifiuta ogni classe con uppercase e una spaziatura diversa da tracking-label. tailwind.config.ts non toccato: cambiarne la scala toccherebbe anche ciò che non è un'etichetta. Il primo commit aveva scritto la prova sopra una prova esistente con lo stesso nome (di un R06 di una campagna passata, che guarda altri 5 file): il commit 0968f181 la rimette intera, e la mia prova sta in un file nuovo; guardia-ramo verde.",
+      "cosa_resta": "90 etichette maiuscole in 52 file non miei usano ancora una delle otto spaziature (tracking-wide 30, tracking-wider 33, tracking-widest 2, tracking-[0.03em] 14, [0.04em] 4, [0.05em] 4, [0.06em] 2, [0.08em] 1): elenco esatto in serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/category/[slug]/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 291 (tracking-wide), 310 (tracking-wide), 337 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/activity/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 465 (tracking-wide), 476 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/users/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 677 (tracking-wide), 1002 (tracking-wide), 1020 (tracking-wide), 1028 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/orders/[id]/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 289 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/funnel/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 416 (tracking-[0.04em]), 440 (tracking-wide), 447 (tracking-wide), 451 (tracking-wide), 469 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/disputes/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 332 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/today/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 104 (tracking-[0.04em]), 184 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/products/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 177 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/coupons/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 238 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/admin/payouts/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 338 (tracking-[0.04em]), 358 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 565 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/seller/customers/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 107 (tracking-wide), 113 (tracking-wide), 117 (tracking-wide), 177 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/seller/earnings/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 397 (tracking-[0.03em]), 460 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/seller/promotions/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 262 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/profile/loyalty/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 198 (tracking-wide), 263 (tracking-wide), 273 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/profile/returns/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 42 (tracking-[0.05em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/profile/gift-cards/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 226 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/profile/referral/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 126 (tracking-wide), 182 (tracking-wide), 186 (tracking-wide), 190 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/profile/addresses/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 153 (tracking-[0.05em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/rider/history/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 149 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/rider/orders/[id]/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 527 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/rider/profile/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 253 (tracking-[0.03em]), 282 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/rider/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 110 (tracking-[0.03em]), 512 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/rider/help/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 116 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/rider/availability/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 197 (tracking-[0.03em]), 251 (tracking-[0.03em]), 314 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/favorites/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 105 (tracking-[0.05em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "app/come-funziona/page.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 56 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/LiveActivityFeed.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 60 (tracking-wide), 158 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/admin/AdminUI.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 27 (tracking-[0.06em]), 40 (tracking-[0.03em]), 63 (tracking-[0.04em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/admin/home/HomeSectionsEditor.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 60 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/admin/RimborsiDaDividere.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 66 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/VoiceProductButton.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 170 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/QuickAiTools.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 155 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/ImproveAllPanel.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 206 (tracking-wide), 261 (tracking-wide), 280 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/site/PageSectionsEditor.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 58 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/site/PageListEditor.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 93 (tracking-wide), 94 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/SellerHealthScore.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 172 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/seller/SellerPageTitle.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 37 (tracking-[0.06em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 126 (tracking-wide), 144 (tracking-wide), 162 (tracking-wide), 189 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/ProductQA.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 223 (tracking-wide), 238 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/store-sections/HoursSection.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 58 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/account/AccountSidebar.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 143 (tracking-[0.08em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/home-sections/HomeSectionRenderer.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 224 (tracking-wide), 316 (tracking-wide), 348 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/home-sections/ReorderRail.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 179 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 79 (tracking-[0.05em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 307 (tracking-wide), 322 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/home/PromoDeals.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 43 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/home/HowItWorks.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 62 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/home/TrendingNow.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 64 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/products/VendutoDa.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 59 (tracking-[0.03em]) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 112 (tracking-wide) (righe della base 1ad51b4c)"
+        },
+        {
+          "file": "components/MobileAccountSheet.tsx",
+          "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 95 (tracking-wide) (righe della base 1ad51b4c)"
+        }
+      ],
+      "verificato_da": "qa (subagente generico, sola lettura): prova verde 5/5, la stessa regex sulla base trova tracking-[0.05em] (la prova sarebbe rossa), nei 4 file nessun'altra etichetta maiuscola, 14 file di prove sulla pagina profilo verdi (76/76)"
+    },
+    {
+      "id": "R06-004",
+      "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
+      "esito": "scelta_di_nicola",
+      "domanda": "Un cliente già registrato deve poter diventare fattorino da solo, come un negozio fa con /api/seller/apply, o deve aprire un secondo account con /sign-up?role=rider? Oggi da solo non può: l'unico ingresso è /sign-up?role=rider (app/lavora-con-noi/page.tsx:36), l'aiuto «Diventa rider» manda a /contact (app/help/page.tsx:58-60), la migrazione 119 vieta di cambiarsi il ruolo da sé, e solo un admin può cambiare il ruolo (app/admin/users/page.tsx:1029).",
+      "verificato_da": "qa (subagente generico, sola lettura): confermato che il cliente non ha una strada da solo; ha corretto il «nessun cambio di ruolo»: l'admin può farlo (app/admin/users/page.tsx:1029, conferma a :906)"
+    },
+    {
+      "id": "R06-001",
+      "chiave": "architettura|tre librerie usate dalle prove non sono dichiarate in package.json",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "package.json",
+          "modifica": "In devDependencies aggiungere, in ordine alfabetico: \"@testing-library/dom\": \"10.4.2\" (importata da 18 prove), \"attr-accept\": \"2.2.5\" (tests/unit/la-foto-dell-iphone-entra-nella-vetrina-e-chi-resta-fuori-lo-sa.test.ts:4), \"esbuild\": \"0.28.1\" (tests/unit/aiuti/compila.mjs). Sono le versioni già in package-lock.json e node_modules."
+        },
+        {
+          "file": "package-lock.json",
+          "modifica": "Rigenerare con npm install --package-lock-only dopo la modifica a package.json: cambia solo l'elenco devDependencies della radice (le tre librerie ci sono già)."
+        }
+      ],
+      "verificato_da": "qa (subagente generico, sola lettura): import e versioni confermati su node_modules e package-lock (10.4.2, 2.2.5, 0.28.1); scansione di tutti gli import nudi in tests/: l'unico altro nome non dichiarato è server-only, solo dentro vi.mock"
+    },
+    {
+      "id": "R06-002",
+      "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts",
+          "modifica": "Togliere da FUORI_DALL_EXPORT la riga 44 «cod_reconciliations: 'quadratura della cassa contanti: registro contabile',». L'export la legge già (app/api/account/export/route.ts:215, from('cod_reconciliations')…eq('rider_id', userId)) e la tabella esiste (migrations/024:120): finché resta fra le escluse, la prova non si accorge se la lettura sparisce."
+        }
+      ],
+      "verificato_da": "qa (subagente generico, sola lettura): copia in /tmp con la riga 44 tolta, la prova resta verde 4/4; export/route.ts:215 legge la tabella"
+    },
+    {
+      "id": "R06-009",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-rclone.ts",
+          "modifica": "Accanto a FINTO_PGDUMP (riga ~74) aggiungere: export const FINTO_PSQL = ['#!/usr/bin/env bash', 'cat >/dev/null', 'echo \"psql: could not connect to server\" >&2', 'exit 2'].join('\\n') + '\\n'; (database irraggiungibile: scripts/backup-db.sh:370-377, con psql che esce non-zero, ricade sulla memoria)."
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+          "modifica": "Aggiungere FINTO_PSQL all'import della riga 34, e in bancoDiProva, subito dopo la coppia writeFileSync/chmodSync di rclone (righe 59-60), aggiungere writeFileSync(join(finti, 'psql'), FINTO_PSQL); chmodSync(join(finti, 'psql'), 0o755); (finti è già in testa al PATH). Oggi, con SUPABASE_DB_URL=…localhost:5432, lo script usa il /usr/bin/psql vero della macchina e l'esito dipende da cosa gira lì; con lo stub, scripts/backup-db.sh:370-376 esce con return 1 e la riga 437 ricade su nel_database=\"\" (il ripiego voluto). Da valutare uguale per le altre prove che lanciano scripts/backup-db.sh con SUPABASE_DB_URL; modello già esistente: PSQL_FINTO in tests/unit/riparazione-r15-rclone-finto.ts:37-49."
+        }
+      ],
+      "verificato_da": "qa (subagente generico, sola lettura): stub e ripiego confermati (backup-db.sh:370, :376, :437); ha corretto il punto d'inserimento (dopo le righe 59-60, non dopo la 71, che sta nel blocco env di spawnSync)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "la campanella «ordine pronto» dice la fascia senza il giorno",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "migrations/321_l_ordine_pronto_dice_la_fascia.sql:31-39",
+      "descrizione": "Della fascia scelta tiene solo l orario: un ordine pronto stasera per «Domani · 9:00–12:00» legge «nella fascia che hai scelto (9:00–12:00)», senza «domani»."
+    },
+    {
+      "titolo": "il modulo prodotto del negozio si blocca se le categorie formano un cerchio",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/ProductForm.tsx:351-356",
+      "descrizione": "resolveTop risale i genitori con while (cur?.parent_id) senza tetto: con un cerchio a→b→a nei dati il render non finisce. Fa parte della stessa voce delle categorie in cerchio (R06-007, scelta di Nicola)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R06-005: indirizzo, CAP e città nel Profilo: li rimettiamo o cancelliamo le colonne? (stessa domanda di R33-020)",
+    "R06-008: il codice di ritiro è a posto sulla base: accendiamo il ritiro in negozio (dopo aver confermato le migrazioni 124, 179, 215 in produzione)?",
+    "R06-004: un cliente già registrato può diventare fattorino da solo (cambio di ruolo) o deve aprire un secondo account?",
+    "R06-007: la risalita delle categorie in cerchio è al terzo giro (carta 243): come la rifacciamo senza rompere gli allergeni, e chi la collauda?"
+  ],
+  "conto": {
+    "agenti": 4,
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) + 2 revisori sonnet in sola lettura; costo da get_session alle 01:45 del 22/11: 9,96 $",
+    "subagenti": 4,
+    "costo_usd": 9.96
+  },
+  "costo_usd": 9.96
+}

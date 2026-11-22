@@ -96,7 +96,7 @@ export default function ProfilePage() {
     <div className="max-w-2xl">
       {/* Page header dell'hub account */}
       <header className="mb-6">
-        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Account</p>
+        <p className="text-xs font-bold uppercase tracking-label text-primary-700">Account</p>
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
           Profilo
         </h1>
