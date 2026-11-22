@@ -1,13 +1,13 @@
 {
   "sessione": "R12",
-  "aggiornato": "2026-11-22 03:40",
-  "finita": false,
-  "testa": "63e85883f438d3e959f029d18294a29548049976",
+  "aggiornato": "2026-11-22 04:05",
+  "finita": true,
+  "testa": "16fc7e09f9f9d769c2f01da79848d68c8b9264a6",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "d029523ae7bedddaaf37f496adb687c68c41ccf1",
-    "nota": "typecheck 0 errori, lint 0 errori (126 avvisi già presenti), vitest 1918 file passati e 1 saltato (11853 casi). Girato su d029523a, che dopo 63e85883 tocca solo il referto."
+    "testa": "338b1a6661882beadd3ce77c5bfcc37c94794591",
+    "nota": "Dopo il giro K04: typecheck 0 errori, lint 0 errori (126 avvisi già presenti), vitest 1918 file passati e 1 saltato (11866 casi). Girato su 338b1a66, che dopo l ultimo commit di codice 16fc7e09 tocca solo il referto."
   },
   "voci": [
     {
@@ -460,7 +460,8 @@
   "conto": {
     "agenti": 6,
     "subagenti": 6,
-    "nota": "6 subagenti aperti: lotto A (sonnet, ripreso per il giro K04), lotto B (grande, ripreso una volta), correzione del piede (sonnet), 3 revisori (sonnet). Nel giro K04 nessun subagente nuovo, e nessun revisore perché la spesa era al 70% del tetto."
+    "nota": "6 subagenti aperti: lotto A (sonnet, ripreso per il giro K04), lotto B (grande, ripreso una volta), correzione del piede (sonnet), 3 revisori (sonnet). Nel giro K04 nessun subagente nuovo, e nessun revisore perché la spesa era al 70% del tetto.",
+    "costo_usd": 24.82
   },
-  "costo_usd": 18.69
+  "costo_usd": 24.82
 }
