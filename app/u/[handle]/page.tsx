@@ -1,3 +1,4 @@
+import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
@@ -34,7 +35,19 @@ type Profile = {
  * persona non esiste», senza una riga nei registri. Adesso un guasto si scrive e si lancia
  * (pagina d'errore con «Riprova»); «non trovato» solo quando la lettura riesce e non c'è niente.
  */
-async function fetchProfileByHandle(handle: string) {
+/**
+ * 21/11/2026 (R10-016) — `generateMetadata` e la pagina chiedevano lo stesso profilo due volte a
+ * ogni visita, due letture vere col client di servizio. Con `cache()` di React (c'è nei componenti
+ * del server, dove Next usa il suo React) la stessa richiesta lo legge una volta sola. Dove `cache`
+ * non c'è (le prove, col React 18 del progetto) si legge e basta, come prima.
+ */
+type Memorizzatore = <F extends (...argomenti: never[]) => unknown>(f: F) => F;
+const cacheDiReact = (React as unknown as { cache?: Memorizzatore }).cache;
+const unaVoltaPerRichiesta: Memorizzatore = (f) => (typeof cacheDiReact === 'function' ? cacheDiReact(f) : f);
+
+const fetchProfileByHandle = unaVoltaPerRichiesta(leggiProfiloPerHandle);
+
+async function leggiProfiloPerHandle(handle: string) {
   if (!handleValido(handle)) return null;
   let supabase;
   try {

@@ -141,14 +141,40 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
         await avvisaNegozioMessaggioNuovo(admin, { conversationId, senderId: mittente });
       }, 'email al negozio per un messaggio nuovo');
     }
+    // Id deciso qui: lo spegnimento qui sotto tocca solo questa voce, non un'altra arrivata nel frattempo.
+    const idVoce = crypto.randomUUID();
     const { error: errN } = await admin.from('notifications').insert({
+      id: idVoce,
       category: 'system',
       user_id: destinatario,
       title: titolo,
       body: testo.length > 140 ? `${testo.slice(0, 139)}…` : testo,
       link,
     });
-    if (errN) logger.error('[chat/messages] campanella non scritta', { conversationId, message: errN.message });
+    if (errN) {
+      logger.error('[chat/messages] campanella non scritta', { conversationId, message: errN.message });
+      return;
+    }
+    // R04-004 — Il contatore l'abbiamo letto una volta sola, prima dei passaggi qui sopra. Se intanto
+    // chi riceve ha aperto la chat e /api/chat/mark-read ha spento le voci, quella appena scritta
+    // resterebbe accesa per una chat già letta. Si rilegge il contatore a voce scritta: a 0 la
+    // spegniamo noi. Se la lettura arriva dopo la rilettura, la voce c'è già e la spegne mark-read
+    // (spegne le voci dopo aver azzerato il contatore). Best effort, come il resto della campanella.
+    const { data: dopo, error: errDopo } = await admin
+      .from('conversations')
+      .select('buyer_unread_count, seller_unread_count')
+      .eq('id', conversationId)
+      .maybeSingle();
+    const nonLettiOra = dopo ? (scriveIlCliente ? dopo.seller_unread_count : dopo.buyer_unread_count) : null;
+    if (!errDopo && nonLettiOra === 0) {
+      const { error: errSpegni } = await admin
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', idVoce);
+      if (errSpegni) {
+        logger.warn('[chat/messages] voce della campanella non spenta dopo la lettura', { conversationId, message: errSpegni.message });
+      }
+    }
   } catch (e) {
     logger.error('[chat/messages] campanella non scritta', { conversationId, message: e instanceof Error ? e.message : String(e) });
   }

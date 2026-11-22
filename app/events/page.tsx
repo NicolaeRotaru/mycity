@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Clock, CalendarDays, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -132,20 +132,38 @@ export default function EventsPage() {
   const adesso = Date.now();
   const events = tuttiGliEventi.filter((ev) => Date.parse(ev.ends_at) > adesso);
 
+  // 21/11/2026 — Il doppio tocco sul telefono faceva partire due scritture: la seconda tornava
+  // «già usato» e sotto «Ci sei!» compariva un errore. Il secondo tocco su un evento che sta già
+  // lavorando non parte: lo ferma questo elenco, che si aggiorna subito, non al prossimo disegno.
+  const inCorso = useRef<Set<string>>(new Set());
+
+  // Un evento chiuso o annullato dall'admin con la pagina aperta (o visto con l'orologio del
+  // telefono indietro): lo si dice chiaro, invece di «Non hai i permessi», e si rilegge la lista.
+  const eventoChiuso = () => {
+    toast.error('Questo evento è chiuso: non ci si può più iscrivere.');
+    qc.invalidateQueries({ queryKey: queryKeys.events.public });
+  };
+
   const rsvp = useMutation({
     mutationFn: async (eventId: string) => {
-      if (!userId) throw new Error('Devi accedere per partecipare');
-      const isGoing = myRsvps.has(eventId);
-      if (isGoing) {
-        const { error } = await supabase.from('event_rsvps').delete().eq('user_id', userId).eq('event_id', eventId);
-        if (error) throw error;
-        const next = new Set(myRsvps); next.delete(eventId); setMyRsvps(next);
-        return false;
-      } else {
-        const { error } = await supabase.from('event_rsvps').insert({ user_id: userId, event_id: eventId });
-        if (error) throw error;
-        const next = new Set(myRsvps); next.add(eventId); setMyRsvps(next);
-        return true;
+      try {
+        if (!userId) throw new Error('Devi accedere per partecipare');
+        const isGoing = myRsvps.has(eventId);
+        if (isGoing) {
+          const { error } = await supabase.from('event_rsvps').delete().eq('user_id', userId).eq('event_id', eventId);
+          if (error) throw error;
+          setMyRsvps((prima) => { const next = new Set(prima); next.delete(eventId); return next; });
+          return false;
+        } else {
+          const { error } = await supabase.from('event_rsvps').insert({ user_id: userId, event_id: eventId });
+          // 23505: la riga c'è già (un tocco arrivato prima, o le tue iscrizioni non lette).
+          // Vuol dire che sei già iscritto: è un «Ci sei», non un errore.
+          if (error && error.code !== '23505') throw error;
+          setMyRsvps((prima) => { const next = new Set(prima); next.add(eventId); return next; });
+          return true;
+        }
+      } finally {
+        inCorso.current.delete(eventId);
       }
     },
     onSuccess: (going) => {
@@ -155,7 +173,11 @@ export default function EventsPage() {
       // riga «Ci sei» restava sopra «0 partecipanti» fino a un minuto.
       qc.invalidateQueries({ queryKey: queryKeys.events.rsvpCounts });
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => {
+      // 42501: il database (701) rifiuta l'iscrizione a un evento che non è più in programma o in corso.
+      if ((err as { code?: unknown } | null)?.code === '42501') { eventoChiuso(); return; }
+      toast.error(friendlyError(err));
+    },
   });
 
   const { data: rsvpCounts = {} } = useQuery({
@@ -283,7 +305,18 @@ export default function EventsPage() {
 
                   <div className="flex gap-2 mt-auto pt-3">
                     <button
-                      onClick={() => userId ? rsvp.mutate(ev.id) : toast.error('Accedi per partecipare')}
+                      onClick={() => {
+                        if (!userId) { toast.error('Accedi per partecipare'); return; }
+                        // L'ora si guarda al tocco, non all'ultimo disegno: un evento finito
+                        // mentre la pagina era aperta non si preme più, e la scheda se ne va.
+                        if (Date.parse(ev.ends_at) <= Date.now()) { battito((n) => n + 1); return; }
+                        // E lo stato, con la stessa regola del database (701): solo un evento in
+                        // programma o in corso.
+                        if (ev.status !== 'scheduled' && ev.status !== 'live') { eventoChiuso(); return; }
+                        if (inCorso.current.has(ev.id)) return;
+                        inCorso.current.add(ev.id);
+                        rsvp.mutate(ev.id);
+                      }}
                       disabled={rsvp.isPending}
                       className={`flex-1 px-4 py-2 rounded-full font-bold text-sm transition-colors ${
                         isGoing

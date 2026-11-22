@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { cn } from '@/lib/cn';
 
 /**
@@ -10,7 +11,7 @@ import { cn } from '@/lib/cn';
  *   3 size: sm/md/lg. Composition con Card.Header/Body/Footer in v2."
  */
 
-type Variant = 'bordered' | 'elevated' | 'flat' | 'funnel';
+type Variant = 'bordered' | 'elevated' | 'flat' | 'funnel' | 'surface' | 'quiet';
 type Padding = 'none' | 'sm' | 'md' | 'lg';
 /**
  * 12/11/2026 (R10-010) — IL RAGGIO PER CONTESTO, DETTO QUI.
@@ -39,6 +40,10 @@ const VARIANTS: Record<Variant, string> = {
    * e chi la usa non riscrive più le classi a mano.
    */
   funnel:   'bg-white border border-surface-200 shadow-card',
+  /** Card a mano con fondo `surface-0` e bordo sabbia (righe di elenco, riquadri dei cruscotti). */
+  surface:  'bg-surface-0 border border-cream-300',
+  /** Card a mano con bordo sabbia chiaro e ombra lieve (le più comuni dopo `bordered`). */
+  quiet:    'bg-white border border-cream-200 shadow-warm-sm',
 };
 
 const PADDINGS: Record<Padding, string> = {
@@ -53,25 +58,32 @@ type Props = {
   padding?: Padding;
   className?: string;
   children: React.ReactNode;
-  as?: 'div' | 'article' | 'section' | 'aside';
+  /** `details`: il riquadro che si apre e si chiude (es. «Articoli» nella consegna del fattorino). */
+  as?: 'div' | 'article' | 'section' | 'aside' | 'details';
   /** Aggiunge sollevamento + ombra al passaggio del mouse (per card cliccabili). */
   hover?: boolean;
   /** R10-010 — 'xl' (contenuto, di base), '2xl' (prodotto/negozio), 'lg' (riquadro interno). */
   radius?: Radius;
+  /** Con `href` la card è un link (`<a>` di Next): le card cliccabili non si scrivono più a mano. */
+  href?: string;
+  /** Solo con `href`: etichetta per chi legge con lo screen reader. */
+  'aria-label'?: string;
 };
 
-export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl' }: Props) {
-  return (
-    <Tag
-      className={cn(
-        RADIUS[radius],
-        VARIANTS[variant],
-        PADDINGS[padding],
-        hover && 'transition-transform hover:-translate-y-[3px] hover:shadow-[var(--shadow-hover)]',
-        className,
-      )}
-    >
-      {children}
-    </Tag>
+export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false, radius = 'xl', href, 'aria-label': ariaLabel }: Props) {
+  const classi = cn(
+    RADIUS[radius],
+    VARIANTS[variant],
+    PADDINGS[padding],
+    hover && 'transition-transform hover:-translate-y-[3px] hover:shadow-[var(--shadow-hover)]',
+    className,
   );
+  if (href) {
+    return (
+      <Link href={href} aria-label={ariaLabel} className={cn('block', classi)}>
+        {children}
+      </Link>
+    );
+  }
+  return <Tag className={classi}>{children}</Tag>;
 }

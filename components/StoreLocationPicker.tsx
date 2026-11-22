@@ -204,7 +204,12 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         setLocating(false);
       },
       (err) => {
-        setError('Impossibile ottenere la posizione: ' + err.message);
+        // Il testo del browser (err.message) arriva in inglese o vuoto: si dice in italiano dal codice.
+        setError(
+          err.code === 1
+            ? 'Il browser non dà il permesso di usare la posizione: attivalo nelle impostazioni, oppure cerca l’indirizzo o tocca la mappa.'
+            : 'Impossibile ottenere la posizione in questo momento: riprova, oppure cerca l’indirizzo o tocca la mappa.',
+        );
         setLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10_000 }

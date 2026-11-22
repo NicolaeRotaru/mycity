@@ -20,7 +20,8 @@ export const metadata = {
 
 export default function ReturnsPage() {
   return (
-    <div className="container mx-auto px-6 py-10 max-w-3xl">
+    <div className="container mx-auto px-6 py-10 max-w-3xl break-words hyphens-auto">
+      {/* R12-002 — break-words si eredita: ogni testo dei riquadri va a capo dentro il suo riquadro col testo al 200% a 280 px. */}
       {/* Page header — linguaggio dell'hub account: serif + sottotitolo ink-500 */}
       <header className="mb-8">
         <p className="text-xs font-bold uppercase tracking-label text-primary-700">Assistenza</p>

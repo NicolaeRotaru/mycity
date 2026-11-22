@@ -19,13 +19,21 @@ function altezzaDalleClassi(): number {
   return 1 + 8 + 8 + icona + 2 + testo * 1.5;
 }
 
+/** R12-003 — Il valore di una misura CSS (px, rem, calc con + e *) con la radice del testo a `radice` pixel. */
+function misuraConRadice(valore: string, radice: number): number {
+  const espressione = valore.trim().replace(/^calc\((.*)\)$/, '$1').replace(/(\d*\.?\d+)rem/g, `($1*${radice})`).replace(/(\d*\.?\d+)px/g, '$1');
+  if (!/^[\d.\s+*()]+$/.test(espressione)) return Number.NaN;
+  return Number(new Function(`return (${espressione});`)());
+}
+
 describe('il fondo della pagina mobile finisce dove finisce la barra', () => {
   it('il padding del body usa l\'altezza vera, non i 72px', () => {
     expect(CSS).toMatch(/body \{ padding-bottom: calc\(var\(--tabbar-altezza-vera\) \+ env\(safe-area-inset-bottom, 0\)\); \}/);
   });
 
   it('l\'altezza vera dichiarata e\' quella della barra, al pixel', () => {
-    const dichiarata = Number(CSS.match(/--tabbar-altezza-vera:\s*(\d+)px/)?.[1]);
+    // R12-003 — la dichiarazione ora e' un calc in rem e px (segue il testo ingrandito): si conta col testo normale, 16px.
+    const dichiarata = misuraConRadice(CSS.match(/--tabbar-altezza-vera:\s*([^;]+);/)?.[1] ?? '', 16);
     const vera = altezzaDalleClassi();
     expect(Math.abs(dichiarata - vera)).toBeLessThanOrEqual(1);
   });

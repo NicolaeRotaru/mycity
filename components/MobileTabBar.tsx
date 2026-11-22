@@ -110,6 +110,8 @@ export default function MobileTabBar() {
     router.refresh();
   };
 
+  // R12-003 — L'altezza di questa barra (bordo, py-2, icona, gap-0.5, etichetta) è sommata con le
+  // stesse unità in --tabbar-altezza-vera (app/globals.css): chi cambia una misura qui cambia anche quella.
   const tabClass = (active: boolean) =>
     `relative w-full flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
       active ? 'text-primary-600' : 'text-ink-500 hover:text-ink-800'

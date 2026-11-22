@@ -10,6 +10,19 @@ import BannerFields from './BannerFields';
 import CollectionFields from './CollectionFields';
 import GalleryFields from './GalleryFields';
 
+/**
+ * R10-008 R10-009 — Niente `maxLength` sui campi brevi: il browser tagliava in silenzio quello che
+ * si incollava oltre il tetto (stesso schema di R09-008 sulla home). Il testo resta intero e, oltre
+ * il tetto che lo schema rifiuta al salvataggio, l'errore lo dice sotto il campo. Si conta come lo
+ * schema (`z.string().trim().max(n)`).
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 type VideoSec = Extract<SiteSection, { type: 'video' }>;
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
@@ -51,7 +64,7 @@ function VideoField({ section, onChange }: { section: VideoSec; onChange: (s: Si
 
   return (
     <div className="space-y-3">
-      <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
+      <Input label="Titolo (opzionale)" value={c.heading ?? ''} error={sopraIlTetto(c.heading, 120)} onChange={(e) => set({ heading: e.target.value })} />
       <Input
         label="Link YouTube o Vimeo"
         value={url}
@@ -143,7 +156,7 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
       const n = (x: number) => x.toLocaleString('it-IT');
       return (
         <div className="space-y-3">
-          <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
+          <Input label="Titolo (opzionale)" value={c.heading ?? ''} error={sopraIlTetto(c.heading, 120)} onChange={(e) => set({ heading: e.target.value })} />
           <Textarea
             label="Testo"
             value={htmlInACapo(c.body ?? '')}
@@ -165,7 +178,7 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
         set({ items: items.map((it, k) => (k === i ? { ...it, ...patch } : it)) });
       return (
         <div className="space-y-3">
-          <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
+          <Input label="Titolo (opzionale)" value={c.heading ?? ''} error={sopraIlTetto(c.heading, 120)} onChange={(e) => set({ heading: e.target.value })} />
           {items.map((it, i) => (
             <div key={i} className="rounded-lg border border-cream-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -174,8 +187,8 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
                   <Trash2 size={14} aria-hidden />
                 </button>
               </div>
-              <Input value={it.q} maxLength={200} onChange={(e) => setItem(i, { q: e.target.value })} placeholder="Domanda" />
-              <Textarea value={it.a} rows={2} maxLength={1000} onChange={(e) => setItem(i, { a: e.target.value })} placeholder="Risposta" />
+              <Input value={it.q} error={sopraIlTetto(it.q, 200)} onChange={(e) => setItem(i, { q: e.target.value })} placeholder="Domanda" />
+              <Textarea value={it.a} rows={2} error={sopraIlTetto(it.a, 1000)} onChange={(e) => setItem(i, { a: e.target.value })} placeholder="Risposta" />
             </div>
           ))}
           <button type="button" onClick={() => set({ items: [...items, { q: '', a: '' }] })} className="text-sm font-semibold text-primary-700 hover:underline">

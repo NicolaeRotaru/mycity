@@ -21,9 +21,14 @@ import { vistaDaQuery } from '@/lib/vista-query';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
 import { safeInternalPath } from '@/lib/safe-redirect';
+import { logger } from '@/lib/logger';
 
 /** Il magazzino delle storie. La sua regola sta in lib/storage/regole-secchi.ts, non qui. */
 const SECCHIO_STORIE = 'stories';
+
+/** R10-015 — Quello che legge il negoziante quando il magazzino delle foto non risponde. */
+const FOTO_STORIA_NON_CARICATA =
+  'Non sono riuscito a caricare la foto della storia: il problema è nostro, non della tua foto. Riprova fra qualche minuto, e se succede ancora scrivi all\'assistenza.';
 
 /**
  * R16-011 — Il link della storia porta solo a una pagina di MyCity. La regola è quella dei ritorni
@@ -158,7 +163,13 @@ export default function SellerStoriesPage() {
       } catch (e) {
         const messaggio = e instanceof Error ? e.message : String(e);
         if (messaggio.includes('not found') || messaggio.includes('bucket')) {
-          throw new Error('Bucket "stories" non configurato. Applica la migration 035.');
+          // R10-015 — Il negoziante leggeva «Bucket "stories" non configurato. Applica la migration
+          // 035.»: un'istruzione per chi gestisce il database, non per lui. Il dettaglio tecnico va nei
+          // registri; a lui si dice cosa è successo e cosa può fare.
+          logger.error('[storie] il magazzino «stories» non risponde: controllare che esista (migrazione 035)', {
+            messaggio,
+          });
+          throw new Error(FOTO_STORIA_NON_CARICATA);
         }
         throw e;
       }

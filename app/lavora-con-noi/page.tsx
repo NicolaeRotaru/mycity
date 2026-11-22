@@ -134,7 +134,7 @@ export default function LavoraConNoiPage() {
                 // 13/11/2026 (R15-008) — Col testo ingrandito al massimo il riquadro (p-6 = 48px per lato) e il
                 // bottone (parole che non vanno a capo) arrivavano a 369px su 360: meno margine sul telefono,
                 // e il testo del bottone può andare a capo.
-                className="min-w-0 bg-white border border-cream-300 rounded-2xl p-4 sm:p-6 flex flex-col shadow-warm-sm"
+                className="min-w-0 bg-white border border-cream-300 rounded-2xl p-4 sm:p-6 flex flex-col shadow-warm-sm break-words hyphens-auto"
               >
                 <span className="w-[50px] h-[50px] rounded-lg bg-primary-100 text-primary-700 inline-flex items-center justify-center mb-4">
                   <Icon size={24} strokeWidth={2.2} aria-hidden />
@@ -167,7 +167,7 @@ export default function LavoraConNoiPage() {
                   <Icon size={20} strokeWidth={2.2} aria-hidden />
                 </span>
                 <div className="min-w-0 [overflow-wrap:anywhere]">
-                  <span className="block text-[15px] font-bold text-ink-900">{title}</span>
+                  <span className="block text-base font-bold text-ink-900">{title}</span>
                   <span className="block text-sm text-ink-600 mt-0.5 leading-relaxed">{body}</span>
                 </div>
               </div>
@@ -176,7 +176,10 @@ export default function LavoraConNoiPage() {
         </div>
       </section>
 
-      <div className="container mx-auto px-6 max-w-5xl">
+      {/* R12-004 (giro 2) — I margini si stringono in modo continuo con lo schermo (min(…, vw)), non a un gradino:
+          a 320 px e oltre restano 24 px come prima, sotto si riducono, e col testo ingrandito la riga delle
+          posizioni ha posto per il titolo e per «Candidati». */}
+      <div className="container mx-auto px-[min(1.5rem,7.5vw)] max-w-5xl">
         {/* Posizioni aperte */}
         <section id="posizioni" className="py-14 scroll-mt-24 md:scroll-mt-0">
           <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-1.5 break-words hyphens-auto">
@@ -187,11 +190,11 @@ export default function LavoraConNoiPage() {
             {JOBS.map((job) => (
               <li
                 key={job.title}
-                className="bg-white border border-cream-300 rounded-xl px-5 py-4 max-[300px]:px-3 flex items-center gap-4 flex-wrap"
+                className="bg-white border border-cream-300 rounded-xl px-[min(1.25rem,6.25vw)] py-4 flex items-center gap-4 flex-wrap"
               >
                 <div className="flex-1 min-w-[min(200px,100%)]">
-                  <h3 className="text-[17px] font-bold text-ink-900 mb-1">{job.title}</h3>
-                  <div className="text-[13px] text-ink-500 flex gap-3.5 flex-wrap">
+                  <h3 className="text-lg font-bold text-ink-900 mb-1 break-words hyphens-auto">{job.title}</h3>
+                  <div className="text-sm text-ink-500 flex gap-3.5 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
                       <MapPin size={14} strokeWidth={2.2} aria-hidden /> {job.location}
                     </span>
@@ -200,12 +203,12 @@ export default function LavoraConNoiPage() {
                     </span>
                   </div>
                 </div>
-                <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-accent-100 text-accent-800 whitespace-nowrap max-w-full max-[300px]:whitespace-normal [overflow-wrap:anywhere]">
+                <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-accent-100 text-accent-800 max-w-full [overflow-wrap:anywhere]">
                   {job.tag}
                 </span>
                 <a
                   href={job.mailto}
-                  className="inline-flex max-w-full items-center gap-1.5 border border-cream-300 text-primary-700 font-bold text-sm px-4 py-2.5 rounded-full hover:bg-cream-50 transition-colors [overflow-wrap:anywhere]"
+                  className="inline-flex max-w-full flex-wrap items-center gap-1.5 border border-cream-300 text-primary-700 font-bold text-sm px-[min(1rem,5vw)] py-2.5 rounded-full hover:bg-cream-50 transition-colors [overflow-wrap:anywhere]"
                 >
                   Candidati <ArrowRight size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />
                 </a>
@@ -220,13 +223,13 @@ export default function LavoraConNoiPage() {
             <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
               Non trovi il ruolo giusto?
             </h2>
-            <p className="text-white/80 text-[15px] max-w-[50ch] mx-auto mb-6">
+            <p className="text-white/80 text-base max-w-[50ch] mx-auto mb-6">
               Scrivici comunque. Se condividi la nostra idea di città, troveremo il modo di lavorare
               insieme.
             </p>
             <a
               href={mailtoContatto('lavoro', 'Candidatura spontanea')}
-              className="inline-flex max-w-full items-center gap-2 rounded-full px-6 py-3.5 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors [overflow-wrap:anywhere]"
+              className="inline-flex max-w-full items-center gap-2 rounded-full px-6 py-3.5 font-bold text-base bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors [overflow-wrap:anywhere]"
             >
               <Mail size={18} strokeWidth={2.2} className="shrink-0" aria-hidden /> Invia una candidatura spontanea
             </a>

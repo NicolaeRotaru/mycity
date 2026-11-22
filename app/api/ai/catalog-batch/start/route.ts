@@ -97,10 +97,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
   const aperto = (aperti ?? [])[0] as { id: string; status: string } | undefined;
   if (aperto) {
-    // R03-002 (giro di correzione) — Un lavoro «in invio» non si applica e non
-    // si scarta (cancel accetta solo «pronto»): si aspetta che l'invio si chiarisca.
+    // R03-002 (giro di correzione) — Un lavoro «in invio» non si applica: si
+    // aspetta che l'invio si chiarisca. 21/11/2026 (R02-003 · R02-002) — Se resta
+    // senza risposta, dopo qualche minuto si scarta (cancel/route.ts): prima il
+    // negozio restava fermo fino a 24 ore.
     const messaggio = aperto.status === 'submitting'
-      ? 'Hai già un lavoro sul catalogo il cui invio è ancora da verificare. Ricarica la pagina fra qualche minuto prima di avviarne un altro.'
+      ? 'Hai già un lavoro sul catalogo il cui invio è ancora da verificare: lo trovi qui sotto. Ricarica la pagina fra qualche minuto; se è ancora senza risposta, puoi scartarlo e avviarne un altro.'
       : 'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.';
     return apiError(409, messaggio, 'CONFLICT', { jobId: aperto.id, status: aperto.status });
   }
@@ -162,6 +164,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .single();
 
   if (errJob || !job) {
+    // 21/11/2026 (R02-004 · R02-013) — DUE AVVII INSIEME. La lettura dei lavori
+    // aperti qui sopra passa per tutti e due; il database tiene un solo lavoro
+    // aperto per negozio (migrazione 640), e il secondo inserimento arriva qui
+    // con 23505. Non e' un guasto: e' il lavoro dell'altro avvio, gia' aperto.
+    if (errJob?.code === '23505') {
+      const { data: altri } = await admin
+        .from('catalog_ai_jobs')
+        .select('id, status')
+        .eq('seller_id', user.id)
+        .in('status', STATI_APERTI)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const altro = (altri ?? [])[0] as { id: string; status: string } | undefined;
+      return apiError(
+        409,
+        'Hai già un lavoro sul catalogo appena avviato: lo trovi qui sotto. Non avviarne un altro.',
+        'CONFLICT',
+        altro ? { jobId: altro.id, status: altro.status } : undefined,
+      );
+    }
     logger.error('catalog-batch start: insert job failed', { sellerId: user.id, status: errJob?.code });
     return ApiErrors.badGateway('Non sono riuscito ad aprire il lavoro. Riprova.');
   }
@@ -256,7 +278,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       if (errMotivo) logger.error('catalog-batch start: motivo dell\'invio senza risposta rifiutato', { jobId: job.id, status: errMotivo.code });
       logger.error('catalog-batch start: invio del lotto senza risposta, da verificare', { sellerId: user.id, jobId: job.id });
       return ApiErrors.unavailable(
-        'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
+        'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto, e se è ancora senza risposta puoi scartarlo.',
       );
     }
     // R03-002 (giro di correzione) — Il lavoro non e' partito: la riga, nata

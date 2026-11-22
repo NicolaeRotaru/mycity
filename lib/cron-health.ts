@@ -81,9 +81,12 @@ export const FINESTRA_PRIMA_ACCENSIONE_MIN = 24 * 60;
 export type StaleCron = { name: string; staleMin: number; thresholdMin: number };
 
 /**
- * Cron monitorati il cui ultimo heartbeat supera la soglia. I cron senza alcun
- * heartbeat vengono IGNORATI (mai registrati: evita lo spam prima che lo
- * scheduler sia configurato; la migrazione 095 li seed-a con last_run_at=now()).
+ * Cron monitorati il cui ultimo heartbeat supera la soglia. Un cron senza alcun
+ * heartbeat si segnala solo se si sa da quando esiste il sistema
+ * (`installatoDaMs`) ed e' passata la finestra di prima accensione
+ * (FINESTRA_PRIMA_ACCENSIONE_MIN, #242): prima e' rumore, dopo e' un lavoro mai
+ * partito. Senza `installatoDaMs` resta ignorato. Le migrazioni 095 e 250 li
+ * seminano con last_run_at=now().
  */
 export function staleCrons(
   heartbeats: CronHeartbeat[],

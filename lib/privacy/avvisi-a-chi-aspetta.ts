@@ -42,7 +42,7 @@ import { createHash } from 'node:crypto';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { indirizzoPubblico } from '@/lib/env';
-import { PAGINA_DEI_CONTATTI } from '@/lib/legal/titolare';
+import { PAGINA_DEI_CONTATTI, recapitoPrivacy } from '@/lib/legal/titolare';
 import { avvisoCancellazioneTemplate } from '@/lib/email/templates';
 
 export type Risposta = { data: unknown; error: { message: string } | null };
@@ -347,6 +347,8 @@ function presoIl(metadata: unknown): number {
 const REGISTRO_INVII = 'audit_logs';
 const EMAIL_TENTATA = 'privacy.avviso_cancellazione.email_tentata';
 const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
+/** R05-006 — Le pause prima di ritentare il segno «partita»: tre prove in tutto, in due secondi e mezzo. */
+const PAUSE_DEL_SEGNO_MS = [500, 2_000];
 
 /** Una riga del registro degli invii. Il giro notturno non è una persona: `actor_id` resta vuoto. */
 function rigaDegliInvii(
@@ -416,15 +418,26 @@ async function emailDovuta(
     return tentativo > 1 ? 'bloccata' : 'non-partita';
   }
 
-  try {
-    const segno = await admin
-      .from(REGISTRO_INVII)
-      .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo, adesso)]);
-    if (segno.error && !eUnDoppione(segno.error.message)) throw new Error(segno.error.message);
-  } catch (e) {
-    registro.error('[avvisi-cancellazione] email partita ma non segnata: la notte dopo puo ripartire una seconda volta', {
-      userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
-    });
+  // R05-006 — Il segno «partita» si ritenta prima di arrendersi. Un solo rifiuto passeggero del
+  // database (scritto un attimo prima il turno, rifiutato il segno) bastava: la notte dopo l'email
+  // ripartiva, e se quella cadeva l'allarme diceva «non partita» per un'email già arrivata.
+  for (let prova = 0; ; prova++) {
+    try {
+      const segno = await admin
+        .from(REGISTRO_INVII)
+        .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo, adesso)]);
+      if (segno.error && !eUnDoppione(segno.error.message)) throw new Error(segno.error.message);
+      break;
+    } catch (e) {
+      if (prova < PAUSE_DEL_SEGNO_MS.length) {
+        await new Promise((r) => setTimeout(r, PAUSE_DEL_SEGNO_MS[prova]));
+        continue;
+      }
+      registro.error('[avvisi-cancellazione] email partita ma non segnata: la notte dopo puo ripartire una seconda volta', {
+        userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
+      });
+      break;
+    }
   }
   return 'partita';
 }
@@ -435,15 +448,34 @@ async function emailDovuta(
  * Il corpo è scritto per il pannello: senza casella privacy dice «scrivi a noi
  * con il modulo dei contatti del sito (pagina /contact)». Dentro il sito
  * «/contact» è un indirizzo; in una email è una parola, senza dominio e senza
- * niente da cliccare, letta da chi sta cercando di andarsene. Qui «/contact»
- * diventa l'indirizzo intero e cliccabile, e in fondo c'è la pagina
+ * niente da cliccare, letta da chi sta cercando di andarsene. Qui il modulo
+ * dei contatti è un indirizzo intero e cliccabile, e in fondo c'è la pagina
  * dell'account (`a.link`), dove si vede lo stato della richiesta.
+ *
+ * 22/11/2026 — IL COLLEGAMENTO VIENE DAL RECAPITO, NON DALLA FRASE. Prima si cercava «/contact»
+ * dentro il testo, che scrive un altro modulo (`recapitoInUnaFrase` in lib/legal/titolare.ts): se
+ * quella frase cambiava parole, l'email restava senza niente da cliccare e nessuno se ne accorgeva.
+ * Ora il testo resta parola per parola quello del pannello, e sotto c'è il collegamento al modulo
+ * dei contatti preso dal recapito (`recapitoPrivacy`). Con una casella privacy vera l'indirizzo è
+ * già nel testo, e non si aggiunge niente.
+ *
+ * 22/11/2026 (collaudo) — IL TESTO SALVATO PUÒ PORTARE ANCORA LA PAGINA. Il corpo si scrive la notte
+ * del pannello e l'email può partire una notte dopo: se intanto si configura la casella privacy, il
+ * testo salvato dice ancora «(pagina /contact)» mentre il recapito di adesso è una casella. Allora la
+ * pagina scritta nel testo diventa l'indirizzo intero e cliccabile, e la riga del modulo si aggiunge
+ * solo quando il testo non porta la pagina: mai la stessa strada due volte, mai una parola senza
+ * dominio, e il collegamento non dipende dalle parole della frase.
  */
-// 5/11/2026 — La pagina viene da lib/legal/titolare.ts (la stessa costante delle frasi), e si
-// cerca come percorso a sé: non dentro «/contacts» né dentro un indirizzo intero già scritto.
 const PERCORSO_DEI_CONTATTI = new RegExp(
   `(?<![\\w/.:])${PAGINA_DEI_CONTATTI.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![\\w/-])`,
 );
+
+function rigaDelModulo(corpo: string): { testo: string; percorso: string } | null {
+  if (PERCORSO_DEI_CONTATTI.test(corpo)) return null;
+  const dove = recapitoPrivacy();
+  if (dove.eUnaCasella) return null;
+  return { testo: `${dove.testo.charAt(0).toUpperCase()}${dove.testo.slice(1)}, sul sito:`, percorso: dove.href };
+}
 
 export function corpoDellEmail(a: AvvisoAllInteressato): string {
   const sito = indirizzoPubblico().url.replace(/\/+$/, '');
@@ -455,15 +487,21 @@ export function corpoDellEmail(a: AvvisoAllInteressato): string {
     .split(PERCORSO_DEI_CONTATTI)
     .map((pezzo) => escapeHtml(pezzo).replace(/\n/g, '<br>'))
     .join(collegamento(PAGINA_DEI_CONTATTI));
+  const riga = rigaDelModulo(a.corpo);
+  const modulo = riga ? `<p>${escapeHtml(riga.testo)} ${collegamento(riga.percorso)}</p>` : '';
   const pagina = a.link ? `<p>La tua richiesta, sul sito: ${collegamento(a.link)}</p>` : '';
-  return `<p>${testo}</p>${pagina}`;
+  return `<p>${testo}</p>${modulo}${pagina}`;
 }
 
-/** Il testo semplice della stessa email: corpo e indirizzo della pagina, interi. */
+/** Il testo semplice della stessa email: corpo e indirizzi delle pagine, interi. */
 function testoDellEmail(a: AvvisoAllInteressato): string {
   const sito = indirizzoPubblico().url.replace(/\/+$/, '');
-  const corpo = a.corpo.split(PERCORSO_DEI_CONTATTI).join(`${sito}${PAGINA_DEI_CONTATTI}`);
-  return a.link ? `${corpo}\n\nLa tua richiesta, sul sito: ${sito}${a.link}` : corpo;
+  const riga = rigaDelModulo(a.corpo);
+  return [
+    a.corpo.split(PERCORSO_DEI_CONTATTI).join(`${sito}${PAGINA_DEI_CONTATTI}`),
+    riga ? `${riga.testo} ${sito}${riga.percorso}` : null,
+    a.link ? `La tua richiesta, sul sito: ${sito}${a.link}` : null,
+  ].filter((r): r is string => r !== null).join('\n\n');
 }
 
 /** Vero se l'email è partita. Non lancia: un'email persa si conta, non ferma la notte. */

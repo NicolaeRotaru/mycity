@@ -60,7 +60,9 @@ describe('la pagina dei risultati quando si ordina per pertinenza', () => {
       sort: 'relevance', search: 'pane', tetto: 96,
     });
 
-    expect(righe.map((r) => r.name)).toEqual(['Focaccia dei Colli']);
+    // R11-009 — Il pertinente sta in testa; dopo di lui, senza doppioni, i prodotti che hanno la
+    // parola nel nome (la ciabatta), che la ricerca italiana non aveva riconosciuto.
+    expect(righe.map((r) => r.name)).toEqual(['Focaccia dei Colli', 'Ciabatta di pane comune']);
   });
 
   it('mette in cima il più pertinente, non il più recente', async () => {

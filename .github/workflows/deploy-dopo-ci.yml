@@ -814,6 +814,16 @@ jobs:
             fi
           }
 
+          # 21/11/2026 — In una riga, per l'avviso in cima e per il titolo del riepilogo: il ritorno
+          # indietro e' solo del CODICE, e chi legge solo quelli deve saperlo subito.
+          database_in_breve() {
+            case "${MIGRAZIONI:-}" in
+              '') echo "il database non torna indietro (in questo giro non ho applicato migrazioni)" ;;
+              0) echo "il database non torna indietro (in questo giro non c'erano migrazioni nuove)" ;;
+              *) echo "il database NON torna indietro: resta avanti di $MIGRAZIONI migrazioni, applicate in questo giro ($(echo ${MIGRAZIONI_ELENCO:-non so quali}))" ;;
+            esac
+          }
+
           if [ -z "$PRECEDENTE" ]; then
             echo "::error::Il sito appena pubblicato non risponde e non so a quale rilascio tornare: il ritorno indietro va fatto a mano su Vercel."
             {
@@ -825,16 +835,16 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "::error::La prova di fumo e' fallita sul rilascio appena pubblicato: torno a $PRECEDENTE."
+          echo "::error::La prova di fumo e' fallita sul rilascio appena pubblicato: torno al codice di $PRECEDENTE, ma $(database_in_breve)."
           npx --yes vercel@59.10.0 rollback "$PRECEDENTE" --yes --token="$TOKEN"
           # Solo dopo che il comando e' andato a buon fine: `set -e` ferma tutto
           # prima di qui se e' fallito, e una frase scritta comunque sarebbe una
           # bugia lasciata nel riepilogo.
           echo "tornato=si" >> "$GITHUB_OUTPUT"
           {
-            echo "## ⛔ Rilascio annullato"
+            echo "## ⛔ Rilascio annullato: e' tornato indietro solo il codice"
             echo ""
-            echo "Il sito appena pubblicato non ha superato la prova di fumo: sono tornata al rilascio $PRECEDENTE."
+            echo "Il sito appena pubblicato non ha superato la prova di fumo: sono tornata al rilascio $PRECEDENTE, ma solo col CODICE: $(database_in_breve)."
             echo "Guarda il passo «Prova di fumo» qui sopra per sapere quale dei tre controlli e' caduto."
             nota_database
           } >> "$GITHUB_STEP_SUMMARY"

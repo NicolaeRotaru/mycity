@@ -103,25 +103,6 @@ function SearchInner() {
     return SORT_OPTIONS.includes(grezzo as SortOption) ? (grezzo as SortOption) : 'relevance';
   });
 
-  // #118 — Ogni cambio di filtro riscrive l'indirizzo senza ricaricare la
-  // pagina e senza spostare lo scorrimento: cosi' Indietro riporta i filtri di
-  // prima e il link si puo' mandare a qualcuno.
-  useEffect(() => {
-    const p = new URLSearchParams();
-    if (q) p.set('q', q);
-    if (categoryId) p.set('cat', categoryId);
-    if (minPrice > 0) p.set('min', String(minPrice));
-    if (maxPrice < 500) p.set('max', String(maxPrice));
-    if (onlyOpenStores) p.set('aperti', '1');
-    if (onlyPromo) p.set('promo', '1');
-    if (onlyInStock) p.set('disponibili', '1');
-    if (minRating > 0) p.set('stelle', String(minRating));
-    if (sort !== 'relevance') p.set('ordine', sort);
-    const nuovo = p.toString();
-    if (nuovo === params.toString()) return;
-    router.replace(nuovo ? `/search?${nuovo}` : '/search', { scroll: false });
-  }, [q, categoryId, minPrice, maxPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort, params, router]);
-
   /**
    * 6/9/2026 — LA LISTA DELLE CATEGORIE ERA PIATTA, E DUE SI CHIAMAVANO UGUALE.
    *
@@ -189,8 +170,32 @@ function SearchInner() {
 
   // Mobile bottom-sheet: scroll-lock + Esc, PIÙ focus-trap nel pannello e
   // ritorno del focus al bottone trigger alla chiusura (WCAG 2.1.2 / 2.4.3).
-  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
-  useBottomSheetA11y(sortOpen, sortSheetRef, sortTriggerRef, () => setSortOpen(false));
+  // Anche «Ordina» copre la pagina: Indietro lo chiude, come i filtri (R07-007).
+  const voceFiltri = useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false), { indietroChiude: true });
+  const voceOrdina = useBottomSheetA11y(sortOpen, sortSheetRef, sortTriggerRef, () => setSortOpen(false), { indietroChiude: true });
+
+  // #118 — Ogni cambio di filtro riscrive l'indirizzo senza ricaricare la
+  // pagina e senza spostare lo scorrimento: cosi' Indietro riporta i filtri di
+  // prima e il link si puo' mandare a qualcuno.
+  // R07-007 — Finché la voce di cronologia di un pannello c'è (pannello aperto, o il suo ritorno
+  // indietro ancora in corso) l'indirizzo non si riscrive: il ritorno indietro buttava il replace e
+  // l'indirizzo restava senza i filtri scelti. Tolta la voce, l'effetto rigira e scrive tutto insieme.
+  useEffect(() => {
+    if (voceFiltri || voceOrdina) return;
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (categoryId) p.set('cat', categoryId);
+    if (minPrice > 0) p.set('min', String(minPrice));
+    if (maxPrice < 500) p.set('max', String(maxPrice));
+    if (onlyOpenStores) p.set('aperti', '1');
+    if (onlyPromo) p.set('promo', '1');
+    if (onlyInStock) p.set('disponibili', '1');
+    if (minRating > 0) p.set('stelle', String(minRating));
+    if (sort !== 'relevance') p.set('ordine', sort);
+    const nuovo = p.toString();
+    if (nuovo === params.toString()) return;
+    router.replace(nuovo ? `/search?${nuovo}` : '/search', { scroll: false });
+  }, [q, categoryId, minPrice, maxPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort, params, router, voceFiltri, voceOrdina]);
 
   const activeFilters = [
     categoryId && 'categoria',

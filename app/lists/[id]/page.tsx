@@ -129,6 +129,9 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
 
   const updateMeta = useMutation({
     mutationFn: async () => {
+      // R08-007 — la creazione su /lists vieta il titolo vuoto, e anche la modifica: il database
+      // accetta la stringa vuota, quindi il controllo sta qui.
+      if (!titleVal.trim()) throw new Error('Scrivi un titolo per la lista.');
       const { error } = await supabase
         .from('product_lists')
         .update({ title: titleVal.trim(), description: descVal.trim() || null, updated_at: new Date().toISOString() })
@@ -141,6 +144,8 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
       // R10-007, R10-008 — anche /lists mostra titolo e descrizione: prima restavano i vecchi.
       rileggiLeListeDiLists();
+      // R08-004 — e il menu «Aggiungi a lista» della scheda prodotto, che legge i titoli da questa chiave.
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -173,8 +178,16 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         .eq('product_id', productId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_esito, productId) => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
+      // R08-005 — e la spunta del menu «Aggiungi a lista» della scheda di quel prodotto. Il menu
+      // legge solo quando è aperto: riaperto durante la rilettura mostrerebbe la lista ancora
+      // segnata (e un tocco farebbe una cancellazione a vuoto). La lista si toglie subito dai dati
+      // in memoria, poi si invalida tutta la famiglia «containing» (anche un id scritto diverso).
+      const questaLista = params.id.toLowerCase();
+      qc.setQueryData<string[]>(queryKeys.lists.containing(productId), (dentro) =>
+        dentro ? dentro.filter((id) => id.toLowerCase() !== questaLista) : dentro);
+      qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId).slice(0, 2) });
       // R02-008 — /lists legge il conteggio dei prodotti da queste tre: come quando /lists crea una
       // lista, si rileggono, invece di mostrare il numero vecchio fino a quando scadono.
       qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
@@ -204,7 +217,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       const { error } = await supabase.from('product_lists').delete().eq('id', params.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Lista eliminata');
       rileggiLeListeDiLists();
       // R10-009 — e il menu «Aggiungi a lista» della scheda prodotto: prima la mostrava ancora.
@@ -214,6 +227,16 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       qc.setQueryData<Array<{ id: string }> | null>(queryKeys.lists.mineMin, (vecchie) =>
         vecchie ? vecchie.filter((l) => l.id !== params.id) : vecchie);
       qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
+      // R08-006 — la lista eliminata non resta in memoria: col tasto indietro la pagina non la
+      // rimostra (con «Modifica» ed «Elimina») per 30 secondi. `null` è quello che la lettura
+      // risponde per una lista che non c'è. Prima si annullano le letture in volo (partite dopo una
+      // rinomina o un cambio di visibilità): tornando, rimetterebbero in memoria la lista eliminata.
+      await Promise.all([
+        qc.cancelQueries({ queryKey: queryKeys.lists.detail(params.id) }),
+        qc.cancelQueries({ queryKey: queryKeys.lists.items(params.id) }),
+      ]);
+      qc.setQueryData(queryKeys.lists.detail(params.id), null);
+      qc.setQueryData(queryKeys.lists.items(params.id), []);
       router.push('/lists');
     },
     onError: (err: unknown) => toast.error(`Lista non eliminata: ${friendlyError(err)}`),
@@ -282,7 +305,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
                 className="w-full text-sm bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 resize-none"
               />
               <div className="flex gap-2">
-                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{tActions('save')}</button>
+                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending || !titleVal.trim()} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{tActions('save')}</button>
                 <button onClick={() => setEditTitle(false)} className="text-ink-500 px-3 py-1 rounded-lg text-sm">{tActions('cancel')}</button>
               </div>
             </div>

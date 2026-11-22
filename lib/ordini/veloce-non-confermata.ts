@@ -482,6 +482,31 @@ async function spostaIlCarrello(
   // essere finita, o a meno di un'ora dalla fine; allora si sceglie da capo, come prima.
   const scrittaSulFratello = vivi.find((c) => c.id !== o.id && !c.pickup_in_store
     && /^(Oggi|Domani) · /.test(String(c.delivery_slot ?? '')))?.delivery_slot ?? null;
+  // 21/11/2026 — Un ordine veloce già oltre la sua scadenza non si sposta: il giorno che i lavori si
+  // riaccendono, l'ordine nato ieri prendeva una fascia di «Domani» e il cliente la leggeva, poi
+  // arrivava l'annullo. Si guarda con gli orari del suo negozio, come il giro notturno, e lo annulla
+  // expire-stale-orders, che avvisa lui. Solo a carrello intatto: se un giro di prima ne ha già
+  // spostato una parte, il resto la segue (qui sotto) e il cliente legge il carrello intero.
+  // 22/11/2026 — Si guarda OGNI ordine nuovo del carrello, non solo quello letto per primo: con due
+  // negozi, uno scaduto e uno no, l'esito dipendeva dall'ordine delle righe della ricerca. Il carrello
+  // si sposta tutto insieme o niente, perché l'euro della veloce sta su UN ordine (quello che porta la
+  // base, la spesa più alta): spostando solo il valido, l'euro sullo scaduto resterebbe «a mano», e
+  // all'annullo dello scaduto, ancora «Adesso», il giro della consegna (consegnaDopoLAnnullo)
+  // passerebbe base ed euro della veloce al fratello già in fascia. E il giro dopo, trovando un
+  // fratello in fascia, crederebbe a un giro caduto a metà e ci porterebbe dietro lo scaduto. Quindi
+  // niente si sposta e nessuno legge niente: expire-stale-orders annulla lo scaduto e rifà il conto
+  // del carrello, e al giro dopo il freno sposta il resto e avvisa il cliente, come sempre.
+  if (!scrittaSulFratello) {
+    const scaduto = daSpostare.find((c) => {
+      if (c.id !== o.id && String(c.delivery_status) !== 'NEW') return false;
+      const scadenza = scadenzaAccettazione(c, undefined, c.seller_id ? orari[venditori.indexOf(c.seller_id)] : undefined);
+      return !!scadenza && scadenza.getTime() <= adesso.getTime();
+    });
+    if (scaduto) {
+      logger.info('[veloce-non-confermata] ordine già scaduto nel carrello: non sposto niente, lo lascio a expire-stale-orders', { orderId: scaduto.id, carrelloDi: o.id });
+      return 'scaduto';
+    }
+  }
   const vistaDaOggi = scrittaSulFratello && o.created_at ? fasciaAlGiornoDellOrdine(scrittaSulFratello, o.created_at, adesso) : null;
   const fasciaDelCarrello = vistaDaOggi && fasciaFuoriTempo(vistaDaOggi, romeNow(adesso)) === null ? scrittaSulFratello : null;
   const fasciaDelGiro = fasciaDelCarrello ? null : fasciaDopoLaVeloce(romeNow(adesso), orari);
