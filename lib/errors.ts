@@ -235,6 +235,10 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return 'Il nome del prodotto è troppo lungo: al massimo 120 caratteri. Accorcialo e riprova.';
     }
+    if (e.code === '23514' && /products_description_lunghezza/.test(`${e.message ?? ''} ${e.details ?? ''}`)) {
+      trackErrorShown(e.code, e.message ?? '', context?.page);
+      return 'La descrizione del prodotto è troppo lunga: al massimo 4000 caratteri. Accorciala e riprova.';
+    }
     if (e.code && SUPABASE_CODE_MAP[e.code]) {
       trackErrorShown(e.code, e.message ?? '', context?.page);
       return SUPABASE_CODE_MAP[e.code];
