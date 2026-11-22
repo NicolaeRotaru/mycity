@@ -268,13 +268,13 @@ export default function RiderOnboardingPage() {
         </Link>
         <h1 className="font-serif text-[22px] font-extrabold text-ink-900">Documenti e verifica</h1>
       </div>
-      <p className="px-4 text-[13px] text-ink-600">
+      <p className="px-4 text-sm text-ink-600">
         Completa i 3 passi qui sotto per attivare il tuo profilo da fattorino. Dopo la verifica
         potrai accettare consegne.
       </p>
 
       <section className="mx-4 mt-5 rounded-xl border border-cream-300 bg-surface-0 p-4">
-        <h2 className="font-serif text-[17px] font-bold text-ink-900">1. Dati anagrafici</h2>
+        <h2 className="font-serif text-lg font-bold text-ink-900">1. Dati anagrafici</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Nome" value={form.legal_first_name} onChange={(v) => setForm((f) => ({ ...f, legal_first_name: v }))} />
           <Field label="Cognome" value={form.legal_last_name} onChange={(v) => setForm((f) => ({ ...f, legal_last_name: v }))} />
@@ -310,7 +310,7 @@ export default function RiderOnboardingPage() {
       </section>
 
       <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
-        <h2 className="font-serif text-[17px] font-bold text-ink-900">2. Mezzo di trasporto</h2>
+        <h2 className="font-serif text-lg font-bold text-ink-900">2. Mezzo di trasporto</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-sm">
             <span className="block font-medium text-ink-700">Tipo</span>
@@ -332,12 +332,12 @@ export default function RiderOnboardingPage() {
       </section>
 
       <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
-        <h2 className="font-serif text-[17px] font-bold text-ink-900">3. Documenti</h2>
+        <h2 className="font-serif text-lg font-bold text-ink-900">3. Documenti</h2>
         {!etaConfermata && (
           // Il passo 3 resta chiuso finché il passo 1 non è salvato. Prima
           // arrivavano prima i documenti e poi il «servono 18 anni compiuti»:
           // il documento di chi non poteva iscriversi era già da noi.
-          <p className="mt-3 rounded-lg border border-cream-300 bg-cream-100 px-3 py-2.5 text-[13px] text-ink-700">
+          <p className="mt-3 rounded-lg border border-cream-300 bg-cream-100 px-3 py-2.5 text-sm text-ink-700">
             Prima salva i tuoi dati (passo 1). Per consegnare servono 18 anni compiuti:
             lo controlliamo <strong>prima</strong> di chiederti un documento, così non
             teniamo la carta d&apos;identità di chi non può iscriversi.

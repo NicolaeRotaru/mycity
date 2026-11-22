@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // Le misure a mano `text-[Npx]` aggirano la scala tipografica del progetto
-// (tailwind.config.ts: 2xs=10, xs=12, sm=14, base=16...). Qui i sei file della
-// voce devono usare solo i passi della scala. Le misure senza passo entro 1px
-// restano di proposito e sono elencate per misura.
+// (tailwind.config.ts: 2xs=10, xs=12, sm=14, base=16, lg=18, xl=20, 2xl=24...).
+// Qui gli otto file della voce devono usare solo i passi della scala: la misura
+// uguale al passo, o il passo più vicino entro 1px (a parità, il più grande:
+// 11→xs, 13→sm, 17→lg). Le misure senza passo entro 1px restano di proposito e
+// sono elencate per misura.
 const ROOT = process.cwd();
 const FILE: Record<string, Record<string, number>> = {
   "app/category/[slug]/page.tsx": {},
@@ -14,6 +16,8 @@ const FILE: Record<string, Record<string, number>> = {
   "app/rider/earnings/page.tsx": {},
   "app/search/page.tsx": {},
   "components/admin/AdminSidebar.tsx": {},
+  "app/rider/onboarding/page.tsx": { "22px": 1 }, // tra text-xl (20) e text-2xl (24)
+  "components/seller/CatalogCopilot.tsx": {},
 };
 
 describe("la scala tipografica non è aggirata con misure a mano", () => {

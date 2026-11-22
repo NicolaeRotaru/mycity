@@ -272,10 +272,10 @@ function ChangesPreview({
     <div className="w-full overflow-hidden rounded-xl border border-cream-300 bg-white shadow-warm-sm">
       <div className="flex items-center gap-2 border-b border-cream-200 bg-cream-50 px-3.5 py-2.5">
         <PackagePlus size={16} className="text-primary-700" aria-hidden />
-        <span className="flex-1 text-[13px] font-bold text-ink-900">
+        <span className="flex-1 text-sm font-bold text-ink-900">
           {changes.length} {changes.length === 1 ? 'modifica proposta' : 'modifiche proposte'}
         </span>
-        <span className="inline-flex items-center rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-semibold text-olive-800 ring-1 ring-inset ring-olive-200">
+        <span className="inline-flex items-center rounded-full bg-olive-100 px-2 py-0.5 text-xs font-semibold text-olive-800 ring-1 ring-inset ring-olive-200">
           Anteprima
         </span>
       </div>
