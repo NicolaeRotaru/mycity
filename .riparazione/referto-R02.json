@@ -1,6 +1,6 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-22 00:55",
+  "aggiornato": "2026-11-22 01:00",
   "finita": true,
   "testa": "04991f1e9c7725cf27227b73b32018d2677328aa",
   "verifica": {
@@ -355,6 +355,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "L1 opus (ripreso una volta per la guardia), L2 sonnet, revisori A opus, B e C sonnet, giro di correzione opus"
-  }
+    "nota": "L1 opus (ripreso una volta per la guardia), L2 sonnet, revisori A opus, B e C sonnet, giro di correzione opus",
+    "subagenti": 6
+  },
+  "costo_usd": 23.44
 }
