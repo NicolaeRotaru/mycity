@@ -4,6 +4,7 @@ import { Input, Select } from '@/components/ui/Field';
 import FeaturedProductsPicker from '@/components/seller/FeaturedProductsPicker';
 import type { SiteSection } from '@/lib/store-site';
 import CategorySelect from './CategorySelect';
+import { sopraIlTetto } from './dove-e-l-errore';
 
 type CollectionSec = Extract<SiteSection, { type: 'collection' }>;
 type Cfg = CollectionSec['config'];
@@ -21,7 +22,7 @@ export default function CollectionFields({ section, onChange }: { section: Colle
       <Input
         label="Titolo"
         value={c.heading ?? ''}
-        maxLength={120}
+        error={sopraIlTetto(c.heading, 120)}
         onChange={(e) => set({ heading: e.target.value })}
         placeholder="Es. I più venduti"
       />

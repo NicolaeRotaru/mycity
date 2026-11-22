@@ -48,3 +48,16 @@ export function clicDaFermare(
   if (url.origin !== window.location.origin || url.pathname === pathname) return false;
   return !conferma(`Hai modifiche ${cosa} non salvate: se esci le perdi. Uscire lo stesso?`);
 }
+
+/**
+ * R10-008 R10-009 — Niente `maxLength` sui campi brevi del sito del negozio: il browser tagliava in
+ * silenzio quello che si incollava oltre il tetto (stesso schema di R09-008 sulla home). Il testo
+ * resta intero e, oltre il tetto che lo schema rifiuta al salvataggio, l'errore lo dice sotto il campo.
+ * Si conta come lo schema (`z.string().trim().max(n)`).
+ */
+export function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
