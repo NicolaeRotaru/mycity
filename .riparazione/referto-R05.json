@@ -1,6 +1,6 @@
 {
   "sessione": "R05",
-  "aggiornato": "2026-11-22 02:25",
+  "aggiornato": "2026-11-22 02:30",
   "finita": true,
   "testa": "a3c58389c3472ccd0ae2c1d625c72c3d9980b1e2",
   "verifica": {
@@ -203,12 +203,14 @@
         "app/api/orders/cod/route.ts"
       ],
       "prova_file": [],
-      "prova_comando": "grep -rn 'approvato e online' app/api (nessuna riga)",
-      "prova_tipo": "leggera",
+      "prova_comando": "grep -c \"approvato e online\" app/api/orders/cod/route.ts (0 righe) ; grep -rn \"approvato e online\" app/api/consegna/veloce/route.ts (0 righe)",
+      "prova_tipo": "lettura-codice",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "non_applicabile",
-        "nota": "solo commento, nessun comportamento"
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "prima=$(git show a3c58389^:app/api/orders/cod/route.ts | grep -c \"approvato e online\"); dopo=$(git show a3c58389:app/api/orders/cod/route.ts | grep -c \"approvato e online\"); [ \"$prima\" -ge 1 ] && [ \"$dopo\" -eq 0 ]",
+        "nota": "solo commento: rimessa fatta a mano dalla capo squadra (prima=1, dopo=0, uscita 0); prova-rimessa.mjs non giudica un commento"
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il commento in app/api/orders/cod/route.ts:1004 dice la condizione vera di veloceSiPuo e contaFattoriniOnline (ore 8-21, negozi aperti ancora per un quarto d'ora, fattorino approvato, interruttore acceso e libero). In app/api/consegna/veloce/route.ts la frase vecchia non c'era più.",
@@ -284,6 +286,9 @@
   "domande_per_nicola": [],
   "conto": {
     "agenti": 6,
-    "nota": "3 riparatori (lotto 1 e 2 modello grande, lotto 3 piccolo) + 3 revisori (lotto 1 grande, lotti 2 e 3 piccolo): tetto raggiunto; R05-001, R05-007 e R05-008 restano senza giro di correzione"
-  }
+    "nota": "3 riparatori (lotto 1 e 2 modello grande, lotto 3 piccolo) + 3 revisori (lotto 1 grande, lotti 2 e 3 piccolo): tetto raggiunto; R05-001, R05-007 e R05-008 restano senza giro di correzione",
+    "subagenti": 6,
+    "costo_nota": "usage.cost_usd di get_session senza id, letto il 22/11 alle 01:28 prima della consegna (19,94 $)"
+  },
+  "costo_usd": 19.94
 }
