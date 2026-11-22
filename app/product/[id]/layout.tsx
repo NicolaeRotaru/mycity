@@ -161,8 +161,9 @@ export default async function ProductLayout(
   // precarico (vedi `prodottoDalPrecarico`), non da una seconda domanda allo stesso prodotto.
   const precarico = await precaricaProdotto(params.id);
   const product = await prodottoDellaRichiesta(params.id, precarico);
-  // R10-001 — Qui, nel guscio, si decide la 404. Arriva in rete perché sopra non c'è nessuna attesa
-  // (22/11/2026: tolto app/loading.tsx): un loading.tsx più in alto farebbe partire la risposta con 200.
+  // R10-001 — Qui, nel guscio, si decide la 404. Arriva in rete solo quando sopra non c'è nessuna
+  // attesa: oggi app/loading.tsx c'è ancora e fa partire la risposta con 200, quindi notFound()
+  // arriva in streaming. Va tolto insieme alle prove comuni che lo leggono per nome.
   if (!product && (await prodottoInesistente(params.id))) notFound();
 
   const schema = product && {

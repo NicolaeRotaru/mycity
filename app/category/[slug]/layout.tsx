@@ -97,7 +97,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
 /**
  * R10-001 — Una categoria che non esiste: qui, nel guscio, si decide la 404. La pagina è del
  * browser, e il suo «notFound()» arrivava dopo la risposta già partita con «tutto ok». La 404 arriva
- * in rete perché sopra non c'è nessuna attesa (22/11/2026: tolto app/loading.tsx, che faceva partire la risposta con 200). La riga è la stessa dei metadati (una lettura
+ * in rete solo togliendo app/loading.tsx, che oggi c'è ancora e fa partire la risposta con 200. La riga è la stessa dei metadati (una lettura
  * sola); un guasto non è «non trovato», e la pagina resta quella di prima col suo «Riprova».
  */
 export default async function CategoryLayout(

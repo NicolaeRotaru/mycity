@@ -139,8 +139,8 @@ export default async function StoreLayout(
   const precarico = await precaricaNegozio(params.id);
   const store = await negozioDellaRichiesta(params.id, precarico).catch(() => undefined);
   // R10-001 — Qui, nel guscio, si decide la 404 di un negozio che non c'è, con la condizione con cui
-  // la pagina dice «Negozio non trovato». Arriva in rete perché sopra non c'è nessuna attesa (22/11/2026:
-  // tolti app/loading.tsx e app/store/loading.tsx, che facevano partire la risposta con 200).
+  // la pagina dice «Negozio non trovato». Arriva in rete solo togliendo le attese sopra: oggi
+  // app/loading.tsx c'è ancora e fa partire la risposta con 200 (app/store/loading.tsx è tolto).
   if (store === null || (store && (store.role !== 'seller' || !store.is_approved || !store.store_name))) notFound();
 
   return <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>;
