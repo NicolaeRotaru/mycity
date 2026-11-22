@@ -1,13 +1,13 @@
 {
   "sessione": "R17",
-  "aggiornato": "2026-11-22 19:17",
+  "aggiornato": "2026-11-22 19:25",
   "finita": true,
-  "testa": "3fcec934b3e3d042094ef9daa65c55cce64c1f1b",
+  "testa": "4c6193460f6a2836bd2d21d85dce9ac0150b4941",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "3fcec934b3e3d042094ef9daa65c55cce64c1f1b",
-    "nota": "typecheck e lint senza errori (122 avvisi già presenti), 2000 file di prove passati e 1 saltato (12295 prove). SHA preso con git rev-parse HEAD prima del lancio, aspettato nello stesso turno."
+    "testa": "4c6193460f6a2836bd2d21d85dce9ac0150b4941",
+    "nota": "typecheck e lint senza errori (122 avvisi già presenti), 2000 file di prove passati e 1 saltato (12295 prove). SHA preso con git rev-parse HEAD prima del lancio, aspettato nello stesso turno. Prima del ritiro di R17-003 era verde anche su 3fcec934."
   },
   "voci": [
     {
@@ -52,14 +52,11 @@
     {
       "id": "R17-003",
       "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
-      "esito": "parziale",
-      "commit": "691cdf0a",
-      "file_toccati": [
-        "app/store/loading.tsx",
-        "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts"
-      ],
+      "esito": "serve_file_altrui",
+      "commit": "691cdf0a (tolto con 4c619346, su richiesta della regia)",
+      "file_toccati": [],
       "prova_file": [
-        "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts"
+        "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts (dentro il diff)"
       ],
       "prova_comando": "npx vitest run tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts --reporter=dot",
       "prova_tipo": "comando",
@@ -70,17 +67,16 @@
         "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 691cdf0a^ --file app/store/loading.tsx --prove tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts --json"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Tolto app/store/loading.tsx. Sulla base app/store/[id]/layout.tsx chiamava già notFound(). Ho modificato la prova esistente: il caso «il sipario copre anche il guscio» diventa «sopra il guscio del negozio non c'è nessuna attesa, e il guscio chiama notFound()».",
+      "cosa_ho_fatto": "La cura (togliere app/store/loading.tsx e cambiare la prova comune che lo pretende) reggeva alla rimessa in 691cdf0a. La prova è comune (usa file di altre sessioni dell onda) e da sola la cura non dà la 404 in rete, perché sopra il guscio resta app/loading.tsx: la regia ha chiesto di toglierla (4c619346). Il ramo è tornato come la base su questi due file.",
       "serve_file_altrui": [
         {
-          "file": "tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts",
-          "modifica": "il diff del commit 691cdf0a su quella prova (righe 90-106 della base): (diff nel campo diff) r17-003-prova-aprendo.patch",
+          "file": "app/store/loading.tsx + tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts, insieme alla parte di R17-002",
+          "modifica": "Da applicare tutto insieme, nello stesso commit: (1) cancellare app/store/loading.tsx; (2) applicare alla prova comune il diff qui sotto (righe 90-106 della base: il caso «il sipario copre anche il guscio» diventa «sopra il guscio del negozio non c è nessuna attesa, e il guscio chiama notFound()»; è il diff di 691cdf0a: git show 691cdf0a -- tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts); (3) la parte di R17-002: cancellare app/loading.tsx e applicare i suoi due diff (r17-002-radice-e-prova.patch e minori-s09-aspetto.patch, nel campo diff della voce R17-002). Solo con (1)+(3) un negozio che non esiste risponde 404 in rete. Per le pagine su misura del negozio serve anche cancellare app/store/[id]/loading.tsx (vedi R17-002). Nota UX: sopra il guscio si perde il sipario col volto del negozio; sotto resta app/store/[id]/loading.tsx.",
           "diff": "### r17-003-prova-aprendo.patch\ndiff --git a/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts b/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts\nindex 6b583bca..93128ba4 100644\n--- a/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts\n+++ b/tests/unit/aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva.test.ts\n@@ -87,22 +87,20 @@ describe('mentre il negozio arriva si vede una cosa sola', () => {\n     }\n   });\n \n-  it('il sipario copre anche il guscio, non solo la pagina', () => {\n-    // Da quando il guscio legge il negozio sul server, è LUI a fermarsi per\n-    // primo. Un'attesa scritta dentro il guscio non può fargli da sipario: la\n-    // trova solo chi è già entrato. Senza una schermata di attesa sopra, chi\n-    // apre un negozio vede il sipario generale del sito — che ha la forma di\n-    // una pagina qualsiasi — e poi il negozio: il salto torna, spostato in su.\n+  it('sopra il guscio del negozio non c’è nessuna attesa, e il guscio chiama notFound()', () => {\n+    // 22/11/2026 — Qui si pretendeva `app/store/loading.tsx`, il sipario col volto del negozio\n+    // SOPRA il guscio. Ma un'attesa sopra il guscio lo avvolge in un Suspense: la risposta parte\n+    // con «tutto ok» prima che il guscio sappia se il negozio esiste, e il suo notFound() arriva a\n+    // risposta già partita (un negozio inesistente rispondeva 200). Adesso sopra il guscio del\n+    // negozio non c'è nessuna attesa: il browser tiene la pagina di prima finché arriva il negozio,\n+    // già pieno grazie al precarico. Lo scheletro resta sotto il guscio (`app/store/[id]/loading.tsx`)\n+    // e nella pagina.\n     const guscio = ROTTA.find((f) => f.nome === 'app/store/[id]/layout.tsx')!.src;\n-    const gusciofermo = /export default async function/.test(guscio) && /await\\s+precarica/.test(guscio);\n-    if (!gusciofermo) return; // il guscio non aspetta niente: nessun sipario da pretendere\n-\n-    const sopra = ROTTA.find((f) => f.nome === 'app/store/loading.tsx');\n+    expect(guscio, 'il guscio non decide più la 404 del negozio').toMatch(/\\bnotFound\\(\\)/);\n     expect(\n-      sopra?.src,\n-      'il guscio del negozio si ferma a leggere sul server, ma sopra di lui non c’è nessuna ' +\n-        'schermata di attesa col volto del negozio: serve app/store/loading.tsx',\n-    ).toMatch(/<ScheletroNegozio\\s*\\/>/);\n+      ROTTA.map((f) => f.nome),\n+      'il sipario sopra il guscio del negozio è tornato: un negozio che non esiste risponde «tutto ok»',\n+    ).not.toContain('app/store/loading.tsx');\n   });\n \n   it('lo scheletro non è un cerchietto travestito', () => {\n"
         }
       ],
-      "nota": "guardia-ramo: prova comune, in attesa della firma prove_comuni. La 404 vera arriva in rete solo togliendo anche app/loading.tsx (vedi la voce sotto).",
-      "verificato_da": "revisore sonnet (subagente 3, diverso da chi ha riparato), worktree a 3fcec934: rimessa uscita 0; verdetto parziale: la 404 resta bloccata da app/loading.tsx (app/store/[id]/layout.tsx:142-143 lo dice), la prova modificata (righe 90-104) controlla solo l assenza del file e ha perso il caso «se il guscio aspetta, sopra c è uno scheletro».",
-      "cosa_resta": "La 404 vera in rete arriva solo insieme alla parte di R17-002: togliere anche app/loading.tsx, che avvolge ancora il guscio del negozio (risposta con 200 e notFound() in streaming), con la modifica a tests/unit/minori-s09-aspetto.test.ts (diff nella voce R17-002). La prova controlla la struttura delle attese sopra il guscio, non una 404 vista in rete. Sopra il guscio non c è più il sipario col volto del negozio: durante la lettura del guscio si vede il sipario generale, sotto resta app/store/[id]/loading.tsx."
+      "nota": "guardia-ramo: la prova è comune (non è di nessuna sessione), la tocca solo la regista. Con la firma prove_comuni la cura si rimette con git revert 4c619346.",
+      "verificato_da": "revisore sonnet (subagente 3, diverso da chi ha riparato), worktree a 3fcec934: rimessa uscita 0; verdetto parziale: la 404 resta bloccata da app/loading.tsx (app/store/[id]/layout.tsx:142-143 lo dice), la prova modificata (righe 90-104) controlla solo l assenza del file e ha perso il caso «se il guscio aspetta, sopra c è uno scheletro»."
     },
     {
       "id": "R17-004",
