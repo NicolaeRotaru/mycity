@@ -145,12 +145,12 @@ export default async function AboutPage() {
             <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4 break-words hyphens-auto">
               Perché esistiamo
             </h2>
-            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
+            <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch]">
               Ogni saracinesca che si abbassa è una storia, un mestiere, un pezzo di città che si
               spegne. Le grandi piattaforme hanno reso comodo comprare lontano; noi vogliamo rendere
               altrettanto comodo comprare <strong>vicino</strong>.
             </p>
-            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
+            <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
               Con MyCity un negoziante pubblica i suoi prodotti in pochi minuti — anche da una foto
               — e i suoi clienti li ricevono a casa in giornata. Niente vetrine digitali complicate,
               niente commissioni assurde: solo il quartiere che torna a girare.
@@ -171,7 +171,7 @@ export default async function AboutPage() {
           <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">
             I nostri valori
           </h2>
-          <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
+          <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch]">
             Tre principi guidano ogni decisione di prodotto.
           </p>
           <div className="grid md:grid-cols-3 gap-4 mt-6">
@@ -205,12 +205,12 @@ export default async function AboutPage() {
             <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4 break-words hyphens-auto">
               Come siamo arrivati qui
             </h2>
-            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
+            <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch]">
               Tutto è partito da una domanda semplice di un gruppo di piacentini: <em>perché posso
               farmi arrivare qualsiasi cosa dall’altra parte del mondo, ma non un etto di coppa dal
               salumiere di fronte?</em>
             </p>
-            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
+            <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
               Partiamo dal centro di Piacenza, con i primi negozi, le consegne in bici e
               un’app pensata per chi non ha tempo da perdere. Siamo all’inizio: cresceremo un
               quartiere alla volta, sempre con la stessa bussola: la prossimità.
@@ -225,7 +225,7 @@ export default async function AboutPage() {
               <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2">
                 Vuoi farne parte?
               </h2>
-              <p className="text-white/80 text-[15px] max-w-[46ch]">
+              <p className="text-white/80 text-base max-w-[46ch]">
                 Che tu abbia un negozio, una bici o voglia di costruire qualcosa di utile per la tua
                 città — c’è posto per te.
               </p>
@@ -233,13 +233,13 @@ export default async function AboutPage() {
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/lavora-con-noi"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-base bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
               >
                 <Briefcase size={18} strokeWidth={2.2} aria-hidden /> Lavora con noi
               </Link>
               <Link
                 href="/sell"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-[15px] bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 max-[300px]:px-3 max-[300px]:max-w-full font-bold text-base bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
               >
                 <Store size={18} strokeWidth={2.2} aria-hidden /> Apri un negozio
                 <ArrowRight size={16} strokeWidth={2.2} aria-hidden />

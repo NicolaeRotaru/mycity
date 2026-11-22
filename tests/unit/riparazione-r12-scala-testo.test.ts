@@ -21,3 +21,16 @@ describe('R12-014 — le schede usano i passi della scala del testo', () => {
     });
   }
 });
+
+describe('R12-014 (giro 2) — le pagine pubbliche usano i passi della scala dove c\'è un passo a 1 px', () => {
+  const misure = (file: string) => senzaCommenti(readFileSync(file, 'utf8')).match(/text-\[[0-9.]+(px|rem)\]/g) ?? [];
+  it('app/about/page.tsx non ha misure scritte a mano', () => {
+    expect(misure('app/about/page.tsx')).toEqual([]);
+  });
+  it('app/lavora-con-noi/page.tsx tiene solo il titolo da 54 px (6 px dal passo più vicino: scelta di disegno)', () => {
+    expect(misure('app/lavora-con-noi/page.tsx')).toEqual(['text-[54px]']);
+  });
+  it('app/returns/page.tsx tiene solo il titolo da 32 px (2 px dal passo più vicino: scelta di disegno)', () => {
+    expect(misure('app/returns/page.tsx')).toEqual(['text-[32px]']);
+  });
+});

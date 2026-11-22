@@ -167,7 +167,7 @@ export default function LavoraConNoiPage() {
                   <Icon size={20} strokeWidth={2.2} aria-hidden />
                 </span>
                 <div className="min-w-0 [overflow-wrap:anywhere]">
-                  <span className="block text-[15px] font-bold text-ink-900">{title}</span>
+                  <span className="block text-base font-bold text-ink-900">{title}</span>
                   <span className="block text-sm text-ink-600 mt-0.5 leading-relaxed">{body}</span>
                 </div>
               </div>
@@ -193,8 +193,8 @@ export default function LavoraConNoiPage() {
                 className="bg-white border border-cream-300 rounded-xl px-[min(1.25rem,6.25vw)] py-4 flex items-center gap-4 flex-wrap"
               >
                 <div className="flex-1 min-w-[min(200px,100%)]">
-                  <h3 className="text-[17px] font-bold text-ink-900 mb-1">{job.title}</h3>
-                  <div className="text-[13px] text-ink-500 flex gap-3.5 flex-wrap">
+                  <h3 className="text-lg font-bold text-ink-900 mb-1">{job.title}</h3>
+                  <div className="text-sm text-ink-500 flex gap-3.5 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
                       <MapPin size={14} strokeWidth={2.2} aria-hidden /> {job.location}
                     </span>
@@ -223,13 +223,13 @@ export default function LavoraConNoiPage() {
             <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
               Non trovi il ruolo giusto?
             </h2>
-            <p className="text-white/80 text-[15px] max-w-[50ch] mx-auto mb-6">
+            <p className="text-white/80 text-base max-w-[50ch] mx-auto mb-6">
               Scrivici comunque. Se condividi la nostra idea di città, troveremo il modo di lavorare
               insieme.
             </p>
             <a
               href={mailtoContatto('lavoro', 'Candidatura spontanea')}
-              className="inline-flex max-w-full items-center gap-2 rounded-full px-6 py-3.5 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors [overflow-wrap:anywhere]"
+              className="inline-flex max-w-full items-center gap-2 rounded-full px-6 py-3.5 font-bold text-base bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors [overflow-wrap:anywhere]"
             >
               <Mail size={18} strokeWidth={2.2} className="shrink-0" aria-hidden /> Invia una candidatura spontanea
             </a>
