@@ -10,6 +10,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
 import { controlloEta } from '@/lib/maggiore-eta';
 import { documentiObbligatoriDelFattorino } from '@/lib/admin/regole-approvazione';
+import { Card } from '@/components/ui/Card';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -29,11 +30,21 @@ const FILE_TROPPO_GRANDE = `File troppo grande, massimo ${TETTO_DOCUMENTO_MB} MB
 const DOCS: DocDef[] = [
   { kind: 'id_front',       label: 'Documento d’identità — fronte',  required: true,  hint: `Carta d’identità o passaporto. JPG/PNG/PDF max ${TETTO_DOCUMENTO_MB} MB.` },
   { kind: 'id_back',        label: 'Documento d’identità — retro',   required: false, hint: 'Necessario per carta d’identità italiana.' },
-  { kind: 'selfie',         label: 'Selfie con documento',           required: true,  hint: 'Foto del tuo viso tenendo il documento accanto, per face match.' },
+  { kind: 'selfie',         label: 'Selfie con documento',           required: true,  hint: 'Foto del tuo viso tenendo il documento accanto, per confrontarlo con la foto del documento.' },
   { kind: 'rider_license',  label: 'Patente di guida',               required: true,  hint: 'Obbligatoria per scooter/auto.' },
   { kind: 'rider_insurance',label: 'Polizza RC',                     required: true,  hint: 'Assicurazione responsabilità civile valida.' },
-  { kind: 'rider_haccp',    label: 'Attestato HACCP (se food)',      required: false, hint: 'Solo se consegnerai alimenti.' },
+  { kind: 'rider_haccp',    label: 'Attestato HACCP (per gli alimenti)', required: false, hint: 'Solo se consegnerai alimenti.' },
 ];
+
+/** Il messaggio dopo un caricamento riuscito: in italiano, non col nome interno del documento («id_front»). */
+const CARICATO: Record<DocKind, string> = {
+  id_front: 'Documento d’identità (fronte) caricato',
+  id_back: 'Documento d’identità (retro) caricato',
+  selfie: 'Selfie con documento caricato',
+  rider_license: 'Patente caricata',
+  rider_insurance: 'Polizza RC caricata',
+  rider_haccp: 'Attestato HACCP caricato',
+};
 
 export default function RiderOnboardingPage() {
   const router = useRouter();
@@ -124,11 +135,11 @@ export default function RiderOnboardingPage() {
       // Un 413 della piattaforma non è JSON: si legge senza far cadere tutto.
       const data = await r.json().catch(() => null);
       if (r.status === 413) throw new Error(FILE_TROPPO_GRANDE);
-      if (!r.ok || !data) throw new Error(apiErrorMessage(data, 'Upload fallito'));
-      toast.success(`${kind} caricato`);
+      if (!r.ok || !data) throw new Error(apiErrorMessage(data, 'Caricamento non riuscito'));
+      toast.success(CARICATO[kind]);
       setProfile((p) => ({ ...(p ?? {}), [columnForKind(kind)]: data.url }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Errore upload');
+      toast.error(e instanceof Error ? e.message : 'Errore nel caricamento');
     } finally {
       setUploading(null);
     }
@@ -219,8 +230,8 @@ export default function RiderOnboardingPage() {
         headers: { 'Authorization': `Bearer ${session?.access_token ?? ''}` },
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(apiErrorMessage(data, 'KYC fallito'));
-      toast.success(data.status === 'APPROVED' ? 'KYC approvato!' : 'KYC inviato, verifica in corso');
+      if (!r.ok) throw new Error(apiErrorMessage(data, 'Invio per la verifica non riuscito'));
+      toast.success(data.status === 'APPROVED' ? 'Documenti approvati!' : 'Documenti inviati: li stiamo verificando');
       router.push('/rider');
     } catch (e) {
       // 6/9/2026 — L'AVVISO DICEVA SOLTANTO «ERRORE».
@@ -256,15 +267,15 @@ export default function RiderOnboardingPage() {
         >
           <ArrowLeft size={20} aria-hidden />
         </Link>
-        <h1 className="font-serif text-[22px] font-extrabold text-ink-900">Onboarding rider</h1>
+        <h1 className="font-serif text-[22px] font-extrabold text-ink-900">Documenti e verifica</h1>
       </div>
-      <p className="px-4 text-[13px] text-ink-600">
-        Completa i 3 passi qui sotto per attivare il tuo account rider. Dopo la verifica
+      <p className="px-4 text-sm text-ink-600">
+        Completa i 3 passi qui sotto per attivare il tuo profilo da fattorino. Dopo la verifica
         potrai accettare consegne.
       </p>
 
-      <section className="mx-4 mt-5 rounded-xl border border-cream-300 bg-surface-0 p-4">
-        <h2 className="font-serif text-[17px] font-bold text-ink-900">1. Dati anagrafici</h2>
+      <Card as="section" variant="surface" className="mx-4 mt-5">
+        <h2 className="font-serif text-lg font-bold text-ink-900">1. Dati anagrafici</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Nome" value={form.legal_first_name} onChange={(v) => setForm((f) => ({ ...f, legal_first_name: v }))} />
           <Field label="Cognome" value={form.legal_last_name} onChange={(v) => setForm((f) => ({ ...f, legal_last_name: v }))} />
@@ -297,10 +308,10 @@ export default function RiderOnboardingPage() {
             </span>
           )}
         </div>
-      </section>
+      </Card>
 
-      <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
-        <h2 className="font-serif text-[17px] font-bold text-ink-900">2. Mezzo di trasporto</h2>
+      <Card as="section" variant="surface" className="mx-4 mt-4">
+        <h2 className="font-serif text-lg font-bold text-ink-900">2. Mezzo di trasporto</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-sm">
             <span className="block font-medium text-ink-700">Tipo</span>
@@ -319,15 +330,15 @@ export default function RiderOnboardingPage() {
           <Field label="Scadenza patente" type="date" value={form.rider_license_expires_on} onChange={(v) => setForm((f) => ({ ...f, rider_license_expires_on: v }))} />
           <Field label="Scadenza polizza RC" type="date" value={form.rider_insurance_expires_on} onChange={(v) => setForm((f) => ({ ...f, rider_insurance_expires_on: v }))} />
         </div>
-      </section>
+      </Card>
 
-      <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
-        <h2 className="font-serif text-[17px] font-bold text-ink-900">3. Documenti</h2>
+      <Card as="section" variant="surface" className="mx-4 mt-4">
+        <h2 className="font-serif text-lg font-bold text-ink-900">3. Documenti</h2>
         {!etaConfermata && (
           // Il passo 3 resta chiuso finché il passo 1 non è salvato. Prima
           // arrivavano prima i documenti e poi il «servono 18 anni compiuti»:
           // il documento di chi non poteva iscriversi era già da noi.
-          <p className="mt-3 rounded-lg border border-cream-300 bg-cream-100 px-3 py-2.5 text-[13px] text-ink-700">
+          <p className="mt-3 rounded-lg border border-cream-300 bg-cream-100 px-3 py-2.5 text-sm text-ink-700">
             Prima salva i tuoi dati (passo 1). Per consegnare servono 18 anni compiuti:
             lo controlliamo <strong>prima</strong> di chiederti un documento, così non
             teniamo la carta d&apos;identità di chi non può iscriversi.
@@ -337,7 +348,7 @@ export default function RiderOnboardingPage() {
           {DOCS.map((d) => {
             const uploaded = !!profile?.[columnForKind(d.kind)];
             return (
-              <div key={d.kind} className="rounded-lg border border-cream-300 bg-surface-0 p-3.5">
+              <Card key={d.kind} variant="surface" radius="lg" padding="none" className="p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium text-ink-900">
@@ -363,11 +374,11 @@ export default function RiderOnboardingPage() {
                     />
                   </label>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
-      </section>
+      </Card>
 
       <div className="mt-6 px-4">
         <button

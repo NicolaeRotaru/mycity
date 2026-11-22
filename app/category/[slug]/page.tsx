@@ -188,7 +188,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   // scritto li' dentro e nessuno l'aveva estratto.
   const sheetRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
+  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false), { indietroChiude: true });
 
   const reset = () => {
     setMaxPrice(500);
@@ -288,7 +288,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
     <div className="divide-y divide-cream-100">
       <div className="pb-3">
         <label className="block">
-          <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('sortBy')}</span>
+          <span className="block text-xs font-semibold text-ink-500 mb-1 uppercase tracking-wider">{t('sortBy')}</span>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortOption)}
@@ -307,7 +307,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       {/* Range prezzo */}
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
+          <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
           <span className="font-bold text-primary-700 text-xs">€{minPrice} – €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
         </div>
         <input
@@ -334,7 +334,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
 
       {/* Rating minimo */}
       <div className="py-3">
-        <span className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+        <span className="text-xs font-semibold text-ink-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
           <Star size={11} strokeWidth={2.2} />
           {t('minRating')}
         </span>
@@ -512,7 +512,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
             <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
             {t('filters')}
             {activeFilters > 0 && (
-              <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+              <span className="bg-primary-600 text-white text-2xs font-bold rounded-full px-1.5 py-0.5 leading-none">
                 {activeFilters}
               </span>
             )}
@@ -543,7 +543,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           <Filter size={15} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
           <span>{t('filters')}</span>
           {activeFilters > 0 && (
-            <span className="bg-white text-primary-700 text-[10px] font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
+            <span className="bg-white text-primary-700 text-2xs font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
               {activeFilters}
             </span>
           )}
@@ -560,7 +560,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
                 <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
                 {t('filters')}
                 {activeFilters > 0 && (
-                  <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                  <span className="bg-primary-600 text-white text-2xs font-bold rounded-full px-1.5 py-0.5 leading-none">
                     {activeFilters}
                   </span>
                 )}
@@ -607,7 +607,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
                 type="button"
                 onClick={c.clear}
                 aria-label={t('removeFilter', { label: c.label })}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 pl-3 pr-2 py-1 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 pl-3 pr-2 py-1 text-sm font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
               >
                 {c.label}
                 <X size={14} strokeWidth={2.4} className="text-primary-700" aria-hidden />
@@ -616,7 +616,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
             <button
               type="button"
               onClick={reset}
-              className="inline-flex items-center gap-1 px-2 py-1 text-[13px] font-semibold text-ink-500 hover:text-primary-700 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-semibold text-ink-500 hover:text-primary-700 transition-colors"
             >
               <RotateCcw size={13} aria-hidden /> {t('clearAll')}
             </button>
@@ -634,13 +634,13 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
             <div className="mt-6 space-y-6">
               {sottocategoriePiene.length > 0 && (
                 <div className="text-center">
-                  <p className="mb-2 text-[13px] text-ink-500">{t('didYouMean')}</p>
+                  <p className="mb-2 text-sm text-ink-500">{t('didYouMean')}</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {sottocategoriePiene.slice(0, 6).map((s) => (
                       <Link
                         key={s.id}
                         href={`/category/${s.slug}`}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-sm font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
                       >
                         <Search size={13} strokeWidth={2.4} aria-hidden /> {s.name}
                       </Link>
