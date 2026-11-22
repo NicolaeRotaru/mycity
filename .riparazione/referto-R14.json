@@ -1,13 +1,13 @@
 {
   "sessione": "R14",
-  "aggiornato": "2026-11-22 17:45",
+  "aggiornato": "2026-11-22 18:36",
   "finita": true,
-  "testa": "c1e4d046181841b09666967cd6997b766bd97afe",
+  "testa": "b97d6aa4fc64f11643248d8f15f80f957b9bebf4",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "c1e4d046181841b09666967cd6997b766bd97afe",
-    "nota": "typecheck pulito; lint 0 errori (122 avvisi); 2001 file di prova passati, 1 saltato (12296 casi passati, 1 saltato)"
+    "testa": "b97d6aa4fc64f11643248d8f15f80f957b9bebf4",
+    "nota": "typecheck pulito; lint 0 errori (122 avvisi); 2001 file di prova passati, 1 saltato (12296 casi passati, 1 saltato). Lo stesso verde c'era su c1e4d046, che ha lo stesso albero di codice."
   },
   "voci": [
     {
@@ -62,7 +62,7 @@
       "id": "R14-003",
       "chiave": "api-backend|comunicare due volte l'esito di una segnalazione rimanda la mail e le notifiche, e dopo un errore il nuovo tentativo rimanda anche i canali già riusciti",
       "esito": "riparato",
-      "commit": "2b0edf4c",
+      "commit": "b97d6aa4",
       "file_toccati": [
         "app/api/segnalazioni/esito/comunica.ts"
       ],
@@ -75,7 +75,7 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2b0edf4c^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-una-volta.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b97d6aa4^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-una-volta.test.ts --json"
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "comunicaEsito ricorda canale per canale cosa è arrivato: ogni canale riuscito (mail a chi segnala, notifica a chi segnala, notifica al venditore) scrive una riga in audit_logs (tabella esistente, nessuna colonna nuova) con target_id = id della segnalazione e l'impronta sha256 di destinatario+decisione+motivazione; un canale riparte solo se la sua ULTIMA riga per quella segnalazione ha un'impronta diversa. Così comunicare due volte non rimanda niente, il nuovo tentativo dopo un errore parziale rimanda solo il canale fallito, accolta→respinta→accolta riparte ogni volta e due segnalazioni con la stessa motivazione restano separate (i due casi che avevano fatto bocciare il tentativo precedente). Se audit_logs non si legge si manda come prima (meglio un esito doppio che uno perso).",
@@ -83,13 +83,14 @@
         "R14-004"
       ],
       "cosa_resta": "Due comunicazioni lanciate nello stesso istante (doppio clic simultaneo) leggono entrambe la memoria vuota e mandano due volte: la voce non lo nomina; chiuderlo davvero vorrebbe un vincolo unico nel database (migrazione).",
-      "verificato_da": "revisore S1 (subagente diverso da chi ha riparato): rilanciata la prova (6/6; contro comunica.ts della base cadono 3 casi su 6), provate 11 varianti fuori albero (decisione cambiata e rimessa con righe in ordine inverso e date PostgREST, stessa motivazione con decisione diversa, due segnalazioni con la stessa motivazione e lo stesso destinatario, memoria che lancia, canale fallito tre volte poi riuscito, venditore cambiato, scrittura del registro rifiutata, metadata potato), client della rotta = chiave di servizio (app/api/segnalazioni/route.ts:224) con SELECT/INSERT su audit_logs (migrations/425:338), colonne controllate (migrations/027:154-163), 43+97 casi vicini verdi, tsc ed eslint puliti"
+      "verificato_da": "revisore S1 (subagente diverso da chi ha riparato): rilanciata la prova (6/6; contro comunica.ts della base cadono 3 casi su 6), provate 11 varianti fuori albero (decisione cambiata e rimessa con righe in ordine inverso e date PostgREST, stessa motivazione con decisione diversa, due segnalazioni con la stessa motivazione e lo stesso destinatario, memoria che lancia, canale fallito tre volte poi riuscito, venditore cambiato, scrittura del registro rifiutata, metadata potato), client della rotta = chiave di servizio (app/api/segnalazioni/route.ts:224) con SELECT/INSERT su audit_logs (migrations/425:338), colonne controllate (migrations/027:154-163), 43+97 casi vicini verdi, tsc ed eslint puliti",
+      "nota_commit": "Il primo commit (2b0edf4c) citava solo R14-003: tolto con 0233c670 e rifatto identico in b97d6aa4, che cita tutte e due le voci; nessuna riscrittura della storia."
     },
     {
       "id": "R14-004",
       "chiave": "api-backend|l'esito di una segnalazione si rimanda due volte: dopo un errore parziale la pagina chiede di registrare di nuovo e tutti i canali ripartono, anche quelli già arrivati",
       "esito": "riparato",
-      "commit": "2b0edf4c",
+      "commit": "b97d6aa4",
       "file_toccati": [
         "app/api/segnalazioni/esito/comunica.ts"
       ],
@@ -102,14 +103,15 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2b0edf4c^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-una-volta.test.ts --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b97d6aa4^ --file app/api/segnalazioni/esito/comunica.ts --prove tests/unit/riparazione-r14-esito-una-volta.test.ts --json"
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Stesso commit di R14-003, stesse righe di comunicaEsito (111-142). La pagina admin, dopo un errore parziale, fa registrare di nuovo la decisione (nuovo deciso_at): la memoria non guarda deciso_at ma destinatario+stato+motivazione, quindi la stessa decisione registrata di nuovo rimanda solo i canali falliti (prova: 'dopo un errore parziale il nuovo tentativo rimanda solo il canale che era fallito').",
       "insieme_a": [
         "R14-003"
       ],
-      "verificato_da": "revisore S1: stesso commit; provato il nuovo tentativo dopo un errore parziale (rimanda solo il canale fallito), controllato che registrare di nuovo non si blocchi (accogli risponde 200 con giaAssente, app/api/admin/segnalazioni/accogli/route.ts:52); il codice nuovo sta a comunica.ts:102-147, usato a 167-207"
+      "verificato_da": "revisore S1: stesso commit; provato il nuovo tentativo dopo un errore parziale (rimanda solo il canale fallito), controllato che registrare di nuovo non si blocchi (accogli risponde 200 con giaAssente, app/api/admin/segnalazioni/accogli/route.ts:52); il codice nuovo sta a comunica.ts:102-147, usato a 167-207",
+      "nota_commit": "Il primo commit (2b0edf4c) citava solo R14-003: tolto con 0233c670 e rifatto identico in b97d6aa4, che cita tutte e due le voci; nessuna riscrittura della storia."
     },
     {
       "id": "R14-005",
@@ -514,6 +516,9 @@
   ],
   "conto": {
     "agenti": 4,
-    "nota": "2 riparatori (lotto 1 sul modello grande, lotto 2 su sonnet) + 2 revisori (S1 sul modello grande, S2 su sonnet); nessun Workflow. La spesa la legge la regia: get_session senza id non riporta usage.cost_usd"
-  }
+    "subagenti": 4,
+    "nota": "2 riparatori (lotto 1 sul modello grande, lotto 2 su sonnet) + 2 revisori (S1 sul modello grande, S2 su sonnet); nessun Workflow; costo letto con get_session (usage.cost_usd) alle 18:35: 16,22 $",
+    "costo_usd": 16.22
+  },
+  "costo_usd": 16.22
 }
