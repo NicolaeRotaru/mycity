@@ -109,6 +109,9 @@ const _stato = {
 /** Ogni quanto si ripete l'allarme, quando l'assenza non passa. */
 const RIPETI_ALLARME_MS = 60 * 60_000;
 
+/** L'ultima volta che questa copia ha visto il conto condiviso rispondere. 0 = mai. */
+let _ultimaRispostaAlle = 0;
+
 /**
  * La riga che ricorda, per TUTTE le copie, quando e' partito l'ultimo `error` del ripiego.
  * Sta nella tabella che il cron degli avvisi usa gia' (`operational_alert_log`): nessuna
@@ -145,8 +148,61 @@ async function nessunoHaParlatoNellOra(adesso: number): Promise<boolean> {
   }
 }
 
+/**
+ * 22/11/2026 (giro di correzione) — L'ORA DI TOLLERANZA SI CONTA FRA LE COPIE.
+ *
+ * L'inizio del ripiego stava solo nella memoria della copia: su Vercel ogni copia
+ * nuova ripartiva da zero e l'ora non passava mai. La prima volta che questa copia
+ * va in ripiego scrive l'inizio nella riga CHIAVE_RIPIEGO_DA di
+ * `operational_alert_log` (upsert che ignora i doppioni: vince chi l'ha scritta per
+ * primo), la rilegge e prende l'inizio piu' vecchio. Nessuna tabella nuova.
+ * Una riga rimasta da un guasto vecchio non si prende: se questa copia ha visto il
+ * conto rispondere DOPO quell'inizio, quel guasto e' finito, e la riga riparte da
+ * adesso. Se la tabella non risponde vale la memoria della copia, come prima.
+ */
+async function ricordaInizioRipiegoCondiviso(adesso: number): Promise<void> {
+  try {
+    const admin = getAdminSupabase();
+    const ora = new Date(adesso).toISOString();
+    await admin
+      .from('operational_alert_log')
+      .upsert({ alert_key: CHIAVE_RIPIEGO_DA, last_sent_at: ora }, { onConflict: 'alert_key', ignoreDuplicates: true });
+    const { data } = await admin
+      .from('operational_alert_log')
+      .select('last_sent_at')
+      .eq('alert_key', CHIAVE_RIPIEGO_DA)
+      .maybeSingle();
+    const scritto = data && typeof (data as { last_sent_at?: unknown }).last_sent_at === 'string'
+      ? Date.parse((data as { last_sent_at: string }).last_sent_at)
+      : NaN;
+    if (!Number.isFinite(scritto) || scritto <= 0 || scritto > adesso) return;
+    if (_ultimaRispostaAlle > scritto) {
+      await admin
+        .from('operational_alert_log')
+        .update({ last_sent_at: ora })
+        .eq('alert_key', CHIAVE_RIPIEGO_DA)
+        .lt('last_sent_at', new Date(_ultimaRispostaAlle).toISOString());
+      return;
+    }
+    if (_stato.ripiegoDa === 0 || scritto < _stato.ripiegoDa) _stato.ripiegoDa = scritto;
+  } catch {
+    // Vale quello che sa la copia.
+  }
+}
+
+/** Il conto ha risposto di nuovo: l'inizio del guasto ricordato per tutte le copie si toglie. */
+function dimenticaInizioRipiegoCondiviso(): void {
+  try {
+    const togli = getAdminSupabase().from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
+    void Promise.resolve(togli).catch(() => undefined);
+  } catch {
+    // Se non si toglie, la prossima copia che va in ripiego la riconosce come vecchia.
+  }
+}
+
 /** Solo per le prove: rimette a zero il contatore di ripiego. */
 export function __azzeraRipiegoSpesaAi(): void {
+  _ultimaRispostaAlle = 0;
   _ripiego.giorno = '';
   _ripiego.cents = 0;
   _ripieghiSegnalati = 0;
@@ -220,7 +276,10 @@ function ripiegoCents(giorno: string): number {
  */
 async function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.now()): Promise<void> {
   _ripieghiSegnalati++;
-  if (_stato.ripiegoDa === 0) _stato.ripiegoDa = adesso;
+  if (_stato.ripiegoDa === 0) {
+    _stato.ripiegoDa = adesso;
+    await ricordaInizioRipiegoCondiviso(adesso);
+  }
   // Il motivo NON si sovrascrive qui: `chiamaRpc` ci ha appena messo le parole
   // vere del database («Could not find the function…»), e questa e' la frase
   // generica di chi sta a valle. Rimpiazzarla rifarebbe il difetto di prima —
@@ -296,6 +355,8 @@ function segnaEsito(riuscito: boolean): void {
   if (riuscito) {
     fallimentiDiFila = 0;
     riprovaDopo = 0;
+    _ultimaRispostaAlle = Date.now();
+    if (_stato.ripiegoDa !== 0) dimenticaInizioRipiegoCondiviso();
     // Il conto condiviso ha risposto: il ripiego e' finito, e l'allarme con lui.
     _stato.ripiegoDa = 0;
     _stato.dettoAlle = 0;
