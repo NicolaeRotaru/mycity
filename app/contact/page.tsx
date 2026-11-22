@@ -188,7 +188,7 @@ export default function ContactPage() {
               Inviando il messaggio accetti la nostra <Link href="/privacy" className="text-primary-700 underline">Privacy Policy</Link>.
             </p>
             {TURNSTILE_SITE_KEY && (
-              <div className="flex justify-center">
+              <div className="flex justify-center max-w-full overflow-hidden">
                 <Turnstile
                   ref={antiBot}
                   siteKey={TURNSTILE_SITE_KEY}
