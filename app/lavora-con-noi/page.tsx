@@ -134,7 +134,7 @@ export default function LavoraConNoiPage() {
                 // 13/11/2026 (R15-008) — Col testo ingrandito al massimo il riquadro (p-6 = 48px per lato) e il
                 // bottone (parole che non vanno a capo) arrivavano a 369px su 360: meno margine sul telefono,
                 // e il testo del bottone può andare a capo.
-                className="min-w-0 break-words hyphens-auto bg-white border border-cream-300 rounded-2xl p-4 sm:p-6 flex flex-col shadow-warm-sm"
+                className="min-w-0 bg-white border border-cream-300 rounded-2xl p-4 sm:p-6 flex flex-col shadow-warm-sm break-words hyphens-auto"
               >
                 <span className="w-[50px] h-[50px] rounded-lg bg-primary-100 text-primary-700 inline-flex items-center justify-center mb-4">
                   <Icon size={24} strokeWidth={2.2} aria-hidden />
@@ -193,7 +193,7 @@ export default function LavoraConNoiPage() {
                 className="bg-white border border-cream-300 rounded-xl px-[min(1.25rem,6.25vw)] py-4 flex items-center gap-4 flex-wrap"
               >
                 <div className="flex-1 min-w-[min(200px,100%)]">
-                  <h3 className="text-lg font-bold text-ink-900 mb-1">{job.title}</h3>
+                  <h3 className="text-lg font-bold text-ink-900 mb-1 break-words hyphens-auto">{job.title}</h3>
                   <div className="text-sm text-ink-500 flex gap-3.5 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
                       <MapPin size={14} strokeWidth={2.2} aria-hidden /> {job.location}

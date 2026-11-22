@@ -74,10 +74,10 @@ describe('R12-002 (giro 2) · i testi restano nel loro riquadro a 280 px col tes
     expect(div).toContain('break-words');
     expect(div).toContain('hyphens-auto');
   });
-  it('/returns: il riquadro del recesso e i riquadri sotto vanno a capo (break-words si eredita)', () => {
-    const src = leggi('app/returns/page.tsx');
-    expect(tagPrima(src, '<div className="flex flex-wrap items-start gap-4">', 'div')).toContain('break-words');
-    expect(tagPrima(src, '<section className="rounded-2xl border border-cream-300 bg-white p-6">', 'div')).toContain('break-words');
+  it('/returns: la pagina intera va a capo (break-words si eredita nei riquadri)', () => {
+    const cornice = leggi('app/returns/page.tsx').match(/<div className="container mx-auto px-6 py-10 max-w-3xl([^"]*)"/)?.[1] ?? '';
+    expect(cornice).toContain('break-words');
+    expect(cornice).toContain('hyphens-auto');
   });
   it('/lavora-con-noi: i tre riquadri vanno a capo dentro il riquadro', () => {
     const riquadro = tagPrima(leggi('app/lavora-con-noi/page.tsx'), '<span className="w-[50px]', 'div');
@@ -91,5 +91,13 @@ describe('R12-007 (giro 2) · «Come funziona»: il titolo «Ordina» non si spe
     const src = leggi('components/home/HowItWorks.tsx');
     const scheda = src.match(/<Card [^>]*as="article"[^>]*>/)?.[0] ?? '';
     expect(scheda).toContain('!p-[min(1.5rem,7vw)]');
+  });
+});
+
+describe('R12-004 (giro 2) · il titolo di una posizione va a capo dentro la riga', () => {
+  it('«job.title» ha break-words e hyphens-auto: «Coordinatore» non esce dalla riga a 280 px col testo al 200%', () => {
+    const h3 = leggi('app/lavora-con-noi/page.tsx').match(/<h3 className="([^"]*)">\{job\.title\}<\/h3>/)?.[1] ?? '';
+    expect(h3).toContain('break-words');
+    expect(h3).toContain('hyphens-auto');
   });
 });
