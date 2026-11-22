@@ -212,4 +212,20 @@ describe('R04-010 · un negozio solo non riempie il carosello delle storie', () 
     expect(bolle(radice)).toEqual(['Pane di Ada', 'Fiori di Bea']);
     expect(storieLette(qc).map((s) => s.id)).toEqual(['pane-1', 'fiori-1', 'pane-2']);
   });
+
+  it.each([[true], [false]])('con 40 negozi da 40 storie le letture sono al massimo 3 e il carosello mostra più negozi (aggancio alla vista: %s)', async (aggancio) => {
+    mondo.agganciAllaVista = aggancio;
+    const negozi = Array.from({ length: 40 }, (_, k) => ({ id: `n-${k}`, role: 'seller', is_approved: true, store_name: `Negozio ${k}`, store_logo: null }));
+    mondo.profili = negozi;
+    // Il negozio 0 ha le storie più recenti, poi il 1, e così via: ogni lettura piena è di un negozio solo.
+    mondo.storie = negozi.flatMap((n, k) =>
+      Array.from({ length: 40 }, (_, i) => storia(`${n.id}-${i}`, n.id as string, new Date(ADESSO.getTime() - (k * 40 + i + 1) * 1000).toISOString())),
+    );
+    const { radice } = await accendi();
+
+    // Nel ripiego la prima domanda (con l'aggancio) cade senza dare righe: non è una lettura.
+    const lette = lettureStorie().filter((l) => aggancio || !/negozio:seller_public_profiles/.test(l.select));
+    expect(lette.length, 'letture delle storie').toBeLessThanOrEqual(3);
+    expect(bolle(radice).length, 'negozi nel carosello').toBeGreaterThan(1);
+  });
 });

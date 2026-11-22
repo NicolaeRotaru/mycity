@@ -76,8 +76,7 @@ function aTurnoFraINegozi<T extends { seller_id: string }>(storie: T[]): T[] {
 /**
  * R04-010 — Una lettura tornata piena (tante righe quanto il suo tetto) può essere tutta di un
  * negozio solo: le storie degli altri restavano fuori prima ancora dell'alternanza. Allora si
- * rilegge senza i negozi già visti, finché arrivano negozi nuovi (al massimo tanti quanti i posti
- * del carosello). Una rilettura caduta tiene quello che c'è.
+ * rilegge senza i negozi già visti, finché arrivano negozi nuovi (al massimo due riletture, tre letture in tutto). Una rilettura caduta tiene quello che c'è.
  */
 async function conGliAltriNegozi<T extends { seller_id: string }>(
   prime: T[],
@@ -87,7 +86,8 @@ async function conGliAltriNegozi<T extends { seller_id: string }>(
   let righe = prime;
   let ultima = prime;
   const visti = new Set(prime.map((s) => s.seller_id));
-  while (ultima.length >= tetto && visti.size < STORIE_MOSTRATE) {
+  // Al massimo due riletture dopo la prima lettura: tre letture in tutto, anche con 30 negozi da 30 storie.
+  for (let rilette = 0; rilette < 2 && ultima.length >= tetto && visti.size < STORIE_MOSTRATE; rilette += 1) {
     const { data, error } = await senzaQuesti(`(${[...visti].join(',')})`);
     if (error) {
       logger.warn('[storie] rilettura senza i negozi già visti non riuscita: restano le storie lette', { error });
