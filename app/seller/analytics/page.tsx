@@ -275,7 +275,7 @@ export default function SellerAnalyticsPage() {
   if (best && ABBONAMENTO_NEGOZI_ACCESO) {
     insights.push({
       icon: TrendingUp, tone: 'olive',
-      title: `Spingi "${best.name ?? 'il tuo prodotto più venduto'}"`,
+      title: `Spingi "${best.name ?? 'il tuo prodotto più visto'}"`,
       body: `È il prodotto più visto (${best.views} ${best.views === 1 ? 'visita' : 'visite'} in 30 giorni). Sponsorizzalo per restare in cima alle ricerche.`,
       ctaLabel: 'Sponsorizza', ctaHref: '/seller/promote',
     });

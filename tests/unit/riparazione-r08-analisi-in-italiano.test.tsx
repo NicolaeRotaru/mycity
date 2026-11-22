@@ -111,11 +111,13 @@ describe('R08 · le etichette della pagina Analisi sono in italiano', () => {
     expect(testo).toContain('4 ultimi 7 giorni');
   });
 
-  it('il consiglio sul prodotto senza nome dice «il tuo prodotto più venduto», non «best-seller»', async () => {
+  // Il consiglio sceglie il prodotto con più VISITE: la scritta dice quello che il dato è.
+  it('il consiglio sul prodotto senza nome dice «il tuo prodotto più visto», non «best-seller» né «più venduto»', async () => {
     scena.nomeProdotto = null;
     scena.sponsorizzazioni = true;
     const testo = await apri();
     expect(testo).not.toMatch(/best-?seller/i);
-    expect(testo).toContain('Spingi "il tuo prodotto più venduto"');
+    expect(testo).not.toMatch(/più vendut/i);
+    expect(testo).toContain('Spingi "il tuo prodotto più visto"');
   });
 });
