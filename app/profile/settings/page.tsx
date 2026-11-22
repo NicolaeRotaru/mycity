@@ -26,6 +26,7 @@ import { Input, Select } from '@/components/ui/Field';
 // cinque comandi che si annunciavano tutti come «interruttore». Adesso ha una
 // casa sua, e il nome ce l'ha (components/ui/Toggle.tsx).
 import { Toggle } from '@/components/ui/Toggle';
+import { pezziDelMotivo } from '@/lib/testo/pezzi-del-motivo';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -106,7 +107,8 @@ function schedaDallIndirizzo(): Tab | null {
  * indirizzo email: nell'email sono collegamenti, qui erano testo nudo.
  */
 function MotivoConCollegamenti({ testo }: { testo: string }) {
-  const pezzi = testo.split(/((?<![\w/.:])\/contact(?![\w/-])|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g);
+  // Senza lookbehind e senza ripercorrere il testo da ogni carattere: vedi lib/testo/pezzi-del-motivo.ts.
+  const pezzi = pezziDelMotivo(testo);
   return (
     <>
       {pezzi.map((pezzo, i) => {

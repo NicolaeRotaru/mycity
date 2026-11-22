@@ -44,6 +44,7 @@
  */
 
 import { indirizzoSenzaDatiPersonali, VALORE_NASCOSTO } from './indirizzo-senza-dati-personali';
+import { sostituisciTutti } from '@/lib/testo/scansioni-lineari';
 
 /**
  * I due tipi di evento rrweb che portano il DOM del filmato: `FullSnapshot` (2) e
@@ -64,7 +65,45 @@ export const TIPI_RRWEB_CHE_PORTANO_IL_DOM: ReadonlySet<number> = new Set([2, 3]
 // Lo stesso vale per l'apostrofo: encodeURIComponent lascia in chiaro ( ) ! * ~ '.
 // L'indirizzo finisce a uno spazio, alle virgolette doppie, a < > o a una barra
 // rovescia: nel dubbio si nasconde un carattere in piu', non un dato in meno.
-const UN_INDIRIZZO_DENTRO_IL_TESTO = /https?:\/\/[^\s"<>\\]+|\/[^\s"<>\\]*\?[^\s"<>\\]*/g;
+//
+// Le regole erano una sola espressione (`https?:\/\/[^\s"<>\\]+|\/[^\s"<>\\]*\?[^\s"<>\\]*` con `g`),
+// che da ogni barra ripercorreva la sequenza fino in fondo cercando un «?». Qui si guarda una
+// sequenza alla volta: una corrispondenza, se c'e', va dal suo inizio alla fine della sequenza, e
+// comincia al primo `http://`/`https://` seguito da qualcosa o alla prima barra con un «?» dopo.
+const CONFINE_DELL_INDIRIZZO = /[\s"<>\\]/;
+
+function sostituisciIndirizziNelTesto(testo: string, sostituisci: (indirizzo: string) => string): string {
+  let fuori = '';
+  let copiato = 0;
+  let inizio = 0;
+  while (inizio < testo.length) {
+    if (CONFINE_DELL_INDIRIZZO.test(testo[inizio])) {
+      inizio++;
+      continue;
+    }
+    let fine = inizio;
+    while (fine < testo.length && !CONFINE_DELL_INDIRIZZO.test(testo[fine])) fine++;
+    const pezzo = testo.slice(inizio, fine);
+    let da = -1;
+    const ultimoPunto = pezzo.lastIndexOf('?');
+    if (ultimoPunto > 0) {
+      const barra = pezzo.indexOf('/');
+      if (barra !== -1 && barra < ultimoPunto) da = barra;
+    }
+    for (let h = pezzo.indexOf('http'); h !== -1 && (da === -1 || h < da); h = pezzo.indexOf('http', h + 1)) {
+      if ((pezzo.startsWith('http://', h) && h + 7 < pezzo.length) || (pezzo.startsWith('https://', h) && h + 8 < pezzo.length)) {
+        da = h;
+        break;
+      }
+    }
+    if (da !== -1) {
+      fuori += testo.slice(copiato, inizio + da) + sostituisci(pezzo.slice(da));
+      copiato = fine;
+    }
+    inizio = fine;
+  }
+  return copiato === 0 ? testo : fuori + testo.slice(copiato);
+}
 
 /** Oltre questo un testo non arriva da una navigazione vera: si nasconde intero. */
 const TESTO_TROPPO_LUNGO = 50_000;
@@ -84,8 +123,8 @@ export function testoSenzaIndirizzi(testo: string): string {
   // Un testo cosi' lungo non e' un indirizzo ne' un messaggio: si chiude a chiave.
   if (testo.length > TESTO_TROPPO_LUNGO) return VALORE_NASCOSTO;
   const senzaIndirizzi = testo.includes('/')
-    ? testo.replace(
-        UN_INDIRIZZO_DENTRO_IL_TESTO,
+    ? sostituisciIndirizziNelTesto(
+        testo,
         (indirizzo) => indirizzoSenzaDatiPersonali(indirizzo) ?? VALORE_NASCOSTO,
       )
     : testo;
@@ -141,15 +180,20 @@ export function testoSenzaEmail(testo: string, segno: string = VALORE_NASCOSTO):
 // Prima e dopo non ci devono essere lettere, cifre, trattini o barre: cosi' un
 // percorso («/negozio/3331234567») o un uuid non vengono toccati.
 // Unica eccezione: uno spazio codificato («Mario%20Rossi%203331234567») conta
-// come spazio.
-const UN_TELEFONO = /(?:(?<![\w\-/])|(?<=%20))(?:(?:\+|00)39[\s.-]?)?\(?(?:3\d{2}|0\d{1,3})\)?(?:[\s.\-/]?\d){5,8}(?![\w\-/])/g;
+// come spazio. Il «prima» lo guarda `telefonoPuoPartire`, non un lookbehind: Safari prima della
+// 16.4 non lo legge, e il file intero non si caricherebbe.
+const UN_TELEFONO = /(?:(?:\+|00)39[\s.-]?)?\(?(?:3\d{2}|0\d{1,3})\)?(?:[\s.\-/]?\d){5,8}(?![\w\-/])/y;
+const PRIMA_DEL_TELEFONO_NO = /[\w\-/]/;
+const telefonoPuoPartire = (testo: string) => (i: number): boolean =>
+  i === 0 || !PRIMA_DEL_TELEFONO_NO.test(testo[i - 1]) || (i >= 3 && testo.slice(i - 3, i) === '%20');
 // Quello che ha la forma di un telefono ma non lo e': date («05.11.2026») e decimali («314.15926»).
 const SEMBRA_UNA_DATA_O_UN_DECIMALE = /^(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d+\.\d+)$/;
 
 export function testoSenzaRecapiti(testo: string): string {
   if (!testo) return testo;
-  return testoSenzaEmail(testo)
-    .replace(UN_TELEFONO, (trovato) => (SEMBRA_UNA_DATA_O_UN_DECIMALE.test(trovato) ? trovato : VALORE_NASCOSTO));
+  const senzaEmail = testoSenzaEmail(testo);
+  return sostituisciTutti(senzaEmail, UN_TELEFONO, telefonoPuoPartire(senzaEmail),
+    (trovato) => (SEMBRA_UNA_DATA_O_UN_DECIMALE.test(trovato) ? trovato : VALORE_NASCOSTO));
 }
 
 type Conteggio = { pezzi: number };

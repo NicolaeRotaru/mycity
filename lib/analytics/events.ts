@@ -25,6 +25,7 @@
  */
 
 import { track } from './posthog';
+import { inizioDiSequenza, sostituisciTutti } from '@/lib/testo/scansioni-lineari';
 import { readConsent } from '@/lib/consent';
 import { registraAccessoNelRegistro } from './registro-accessi';
 
@@ -319,6 +320,47 @@ export const trackRiderDeliveryCompleted = (orderId: string, durationMinutes: nu
 
 // Errors (user-visible)
 /**
+ * Le due regole del messaggio che si riprovavano da ogni carattere, scritte in modo che il tempo
+ * cresca con la lunghezza e non col suo quadrato (vedi lib/testo/scansioni-lineari.ts).
+ *
+ * L'email è `[\w.+-]+@[\w-]+\.[\w.-]+`, provata solo dove comincia una sequenza di caratteri che in
+ * un'email stanno prima della chiocciola.
+ */
+const UN_EMAIL_NEL_MESSAGGIO = /[\w.+-]+@[\w-]+\.[\w.-]+/y;
+const CARATTERE_PRIMA_DELLA_CHIOCCIOLA = /[\w.+-]/;
+
+/**
+ * «Key (colonna)=(valore)» di Postgres diventa «Key (…)=(…)»: è `Key\s*\([^)]*\)\s*=\s*\([^)]*\)`
+ * (maiuscole o minuscole). Quando un tentativo arriva alla prima «)» e dopo non c'è «=(», ogni
+ * «Key(» prima di quella «)» arriva alla stessa «)» e fallisce allo stesso modo: si riparte da lì.
+ */
+const INIZIO_DELLA_CHIAVE = /Key\s*\(/gi;
+const UGUALE_E_PARENTESI = /\s*=\s*\(/y;
+function chiaviNascoste(testo: string): string {
+  let fuori = '';
+  let copiato = 0;
+  let da = 0;
+  while (da < testo.length) {
+    INIZIO_DELLA_CHIAVE.lastIndex = da;
+    const inizio = INIZIO_DELLA_CHIAVE.exec(testo);
+    if (!inizio) break;
+    const primaChiusa = testo.indexOf(')', INIZIO_DELLA_CHIAVE.lastIndex);
+    if (primaChiusa === -1) break;
+    UGUALE_E_PARENTESI.lastIndex = primaChiusa + 1;
+    if (!UGUALE_E_PARENTESI.test(testo)) {
+      da = primaChiusa + 1;
+      continue;
+    }
+    const secondaChiusa = testo.indexOf(')', UGUALE_E_PARENTESI.lastIndex);
+    if (secondaChiusa === -1) break;
+    fuori += testo.slice(copiato, inizio.index) + 'Key (…)=(…)';
+    copiato = secondaChiusa + 1;
+    da = copiato;
+  }
+  return copiato === 0 ? testo : fuori + testo.slice(copiato);
+}
+
+/**
  * #216 — Il messaggio grezzo del database non deve uscire da qui.
  *
  * Un errore di chiave duplicata di Postgres suona cosi': «duplicate key value
@@ -332,9 +374,8 @@ export const trackRiderDeliveryCompleted = (orderId: string, durationMinutes: nu
  * limitata ci sono gia'.
  */
 export function messaggioSenzaDatiPersonali(message: string): string {
-  return (message || '')
-    .replace(/Key\s*\([^)]*\)\s*=\s*\([^)]*\)/gi, 'Key (…)=(…)')
-    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
+  const conChiaviNascoste = chiaviNascoste(message || '');
+  return sostituisciTutti(conChiaviNascoste, UN_EMAIL_NEL_MESSAGGIO, inizioDiSequenza(conChiaviNascoste, CARATTERE_PRIMA_DELLA_CHIOCCIOLA), () => '<email>')
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<id>')
     // S10 (5/11/2026) — Un telefono si scrive con gli spazi («333 123 4567»,
     // «+39 333 123 45 67»): la regola delle 6 cifre attaccate non lo vedeva, e
