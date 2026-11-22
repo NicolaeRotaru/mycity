@@ -1,0 +1,367 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-22 01:35",
+  "finita": true,
+  "testa": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
+    "nota": "typecheck, lint e vitest verdi (file: 1923 passed | 1 skipped (1924); prove: 11864 passed | 1 skipped (11865)); un eventuale file saltato è uno skip condizionale già alla base, nessuna prova di R02 usa skip; lanciato sulla testa e aspettato"
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "chiave": "ai-endpoints|i controlli di conformità del copilot in blocco partono tutti insieme, fino a 200, senza un tetto",
+      "esito": "riparato",
+      "commit": "7cf637354bb9ae3def21299025703502d3c5c095",
+      "file_toccati": [
+        "app/api/ai/catalog-apply-bulk/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-conformita-con-tetto.test.ts",
+        "tests/unit/riparazione-r02-conformita-entro-i-120-secondi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-conformita-con-tetto.test.ts tests/unit/riparazione-r02-conformita-entro-i-120-secondi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3b084b5c094ca07219211e1a70e640c25535d317^ --file app/api/ai/catalog-apply-bulk/route.ts --prove tests/unit/riparazione-r02-conformita-con-tetto.test.ts,tests/unit/riparazione-r02-conformita-entro-i-120-secondi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tetto di 5 controlli in volo (commit 3b084b5c) più un tetto di tempo: i controlli nuovi smettono di partire dopo 70 s, le scritture dopo 105 s, così la rotta finisce prima dei 120 s di app/api/ai/**. Le voci non controllate o non scritte restano intatte, hanno motivo «rimandalo» nei results e la risposta le elenca in `rimaste`. Prova con orologio finto: 200 voci a 8 s l'una finiscono sotto i 110 s.",
+      "verificato_da": "revisore B (sonnet), tre giri: tetto di 5 provato; giro K02 7cf63735 letto: controlli entro ~80 s, scritture entro 105 s, rimaste mai scritte, ordine e primo errore invariati; 2 prove verdi"
+    },
+    {
+      "id": "R02-002",
+      "chiave": "ai-endpoints|un lavoro sul catalogo «forse partito» non si può scartare",
+      "esito": "riparato",
+      "commit": "25ac5e9d8a31708f31bbfa00f4d05d99e5691610",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/cancel/route.ts",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-scarta-invio-incerto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-scarta-invio-incerto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 25ac5e9d8a31708f31bbfa00f4d05d99e5691610^ --file app/api/ai/catalog-batch/cancel/route.ts,app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-scarta-invio-incerto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "insieme_a": [
+        "R02-003"
+      ],
+      "cosa_ho_fatto": "Stessa riga di R02-003 (cancel/route.ts:39 accettava solo 'ready'), stesso commit: la riga 'submitting' col motivo INVIO_SENZA_RISPOSTA (quindi senza lotto), nata da più di 3 minuti, si scarta; rilettura e scarto usano solo .eq, e lo scarto è condizionato su stato e motivo. Resta 'canceled' come traccia, col motivo che dice che il lotto potrebbe essere partito. L'id del fornitore non c'è, quindi nessun annullo presso il fornitore: via più sicura come sopra.",
+      "verificato_da": "revisore A (opus): stessa riga di R02-003; scarto condizionato rilegge e rifiuta un lotto agganciato (409); altro negozio→409; rimessa regge"
+    },
+    {
+      "id": "R02-003",
+      "chiave": "ai-endpoints|dopo ogni 500/502/504 del fornitore all'invio di un lotto il negozio resta bloccato fino a 24 ore, senza modo di scartare il lavoro",
+      "esito": "riparato",
+      "commit": "25ac5e9d8a31708f31bbfa00f4d05d99e5691610",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/cancel/route.ts",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-scarta-invio-incerto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-scarta-invio-incerto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 25ac5e9d8a31708f31bbfa00f4d05d99e5691610^ --file app/api/ai/catalog-batch/cancel/route.ts,app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-scarta-invio-incerto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "insieme_a": [
+        "R02-002"
+      ],
+      "cosa_ho_fatto": "La rotta cancel, se il lavoro non è pronto, scarta anche una riga 'submitting' col motivo INVIO_SENZA_RISPOSTA (il caso dopo 500/502/504/520/524, timeout o connessione caduta), nata da più di 3 minuti. I 3 minuti: la rotta di avvio vive al massimo 120 s (vercel.json, app/api/ai/**), quindi dopo non può più agganciare un lotto. Solo metodi .eq: la riga si rilegge con un update che riscrive lo stesso motivo (nessun dato cambia) filtrato su id, seller_id, status 'submitting' e motivo, e restituisce batch_id e created_at; età e batch_id nullo si controllano in JS; poi lo scarto è un update condizionato su id, seller_id, status 'submitting' e motivo. Nessuna garanzia persa: created_at non lo scrive nessuno, e chi mette un batch_id (start «aggancia», status «daAgganciare») cambia nello stesso update stato in 'processing' e motivo, quindi «in invio + invio senza risposta» vuol dire anche «senza lotto», e un aggancio fra rilettura e scarto fa fallire lo scarto (409). Una riga «lotto partito ma non agganciato: <id>» non si scarta. La riga non si cancella: resta 'canceled' con la data e il motivo «il lotto potrebbe essere partito ed essere stato pagato; se serve, si recupera con l'assistenza», più un logger.warn per la riconciliazione; la stima era già contata nel tetto alla partenza. Annullarlo presso il fornitore non si può: l'id del lotto non è mai arrivato; via più sicura: niente scarto prima dei 3 minuti, scarto condizionato, traccia sulla riga. I messaggi 409 e 503 dell'avvio dicono che dopo qualche minuto si può scartare (tengono «verificare», «ricarica», «Non riavviarlo» che le prove esistenti chiedono). Il pulsante nella pagina è nel commit di R02-007, la bandiera «incerto» in quello di R02-005: con tutti e tre la voce è chiusa.",
+      "verificato_da": "revisore A (opus): prova verde; varianti 179s/180s→409, 181s→200; aggancio fra rilettura e scarto→409; altro negozio e riga assente→409; pg_trigger vuoto; rimessa regge",
+      "nota": "La prova nuova fa tutto il giro: 502 all'invio → 409 al secondo avvio → scarto rifiutato dopo 1 minuto → scarto accettato dopo 4 → nuovo avvio 200. La prova esistente riparazione-r04-scarta-lavoro è identica alla base e verde. Nota per la regista: cancel/route.ts rilegge la riga con un update che riscrive lo stesso motivo invece di una select, perché il database finto della prova comune tests/unit/riparazione-r04-scarta-lavoro.test.ts (non mia, la tocca solo la regista) ha solo update/eq/select. Se la regista aggiunge al finto select(), is() e lt(), la rotta può tornare a una select più un update condizionato con .is(batch_id,null) e .lt(created_at,…)."
+    },
+    {
+      "id": "R02-004",
+      "chiave": "ai-endpoints|due avvii insieme di un lavoro sul catalogo superano entrambi il controllo dei lavori aperti",
+      "esito": "parziale",
+      "insieme_a": [
+        "R02-013"
+      ],
+      "commit": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "",
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La gara fra due avvii è chiusa: migrazione 640 (indice unico parziale su catalog_ai_jobs per gli stati aperti, guardia to_regclass, doppioni chiusi tenendo ready, poi processing con batch_id, poi il più recente) e 409 sul 23505 nella rotta di avvio. Il blocco dell avvio per 120 s dopo ogni applicazione (713d46ff) è stato tolto in 23e86543 su decisione della regia: toccava tutti i negozi a ogni applicazione.",
+      "cosa_resta": "Il «rimetti pronto» di apply/route.ts può ricevere 23505 dalla 640 se il negozio avvia un lavoro mentre un applicazione è in corso (gara rara, già possibile alla base con due lavori aperti). Cura intera: (1) apply/route.ts scrive un segno di fine a fine applicazione e lo azzera in rimettiPronto, e legge l errore di rimettiPronto dicendo il 23505 al negozio; (2) una colonna nuova nullable (es. applicazione_finita_il timestamptz) in una migrazione della fascia 641-649, che la regia porta a Nicola; (3) start/route.ts dà 409 solo se l ultimo lavoro applied ha quel segno nullo e updated_at entro 120 s.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "a fine applicazione (riga ~345, dopo `if (ripetibile) await rimettiPronto();`), se non ripetibile, scrivere un segno di fine sulla riga: `await admin.from('catalog_ai_jobs').update({ applicazione_finita_il: new Date().toISOString() }).eq('id', job.id).eq('seller_id', user.id)`; e rimettere a null lo stesso campo dentro rimettiPronto (riga 124-128)."
+        },
+        {
+          "file": "migrations/<numero nella fascia R02>_catalog_ai_jobs_applicazione_finita_il.sql",
+          "modifica": "aggiungere `applicazione_finita_il timestamptz` nullable a catalog_ai_jobs (non toccare la 640). Poi in start/route.ts (mio) il 409 vale solo se l'ultimo 'applied' ha applicazione_finita_il null e updated_at più recente di 120 s: lo faccio io appena il segno esiste."
+        }
+      ],
+      "nota": "Senza migrazione l'unica alternativa è riscrivere updated_at a fine applicazione, ma rompe l'ordine dei lavori e la 640: sconsigliata. Resta anche il 23505 di rimettiPronto (serve_file_altrui già dichiarato).",
+      "verificato_da": "revisore A (opus): prova SQL e vitest verdi, 640 su db con doppioni, rimessa regge; difetti (rimettiPronto 23505, to_regclass, scelta doppioni) corretti in 713d46ff e ricontrollati da revisore B: 409 se applied <120s, SQL 640 letto; collaudo K02: blocco di 120 s dopo ogni applicazione = rompe_altro, resta per mancanza di un segno di fine (serve_file_altrui)",
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-due-avvii-insieme.test.ts --json (la parte SQL della 640 regge con --sql r02_rimessa_c, invariata dal commit 713d46ff)"
+      }
+    },
+    {
+      "id": "R02-005",
+      "chiave": "ai-endpoints|la pagina del lotto mostra la rotella «tra poco lo vedi partire» per 24 ore su un invio senza risposta",
+      "esito": "riparato",
+      "commit": "d912e35aca8e16d002a9bec7e705cf547a1609f4",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/status/route.ts",
+        "app/seller/products/ai-batch/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-invio-incerto-senza-rotella.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-invio-incerto-senza-rotella.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b35230c6808fe17b31c3c1727c90a61ca4aa82a2^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r02-invio-incerto-senza-rotella.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta dello stato aggiunge «incerto» (true per una riga 'submitting' senza lotto, col motivo INVIO_SENZA_RISPOSTA, nata da più di 3 minuti) e la pagina, con incerto, non mostra la rotella «tra poco lo vedi partire» ma un riquadro con «Scarta» (b35230c6). Giro di correzione (d912e35a): il riquadro non dice più «Se parte lo vedi qui; se resta così, si chiude da solo entro 24 ore», falso dopo i 3 minuti: dice che l'invio non ha avuto risposta, che quel lavoro non partirà più da solo, e di scartarlo e avviarne un altro (se l'invio era arrivato, i risultati si recuperano con l'assistenza). La prova fissa che «se parte lo vedi qui» e «si chiude da solo» non ci sono più e che c'è «non partirà più da solo» e «Scartalo».",
+      "verificato_da": "revisore A (opus): bandiera e soglia allineate allo scarto a 179/180/181s; testo «se parte lo vedi qui» falso dopo 3 min, corretto in d912e35a e ricontrollato da revisore B; prova verde",
+      "nota": "Rimessa nuova /tmp/claude-0/corr-rimessa-R02-005.json, uscita 0."
+    },
+    {
+      "id": "R02-006",
+      "chiave": "ai-endpoints|il copilot su un sottoinsieme grande del catalogo (es. «tutti i disponibili», 150 su 200) scrive ancora gli id uno per uno e risponde «riprova»",
+      "esito": "parziale",
+      "commit": "42a1ec1969953a285f5558f897b219e6ff090ac2",
+      "file_toccati": [
+        "app/api/ai/copilot/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-copilot-sottoinsieme.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-copilot-sottoinsieme.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 372a436a9636b7902f492cdb44c1f2189869a490^ --file app/api/ai/copilot/route.ts --prove tests/unit/riparazione-r02-copilot-sottoinsieme.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La regola del copilot accetta un filtro (stato e/o categoria, sottocategorie comprese) e gli id li sceglie il server; il tetto di 40 voci singole lo fa rispettare il server (372a436a). Giro di correzione (42a1ec19): un criterio presente ma non valido (stato fuori elenco, categoria vuota, di soli spazi o non testo) fa scegliere 0 prodotti invece di essere saltato e allargare il filtro ({stato:'Available', categoria:'Abbigliamento'} → 0, non 66); quando il tetto delle 40 voci taglia, alla risposta si aggiunge «Ne ho preparate 40 su N: per le altre chiedimi con un filtro.». Prove nuove: i quattro criteri non validi → 0; 55 voci → 40 e la frase; 30 voci → risposta del modello invariata.",
+      "verificato_da": "revisore C (sonnet), due giri: Available+Abbigliamento=0 e 55 voci=40 con avviso ora giusti; trovato null su stato/categoria che dà 0 (route.ts:125); rimessa regge",
+      "nota": "Rimessa nuova /tmp/claude-0/corr-rimessa-R02-006.json, uscita 0. Le 11 prove che importano la rotta del copilot sono verdi.",
+      "cosa_resta": "app/api/ai/copilot/route.ts:125 (e il controllo gemello su stato): un null nel campo che il modello non usa conta come criterio scritto e non valido, quindi {stato:\"available\", categoria:null} sceglie 0 prodotti invece di 150. Basta trattare null come assente (categoria != null && !nomeCat, idem per stato) e aggiungere il caso alla prova. Errore sicuro (non allarga il filtro); lo schema dichiara stringa ed enum, ma il vincolo non è fatto rispettare."
+    },
+    {
+      "id": "R02-007",
+      "chiave": "ai-endpoints|un lavoro «in invio» incerto non si può scartare: il negozio resta bloccato fino a 24 ore",
+      "esito": "riparato",
+      "commit": "07680a024710b83b21ff8b50cade45c3b68f21c4",
+      "file_toccati": [
+        "app/seller/products/ai-batch/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-scarta-dalla-pagina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-scarta-dalla-pagina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 07680a024710b83b21ff8b50cade45c3b68f21c4^ --file app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r02-scarta-dalla-pagina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel riquadro dell'invio incerto la pagina ha «Scarta» (la stessa funzione del lavoro pronto), con l'avviso che se il lotto era partito i risultati si recuperano solo con l'assistenza. La parte server (cancel che accetta l'incerto) è nel commit di R02-003/R02-002. Prova: la pagina vera parla con le rotte vere di stato e scarto; dopo il clic la riga è 'canceled' con il motivo, la pagina dice «annullato» e «Avvia sul catalogo» torna; a 1 minuto «Scarta» non c'è.",
+      "verificato_da": "revisore A (opus): prova verde; «Scarta» compare col polling dopo 3 min senza ricaricare; lotto agganciato appena prima del clic→409; a 1 min niente pulsante; rimessa regge"
+    },
+    {
+      "id": "R02-008",
+      "chiave": "ai-endpoints|il messaggio di «genera con ai» dice «modifica come preferisci» anche quando il testo è solo una proposta",
+      "esito": "riparato",
+      "commit": "5140d52c1680bd180b42d88cd3c314e9eb6fdbfb",
+      "file_toccati": [
+        "components/AIDescriptionButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-genera-con-ai-messaggio-a-video.test.tsx",
+        "tests/unit/riparazione-r02-messaggio-genera-con-ai.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-genera-con-ai-messaggio-a-video.test.tsx tests/unit/riparazione-r02-messaggio-genera-con-ai.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1c61a93eb2274d7b38a743e4b9ae48901eff09cc^ --file components/AIDescriptionButton.tsx --prove tests/unit/riparazione-r02-genera-con-ai-messaggio-a-video.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sopra una descrizione già scritta il messaggio dice «Proposta pronta — la tua descrizione resta com'è finché non scegli», sopra un campo vuoto «Descrizione generata — modifica come preferisci» (1c61a93e, 67841625). Giro di correzione (5140d52c): il messaggio si decide col testo del momento in cui arriva la risposta, come fa ProductForm.tsx:1079 con getValues. ProductForm passa currentText={watch('description')}, cioè il valore vivo: il bottone ne tiene l'ultimo in un ref aggiornato a ogni cambio e calcola il messaggio da lì, prima di onResult. Nessun file altrui toccato. Prova col bottone montato e fetch tenuta in attesa: campo vuoto al clic e scritto durante l'attesa → «proposta»; testo al clic e cancellato durante l'attesa → «modifica come preferisci» (sul codice di prima tutte e due rosse).",
+      "verificato_da": "revisore C (sonnet), due giri: testo cambiato durante l attesa nei due versi coperto dalla prova montata; unico chiamante ProductForm passa watch; 161 prove vicine verdi",
+      "nota": "Commit della voce: 1c61a93e, 67841625, 5140d52c. Rimessa nuova /tmp/claude-0/corr-rimessa-R02-008.json, uscita 0, con la sola prova montata (con anche riparazione-r02-messaggio-genera-con-ai.test.ts esce 3: importa il nome nuovo messaggioDelRisultato)."
+    },
+    {
+      "id": "R02-009",
+      "chiave": "ai-endpoints|la conformità dei prodotti (classifyproductpolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
+      "esito": "parziale",
+      "commit": "a4d97723844008a1d628920717072963939263a3",
+      "file_toccati": [
+        "lib/ai/moderation.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-conformita-prodotti-tempo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-conformita-prodotti-tempo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a4d97723844008a1d628920717072963939263a3^ --file lib/ai/moderation.ts --prove tests/unit/riparazione-r02-conformita-prodotti-tempo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "classifyProductPolicy ha 10 s e nessun ritentativo. I giri di fila in catalog-apply-bulk sono coperti dal commit 7cf63735 (voce R02-001: tetto di tempo di 70 s sui controlli e 105 s sulle scritture, voci rimaste fuori dette nella risposta); non è la stessa riga, quindi nessun insieme_a.",
+      "cosa_resta": "catalog-batch/apply/route.ts (righe 41-53 e 222) chiama il filtro a gruppi da 5 su fino a 200 righe senza tetto di tempo: con 10 s a controllo sfora i 120 s della rotta.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "dare ad `aGruppi` una scadenza: `const inizio = Date.now()` all'inizio dell'handler; in aGruppi, prima di ogni gruppo, `if (Date.now() > scadenza) break` (le voci non controllate restano senza esito); alla chiamata di riga ~222 passare `inizio + 70_000`; chi non ha verdetto (verdetti[i] undefined) va nei saltati con motivo «non controllato in tempo: rimandalo», e la risposta lo dice. Stesso schema di catalog-apply-bulk/route.ts."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): prova verde; client.ts maxRetries=0 e catch dei 5 chiamanti letti; 40 prove vicine verdi; collaudo K02: i 40 giri restano in catalog-batch/apply (non di R02)"
+    },
+    {
+      "id": "R02-010",
+      "chiave": "ai-endpoints|il freno «un errore all'ora» del tetto di spesa ai vive nella memoria della copia: con il tetto impostato e la migrazione del conto assente l'errore può arrivare a ogni giro del cron",
+      "esito": "riparato",
+      "commit": "9c3cf4e7f4a75d4d4535f2f3afee15079ec35ca2",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-errore-tetto-fra-copie.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-errore-tetto-fra-copie.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c3cf4e7f4a75d4d4535f2f3afee15079ec35ca2^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r02-errore-tetto-fra-copie.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima di fare il logger.error del ripiego (conto assente o oltre un'ora) la copia chiede a una riga fissa di operational_alert_log (tabella già usata dal modulo, nessuna migrazione) se qualcuno ha parlato nell'ultima ora; se la riga non risponde parla comunque. Prova con orologio finto e tre copie rilette con vi.resetModules. Il tetto e il momento in cui blocca la spesa non cambiano.",
+      "verificato_da": "revisore B (sonnet): migrazione 084 e diff letti; 3 varianti tabella/eccezione temporanee: parla comunque; 40 prove vicine verdi; rimessa regge (exit 0)"
+    },
+    {
+      "id": "R02-011",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "dopo la costruzione di `alerts` (const alerts a riga ~101, prima del filtro di dedup) aggiungere `alerts.push(...(await allarmiTettoSpesaAiPerIlCron()))`, importando `allarmiTettoSpesaAiPerIlCron` da '@/lib/ai/tettoSpesa': la funzione esiste già (lib/ai/tettoSpesa.ts, ricorda l'inizio del guasto nella riga ai-tetto-condiviso:ripiego-da di operational_alert_log) ma nessuno la chiama (grep in app e lib)."
+        }
+      ],
+      "nota": "L'ora di tolleranza resta nella memoria della copia finché il cron non chiama la funzione già pronta; nessun codice di lib/ai/tettoSpesa.ts da cambiare e nessuno stato nuovo da inventare. Un tentativo di cura parziale dentro lib/ai/tettoSpesa.ts (commit c3379674: inizio del ripiego ricordato fra le copie nella riga CHIAVE_RIPIEGO_DA) è stato tolto con il commit 04991f1e: il revisore ha mostrato che una riga rimasta da un guasto vecchio (copie morte senza vedere il ritorno, cron che non la toglie) faceva scattare subito daMinuti>60 al guasto dopo, con allarme anticipato e quota di ripiego ridotta. Un pezzo dentro il file resta possibile (ignorare una riga più vecchia di 24 ore), ma senza la chiamata dal cron non chiude la voce.",
+      "verificato_da": "revisore B (sonnet), due giri: grep conferma allarmiTettoSpesaAiPerIlCron mai chiamata; tipi AllarmeTetto/AlertRow compatibili con route.ts:101,805; tentativo in-file smentito (riga vecchia 10 giorni) e tolto"
+    },
+    {
+      "id": "R02-012",
+      "chiave": "ai-endpoints|la scheda della chat non mostra la rimozione di un attributo rimasto da una categoria di prima, che il server invece toglie",
+      "esito": "riparato",
+      "commit": "5c60e8ab33f54c3aea6af74034041c92274edba8",
+      "file_toccati": [
+        "lib/products/prontoPerLaVendita.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-scheda-chat-rimozione-rimasta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-scheda-chat-rimozione-rimasta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5c60e8ab33f54c3aea6af74034041c92274edba8^ --file lib/products/prontoPerLaVendita.ts --prove tests/unit/riparazione-r02-scheda-chat-rimozione-rimasta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "righeDellaProposta accetta gli attributi attuali del prodotto (già presenti nello snapshot che la chat passa) e mostra «Rimuovi x» per un attributo rimasto che non è un campo della categoria attuale, come lo toglie il server; senza quell'attributo non promette niente.",
+      "verificato_da": "revisore C (sonnet): diff letto contro aiPatch.ts (attributiDaTogliere, soloPieni:false); prova ok, 12 file vicini 201 verdi; varianti chiave/senza categoria/attributes null provate"
+    },
+    {
+      "id": "R02-013",
+      "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
+      "esito": "parziale",
+      "insieme_a": [
+        "R02-004"
+      ],
+      "commit": "23e865432b8dc4ec5e234a6fdf40541b2102e1fb",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "",
+      "prova_tipo": "comando",
+      "prova_eseguita": false,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La gara fra due avvii è chiusa: migrazione 640 (indice unico parziale su catalog_ai_jobs per gli stati aperti, guardia to_regclass, doppioni chiusi tenendo ready, poi processing con batch_id, poi il più recente) e 409 sul 23505 nella rotta di avvio. Il blocco dell avvio per 120 s dopo ogni applicazione (713d46ff) è stato tolto in 23e86543 su decisione della regia: toccava tutti i negozi a ogni applicazione.",
+      "cosa_resta": "Il «rimetti pronto» di apply/route.ts può ricevere 23505 dalla 640 se il negozio avvia un lavoro mentre un applicazione è in corso (gara rara, già possibile alla base con due lavori aperti). Cura intera: (1) apply/route.ts scrive un segno di fine a fine applicazione e lo azzera in rimettiPronto, e legge l errore di rimettiPronto dicendo il 23505 al negozio; (2) una colonna nuova nullable (es. applicazione_finita_il timestamptz) in una migrazione della fascia 641-649, che la regia porta a Nicola; (3) start/route.ts dà 409 solo se l ultimo lavoro applied ha quel segno nullo e updated_at entro 120 s.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/catalog-batch/apply/route.ts",
+          "modifica": "come R02-004 (segno di fine applicazione), più gestire il 23505 di rimettiPronto (riga 124-131)."
+        },
+        {
+          "file": "migrations/<numero nella fascia R02>_catalog_ai_jobs_applicazione_finita_il.sql",
+          "modifica": "come R02-004."
+        }
+      ],
+      "nota": "",
+      "verificato_da": "revisore A (opus) e revisore B (sonnet): stessa cura di R02-004 (indice 640 + 409 sul 23505 + attesa di un applicazione in corso), prove verdi, rimessa regge; collaudo K02: stesso esito di R02-004",
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4897836a^ --file app/api/ai/catalog-batch/start/route.ts --prove tests/unit/riparazione-r02-due-avvii-insieme.test.ts --json (la parte SQL della 640 regge con --sql r02_rimessa_c, invariata dal commit 713d46ff)"
+      }
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "con un solo lavoro aperto per negozio, il «rimetti pronto» dell applica può fallire senza che nessuno lo veda",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-batch/apply/route.ts:124-131,188,345",
+      "descrizione": "Mentre l applica gira il lavoro è applied (chiuso); se il negozio avvia un altro lavoro, rimettiPronto() riceve 23505 dall indice della migrazione 640 e l errore non viene letto: il lavoro resta applied mentre la risposta dice ripetibile:true e i saltati pagati non si riprovano. Dal giro di correzione (713d46ff) start/route.ts rifiuta l avvio con 409 finché il lavoro applied è stato prenotato da meno di 120 s, la durata massima della rotta: resta solo la gara stretta fra il controllo dell avvio e la prenotazione dell applica. Nessuna spesa doppia. Il file non è di R02: va letto l errore di rimettiPronto e, se 23505, detto al negozio (modifica esatta nel serve_file_altrui di R02-004 e R02-013)."
+    }
+  ],
+  "domande_per_nicola": [
+    "La migrazione 640 (un solo lavoro AI aperto per negozio) va applicata al database vero quando decidi tu: prima lancia la query nell intestazione del file, che dice se ci sono negozi con più lavori aperti; se ci sono, la migrazione lascia aperto il più recente e chiude gli altri come canceled (lotto, risultati e motivo restano sulla riga).",
+    "Il limite di 3 minuti per scartare un invio incerto (cancel/route.ts e status/route.ts) regge finché vercel.json dà 120 secondi alle rotte app/api/ai/**: se quel tempo sale oltre circa 170 secondi, va alzato anche il limite."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "6 subagenti aperti (L1 opus, L2 sonnet, revisori A opus, B e C sonnet, correzione opus); per il giro K02 ripresi L2 e il revisore B, nessun subagente nuovo",
+    "subagenti": 6
+  },
+  "costo_usd": 27.67
+}

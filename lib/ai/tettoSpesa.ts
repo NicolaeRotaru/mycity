@@ -109,6 +109,42 @@ const _stato = {
 /** Ogni quanto si ripete l'allarme, quando l'assenza non passa. */
 const RIPETI_ALLARME_MS = 60 * 60_000;
 
+/**
+ * La riga che ricorda, per TUTTE le copie, quando e' partito l'ultimo `error` del ripiego.
+ * Sta nella tabella che il cron degli avvisi usa gia' (`operational_alert_log`): nessuna
+ * tabella nuova. Una riga sola, che si aggiorna: chi la aggiorna per primo in quell'ora parla.
+ */
+export const CHIAVE_ERRORE_RIPIEGO = 'ai-tetto-condiviso:errore-ripiego';
+
+/**
+ * Il freno «un `error` all'ora» non puo' vivere solo nella memoria della copia: su Vercel
+ * ogni giro del cron nasce su una copia nuova, che crede di non aver mai parlato. Prima di
+ * parlare si chiede alla riga condivisa se qualcuno ha gia' parlato nell'ultima ora.
+ * Se la riga non risponde si parla comunque: meglio un doppione che il silenzio.
+ */
+async function nessunoHaParlatoNellOra(adesso: number): Promise<boolean> {
+  try {
+    const admin = getAdminSupabase();
+    const ora = new Date(adesso).toISOString();
+    const nuova = await admin
+      .from('operational_alert_log')
+      .upsert({ alert_key: CHIAVE_ERRORE_RIPIEGO, last_sent_at: ora }, { onConflict: 'alert_key', ignoreDuplicates: true })
+      .select('alert_key');
+    if (nuova.error) return true;
+    if ((nuova.data ?? []).length > 0) return true;
+    const presa = await admin
+      .from('operational_alert_log')
+      .update({ last_sent_at: ora })
+      .eq('alert_key', CHIAVE_ERRORE_RIPIEGO)
+      .lt('last_sent_at', new Date(adesso - RIPETI_ALLARME_MS).toISOString())
+      .select('alert_key');
+    if (presa.error) return true;
+    return (presa.data ?? []).length > 0;
+  } catch {
+    return true;
+  }
+}
+
 /** Solo per le prove: rimette a zero il contatore di ripiego. */
 export function __azzeraRipiegoSpesaAi(): void {
   _ripiego.giorno = '';
@@ -182,7 +218,7 @@ function ripiegoCents(giorno: string): number {
  * giornaliero del sito NON e' quello scritto — e la prima notizia, altrimenti,
  * arriva con la fattura.
  */
-function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.now()): void {
+async function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.now()): Promise<void> {
   _ripieghiSegnalati++;
   if (_stato.ripiegoDa === 0) _stato.ripiegoDa = adesso;
   // Il motivo NON si sovrascrive qui: `chiamaRpc` ci ha appena messo le parole
@@ -194,6 +230,7 @@ function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.no
   if (_stato.permanente) {
     if (adesso - _stato.dettoAlle < RIPETI_ALLARME_MS) return;
     _stato.dettoAlle = adesso;
+    if (!(await nessunoHaParlatoNellOra(adesso))) return;
     logger.error(
       '[ai] il conto della spesa condiviso NON ESISTE: il tetto giornaliero vale per copia, non per il sito. Applicare la migrazione 131.',
       {
@@ -215,6 +252,7 @@ function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.no
   if (daMinuti > TOLLERANZA_RIPIEGO_MINUTI) {
     if (adesso - _stato.dettoAlle < RIPETI_ALLARME_MS) return;
     _stato.dettoAlle = adesso;
+    if (!(await nessunoHaParlatoNellOra(adesso))) return;
     logger.error(
       '[ai] il conto della spesa condiviso non risponde da oltre un ora: il tetto giornaliero vale per copia, non per il sito (quota ridotta per copia).',
       { motivo, detto_dal_database: _stato.motivo, giorno, daMinuti, ripieghi: _ripieghiSegnalati },
@@ -309,7 +347,7 @@ export async function spesaDiOggiCents(quando?: Date): Promise<number> {
   const giorno = giornoDiSpesa(quando);
   const condiviso = await chiamaRpc('spesa_ai_di_oggi', { p_giorno: giorno });
   if (condiviso === null) {
-    segnalaRipiego('lettura del conto condiviso non riuscita', giorno);
+    await segnalaRipiego('lettura del conto condiviso non riuscita', giorno);
     return ripiegoCents(giorno);
   }
   // Il ripiego non si butta: se il database torna a tacere piu' avanti, si
@@ -338,7 +376,7 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
   const arrotondati = Math.max(1, Math.round(cents));
   const totale = await chiamaRpc('registra_spesa_ai', { p_giorno: giorno, p_cents: arrotondati });
   if (totale === null) {
-    segnalaRipiego('registrazione della spesa non riuscita', giorno);
+    await segnalaRipiego('registrazione della spesa non riuscita', giorno);
     _ripiego.cents = ripiegoCents(giorno) + arrotondati;
     return;
   }
@@ -386,7 +424,7 @@ export async function sondaContoCondiviso(
     ) {
       _stato.ripiegoDa = ripiegoNotoDaMs;
     }
-    segnalaRipiego('sonda del conto condiviso non riuscita', giorno, adesso);
+    await segnalaRipiego('sonda del conto condiviso non riuscita', giorno, adesso);
   }
   return statoContoCondiviso();
 }

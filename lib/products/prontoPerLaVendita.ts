@@ -696,7 +696,7 @@ export const ETICHETTE_STATO: Record<string, string> = {
  */
 export function righeDellaProposta(
   patch: AiProductPatch,
-  prodotto: { price: number | null; categorySlug: string | null },
+  prodotto: { price: number | null; categorySlug: string | null; attributes?: Record<string, unknown> | null },
 ): string[] {
   const out: string[] = [];
   const eur = (n: number) => formatPrice(n);
@@ -766,8 +766,14 @@ export function righeDellaProposta(
     const k = voceComeTesto(voce);
     if (!k) continue;
     if (!eCampoDichiarativo(k)) {
-      // 1698 — Togliere un campo che la scheda non ha non è una modifica.
-      if (categoria && !campi.some((f) => f.key === chiaveCampo(k))) continue;
+      // 1698 — Togliere un campo che la scheda non ha non è una modifica... salvo che il prodotto
+      // se lo porti ancora dietro da una categoria di prima: il server toglie qualunque chiave
+      // presente negli attributi (`attributiDaTogliere`), e la scheda lo deve dire.
+      if (categoria && !campi.some((f) => f.key === chiaveCampo(k))) {
+        const attuali = prodotto.attributes;
+        if (attuali && typeof attuali === 'object' && chiaveCampo(k) in attuali) out.push(`Rimuovi ${k}`);
+        continue;
+      }
       out.push(`Rimuovi ${k}`);
       continue;
     }
