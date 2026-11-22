@@ -112,9 +112,9 @@ export default async function StoreLayout(
   const lettura = fetchStore(params.id).catch(() => undefined);
   const precarico = await precaricaNegozio(params.id);
   const store = await lettura;
-  // R10-001 — Un negozio che non c'è risponde 404 davvero: qui siamo nel guscio, e sopra non c'è più
-  // nessuna attesa (né app/loading.tsx né app/store/loading.tsx) che faccia partire la risposta con
-  // «tutto ok» prima di saperlo. La condizione è quella con cui la pagina dice «Negozio non trovato».
+  // R10-001 — Qui, nel guscio, si decide la 404 di un negozio che non c'è, con la condizione con cui
+  // la pagina dice «Negozio non trovato». Arriva in rete solo togliendo le attese sopra: oggi
+  // app/loading.tsx e app/store/loading.tsx ci sono ancora e fanno partire la risposta con 200.
   if (store === null || (store && (store.role !== 'seller' || !store.is_approved || !store.store_name))) notFound();
 
   return <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>;

@@ -115,8 +115,9 @@ export default async function ProductLayout(
   // sopra non conta. Il guscio gira a OGNI visita: ogni viaggio in piu' lo paga chi
   // apre la scheda.
   const [product, precarico] = await Promise.all([fetchProduct(params.id), precaricaProdotto(params.id)]);
-  // R10-001 — Qui, nel guscio e senza nessuna attesa sopra (niente app/loading.tsx), la 404 arriva
-  // prima che parta la risposta: Google e chi apre il link ricevono «non trovato» davvero.
+  // R10-001 — Qui, nel guscio, si decide la 404. Arriva in rete solo quando sopra non c'è nessuna
+  // attesa: oggi app/loading.tsx c'è ancora e fa partire la risposta con 200, quindi notFound()
+  // arriva in streaming. Va tolto insieme alle prove comuni che lo leggono per nome.
   if (!product && (await prodottoInesistente(params.id))) notFound();
 
   const schema = product && {
