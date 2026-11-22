@@ -1,0 +1,240 @@
+{
+  "sessione": "R08",
+  "aggiornato": "2026-11-22 00:20",
+  "finita": false,
+  "testa": "f793fafbd01110ac7984fcee8df70957a6bb7784",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "non_lanciato",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R08-001",
+      "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge «nessuna recensione», e le etichette sono in inglese",
+      "esito": "parziale",
+      "commit": "9febd830",
+      "file_toccati": [
+        "app/seller/analytics/page.tsx",
+        "tests/unit/riparazione-r08-analisi-in-italiano.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-analisi-in-italiano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-analisi-in-italiano.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9febd830^ --file app/seller/analytics/page.tsx --prove tests/unit/riparazione-r08-analisi-in-italiano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Solo le etichette, come deciso dalla regista: «Insight» → «Consigli», «Rating medio» → «Voto medio», «30gg» → «30 giorni», «lo stock pronto» → «tieni pronta la merce». «Conversion rate» era già in italiano sulla base. Nessuna migrazione.",
+      "cosa_resta": "Il voto medio e il conteggio delle recensioni in andamento_del_negozio (ultima definizione migrations/260:93-94): contano ancora solo public.reviews sui prodotti.",
+      "domanda": "Il voto medio in Analisi deve contare solo le recensioni al negozio (store_reviews, come la pagina Recensioni) o sommarle a quelle dei prodotti in una media unica?",
+      "verificato_da": ""
+    },
+    {
+      "id": "R08-002",
+      "chiave": "dati-analytics|strutturasenzaindirizzi in caso di eccezione lascia passare il valore originale",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano)"
+    },
+    {
+      "id": "R08-003",
+      "chiave": "dati-analytics|le visite al prodotto si contano con due regole diverse: posthog conta ogni nuova scheda, il database una per persona all'ora",
+      "esito": "riparato",
+      "commit": "dcbceab2",
+      "file_toccati": [
+        "lib/analytics/visita-prodotto.ts",
+        "components/ProductViewTracker.tsx",
+        "tests/unit/riparazione-r08-visita-come-il-database.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-visita-come-il-database.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-visita-come-il-database.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base dcbceab2^ --file lib/analytics/visita-prodotto.ts,components/ProductViewTracker.tsx --prove tests/unit/riparazione-r08-visita-come-il-database.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scrittura in product_views chiede il conto delle righe entrate. Se il trigger della 119 ha scartato la riga (conto 0), la visita non va a PostHog e il freno locale non si mette: decide il database, una per persona e prodotto all'ora. La 119 non è toccata.",
+      "nota": "Che PostgREST restituisca conto 0 su un INSERT scartato dal trigger non è provato contro un PostgREST vero; se il conto non arriva (null) la visita si annuncia come prima. La definizione nel GLOSSARIO-KPI che la voce chiede non sta nel deposito del sito: la scrive la regista.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R08-004",
+      "chiave": "qa-flussi|il menu «aggiungi a lista» mostra il titolo vecchio dopo una rinomina",
+      "esito": "riparato",
+      "commit": "c8a01245",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c8a01245^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-rinomina-nel-menu.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Dopo la rinomina si invalida anche queryKeys.lists.mineMin, la chiave che legge il menu (AddToListButton.tsx:39-41). La prova monta il pulsante e la pagina nello stesso QueryClient, rinomina e riapre il menu.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R08-005",
+      "chiave": "qa-flussi|tolto un prodotto da una lista, il menu «aggiungi a lista» lo segna ancora dentro",
+      "esito": "riparato",
+      "commit": "5ff73ab4",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5ff73ab4^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-rimozione-nel-menu.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto un prodotto, si invalida anche queryKeys.lists.containing(productId), la chiave della spunta nel menu (AddToListButton.tsx:58-59). La prova controlla che riaprendo il menu aria-pressed sia false.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R08-006",
+      "chiave": "qa-flussi|tornando indietro dopo l eliminazione la lista eliminata ricompare per 30 secondi",
+      "esito": "riparato",
+      "commit": "b0d1e34f",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b0d1e34f^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-eliminata-tornando-indietro.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Eliminata la lista, la cache del dettaglio diventa null (come una lista che non c'è) e quella delle righe []. Tornando indietro la pagina non mostra più la lista eliminata, neanche col database lento.",
+      "nota": "Nel breve istante fra l'eliminazione e la navigazione la pagina mostra «Lista non trovata» al posto della lista.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R08-007",
+      "chiave": "qa-flussi|una lista si può salvare col titolo vuoto",
+      "esito": "riparato",
+      "commit": "f793fafb",
+      "file_toccati": [
+        "app/lists/[id]/page.tsx",
+        "migrations/702_una_lista_non_ha_il_titolo_vuoto.sql",
+        "tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx",
+        "tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx",
+        "tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx --reporter=dot ; tests/sql/harness/apply.sh r08_prova && psql -X -q -v ON_ERROR_STOP=1 -d r08_prova -f tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 94b293f0^ --file \"app/lists/[id]/page.tsx\" --prove tests/unit/riparazione-r08-liste-titolo-vuoto.test.tsx --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f793fafbd01110ac7984fcee8df70957a6bb7784^ --file migrations/702_una_lista_non_ha_il_titolo_vuoto.sql --prove tests/sql/rls/riparazione-r08-liste-titolo-vuoto.test.sql --sql r08_rimessa --json (uscita 0 tutte e due)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due commit della stessa voce. 94b293f0: la pagina spegne Salva a titolo vuoto e la modifica rifiuta il titolo vuoto prima di scrivere. f793fafb: migrazione 702 nuova, vincolo CHECK sul titolo non vuoto (gli stessi spazi che toglie trim() della creazione), aggiunto NOT VALID e poi validato, rilanciabile; con righe vecchie vuote lascia un WARNING e il vincolo NOT VALID.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R08-008",
+      "chiave": "qa-flussi|il finto di react-query non ha setqueriesdata",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finti/react-query.mjs",
+          "modifica": "Dentro l'oggetto restituito da useQueryClient, subito dopo setQueryData, aggiungere: `setQueriesData: (filtro, valore) => { if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([filtro?.queryKey ?? filtro, valore]); },` (il filtro può arrivare come {queryKey} o come chiave nuda; la forma registrata è quella di setQueryData)."
+        }
+      ],
+      "nota": "Difetto ancora presente sulla base (useQueryClient del finto espone solo invalidateQueries, setQueryData, getQueryData e cancelQueries). Le riparazioni di R08 non usano setQueriesData."
+    },
+    {
+      "id": "R08-009",
+      "chiave": "qa-flussi|una prova col nome del collaudo",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/zz-collaudo-termini-chi.test.tsx",
+          "modifica": "git mv tests/unit/zz-collaudo-termini-chi.test.tsx tests/unit/i-termini-nominano-chi-gestisce-senza-dati-inventati.test.tsx, senza cambiare il contenuto"
+        }
+      ],
+      "nota": "La prova importa solo @/app/terms/page, nessun file di R08, e nessun file del deposito nomina il vecchio percorso. Una rinomina dentro un ramo da riparatore guardia-ramo la legge come cancellazione di una prova esistente: va fatta dalla regista o da Nicola."
+    },
+    {
+      "id": "R08-010",
+      "chiave": "stati-ui|il doppio tocco su «partecipa» mostra un messaggio d'errore, e un evento appena finito resta premibile per quasi un minuto",
+      "esito": "riparato",
+      "commit": "0d645382",
+      "file_toccati": [
+        "app/events/page.tsx",
+        "migrations/701_non_ci_si_iscrive_a_un_evento_finito.sql",
+        "tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx",
+        "tests/sql/rls/riparazione-r08-evento-finito.test.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx",
+        "tests/sql/rls/riparazione-r08-evento-finito.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx --reporter=dot ; tests/sql/harness/apply.sh r08_prova && psql -X -q -v ON_ERROR_STOP=1 -d r08_prova -f tests/sql/rls/riparazione-r08-evento-finito.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d645382^ --file app/events/page.tsx --prove tests/unit/riparazione-r08-partecipa-doppio-tocco.test.tsx --json ; timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d645382^ --file migrations/701_non_ci_si_iscrive_a_un_evento_finito.sql --prove tests/sql/rls/riparazione-r08-evento-finito.test.sql --sql r08_rimessa --json (uscita 0 tutte e due)"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il secondo tocco su un evento che sta già lavorando non parte, e il doppione 23505 vale «già iscritto». L'ora si controlla al tocco: un evento finito non scrive niente e sparisce subito. Migrazione 701 nuova: una regola RESTRICTIVE solo sull'INSERT di event_rsvps (l'evento deve essere scheduled o live, e non finito); la 034 non è toccata.",
+      "verificato_da": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il traguardo «venditore più votato» guarda solo le recensioni ai prodotti, mai quelle al negozio",
+      "dimensione": "dati-analytics",
+      "severita": "minore",
+      "file": "migrations/032_auto_achievements_cross_device_cart_republish.sql:88-95",
+      "descrizione": "Il trigger sta solo su public.reviews (riga 105): le recensioni al negozio non contano per il traguardo seller_top_rated. Stessa radice del voto medio in Analisi."
+    }
+  ],
+  "domande_per_nicola": [
+    "R08-001: il voto medio in Analisi conta solo le recensioni al negozio (store_reviews) o le somma a quelle dei prodotti in una media unica?",
+    "R08-010: il database deve vietare anche di togliere l iscrizione a un evento già finito? Oggi la migrazione 701 lo ammette; la pagina non lo lascia più fare."
+  ],
+  "conto": {
+    "agenti": 3,
+    "nota": ""
+  }
+}
