@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { queryKeys } from '@/lib/queries/keys';
+import { domandaAlberoCategorie } from '@/components/CategoryBar';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useTranslations } from 'next-intl';
 
@@ -116,13 +116,15 @@ function SearchInner() {
    * madre diventa quello che distingue le due «Bambini». `icon` e' l'emoji della categoria:
    * serve alle scorciatoie di «Forse cercavi».
    *
-   * ⚠️ Questa chiave di cache la usa anche `components/seller/site/CategorySelect.tsx`, che
-   * legge `id, name, slug, parent_id`. Chi arriva primo riempie la cache: `parent_id` c'e' in
-   * tutti e due, quindi i gruppi reggono comunque; l'emoji puo' mancare, e per questo sotto
-   * ha sempre il suo ripiego.
+   * R16-009 — Le stesse righe (id, slug, nome, emoji, madre) le leggeva già il menu in alto, con
+   * un'altra chiave (`['all-categories']`, che condivideva con `CategorySelect` del negozio): la
+   * pagina le chiedeva una seconda volta, e il precarico del sito non le serviva. Adesso la chiave
+   * e la durata sono quelle del menu (`domandaAlberoCategorie`): la ricerca trova la risposta del
+   * menu o del precarico e non torna al database. La lettura resta scritta qui, con le stesse
+   * colonne del menu.
    */
   const { data: categories = [] } = useQuery({
-    queryKey: queryKeys.categories.allList,
+    ...domandaAlberoCategorie(supabase),
     queryFn: async (): Promise<Categoria[]> => {
       const { data, error } = await supabase
         .from('categories')

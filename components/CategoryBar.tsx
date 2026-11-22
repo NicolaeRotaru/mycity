@@ -41,6 +41,28 @@ const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 const PANNELLO_ID = 'mega-menu-categorie';
 
 type Cat = { id: string; slug: string; name: string; parent_id: string | null; icon: string | null };
+export type CategoriaDellAlbero = Cat;
+
+/**
+ * R16-009 — L'ALBERO DELLE CATEGORIE SI LEGGE UNA VOLTA SOLA.
+ *
+ * Menu, piede, ricerca e pagine di categoria leggevano la stessa tabella con tre chiavi diverse
+ * (`['categories','tree']`, `['all-categories']`, `['category', slug]`): fino a tre letture uguali
+ * per la stessa pagina, e le ultime due non trovavano mai il precarico del sito. Adesso è una sola
+ * domanda (stessa chiave, stessa lettura e stessa durata di quella in `lib/queries/precarico.ts`),
+ * e chi ne vuole un pezzo lo ricava dalla risposta.
+ */
+export function domandaAlberoCategorie(client: Pick<typeof supabase, 'from'>) {
+  return {
+    queryKey: ['categories', 'tree'] as const,
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<Cat[]> => {
+      const { data, error } = await client.from('categories').select('id, slug, name, parent_id, icon').order('name');
+      if (error) throw error;
+      return (data ?? []) as Cat[];
+    },
+  };
+}
 
 /**
  * Barra sotto l'header (terracotta). TUTTE le voci scorrono insieme in
@@ -123,18 +145,7 @@ const CategoryBar = () => {
     primo?.focus({ preventScroll: true });
   }, [open]);
 
-  const { data: cats = [] } = useQuery({
-    queryKey: ['categories', 'tree'],
-    staleTime: 10 * 60_000,
-    queryFn: async (): Promise<Cat[]> => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, slug, name, parent_id, icon')
-        .order('name');
-      if (error) throw error;
-      return (data ?? []) as Cat[];
-    },
-  });
+  const { data: cats = [] } = useQuery(domandaAlberoCategorie(supabase));
   // 5/11/2026 — Come home e piè di pagina: solo le categorie con qualcosa dentro (stessa
   // lettura e stessa chiave, quindi nessuna domanda in più). Se non si sa, si elencano tutte.
   const piene = useQuery(domandaCategoriePiene(supabase));
