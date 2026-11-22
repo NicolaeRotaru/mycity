@@ -269,10 +269,10 @@ export async function leggiProdottiDellaGriglia(
   // intere (la funzione non restituisce giacenza, varianti e prezzo barrato, che servono alla scheda).
   let perPertinenza: string[] | null = null;
   if (termine && d.sort === 'relevance' && d.search) {
-    // Con la finestra servono abbastanza identificativi da coprirla: chiederne
-    // quanti ne sta in una pagina sola lascerebbe vuota la seconda.
-    const quanti = d.finestra ? d.finestra[1] + 1 : d.tetto;
-    const ids = await idsPiuPertinenti(supabase, d.search.slice(0, 100), quanti);
+    // R11-009 — SEMPRE gli stessi (il tetto della funzione), qualunque sia la pagina: l'elenco dei
+    // pertinenti deve essere lo stesso a ogni pagina, altrimenti le posizioni si spostano fra una
+    // pagina e l'altra (prodotti che non escono mai, doppioni) e la lettura cresce con le pagine.
+    const ids = await idsPiuPertinenti(supabase, d.search.slice(0, 100), TETTO_PERTINENZA);
     perPertinenza = ids.length > 0 ? ids : null;
   }
 
@@ -303,8 +303,8 @@ export async function leggiProdottiDellaGriglia(
         ? await conLeSueSottocategorie(supabase, d.categoryId)
         : null;
 
-  const base = () => {
-    let q = supabase.from('products').select(COLONNE).eq('status', 'available');
+  const base = (colonne: string = COLONNE) => {
+    let q = supabase.from('products').select(colonne).eq('status', 'available');
 
     switch (d.sort) {
       case 'price_asc':  q = q.order('price', { ascending: true }); break;
@@ -326,44 +326,79 @@ export async function leggiProdottiDellaGriglia(
   };
 
   let rows: RigaGriglia[];
+  // R11-009 — Quante righe ha dato il database per la finestra (pertinenti + per nome), prima di
+  // togliere i doppioni e il filtro sui negozi: è su queste che si decide «ce n'è un'altra».
+  let righeDellaFinestra: number | undefined;
   if (perPertinenza) {
-    // A blocchi da cento: duecento identificativi in un indirizzo solo lo farebbero sfondare (#93).
-    const { data, error } = await leggiInBlocchi<RigaGriglia>(
-      perPertinenza,
-      (blocco) => base().in('id', blocco) as unknown as PromiseLike<{ data: RigaGriglia[] | null; error: { message?: string } | null }>,
-    );
-    if (error) throw error;
-    const rango = new Map(perPertinenza.map((id, i) => [id, i]));
-    const ordinati = data.sort(
-      (a, b) => (rango.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rango.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-    );
     /**
      * 5/11/2026 — LA PERTINENZA SI CHIEDE SU TUTTO IL SITO, I FILTRI SI APPLICANO DOPO.
      * `search_products_smart` non conosce negozio, categoria e prezzo: restituisce i primi 200 di
      * tutto il catalogo, e dentro la vetrina di un negozio (o con una categoria) quelli del negozio
-     * potevano restare fuori dal taglio — «nessun risultato» con il prodotto lì. Quando c'è un
-     * filtro che stringe, sotto i pertinenti si aggiungono quelli che hanno la parola nel nome
-     * (la vecchia strada), senza doppioni.
+     * potevano restare fuori dal taglio.
+     *
+     * R11-009 — LA LISTA UNITA È UNA SOLA, E STABILE FRA LE PAGINE:
+     *   L = Pf (i pertinenti che passano i filtri, in ordine di pertinenza) seguiti da
+     *       N (i prodotti con la parola nel nome, stessi filtri, per data e id).
+     * Pf è sempre quello (si chiedono sempre gli stessi 200 pertinenti), N ha un ordine fisso: la
+     * finestra [a, b] di L si legge così: le posizioni sotto |Pf| vengono da Pf, le altre da N con
+     * `.range(a − |Pf|, b − |Pf|)`. Ogni pagina legge i suoi id (solo `id`, leggeri), le sue righe
+     * di Pf e la sua fetta di N: non crescono con le pagine, e le pagine non si accavallano.
+     * I pertinenti che hanno ANCHE la parola nel nome stanno due volte in L (in Pf e in N): la
+     * seconda volta si salta, ma la sua posizione conta, così le finestre restano esatte.
      */
-    // R11-009 — Il ripiego sul nome vale SEMPRE, non solo con un filtro che stringe: la ricerca
-    // italiana non riconosce «pomo» per «Pomodori», e con un solo pertinente trovato gli altri
-    // prodotti con la parola nel nome restavano fuori. I doppioni li toglie `gia`.
-    if (termine) {
-      const perNome = () => base().ilike('name', `%${termine}%`);
-      // Fino alla fine della finestra chiesta, non una pagina sola: «Carica altri» deve arrivarci.
-      const fine = d.finestra ? d.finestra[1] + 1 : d.tetto;
-      const { data: altri, error: errNome } = soloConVoto
-        ? await leggiFraGliIdsColVoto(perNome, d.idsColVoto!, d.sort, 0, fine - 1, false)
-        : await perNome().limit(fine);
-      if (errNome) throw errNome;
-      const gia = new Set(ordinati.map((r) => r.id));
-      for (const r of (altri ?? []) as unknown as RigaGriglia[]) if (!gia.has(r.id)) ordinati.push(r);
+    const [da, a] = d.finestra ? [d.finestra[0], d.finestra[1]] : [0, d.tetto - 1];
+    // 1) Quali pertinenti passano i filtri (solo gli id): ne esce |Pf| e l'ordine.
+    const passano = new Set<string>();
+    const conNome = new Set<string>();
+    const { data: idsPassano, error: errIds } = await leggiInBlocchi<{ id: string; name: string | null }>(
+      perPertinenza,
+      (blocco) => base('id, name').in('id', blocco) as unknown as PromiseLike<{ data: Array<{ id: string; name: string | null }> | null; error: { message?: string } | null }>,
+    );
+    if (errIds) throw errIds;
+    const cercato = (d.search ?? '').slice(0, 100).toLowerCase();
+    for (const r of idsPassano) {
+      passano.add(r.id);
+      if (cercato && (r.name ?? '').toLowerCase().includes(cercato)) conNome.add(r.id);
     }
-    // Sul ramo pertinenza l'ordine lo decide la funzione del database, quindi
-    // la finestra si taglia qui: e' lo stesso elenco, preso dal punto giusto.
-    rows = d.finestra
-      ? ordinati.slice(d.finestra[0], d.finestra[1] + 1)
-      : ordinati.slice(0, d.tetto);
+    const pf = perPertinenza.filter((id) => passano.has(id));
+
+    // 2) Le righe di Pf che cadono nella finestra.
+    const fettaPf = pf.slice(da, a + 1);
+    const { data: righePf, error: errPf } = await leggiInBlocchi<RigaGriglia>(
+      fettaPf,
+      (blocco) => base().in('id', blocco) as unknown as PromiseLike<{ data: RigaGriglia[] | null; error: { message?: string } | null }>,
+    );
+    if (errPf) throw errPf;
+    const rango = new Map(fettaPf.map((id, i) => [id, i]));
+    const ordinati = righePf.sort((x, y) => (rango.get(x.id) ?? 0) - (rango.get(y.id) ?? 0));
+    righeDellaFinestra = fettaPf.length;
+
+    // 3) La fetta di N: il ripiego sul nome vale SEMPRE (la ricerca italiana non riconosce «pomo»
+    //    per «Pomodori»). Se la lettura sbaglia si mostrano i pertinenti, senza buttare giù la griglia.
+    if (termine && a >= pf.length) {
+      const dalNome = Math.max(0, da - pf.length);
+      const alNome = a - pf.length;
+      // I pertinenti che hanno anche la parola nel nome si escludono qui (sono già in Pf): gli scarti
+      // sono esatti e le pagine non si accavallano. Gli id vanno nell'indirizzo, quindi al più un
+      // blocco, sempre gli stessi a ogni pagina (i primi in ordine di pertinenza); se ne restano
+      // fuori, la riga doppia si salta qui sotto, ma la sua posizione conta e le finestre restano esatte.
+      const daEscludere = pf.filter((id) => conNome.has(id)).slice(0, DIMENSIONE_BLOCCO);
+      const perNome = () => {
+        const q = base().ilike('name', `%${termine}%`);
+        return daEscludere.length > 0 ? q.or(`id.not.in.(${daEscludere.join(',')})`) : q;
+      };
+      const { data: altri, error: errNome } = soloConVoto
+        ? await leggiFraGliIdsColVoto(perNome, d.idsColVoto!, d.sort, dalNome, alNome, true)
+        : await perNome().range(dalNome, alNome);
+      if (errNome) {
+        console.warn('Ricerca per nome non riuscita, si mostrano solo i risultati più pertinenti:', errNome.message ?? errNome);
+      } else {
+        const lette = (altri ?? []) as unknown as RigaGriglia[];
+        righeDellaFinestra += lette.length;
+        for (const r of lette) if (!passano.has(r.id)) ordinati.push(r);
+      }
+    }
+    rows = ordinati;
   } else {
     const { data, error } = soloConVoto
       ? await leggiFraGliIdsColVoto(base, d.idsColVoto!, d.sort, d.finestra ? d.finestra[0] : 0, d.finestra ? d.finestra[1] : d.tetto - 1, !!d.finestra)
@@ -381,7 +416,7 @@ export async function leggiProdottiDellaGriglia(
   );
   const tenute = attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved) as RigaGriglia[];
   // R02-012 — Quante ne ha date il database, prima del filtro: è su queste che si sa se ce ne sono altre.
-  Object.defineProperty(tenute, 'righeLette', { value: rows.length, enumerable: false });
+  Object.defineProperty(tenute, 'righeLette', { value: righeDellaFinestra ?? rows.length, enumerable: false });
   return tenute;
 }
 

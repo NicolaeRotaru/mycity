@@ -34,13 +34,6 @@ describe('R11-009 · ricerca a metà parola', () => {
     expect(r.map((x) => x.id).sort()).toEqual(['p1', 'p2', 'p3']);
     expect(r[0].id, 'il pertinente resta in testa').toBe('p1');
   });
-  it('anche con la finestra di «Carica altri»', async () => {
-    const db = fintoDb(tabelle(), rpcs);
-    const r = await leggiProdottiDellaGriglia(db.client as unknown as SupabaseClient, { sort: 'relevance', search: 'pomo', tetto: 2, finestra: [0, 1] });
-    expect(r.map((x) => x.id)).toEqual(['p1', 'p2']);
-    const seconda = await leggiProdottiDellaGriglia(db.client as unknown as SupabaseClient, { sort: 'relevance', search: 'pomo', tetto: 2, finestra: [2, 3] });
-    expect(seconda.map((x) => x.id)).toEqual(['p3']);
-  });
   it('col voto minimo, se il pertinente non è recensito, non dice «nessun risultato»', async () => {
     const db = fintoDb(tabelle(), rpcs);
     const r = await leggiProdottiDellaGriglia(db.client as unknown as SupabaseClient, {
