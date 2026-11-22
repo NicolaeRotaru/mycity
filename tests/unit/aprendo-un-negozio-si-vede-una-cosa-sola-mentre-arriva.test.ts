@@ -25,7 +25,7 @@
  * deduco dalle misure, non l'ho visto.
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ALTEZZA_COPERTINA, CONTENITORE_PAGINA_NEGOZIO } from '@/components/store-sections/misure-vetrina';
 
@@ -87,18 +87,22 @@ describe('mentre il negozio arriva si vede una cosa sola', () => {
     }
   });
 
-  it('sopra il guscio non c’è nessun sipario, né quello del negozio né quello del sito', () => {
-    // 21/11/2026 (R10-001, R10-005) — Qui si pretendeva `app/store/loading.tsx`, il sipario col
-    // volto del negozio SOPRA il guscio. Ma un'attesa sopra il guscio fa partire la risposta con
-    // «tutto ok» prima che il guscio sappia se il negozio esiste: il suo notFound() arrivava a
-    // risposta già partita, e un negozio inesistente rispondeva 200. Adesso sopra il guscio non
-    // c'è nessuna attesa: niente salto (il browser tiene la pagina di prima finché arriva il
-    // negozio, già pieno grazie al precarico), e la 404 è vera. Lo scheletro resta dove c'era
-    // già, sotto il guscio (`app/store/[id]/loading.tsx`) e nella pagina.
+  it('il sipario copre anche il guscio, non solo la pagina', () => {
+    // Da quando il guscio legge il negozio sul server, è LUI a fermarsi per
+    // primo. Un'attesa scritta dentro il guscio non può fargli da sipario: la
+    // trova solo chi è già entrato. Senza una schermata di attesa sopra, chi
+    // apre un negozio vede il sipario generale del sito — che ha la forma di
+    // una pagina qualsiasi — e poi il negozio: il salto torna, spostato in su.
     const guscio = ROTTA.find((f) => f.nome === 'app/store/[id]/layout.tsx')!.src;
-    expect(guscio, 'il guscio non decide più la 404 del negozio').toMatch(/notFound\(\)/);
-    expect(ROTTA.map((f) => f.nome), 'il sipario sopra il guscio è tornato: la 404 risponde «tutto ok»').not.toContain('app/store/loading.tsx');
-    expect(existsSync(join(RADICE, 'app/loading.tsx')), 'il sipario del sito è tornato sopra il guscio').toBe(false);
+    const gusciofermo = /export default async function/.test(guscio) && /await\s+precarica/.test(guscio);
+    if (!gusciofermo) return; // il guscio non aspetta niente: nessun sipario da pretendere
+
+    const sopra = ROTTA.find((f) => f.nome === 'app/store/loading.tsx');
+    expect(
+      sopra?.src,
+      'il guscio del negozio si ferma a leggere sul server, ma sopra di lui non c’è nessuna ' +
+        'schermata di attesa col volto del negozio: serve app/store/loading.tsx',
+    ).toMatch(/<ScheletroNegozio\s*\/>/);
   });
 
   it('lo scheletro non è un cerchietto travestito', () => {

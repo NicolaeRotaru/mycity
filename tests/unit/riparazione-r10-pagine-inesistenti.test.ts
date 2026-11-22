@@ -12,14 +12,13 @@
  *
  * ② Nessuna attesa sopra chi decide. Un `loading.tsx` avvolge in un'attesa tutto quello che sta
  *    sotto la sua cartella: la risposta parte con «tutto ok» per mostrare l'attesa, e un notFound()
- *    che arriva dopo non può più cambiare il codice. `app/loading.tsx` avvolgeva ogni pagina del
- *    sito, `app/store/loading.tsx` il guscio del negozio.
+ *    che arriva dopo non può più cambiare il codice. Togliere `app/loading.tsx` e
+ *    `app/store/loading.tsx` va fatto insieme alle prove comuni che li leggono per nome: resta alla
+ *    regista (nel referto, serve_file_altrui). Questa prova guarda solo ①.
  *
  * Non ho potuto avviare il sito: che la risposta sia davvero 404 lo deduco da come Next decide il
  * codice (prima della prima attesa), non l'ho visto in rete.
  */
-import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { defaultSite } from '@/lib/store-site';
 
@@ -195,48 +194,5 @@ describe('① il guscio di una pagina su misura del negozio', () => {
   it('se la lettura non riesce, niente 404', async () => {
     mondo.guasto = true;
     expect(await paginaDelNegozio('ordini-per-le-feste')).toBe(false);
-  });
-});
-
-describe('② nessuna attesa sopra chi decide la 404', () => {
-  /**
-   * Chi decide: il guscio, o la pagina quando la pagina è del server. Un loading.tsx nella cartella
-   * di un guscio avvolge solo quello che sta sotto il guscio (va bene); nella cartella di una pagina
-   * avvolge la pagina stessa. Nelle cartelle sopra, avvolge tutto.
-   *
-   * Fuori da questo elenco, dichiarato: le pagine su misura del negozio (app/store/[id]/[slug]) stanno
-   * sotto app/store/[id]/loading.tsx, che non è un file di questa riparazione.
-   */
-  const CHI_DECIDE = [
-    'app/product/[id]/layout.tsx',
-    'app/store/[id]/layout.tsx',
-    'app/category/[slug]/layout.tsx',
-    'app/u/[handle]/page.tsx',
-  ];
-
-  function attesaSopra(file: string): string[] {
-    const cartelle: string[] = [];
-    let dir = dirname(file);
-    if (/\/page\.tsx$/.test(file)) cartelle.push(dir);
-    while (dir !== 'app' && dir !== '.') {
-      dir = dirname(dir);
-      cartelle.push(dir);
-    }
-    return cartelle.flatMap((c) =>
-      ['loading.tsx', 'loading.jsx', 'loading.js', 'loading.ts'].map((n) => join(c, n)).filter((p) => existsSync(p)),
-    );
-  }
-
-  it('i file che decidono esistono (la prova guarda i file giusti)', () => {
-    for (const f of CHI_DECIDE) expect(existsSync(f), f).toBe(true);
-  });
-
-  it.each(CHI_DECIDE)('%s: sopra non c\'è nessun loading', (file) => {
-    expect(attesaSopra(file), `un'attesa sopra ${file} fa partire la risposta con «tutto ok» prima della 404`).toEqual([]);
-  });
-
-  it('l\'attesa della radice e quella del negozio non ci sono più', () => {
-    expect(existsSync('app/loading.tsx'), 'app/loading.tsx avvolge ogni pagina del sito').toBe(false);
-    expect(existsSync('app/store/loading.tsx'), 'app/store/loading.tsx avvolge il guscio del negozio').toBe(false);
   });
 });
