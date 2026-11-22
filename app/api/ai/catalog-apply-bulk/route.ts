@@ -54,6 +54,18 @@ const MAX_CHANGES = 200;
 const FILTRI_INSIEME = 5;
 
 /**
+ * Le rotte app/api/ai/** hanno 120 s (vercel.json). Con 5 controlli in volo, 200 voci sono 40
+ * giri e a 1-10 s l'uno si sforava: 504, niente scritto e controlli gia' pagati. Perche' la rotta
+ * finisca sempre prima: i controlli nuovi smettono di partire dopo 70 s (quelli in volo ne hanno
+ * al massimo 10), e le scritture smettono dopo 105 s. Le voci rimaste fuori non si toccano e la
+ * risposta le elenca (`rimaste`), perche' il negozio le rimandi.
+ */
+const CONTROLLI_ENTRO_MS = 70_000;
+const SCRITTURE_ENTRO_MS = 105_000;
+const MOTIVO_NON_CONTROLLATO = 'non controllato in tempo: rimandalo';
+const MOTIVO_NON_SALVATO = 'non salvato in tempo: rimandalo';
+
+/**
  * Come Promise.allSettled, ma al massimo `quanti` lavori in volo alla volta: i
  * risultati restano nello stesso ordine delle voci.
  */
@@ -61,11 +73,13 @@ async function conTetto<T, R>(
   voci: T[],
   quanti: number,
   lavoro: (v: T) => Promise<R>,
-): Promise<PromiseSettledResult<R>[]> {
-  const esiti: PromiseSettledResult<R>[] = new Array(voci.length);
+  /** Passato questo istante nessun lavoro nuovo parte: la sua voce resta `null`. */
+  scadenza: number = Infinity,
+): Promise<(PromiseSettledResult<R> | null)[]> {
+  const esiti: (PromiseSettledResult<R> | null)[] = new Array(voci.length).fill(null);
   let prossima = 0;
   const operaio = async () => {
-    while (prossima < voci.length) {
+    while (prossima < voci.length && Date.now() < scadenza) {
       const i = prossima++;
       try {
         esiti[i] = { status: 'fulfilled', value: await lavoro(voci[i]) };
@@ -87,6 +101,7 @@ type BulkBody = { changes?: Change[] };
 type Esito = { productId: string; ok: boolean; motivo?: string; nonApplicato?: string; rifiutati?: string[] };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  const inizio = Date.now();
   if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   // Una chiamata porta fino a duecento modifiche: dieci all'ora sono duemila
   // modifiche, cioe' molto piu' di quante il copilot possa proporne in un'ora.
@@ -216,6 +231,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   );
   let erroreDelFiltro: unknown = null;
   const bloccati = new Map<string, string>();
+  const rimaste: string[] = [];
   if (daFiltrare.length > 0) {
     const verdetti = await conTetto(daFiltrare, FILTRI_INSIEME, (r) =>
       classifyProductPolicy(
@@ -226,9 +242,15 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         },
         'catalog-apply-bulk-policy',
       ),
+      inizio + CONTROLLI_ENTRO_MS,
     );
     daFiltrare.forEach((r, i) => {
       const esito = verdetti[i];
+      if (esito === null) {
+        bloccati.set(r.id, MOTIVO_NON_CONTROLLATO);
+        rimaste.push(r.id);
+        return;
+      }
       // Nel dubbio si nega, come fa il filtro stesso quando non sa rispondere.
       if (esito.status === 'rejected') {
         erroreDelFiltro = erroreDelFiltro ?? esito.reason;
@@ -252,6 +274,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     const motivo = bloccati.get(r.id);
     if (motivo) {
       esiti.push({ productId: r.id, ok: false, motivo });
+      continue;
+    }
+    if (Date.now() - inizio > SCRITTURE_ENTRO_MS) {
+      esiti.push({ productId: r.id, ok: false, motivo: MOTIVO_NON_SALVATO });
+      rimaste.push(r.id);
       continue;
     }
     const { error } = await admin
@@ -292,5 +319,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   logger.info('catalog-apply-bulk', { sellerId: user.id, chieste: changes.length, applied });
-  return NextResponse.json({ ok: true, applied, total: changes.length, results: esiti });
+  return NextResponse.json({
+    ok: true,
+    applied,
+    total: changes.length,
+    results: esiti,
+    ...(rimaste.length > 0 ? { rimaste } : {}),
+  });
 });
