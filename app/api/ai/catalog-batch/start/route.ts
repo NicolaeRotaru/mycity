@@ -44,9 +44,6 @@ const testoTroppoLungoPerTradurre = (p: ProductRow) =>
 /** Un lavoro in questi stati e' ancora aperto: pagato, e non ancora chiuso dal venditore. */
 const STATI_APERTI = ['submitting', 'processing', 'ready'];
 
-/** Quanto puo' girare /apply al massimo: la durata delle rotte app/api/ai/** in vercel.json (120 s). */
-const DURATA_MASSIMA_APPLICA_MS = 120_000;
-
 type Body = { operation?: string; targetLang?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -108,35 +105,6 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ? 'Hai già un lavoro sul catalogo il cui invio è ancora da verificare: lo trovi qui sotto. Ricarica la pagina fra qualche minuto; se è ancora senza risposta, puoi scartarlo e avviarne un altro.'
       : 'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.';
     return apiError(409, messaggio, 'CONFLICT', { jobId: aperto.id, status: aperto.status });
-  }
-
-  // 22/11/2026 (R02-004 · R02-013, giro di correzione) — UN'APPLICAZIONE IN
-  // CORSO. Mentre /apply scrive, il suo lavoro e' gia' 'applied' (chiuso): lo
-  // prenota cosi', con updated_at all'ora della prenotazione. Se in quel momento
-  // partiva un lavoro nuovo, il «rimetti pronto» dell'applica riceveva 23505
-  // dall'indice della migrazione 640 e il lavoro pagato restava chiuso, coi
-  // saltati irraggiungibili. Finche' l'applica puo' ancora girare (la durata
-  // massima delle rotte app/api/ai/** in vercel.json) non se ne avvia un altro.
-  const { data: applicati, error: errApplicati } = await admin
-    .from('catalog_ai_jobs')
-    .select('id, updated_at')
-    .eq('seller_id', user.id)
-    .in('status', ['applied'])
-    .order('updated_at', { ascending: false })
-    .limit(1);
-  if (errApplicati) {
-    logger.error('catalog-batch start: lettura delle applicazioni in corso fallita', { sellerId: user.id, status: errApplicati.code });
-    return ApiErrors.badGateway('Non sono riuscito a controllare i lavori in corso. Riprova.');
-  }
-  const ultimoApplicato = (applicati ?? [])[0] as { id: string; updated_at?: string | null } | undefined;
-  const prenotatoIl = ultimoApplicato?.updated_at ? Date.parse(ultimoApplicato.updated_at) : NaN;
-  if (ultimoApplicato && Number.isFinite(prenotatoIl) && Date.now() - prenotatoIl < DURATA_MASSIMA_APPLICA_MS) {
-    return apiError(
-      409,
-      'Un\'applicazione di un lavoro sul catalogo è in corso: aspetta che finisca (al massimo un paio di minuti) e poi avvia il lavoro nuovo.',
-      'CONFLICT',
-      { jobId: ultimoApplicato.id, status: 'applied' },
-    );
   }
 
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([
