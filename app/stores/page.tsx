@@ -11,6 +11,7 @@ import { chiaveDiOggi, isOpenNow, romeNow, type StoreHours } from '@/lib/store-h
 import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Card } from '@/components/ui/Card';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
@@ -338,7 +339,7 @@ export default function StoresPage() {
       {titoloDellaPagina}
 
       {/* Filtri */}
-      <div className="bg-white border border-cream-300 rounded-xl p-3 mb-6 shadow-sm space-y-2">
+      <Card radius="xl" padding="sm" className="mb-6 shadow-sm space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
           <input
             type="search"
@@ -406,7 +407,7 @@ export default function StoresPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-ink-500 bg-white border rounded-xl">

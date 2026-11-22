@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Card } from '@/components/ui/Card';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
@@ -139,7 +140,7 @@ export default function SellerProfilePage() {
       </div>
 
       {/* Contatti & orari */}
-      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
+      <Card variant="elevated" radius="2xl" padding="lg">
         <h2 className="font-semibold text-ink-900 mb-1">Contatti e orari</h2>
         <p className="text-sm text-ink-500 mb-4">Telefono, indirizzo sulla mappa e orari di apertura del negozio.</p>
         <VendorForm
@@ -158,7 +159,7 @@ export default function SellerProfilePage() {
           isLoading={updateContact.isPending}
           salvataggioRiuscito={updateContact.isSuccess ? updateContact.submittedAt : 0}
         />
-      </div>
+      </Card>
 
       {/* R11-003 — IBAN e dati della ditta: prima si scrivevano solo dal modulo d'iscrizione,
           che a un negozio approvato non si apre più. */}
@@ -182,7 +183,7 @@ export default function SellerProfilePage() {
       <GestisciAbbonamento stato={profile?.subscription_status} />
 
       {/* Aspetto e dati della vetrina → si gestiscono nel site builder */}
-      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
+      <Card variant="elevated" radius="2xl" padding="lg">
         <div className="flex items-start gap-3">
           <Palette size={20} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
           <div className="flex-1 min-w-0">
@@ -199,10 +200,10 @@ export default function SellerProfilePage() {
             </Link>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Consegna Express a livello negozio (default per i prodotti) — impostazione operativa */}
-      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
+      <Card variant="elevated" radius="2xl" padding="lg">
         <div className="flex items-start justify-between gap-4">
           <div>
             <label htmlFor="profilo-consegna-express" className="font-bold text-ink-900 flex items-center gap-2 cursor-pointer">
@@ -222,7 +223,7 @@ export default function SellerProfilePage() {
             onChange={(e) => updateExpress.mutate(e.target.checked)}
           />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

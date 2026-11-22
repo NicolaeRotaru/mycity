@@ -7,6 +7,7 @@ import Honeypot from '@/components/Honeypot';
 import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
 import { nomePubblico, recapitoDallaRisposta, rigaIdentita, titolare } from '@/lib/legal/titolare';
@@ -141,7 +142,7 @@ export default function ContactPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
-        <div className="md:col-span-3 bg-white border border-cream-300 rounded-2xl p-6">
+        <Card variant="bordered" radius="2xl" padding="lg" className="md:col-span-3">
           <h2 className="text-xl font-bold mb-4 [overflow-wrap:anywhere]">Scrivici un messaggio</h2>
           <form onSubmit={submit} className="space-y-4">
             <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
@@ -217,7 +218,7 @@ export default function ContactPage() {
               {sending ? 'Invio in corso...' : <span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Invia messaggio</span>}
             </Button>
           </form>
-        </div>
+        </Card>
 
         <aside className="md:col-span-2 space-y-4">
           <div className="bg-gradient-to-br from-primary-50 to-secondary-50 border border-primary-100 rounded-2xl p-6">
@@ -243,14 +244,14 @@ export default function ContactPage() {
           </div>
 
           {piuCanali && (
-          <div className="bg-white border border-cream-300 rounded-2xl p-6">
+          <Card radius="2xl" padding="lg">
             <h3 className="font-bold text-ink-900 mb-3 flex items-center gap-2 [overflow-wrap:anywhere]"><Clock size={18} className="text-primary-600 shrink-0" aria-hidden /> Orari assistenza</h3>
             <ul className="text-sm text-ink-700 space-y-1">
               <li className="flex justify-between"><span>Lunedì - Venerdì</span><span className="font-semibold">9:00 - 18:00</span></li>
               <li className="flex justify-between"><span>Sabato</span><span className="font-semibold">10:00 - 14:00</span></li>
               <li className="flex justify-between text-ink-400"><span>Domenica</span><span>Chiuso</span></li>
             </ul>
-          </div>
+          </Card>
           )}
 
           <Link href="/faq" className="block bg-accent-50 border border-accent-200 rounded-2xl p-5 hover:bg-accent-100 transition-colors">
