@@ -167,6 +167,11 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ q: parts.join(', ') }),
       });
+      // Servizio degli indirizzi giù o limitato (429, 5xx): non è «indirizzo non trovato».
+      if (res.status === 429 || res.status >= 500) {
+        setError('Il servizio che cerca gli indirizzi non risponde in questo momento. Riprova fra poco, o sposta il pin sulla mappa.');
+        return;
+      }
       const data = await res.json();
       if (!data || data.lat == null || data.lng == null) {
         setError('Indirizzo non trovato. Prova ad essere più specifico o sposta il pin sulla mappa.');

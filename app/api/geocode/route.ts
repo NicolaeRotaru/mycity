@@ -15,9 +15,13 @@ export const runtime = 'nodejs';
  *    eterogenei → rischio ban);
  *  - nessun rate-limit né timeout né fallback.
  * Qui centralizziamo: User-Agent corretto, timeout, rate-limit per IP, e una
- * risposta minimale { lat, lng }. Se Nominatim è giù/lento, rispondiamo 200 con
- * { lat: null, lng: null } (fallback morbido: il checkout prosegue senza coord).
+ * risposta minimale { lat, lng }. «Nessun risultato» è 200 con { lat: null, lng: null };
+ * se invece Nominatim è giù, limitato o lento (429, 5xx, rete, tempo scaduto) rispondiamo 503
+ * con { lat: null, lng: null, error: 'servizio_non_disponibile' }: i chiamanti che leggono solo
+ * lat/lng proseguono senza coord come prima, chi lo vuole può dire «riprova fra poco».
  */
+const SERVIZIO_NON_DISPONIBILE = { lat: null, lng: null, error: 'servizio_non_disponibile' };
+
 export async function POST(req: Request) {
   const ip = getClientIp(req);
   const rl = await rateLimitAsync({ key: `geocode:${ip}`, max: 30, windowMs: 60_000 });
@@ -43,7 +47,10 @@ export async function POST(req: Request) {
       },
       signal: AbortSignal.timeout(5_000),
     });
-    if (!res.ok) return NextResponse.json({ lat: null, lng: null });
+    if (!res.ok) {
+      logger.warn('[geocode] Nominatim ha risposto con un errore', { status: res.status });
+      return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: 503 });
+    }
     const json = (await res.json()) as Array<{ lat?: string; lon?: string }>;
     const hit = Array.isArray(json) ? json[0] : undefined;
     const lat = hit?.lat != null ? parseFloat(hit.lat) : null;
@@ -54,6 +61,6 @@ export async function POST(req: Request) {
     });
   } catch {
     logger.warn('[geocode] Nominatim non raggiungibile', { qlen: q.length });
-    return NextResponse.json({ lat: null, lng: null });
+    return NextResponse.json(SERVIZIO_NON_DISPONIBILE, { status: 503 });
   }
 }
