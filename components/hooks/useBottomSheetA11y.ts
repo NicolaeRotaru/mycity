@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
 /**
  * #134 — La correzione esisteva già, a un file di distanza.
@@ -17,8 +17,40 @@ import { useEffect, type RefObject } from 'react';
  * la regola è: nessun overlay del marketplace scritto a mano — o passa da
  * `components/ui/Modal.tsx`, o passa da questo hook.
  */
+/**
+ * Le voci di cronologia dei pannelli con `indietroChiude` non ancora tolte, in tutta la pagina: un
+ * pannello aperto, o un history.back() partito col popstate non ancora arrivato. Fa da guardia al
+ * salto della voce orfana (sotto): con una voce già in gioco non si torna indietro una seconda volta.
+ */
+let vociDeiPannelli = 0;
+
+/** Toglie la voce del pannello che è in cima; `tolta` parte dopo il suo popstate. */
+function tornaSottoLaVoce(tolta: () => void) {
+  let fatto = false;
+  let riserva: ReturnType<typeof setTimeout> | undefined;
+  const arrivato = () => {
+    if (fatto) return;
+    fatto = true;
+    window.removeEventListener('popstate', arrivato);
+    if (riserva !== undefined) clearTimeout(riserva);
+    // Dopo il giro del popstate, quando il ritorno di Next è già partito.
+    setTimeout(tolta, 0);
+  };
+  window.addEventListener('popstate', arrivato);
+  // Se il popstate non arrivasse, la voce non deve restare «in uscita» per sempre.
+  riserva = setTimeout(arrivato, 1500);
+  window.history.back();
+}
+
 // Bottom-sheet mobile: scroll-lock + Esc, focus-trap e ritorno del focus al
 // trigger alla chiusura (WCAG 2.1.2 / 2.4.3). Condiviso tra pannello filtri e ordina.
+//
+// Con `indietroChiude` restituisce `true` finché la voce di cronologia del pannello c'è: dall'apertura
+// fino al popstate che la toglie (anche dopo la chiusura con X, Esc o «Mostra risultati», il cui
+// history.back() arriva un attimo dopo). Chi riscrive l'indirizzo con router.replace aspetta che torni
+// `false`: un replace fatto prima finisce sulla voce del pannello, e il ritorno indietro lo butta (se è
+// in volo Next lo scarta, perché il popstate ha la precedenza; se è concluso, la voce di sotto ha
+// l'indirizzo di prima). I filtri scelti sparivano dall'indirizzo.
 export function useBottomSheetA11y(
   open: boolean,
   sheetRef: RefObject<HTMLElement | null>,
@@ -29,6 +61,7 @@ export function useBottomSheetA11y(
 ) {
   const blocca = opzioni.bloccaScorrimento !== false;
   const indietroChiude = opzioni.indietroChiude === true;
+  const [voceInCronologia, setVoceInCronologia] = useState(false);
   useEffect(() => {
     if (!open) return;
     const trigger = triggerRef.current;
@@ -72,17 +105,49 @@ export function useBottomSheetA11y(
     const percorso = window.location.pathname;
     const stato = window.history.state;
     window.history.pushState({ ...(stato && typeof stato === 'object' ? stato : {}), pannelloAperto: true }, '');
+    vociDeiPannelli += 1;
+    setVoceInCronologia(true);
+    let giaTolta = false;
+    const tolta = () => {
+      if (giaTolta) return;
+      giaTolta = true;
+      vociDeiPannelli = Math.max(0, vociDeiPannelli - 1);
+      setVoceInCronologia(false);
+    };
     let chiusoDaIndietro = false;
     const onPopState = () => {
       chiusoDaIndietro = true;
+      window.removeEventListener('popstate', onPopState);
       onClose();
+      setTimeout(tolta, 0);
     };
     window.addEventListener('popstate', onPopState);
     return () => {
       window.removeEventListener('popstate', onPopState);
-      // Se nel frattempo si è andati su un'altra pagina, la voce non è più in cima: non si torna indietro.
-      if (!chiusoDaIndietro && window.location.pathname === percorso) window.history.back();
+      if (chiusoDaIndietro) return;
+      if (window.location.pathname === percorso) tornaSottoLaVoce(tolta);
+      // Si è andati su un'altra pagina: la voce non è più in cima e non si torna indietro.
+      else setTimeout(tolta, 0);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, indietroChiude]);
+
+  // Si è lasciata la pagina col pannello aperto, e con Indietro si torna sulla voce del pannello: la
+  // pagina rinasce col pannello chiuso, e quella voce sarebbe un Indietro a vuoto. Si toglie subito.
+  // La conta delle voci fa da guardia: il doppio montaggio di Strict Mode, il secondo pannello della
+  // stessa pagina, o un ritorno già in corso non tornano indietro una seconda volta.
+  useEffect(() => {
+    if (!indietroChiude || typeof window === 'undefined' || vociDeiPannelli > 0) return;
+    const stato = window.history.state as { pannelloAperto?: unknown } | null;
+    if (!stato || typeof stato !== 'object' || stato.pannelloAperto !== true) return;
+    vociDeiPannelli += 1;
+    setVoceInCronologia(true);
+    tornaSottoLaVoce(() => {
+      vociDeiPannelli = Math.max(0, vociDeiPannelli - 1);
+      setVoceInCronologia(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return indietroChiude && voceInCronologia;
 }
