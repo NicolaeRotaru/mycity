@@ -310,7 +310,25 @@ DEST_PULITA="$DESTINAZIONE_FOTO"
 while [[ "$DEST_PULITA" == */ && ${#DEST_PULITA} -gt 1 ]]; do
   DEST_PULITA="${DEST_PULITA%/}"
 done
-STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DEST_PULITA}-storico}"
+# Destinazione con una cartella dentro il secchio ("b2:mycity-foto/copie"): il «-storico» va
+# attaccato al nome del SECCHIO ("b2:mycity-foto-storico/copie"), non alla cartella, altrimenti lo
+# storico finisce nello stesso secchio della copia. Se non c'e' un secchio da cui ricavarlo
+# (remote usato alla radice, "cifrata:" o "cifrata:/x"), il predefinito non esiste: la notte e' rossa
+# finche' non si imposta STORAGE_SYNC_STORICO.
+STORICO_SENZA_SECCHIO=""
+STORICO_PREDEFINITO="${DEST_PULITA}-storico"
+if [[ "$DEST_PULITA" == *:* ]]; then
+  _remote="${DEST_PULITA%%:*}"
+  _resto="${DEST_PULITA#*:}"
+  _resto="${_resto#/}"
+  _secchio="${_resto%%/*}"
+  if [[ -z "$_secchio" ]]; then
+    STORICO_SENZA_SECCHIO=1
+  elif [[ "$_resto" == */* ]]; then
+    STORICO_PREDEFINITO="${_remote}:${_secchio}-storico/${_resto#*/}"
+  fi
+fi
+STORICO_FOTO="${STORAGE_SYNC_STORICO:-${STORICO_PREDEFINITO}}"
 
 # 8/9/2026 — DICEVA «COPIATE» SENZA AVER MAI RIAPERTO UN FILE.
 #
@@ -504,6 +522,11 @@ elif ! command -v rclone >/dev/null 2>&1; then
   riepilogo_lavoro "❌ **Le foto non sono state copiate** — la copia e' configurata ma \`rclone\` non e' installato sulla macchina che fa il lavoro."
   exit 4
 else
+  if [[ -n "$STORICO_SENZA_SECCHIO" && -z "${STORAGE_SYNC_STORICO:-}" ]]; then
+    echo "[backup] esito-foto: fallita — dalla destinazione (${DESTINAZIONE_FOTO}) non si ricava il secchio dello storico: non c'e' un secchio da cui partire. Imposta STORAGE_SYNC_STORICO su un secchio diverso da quello della copia. Stanotte la copia delle foto non parte." >&2
+    riepilogo_lavoro "❌ **Le foto non sono state copiate: manca il secchio dello storico** — dalla destinazione non si ricava un secchio diverso da quello della copia. Imposta \`STORAGE_SYNC_STORICO\`."
+    exit 5
+  fi
   # 6/9/2026 — LO STORICO E' UN SECCHIO A PARTE, E NESSUNO L'AVEVA MAI CREATO.
   #
   # `--backup-dir` scrive in un secchio DIVERSO da quello di destinazione:
