@@ -214,4 +214,24 @@ describe('R03-007 · la chiusura legge tutti gli allarmi aperti, in ordine, oltr
     expect(dopo.find((n) => n.id === uscita.id)?.is_read, 'il duecentoundicesimo resta aperto per sempre').toBe(true);
     expect(dopo.filter((n) => n.title === TITOLO && n.is_read === false), 'chi aspetta ancora perde l allarme').toHaveLength(210);
   });
+
+  it('la chiusura legge solo «scrivile tu»: «Persone non avvisate» di chi aspetta e non è avvisato resta aperto', async () => {
+    const NON_AVVISATE = 'Persone non avvisate del rinvio della cancellazione';
+    const m = ilMondo([PRIMA]);
+    // Il pannello della persona rifiuta la riga: la spiegazione non arriva e la rotta scrive l'allarme,
+    // che nel testo ha «Chi aspetta: l'utente …» come «scrivile tu».
+    m.giro.guasti.push({
+      tabella: 'notifications', azione: 'insert', messaggio: 'permission denied for table notifications',
+      seRiga: (r) => r.user_id === PRIMA,
+    });
+    const nonAvvisate = () =>
+      m.giro.righe('notifications').filter((n) => n.title === NON_AVVISATE && n.user_id === 'admin-1');
+    for (let notte = 0; notte < 2; notte++) {
+      const { corpo } = await unaNotte(notte);
+      expect(corpo.avvisiFalliti, 'il guasto del pannello non c è: la prova non prova niente').toBe(1);
+      expect(nonAvvisate(), 'la rotta non ha scritto «Persone non avvisate»').toHaveLength(1);
+      expect(String(nonAvvisate()[0].body)).toContain(`Chi aspetta: l'utente ${PRIMA}.`);
+      expect(nonAvvisate()[0].is_read, 'la chiusura dello «scrivile tu» ha chiuso «Persone non avvisate»').toBe(false);
+    }
+  });
 });
