@@ -57,3 +57,21 @@ describe('R12-004 · /lavora-con-noi, le righe delle posizioni a 280 px col test
     expect(link).toContain('max-[300px]:flex-wrap');
   });
 });
+
+describe('R12-002 (giro 2) · i testi restano nel loro riquadro a 280 px col testo al 200%', () => {
+  it('/faq: il riquadro «Non hai trovato la risposta?» manda a capo le parole lunghe', () => {
+    const div = tagPrima(leggi('app/faq/page.tsx'), '<h3 className="text-xl font-bold mb-2">', 'div');
+    expect(div).toContain('break-words');
+    expect(div).toContain('hyphens-auto');
+  });
+  it('/returns: il riquadro del recesso e i riquadri sotto vanno a capo (break-words si eredita)', () => {
+    const src = leggi('app/returns/page.tsx');
+    expect(tagPrima(src, '<div className="flex flex-wrap items-start gap-4">', 'div')).toContain('break-words');
+    expect(tagPrima(src, '<section className="rounded-2xl border border-cream-300 bg-white p-6">', 'div')).toContain('break-words');
+  });
+  it('/lavora-con-noi: i tre riquadri vanno a capo dentro il riquadro', () => {
+    const riquadro = tagPrima(leggi('app/lavora-con-noi/page.tsx'), '<span className="w-[50px]', 'div');
+    expect(riquadro).toContain('break-words');
+    expect(riquadro).toContain('hyphens-auto');
+  });
+});

@@ -263,7 +263,7 @@ export default function FaqPage() {
 
       {/* 13/11/2026 (R15-008) — Col testo ingrandito al massimo il bottone «Contattaci» arrivava a 405px
           su 360: meno margine sul telefono, e la parola può andare a capo invece di uscire. */}
-      <div className="mt-12 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl px-4 py-8 sm:p-8 text-center">
+      <div className="mt-12 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl px-4 py-8 sm:p-8 text-center break-words hyphens-auto">
         <h3 className="text-xl font-bold mb-2">Non hai trovato la risposta?</h3>
         <p className="text-primary-100 mb-4">Il nostro team risponde entro 24 ore lavorative.</p>
         {/* R04-004 — Sul fondo terracotta l'anello di fuoco terracotta non si vedeva: bianco, come nelle barre in alto. */}

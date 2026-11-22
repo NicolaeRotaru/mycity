@@ -33,7 +33,7 @@ export default function ReturnsPage() {
       {/* Callout 14 giorni — card cream-bordered */}
       {/* 13/11/2026 (R15-008) — Col testo ingrandito al massimo icona e testo affiancati non ci stavano
           (394px su 360): ora, se il testo non sta accanto all'icona, va sotto. */}
-      <div className="mb-10 rounded-2xl border border-cream-300 bg-white p-4 sm:p-6">
+      <div className="mb-10 rounded-2xl border border-cream-300 bg-white p-4 sm:p-6 break-words hyphens-auto">
         <div className="flex flex-wrap items-start gap-4">
           <span
             className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-700"
@@ -51,7 +51,8 @@ export default function ReturnsPage() {
         </div>
       </div>
 
-      <div className="space-y-5 text-ink-700">
+      {/* R12-002 — break-words si eredita: ogni testo dei riquadri va a capo dentro il suo riquadro col testo al 200% a 280 px. */}
+      <div className="space-y-5 text-ink-700 break-words hyphens-auto">
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
           <h2 className="mb-3 font-serif text-xl font-bold text-ink-900 break-words hyphens-auto">Come restituire un prodotto</h2>
           <ol className="list-decimal space-y-2 pl-5 leading-relaxed [overflow-wrap:anywhere]">
