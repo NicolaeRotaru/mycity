@@ -1,0 +1,173 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-22 00:30",
+  "finita": false,
+  "testa": "f9a54ab53496b1794e63b292f67c885669a82b39",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R03-005",
+      "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista nell'approvazione del piano, 21/11)"
+    },
+    {
+      "id": "R03-016",
+      "chiave": "api-backend|un fattorino puo' legare il suo sos a un ordine che non e' suo",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista nell'approvazione del piano, 21/11)"
+    },
+    {
+      "id": "R03-004",
+      "chiave": "api-backend|due allarmi del giro notturno delle cancellazioni si ripetono ogni notte a ogni amministratore",
+      "esito": "riparato",
+      "commit": "489543c2bf2ebaaa0fd3934cf8a81aadc9033888",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-allarmi-della-notte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-allarmi-della-notte.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 489543c2^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-allarmi-della-notte.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Dati vecchi non cancellati» ha ora un identificativo ricavato da quali pulizie falliscono: stesso guasto nessuna riga nuova, guasto diverso un allarme nuovo; il 500 resta. L'altro dei due allarmi (persone non avvisate) è chiuso dal commit di R03-003, e la prova li guarda insieme.",
+      "nota": "I due allarmi sono quelli che il referto S01b nomina (:295-300 e :543-549). Metà della voce sta nel commit di R03-003 (stessa riga): se quel commit si toglie, la metà «persone non avvisate» si riapre.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R03-003",
+      "chiave": "api-backend|allarme 'persone non avvisate' riscritto ogni notte, senza dire chi: la stessa classe chiusa per le email resta aperta qui",
+      "esito": "riparato",
+      "commit": "665234dd129d9777a9ad8ddc682e131e14e3cebc",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-persone-non-avvisate.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-persone-non-avvisate.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 665234dd^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-persone-non-avvisate.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Come per le email ferme: un allarme per avviso non recapitato, con id derivato dall'avviso (<idAvviso>:non-avvisata, per amministratore), e nel testo l'utente e quale spiegazione (rinvio o termine scaduto). Tre notti con lo stesso guasto: un allarme solo.",
+      "nota": "Lo stato della notte resta 500 finché qualcuno non è avvisato (la voce non lo nomina). Le email ferme invece tornano verdi dalla seconda notte: se la regista vuole la stessa regola anche qui è una riga sullo stato.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R03-006",
+      "chiave": "api-backend|l'allarme «scrivile tu» resta aperto per sempre se la persona esce dall'elenco della notte",
+      "esito": "riparato",
+      "commit": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cc4248b^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova chiusura chiamata ogni notte, anche senza nessuno in lista: chiude gli allarmi «scrivile tu» di chi non aspetta più (profilo sparito, richiesta annullata, richiesta rifatta con altra data), rileggendo la richiesta nel profilo; chi aspetta ancora lo tiene. Non lancia, gira dopo le email, non tocca cancellazioni né tetti.",
+      "insieme_a": [
+        "R03-007"
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R03-007",
+      "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
+      "esito": "riparato",
+      "commit": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cc4248b^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La chiusura di R03-006 legge solo gli allarmi aperti di quel titolo per amministratore, in ordine di id, a pagine da 200 fino in fondo (cursore che deve avanzare), senza tetto. Prove: 300 avvisi letti o d'altro tipo davanti, e 210 aperti validi prima di quello da chiudere.",
+      "insieme_a": [
+        "R03-006"
+      ],
+      "nota": "Sulla base la chiusura per chi esce dall'elenco non c'era affatto: la voce descrive il vincolo che quella chiusura deve rispettare, quindi sta nello stesso commit. Due mutanti provati a mano: una pagina sola filtrata (1 rossa), 200 righe senza filtro (2 rosse).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R03-008",
+      "chiave": "api-backend|quando la notte finisce il tempo delle email, l'allarme agli amministratori conta come «non partite» anche le spiegazioni gia' arrivate per email nelle notti prima",
+      "esito": "riparato",
+      "commit": "f9a54ab53496b1794e63b292f67c885669a82b39",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-email-gia-partite.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-email-gia-partite.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f9a54ab5^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-email-gia-partite.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A tempo delle email finito, prima di contare e di scrivere l'allarme si tolgono le spiegazioni con «email_partita» nel registro degli invii; conto (avvisiEmailSenzaTempo), testo e chiave dicono solo le altre; se non ne resta nessuna, niente allarme. Il pannello si scrive per tutte come prima.",
+      "nota": "La stringa del segno «privacy.avviso_cancellazione.email_partita» è privata nella libreria: è copiata in una costante della rotta. La prova la incrocia con la libreria vera (che scrive il segno la prima notte), quindi una deriva diventa rossa.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R03-009",
+      "chiave": "api-backend|le notifiche push partono due volte se due giri del cron si sovrappongono: la presa in carico non è atomica",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "Rigenerare con `node scripts/gen-db-types.mjs` dopo la migrazione 650: aggiunge in notifications.Row `push_claimed_at: string | null;` e in Insert e Update `push_claimed_at?: string | null;` (3 righe, nient'altro; patch pronta in scratchpad/R03-009-tipi.patch)."
+        }
+      ],
+      "cosa_resta": "Applicare insieme ai tipi la patch la patch R03-009-cura (consegnata alla regista nel messaggio finale) (rotta send-push con presa condizionata su push_claimed_at, presa valida 10 minuti, prese non mandate ridate, ripiego se la colonna manca; migrations/650_le_push_si_prendono_in_carico.sql; tests/unit/riparazione-r03-push.test.ts; tests/sql/rls/riparazione-r03-push.test.sql; 5 prove esistenti che importano la rotta, adattate solo nel finto). Poi commit R03-009 e prova rimessa: vitest con --file app/api/cron/send-push/route.ts (rossa 3 su 5 senza la rotta); la --sql r03_rimessa sulla 650 darà 3 per costruzione (la prova nomina la colonna nuova: 42703).",
+      "nota": "Non è nel ramo perché senza i tipi diventano rosse le guardie nessuna-scrittura-inventa-una-colonna e nessuna-colonna-che-non-esiste. Senza colonna nuova: pushed_at come segno di presa perde le righe di un giro morto; un segno finto dentro pushed_at è un trucco con letture senza indice. Verificata con i tipi rigenerati solo in locale: 12 file send-push + guardie 121/121 verdi, tsc 0, prova SQL 5/5 verde sul Postgres 16 locale. vercel.json e send-emails non toccati.",
+      "verificato_da": ""
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 1,
+    "nota": "lotto A fatto; spesa letta da get_session dopo il lotto A: 11,85 $"
+  }
+}
