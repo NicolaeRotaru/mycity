@@ -291,6 +291,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "5 subagenti su 6: lotto A (grande), lotto B (sonnet), revisore 1 (grande), giro di correzione (grande), revisore 2 (sonnet). Nessun Workflow."
-  }
+    "nota": "5 subagenti su 6: lotto A (grande), lotto B (sonnet), revisore 1 (grande), giro di correzione (grande), revisore 2 (sonnet). Nessun Workflow. Costo letto con get_session senza id alle 17:42 UTC (usage.cost_usd 17,29 $), prima della consegna.",
+    "subagenti": 5
+  },
+  "costo_usd": 17.29
 }
