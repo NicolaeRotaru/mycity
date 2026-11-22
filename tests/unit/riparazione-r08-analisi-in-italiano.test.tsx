@@ -13,6 +13,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
  * «tieni lo stock pronto»: un fornaio capisce poco le parole inglesi. Qui la pagina VERA
  * (app/seller/analytics/page.tsx) si monta con un database finto e si legge quello che è a video.
  */
+// Il nome del prodotto più visto e l'interruttore delle sponsorizzazioni, che le prove possono cambiare:
+// il titolo di riserva del consiglio «Spingi …» si vede solo con le sponsorizzazioni accese e un
+// prodotto senza nome.
+const scena = vi.hoisted(() => ({ nomeProdotto: 'Pane' as string | null, sponsorizzazioni: false }));
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...(await originale<Record<string, unknown>>()),
+  get ABBONAMENTO_NEGOZI_ACCESO() { return scena.sponsorizzazioni; },
+}));
 vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }), usePathname: () => '/seller/analytics' }));
 vi.mock('next/link', async () => {
@@ -36,7 +44,7 @@ vi.mock('@/lib/supabase/client', () => {
       auth: { getUser: async () => ({ data: { user: { id: 'neg-1' } } }) },
       from: (tavola: string) => {
         if (tavola === 'products') {
-          return catena(() => ({ data: [{ id: 'p1', name: 'Pane', price: 4, images: [], status: 'available', stock: 5, created_at: '2026-10-01T00:00:00Z' }], error: null }));
+          return catena(() => ({ data: [{ id: 'p1', name: scena.nomeProdotto, price: 4, images: [], status: 'available', stock: 5, created_at: '2026-10-01T00:00:00Z' }], error: null }));
         }
         if (tavola === 'orders') return catena(() => ({ data: ordini, error: null }));
         return catena(() => ({ data: [], error: null }));
@@ -59,6 +67,8 @@ let root: Root;
 afterEach(() => {
   act(() => root.unmount());
   div.remove();
+  scena.nomeProdotto = 'Pane';
+  scena.sponsorizzazioni = false;
 });
 
 async function apri(): Promise<string> {
@@ -92,5 +102,20 @@ describe('R08 · le etichette della pagina Analisi sono in italiano', () => {
     expect(testo).toContain('Ordini (30 giorni)');
     expect(testo).toContain('tieni pronta la merce');
     expect(testo).toMatch(/Consigli/);
+  });
+
+  it('niente «7gg»: le visite e gli ordini della settimana dicono «ultimi 7 giorni»', async () => {
+    const testo = await apri();
+    expect(testo).not.toMatch(/7\s?gg/i);
+    expect(testo).toContain('0 oggi · 3 ultimi 7 giorni');
+    expect(testo).toContain('4 ultimi 7 giorni');
+  });
+
+  it('il consiglio sul prodotto senza nome dice «il tuo prodotto più venduto», non «best-seller»', async () => {
+    scena.nomeProdotto = null;
+    scena.sponsorizzazioni = true;
+    const testo = await apri();
+    expect(testo).not.toMatch(/best-?seller/i);
+    expect(testo).toContain('Spingi "il tuo prodotto più venduto"');
   });
 });

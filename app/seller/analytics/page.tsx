@@ -275,7 +275,7 @@ export default function SellerAnalyticsPage() {
   if (best && ABBONAMENTO_NEGOZI_ACCESO) {
     insights.push({
       icon: TrendingUp, tone: 'olive',
-      title: `Spingi "${best.name ?? 'il tuo best-seller'}"`,
+      title: `Spingi "${best.name ?? 'il tuo prodotto più venduto'}"`,
       body: `È il prodotto più visto (${best.views} ${best.views === 1 ? 'visita' : 'visite'} in 30 giorni). Sponsorizzalo per restare in cima alle ricerche.`,
       ctaLabel: 'Sponsorizza', ctaHref: '/seller/promote',
     });
@@ -339,11 +339,11 @@ export default function SellerAnalyticsPage() {
           delta={
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le visite'
-              : `${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`
+              : `${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7 giorni`
           }
           color="primary"
         />
-        <KpiCard icon={ShoppingCart} label="Ordini (30 giorni)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
+        <KpiCard icon={ShoppingCart} label="Ordini (30 giorni)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7 giorni`} color="olive" />
         <KpiCard
           icon={TrendingUp}
           label="Visite che diventano ordini"
