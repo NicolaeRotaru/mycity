@@ -8,7 +8,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { fireEvent } from '@testing-library/dom';
 
 vi.mock('next/link', async () => {
   const { createElement: ce } = await import('react');

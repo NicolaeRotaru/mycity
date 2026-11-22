@@ -16,12 +16,12 @@ const evento = (target: Element) => ({ defaultPrevented: false, button: 0, metaK
 
 describe('R10-007 — il conferma dice di cosa si tratta', () => {
   it('sulla vetrina dice «alla vetrina»', () => {
-    const conferma = vi.fn(() => false);
+    const conferma = vi.fn((_m: string) => false);
     clicDaFermare(evento(link('/seller/orders')), true, '/seller/site', conferma);
     expect(conferma.mock.calls[0]?.[0]).toContain('modifiche alla vetrina non salvate');
   });
   it('sul profilo dice «al profilo», non «la vetrina»', () => {
-    const conferma = vi.fn(() => false);
+    const conferma = vi.fn((_m: string) => false);
     clicDaFermare(evento(link('/seller/orders')), true, '/seller/profile', conferma, 'al profilo');
     const msg = String(conferma.mock.calls[0]?.[0]);
     expect(msg).toContain('modifiche al profilo non salvate');
