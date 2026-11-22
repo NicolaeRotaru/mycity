@@ -6,7 +6,7 @@ import { precaricoFoto } from '@/lib/preload-foto';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaProdotto } from '@/lib/queries/precarico';
 import { notFound } from 'next/navigation';
-import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 
 export const revalidate = 300; // 5 min ISR sui metadata
@@ -15,64 +15,22 @@ export const revalidate = 300; // 5 min ISR sui metadata
  * R10-001 — UN PRODOTTO CHE NON ESISTE RISPONDE 404, NON «TUTTO OK».
  *
  * La lettura pubblica vede solo i prodotti in vendita di un negozio approvato: «niente» vuol dire
- * sia «non esiste» sia «esiste ma ora non si vende». Il secondo caso resta la pagina «Prodotto non
- * disponibile» solo quando lo è anche per il pubblico: finito per oggi, esaurito o venduto, in un
- * negozio approvato. Tutto il resto, per chi non lo può vedere, è una 404 come un prodotto che non
- * c'è.
- *
- * Come si decide:
- * 1. Prima si chiede con la sessione di chi apre la pagina, cioè con le sue regole di lettura: il
- *    negoziante vede le sue bozze (le apre dalla sua lista), l'amministratore tutto. Se la riga gli
- *    arriva, niente 404.
- * 2. Altrimenti si guarda la riga senza le regole, ma se ne usa solo la risposta «non disponibile»:
- *    stato finito/esaurito/venduto E negozio approvato. Bozza, in approvazione, o negozio non
- *    approvato: 404.
- * Se una delle due domande non riesce si risponde «non lo so» (false): la pagina resta quella di
- * prima, mai una 404 per un guasto. Un id che non è nemmeno un UUID (22P02) è una 404.
+ * sia «non esiste» sia «esiste ma ora non si vende» (finito per oggi, in bozza, negozio sospeso).
+ * Il secondo caso deve restare la pagina «Prodotto non disponibile», che spiega cosa succede; solo
+ * il primo è una 404. Qui si chiede l'id e basta, senza le regole di lettura: vero solo se la riga
+ * non c'è proprio. Se non si riesce a chiederlo si risponde «non lo so» (false): la pagina resta
+ * quella di prima, mai una 404 per un guasto.
  */
-const STATI_NON_DISPONIBILI_AL_PUBBLICO = new Set(['out_of_stock', 'sold_out', 'sold']);
-
-function codiceDi(error: unknown): string | undefined {
-  return (error as { code?: string } | null)?.code;
-}
-
 async function prodottoInesistente(id: string): Promise<boolean> {
   try {
-    const sessione = await getServerSupabase();
-    const { data, error } = await sessione.from('products').select('id').eq('id', id).maybeSingle();
+    const { data, error } = await getAdminSupabase().from('products').select('id').eq('id', id).maybeSingle();
+    // 22P02 = un id che non è nemmeno un UUID: un prodotto così non c'è.
     if (error) {
-      if (codiceDi(error) === '22P02') return true;
-      logger.warn('[scheda] non so se il prodotto si vede: niente 404', { id, code: codiceDi(error) });
+      if ((error as { code?: string }).code === '22P02') return true;
+      logger.warn('[scheda] non so se il prodotto esiste: niente 404', { id, code: (error as { code?: string }).code });
       return false;
     }
-    if (data) return false;
-  } catch (e) {
-    logger.warn('[scheda] non so se il prodotto si vede: niente 404', { id, errore: e instanceof Error ? e.message : 'errore' });
-    return false;
-  }
-
-  try {
-    const admin = getAdminSupabase();
-    const { data, error } = await admin.from('products').select('id, status, seller_id').eq('id', id).maybeSingle();
-    if (error) {
-      if (codiceDi(error) === '22P02') return true;
-      logger.warn('[scheda] non so se il prodotto esiste: niente 404', { id, code: codiceDi(error) });
-      return false;
-    }
-    const riga = data as { status?: string | null; seller_id?: string | null } | null;
-    if (!riga) return true;
-    if (!riga.status || !STATI_NON_DISPONIBILI_AL_PUBBLICO.has(riga.status) || !riga.seller_id) return true;
-    const { data: negozio, error: erroreNegozio } = await admin
-      .from('profiles')
-      .select('role, is_approved')
-      .eq('id', riga.seller_id)
-      .maybeSingle();
-    if (erroreNegozio) {
-      logger.warn('[scheda] non so se il negozio è approvato: niente 404', { id, code: codiceDi(erroreNegozio) });
-      return false;
-    }
-    const n = negozio as { role?: string | null; is_approved?: boolean | null } | null;
-    return !(n?.role === 'seller' && n?.is_approved === true);
+    return !data;
   } catch (e) {
     logger.warn('[scheda] non so se il prodotto esiste: niente 404', { id, errore: e instanceof Error ? e.message : 'errore' });
     return false;
