@@ -50,7 +50,9 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
       </div>
 
       <div className="min-w-0 flex-1">
-        <h3 className="inline-flex items-center gap-1.5 truncate text-[15px] font-bold text-ink-900 group-hover:text-primary-700">
+        {/* R12-009 — Senza max-w-full un nome lungo senza spazi allargava il titolo e la pagina
+            sul telefono: ora il titolo resta nella scheda e il nome si taglia coi puntini. */}
+        <h3 className="inline-flex max-w-full items-center gap-1.5 truncate text-[15px] font-bold text-ink-900 group-hover:text-primary-700">
           <span className="truncate">{store.store_name}</span>
           {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
         </h3>
