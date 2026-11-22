@@ -1,0 +1,394 @@
+{
+  "sessione": "R16",
+  "finita": true,
+  "voci": [
+    {
+      "id": "R16-001",
+      "chiave": "coerenza-brand|card a mano con bg-surface-0 restano fuori dal conteggio delle card ridisegnate",
+      "esito": "parziale",
+      "commit": "e3592f96",
+      "file_toccati": [
+        "app/near/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-card-surface.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-card-surface.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e3592f96^ --file app/near/page.tsx --prove tests/unit/riparazione-r16-card-surface.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "/near riga 295: invito alla posizione ora <Card variant=\"surface\" padding=\"none\" className=\"mb-4 flex ... px-4 py-3\"> (raggio xl e padding come prima). rider/earnings:119 è una pillola con ring (non card), SellerShell:450 è la barra sticky e :178 il dialog: restano a mano.",
+      "cosa_resta": "Gli altri file non miei (regola e elenco in serve_file_altrui).",
+      "serve_file_altrui": [
+        {
+          "file": "app/rider/page.tsx, app/rider/profile/page.tsx, app/rider/help/page.tsx, app/rider/history/page.tsx, app/rider/reviews/page.tsx, app/product/[id]/page.tsx, components/seller/SellerHealthScore.tsx, components/seller/SellerOnboardingChecklist.tsx",
+          "modifica": "REGOLA: ogni contenitore con bg-surface-0 + border border-cream-300 + rounded-* scritto a mano diventa <Card variant=\"surface\"> con radius (lg/xl/2xl) e padding (none/sm/md/lg) uguali a oggi, classi residue nel className; Link -> <Card href>, details -> as=\"details\" padding=\"none\", article -> as=\"article\"; link esterni e dialog restano a mano. ELENCO file:righe come da scheda: rider/page.tsx 510,632,638,681,700 (div), 579 (Link); rider/profile 226,232,242,254,288; rider/help 121 (details), 150,163,178 (link); rider/history 142,181 (div), 173 (Link); rider/reviews 102 (div), 160 (article); product/[id] 1271; SellerHealthScore 142; SellerOnboardingChecklist 118."
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): diff e3592f96 confrontato con Card.tsx (rounded-xl, bg-surface-0, border-cream-300, padding none + px-4 py-3 identici a prima) e prova rilanciata verde; il resto resta serve_file_altrui. — verdetto: parziale · rilievi: app/near/page.tsx:295: nessuna regressione visiva, ma la voce resta aperta: 1 sola card su 24 convertita, il resto delegato (esito parziale corretto)."
+    },
+    {
+      "id": "R16-002",
+      "chiave": "coerenza-brand|la scala tipografica è aggirata 330 volte con misure a mano",
+      "esito": "parziale",
+      "commit": "63dd487d",
+      "file_toccati": [
+        "components/ImageUrlField.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-scala-tipografica.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-scala-tipografica.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 63dd487d^ --file components/ImageUrlField.tsx --prove tests/unit/riparazione-r16-scala-tipografica.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "SellerShell, rider/earnings, search e AdminSidebar non hanno più text-[Npx] (già fatto alla base). Nei miei file l'unico con passo entro 1px era ImageUrlField:127 text-[10px] -> text-2xs (esiste in tailwind.config.ts). Restano di proposito text-[54px] (lavora-con-noi:113) e text-[32px] (returns:28): nessun passo entro 1px.",
+      "cosa_resta": "76 file non miei con text-[Npx] (elenco in serve_file_altrui) e i due 22px senza passo.",
+      "serve_file_altrui": [
+        {
+          "file": "(76 file, elenco sotto)",
+          "modifica": "REGOLA: text-[Npx] -> passo della scala solo se entro 1px: 10->text-2xs, 11->text-xs, 12->text-xs, 13->text-sm, 14->text-sm, 15->text-base, 17->text-lg; lasciare 22, 26, 32 (nessun passo entro 1px). File: app/accetta-condizioni/page.tsx app/admin/activity/page.tsx app/admin/audit/page.tsx app/admin/cod-remittance/page.tsx app/admin/delivery/page.tsx app/admin/funnel/page.tsx app/admin/page.tsx app/admin/payouts/page.tsx app/admin/products/page.tsx app/admin/support-chat/page.tsx app/admin/today/page.tsx app/events/page.tsx app/favorites/page.tsx app/globals.css app/messages/[id]/page.tsx app/messages/page.tsx app/notifications/page.tsx app/orders/[id]/page.tsx app/orders/page.tsx app/profile/achievements/page.tsx app/profile/addresses/page.tsx app/profile/page.tsx app/promozioni/page.tsx app/regali/RegaliClient.tsx app/rider/availability/page.tsx app/rider/help/page.tsx app/rider/history/page.tsx app/rider/onboarding/page.tsx app/rider/orders/[id]/page.tsx app/rider/page.tsx app/rider/profile/page.tsx app/rider/reviews/page.tsx app/seller/analytics/page.tsx app/seller/earnings/page.tsx app/seller/orders/[id]/page.tsx app/seller/orders/page.tsx app/seller/products/ai-batch/page.tsx app/seller/products/import/page.tsx app/seller/products/page.tsx app/sign-in/page.tsx app/u/[handle]/page.tsx components/CollectionHeader.tsx components/DeliveryMap.tsx components/LocationPill.tsx components/MobileTabBar.tsx components/OrderTimeline.tsx components/PhotoReviewUpload.tsx components/ProductCard.tsx components/SearchBar.tsx components/Segnala.tsx components/StoreProductExplorer.tsx components/account/AccountShell.tsx components/account/AccountSidebar.tsx components/admin/AdminUI.tsx components/admin/ExternalDataPanel.tsx components/home-sections/ReorderRail.tsx components/home/HeroStoreCard.tsx components/home/StoriesCarousel.tsx components/home/TrendingNow.tsx components/orders/ContactSheet.tsx components/products/AllergensAccordion.tsx components/products/SellerCard.tsx components/products/VendutoDa.tsx components/rider/RiderShell.tsx components/seller/ProductImagesField.tsx components/seller/SellerPageTitle.tsx components/seller/site/PageListEditor.tsx components/seller/site/PageSectionsEditor.tsx components/seller/site/SitePreview.tsx components/store-sections/HeroSection.tsx components/store-sections/HoursSection.tsx components/store-sections/ReviewsSection.tsx components/ui/AuthShell.tsx components/ui/Badge.tsx components/ui/LegalLayout.tsx components/ui/QualityMarks.tsx"
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): text-2xs esiste in tailwind.config.ts (0.625rem = 10px esatti), grep reale sui 29 file di R16 trova solo text-[54px] e text-[32px] (nessun passo entro 1px), e l'elenco dei 76 file della nota contiene tutti i 68 file col grep text-[9..18px] (8 in piu sono i 22px/altre misure). — verdetto: parziale · rilievi: components/ImageUrlField.tsx:127: conversione corretta; la voce resta parziale per 76 file altrui, come dichiarato."
+    },
+    {
+      "id": "R16-003",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi",
+      "esito": "parziale",
+      "commit": "c185c3ab",
+      "file_toccati": [
+        "app/faq/page.tsx",
+        "app/stores/page.tsx",
+        "app/contact/page.tsx",
+        "app/seller/profile/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-card-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-card-a-mano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c185c3ab^ --file app/faq/page.tsx,app/stores/page.tsx,app/contact/page.tsx,app/seller/profile/page.tsx --prove tests/unit/riparazione-r16-card-a-mano.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Card.tsx già copre i raggi lg/xl/2xl e le varianti bordered/elevated: nessuna modifica. Convertiti 7 riquadri div (faq 1, negozi 1, contatti 2, profilo negozio 3) con raggio e padding uguali; suite dei 40 file di prova che toccano queste pagine verde, tranne una già rossa (vedi nuovi). Lasciati a mano: link/form/aside/pillole (DatiPerIBonifici form, contact link <a>, category aside, lavora-con-noi, StoreProductExplorer ecc.).",
+      "cosa_resta": "Card a mano nei file non miei e nei miei non convertiti (form, link, aside, li).",
+      "serve_file_altrui": [
+        {
+          "file": "(69 file, elenco sotto)",
+          "modifica": "REGOLA: <div|section> con bg-white border border-cream-300|surface-200 rounded-(lg|xl|2xl) [shadow-warm] [p-N] -> <Card variant=\"bordered|elevated(se shadow-warm)|funnel(surface-200+shadow-card)\" radius=\"lg|xl|2xl\" padding=\"sm|md|lg\">, resto nel className. File: app/about/page.tsx app/admin/activity/page.tsx app/admin/branding/page.tsx app/admin/categories/page.tsx app/admin/cod-remittance/page.tsx app/admin/daily-drops/page.tsx app/admin/events/page.tsx app/admin/funnel/page.tsx app/admin/home/page.tsx app/admin/orders/page.tsx app/admin/page.tsx app/admin/pages/[slug]/page.tsx app/admin/pages/page.tsx app/admin/shop-of-month/page.tsx app/admin/sponsored/page.tsx app/admin/support-chat/page.tsx app/admin/users/page.tsx app/cart/page.tsx app/categorie/page.tsx app/events/page.tsx app/help/page.tsx app/lists/[id]/page.tsx app/lists/page.tsx app/messages/page.tsx app/not-found.tsx app/orders/[id]/dispute/page.tsx app/orders/page.tsx app/product/[id]/page.tsx app/profile/addresses/page.tsx app/profile/gift-cards/page.tsx app/profile/loyalty/page.tsx app/profile/referral/leaderboard/page.tsx app/seller/customers/page.tsx app/seller/dashboard/page.tsx app/seller/orders/[id]/page.tsx app/seller/products/import/page.tsx app/seller/promotions/page.tsx app/seller/reviews/page.tsx app/seller/stories/page.tsx app/shared-cart/page.tsx app/shop-of-month/page.tsx app/status/page.tsx app/u/[handle]/page.tsx components/DailyCheckIn.tsx components/LiveActivityFeed.tsx components/PWAInstallBanner.tsx components/ProductGrid.tsx components/ProductQA.tsx components/ShareCartButton.tsx components/SkeletonCard.tsx components/StickyAddToCart.tsx components/StoreProductExplorer.tsx components/cart/CartUpsell.tsx components/cms/CmsBlockRenderer.tsx components/home-sections/HomeSectionRenderer.tsx components/home/HeroStoreCard.tsx components/home/HomeEvents.tsx components/seller/GestisciAbbonamento.tsx components/seller/ProductForm.tsx components/seller/ReturnRequestCard.tsx components/seller/SellerHealthScore.tsx components/seller/site/PageEditor.tsx components/seller/site/SiteEditor.tsx components/seller/site/StoreDetailsEditor.tsx components/store-sections/FaqSection.tsx components/store-sections/RichTextSection.tsx components/ui/ErrorState.tsx components/ui/LegalLayout.tsx components/ui/LoadingState.tsx"
+        }
+      ],
+      "verificato_da": "revisore B (sonnet): per i 7 riquadri confrontate le classi di prima con quelle di Card (cn senza tailwind-merge, ma nessun conflitto: padding/raggio/variante coincidono, shadow-sm e space-y-2 in className); section/form/aria non persi, tag restano div, prova rilanciata verde. — verdetto: parziale · rilievi: app/contact/page.tsx:145: nessuna regressione; voce parziale perche restano ~134 card a mano in 69 file altrui piu form/link/aside nei propri."
+    },
+    {
+      "id": "R16-004",
+      "chiave": "frontend-ux|il controllo sul taglio dei campi di testo del costruttore della home tronca ancora titoli e sottotitoli in silenzio",
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel banner della vetrina (BannerFields) i quattro maxLength (titolo 120, sottotitolo 200, testo alternativo 160, pulsante 40) sono diventati un errore sotto il campo, col testo che resta intero; HomeSectionConfigForm era già a posto. La prova comune r02-banner-alt ora controlla niente maxLength ed errore oltre 160 (eccezione firmata prove_comuni, onda 2). Rimesso col commit 1a91d22a dopo il ritorno 40da5b80.",
+      "verificato_da": "revisore A (sonnet): prova rilanciata (8/8 verde); tetti 120/200/160/40 uguali a bannerConfig in lib/store-site.ts, il salvataggio in SiteEditor.tsx:98 passa da storeSiteSchema.safeParse e lancia errore oltre il tetto (non lascia passare testo lungo); HomeSectionConfigForm senza maxLength e già con error. Prova comune r02-banner-alt rossa nota. — verdetto: regge · stesso codice ricontrollato dopo la firma: prove verdi, prova rimessa regge, guardia-ramo verde con la firma.",
+      "commit": "1a91d22a",
+      "file_toccati": [
+        "components/seller/site/BannerFields.tsx",
+        "tests/unit/riparazione-r02-banner-alt.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-banner-campi-brevi.test.tsx",
+        "tests/unit/riparazione-r02-banner-alt.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-banner-campi-brevi.test.tsx tests/unit/riparazione-r02-banner-alt.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1a91d22a^ --file components/seller/site/BannerFields.tsx --prove tests/unit/riparazione-r16-banner-campi-brevi.test.tsx,tests/unit/riparazione-r02-banner-alt.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "eccezione_firmata": "prove_comuni, onda 2: Nicola in chat 2026-11-22 19:45 (piano della regia ec176140)"
+    },
+    {
+      "id": "R16-005",
+      "chiave": "frontend-ux|tre etichette del modulo negozio e una del profilo non sono legate al loro campo",
+      "esito": "gia_riparato_prima",
+      "prova": "components/VendorForm.tsx:360 <label htmlFor={idLogo}> con input id da getInputProps({id:idLogo}) (:364); :467 <label htmlFor={idSlogan}> con input id={idSlogan}; app/seller/profile/page.tsx:208 <label htmlFor=\"profilo-consegna-express\"> con id sul controllo (:216). Già così alla base b57195e2; i campi Nome/Descrizione/Telefono usano Input/Textarea di ui/Field (etichetta propria). · Sulla base b57195e2 VendorForm ha solo due <label>, entrambe legate (riga 355 htmlFor={idLogo}, riga 462 htmlFor={idSlogan}); app/seller/profile/page.tsx:208 htmlFor=\"profilo-consegna-express\". Le etichette le ha legate il commit 87b53c61, già nella storia della base; gli altri campi passano da Input/Textarea, che legano da sé.",
+      "verificato_da": "revisore B (sonnet): su b57195e2 VendorForm ha label htmlFor={idLogo} (input id via getInputProps, :355/:364) e htmlFor={idSlogan} (input id={idSlogan}, :462/:464), Input/Textarea di ui/Field legano label via htmlFor/id, SocialLinksFields usa htmlFor social-*, seller/profile:208 htmlFor profilo-consegna-express con id sul checkbox :216; nota: alle righe 321/471 della voce non c'e nessuna label, quindi la terza etichetta non e individuabile ma nessuna label presente e slegata. — verdetto: regge"
+    },
+    {
+      "id": "R16-006",
+      "chiave": "layout-responsive|a 280 px col testo al 200% scorrono di lato anche faq, negozi, resi e lavora con noi",
+      "esito": "parziale",
+      "commit": "76cf8c37",
+      "file_toccati": [
+        "app/stores/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-negozi-280px.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-negozi-280px.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 76cf8c37^ --file app/stores/page.tsx --prove tests/unit/riparazione-r16-negozi-280px.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Misurato con Playwright (next dev, viewport 280, html 200%): faq, resi, lavora con noi, contatti, aiuto, termini avevano scrollWidth 280 già alla base (R12-002/004 già fatti); solo /stores scorreva (381): il titolo «Piacenza» in corpo grande, parola lunga. Aggiunto break-words ai tre contenitori di pagina (si eredita): scrollWidth 381->280. La prova è sul sorgente (le classi), la misura viva è a mano.",
+      "cosa_resta": "La causa è in components/CollectionHeader.tsx:80 (h1 senza break-words), file non mio: lo stesso titolo può scorrere in app/category, promozioni, novita, piu-venduti, piccoli-prezzi, events, lists, regali.",
+      "serve_file_altrui": [
+        {
+          "file": "components/CollectionHeader.tsx",
+          "modifica": "riga 80: all'<h1 className=\"mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]\"> aggiungere break-words (o [overflow-wrap:anywhere])."
+        }
+      ],
+      "verificato_da": "revisore C (sonnet): rilanciata la prova (verde, cade togliendo break-words da un contenitore) e verificato che l'h1 di CollectionHeader sta in un figlio con min-w-0, quindi break-words ereditato lo fa andare a capo. — verdetto: parziale · rilievi: tests/unit/riparazione-r16-negozi-280px.test.ts:16: La prova controlla solo le classi sul sorgente, non la misura viva; la correzione regge solo finché CollectionHeader conserva il wrapper min-w-0. | components/CollectionHeader.tsx:80: Causa vera ancora aperta (serve_file_altrui dichiarato): le altre pagine con lo stesso header non hanno break-words."
+    },
+    {
+      "id": "R16-007",
+      "chiave": "layout-responsive|col testo ingrandito al massimo sul telefono, le pagine pubbliche scorrono di lato per colpa del piè di pagina",
+      "esito": "parziale",
+      "commit": "b69a14d0",
+      "file_toccati": [
+        "components/Turnstile.tsx",
+        "app/contact/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-turnstile-compatto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-turnstile-compatto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b69a14d0^ --file components/Turnstile.tsx,app/contact/page.tsx --prove tests/unit/riparazione-r16-turnstile-compatto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Turnstile: size 'compact' sotto 340 px di larghezza, 'normal' sopra (prova con window.innerWidth finto e render spiato); contatti: wrapper max-w-full overflow-hidden. Footer (griglia auto-fit), lavora-con-noi, resi e faq erano già a posto alla base: misurati a 280 px/200%, nessun overflow.",
+      "cosa_resta": "app/help (riquadro Email) e app/terms («sponsorizzati»): misurati a 280 px/200% su next dev, scrollWidth 280, nessun overflow visibile; non sono miei. La modifica difensiva è scritta in serve_file_altrui. Widget Turnstile non misurato dal vivo (serve chiave vera).",
+      "serve_file_altrui": [
+        {
+          "file": "app/help/page.tsx",
+          "modifica": "riquadro Email: aggiungere [overflow-wrap:anywhere] al contenitore dell'indirizzo (solo difensiva: a 280/200% oggi non scorre)."
+        },
+        {
+          "file": "app/terms/page.tsx",
+          "modifica": "paragrafo con «sponsorizzati»: aggiungere break-words/[overflow-wrap:anywhere] al contenitore (solo difensiva: a 280/200% oggi non scorre)."
+        }
+      ],
+      "verificato_da": "revisore C (sonnet): rilanciata la prova (3 verdi; senza la riga size le prime due cadono), Footer alla base già con auto-fit e senza grid-cols-2, f4974138 solo tipi senza cambiare il senso. — verdetto: parziale · rilievi: components/Turnstile.tsx:80: innerWidth letto una sola volta al render del widget: nessun ascolto di resize/rotazione, quindi dopo il cambio di larghezza resta la dimensione sbagliata. | app/contact/page.tsx:191: overflow-hidden taglia il widget (e il suo anello di fuoco) invece di stringerlo; il terzo test è solo una stringa sul sorgente; widget non misurato dal vivo."
+    },
+    {
+      "id": "R16-008",
+      "chiave": "layout-responsive|basta un negozio col nome lungo e sul telefono la home, l'elenco negozi e «vicino a te» diventano più larghe dello schermo",
+      "esito": "riparato",
+      "commit": "efe92beb",
+      "file_toccati": [
+        "app/near/page.tsx",
+        "components/VendorForm.tsx",
+        "tests/unit/riparazione-r16-nome-lungo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-nome-lungo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-nome-lungo.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base efe92beb^ --file app/near/page.tsx,components/VendorForm.tsx --prove tests/unit/riparazione-r16-nome-lungo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base le schede (StorePreviewCard, StoreListRow: max-w-full, truncate, min-w-0, flex-wrap) e il tetto di 80 caratteri nella rotta e nel modulo d'iscrizione c'erano già, con le loro prove (riparazione-r12-nome-lungo, riparazione-r28-nome-negozio-troppo-lungo); StoreShowcase usa grid-cols-2 (minmax(0,1fr)). Restavano: (1) «vicino a te» a 280/320 px col testo al 200% larga 359 px (misurato in Chromium col CSS compilato: selettore Lista/Mappa in linea senza tetto e cursore del raggio w-40) → selettore max-w-full flex-wrap, riga del raggio flex-wrap, cursore max-w-full: 280/320/375 px a 100% e 200% senza scorrimento, al 100% posizioni identiche a prima; (2) il nome si cambiava senza limite dal modulo del negozio (VendorForm, modo branding) → stesso tetto di 80 e stessa frase della domanda. Prova: render di VendorForm con 81 lettere attaccate (avviso, niente salvataggio, valore intero) e controprova con 80; classi del selettore e del cursore lette dal sorgente di app/near/page.tsx.",
+      "nota": "Non toccato di proposito: un nome normale di 20 caratteri si tronca coi puntini nella scheda a 2 colonne della home a 320 px (osservazione minore del collaudo precedente): è il compromesso del truncate già collaudato, cambiarlo è una scelta di disegno.",
+      "verificato_da": "revisore A (sonnet): prova rilanciata (4/4 verde); il tetto 80 con trim coincide con SellerApplicationForm.tsx:75 e app/api/seller/apply/route.ts:86, la condizione è >80 (80 esatti passano) e il messaggio è identico a quello della domanda. — verdetto: regge · rilievi: components/VendorForm.tsx:120: Tetto solo lato modulo: non ho trovato una rotta server che lo imponga sul cambio nome dal modulo del negozio (minore, fuori dal perimetro dichiarato)."
+    },
+    {
+      "id": "R16-009",
+      "chiave": "performance|ogni pagina aperta fa tre letture uguali per tutti direttamente al database, e le categorie le legge due o tre volte",
+      "esito": "parziale",
+      "commit": "4a3a295c",
+      "file_toccati": [
+        "components/CategoryBar.tsx",
+        "components/Footer.tsx",
+        "app/search/page.tsx",
+        "app/category/[slug]/page.tsx",
+        "tests/unit/riparazione-r16-letture-condivise.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-letture-condivise.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-letture-condivise.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4a3a295c^ --file 'app/search/page.tsx,app/category/[slug]/page.tsx' --prove tests/unit/riparazione-r16-letture-condivise.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Una sola domanda per l'albero delle categorie (domandaAlberoCategorie in components/CategoryBar.tsx: chiave ['categories','tree'], 10 minuti, la stessa del precarico del sito), usata da menu e piede; la ricerca passa dalla chiave ['all-categories'] a quella del menu, la pagina di categoria prende le righe con fetchQuery della stessa domanda (memoria o lettura in corso del menu) invece di rileggerle. Prova: react-query vero e database finto che conta: menu+piede+ricerca = 1 lettura, menu+piede+categoria = 1, col precarico già in memoria = 0 (rossa togliendo ciascuna delle due pagine). La ricerca tiene scritta la sua lettura con le stesse colonne perché la prova comune tests/unit/il-filtro-categoria-non-ha-due-bambini-uguali.test.ts controlla quel testo nel sorgente. Branding e promo erano già condivisi nella pagina (una chiave ciascuno, 5 minuti): non li ho toccati.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/queries/precarico.ts",
+          "modifica": "In precaricaSito(), nella lista passata a insieme(qc, [...]) dopo domandaCategoriePiene(supa), aggiungere due domande con le stesse chiavi e durate del browser: { queryKey: ['branding', 'public'], staleTime: 5 * 60_000, queryFn: async () => { const { data, error } = await supa.from('site_settings').select('branding').eq('id', 1).maybeSingle(); if (error) throw error; return normalizeBranding((data as { branding?: unknown } | null)?.branding); } } e { queryKey: ['promotions', 'active-any'], staleTime: 5 * 60_000, queryFn: () => ciSonoPromoAttive(supa as unknown as SupabaseClient) }, con gli import di normalizeBranding da '@/lib/site-branding' e ciSonoPromoAttive da '@/lib/queries/promo-attive' (cast del client di lettura se il tipo ClientDiLettura non ha eq/maybeSingle/lte/gte). Così branding e «c'è una promo attiva» escono dalla cache del server di app/layout.tsx (unstable_cache, 60 s, uguale per tutti) e useBranding/PromoTicker li trovano già in memoria invece di chiederli al database da ogni browser."
+        },
+        {
+          "file": "app/api/admin/branding/route.ts",
+          "modifica": "dopo il salvataggio riuscito di site_settings.branding chiamare revalidateTag('sito-precarico') (import da 'next/cache'), così il branding precaricato cambia subito e non dopo 60 secondi (serve solo insieme alla modifica di lib/queries/precarico.ts)."
+        },
+        {
+          "file": "app/categorie/page.tsx",
+          "modifica": "Righe 20-30: sostituire `const { data: cats = [], isLoading, isError, refetch } = useQuery({ queryKey: ['all-categories-tree'], queryFn: async (): Promise<Cat[]> => { const { data, error } = await supabase.from('categories').select('id, slug, name, icon, parent_id').order('name'); if (error) throw error; return (data ?? []) as Cat[]; }, });` con `const { data: cats = [], isLoading, isError, refetch } = useQuery(domandaAlberoCategorie(supabase));` e aggiungere in cima `import { domandaAlberoCategorie } from '@/components/CategoryBar';`. È la stessa domanda (chiave ['categories','tree'], colonne id, slug, name, parent_id, icon, ordine per nome, staleTime 10 minuti) di menu, piede, ricerca e pagina di categoria, che il precarico del sito riempie già. Se il tipo Cat locale non combacia con quello della domanda, usare il tipo restituito dalla domanda. Prova suggerita: come tests/unit/riparazione-r16-letture-condivise.test.tsx, montare CategoryBar + Footer + CategoriePage con un client finto e controllare una sola lettura di categories."
+        }
+      ],
+      "cosa_resta": "branding e promo attive si leggono ancora dal browser alla prima pagina di ogni visitatore (una lettura ciascuno, condivisa nella pagina): per servirli dalla cache del server uguale per tutti serve la modifica di lib/queries/precarico.ts qui sotto (file non mio). Resta anche app/categorie/page.tsx:20-30 (file non mio, visto dal collaudo K06): legge lo stesso albero dal browser con la sua chiave ['all-categories-tree'] e le stesse colonne, quindi su /categorie le categorie si leggono ancora due volte (menu e piede da una parte, pagina dall'altra) e senza il precarico.",
+      "verificato_da": "revisore A (sonnet): rilanciata la prova (3/3 verde), confrontate le colonne dei consumatori della chiave ['categories','tree'] (CategoryBar, Footer, ChipDelleCategorie, precarico, ricerca, categoria): tutti 'id, slug, name, parent_id, icon', nessuna rottura silenziosa. — verdetto: parziale · rilievi: app/search/page.tsx:127: La ricerca tiene una copia della lettura con le stesse colonne ma sulla chiave condivisa: se qualcuno cambia le colonne in un posto solo, chi arriva primo riempie la cache con la forma sbagliata (la prova comune controlla solo il testo nel sorgente). | components/home-sections/ChipDelleCategorie.tsx:17: Resta una quarta copia della stessa domanda scritta a mano, non migrata a domandaAlberoCategorie. | app/category/[slug]/page.tsx:62: Tolto il .limit(500): ora vale il tetto di default del database (1000), senza finestre; innocuo con poche decine di categorie. Voce dichi · collaudo K06: non regge come «parziale» perché il cosa_resta non nominava app/categorie/page.tsx; aggiunto ora a cosa_resta e serve_file_altrui."
+    },
+    {
+      "id": "R16-010",
+      "chiave": "qa-flussi|altre due ancore sommano il loro scroll-mt allo scroll-padding da md in su",
+      "esito": "riparato",
+      "commit": "bad84235",
+      "file_toccati": [
+        "components/seller/DatiPerIBonifici.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-ancora-bonifici.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-ancora-bonifici.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bad84235^ --file components/seller/DatiPerIBonifici.tsx --prove tests/unit/riparazione-r16-ancora-bonifici.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il form #bonifici ora porta scroll-mt-24 md:scroll-mt-0. L'ancora di app/faq/page.tsx:229 (ora :231) era già a posto alla base (prova comune riparazione-r02-ancore-faq).",
+      "verificato_da": "revisore C (sonnet): riletto il diff, globals.css:205 (scroll-padding-top solo da md), faq/page.tsx:231 con md:scroll-mt-0 e rilanciata la prova (verde; senza md:scroll-mt-0 la toContain cade). — verdetto: regge"
+    },
+    {
+      "id": "R16-011",
+      "chiave": "qa-flussi|nella pagina dei negozi le categorie per negozio si leggono senza finestre: sopra i mille negozi con prodotti alcuni perderebbero le loro categorie nel filtro",
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le categorie per negozio si leggono a finestre di mille ordinate per negozio (leggiTutteLeRighe + order + range); prova nuova con 1.102 righe. La prova comune r02-negozi-categorie-a-pagine ha il finto rpc con order/range/then, come nel commit 8f8973f3 (eccezione firmata prove_comuni, onda 2); la prova r12 era già verde. Rimesso col commit 8c8e6853 dopo il ritorno 5a804dbe.",
+      "verificato_da": "revisore A (sonnet): rilanciata la prova (1/1 verde), letto il diff: order('seller_id') + leggiTutteLeRighe, stesso helper già usato altrove; la prova comune r02 rossa è nota. — verdetto: regge · stesso codice ricontrollato dopo la firma: prove verdi, prova rimessa regge, guardia-ramo verde con la firma.",
+      "commit": "8c8e6853",
+      "file_toccati": [
+        "app/stores/page.tsx",
+        "tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-negozi-categorie.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-negozi-categorie.test.tsx tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx tests/unit/riparazione-r12-negozi-categorie.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8c8e6853^ --file app/stores/page.tsx --prove tests/unit/riparazione-r16-negozi-categorie.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "eccezione_firmata": "prove_comuni, onda 2: Nicola in chat 2026-11-22 19:45 (piano della regia ec176140)"
+    },
+    {
+      "id": "R16-012",
+      "chiave": "qa-flussi|il pannello della home suggerisce ancora «i più amati / prodotti che vanno forte»",
+      "esito": "serve_file_altrui",
+      "copre_tutta_la_voce": false,
+      "prova": "components/admin/home/HomeSectionConfigForm.tsx:136-137 (sezione popularProducts) ha già i segnaposto neutri «Appena arrivati» e «Ultimi arrivati dai negozi»: nel file non c'è più «I più amati» né «vanno forte» (grep), e la prova esistente tests/unit/riparazione-r15-pannello-home-segnaposto.test.ts lo controlla ed è verde (npx vitest run tests/unit/riparazione-r15-pannello-home-segnaposto.test.ts). Nel mio file non resta niente da cambiare.",
+      "cosa_ho_fatto": "Controllato il pannello: i segnaposto del modulo sono già neutri. Il suggerimento resta nel menu «Aggiungi sezione» del pannello (components/admin/home/HomeSectionsEditor.tsx:70 mostra it.description), che legge la descrizione da lib/home-site.ts:75: «Griglia dei prodotti più amati», mentre la fila mostra gli ultimi arrivati. File non miei: modifica qui sotto.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/home-site.ts",
+          "modifica": "Riga 75: nella voce { type: 'popularProducts', … } sostituire `description: 'Griglia dei prodotti più amati'` con `description: 'Griglia degli ultimi prodotti arrivati dai negozi'` (coerente coi segnaposto «Appena arrivati» / «Ultimi arrivati dai negozi» del modulo e col titolo della fila in components/home-sections/HomeSectionRenderer.tsx). L'etichetta `label: 'Prodotti popolari'` promette anche lei popolarità: se si vuole, `label: 'Ultimi arrivati'` (prima controllare le prove che cercano «Prodotti popolari», es. tests/unit/riparazione-r15-pannello-home-segnaposto.test.ts lo usa solo nel titolo del describe)."
+        }
+      ],
+      "verificato_da": "revisore A (sonnet): git grep di «più amati»/«vanno forte» su base b57195e2 e su HEAD: nel pannello home (HomeSectionConfigForm, HomeSectionsEditor) non c'è nulla, resta solo lib/home-site.ts:75 (più commenti e l'opzione di ordinamento «Più amati» in app/stores/page.tsx:375, legittima per rating, e shop-of-month); nessun file toccato dal riparatore. — verdetto: regge"
+    },
+    {
+      "id": "R16-013",
+      "chiave": "qa-flussi|le maschere di caricamento delle foto accettano solo jpg, png e webp, mentre la porta e lo storage ne accettano sette",
+      "esito": "parziale",
+      "commit": "7598e314",
+      "file_toccati": [
+        "components/ImageUrlField.tsx",
+        "components/VendorForm.tsx",
+        "components/SellerApplicationForm.tsx",
+        "tests/unit/riparazione-r16-foto-sette-tipi.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r16-foto-sette-tipi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r16-foto-sette-tipi.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7598e314^ --file components/ImageUrlField.tsx,components/VendorForm.tsx,components/SellerApplicationForm.tsx --prove tests/unit/riparazione-r16-foto-sette-tipi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nei tre file miei l'accept di react-dropzone non è più scritto a mano: viene da mappaAccept() di lib/storage/casella-di-caricamento.ts (costruita da TIPI_IMMAGINE di lib/storage/regole-secchi.ts, i sette tipi del deposito, con le estensioni, HEIC/HEIF compresi), l'avviso di scarto nomina i formati con tipiScrittiPerUmani(), e il file parte con fileColTipoGiusto() (un HEIC col tipo vuoto, come da Windows, arriva al deposito come image/heic e non come application/octet-stream). ImageUrlField usa la regola del suo bucket (default products). Prova: react-dropzone finto che cattura le opzioni, per i tre componenti: sette tipi con .heic, avviso con HEIC e AVIF, HEIC col tipo vuoto caricato come image/heic (rossa togliendo ciascuno dei tre file).",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreMediaManager.tsx",
+          "modifica": "Aggiungere l'import `import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';`. Righe 54-58: sostituire l'oggetto `accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },` con `accept: mappaAccept(),`. Riga 66: `'Formato non accettato: servono foto in JPG, PNG o WEBP.'` diventa `` `Formato non accettato: servono foto in ${tipiScrittiPerUmani()}.` ``. Nel ciclo di onDrop (riga 78) `for (const file of files) {` diventa `for (const grezzo of files) { const file = fileColTipoGiusto(grezzo);` (così un HEIC col tipo vuoto è riconosciuto come immagine da `file.type.startsWith('image/')` alla riga 80, invece di finire fra gli scartati, e sale col tipo giusto alla riga 104). Prova suggerita: come tests/unit/riparazione-r16-foto-sette-tipi.test.tsx (react-dropzone finto che cattura le opzioni) montando StoreMediaManager con value=[] e onChange."
+        }
+      ],
+      "cosa_resta": "components/StoreMediaManager.tsx (copertine della vetrina, file non mio) accetta ancora solo JPG, PNG e WEBP: la modifica esatta è qui sotto.",
+      "verificato_da": "revisore A (sonnet): prova rilanciata (9/9 verde); mappaAccept deriva da TIPI_IMMAGINE (jpeg,png,webp,gif,avif,heic,heif = sette, uguale alla regola del secchio), tipoDedotto confronta il nome in minuscolo (.HEIC ok) e un tipo non ammesso resta fuori. — verdetto: parziale · rilievi: components/StoreMediaManager.tsx:54: Accetta ancora solo JPG, PNG e WEBP (file non suo, dichiarato): la voce resta aperta finché la regia non applica la modifica."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il nome del negozio non ha un tetto nel database: dal modulo del negozio si salva direttamente nella tabella dei profili",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/site/StoreDetailsEditor.tsx:46",
+      "descrizione": "StoreDetailsEditor aggiorna profiles.store_name dal browser (supabase.from('profiles').update) e la colonna non ha un vincolo di lunghezza: il tetto di 80 adesso c'è nel modulo (VendorForm) e nella rotta d'iscrizione, ma una richiesta scritta a mano passa ancora. Servirebbe un CHECK (char_length(store_name) <= 80) in una migrazione nuova (dopo aver controllato che nessun nome esistente lo superi)."
+    },
+    {
+      "titolo": "Il titolo di CollectionHeader non va a capo sulle parole lunghe a 280 px col testo al 200%",
+      "dimensione": "layout-responsive",
+      "severita": "minore",
+      "file": "components/CollectionHeader.tsx:80",
+      "descrizione": "h1 senza break-words: «Piacenza» in corpo grande allarga la pagina; sulle altre pagine che lo usano vale lo stesso."
+    }
+  ],
+  "conto": {
+    "agenti": 5,
+    "subagenti": 5,
+    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet) + 3 revisori sonnet in parallelo; nessun Workflow, nessuno fermato"
+  },
+  "aggiornato": "2026-11-22 19:55",
+  "testa": "8c8e6853600d81d6770e428b843c82bf210f9dbc",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "8c8e6853600d81d6770e428b843c82bf210f9dbc",
+    "nota": "typecheck pulito, lint 0 errori (122 avvisi già presenti), test 12323 passati e 1 saltato, con R16-004 e R16-011 rimessi insieme alle due prove comuni firmate (onda 2)."
+  },
+  "domande_per_nicola": [
+    "Firma prove_comuni per questo giro: posso applicare io, un commit per prova, le modifiche a tests/unit/riparazione-r02-banner-alt.test.tsx e tests/unit/riparazione-r02-negozi-categorie-a-pagine.test.tsx scritte in R16-004 e R16-011? (chiesta dalla regia)"
+  ],
+  "costo_usd": 20.27
+}

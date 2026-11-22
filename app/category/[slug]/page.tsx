@@ -17,6 +17,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { contaProdottiDellaGriglia } from '@/lib/queries/griglia-prodotti';
 import { domandaCategoriePiene, soloLePiene } from '@/lib/queries/categorie-piene';
+import { domandaAlberoCategorie, type CategoriaDellAlbero } from '@/components/CategoryBar';
 
 /**
  * 13/11/2026 (R15-010) — Una categoria senza prodotti diceva «Non abbiamo trovato questo
@@ -48,19 +49,17 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
    * chiedere insieme: una lettura sola, `slug = questa OPPURE genitore =
    * questa`, e poi si separano qui.
    */
+  const memoriaDelleCategorie = useQueryClient();
   const { data: alberoCategoria, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.categories.bySlug(slug),
     queryFn: async () => {
       // Le categorie sono poche decine: si leggono tutte in un colpo e si
-      // separano qui. Costa meno di due viaggi in fila, e la risposta serve
-      // anche alle altre pagine di categoria (stessa chiave di cache).
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, slug, name, icon, parent_id')
-        .order('name')
-        .limit(500);
-      if (error) throw error;
-      const righe = (data ?? []) as Array<SubcatRow & { parent_id: string | null }>;
+      // separano qui. Costa meno di due viaggi in fila.
+      // R16-009 — Le righe sono quelle dell'albero del menu e del piede (`domandaAlberoCategorie`,
+      // stessa chiave del precarico del sito): `fetchQuery` le prende dalla memoria se ci sono e
+      // sono fresche, si aggancia alla lettura del menu se è in corso, e torna al database solo
+      // altrimenti. Prima la pagina le rileggeva tutte con una sua chiave.
+      const righe: CategoriaDellAlbero[] = await memoriaDelleCategorie.fetchQuery(domandaAlberoCategorie(supabase));
       const padre = righe.find((r) => r.slug === slug) ?? null;
       // 6/9/2026 — Il briciolo di pane saltava la categoria madre: su
       // /category/libri-romanzi diceva «Home › Categorie › Romanzi», senza

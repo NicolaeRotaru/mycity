@@ -11,6 +11,7 @@ import { chiaveDiOggi, isOpenNow, romeNow, type StoreHours } from '@/lib/store-h
 import { useOraDiPiacenza } from '@/components/ui/DeliveryCutoff';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Card } from '@/components/ui/Card';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
@@ -103,7 +104,11 @@ const fetchStoresData = async () => {
     // dal mucchio di prodotti scaricati, e siccome quel mucchio era capato a
     // seicento IN TUTTO, i negozi che non pubblicavano da un po' sparivano dal
     // filtro pur avendo il catalogo pieno.
-    supabase.rpc('categorie_per_negozio'),
+    // R16-011 — Anche queste a finestre di mille, ordinate per negozio: una riga per negozio coi
+    // prodotti, e sopra i mille negozi le righe dopo la millesima si perdevano senza errore.
+    leggiTutteLeRighe<{ seller_id: string; categorie: string[] | null }>((da, a) =>
+      supabase.rpc('categorie_per_negozio').order('seller_id').range(da, a),
+    ),
   ]);
 
   const schede = (schedeRes.data ?? []) as Array<{
@@ -310,7 +315,7 @@ export default function StoresPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 break-words">
         {titoloDellaPagina}
         <LoadingState />
       </div>
@@ -319,7 +324,7 @@ export default function StoresPage() {
 
   if (isError) {
     return (
-      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 break-words">
         {titoloDellaPagina}
         <ErrorState
           title="Impossibile caricare i negozi"
@@ -330,11 +335,11 @@ export default function StoresPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 break-words">
       {titoloDellaPagina}
 
       {/* Filtri */}
-      <div className="bg-white border border-cream-300 rounded-xl p-3 mb-6 shadow-sm space-y-2">
+      <Card radius="xl" padding="sm" className="mb-6 shadow-sm space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
           <input
             type="search"
@@ -402,7 +407,7 @@ export default function StoresPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-ink-500 bg-white border rounded-xl">
