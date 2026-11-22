@@ -1,6 +1,6 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-22 01:35",
+  "aggiornato": "2026-11-22 01:40",
   "finita": true,
   "testa": "8048e2b97009d9b8d1f0fa7a1f617778a4697118",
   "verifica": {
@@ -76,7 +76,7 @@
         "tests/unit/riparazione-r09-ritorno-solo-codice.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r09-ritorno-solo-codice.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -87,7 +87,7 @@
       "cosa_ho_fatto": "Solo testo (decisione della regista): nel passo «Torna indietro» l'avviso ::error:: e il titolo del riepilogo dicono che è tornato indietro solo il codice e, se il giro ha applicato migrazioni, che il database resta avanti di N migrazioni (elenco), dalle uscite già esistenti steps.migrazioni.outputs.quante/elenco. Anche il verdetto finale di prova-di-fumo.mjs non dice più «sono tornata al rilascio di prima». Nessun passo nuovo, YAML validato.",
       "cosa_resta": "Il vero ritorno del database: servono migrazioni reversibili («espandi e poi contrai») oppure un ordine diverso dei passi (niente ritorno automatico se una migrazione del giro toglie qualcosa).",
       "domanda": "Per il ritorno vero del database scegli migrazioni «espandi e poi contrai» (mai togliere nello stesso rilascio) oppure nessun ritorno automatico quando una migrazione del giro toglie qualcosa?",
-      "verificato_da": "revisore (subagente generico, mandato di smentire): rimettendo i due file della base cadono 3 casi su 3; confermato solo testo (nessun passo né condizione nuova), uscite steps.migrazioni.outputs.quante/elenco esistenti nello stesso job, nessuna espressione ${{ }} dentro run:, YAML valido, bash -n sul passo ok; 25 prove sul rilascio verdi"
+      "verificato_da": "revisore (subagente generico, mandato di smentire): rimettendo i due file della base cadono 3 casi su 3; confermato solo testo (nessun passo né condizione nuova), uscite steps.migrazioni.outputs.quante/elenco esistenti nello stesso job, nessuna espressione di GitHub Actions interpolata dentro run:, YAML valido, bash -n sul passo ok; 25 prove sul rilascio verdi"
     },
     {
       "id": "R09-007",
@@ -184,7 +184,7 @@
         "tests/unit/riparazione-r09-commento-stalecrons.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r09-commento-stalecrons.test.ts --reporter=dot",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -226,6 +226,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "2 lotti che riparano (A modello grande, B sonnet), 1 giro di correzione (sonnet), 2 revisori (A grande, B sonnet). Nessun Workflow."
-  }
+    "nota": "2 lotti che riparano (A modello grande, B sonnet), 1 giro di correzione (sonnet), 2 revisori (A grande, B sonnet). Nessun Workflow. Costo letto da get_session il 22/11 alle 00:16 UTC: 14,02 $.",
+    "subagenti": 5
+  },
+  "costo_usd": 14.02
 }
