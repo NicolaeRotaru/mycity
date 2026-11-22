@@ -237,10 +237,14 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       // posta non e' configurata, il segno restava e il promemoria non partiva
       // mai piu'. Il segno si toglie: il giro dopo, a posta pronta, ci riprova.
       errors++;
-      const { error: errRilascio } = await supa
+      // R03-002 — Il segno si toglie solo se il carrello è ancora quello letto: se nel frattempo è
+      // cambiato, il segno che c'è non è più il nostro e non si cancella.
+      let rilascio = supa
         .from('abandoned_carts')
         .update({ recovery_email_sent_at: null })
         .eq('user_id', c.user_id);
+      if (typeof c.last_activity === 'string' && c.last_activity) rilascio = rilascio.eq('last_activity', c.last_activity);
+      const { error: errRilascio } = await rilascio;
       if (errRilascio) {
         logger.error('[abandoned-carts] invio saltato e carrello NON rimesso da avvisare', {
           user: c.user_id, motivo: res.reason, message: errRilascio.message,

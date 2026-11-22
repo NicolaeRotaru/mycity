@@ -1,0 +1,391 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-22 03:50",
+  "finita": true,
+  "testa": "bfc33235a459e450b89f152eca00642dca920b72",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "bfc33235a459e450b89f152eca00642dca920b72",
+    "nota": "typecheck, lint e vitest: 1918 file verdi e 1 saltato (11862 prove verdi, 1 saltata), uscita 0. La prova saltata è un salto condizionato già esistente: il diff del ramo non aggiunge nessuno skip."
+  },
+  "voci": [
+    {
+      "id": "R03-005",
+      "chiave": "api-backend|il tetto di tempo delle email della notte parte dall inizio del giro, e il ciclo delle cancellazioni resta senza tetto: con una notte lunga non parte nessuna email e non c è allarme",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista nell'approvazione del piano, 21/11)"
+    },
+    {
+      "id": "R03-016",
+      "chiave": "api-backend|un fattorino puo' legare il suo sos a un ordine che non e' suo",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista nell'approvazione del piano, 21/11)"
+    },
+    {
+      "id": "R03-004",
+      "chiave": "api-backend|due allarmi del giro notturno delle cancellazioni si ripetono ogni notte a ogni amministratore",
+      "esito": "riparato",
+      "commit": "489543c2bf2ebaaa0fd3934cf8a81aadc9033888",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-allarmi-della-notte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-allarmi-della-notte.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 489543c2^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-allarmi-della-notte.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Dati vecchi non cancellati» ha ora un identificativo ricavato da quali pulizie falliscono: stesso guasto nessuna riga nuova, guasto diverso un allarme nuovo; il 500 resta. L'altro dei due allarmi (persone non avvisate) è chiuso dal commit di R03-003, e la prova li guarda insieme.",
+      "nota": "I due allarmi sono quelli che il referto S01b nomina (:295-300 e :543-549). Metà della voce sta nel commit di R03-003 (stessa riga): se quel commit si toglie, la metà «persone non avvisate» si riapre.",
+      "verificato_da": "revisore 1 (grande): REGGE. Chiave fissa tra le notti (etichette fisse in lib/privacy/potature-ritenzione.ts), un allarme per amministratore; rimessa a mano 3/3 rossi; 33 file vicini verdi (282 casi) · collaudo K04: regge"
+    },
+    {
+      "id": "R03-003",
+      "chiave": "api-backend|allarme 'persone non avvisate' riscritto ogni notte, senza dire chi: la stessa classe chiusa per le email resta aperta qui",
+      "esito": "riparato",
+      "commit": "bfc33235a459e450b89f152eca00642dca920b72",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts",
+        "tests/unit/riparazione-r03-persone-non-avvisate.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-persone-non-avvisate.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-persone-non-avvisate.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bfc33235^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-persone-non-avvisate.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Completata la parte «come la classe delle email»: (a) la chiusura degli allarmi aperti (quella dello «scrivile tu», ora con titolo e segno come parametri, ognuna legge solo il suo titolo) chiude anche «Persone non avvisate» (id <idAvviso>:non-avvisata:<admin>) quando la persona non aspetta più o la spiegazione è nel suo pannello, in tutti e due i percorsi della notte; (b) avvisaAmministratori dice se l'allarme è nuovo o non scritto, e la notte è 500 solo quando un «Persone non avvisate» nasce o non si scrive (prima: avvisi.falliti > 0 ogni notte); nella risposta c'è allarmiNonAvvisateNuovi, avvisiFalliti resta.",
+      "nota": "La prova esistente non chiedeva il 500 ogni notte su più notti: a :118 (caso di una notte sola) il 500 resta perché l'allarme nasce quella notte; ho cambiato solo il messaggio ('la notte in cui nasce l allarme … è rossa') e dichiaro di aver adeguato l'aiuto laNotte (profili delle persone con la richiesta, is_read=false alle righe nuove, lista e rifiuti cambiabili fra le notti, posta accendibile). (b) non tocca cosa si cancella, chi, quando né i tetti: il battito si scrive comunque (lib/api/middleware.ts:687-715), cambia solo il codice della risposta e la sua eco (pannello di Vercel, riga d'errore). Prova: rossa alla testa di prima (5 rosse su 11), verde con la correzione. Mutanti provati a mano: senza «spiegazione nel pannello» → 2 rosse; stato con avvisi.falliti > 0 → 1 rossa (tre notti); senza nonScritti nello stato → 1 rossa (allarme non scritto). Le 26 prove che importano la rotta: 251 verdi (minori-s03-cancellazioni legge il file per nome: il commento di avvisaAmministratori deve restare sopra la funzione, rispettato senza toccarla).",
+      "verificato_da": "collaudo K04: parziale confermato; giro di correzione (a)+(b) con mutanti a mano rossi (senza «nel pannello», stato su avvisi.falliti, senza nonScritti). Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "665234dd129d9777a9ad8ddc682e131e14e3cebc",
+      "collaudo": {
+        "K04": "parziale"
+      }
+    },
+    {
+      "id": "R03-006",
+      "chiave": "api-backend|l'allarme «scrivile tu» resta aperto per sempre se la persona esce dall'elenco della notte",
+      "esito": "riparato",
+      "commit": "5ea27bdf63fc91cd9703e7058004b36bf6bceda2",
+      "file_toccati": [
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cc4248b^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Commit di sola prova: nuovo caso con una persona oltre il mese (due spiegazioni ferme, due «scrivile tu»): quello del termine scaduto resta aperto la notte in cui nasce e la notte dopo in cui la lista non la porta. ilMondo prende la data della richiesta come parametro facoltativo.",
+      "nota": "Codice nel commit 3cc4248bc8a6d960ec78beb1cc043f8a61c8936d (già a referto), prova in questo commit di sola prova. Mutante provato a mano «confronta solo la tappa rinviata» (['rinviata'] al posto di ['rinviata','termine-scaduto'] in chiudiGliAllarmiDiChiNonAspettaPiu): 1 rossa (il caso nuovo), 6 verdi; alla testa 7 verdi. La rimessa contro 3cc4248b^ dà 0 con 5 rosse (i casi di chiusura); il caso nuovo lì è verde perché senza chiusura niente si chiude: morde sul mutante, non sulla base. Il programma non ha rifiutato anche se dopo 3cc4248b il file ha un altro commit (f9a54ab5): la versione di base riporta indietro anche quello.",
+      "verificato_da": "collaudo K04: codice giusto, prova debole; il caso nuovo morde il mutante «solo la tappa rinviata» (1 rossa), verde alla testa. Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "collaudo": {
+        "K04": "parziale"
+      }
+    },
+    {
+      "id": "R03-007",
+      "chiave": "api-backend|la chiusura dell allarme «scrivile tu» legge al massimo 200 avvisi senza ordine né filtro: oltre 200, quelli aperti possono restare fuori",
+      "esito": "riparato",
+      "commit": "e4ecc08b458e1e8658a79f656154bbc1759ffcb7",
+      "file_toccati": [
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3cc4248b^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-scrivile-tu-si-chiude.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Commit di sola prova: nuovo caso in cui il pannello della persona rifiuta la spiegazione, la rotta vera scrive «Persone non avvisate» (testo con «Chi aspetta: l'utente X.»), la persona aspetta ancora e non è avvisata: per due notti, dopo la chiusura dello «scrivile tu», l'allarme resta aperto.",
+      "nota": "Codice nel commit 3cc4248bc8a6d960ec78beb1cc043f8a61c8936d (già a referto), prova in questo commit di sola prova. Mutante provato a mano «senza filtro sul titolo» (tolto .eq('title', TITOLO_EMAIL_FERMA) in chiudiGliAllarmiDiChiNonAspettaPiu): 1 rossa (il caso nuovo), 7 verdi; alla testa 8 verdi. La rimessa contro 3cc4248b^ dà 0 con 5 rosse (i casi di chiusura); il caso nuovo lì è verde perché senza chiusura niente si chiude: morde sul mutante, non sulla base. Resta il minore visto da K04 (la chiusura non ha tetto di tempo e gira dopo il tetto delle email): non toccato.",
+      "verificato_da": "collaudo K04: codice giusto, prova debole; il caso nuovo morde il mutante «senza filtro sul titolo» (1 rossa), verde alla testa. Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "3cc4248bc8a6d960ec78beb1cc043f8a61c8936d",
+      "collaudo": {
+        "K04": "parziale"
+      }
+    },
+    {
+      "id": "R03-008",
+      "chiave": "api-backend|quando la notte finisce il tempo delle email, l'allarme agli amministratori conta come «non partite» anche le spiegazioni gia' arrivate per email nelle notti prima",
+      "esito": "riparato",
+      "commit": "f9a54ab53496b1794e63b292f67c885669a82b39",
+      "file_toccati": [
+        "app/api/cron/process-deletions/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-email-gia-partite.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-email-gia-partite.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f9a54ab5^ --file app/api/cron/process-deletions/route.ts --prove tests/unit/riparazione-r03-email-gia-partite.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "A tempo delle email finito, prima di contare e di scrivere l'allarme si tolgono le spiegazioni con «email_partita» nel registro degli invii; conto (avvisiEmailSenzaTempo), testo e chiave dicono solo le altre; se non ne resta nessuna, niente allarme. Il pannello si scrive per tutte come prima.",
+      "nota": "La stringa del segno «privacy.avviso_cancellazione.email_partita» è privata nella libreria: è copiata in una costante della rotta. La prova la incrocia con la libreria vera (che scrive il segno la prima notte), quindi una deriva diventa rossa.",
+      "verificato_da": "revisore 1 (grande): REGGE. Stesso segno, tabella e target_id di lib/privacy/avvisi-a-chi-aspetta.ts:349-365; registro illeggibile → contata come non partita (lato prudente); rimessa a mano 2/2 rossi · collaudo K04: regge"
+    },
+    {
+      "id": "R03-009",
+      "chiave": "api-backend|le notifiche push partono due volte se due giri del cron si sovrappongono: la presa in carico non è atomica",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "serve_file_altrui": [
+        {
+          "file": "lib/database.types.ts",
+          "modifica": "Rigenerare con `node scripts/gen-db-types.mjs` dopo la migrazione 650: aggiunge in notifications.Row `push_claimed_at: string | null;` e in Insert e Update `push_claimed_at?: string | null;` (3 righe, nient'altro; patch pronta in scratchpad/R03-009-tipi.patch)."
+        }
+      ],
+      "cosa_resta": "Applicare insieme ai tipi la patch la patch R03-009-cura (nel campo patch_pronta di questa voce; i tipi in patch_tipi) (rotta send-push con presa condizionata su push_claimed_at, presa valida 10 minuti, prese non mandate ridate, ripiego se la colonna manca; migrations/650_le_push_si_prendono_in_carico.sql; tests/unit/riparazione-r03-push.test.ts; tests/sql/rls/riparazione-r03-push.test.sql; 5 prove esistenti che importano la rotta, adattate solo nel finto). Poi commit R03-009 e prova rimessa: vitest con --file app/api/cron/send-push/route.ts (rossa 3 su 5 senza la rotta); la --sql r03_rimessa sulla 650 darà 3 per costruzione (la prova nomina la colonna nuova: 42703).",
+      "nota": "Non è nel ramo perché senza i tipi diventano rosse le guardie nessuna-scrittura-inventa-una-colonna e nessuna-colonna-che-non-esiste. Senza colonna nuova: pushed_at come segno di presa perde le righe di un giro morto; un segno finto dentro pushed_at è un trucco con letture senza indice. Verificata con i tipi rigenerati solo in locale: 12 file send-push + guardie 121/121 verdi, tsc 0, prova SQL 5/5 verde sul Postgres 16 locale. vercel.json e send-emails non toccati.",
+      "verificato_da": "",
+      "patch_pronta": "diff --git a/app/api/cron/send-push/route.ts b/app/api/cron/send-push/route.ts\nindex 4ec0953b..767ba3e9 100644\n--- a/app/api/cron/send-push/route.ts\n+++ b/app/api/cron/send-push/route.ts\n@@ -14,6 +14,18 @@ import { CONSEGNA_PER_CATEGORIA, contrassegno } from '@/lib/push/subito';\n /** Le categorie che possono aspettare: senza la preferenza letta non partono. */\n const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);\n \n+/**\n+ * R03-009 — Quanto vale la presa in carico di una notifica: più dei 300 secondi che un giro può\n+ * durare (vercel.json), così un giro vivo non se la vede portare via; dopo, la presa di un giro\n+ * morto torna disponibile.\n+ */\n+const PRESA_SCADE_MS = 10 * 60 * 1000;\n+\n+/** La colonna della presa non c'è (migrazione 650 non applicata): PostgREST o Postgres lo dicono così. */\n+function colonnaDellaPresaMancante(e: { code?: string; message?: string }): boolean {\n+  return e.code === 'PGRST204' || e.code === '42703';\n+}\n+\n /**\n  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)\n  * create nell'ultima ora. Ogni notifica viene processata una sola volta\n@@ -90,6 +102,36 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {\n     }\n   }\n \n+  // R03-009 — Si mandano solo le notifiche che questo giro riesce a PRENDERE. Due giri sovrapposti\n+  // (uno lento, quello dopo, uno a mano) leggevano le stesse righe con `pushed_at` vuoto e mandavano\n+  // la stessa push due volte, perché `pushed_at` si segna solo a fine giro. La presa è una scrittura\n+  // condizionata sola (migrazione 650): prende le righe ancora da mandare e senza una presa viva, e\n+  // restituisce quelle prese. Una presa vale PRESA_SCADE_MS: se il giro che l'ha presa muore, dopo\n+  // quel tempo la riprende un altro giro. Prima della 650 la colonna non c'è: si manda come prima.\n+  const presaIso = new Date().toISOString();\n+  const { data: prese, error: errorePresa } = await supa\n+    .from('notifications')\n+    .update({ push_claimed_at: presaIso })\n+    .in('id', pending.map((n) => n.id))\n+    .is('pushed_at', null)\n+    .or(`push_claimed_at.is.null,push_claimed_at.lt.${new Date(Date.now() - PRESA_SCADE_MS).toISOString()}`)\n+    .select('id');\n+  let presaAtomica = true;\n+  if (errorePresa) {\n+    if (!colonnaDellaPresaMancante(errorePresa)) {\n+      logger.error('[cron] notifiche push non prese in carico: il giro dopo riprova', { message: errorePresa.message });\n+      return ApiErrors.unavailable('notifiche non prese in carico');\n+    }\n+    logger.warn('[cron] migrazione 650 non ancora applicata: le push partono senza presa in carico', {\n+      message: errorePresa.message,\n+    });\n+    presaAtomica = false;\n+  } else {\n+    const nostre = new Set(((prese ?? []) as { id: string }[]).map((n) => n.id));\n+    pending = pending.filter((n) => nostre.has(n.id));\n+    if (!pending.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });\n+  }\n+\n   /**\n    * 22/8/2026 — TRE VIAGGI AL DATABASE PER OGNI SINGOLA NOTIFICA.\n    *\n@@ -230,6 +272,26 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {\n     }\n   }\n \n+  // R03-009 — Le prese non mandate (guasto passeggero, preferenza o iscrizioni non lette) si ridanno\n+  // subito, come prima le riprendeva il giro dopo; solo se la presa è ancora la nostra. Se non si\n+  // riesce, tornano da sole quando la presa scade.\n+  if (presaAtomica) {\n+    const gestite = new Set(daSegnare);\n+    const daRidare = notifiche.filter((n) => !gestite.has(n.id)).map((n) => n.id);\n+    if (daRidare.length > 0) {\n+      const { error } = await supa\n+        .from('notifications')\n+        .update({ push_claimed_at: null })\n+        .in('id', daRidare)\n+        .eq('push_claimed_at', presaIso);\n+      if (error) {\n+        logger.warn('[cron] push non mandate e non ridate: tornano quando scade la presa', {\n+          quante: daRidare.length, message: error.message,\n+        });\n+      }\n+    }\n+  }\n+\n   return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate, rimandate });\n });\n \ndiff --git a/migrations/650_le_push_si_prendono_in_carico.sql b/migrations/650_le_push_si_prendono_in_carico.sql\nnew file mode 100644\nindex 00000000..4c20df5f\n--- /dev/null\n+++ b/migrations/650_le_push_si_prendono_in_carico.sql\n@@ -0,0 +1,41 @@\n+-- =============================================================================\n+-- 650 — LE PUSH SI PRENDONO IN CARICO, COSÌ DUE GIRI NON LE MANDANO DUE VOLTE (R03-009)\n+-- =============================================================================\n+--\n+-- NON APPLICATA. La applica Nicola.\n+--\n+-- ── Cosa c'e' che non va, in parole semplici ─────────────────────────────────\n+-- Il giro delle notifiche push (app/api/cron/send-push) parte ogni 5 minuti e\n+-- puo' durare fino a 300 secondi. Legge le notifiche con `pushed_at` vuoto,\n+-- manda le push e solo alla fine segna `pushed_at`. Se due giri si\n+-- sovrappongono (un giro lento e quello dopo, o un giro fatto a mano), tutti e\n+-- due leggono le stesse righe ancora vuote e la stessa push arriva due volte.\n+--\n+-- ── Cosa fa ──────────────────────────────────────────────────────────────────\n+-- Aggiunge `push_claimed_at`: quando un giro ha preso in carico la notifica.\n+-- Il giro la prende con UNA scrittura condizionata, prima di mandare:\n+--   UPDATE notifications SET push_claimed_at = now()\n+--    WHERE id IN (...) AND pushed_at IS NULL\n+--      AND (push_claimed_at IS NULL OR push_claimed_at < now() - '10 minutes')\n+--   RETURNING id;\n+-- e manda solo le righe che gli tornano indietro: il secondo giro trova la\n+-- presa del primo e non le riceve. Una presa vale 10 minuti (piu' dei 300\n+-- secondi di un giro): se il giro che l'ha presa muore, dopo quel tempo la\n+-- riprende un altro giro. Le prese non mandate (guasto passeggero, preferenza\n+-- non letta) il giro le ridà subito, rimettendo la colonna vuota.\n+--\n+-- Additiva, idempotente: una colonna vuota per difetto, nessun dato toccato.\n+-- Senza questa migrazione la rotta manda come prima (lo dice nel registro).\n+-- =============================================================================\n+\n+BEGIN;\n+\n+ALTER TABLE public.notifications\n+  ADD COLUMN IF NOT EXISTS push_claimed_at timestamptz;\n+\n+COMMENT ON COLUMN public.notifications.push_claimed_at IS\n+  'Quando il giro delle push ha preso in carico la notifica (presa valida 10 minuti). NULL = libera. Vedi migrazione 650.';\n+\n+COMMIT;\n+\n+NOTIFY pgrst, 'reload schema';\ndiff --git a/tests/sql/rls/riparazione-r03-push.test.sql b/tests/sql/rls/riparazione-r03-push.test.sql\nnew file mode 100644\nindex 00000000..3c81e1be\n--- /dev/null\n+++ b/tests/sql/rls/riparazione-r03-push.test.sql\n@@ -0,0 +1,89 @@\n+-- =============================================================================\n+-- R03-009 — Le push si prendono in carico: due giri non mandano la stessa (migrazione 650)\n+-- =============================================================================\n+--   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test\n+--\n+-- La presa è la scrittura condizionata che il giro di app/api/cron/send-push fa prima di mandare:\n+-- prende solo le righe con `pushed_at` vuoto e senza una presa viva, e manda solo quelle che gli\n+-- tornano indietro.\n+-- ① il primo giro prende le due notifiche da mandare, non quella già mandata\n+-- ② il secondo giro, subito dopo, non ne prende nessuna\n+-- ③ la presa di un giro morto, vecchia di 11 minuti, torna disponibile\n+-- ④ una presa ridata (colonna di nuovo vuota) si riprende subito\n+-- ⑤ una notifica già mandata non si prende mai, neanche con una presa scaduta\n+-- Tutto con ROLLBACK.\n+-- =============================================================================\n+\n+BEGIN;\n+\n+CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;\n+\n+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES\n+  ('77777777-7777-7777-7777-777777777777', 'campanella@test.it', '{\"role\":\"seller\"}');\n+\n+INSERT INTO public.notifications (id, user_id, title, category, created_at, pushed_at) VALUES\n+  ('a0000000-0000-4000-8000-000000000001', '77777777-7777-7777-7777-777777777777', 'Nuovo ordine', 'order', now() - interval '1 minute', NULL),\n+  ('a0000000-0000-4000-8000-000000000002', '77777777-7777-7777-7777-777777777777', 'Ordine pronto', 'order', now() - interval '1 minute', NULL),\n+  ('a0000000-0000-4000-8000-000000000003', '77777777-7777-7777-7777-777777777777', 'Già mandata', 'order', now() - interval '1 minute', now());\n+\n+-- La presa, come la scrive la rotta: id della lettura, pushed_at vuoto, nessuna presa viva.\n+CREATE TEMP TABLE prese (giro text, ids uuid[]) ON COMMIT DROP;\n+CREATE FUNCTION pg_temp.prendi(giro text) RETURNS uuid[] LANGUAGE sql AS $$\n+  WITH presa AS (\n+    UPDATE public.notifications\n+       SET push_claimed_at = now()\n+     WHERE id IN ('a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002',\n+                  'a0000000-0000-4000-8000-000000000003')\n+       AND pushed_at IS NULL\n+       AND (push_claimed_at IS NULL OR push_claimed_at < now() - interval '10 minutes')\n+    RETURNING id\n+  )\n+  SELECT coalesce(array_agg(id ORDER BY id), '{}') FROM presa\n+$$;\n+\n+-- ① e ②\n+INSERT INTO prese SELECT 'A', pg_temp.prendi('A');\n+INSERT INTO prese SELECT 'B', pg_temp.prendi('B');\n+INSERT INTO esiti SELECT 'il primo giro prende le due da mandare',\n+  ids = ARRAY['a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002']::uuid[], ids::text\n+  FROM prese WHERE giro = 'A';\n+INSERT INTO esiti SELECT 'il secondo giro non prende niente: niente push doppie', cardinality(ids) = 0, ids::text\n+  FROM prese WHERE giro = 'B';\n+\n+-- ③ Il giro che aveva preso la prima è morto 11 minuti fa.\n+UPDATE public.notifications SET push_claimed_at = now() - interval '11 minutes'\n+ WHERE id = 'a0000000-0000-4000-8000-000000000001';\n+INSERT INTO prese SELECT 'C', pg_temp.prendi('C');\n+INSERT INTO esiti SELECT 'la presa di un giro morto torna disponibile dopo la scadenza',\n+  ids = ARRAY['a0000000-0000-4000-8000-000000000001']::uuid[], ids::text\n+  FROM prese WHERE giro = 'C';\n+\n+-- ④ Il giro ridà la seconda (invio non riuscito): solo se la presa è ancora la sua.\n+UPDATE public.notifications SET push_claimed_at = NULL\n+ WHERE id = 'a0000000-0000-4000-8000-000000000002' AND push_claimed_at = now();\n+INSERT INTO prese SELECT 'D', pg_temp.prendi('D');\n+INSERT INTO esiti SELECT 'una presa ridata si riprende subito',\n+  ids = ARRAY['a0000000-0000-4000-8000-000000000002']::uuid[], ids::text\n+  FROM prese WHERE giro = 'D';\n+\n+-- ⑤ La già mandata, anche con una presa vecchia, non torna.\n+UPDATE public.notifications SET push_claimed_at = now() - interval '1 hour'\n+ WHERE id = 'a0000000-0000-4000-8000-000000000003';\n+INSERT INTO prese SELECT 'E', pg_temp.prendi('E');\n+INSERT INTO esiti SELECT 'una notifica già mandata non si prende mai', cardinality(ids) = 0, ids::text\n+  FROM prese WHERE giro = 'E';\n+\n+DO $$\n+DECLARE r record; rossi int;\n+BEGIN\n+  FOR r IN SELECT * FROM esiti ORDER BY nome LOOP\n+    RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;\n+  END LOOP;\n+  SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;\n+  IF rossi > 0 THEN\n+    RAISE EXCEPTION '% controlli su % sono rossi', rossi, (SELECT count(*) FROM esiti);\n+  END IF;\n+  RAISE INFO 'tutti verdi: % controlli', (SELECT count(*) FROM esiti);\n+END $$;\n+\n+ROLLBACK;\ndiff --git a/tests/unit/api-cron-send-push.test.ts b/tests/unit/api-cron-send-push.test.ts\nindex 01279396..8d46017d 100644\n--- a/tests/unit/api-cron-send-push.test.ts\n+++ b/tests/unit/api-cron-send-push.test.ts\n@@ -1,5 +1,20 @@\n import { describe, it, expect, vi, beforeEach } from 'vitest';\n \n+/**\n+ * R03-009 — La presa in carico del giro (migrazione 650): ogni riga letta qui si prende, e la presa\n+ * ridata a fine giro (`push_claimed_at` di nuovo vuoto) non conta come una notifica segnata.\n+ */\n+function presaDelGiro(valori: Record<string, unknown>) {\n+  let ids: unknown[] = [];\n+  const p: Record<string, unknown> = {\n+    in: (_c: string, v: unknown[]) => { ids = v; return p; },\n+    is: () => p, or: () => p, eq: () => p, select: () => p,\n+    then: (ok: (x: unknown) => unknown) =>\n+      Promise.resolve(valori.push_claimed_at === null ? { data: null, error: null } : { data: ids.map((id) => ({ id })), error: null }).then(ok),\n+  };\n+  return p;\n+}\n+\n /**\n  * send-push — audit 🟠-10: la notifica viene marcata pushed_at SOLO se almeno\n  * una push è stata consegnata, o se l'utente non ha subscription. Su fallimento\n@@ -43,7 +58,7 @@ vi.mock('@supabase/supabase-js', () => ({\n         gte: () => b,\n         order: () => b,\n         limit: () => Promise.resolve({ data: pending, error: null }),\n-        update: () => ((b._update = true), b),\n+        update: (v: Record<string, unknown> = {}) => ('push_claimed_at' in v ? presaDelGiro(v) : ((b._update = true), b)),\n         // 22/8/2026 — il giro segna le notifiche gestite con UNA scrittura\n         // sola invece di una per notifica: il finto deve saper rispondere\n         // anche a quella.\ndiff --git a/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts b/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts\nindex 6d22b39a..30ce7702 100644\n--- a/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts\n+++ b/tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts\n@@ -1,5 +1,20 @@\n import { describe, it, expect, vi, beforeEach } from 'vitest';\n \n+/**\n+ * R03-009 — La presa in carico del giro (migrazione 650): ogni riga letta qui si prende, e la presa\n+ * ridata a fine giro (`push_claimed_at` di nuovo vuoto) non conta come una notifica segnata.\n+ */\n+function presaDelGiro(valori: Record<string, unknown>) {\n+  let ids: unknown[] = [];\n+  const p: Record<string, unknown> = {\n+    in: (_c: string, v: unknown[]) => { ids = v; return p; },\n+    is: () => p, or: () => p, eq: () => p, select: () => p,\n+    then: (ok: (x: unknown) => unknown) =>\n+      Promise.resolve(valori.push_claimed_at === null ? { data: null, error: null } : { data: ids.map((id) => ({ id })), error: null }).then(ok),\n+  };\n+  return p;\n+}\n+\n /**\n  * 30/8/2026 (R076) — UNA DOMANDA AL DATABASE PER OGNI SINGOLA NOTIFICA, E CENTO\n  * CHIAMATE APERTE TUTTE INSIEME.\n@@ -60,7 +75,7 @@ function tabella(nome: string) {\n     gte: () => b,\n     order: () => b,\n     delete: () => b,\n-    update: () => { inAggiornamento = true; return b; },\n+    update: (v: Record<string, unknown> = {}) => { if ('push_claimed_at' in v) return presaDelGiro(v); inAggiornamento = true; return b; },\n     limit: () => Promise.resolve({ data: inSospeso, error: null }),\n     in: (_c: string, valori: string[]) => {\n       if (inAggiornamento) return Promise.resolve({ error: null });\ndiff --git a/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts b/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts\nindex b12a819c..c4d65f38 100644\n--- a/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts\n+++ b/tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts\n@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';\n import { readFileSync } from 'node:fs';\n import path from 'node:path';\n \n+/**\n+ * R03-009 — La presa in carico del giro (migrazione 650): ogni riga letta qui si prende, e la presa\n+ * ridata a fine giro (`push_claimed_at` di nuovo vuoto) non conta come una notifica segnata.\n+ */\n+function presaDelGiro(valori: Record<string, unknown>) {\n+  let ids: unknown[] = [];\n+  const p: Record<string, unknown> = {\n+    in: (_c: string, v: unknown[]) => { ids = v; return p; },\n+    is: () => p, or: () => p, eq: () => p, select: () => p,\n+    then: (ok: (x: unknown) => unknown) =>\n+      Promise.resolve(valori.push_claimed_at === null ? { data: null, error: null } : { data: ids.map((id) => ({ id })), error: null }).then(ok),\n+  };\n+  return p;\n+}\n+\n /**\n  * 6/9/2026 — TRE COSE CHE MANCAVANO AL GIRO DELLE NOTIFICHE PUSH.\n  *\n@@ -59,7 +74,7 @@ function tabella() {\n     gte: () => b,\n     order: () => b,\n     delete: () => b,\n-    update: () => { inAggiornamento = true; return b; },\n+    update: (v: Record<string, unknown> = {}) => { if ('push_claimed_at' in v) return presaDelGiro(v); inAggiornamento = true; return b; },\n     limit: () => Promise.resolve({ data: inSospeso, error: null }),\n     in: (_c: string, valori: string[]) => {\n       if (inAggiornamento) return Promise.resolve({ error: null });\ndiff --git a/tests/unit/minori-s03-push.test.ts b/tests/unit/minori-s03-push.test.ts\nindex 9bc7c3cf..b302b57b 100644\n--- a/tests/unit/minori-s03-push.test.ts\n+++ b/tests/unit/minori-s03-push.test.ts\n@@ -1,5 +1,20 @@\n import { describe, it, expect, vi, beforeEach } from 'vitest';\n \n+/**\n+ * R03-009 — La presa in carico del giro (migrazione 650): ogni riga letta qui si prende, e la presa\n+ * ridata a fine giro (`push_claimed_at` di nuovo vuoto) non conta come una notifica segnata.\n+ */\n+function presaDelGiro(valori: Record<string, unknown>) {\n+  let ids: unknown[] = [];\n+  const p: Record<string, unknown> = {\n+    in: (_c: string, v: unknown[]) => { ids = v; return p; },\n+    is: () => p, or: () => p, eq: () => p, select: () => p,\n+    then: (ok: (x: unknown) => unknown) =>\n+      Promise.resolve(valori.push_claimed_at === null ? { data: null, error: null } : { data: ids.map((id) => ({ id })), error: null }).then(ok),\n+  };\n+  return p;\n+}\n+\n /**\n  * S03 — il giro delle push (schede 550, 112, 41, 321).\n  * La lettura delle notifiche, delle preferenze o delle iscrizioni che cade non diventa mai\n@@ -36,7 +51,7 @@ vi.mock('@/lib/supabase/server', () => ({\n       Object.assign(b, {\n         select: sel, is: sel, gte: sel, order: sel,\n         limit: async () => (erroreLettura ? { data: null, error: { message: 'permission denied' } } : { data: pending, error: null }),\n-        update: () => ((b._update = true), b),\n+        update: (v: Record<string, unknown> = {}) => ('push_claimed_at' in v ? presaDelGiro(v) : ((b._update = true), b)),\n         in: async (_c: string, valori: string[]) => {\n           if (b._update) { segnate.push(...valori); return { error: null }; }\n           if (tabella === 'push_subscriptions') {\ndiff --git a/tests/unit/riparazione-r03-push.test.ts b/tests/unit/riparazione-r03-push.test.ts\nnew file mode 100644\nindex 00000000..f8a0712d\n--- /dev/null\n+++ b/tests/unit/riparazione-r03-push.test.ts\n@@ -0,0 +1,190 @@\n+/**\n+ * R03-009 — LE PUSH NON PARTONO DUE VOLTE SE DUE GIRI SI SOVRAPPONGONO.\n+ *\n+ * Il giro delle push (ogni 5 minuti, fino a 300 secondi) leggeva le notifiche con `pushed_at`\n+ * vuoto, mandava, e segnava `pushed_at` solo alla fine. Un secondo giro partito nel frattempo\n+ * leggeva le stesse righe, ancora vuote, e mandava la stessa push un'altra volta. Adesso il giro\n+ * prende le righe con una scrittura condizionata (`push_claimed_at`, migrazione 650) e manda solo\n+ * quelle che gli tornano; la presa di un giro morto torna disponibile dopo dieci minuti.\n+ *\n+ * Il finto database tiene le righe in memoria e applica i filtri, compresa la presa: i due giri qui\n+ * sono sovrapposti davvero (il primo resta fermo dentro l'invio mentre gira il secondo).\n+ */\n+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';\n+\n+type Riga = Record<string, unknown>;\n+\n+const mondo = vi.hoisted(() => ({\n+  righe: [] as Array<Record<string, unknown>>,\n+  /** Ogni push consegnata: l'id della notifica. */\n+  inviate: [] as string[],\n+  /** Se c'è, l'invio aspetta questa promessa (il primo giro resta «in volo»). */\n+  cancello: null as null | Promise<void>,\n+  /** Si risolve quando un invio è partito. */\n+  partito: null as null | (() => void),\n+  consegna: { delivered: 1, total: 1 },\n+  errorePresa: null as null | { code?: string; message: string },\n+}));\n+\n+vi.mock('@/lib/api/middleware', () => ({\n+  withCronAuth: (h: (req: unknown) => unknown) => (req: unknown) => h(req),\n+}));\n+vi.mock('@/lib/logger', () => ({\n+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn(), spesa: vi.fn() },\n+}));\n+vi.mock('@/lib/push/send', () => ({\n+  isPushConfigured: () => true,\n+  iscrizioniPerUtenti: async (_s: unknown, ids: string[]) => new Map(ids.map((u) => [u, [{ id: `s-${u}` }]])),\n+  sendPushToUser: async (_s: unknown, _u: string, payload: { tag?: string }) => {\n+    mondo.partito?.();\n+    if (mondo.cancello) await mondo.cancello;\n+    if (mondo.consegna.delivered > 0) mondo.inviate.push(String(payload.tag));\n+    return { ...mondo.consegna };\n+  },\n+}));\n+\n+/** Una query sulla tabella delle notifiche che applica davvero i filtri usati dal giro. */\n+function query() {\n+  let azione: 'select' | 'update' = 'select';\n+  let valori: Riga = {};\n+  let tetto = Infinity;\n+  const filtri: Array<(r: Riga) => boolean> = [];\n+  const q: Record<string, unknown> = {\n+    select: () => q,\n+    update: (v: Riga) => { azione = 'update'; valori = v; return q; },\n+    is: (c: string, v: unknown) => { filtri.push((r) => (r[c] ?? null) === v); return q; },\n+    eq: (c: string, v: unknown) => { filtri.push((r) => r[c] === v); return q; },\n+    gte: (c: string, v: string) => { filtri.push((r) => String(r[c]) >= v); return q; },\n+    in: (c: string, vs: unknown[]) => { filtri.push((r) => vs.includes(r[c])); return q; },\n+    or: (espressione: string) => {\n+      // La sola forma col «lt» è la presa: «colonna.is.null,colonna.lt.<ora>».\n+      const presa = /^(\\w+)\\.is\\.null,\\1\\.lt\\.(.+)$/.exec(espressione);\n+      if (presa) filtri.push((r) => r[presa[1]] == null || String(r[presa[1]]) < presa[2]);\n+      return q;\n+    },\n+    order: () => q,\n+    limit: (n: number) => { tetto = n; return q; },\n+    then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {\n+      const esegui = async () => {\n+        if (azione === 'update' && 'push_claimed_at' in valori && valori.push_claimed_at !== null && mondo.errorePresa) {\n+          return { data: null, error: mondo.errorePresa };\n+        }\n+        const scelte = mondo.righe.filter((r) => filtri.every((f) => f(r)));\n+        if (azione === 'update') {\n+          for (const r of scelte) Object.assign(r, valori);\n+          return { data: scelte.map((r) => ({ ...r })), error: null };\n+        }\n+        return { data: scelte.slice(0, tetto).map((r) => ({ ...r })), error: null };\n+      };\n+      return esegui().then(ok, ko);\n+    },\n+  };\n+  return q;\n+}\n+\n+vi.mock('@/lib/supabase/server', () => ({\n+  getAdminSupabase: () => ({\n+    from: () => query(),\n+    rpc: async () => ({ data: true, error: null }),\n+  }),\n+}));\n+\n+import { POST } from '@/app/api/cron/send-push/route';\n+\n+const ADESSO = new Date('2026-11-21T18:00:00Z').getTime();\n+const MINUTO = 60_000;\n+\n+function notifica(id: string, campi: Riga = {}): Riga {\n+  return {\n+    id, user_id: `u-${id}`, title: 'Ordine pronto', body: null, link: null, category: 'order',\n+    created_at: new Date(ADESSO - 2 * MINUTO).toISOString(), pushed_at: null, push_claimed_at: null,\n+    ...campi,\n+  };\n+}\n+\n+const unGiro = async () => {\n+  const r = await (POST as unknown as (req: Request) => Promise<Response>)(\n+    new Request('http://localhost/api/cron/send-push?a_mano=1', { method: 'POST' }),\n+  );\n+  return { status: r.status, corpo: (await r.json()) as Record<string, unknown> };\n+};\n+\n+const riga = (id: string) => mondo.righe.find((r) => r.id === id)!;\n+\n+beforeEach(() => {\n+  vi.useFakeTimers({ toFake: ['Date'] });\n+  vi.setSystemTime(ADESSO);\n+  mondo.righe = [];\n+  mondo.inviate = [];\n+  mondo.cancello = null;\n+  mondo.partito = null;\n+  mondo.consegna = { delivered: 1, total: 1 };\n+  mondo.errorePresa = null;\n+});\n+afterEach(() => {\n+  vi.useRealTimers();\n+});\n+\n+describe('R03-009 · due giri sovrapposti non mandano la stessa push due volte', () => {\n+  it('il secondo giro parte mentre il primo è ancora dentro l invio: ogni push parte una volta sola', async () => {\n+    mondo.righe = [notifica('n1'), notifica('n2')];\n+    let apri: () => void = () => {};\n+    mondo.cancello = new Promise<void>((r) => { apri = r; });\n+    const primoInVolo = new Promise<void>((r) => { mondo.partito = r; });\n+\n+    const primo = unGiro();\n+    await primoInVolo;\n+    // Il primo giro è fermo dentro l'invio: `pushed_at` è ancora vuoto. Parte il secondo.\n+    mondo.cancello = null;\n+    mondo.partito = null;\n+    const secondo = await unGiro();\n+    apri();\n+    const esito = await primo;\n+\n+    expect(mondo.inviate.filter((t) => t === 'n1'), 'la stessa push arriva due volte').toHaveLength(1);\n+    expect(mondo.inviate.filter((t) => t === 'n2'), 'la stessa push arriva due volte').toHaveLength(1);\n+    expect(secondo.corpo.sent, 'il secondo giro non doveva mandare niente').toBe(0);\n+    expect(esito.corpo.sent).toBe(2);\n+    expect(riga('n1').pushed_at).not.toBeNull();\n+  });\n+\n+  it('una presa viva di un altro giro (2 minuti fa) non si tocca; una di un giro morto (11 minuti fa) si riprende', async () => {\n+    mondo.righe = [\n+      notifica('viva', { push_claimed_at: new Date(ADESSO - 2 * MINUTO).toISOString() }),\n+      notifica('morta', { push_claimed_at: new Date(ADESSO - 11 * MINUTO).toISOString() }),\n+    ];\n+    await unGiro();\n+    expect(mondo.inviate, 'la presa di un giro vivo è stata scavalcata').not.toContain('viva');\n+    expect(mondo.inviate, 'la presa di un giro morto non torna mai disponibile').toContain('morta');\n+    expect(riga('viva').pushed_at).toBeNull();\n+  });\n+\n+  it('una push non consegnata si ridà subito: il giro dopo la riprende', async () => {\n+    mondo.righe = [notifica('n1')];\n+    mondo.consegna = { delivered: 0, total: 1 };\n+    await unGiro();\n+    expect(riga('n1').pushed_at).toBeNull();\n+    expect(riga('n1').push_claimed_at, 'la presa resta e il giro dopo non la vede per dieci minuti').toBeNull();\n+    mondo.consegna = { delivered: 1, total: 1 };\n+    vi.setSystemTime(ADESSO + 5 * MINUTO);\n+    await unGiro();\n+    expect(mondo.inviate).toEqual(['n1']);\n+  });\n+\n+  it('se la presa non si scrive per un guasto, non si manda niente e il giro risponde 503', async () => {\n+    mondo.righe = [notifica('n1')];\n+    mondo.errorePresa = { message: 'canceling statement due to statement timeout' };\n+    const { status } = await unGiro();\n+    expect(status).toBe(503);\n+    expect(mondo.inviate, 'senza presa due giri possono mandare la stessa push').toEqual([]);\n+  });\n+\n+  it('prima della migrazione 650 (colonna che non c è) si manda come prima', async () => {\n+    mondo.righe = [notifica('n1')];\n+    mondo.errorePresa = { code: 'PGRST204', message: \"Could not find the 'push_claimed_at' column of 'notifications' in the schema cache\" };\n+    const { status, corpo } = await unGiro();\n+    expect(status).toBe(200);\n+    expect(corpo.sent).toBe(1);\n+    expect(riga('n1').pushed_at).not.toBeNull();\n+  });\n+});\ndiff --git a/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts b/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts\nindex 03128336..5a2bd0b6 100644\n--- a/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts\n+++ b/tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts\n@@ -1,5 +1,20 @@\n import { describe, it, expect, vi, beforeEach } from 'vitest';\n \n+/**\n+ * R03-009 — La presa in carico del giro (migrazione 650): ogni riga letta qui si prende, e la presa\n+ * ridata a fine giro (`push_claimed_at` di nuovo vuoto) non conta come una notifica segnata.\n+ */\n+function presaDelGiro(valori: Record<string, unknown>) {\n+  let ids: unknown[] = [];\n+  const p: Record<string, unknown> = {\n+    in: (_c: string, v: unknown[]) => { ids = v; return p; },\n+    is: () => p, or: () => p, eq: () => p, select: () => p,\n+    then: (ok: (x: unknown) => unknown) =>\n+      Promise.resolve(valori.push_claimed_at === null ? { data: null, error: null } : { data: ids.map((id) => ({ id })), error: null }).then(ok),\n+  };\n+  return p;\n+}\n+\n /**\n  * R26-003 — la notifica del nuovo ordine non fa la fila dietro le promozioni.\n  * Il finto database tiene le notifiche in memoria e sa fare quello che la lettura chiede\n@@ -31,7 +46,7 @@ vi.mock('@/lib/supabase/server', () => ({\n           const righe = tutte.filter((r) => !b._senzaAttese || !['promo', 'group', 'newsletter'].includes(String(r.category)));\n           return { data: righe.slice(0, n), error: null };\n         },\n-        update: () => ((b._update = true), b),\n+        update: (v: Record<string, unknown> = {}) => ('push_claimed_at' in v ? presaDelGiro(v) : ((b._update = true), b)),\n         in: async (_c: string, valori: string[]) => {\n           if (b._update) { segnate.push(...valori); return { error: null }; }\n           if (tabella === 'push_subscriptions') return { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };\n",
+      "patch_tipi": "diff --git a/lib/database.types.ts b/lib/database.types.ts\nindex 48053bff..a0d73c52 100644\n--- a/lib/database.types.ts\n+++ b/lib/database.types.ts\n@@ -1228,6 +1228,7 @@ export interface Database {\n           created_at: string | null;\n           pushed_at: string | null;\n           category: string;\n+          push_claimed_at: string | null;\n         };\n         Insert: {\n           id?: string;\n@@ -1239,6 +1240,7 @@ export interface Database {\n           created_at?: string | null;\n           pushed_at?: string | null;\n           category?: string;\n+          push_claimed_at?: string | null;\n         };\n         Update: {\n           id?: string;\n@@ -1250,6 +1252,7 @@ export interface Database {\n           created_at?: string | null;\n           pushed_at?: string | null;\n           category?: string;\n+          push_claimed_at?: string | null;\n         };\n         Relationships: [];\n       };\n"
+    },
+    {
+      "id": "R03-001",
+      "chiave": "api-backend|con taglie alla stessa posizione la traccia può segnare un riordino che non c'è",
+      "esito": "riparato",
+      "commit": "9dbcc052db20bc3f964757864cb105b1bb2f11ff",
+      "file_toccati": [
+        "app/api/admin/products/route.ts",
+        "tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9dbcc052^ --file app/api/admin/products/route.ts --prove tests/unit/riparazione-r03-taglie-stessa-posizione.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La traccia non confronta più le due liste ordinate (lo spareggio per contenuto inventava un ordine a parità di posizione): segna le taglie se cambia l'insieme (nome, opzioni, scorta) o se due taglie con posizioni di prima strettamente diverse arrivano invertite. La prova finge il salvataggio vero (posizioni 0..n-1, id tenuti) con M e L a posizione 0 nei due ordini d'arrivo, tre taglie, un riordino vero a posizioni distinte e una scorta cambiata.",
+      "nota": "Prova rossa alla testa di prima (spareggio per contenuto: 1 rossa, M,L) e con route.ts della base 41992655^ (spareggio per id: 2 rosse, L,M e tre taglie), verde con la correzione. Mutante provato a mano «nessun riordino mai» (solo l'insieme): 2 rosse. La forma di prima/dopo nella traccia non cambia (nome, opzioni, scorta); le 8 prove che importano la rotta: 39 verdi.",
+      "verificato_da": "collaudo K04: non_regge (spareggio per contenuto); giro di correzione con prova riscritta sullo scenario realistico del collaudo, rossa sia con la testa di prima sia con la base, mutante «nessun riordino mai» rosso; diff riletto dal capo squadra (confronto per coppie di posizioni di prima strettamente diverse). Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "419926551f0d308035e0c5ee0471e730d9e9e939",
+      "collaudo": {
+        "K04": "non_regge"
+      }
+    },
+    {
+      "id": "R03-002",
+      "chiave": "api-backend|se un promemoria del carrello viene saltato, il rilascio del segno può cancellare anche il segno di un carrello cambiato nel frattempo",
+      "esito": "riparato",
+      "commit": "a6ecae54487e53361ce347e28704b02eb8d33461",
+      "file_toccati": [
+        "app/api/cron/abandoned-carts/route.ts",
+        "tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a6ecae54^ --file app/api/cron/abandoned-carts/route.ts --prove tests/unit/riparazione-r03-rilascio-segno-carrello.test.ts --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il rilascio del segno dopo un invio saltato aggiunge il filtro sull'ultima attività letta: se il carrello è cambiato il suo segno non si cancella.",
+      "verificato_da": "revisore 3 (sonnet): mutante senza filtro last_activity → prova rossa; caso normale e last_activity null controllati; 26 file di prove esistenti verdi · collaudo K04: regge"
+    },
+    {
+      "id": "R03-010",
+      "chiave": "api-backend|la ricerca degli indirizzi chiama il servizio pubblico delle mappe più volte al secondo, senza un freno per tutto il sito",
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Un solo freno (un turno al secondo, contatore unico con attesa massima di 8 s) in lib/geocodifica.ts, usato dalla rotta d'ordine e dalla rotta di ricerca indirizzi; senza turno la rotta risponde 429.",
+      "verificato_da": "revisore 2 (grande): il freno tiene 1/s (Upstash finto, Upstash spento, firma vecchia, mutante cassa fuori dal freno → rossa), ma con effetti collaterali sulla cassa",
+      "nota": "Freno unico fatto (99a5e348) e tolto con a95dbdc6: il revisore 2 ha trovato che con il turno occupato la cassa aspetta fino a circa 13 secondi e poi prosegue senza coordinate (effetti sulla cassa: dettagli alla regia, fuori dal deposito pubblico). Con Upstash il contatore è unico (1000 ms tra le chiamate), senza Upstash è per copia del sito.",
+      "commit_tolto": "99a5e348f429cbae02e090041e94c3b4491cf1d4",
+      "domanda": "Nominatim chiede al massimo 1 richiesta al secondo per tutto il sito: quando il turno è occupato, chi ha la precedenza tra la ricerca indirizzi pubblica e la cassa (la cassa aspetta, la cassa passa sempre contando nel freno, oppure un servizio di geocodifica con chiave e cache)?"
+    },
+    {
+      "id": "R03-011",
+      "chiave": "api-backend|il freno sulla rotta regge per 3 interruttori su 9: ai, newsletter, classifica e caricamento da file stanno solo nelle pagine",
+      "esito": "serve_file_altrui",
+      "commit": "",
+      "file_toccati": [],
+      "prova_file": [],
+      "prova_comando": "npx vitest run tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts tests/unit/l-ai-spenta-non-chiama-il-modello-neanche-con-la-chiave.test.ts tests/unit/le-funzioni-spente-le-ferma-la-rotta-anche-a-mano.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessuna modifica: la newsletter e il caricamento da file sono già frenati dalla rotta (app/api/newsletter/route.ts:52 `if (!NEWSLETTER_ACCESA)`, app/api/seller/products/import/route.ts:36); l'AI è fermata a monte in lib/ai/client.ts:217 (spenta, il client lancia AiConfigError: nessuna chiamata al modello); 7 rotte AI hanno anche il controllo proprio.",
+      "cosa_resta": "Restano senza controllo esplicito all'inizio 11 rotte AI (le altre già lo hanno) e la classifica inviti, letta dal browser dalla vista referral_leaderboard (nessuna rotta: il freno è solo nella pagina, come dice lib/funzioni-al-lancio.ts:30-33; chiuderla vuole una modifica della vista nel database, cioè una migrazione, non mia).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/ai/answer-qa/route.ts, app/api/ai/barcode-lookup/route.ts, app/api/ai/catalog-chat/route.ts, app/api/ai/copilot/route.ts, app/api/ai/description/route.ts, app/api/ai/diagnose/route.ts, app/api/ai/improve-product/route.ts, app/api/ai/product-chat/route.ts, app/api/ai/reviews-summary/route.ts, app/api/ai/seo/route.ts, app/api/ai/variants/route.ts, app/api/ai/voice-product/route.ts",
+          "modifica": "Aggiungere `import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';` e, all'inizio di ogni gestore (POST/GET, dopo l'autenticazione e prima del freno di frequenza e di ogni lettura o scrittura), `if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');` (stessa frase delle rotte catalog-create/apply). Dove una rotta ha più gestori (catalog-chat, copilot, description, product-chat, voice-product) il controllo va in ognuno."
+        },
+        {
+          "file": "app/api/ai/catalog-batch/status/route.ts, app/api/ai/catalog-batch/cancel/route.ts",
+          "modifica": "Stesso import e stesso controllo all'inizio del gestore (status: prima del rateLimitAsync, che oggi conta e fa poll di Anthropic; cancel: prima del rateLimitAsync)."
+        },
+        {
+          "file": "supabase/migrations (vista public.referral_leaderboard) + app/profile/referral/leaderboard/page.tsx",
+          "modifica": "Classifica inviti: la pagina legge la vista dal browser; per farla reggere sul server la vista deve restituire zero righe finché CLASSIFICA_INVITI_ACCESA è falso (migrazione nuova, decisione di Nicola, non applicata da me), oppure una rotta server che legge la vista e controlla l'interruttore con `if (!CLASSIFICA_INVITI_ACCESA) return ApiErrors.unavailable(...)` e la pagina che chiama la rotta. È un'eccezione dichiarata in lib/funzioni-al-lancio.ts:30-33: nessun premio passa di mano."
+        }
+      ],
+      "nota": "Per la newsletter e il caricamento da file la voce è già riparata prima (8527d090 e R02-002). La parte nei miei file era già chiusa sulla base (newsletter: app/api/newsletter/route.ts:52); resta solo quella nei file altrui. Il revisore conta 13 rotte AI senza controllo esplicito: in più c'è app/api/ai/translate/route.ts, che però ha già un suo interruttore (TRADUCI_ACCESO, :68). Se si vuole anche lì AI_NEGOZI_ACCESA, è la stessa modifica del gruppo 1.",
+      "verificato_da": "revisore 3 (sonnet): affermazioni verificate (newsletter :52, import :36, lib/ai/client.ts:217); grep: 13 rotte AI senza AI_NEGOZI_ACCESA contando translate, che ha un suo interruttore TRADUCI_ACCESO"
+    },
+    {
+      "id": "R03-012",
+      "chiave": "api-backend|comunicare due volte l'esito di una segnalazione rimanda la mail e le notifiche, e dopo un errore il nuovo tentativo rimanda anche i canali già riusciti",
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "comunicaEsito non riscrive una notifica già presente (stesso destinatario, titolo, testo, link) e manda la mail con una chiave di idempotenza derivata da segnalazione, decisione e motivazione: un secondo comunica o il nuovo tentativo dopo un errore parziale rimanda solo ciò che mancava. Nessuna colonna nuova.",
+      "verificato_da": "revisore 2 (grande): BOCCIATA, vedi nota; mutanti senza controllo e senza chiave → prova rossa, ma il caso accanto si rompeva",
+      "insieme_a": [
+        "R03-013"
+      ],
+      "nota": "Riparazione fatta (93da082a) e tolta dopo il collaudo con il commit 5ff8afd6: il revisore 2 l'ha bocciata. La notifica si riconosceva da destinatario+titolo+testo+link senza l'id della segnalazione (comunica.ts:85) e la chiave della mail era id+decisione+motivazione: due segnalazioni con la stessa motivazione, o accolta→respinta→accolta, perdevano una comunicazione (anche quella al segnalante senza email). Cura giusta per un giro dopo: legare il doppione alla singola decisione (id della segnalazione + momento o numero della decisione), sia per la notifica sia per la idempotencyKey. Non rifatta per il tetto di spesa della sessione.",
+      "commit_tolto": "93da082a1cc17bfe3a0ed1ee55186d456c447b00"
+    },
+    {
+      "id": "R03-013",
+      "chiave": "api-backend|l'esito di una segnalazione si rimanda due volte: dopo un errore parziale la pagina chiede di registrare di nuovo e tutti i canali ripartono, anche quelli già arrivati",
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Stesso commit di R03-012: stessa riga di comunicaEsito, stessa correzione (nessun canale già arrivato riparte).",
+      "verificato_da": "revisore 2 (grande): BOCCIATA, vedi nota; mutanti senza controllo e senza chiave → prova rossa, ma il caso accanto si rompeva",
+      "insieme_a": [
+        "R03-012"
+      ],
+      "nota": "Riparazione fatta (93da082a) e tolta dopo il collaudo con il commit 5ff8afd6: il revisore 2 l'ha bocciata. La notifica si riconosceva da destinatario+titolo+testo+link senza l'id della segnalazione (comunica.ts:85) e la chiave della mail era id+decisione+motivazione: due segnalazioni con la stessa motivazione, o accolta→respinta→accolta, perdevano una comunicazione (anche quella al segnalante senza email). Cura giusta per un giro dopo: legare il doppione alla singola decisione (id della segnalazione + momento o numero della decisione), sia per la notifica sia per la idempotencyKey. Non rifatta per il tetto di spesa della sessione.",
+      "commit_tolto": "93da082a1cc17bfe3a0ed1ee55186d456c447b00"
+    },
+    {
+      "id": "R03-014",
+      "chiave": "api-backend|un rifiuto per troppe richieste della ricerca indirizzi fa salvare l'indirizzo senza coordinate per sempre",
+      "esito": "parziale",
+      "commit": "81ba580d144a1e0e0769d6de8f428ad9478e107c",
+      "file_toccati": [
+        "app/profile/addresses/page.tsx",
+        "tests/unit/riparazione-r03-indirizzo-429.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-indirizzo-429.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-indirizzo-429.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 81ba580d^ --file app/profile/addresses/page.tsx --prove tests/unit/riparazione-r03-indirizzo-429.test.tsx --comando \"npx vitest run {prove} --reporter=dot\" --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel profilo, con lo stesso indirizzo e le coordinate già buone la ricerca della posizione non si fa più, quindi un 429 non blocca il salvataggio (es. cambia solo il telefono); il 429 blocca solo quando la ricerca serve (via nuova o coordinate mancanti). Nuovo caso nella prova: telefono cambiato con 429 armato → salvato con le coordinate di prima, nessuna ricerca, nessun errore.",
+      "cosa_resta": "La metà del negoziante: components/StoreLocationPicker.tsx:169-172, sul 429 della ricerca il negoziante legge ancora «Indirizzo non trovato» (la rotta /api/geocode risponde {lat:null,lng:null,error:'rate_limited'} con 429). Il file non è di R03.",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreLocationPicker.tsx",
+          "modifica": "In searchAddress, subito dopo la fetch a /api/geocode e prima di `const data = await res.json();` (riga 170) aggiungere:\n+      if (res.status === 429) {\n+        setError('Troppe ricerche in questo momento: riprova fra qualche secondo o sposta il pin sulla mappa.');\n+        return;\n+      }\nCosì il 429 non si legge più come «Indirizzo non trovato» (il finally rimette searching a false). Prova suggerita: montare StoreLocationPicker con fetch che risponde 429, cliccare la ricerca, attendersi il testo «Troppe ricerche» e nessun onChange."
+        }
+      ],
+      "nota": "Prova rossa alla testa di prima (il nuovo caso: 1 rossa, 1 verde), verde con la correzione. Le 5 prove che leggono la pagina degli indirizzi: 35 verdi (tra cui «stesso indirizzo: le coordinate restano» di riparazione-r03-rubrica-via-nuova).",
+      "verificato_da": "collaudo K04: parziale; giro di correzione per lo stesso indirizzo, caso nuovo rosso alla testa di prima. Nessun revisore nuovo: tetto di 6 subagenti raggiunto",
+      "commit_precedente": "b1f99d1dcc1d87e409f56a2cea9f4c063d3be181",
+      "collaudo": {
+        "K04": "parziale"
+      }
+    },
+    {
+      "id": "R03-015",
+      "chiave": "api-backend|se il servizio di posta conserva anche le risposte d'errore, una promozione mai partita risulta spedita",
+      "esito": "serve_file_altrui",
+      "prova_base": "lib/email/client.ts:199-202 `if (!error && data?.id) return {ok:true,...}; if (!error) { lastErr = 'risposta senza id di invio'; break; }` (commit bf341cde R04-019, con prova tests/unit/riparazione-r04-019-posta-senza-id.test.ts)",
+      "serve_file_altrui": [
+        {
+          "file": "lib/email/unsubscribe.ts",
+          "modifica": "Rendere deterministico il link di disiscrizione per lo stesso destinatario e la stessa riga della coda (oggi ha una parte casuale, :65): così un nuovo tentativo dalla coda ha lo stesso corpo e la stessa idempotencyKey, e Resend restituisce la risposta conservata (errore = non spedita) invece del 409 invalid_idempotent_request."
+        }
+      ],
+      "nota": "Il revisore 2 ha smentito il «già riparato»: client.ts:199-202 copre solo il 200 senza id. Il buco vero è il 409 invalid_idempotent_request trattato come spedito (lib/email/client.ts:207-210), che scatta perché ogni nuovo tentativo di una promozione ha un corpo diverso con la stessa chiave; app/api/cron/send-emails/route.ts:535-544 scrive sent_at su res.ok. Provato con un Resend finto che conserva gli errori: 0 spedite, segnata spedita. Dopo la modifica a unsubscribe.ts resta da decidere in client.ts (mio) cosa fare del 409 residuo (corpo cambiato per altri motivi): trattarlo come non spedito rischia un doppio invio dopo 24 ore. Lo stesso buco è nel cosa_resta di R04-019 (onda 9).",
+      "verificato_da": "revisore 2 (grande): BOCCIATO il «già riparato», vedi nota"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "l'invio subito delle notifiche push prende le righe guardando solo pushed_at, e può correre col giro del cron",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/push/subito.ts:120-127",
+      "descrizione": "Con la presa in carico del giro (patch di R03-009) va filtrato anche il segno di presa; la corsa c'era già prima."
+    },
+    {
+      "titolo": "la rotta delle cancellazioni copia una stringa privata della libreria degli avvisi",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "lib/privacy/avvisi-a-chi-aspetta.ts:349",
+      "descrizione": "Il segno «email_partita» non è esportato: la rotta lo copia in una costante (process-deletions/route.ts:521). Meglio esportarlo dalla libreria."
+    },
+    {
+      "titolo": "al negozio un rifiuto per troppe richieste della ricerca indirizzi si legge «indirizzo non trovato»",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "components/StoreLocationPicker.tsx:170-172",
+      "descrizione": "Il 429 di /api/geocode viene mostrato come indirizzo non trovato."
+    },
+    {
+      "titolo": "il modulo dell'indirizzo alla cassa non annulla le ricerche vecchie mentre si scrive",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "components/checkout/ShippingAddressForm.tsx:68-90",
+      "descrizione": "Ogni pausa mentre si scrive manda una ricerca; il 429 viene ignorato in silenzio e l'avviso di zona sparisce."
+    },
+    {
+      "titolo": "la chiusura dello «scrivile tu» gira dopo il tetto delle email e non ha un suo tetto di tempo",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/process-deletions/route.ts:338",
+      "descrizione": "Con molti allarmi aperti la chiusura può allungare la notte oltre i tetti; nato con la correzione di R03-006, segnalato dal revisore."
+    }
+  ],
+  "domande_per_nicola": [
+    "R03-010: con il freno unico a 1 richiesta al secondo verso Nominatim, chi ha la precedenza tra la ricerca indirizzi pubblica e la cassa (o si passa a un servizio con chiave e cache)?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "subagenti": 6,
+    "costo_usd": 29.67,
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet), 3 revisori (2 grandi, 1 sonnet), 1 giro di correzione dopo il collaudo K04 (modello grande). Spesa letta da get_session: 21,51 $ alla prima consegna, 29,67 $ dopo il giro. Restano da fare in un'altra sessione R03-012/013 (da rifare) e le parti in file altrui di 009, 011, 014, 015."
+  },
+  "costo_usd": 29.67
+}

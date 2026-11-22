@@ -71,13 +71,19 @@ export default function AddressesPage() {
         !!prima && prima.address === form.address && prima.city === form.city && prima.zip === form.zip;
       let lat: number | null = stessoIndirizzo ? form.lat : null;
       let lng: number | null = stessoIndirizzo ? form.lng : null;
-      try {
+      // R03-014 — Stesso indirizzo con le coordinate già buone (cambia solo il telefono, il nome…):
+      // la ricerca non serve, quindi non si fa e un suo 429 non blocca il salvataggio.
+      const daCercare = lat == null || lng == null;
+      if (daCercare) try {
         // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
         const res = await fetch('/api/geocode', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ q: `${form.address}, ${form.zip} ${form.city}, Italia` }),
         });
+        // R03-014 — Il rifiuto per troppe richieste non è «posizione non trovata»: non si salva
+        // senza coordinate in silenzio, il modulo resta aperto e si riprova fra poco.
+        if (res.status === 429) return { posizioneNonTrovata: false, troppeRichieste: true };
         const json = await res.json();
         if (json && json.lat != null && json.lng != null) {
           lat = json.lat;
@@ -111,9 +117,13 @@ export default function AddressesPage() {
           .neq('id', salvatoId);
         if (error) throw error;
       }
-      return { posizioneNonTrovata };
+      return { posizioneNonTrovata, troppeRichieste: false };
     },
     onSuccess: (esito) => {
+      if (esito?.troppeRichieste) {
+        toast.error('Troppe richieste in questo momento: l\'indirizzo non è stato salvato. Riprova fra qualche secondo.');
+        return;
+      }
       qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       setShowForm(false);
       setEditing(null);
