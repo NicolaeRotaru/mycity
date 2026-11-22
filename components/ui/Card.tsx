@@ -58,7 +58,8 @@ type Props = {
   padding?: Padding;
   className?: string;
   children: React.ReactNode;
-  as?: 'div' | 'article' | 'section' | 'aside';
+  /** `details`: il riquadro che si apre e si chiude (es. «Articoli» nella consegna del fattorino). */
+  as?: 'div' | 'article' | 'section' | 'aside' | 'details';
   /** Aggiunge sollevamento + ombra al passaggio del mouse (per card cliccabili). */
   hover?: boolean;
   /** R10-010 — 'xl' (contenuto, di base), '2xl' (prodotto/negozio), 'lg' (riquadro interno). */

@@ -10,6 +10,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
 import { controlloEta } from '@/lib/maggiore-eta';
 import { documentiObbligatoriDelFattorino } from '@/lib/admin/regole-approvazione';
+import { Card } from '@/components/ui/Card';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -273,7 +274,7 @@ export default function RiderOnboardingPage() {
         potrai accettare consegne.
       </p>
 
-      <section className="mx-4 mt-5 rounded-xl border border-cream-300 bg-surface-0 p-4">
+      <Card as="section" variant="surface" className="mx-4 mt-5">
         <h2 className="font-serif text-lg font-bold text-ink-900">1. Dati anagrafici</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Nome" value={form.legal_first_name} onChange={(v) => setForm((f) => ({ ...f, legal_first_name: v }))} />
@@ -307,9 +308,9 @@ export default function RiderOnboardingPage() {
             </span>
           )}
         </div>
-      </section>
+      </Card>
 
-      <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
+      <Card as="section" variant="surface" className="mx-4 mt-4">
         <h2 className="font-serif text-lg font-bold text-ink-900">2. Mezzo di trasporto</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-sm">
@@ -329,9 +330,9 @@ export default function RiderOnboardingPage() {
           <Field label="Scadenza patente" type="date" value={form.rider_license_expires_on} onChange={(v) => setForm((f) => ({ ...f, rider_license_expires_on: v }))} />
           <Field label="Scadenza polizza RC" type="date" value={form.rider_insurance_expires_on} onChange={(v) => setForm((f) => ({ ...f, rider_insurance_expires_on: v }))} />
         </div>
-      </section>
+      </Card>
 
-      <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
+      <Card as="section" variant="surface" className="mx-4 mt-4">
         <h2 className="font-serif text-lg font-bold text-ink-900">3. Documenti</h2>
         {!etaConfermata && (
           // Il passo 3 resta chiuso finché il passo 1 non è salvato. Prima
@@ -347,7 +348,7 @@ export default function RiderOnboardingPage() {
           {DOCS.map((d) => {
             const uploaded = !!profile?.[columnForKind(d.kind)];
             return (
-              <div key={d.kind} className="rounded-lg border border-cream-300 bg-surface-0 p-3.5">
+              <Card key={d.kind} variant="surface" radius="lg" padding="none" className="p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium text-ink-900">
@@ -373,11 +374,11 @@ export default function RiderOnboardingPage() {
                     />
                   </label>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
-      </section>
+      </Card>
 
       <div className="mt-6 px-4">
         <button

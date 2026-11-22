@@ -33,6 +33,7 @@ import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { seguiAltezzaBarraAzioni, spazioSottoIlContenuto } from '@/lib/ui/altezza-barra-azioni';
+import { Card } from '@/components/ui/Card';
 import {
   AVVISO_INCASSO_DOPO_LA_CONSEGNA,
   AVVISO_INCASSO_MANCANTE,
@@ -523,7 +524,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
 
         {/* Card target unica con azioni Naviga / Chiama */}
         {!done && !annullato && (
-          <div className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 p-4 shadow-warm">
+          <Card variant="surface" className="mb-3.5 shadow-warm">
             <p className="mb-1 text-xs font-bold uppercase tracking-[0.03em] text-ink-400">
               {targetIsStore ? 'Ritira al negozio' : 'Consegna al cliente'}
             </p>
@@ -600,7 +601,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 <StickyNote size={14} className="mt-0.5 shrink-0" aria-hidden /> <span className="min-w-0 [overflow-wrap:anywhere]">{order.delivery_notes}</span>
               </p>
             )}
-          </div>
+          </Card>
         )}
 
         {/* GPS SHARING */}
@@ -644,7 +645,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         )}
 
         {/* Riepilogo ordine */}
-        <div className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 p-4">
+        <Card variant="surface" className="mb-3.5">
           <div className="mb-1.5 flex justify-between text-sm">
             <span className="text-ink-500">Articoli</span>
             <span className="font-semibold text-ink-900">{order.order_items.length} prodotti</span>
@@ -667,7 +668,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               </span>
             </div>
           )}
-        </div>
+        </Card>
 
         {/* CASH ON DELIVERY: incasso da confermare.
             15/10/2026 (R33) — Qui c'era il pulsante dell'incasso, in mezzo al
@@ -738,7 +739,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         )}
 
         {/* Dettaglio articoli */}
-        <details className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 px-4 py-3">
+        <Card as="details" variant="surface" padding="none" className="mb-3.5 px-4 py-3">
           <summary className="cursor-pointer text-sm font-semibold text-ink-900">Articoli ({order.order_items.length})</summary>
           <div className="mt-2 divide-y divide-cream-100 text-sm">
             {order.order_items.map((it) => (
@@ -752,7 +753,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             <span>{order.payment_method === 'card' ? 'Totale (già pagato online)' : 'Totale (da incassare)'}</span>
             <span className="text-primary-800">{formatPrice(order.total_price)}</span>
           </div>
-        </details>
+        </Card>
       </div>
 
       {/* FOOTER STICKY — azione primaria per stato */}
