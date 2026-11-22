@@ -360,6 +360,9 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) e 3 revisori (2 grandi, 1 sonnet); il sesto, per il giro di correzione, non l'ho lanciato: spesa letta da get_session a 21,51 $ prima della consegna, oltre il 70% di 35 $ con il giro. Giri aperti: R03-003 (parziale), R03-012/013 (da rifare), prove di R03-001 e R03-006/007 da rafforzare."
-  }
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) e 3 revisori (2 grandi, 1 sonnet); il sesto, per il giro di correzione, non l'ho lanciato: spesa letta da get_session a 21,51 $ prima della consegna, oltre il 70% di 35 $ con il giro. Giri aperti: R03-003 (parziale), R03-012/013 (da rifare), prove di R03-001 e R03-006/007 da rafforzare.",
+    "subagenti": 5,
+    "costo_usd": 21.51
+  },
+  "costo_usd": 21.51
 }
