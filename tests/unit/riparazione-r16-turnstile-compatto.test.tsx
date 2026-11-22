@@ -17,8 +17,8 @@ import Turnstile from '@/components/Turnstile';
 async function monta(larghezza: number) {
   Object.defineProperty(window, 'innerWidth', { value: larghezza, configurable: true, writable: true });
   const render = vi.fn(() => 'w1');
-  (window as any).__turnstileLoaded = true;
-  (window as any).turnstile = { render, remove: vi.fn(), reset: vi.fn() };
+  (window as unknown as Record<string, unknown>).__turnstileLoaded = true;
+  (window as unknown as Record<string, unknown>).turnstile = { render, remove: vi.fn(), reset: vi.fn() };
   const el = document.createElement('div');
   document.body.appendChild(el);
   const root = createRoot(el);
@@ -28,7 +28,7 @@ async function monta(larghezza: number) {
   return opts;
 }
 
-afterEach(() => { delete (window as any).turnstile; delete (window as any).__turnstileLoaded; document.body.innerHTML = ''; });
+afterEach(() => { const w = window as unknown as Record<string, unknown>; delete w.turnstile; delete w.__turnstileLoaded; document.body.innerHTML = ''; });
 
 describe('R16-007 · Turnstile e telefoni stretti', () => {
   it('sotto 340 px chiede il widget compatto', async () => {
