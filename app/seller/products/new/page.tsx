@@ -130,6 +130,9 @@ function NewProductInner() {
   const { data: source, isLoading: loadingSource, isError: sorgenteNonLetta, fetchStatus: sorgenteFetchStatus, isFetching: sorgenteInLettura, isFetchedAfterMount: sorgenteRiletta, refetch: rileggiSorgente } = useQuery({
     queryKey: ['duplicate-source', fromId],
     enabled: !!fromId,
+    // R14-012: la sorgente si rilegge a ogni apertura: una copia in memoria di pochi secondi prima
+    // (i 30 s del sito) può avere la spunta del recesso di prima.
+    staleTime: 0,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -151,6 +154,8 @@ function NewProductInner() {
   const { data: taglieLette, isLoading: loadingVariants, isError: variantiNonLette, fetchStatus: taglieFetchStatus, isFetching: taglieInLettura, isFetchedAfterMount: taglieRilette, refetch: rileggiVarianti } = useQuery({
     queryKey: ['duplicate-variants', fromId],
     enabled: !!fromId,
+    // R14-012: come la sorgente, le taglie si rileggono a ogni apertura.
+    staleTime: 0,
     queryFn: () => loadProductVariants(fromId!),
   });
   const sourceVariants = useMemo(() => taglieLette ?? [], [taglieLette]);
@@ -223,7 +228,7 @@ function NewProductInner() {
   const chiaveDelModulo = fromId ?? '';
   const [aperto, setAperto] = useState<{ per: string; offre: boolean | undefined; consegnaNonLetta: boolean; taglie: string; volta: number } | null>(null);
   const giaAperto = aperto !== null && aperto.per === chiaveDelModulo ? aperto : null;
-  const caricamento = (fromId && (loadingSource || loadingVariants)) || consegnaInLettura || categorieInLettura;
+  const caricamento = (fromId && (loadingSource || loadingVariants || (sorgenteInLettura && !sorgenteRiletta) || (taglieInLettura && !taglieRilette))) || consegnaInLettura || categorieInLettura;
   const categorieMancanti = (categorieNonLette || (categorieSenzaDati && categorieFetchStatus === 'paused')) && categories.length === 0;
   const moduloPronto = !caricamento && !categorieMancanti && !sorgenteNonArrivata && !taglieNonArrivate;
   const firmaDelleTaglie = fromId && Array.isArray(sourceVariants) ? JSON.stringify(sourceVariants.map((v) => [v.id ?? null, v.options, v.label])) : '';
