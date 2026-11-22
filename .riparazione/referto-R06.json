@@ -1,34 +1,35 @@
 {
   "sessione": "R06",
-  "aggiornato": "2026-11-22 00:20",
-  "finita": false,
-  "testa": "1ad51b4c18d58b3e2a2cac6e60f1bbc61f086f46",
+  "aggiornato": "2026-11-22 01:05",
+  "finita": true,
+  "testa": "d2c8a9ccedd917492dcff2295f26b55d3a347df2",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "311e734f85696bf40e764f535ec3538eb7094f49",
+    "nota": "typecheck pulito, lint 0 errori (126 avvisi già presenti), vitest 1912 file e 11829 prove verdi; girato su 311e734f, che dopo la testa tocca solo il referto"
   },
   "voci": [
     {
       "id": "R06-010",
       "chiave": "rls-database|manca la colonna della scadenza del documento d'identità: si può controllare solo patente e polizza",
       "esito": "non_fatto",
-      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano, 21/11)"
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano, 21/11)",
+      "verificato_da": "regista, al piano (21/11): delicata, va all'onda dei delicati"
     },
     {
       "id": "R06-003",
       "chiave": "microcopy|la campanella «ordine pronto» promette il fattorino «a breve» anche quando la consegna è fissata ore dopo",
       "esito": "gia_riparato_prima",
       "prova": "migrations/321_l_ordine_pronto_dice_la_fascia.sql:49-60 è l ultima definizione di notify_buyer_on_order_status (nessuna migrazione dopo la 321 la ridefinisce, controllato con grep): con una delivery_slot scelta diversa da «Adesso…» la campanella dice «…nella fascia che hai scelto (11:00–13:00)»; «a breve» resta solo per la consegna veloce. Riprovato sulla base: bash tests/sql/harness/apply.sh r06_x && psql -q -X -d r06_x -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r08-l-ordine-pronto-dice-la-fascia.test.sql → 6/6, uscita 0.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): la 321 è l'ultima definizione (dopo 086, 106, 122, 150, 215), apply.sh 210/0 e la prova SQL della fascia verde su un database ricostruito"
     },
     {
       "id": "R06-006",
       "chiave": "qa-flussi|il voto per il negozio del mese dato nelle prime ore del primo giorno non entra nella classifica che si vede",
       "esito": "gia_riparato_prima",
       "prova": "app/shop-of-month/page.tsx:58 calcola il mese con primoDelMesePiacenza() (lib/tempo-piacenza.ts:49, Europe/Rome) per il voto (:102) e per leggere il proprio voto (:69); la vista shop_of_month_leaderboard conta con public.mese_di_piacenza() (migrations/322_la_classifica_conta_il_mese_di_piacenza.sql:22-42, ultima definizione). Riprovato sulla base: psql -f tests/sql/rls/riparazione-r08-la-classifica-conta-il-mese-di-piacenza.test.sql → 9/9 (alle 00:30 del 1/12 e del 1/7 il voto entra); npx vitest run tests/unit/orologio-di-piacenza.test.ts → 7/7.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): prova SQL verde anche con sessione UTC+14 e UTC-11, pg_get_viewdef usa mese_di_piacenza() per colonna e filtro, nessuna ridefinizione dopo la 322 (422/425/541 solo permessi), orologio-di-piacenza 7/7"
     },
     {
       "id": "R06-005",
@@ -36,22 +37,23 @@
       "esito": "scelta_di_nicola",
       "domanda": "I campi indirizzo, CAP e città sono stati tolti dal Profilo di proposito (scelta 178: nessun codice li legge, la cassa usa user_addresses) e la domanda «li rimettiamo nel Profilo o cancelliamo le colonne?» è ancora aperta (R33-020, AZIONI-IN-ATTESA.md:46). Quale delle due?",
       "nota": "La correzione «rimettili» è pronta e provata (app/profile/page.tsx + prova che monta la pagina, rimessa regge, più l adeguamento dichiarato di tests/unit/minori-s08-profilo.test.tsx:182): l ho tolta dal ramo per non anticipare la scelta. Se Nicola dice «rimettili» si rifà in pochi minuti.",
-      "verificato_da": ""
+      "verificato_da": "capo squadra R06: riletti AZIONI-IN-ATTESA.md:46 e consegne/riparazioni/2026-11-12-sito-tutto/referti/R33.json:376: la domanda è ancora aperta"
     },
     {
       "id": "R06-008",
       "chiave": "qa-flussi|il ritiro in negozio è ancora spento, mentre nicola ha deciso che al lancio è acceso e gratis per il cliente",
       "esito": "scelta_di_nicola",
-      "domanda": "Il difetto del codice di ritiro è chiuso sulla base (tutti usano order_delivery_codes: confirm_pickup_by_seller in migrations/179_l_interruttore_sull_ordine_non_si_accende_da_fuori.sql:180, il cliente lo vede in app/orders/[id]/page.tsx:217-220 e :621, il negozio lo scrive in app/seller/orders/[id]/page.tsx:582-600, l email «pronto» in migrations/215_minori_s04_database.sql:432; provato sul Postgres locale: DELIVERED/CASH_IN_STORE). Per accenderlo: lib/ritiro-in-negozio.ts:22 a true e si aggiornano le prove che lo vogliono spento (tests/unit/ritiro-in-negozio-messo-da-parte.test.ts:23, tests/unit/le-promesse-che-il-sito-non-mantiene.test.ts:65), dopo aver confermato che le migrazioni 124, 179 e 215 sono applicate in produzione. È già gratis per il cliente (lib/shipping.ts:81). Lo accendiamo?",
+      "domanda": "Il difetto del codice di ritiro è chiuso sulla base: tutti usano order_delivery_codes. confirm_pickup_by_seller è definita solo in 124 e 179 (179:180), l'email «pronto» in 215:432, il cliente in app/orders/[id]/page.tsx:217-220 e :621, il negozio in app/seller/orders/[id]/page.tsx:582-600; provato sul Postgres locale: DELIVERED/CASH_IN_STORE. Accenderlo NON è una riga sola: con lib/ritiro-in-negozio.ts:22 a true cadono 9 prove in 7 file, perché la copia pubblica e le prove sono scritte per «spento» (ritiro-in-negozio-messo-da-parte, le-promesse-che-il-sito-non-mantiene, chiuso-per-ferie-ferma-gli-ordini-e-il-ritiro-spento-non-si-offre, la-posta-in-coda-non-promette-regali-e-non-si-butta-via, le-promesse-della-consegna-cambiano-solo-di-proposito, minori-s07-promesse: la descrizione Google della spesa supera 160 caratteri, una-consegna-a-milano-non-passa-piu-in-cassa); vanno riscritte insieme all'interruttore, dopo aver confermato le migrazioni 124, 179 e 215 in produzione. È già gratis per il cliente (lib/shipping.ts:81). Lo accendiamo, con quel lavoro?",
       "nota": "Non lavorata per decisione della regista (quarto giro): nessun file toccato.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): percorso del codice confermato; ha provato l'interruttore in una copia in /tmp: cadono 9 prove in 7 file, quindi «una riga» non basta"
     },
     {
       "id": "R06-007",
       "chiave": "qa-flussi|la risalita dei genitori delle categorie non ha un tetto",
-      "esito": "gia_riparato_prima",
-      "prova": "lib/category-attributes.ts:250-274 alla base: PROFONDITA_MASSIMA_CATEGORIE = 20, insieme visti e while (cur?.parent_id && passi++ < PROFONDITA_MASSIMA_CATEGORIE) con visti.has(parent.id) che ferma un cerchio a→b→a (riparato in un'onda precedente).",
-      "verificato_da": ""
+      "esito": "scelta_di_nicola",
+      "domanda": "La risalita delle categorie ha il tetto solo in lib/category-attributes.ts:285-310 (e in lib/queries/categorie-piene.ts). Restano senza tetto components/seller/ProductForm.tsx:351-356 (resolveTop: while (cur?.parent_id) senza contatore né insieme dei visti, il modulo prodotto si blocca su un cerchio a→b→a) e la funzione SQL radice_con_obbligo_alimentare (WITH RECURSIVE senza limite), e la tabella categories non vieta i cerchi (app/admin/categories/page.tsx lascia scegliere qualsiasi genitore). La correzione del database di un giro precedente (migrazione 426) è stata tolta perché faceva pubblicare un alimentare senza allergeni (dbb84ebd, 14/11), e la carta 243 dice «terzo giro solo con lui»: come la rifacciamo, e chi la collauda sugli allergeni?",
+      "nota": "Non lavorata: nel mio file il tetto c'è già; il resto è al terzo giro e la carta 243 lo riserva a Nicola. Nessun file toccato.",
+      "verificato_da": "qa (subagente generico, sola lettura): ha smentito il «già riparato»: ha trovato i due cicli senza tetto fuori dal mio file e il revert dbb84ebd"
     },
     {
       "id": "R06-011",
@@ -286,14 +288,14 @@
           "modifica": "nelle classi con «uppercase», sostituire la spaziatura con tracking-label alle righe 95 (tracking-wide) (righe della base 1ad51b4c)"
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): prova verde 5/5, la stessa regex sulla base trova tracking-[0.05em] (la prova sarebbe rossa), nei 4 file nessun'altra etichetta maiuscola, 14 file di prove sulla pagina profilo verdi (76/76)"
     },
     {
       "id": "R06-004",
       "chiave": "qa-flussi|un cliente che esiste già non ha una strada da solo per diventare fattorino",
       "esito": "scelta_di_nicola",
-      "domanda": "Un cliente già registrato deve poter diventare fattorino da solo (cambio di ruolo + /rider/onboarding) o deve aprire un secondo account con /sign-up?role=rider? Oggi l'unico ingresso è /sign-up?role=rider (app/lavora-con-noi/page.tsx:36) e l'aiuto «Diventa rider» manda a /contact (app/help/page.tsx:58-60). Un percorso di cambio ruolo non esiste, e non l'ho inventato.",
-      "verificato_da": ""
+      "domanda": "Un cliente già registrato deve poter diventare fattorino da solo, come un negozio fa con /api/seller/apply, o deve aprire un secondo account con /sign-up?role=rider? Oggi da solo non può: l'unico ingresso è /sign-up?role=rider (app/lavora-con-noi/page.tsx:36), l'aiuto «Diventa rider» manda a /contact (app/help/page.tsx:58-60), la migrazione 119 vieta di cambiarsi il ruolo da sé, e solo un admin può cambiare il ruolo (app/admin/users/page.tsx:1029).",
+      "verificato_da": "qa (subagente generico, sola lettura): confermato che il cliente non ha una strada da solo; ha corretto il «nessun cambio di ruolo»: l'admin può farlo (app/admin/users/page.tsx:1029, conferma a :906)"
     },
     {
       "id": "R06-001",
@@ -309,7 +311,7 @@
           "modifica": "Rigenerare con npm install --package-lock-only dopo la modifica a package.json: cambia solo l'elenco devDependencies della radice (le tre librerie ci sono già)."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): import e versioni confermati su node_modules e package-lock (10.4.2, 2.2.5, 0.28.1); scansione di tutti gli import nudi in tests/: l'unico altro nome non dichiarato è server-only, solo dentro vi.mock"
     },
     {
       "id": "R06-002",
@@ -321,7 +323,7 @@
           "modifica": "Togliere da FUORI_DALL_EXPORT la riga 44 «cod_reconciliations: 'quadratura della cassa contanti: registro contabile',». L'export la legge già (app/api/account/export/route.ts:215, from('cod_reconciliations')…eq('rider_id', userId)) e la tabella esiste (migrations/024:120): finché resta fra le escluse, la prova non si accorge se la lettura sparisce."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): copia in /tmp con la riga 44 tolta, la prova resta verde 4/4; export/route.ts:215 legge la tabella"
     },
     {
       "id": "R06-009",
@@ -334,10 +336,10 @@
         },
         {
           "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
-          "modifica": "Importare FINTO_PSQL (riga 34) e in bancoDiProva, dopo la riga 71, aggiungere writeFileSync(join(finti, 'psql'), FINTO_PSQL); chmodSync(join(finti, 'psql'), 0o755); (finti è già in testa al PATH a riga 69). Oggi, con SUPABASE_DB_URL=…localhost:5432, lo script usa il /usr/bin/psql vero della macchina e l'esito dipende da cosa gira lì. Da valutare uguale per le altre prove che lanciano scripts/backup-db.sh con SUPABASE_DB_URL; modello già esistente: PSQL_FINTO in tests/unit/riparazione-r15-rclone-finto.ts:37-49."
+          "modifica": "Aggiungere FINTO_PSQL all'import della riga 34, e in bancoDiProva, subito dopo la coppia writeFileSync/chmodSync di rclone (righe 59-60), aggiungere writeFileSync(join(finti, 'psql'), FINTO_PSQL); chmodSync(join(finti, 'psql'), 0o755); (finti è già in testa al PATH). Oggi, con SUPABASE_DB_URL=…localhost:5432, lo script usa il /usr/bin/psql vero della macchina e l'esito dipende da cosa gira lì; con lo stub, scripts/backup-db.sh:370-376 esce con return 1 e la riga 437 ricade su nel_database=\"\" (il ripiego voluto). Da valutare uguale per le altre prove che lanciano scripts/backup-db.sh con SUPABASE_DB_URL; modello già esistente: PSQL_FINTO in tests/unit/riparazione-r15-rclone-finto.ts:37-49."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente generico, sola lettura): stub e ripiego confermati (backup-db.sh:370, :376, :437); ha corretto il punto d'inserimento (dopo le righe 59-60, non dopo la 71, che sta nel blocco env di spawnSync)"
     }
   ],
   "nuovi_difetti_visti": [
@@ -347,15 +349,26 @@
       "severita": "minore",
       "file": "migrations/321_l_ordine_pronto_dice_la_fascia.sql:31-39",
       "descrizione": "Della fascia scelta tiene solo l orario: un ordine pronto stasera per «Domani · 9:00–12:00» legge «nella fascia che hai scelto (9:00–12:00)», senza «domani»."
+    },
+    {
+      "titolo": "il modulo prodotto del negozio si blocca se le categorie formano un cerchio",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "components/seller/ProductForm.tsx:351-356",
+      "descrizione": "resolveTop risale i genitori con while (cur?.parent_id) senza tetto: con un cerchio a→b→a nei dati il render non finisce. Fa parte della stessa voce delle categorie in cerchio (R06-007, scelta di Nicola)."
     }
   ],
   "domande_per_nicola": [
     "R06-005: indirizzo, CAP e città nel Profilo: li rimettiamo o cancelliamo le colonne? (stessa domanda di R33-020)",
     "R06-008: il codice di ritiro è a posto sulla base: accendiamo il ritiro in negozio (dopo aver confermato le migrazioni 124, 179, 215 in produzione)?",
-    "R06-004: un cliente già registrato può diventare fattorino da solo (cambio di ruolo) o deve aprire un secondo account?"
+    "R06-004: un cliente già registrato può diventare fattorino da solo (cambio di ruolo) o deve aprire un secondo account?",
+    "R06-007: la risalita delle categorie in cerchio è al terzo giro (carta 243): come la rifacciamo senza rompere gli allergeni, e chi la collauda?"
   ],
   "conto": {
-    "agenti": 2,
-    "nota": ""
-  }
+    "agenti": 4,
+    "nota": "2 riparatori (lotto A modello grande, lotto B sonnet) + 2 revisori sonnet in sola lettura; costo da get_session alle 01:05 del 22/11: 8,98 $",
+    "subagenti": 4,
+    "costo_usd": 8.98
+  },
+  "costo_usd": 8.98
 }
