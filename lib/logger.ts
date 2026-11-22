@@ -127,25 +127,113 @@ function chiaveErroriDellOra(ms: number): string {
   return `mc:errori-del-sito:${ambiente}:${new Date(ms).toISOString().slice(0, 13)}`;
 }
 
-function chiamaUpstash(u: { url: string; token: string }, comandi: unknown[][]): Promise<Response> {
-  return fetch(`${u.url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${u.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(comandi),
-    cache: 'no-store',
-  });
+/**
+ * 21/11/2026 — IL CONTO DEGLI ERRORI HA UN TEMPO MASSIMO E NON FA UNA RICHIESTA PER ERRORE.
+ *
+ * Prima ogni `logger.error` del server faceva la sua chiamata a Upstash, senza tempo massimo: in una
+ * tempesta di errori partiva una richiesta per errore, senza limite, e una chiamata che non
+ * rispondeva restava appesa quanto voleva. Adesso:
+ * - la chiamata si interrompe dopo `ERRORI_TEMPO_MASSIMO_MS`;
+ * - gli errori dello stesso giro si sommano in memoria e partono in UNA richiesta sola (una pipeline);
+ * - le richieste hanno un tetto: una piccola scorta (`ERRORI_SCORTA`) che si ricarica di una ogni
+ *   `ERRORI_FINESTRA_MS`. Finché c'è scorta il primo errore parte subito (l'allarme del sorvegliante
+ *   scatta già con uno); a scorta finita gli errori si sommano e partono tutti insieme, in una
+ *   richiesta, appena se ne ricarica una. Così in una tempesta le richieste restano poche e contate.
+ * Il numero si manda con comandi INCR ripetuti nella stessa pipeline (INCRBY solo per pacchetti grandi).
+ * Se la funzione si chiude prima di mandare il resto, si perde il numero esatto, non l'allarme.
+ */
+const ERRORI_FINESTRA_MS = 10_000;
+const ERRORI_TEMPO_MASSIMO_MS = 3_000;
+const ERRORI_SCORTA = 5;
+const ERRORI_INCR_RIPETUTI_MAX = 20;
+const erroriDaMandare = new Map<string, number>();
+let erroriScorta = ERRORI_SCORTA;
+let erroriUltimaRicarica = 0;
+let erroriMandoPronto = false;
+let erroriAttesa: ReturnType<typeof setTimeout> | null = null;
+
+function chiamaUpstash(u: { url: string; token: string }, comandi: unknown[][]): Promise<void> {
+  const freno = new AbortController();
+  const tempo = setTimeout(() => freno.abort(), ERRORI_TEMPO_MASSIMO_MS);
+  try {
+    return fetch(`${u.url}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${u.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(comandi),
+      cache: 'no-store',
+      signal: freno.signal,
+    }).then(() => clearTimeout(tempo), () => clearTimeout(tempo));
+  } catch {
+    clearTimeout(tempo);
+    return Promise.resolve();
+  }
+}
+
+/** Manda in una richiesta sola tutti gli errori sommati finora. Non lancia mai. */
+function mandaErroriSommati(): void {
+  const u = upstashDegliErrori();
+  if (!u || erroriDaMandare.size === 0) {
+    erroriDaMandare.clear();
+    return;
+  }
+  const comandi: unknown[][] = [];
+  for (const [chiave, quanti] of erroriDaMandare) {
+    if (quanti <= ERRORI_INCR_RIPETUTI_MAX) for (let i = 0; i < quanti; i++) comandi.push(['INCR', chiave]);
+    else comandi.push(['INCRBY', chiave, quanti]);
+    comandi.push(['EXPIRE', chiave, ERRORI_DURATA_SECONDI]);
+  }
+  erroriDaMandare.clear();
+  void chiamaUpstash(u, comandi);
+}
+
+/** Ricarica la scorta di una richiesta ogni finestra trascorsa (e non si fa ingannare da un orologio che torna indietro). */
+function ricaricaScorta(adesso: number): void {
+  const passato = adesso - erroriUltimaRicarica;
+  if (passato < 0) {
+    erroriUltimaRicarica = adesso;
+    return;
+  }
+  const nuove = Math.floor(passato / ERRORI_FINESTRA_MS);
+  if (nuove > 0) {
+    erroriScorta = Math.min(ERRORI_SCORTA, erroriScorta + nuove);
+    erroriUltimaRicarica += nuove * ERRORI_FINESTRA_MS;
+  }
+}
+
+/** Scorta finita: gli errori aspettano la prossima ricarica e poi partono insieme. */
+function aspettaLaRicarica(adesso: number): void {
+  if (erroriAttesa) return;
+  const attesa = Math.max(1, ERRORI_FINESTRA_MS - (adesso - erroriUltimaRicarica));
+  erroriAttesa = setTimeout(() => {
+    erroriAttesa = null;
+    if (erroriDaMandare.size === 0) return;
+    const ora = Date.now();
+    ricaricaScorta(ora);
+    if (erroriScorta < 1) return aspettaLaRicarica(ora);
+    erroriScorta--;
+    mandaErroriSommati();
+  }, attesa);
+  (erroriAttesa as { unref?: () => void }).unref?.();
 }
 
 /** Conta un errore del server. Nel browser e senza Upstash non fa niente; non lancia mai. */
-function contaErroreDelSito(adesso: number = Date.now()): Promise<void> {
-  if (typeof window !== 'undefined') return Promise.resolve();
-  const u = upstashDegliErrori();
-  if (!u) return Promise.resolve();
-  const chiave = chiaveErroriDellOra(adesso);
+function contaErroreDelSito(adesso: number = Date.now()): void {
+  if (typeof window !== 'undefined') return;
+  if (!upstashDegliErrori()) return;
   try {
-    return chiamaUpstash(u, [['INCR', chiave], ['EXPIRE', chiave, ERRORI_DURATA_SECONDI]]).then(() => undefined, () => undefined);
+    const chiave = chiaveErroriDellOra(adesso);
+    erroriDaMandare.set(chiave, (erroriDaMandare.get(chiave) ?? 0) + 1);
+    if (erroriMandoPronto) return;
+    ricaricaScorta(adesso);
+    if (erroriScorta < 1) return aspettaLaRicarica(adesso);
+    erroriScorta--;
+    erroriMandoPronto = true;
+    queueMicrotask(() => {
+      erroriMandoPronto = false;
+      mandaErroriSommati();
+    });
   } catch {
-    return Promise.resolve();
+    // Un conteggio perso non ferma il logger.
   }
 }
 

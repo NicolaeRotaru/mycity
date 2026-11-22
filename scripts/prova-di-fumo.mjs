@@ -533,9 +533,10 @@ export function verdettoDelLavoro(stato = {}) {
   } else if (codice === String(USCITA.SITO_ROTTO) && tornato) {
     verdetto = {
       verde: false,
-      titolo: '## ⛔ Rilascio annullato',
+      titolo: '## ⛔ Rilascio annullato: e tornato indietro solo il codice',
       righe: [
-        'Il sito appena pubblicato non ha superato la prova di fumo: sono tornata al rilascio di prima.',
+        'Il sito appena pubblicato non ha superato la prova di fumo: sono tornata al rilascio di prima, ma solo col codice.',
+        'Il database non torna indietro: se in questo giro ho applicato delle migrazioni, restano applicate (quante e quali, nel riepilogo del passo «Torna indietro» qui sopra).',
         'Guarda il passo «Prova di fumo» qui sopra per sapere quale dei tre controlli e caduto.',
       ],
     };

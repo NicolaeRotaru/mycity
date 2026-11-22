@@ -147,12 +147,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   let dettaglioBattiti: string | undefined;
   if (dbOk && admin) {
     try {
-      const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
-      if (error) {
+      // Stesso tetto di tempo della prima domanda: un database lento non deve lasciare appesa la rotta.
+      const lettura = await Promise.race([
+        Promise.resolve(admin.from('cron_heartbeats').select('name, last_run_at')).then((r) => ({
+          scaduto: false as const,
+          data: r.data,
+          error: r.error,
+        })),
+        new Promise<{ scaduto: true; data: null; error: null }>((r) =>
+          setTimeout(() => r({ scaduto: true, data: null, error: null }), TETTO_MS)),
+      ]);
+      if (lettura.scaduto) {
         cron = battitiNonLetti(attesi, 'battiti non leggibili');
-        dettaglioBattiti = error.message;
+        dettaglioBattiti = `nessuna risposta entro ${TETTO_MS}ms`;
+      } else if (lettura.error) {
+        cron = battitiNonLetti(attesi, 'battiti non leggibili');
+        dettaglioBattiti = lettura.error.message;
       } else {
-        cron = esitoBattiti((data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
+        cron = esitoBattiti((lettura.data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
       }
     } catch (e) {
       cron = battitiNonLetti(attesi, 'battiti non leggibili');

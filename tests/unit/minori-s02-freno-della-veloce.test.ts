@@ -250,8 +250,11 @@ describe("2332 · 2333 · le prove dei soldi che mancavano", () => {
 });
 
 describe("2372 · il giro vero dopo mezzanotte scrive la fascia col giorno di nascita", () => {
-  it("ordine di sabato 20:45, giro di domenica 00:05: la fascia scritta è «Domani · …», non «Oggi · …»", async () => {
-    db.orders = [ordine({ created_at: "2026-10-31T19:45:00.000Z" })];
+  // 21/11/2026 — Nato alle 22:45 e non più alle 20:45: alle 00:05 un ordine di 3 ore e 20 minuti fa è già
+  // oltre la sua scadenza (tre ore, il negozio non ha orari), e il freno non lo sposta più (lo annulla
+  // expire-stale-orders). Quello che si prova resta lo stesso: il giro dopo mezzanotte.
+  it("ordine di sabato 22:45, giro di domenica 00:05: la fascia scritta è «Domani · …», non «Oggi · …»", async () => {
+    db.orders = [ordine({ created_at: "2026-10-31T21:45:00.000Z" })];
     await giro("2026-10-31T23:05:00.000Z");
     expect(String(o("o1").delivery_slot)).toMatch(/^Domani · /);
   });

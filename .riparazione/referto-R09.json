@@ -1,0 +1,233 @@
+{
+  "sessione": "R09",
+  "aggiornato": "2026-11-22 02:25",
+  "finita": true,
+  "testa": "3e36a739f2ffae5d5705750bebb7268957457660",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "3e36a739f2ffae5d5705750bebb7268957457660",
+    "nota": "1918 file di prova, 11850 casi verdi, nessuno saltato (il Postgres locale riacceso dopo il riavvio della macchina); tsc ok; lint 0 errori (126 avvisi già esistenti)"
+  },
+  "voci": [
+    {
+      "id": "R09-010",
+      "chiave": "qa-flussi|il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
+      "esito": "non_fatto",
+      "nota": "delicata: va all'onda dei delicati, con ultracode (decisione della regista al piano, 21/11)"
+    },
+    {
+      "id": "R09-005",
+      "chiave": "deploy-sre|il conto degli errori del sito non ha un tempo massimo e fa una richiesta per ogni errore",
+      "esito": "riparato",
+      "commit": "8048e2b97009d9b8d1f0fa7a1f617778a4697118",
+      "file_toccati": [
+        "lib/logger.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-conto-errori.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-conto-errori.test.ts tests/unit/riparazione-r01-errori-del-sito-senza-sentry.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a083413448a582358e2111eccf021834e27c06c8^ --file lib/logger.ts --prove tests/unit/riparazione-r09-conto-errori.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due commit della voce: a0834134 e il giro di correzione 8048e2b9 (che riporta alla base la prova comune riparazione-r01-errori-del-sito-senza-sentry, decisione della regista). Il fetch verso Upstash si interrompe dopo 3 s; gli errori dello stesso giro si sommano e partono in UNA pipeline; le richieste hanno una scorta di 5 che si ricarica di una ogni 10 s: in una tempesta non parte più una richiesta per errore. Il logger non lancia mai.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): prova rilanciata verde insieme alla prova comune r01 (11/11); col logger della base cadono 3 casi su 4; varianti: tempesta di 1200 errori in giri separati per 2 minuti a cavallo dell'ora (17 richieste, conto intero, ore giuste), fetch che rifiuta o lancia nel timer (nessun rifiuto non gestito), lato browser zero chiamate, Upstash lento in tempesta (al più 5 in volo); processo Node vero esce subito (3 s con Upstash muto); 512 prove che importano il logger verdi"
+    },
+    {
+      "id": "R09-006",
+      "chiave": "deploy-sre|il giorno che si riaccendono i lavori, il cliente di un ordine veloce vecchio riceve una scadenza già passata",
+      "esito": "riparato",
+      "commit": "a652438abda907114e65b5f0a9e9a11683f3d66b",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts",
+        "tests/unit/minori-s02-freno-della-veloce.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-freno-ordine-di-ieri.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-freno-ordine-di-ieri.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9de228fbb43816dd7a2fbc8fe1fad1f2d9bd15c9^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-ordine-di-ieri.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Commit della voce: 9de228fb e il giro di correzione del collaudo a652438a. A carrello intatto spostaIlCarrello guarda la scadenza di OGNI ordine nuovo del carrello, non solo del primo letto: se uno è già scaduto non si sposta niente e non si scrive a nessuno, in qualunque ordine il database renda le righe; expire-stale-orders annulla lo scaduto e il giro dopo il freno sposta il valido e avvisa il cliente. Il carrello si sposta tutto insieme perché l'euro della veloce sta sull'ordine che porta la base (può essere proprio lo scaduto): spostare solo il valido lascerebbe l'euro a mano e confonderebbe consegnaDopoLAnnullo e il giro dopo. Prezzo: il valido resta «Adesso» senza avviso fino al giro di expire (al più 30 minuti), ora uguale in tutte e due le letture. Eccezione lasciata com'era: con un fratello già spostato da un giro caduto a metà, il resto lo segue (la prova esistente riparazione-r09-carrello-spostato-a-meta conta su questo). PROVA COMUNE TOCCATA CON IL PERMESSO DELLA REGIA (21/11 alle 23:57): tests/unit/minori-s02-freno-della-veloce.test.ts, caso «2372», nascita alle 22:45 invece che alle 20:45, perché il vecchio caso pretendeva lo spostamento di un ordine già scaduto; sta nel commit 9de228fb (già spinto: separarla avrebbe chiesto di riscrivere la storia); non toccata nel giro di correzione.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire) sul primo giro: varianti su orari, cambio d'ora, confine delle 3 ore; collaudo K03: rompe_altro per l'ordine di lettura del carrello misto, corretto in a652438a (la prova rende le righe nei due ordini s1,v1 e v1,s1 e controlla esito identico e il giro dopo l'annullo); rimessa dalla base 9de228fb^ uscita 0; 31 file e 261 casi su veloce-non-confermata verdi"
+    },
+    {
+      "id": "R09-001",
+      "chiave": "deploy-sre|se il sito nuovo non risponde si torna indietro col codice ma il database resta avanti",
+      "esito": "parziale",
+      "commit": "c2b20505ae74dae88019905dd1356d0966f2f778",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml",
+        "scripts/prova-di-fumo.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-ritorno-solo-codice.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-ritorno-solo-codice.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c2b20505ae74dae88019905dd1356d0966f2f778^ --file .github/workflows/deploy-dopo-ci.yml,scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r09-ritorno-solo-codice.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Solo testo (decisione della regista): nel passo «Torna indietro» l'avviso ::error:: e il titolo del riepilogo dicono che è tornato indietro solo il codice e, se il giro ha applicato migrazioni, che il database resta avanti di N migrazioni (elenco), dalle uscite già esistenti steps.migrazioni.outputs.quante/elenco. Anche il verdetto finale di prova-di-fumo.mjs non dice più «sono tornata al rilascio di prima». Nessun passo nuovo, YAML validato.",
+      "cosa_resta": "Il vero ritorno del database: servono migrazioni reversibili («espandi e poi contrai») oppure un ordine diverso dei passi (niente ritorno automatico se una migrazione del giro toglie qualcosa).",
+      "domanda": "Per il ritorno vero del database scegli migrazioni «espandi e poi contrai» (mai togliere nello stesso rilascio) oppure nessun ritorno automatico quando una migrazione del giro toglie qualcosa?",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): rimettendo i due file della base cadono 3 casi su 3; confermato solo testo (nessun passo né condizione nuova), uscite steps.migrazioni.outputs.quante/elenco esistenti nello stesso job, nessuna espressione di GitHub Actions interpolata dentro run:, YAML valido, bash -n sul passo ok; 25 prove sul rilascio verdi"
+    },
+    {
+      "id": "R09-007",
+      "chiave": "deploy-sre|il pulsante delle migrazioni si ferma a metà se nel database c'è anche un solo ordine chiuso con la posizione del fattorino rimasta e senza fattorino",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "migrations/191_la_posizione_non_si_scrive_su_un_ordine_chiuso.sql",
+          "modifica": "Sostituire l'UPDATE di riempimento (righe 45-48) con un blocco DO, come nelle 094/096/124: DO $$ BEGIN PERFORM set_config('mycity.allow_order_write', '1', true); UPDATE public.orders SET rider_lat = NULL, rider_lng = NULL, rider_position_updated_at = NULL WHERE delivery_status IN ('DELIVERED','CANCELED') AND (rider_lat IS NOT NULL OR rider_lng IS NOT NULL OR rider_position_updated_at IS NOT NULL); END $$;  Regge con e senza --single-transaction (provato sul Postgres locale)."
+        },
+        {
+          "file": "tests/sql/harness/migrazione-su-database-pieno.sh",
+          "modifica": "(a) nuova variabile DA_NUMERO=\"${DA_MIGRAZIONE:-${NOME_ULTIMA%%[!0-9]*}}\"; (b) la ricostruzione si ferma al primo file con numero >= DA_NUMERO (confronto numerico, 052b compreso); (c) dopo seed-ordine-vero.sql inserire una copia dell'ordine come CANCELED con rider_id NULL e posizione piena (jsonb_populate_record, DISABLE/ENABLE TRIGGER USER, stripe_session_id/stripe_payment_intent a NULL); (d) applicare sul database pieno tutte le migrazioni >= DA_NUMERO, una per transazione (-1), fermandosi alla prima che cade. Senza DA_MIGRAZIONE guarda solo l'ultima, come oggi."
+        },
+        {
+          "file": ".github/workflows/ci.yml",
+          "modifica": "Al passo della riga 291 (bash tests/sql/harness/migrazione-su-database-pieno.sh mycity_pieno_ci) aggiungere env DA_MIGRAZIONE: '164' (la prima che la produzione non ha). Solo insieme alla correzione della 191, altrimenti la CI diventa rossa."
+        }
+      ],
+      "prova": "Il difetto c'è ancora sulla base: 191:45-48 senza spia, il guardiano 179:60-65/91-97 lo blocca. Riprodotto sul Postgres locale (database fino alla 190 + un ordine CANCELED con posizione e rider_id NULL): la 191 si ferma alla riga 48 con «orders: la posizione la scrive solo il fattorino assegnato». Con la 191 corretta: applicata, 0 righe con posizione. Una migrazione 71x non basta: gira dopo la 191.",
+      "domanda": "La 191 non è ancora in produzione (ferma alla 163): la correggiamo con la spia in un blocco DO (provato in locale), oppure resta com'è e prima di premere il pulsante si puliscono a mano quelle righe sul db vero?",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): letto 191:45-48 e 179:60-96 (il ruolo postgres non è privilegiato, con OLD.rider_id NULL parte l'eccezione); applica-migrazioni-mancanti.sh ordina con sort e la 191 gira prima di una 71x, quindi una migrazione nuova non basta; il blocco DO proposto regge con e senza transazione unica"
+    },
+    {
+      "id": "R09-003",
+      "chiave": "deploy-sre|la rotta «sei pronto» legge i battiti dei lavori pianificati senza un tetto di tempo: un database lento la lascia appesa",
+      "esito": "riparato",
+      "commit": "cdb1d41cd37558e9f03644755692184ae107c9c0",
+      "file_toccati": [
+        "app/api/health/ready/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-pronto-battiti-con-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-pronto-battiti-con-tetto.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cdb1d41cd37558e9f03644755692184ae107c9c0^ --file app/api/health/ready/route.ts --prove tests/unit/riparazione-r09-pronto-battiti-con-tetto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La lettura di cron_heartbeats corre in Promise.race con lo stesso TETTO_MS (3000) del controllo sul database: allo scadere la rotta risponde con i battiti non letti (degraded, 200) e il dettaglio «nessuna risposta entro 3000ms».",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): prova rilanciata e rossa con la rotta di cdb1d41c^; variante query appesa che rifiuta dopo il tetto: nessun rifiuto non gestito, risposta 200 degraded con cron.stato non_letti; 9 prove che nominano health/ready verdi (71 casi)"
+    },
+    {
+      "id": "R09-002",
+      "chiave": "deploy-sre|l'avviso «registratore degli errori acceso solo sul server» resta finché non si rifà il deploy",
+      "esito": "non_codice",
+      "nota": "Non c'è logica da correggere: SENTRY_DSN (operational-alerts/route.ts:711) e RESEND_FROM si leggono dall'ambiente a ogni richiesta; NEXT_PUBLIC_SENTRY_DSN (:710) invece Next.js la fissa al build anche nel codice server, come il pacchetto del browser. Per questo l'avviso cade solo col nuovo deploy, ed è il comportamento voluto: il suo testo dice già «rifai il deploy». Nicola, quando accende Sentry: chiave su Vercel e poi un nuovo deploy. Chiuderla come «non è un difetto» spetta a una persona.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): confermato che nel file non c'è logica correggibile; precisato che NEXT_PUBLIC_* è fissata al build"
+    },
+    {
+      "id": "R09-009",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "scelta_di_nicola",
+      "domanda": "Col dominio non leggibile e un solo altro commit negli ultimi 20 rilasci, il ritorno indietro deve rifiutarsi sempre (nessun rilascio scelto, ritorno a mano), anche se così si perde il ritorno automatico nella scena di ogni giorno?",
+      "nota": "Il caso «dominio che si legge ma non dice il suo commit» è già chiuso sulla base (scripts/prova-di-fumo.mjs:327-328 restituisce null). Resta il caso del dominio che non si legge affatto: con l'elenco [Y che esce, X] si torna a X, che potrebbe essere il rilascio rotto già tolto. Le prove esistenti il-ritorno-indietro-* e riparazione-r02-ritorno-indietro-* fissano proprio «un solo altro commit, si torna lì»: cambiarlo è una regola di Nicola.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): caso del dominio senza commit già chiuso sulla base (327-328 e 341); cambiando il caso restante in «nessun rilascio» cadono 4 prove esistenti (il-ritorno-indietro-dice-a-quale-rilascio-tornare, il-ritorno-indietro-non-torna-sullo-stesso-commit ×2, riparazione-r02-ritorno-indietro-casi-rari), con «sempre il primo» ne cade un'altra: è una regola di Nicola"
+    },
+    {
+      "id": "R09-008",
+      "chiave": "deploy-sre|con una destinazione che ha una cartella dentro il secchio, lo storico predefinito finisce nello stesso secchio della copia senza avviso e la notte resta verde",
+      "esito": "riparato",
+      "commit": "3e36a739f2ffae5d5705750bebb7268957457660",
+      "file_toccati": [
+        "scripts/backup-db.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-backup-storico-secchio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-backup-storico-secchio.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 975745193d58d963b1d11047bd058456d6976b90^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r09-backup-storico-secchio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Commit della voce: 97574519 e il giro di correzione del collaudo 3e36a739. Lo storico predefinito si ricava dal nome del secchio («b2:mycity-foto/copie» → «b2:mycity-foto-storico/copie»); se dopo i due punti la destinazione comincia con «/» (percorso assoluto, remote senza secchi) torna come sulla base, «<dest>-storico» con la barra iniziale («nas:/mnt/x» → «nas:/mnt/x-storico», prima della correzione diventava «nas:mnt-storico/x»); «cifrata:» o «cifrata:/» senza predefinito: avviso, riepilogo ed exit 5. Commenti alle righe ~30 e ~316 corretti. Limite: un remote a secchi scritto con la barra («b2:/secchio/cartella») conta come percorso assoluto e lo storico resta nello stesso secchio, come sulla base: dalla sola stringa non si distingue.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire) sul primo giro: 14 destinazioni; collaudo K03: rompe_altro per la barra iniziale persa su nas:/mnt/x, corretto in 3e36a739 con il caso nella prova; rimessa dalla base 97574519^ uscita 0; bash -n verde; 19 file e 162 casi sul backup verdi"
+    },
+    {
+      "id": "R09-004",
+      "chiave": "deploy-sre|il commento di stalecrons dice ancora che i lavori senza battito sono ignorati",
+      "esito": "riparato",
+      "commit": "19353ada296b32ba45234a6d3c4e7103699a31f4",
+      "file_toccati": [
+        "lib/cron-health.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-commento-stalecrons.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-commento-stalecrons.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 19353ada296b32ba45234a6d3c4e7103699a31f4^ --file lib/cron-health.ts --prove tests/unit/riparazione-r09-commento-stalecrons.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Riscritto solo il commento sopra staleCrons: un lavoro senza battito si segnala dopo la finestra di prima accensione se si conosce installatoDaMs, altrimenti resta ignorato. Codice invariato.",
+      "verificato_da": "revisore (subagente generico, mandato di smentire): diff solo commento + prova, staleCrons identica; il commento descrive il codice (senza installatoDaMs resta ignorato, con installatoDaMs segnala dopo 24 ore); migrazioni 095 e 250 esistono; unico chiamante cron-health.ts:169; 6 prove verdi"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il sorvegliante legge il conto degli errori da Upstash senza un tempo massimo",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "app/api/cron/operational-alerts/route.ts:72-77",
+      "descrizione": "erroriDelSitoRecenti fa fetch POST /pipeline senza signal né timeout: se Upstash non risponde il giro del sorvegliante resta appeso fino al tempo massimo della funzione. Stesso tipo della voce sul conto degli errori, dal lato di chi legge. File di R09 ma fuori dalle voci: non toccato."
+    },
+    {
+      "titolo": "con una destinazione cifrata che ha una cartella, lo storico predefinito cade ancora nello stesso secchio sotto la cifratura",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "scripts/backup-db.sh (derivazione dello storico predefinito)",
+      "descrizione": "«cifrata:cartella» dà «cifrata:cartella-storico»: per un remote crypt è lo stesso secchio sottostante della copia. Era così anche prima della riparazione e lo script non può vedere il secchio sotto la cifratura: serve impostare STORAGE_SYNC_STORICO a mano o un avviso quando la destinazione è un remote crypt."
+    },
+    {
+      "titolo": "nel freno della veloce, un carrello di più negozi con un ordine scaduto si comporta in modo diverso secondo l'ordine in cui il database rende gli ordini",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "lib/ordini/veloce-non-confermata.ts:490-495 · :884-891",
+      "descrizione": "Il controllo della scadenza guarda solo il primo ordine letto e la ricerca ha .limit(100) senza .order. Se esce prima l'ordine scaduto, il carrello non si sposta e l'altro resta «Adesso» fino al giro di expire-stale-orders; se esce prima quello nei tempi, si sposta tutto il carrello e anche l'ordine scaduto prende una scadenza nuova. Nessuna scadenza passata al cliente in nessuno dei due casi; serve un ordine fisso nella ricerca o un controllo su tutti gli ordini del carrello."
+    }
+  ],
+  "domande_per_nicola": [
+    "R09-001: per il ritorno vero del database, migrazioni «espandi e poi contrai» oppure nessun ritorno automatico quando una migrazione del giro toglie qualcosa?",
+    "R09-007: la 191 (non ancora in produzione) si corregge con la spia in un blocco DO, oppure si puliscono a mano le righe sul db vero prima del pulsante?",
+    "R09-009: col dominio non leggibile e un solo altro commit, il ritorno indietro si rifiuta sempre (ritorno a mano)?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "2 lotti che riparano (A modello grande, B sonnet), 2 giri di correzione (R09-005 sonnet; collaudo K03 su R09-006/008 modello grande), 2 revisori (A grande, B sonnet). Nessun Workflow. Costo letto da get_session il 22/11 alle 01:21 UTC: 18,71 $.",
+    "subagenti": 6
+  },
+  "costo_usd": 18.71
+}
