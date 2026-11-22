@@ -70,9 +70,11 @@ export default function HowItWorks({ className }: { className?: string }) {
       <ol className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {STEPS.map((s) => (
           <li key={s.n}>
-            <Card variant="elevated" padding="lg" as="article" className="h-full">
+            <Card variant="elevated" padding="lg" as="article" className="h-full !p-[min(1.5rem,7vw)]">
               {/* R12-007 — A 320 px col testo al 200% il titolo accanto al cerchio non ci stava e la home
-                  scorreva di lato: ora, se non c'è posto, il titolo va sotto il cerchio e le parole vanno a capo. */}
+                  scorreva di lato: ora, se non c'è posto, il titolo va sotto il cerchio e le parole vanno a capo.
+                  R12-007 (giro 2) — Il margine della scheda si stringe con lo schermo (min(1.5rem, 7vw)): a 280 px
+                  al 200% «Ordina» non stava nel testo e si spezzava; da 343 px in su il margine è quello di prima. */}
               <div className="flex flex-wrap items-center gap-3 mb-4">
                 <span className={`relative shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${CIRCLE[s.color]}`}>
                   <s.Icon size={22} strokeWidth={2.2} />

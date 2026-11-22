@@ -85,3 +85,11 @@ describe('R12-002 (giro 2) · i testi restano nel loro riquadro a 280 px col tes
     expect(riquadro).toContain('hyphens-auto');
   });
 });
+
+describe('R12-007 (giro 2) · «Come funziona»: il titolo «Ordina» non si spezza a 280 px col testo al 200%', () => {
+  it('il margine della scheda si stringe con lo schermo (min(1.5rem, 7vw)) invece di restare 24 px', () => {
+    const src = leggi('components/home/HowItWorks.tsx');
+    const scheda = src.match(/<Card [^>]*as="article"[^>]*>/)?.[0] ?? '';
+    expect(scheda).toContain('!p-[min(1.5rem,7vw)]');
+  });
+});
