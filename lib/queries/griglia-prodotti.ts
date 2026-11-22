@@ -407,11 +407,11 @@ export async function contaProdottiDellaGriglia(
         : null;
   const termine = d.search ? d.search.replace(/[%_]/g, '\\$&').slice(0, 100) : undefined;
   // R11-010 R11-011 — Il numero conta solo i prodotti dei negozi approvati, come la griglia: il
-  // negozio si aggancia con `!inner` alla vista pubblica (la stessa delle storie). Se il servizio
-  // non conosce l'aggancio si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
+  // negozio si aggancia con `!inner` alla vista pubblica, NOMINANDO il vincolo (fra products e la
+  // vista ci sono due strade: senza nome PostgREST risponde 300). Se l'aggancio non va si conta com'era (`senzaAggancio`) invece di non dare nessun numero.
   let senzaAggancio = false;
   const conta = (blocco?: string[]) => {
-    const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!inner(id)';
+    const colonne = senzaAggancio ? 'id' : 'id, negozio:seller_public_profiles!products_seller_id_fkey!inner(id)';
     let q = supabase.from('products').select(colonne, { count: 'exact', head: true }).eq('status', 'available');
     q = applicaFiltriComuni(q, d, categorie);
     if (termine) q = q.ilike('name', `%${termine}%`);
@@ -424,8 +424,9 @@ export async function contaProdottiDellaGriglia(
   let totale = 0;
   for (const blocco of blocchi) {
     let { count, error } = await conta(blocco);
-    const codice = (error as { code?: string } | null)?.code;
-    if (error && !senzaAggancio && (codice === 'PGRST200' || codice === 'PGRST201')) {
+    // Su una HEAD postgrest-js non dà il codice dell'errore (solo `message: ""`): il ripiego scatta
+    // su QUALSIASI errore della lettura agganciata, mai sul codice.
+    if (error && !senzaAggancio) {
       senzaAggancio = true;
       ({ count, error } = await conta(blocco));
     }
