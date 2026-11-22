@@ -124,7 +124,7 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
               // Disegnare qui l'immagine di un indirizzo che il browser blocchera' non mostra
               // niente: mostra il buco che il difetto produceva. Meglio un riquadro che ammette
               // di non avere un'anteprima — il perche' sta scritto sotto il campo.
-              <span className="absolute inset-0 flex items-center justify-center text-[10px] leading-tight text-center text-ink-400 px-1">
+              <span className="absolute inset-0 flex items-center justify-center text-2xs leading-tight text-center text-ink-400 px-1">
                 Nessuna anteprima
               </span>
             )}
