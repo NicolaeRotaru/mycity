@@ -25,10 +25,13 @@ import { logger } from '@/lib/logger';
  * ── 27/8/2026 (R082) — LA STESSA RIGA LETTA DUE VOLTE PER OGNI APERTURA ─────────────────────────
  * `app/product/[id]/layout.tsx` chiama questa lettura due volte nello stesso giro: una in
  * `generateMetadata`, una nel componente. Sono due letture vere, sulla pagina più aperta del sito.
- * La memoria qui sotto: due secondi, la stessa domanda, una risposta sola. È una finestra molto più
- * stretta della cache che queste pagine già dichiarano (`revalidate = 300`, cinque minuti), quindi
- * non rende niente più vecchio di quanto già fosse; e le righe qui dentro sono pubbliche —
- * prodotto, negozio, categoria — mai roba di una persona.
+ * La memoria qui sotto: due secondi, la stessa domanda, una risposta sola. Le pagine dichiarano un
+ * `revalidate`, ma `force-dynamic` in app/layout.tsx le rende dinamiche: una cache di cinque minuti
+ * oggi non c'è, e due secondi sono meno di quanto chiunque noti. Le righe qui dentro sono pubbliche
+ * — prodotto, negozio, categoria — mai roba di una persona.
+ *
+ * Nota (collaudo del 22/11): la lettura del precarico (lib/queries/precarico.ts) è una domanda
+ * diversa e NON passa da qui: la stessa riga si legge ancora una volta in più per richiesta.
  *
  * ── 21/11/2026 (R10-016) — UNA LETTURA PER RICHIESTA, NON PER DUE SECONDI ──────────────────────
  * Qui c'era scritto che `cache()` non c'è perché React è il 18. Vale per le prove e per il vecchio
