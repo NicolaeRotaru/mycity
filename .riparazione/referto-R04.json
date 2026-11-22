@@ -1,13 +1,13 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-22 01:00",
+  "aggiornato": "2026-11-22 01:30",
   "finita": true,
-  "testa": "3e6e71a8e56c596cacae0942ae31ff8bccbc7c0b",
+  "testa": "38baad8c221a7ada984a09eef3857df09adc5077",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "3e6e71a8e56c596cacae0942ae31ff8bccbc7c0b",
-    "nota": "typecheck, lint e test: 1921 file, 11872 prove verdi; SHA preso con git rev-parse HEAD nello stesso comando"
+    "testa": "38baad8c221a7ada984a09eef3857df09adc5077",
+    "nota": "typecheck, lint e test: 1921 file, 11875 prove verdi; SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -97,28 +97,33 @@
     {
       "id": "R04-010",
       "chiave": "rls-database|il carosello delle storie legge 200 storie e poi taglia a 30: un solo negozio approvato con 200 storie in 24 ore spingerebbe fuori gli altri",
-      "esito": "riparato",
-      "commit": "f4f58e6c00f6b5700e19b09b66c5e40050e60d24",
+      "esito": "parziale",
+      "commit": "38baad8c221a7ada984a09eef3857df09adc5077",
       "file_toccati": [
-        "components/home/StoriesCarousel.tsx"
+        "components/home/StoriesCarousel.tsx",
+        "migrations/662_il_carosello_delle_storie_legge_poche_storie_per_negozio.sql"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r04-carosello-a-turno.test.tsx"
+        "tests/unit/riparazione-r04-carosello-a-turno.test.tsx",
+        "tests/sql/rls/riparazione-r04-carosello.test.sql"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r04-carosello-a-turno.test.tsx --reporter=dot",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-carosello-a-turno.test.tsx --reporter=dot ; bash tests/sql/harness/apply.sh mycity_test && psql -X -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r04-carosello.test.sql",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c63d879a^ --file components/home/StoriesCarousel.tsx --prove tests/unit/riparazione-r04-carosello-a-turno.test.tsx --json"
+        "esito": "in_parte",
+        "uscita": 3,
+        "comando": "codice, uscita 0 (regge): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c63d879a^ --file components/home/StoriesCarousel.tsx --prove tests/unit/riparazione-r04-carosello-a-turno.test.tsx --json ; migrazione, uscita 3 (rosso_strutturale): timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c63d879a^ --file migrations/662_il_carosello_delle_storie_legge_poche_storie_per_negozio.sql --prove tests/sql/rls/riparazione-r04-carosello.test.sql --sql r04_rimessa --json ; tsx e 662 insieme con la prova vitest: uscita 1 (la 662 da sola non cambia la vitest, che simula la funzione)",
+        "nota": "il codice regge con la rimessa vera; la 662 crea una funzione nuova, che la prova SQL deve nominare, quindi senza la 662 la prova cade per struttura"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nessun numero nuovo: prima del taglio a 30 le storie vanno a turno fra i negozi (la più recente di ognuno, poi la seconda, …). Se una lettura torna piena si rilegge escludendo i negozi già visti finché arrivano negozi nuovi (al massimo 30 negozi; se una rilettura cade si tiene quello che c'è); stesso per il ripiego da 200. Con poche storie resta una lettura sola. Restano verdi le 7 prove esistenti sul carosello. Giro di correzione (f4f58e6c): al massimo 2 riletture dopo la prima (3 letture in tutto), anche nel ripiego; la prova conta le letture con 40 negozi da 40 storie (≤ 3) e vuole storie di più negozi.",
-      "verificato_da": "subagente revisore (lotto 1): rimessa rilanciata uscita 0; indirizzo postgrest seller_id=not.in.(…) giusto; filtri originali tenuti; tetto delle riletture reale ma alto nel caso estremo (fino a 30 letture), corretto nel giro di correzione. Dopo il giro: rimessa sull’intera correzione (base c63d879a^) uscita 0; 6 prove esistenti sul carosello verdi.",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nessun numero nuovo: prima del taglio a 30 le storie vanno a turno fra i negozi (la più recente di ognuno, poi la seconda, …). Se una lettura torna piena si rilegge escludendo i negozi già visti finché arrivano negozi nuovi (al massimo 30 negozi; se una rilettura cade si tiene quello che c'è); stesso per il ripiego da 200. Con poche storie resta una lettura sola. Restano verdi le 7 prove esistenti sul carosello. Giro di correzione (f4f58e6c): al massimo 2 riletture dopo la prima (3 letture in tutto), anche nel ripiego; la prova conta le letture con 40 negozi da 40 storie (≤ 3) e vuole storie di più negozi. Giro del collaudo K02 (38baad8c): con un tetto di 3 letture, tre negozi da più di 30 storie nascondevano gli altri. Migrazione nuova 662: funzione storie_attive_per_negozio(p_per_negozio, p_negozi), SECURITY INVOKER, search_path fisso, stessi filtri (non scadute, negozio in seller_public_profiles, ordine per data), al massimo 30 storie per negozio e 30 negozi; grant ad anon e authenticated. Il carosello la chiama con .rpc (1 lettura), poi alterna i negozi e taglia a 30; se la funzione manca legge come prima (al massimo 3 letture con l’aggancio, 4 senza). Prova vitest: 3 negozi da 45 storie e 12 da 1-2 → compaiono esattamente i 15 negozi; 40 da 40 → 30 negozi diversi; tetto delle letture dichiarato. Prova SQL: 11 controlli verdi (13 negozi esatti con 3 grandi, 30 negozi su 40, scadute, sospesi e non-negozi esclusi, anon e authenticated, parametri limitati). Difetto del collaudo rimesso a mano (risposta della funzione ignorata): i 3 casi nuovi rossi.",
+      "verificato_da": "subagente revisore (lotto 1): rimessa rilanciata uscita 0; indirizzo postgrest seller_id=not.in.(…) giusto; filtri originali tenuti; tetto delle riletture reale ma alto nel caso estremo (fino a 30 letture), corretto nel giro di correzione. Dopo il giro: rimessa sull’intera correzione (base c63d879a^) uscita 0; 6 prove esistenti sul carosello verdi. Collaudo K02: caso di un negozio solo chiuso; il tetto di 3 letture lasciava fuori negozi, corretto in 38baad8c (non ricollaudato).",
       "commit_precedenti": [
-        "c63d879a86097b9be7ac9c5507457ba151a1d4a1"
-      ]
+        "c63d879a86097b9be7ac9c5507457ba151a1d4a1",
+        "f4f58e6c00f6b5700e19b09b66c5e40050e60d24"
+      ],
+      "cosa_resta": "La 662 si prova solo con la rimessa SQL, che esce 3 (rossa per struttura, perché la prova nomina la funzione nuova): per chiudere serve la deroga rimessa_a_mano. La 662 è scritta e NON applicata: finché Nicola non la applica, in produzione il carosello usa il ripiego, dove tre negozi da più di 30 storie possono ancora nascondere gli altri."
     },
     {
       "id": "R04-002",
@@ -292,12 +297,12 @@
   "domande_per_nicola": [
     "R04-006: gli ordini dello stesso carrello devono andare allo stesso fattorino (un giro solo in bacheca e un «Accetta» che li prende tutti, con una migrazione), oppure restano presi uno alla volta e va cambiato il compenso del secondo fattorino?",
     "R04-001: la pulizia degli allarmi tiene 24 ore, cioè la finestra più lunga che il codice legge oggi; la voce suggeriva «qualche giorno». Vuoi un margine più largo (per esempio 7 giorni)?",
-    "R04-001 e R04-007: le migrazioni 660 e 661 sono scritte ma non applicate. La 661 ridefinisce prendi_ordine: finché non è applicata, un ordine annullato risponde ancora «già preso da un altro»."
+    "R04-001, R04-007 e R04-010: le migrazioni 660, 661 e 662 sono scritte ma non applicate. La 661 ridefinisce prendi_ordine: finché non è applicata, un ordine annullato risponde ancora «già preso da un altro». Senza la 662 il carosello usa il ripiego, dove tre negozi grandi possono nascondere gli altri."
   ],
   "conto": {
-    "agenti": 5,
-    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet), 2 revisori (lotto 1 modello grande, lotto 2 sonnet), 1 giro di correzione (sonnet). Costo 19,95 $ letto con get_session prima della consegna.",
-    "subagenti": 5
+    "agenti": 6,
+    "nota": "2 riparatori (lotto 1 modello grande, lotto 2 sonnet), 2 revisori (lotto 1 modello grande, lotto 2 sonnet), 2 giri di correzione (sonnet: uno interno, uno chiesto dal collaudo K02 su R04-010). Costo 22,51 $ letto con get_session prima della consegna.",
+    "subagenti": 6
   },
-  "costo_usd": 19.95
+  "costo_usd": 22.51
 }
