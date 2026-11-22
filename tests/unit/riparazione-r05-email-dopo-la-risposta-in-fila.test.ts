@@ -107,6 +107,51 @@ describe('R05-003 — le email dopo la risposta partono in fila', () => {
     expect(fatti).toEqual(['dopo']);
   });
 
+  it('una raffica di lavori lenti parte uno alla volta anche dopo i 10 s del tetto', async () => {
+    // Giro di correzione: il tetto contato dall'ingresso in fila scadeva per tutti insieme a 10 s, e
+    // i lavori rimasti partivano nello stesso istante (10 lavori da 3 s: 7 in volo insieme).
+    vi.useFakeTimers();
+    let inVolo = 0;
+    let massimo = 0;
+    const finiti: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      dopoLaRisposta(async () => {
+        inVolo++;
+        massimo = Math.max(massimo, inVolo);
+        await new Promise((r) => setTimeout(r, 3_000));
+        inVolo--;
+        finiti.push(i);
+      }, `lavoro ${i}`);
+    }
+
+    void rispostaPartita();
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    expect(massimo, 'più lavori in volo nello stesso momento').toBe(1);
+    expect(finiti).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('il tetto conta da quando il lavoro parte, non da quando entra in fila', async () => {
+    vi.useFakeTimers();
+    const diario: string[] = [];
+    dopoLaRisposta(async () => {
+      await new Promise((r) => setTimeout(r, 8_000));
+      diario.push('primo finito');
+    }, 'primo');
+    dopoLaRisposta(() => {
+      diario.push('appeso parte');
+      return new Promise<void>(() => { /* non finisce mai */ });
+    }, 'appeso');
+    dopoLaRisposta(async () => { diario.push('terzo parte'); }, 'terzo');
+
+    void rispostaPartita();
+    await vi.advanceTimersByTimeAsync(17_000);
+    expect(diario, 'l appeso è partito a 8 s: a 17 s il suo tetto non è ancora scaduto').toEqual(['primo finito', 'appeso parte']);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(diario, 'a 18 s, 10 s dopo l inizio dell appeso, parte il terzo').toEqual(['primo finito', 'appeso parte', 'terzo parte']);
+  });
+
   it('fuori da una richiesta il lavoro parte lo stesso, subito', async () => {
     stato.fuoriDaUnaRichiesta = true;
     const fatti: string[] = [];
