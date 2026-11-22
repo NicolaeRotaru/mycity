@@ -86,14 +86,16 @@ describe('R10-012 — etichette legate al loro campo', () => {
   });
 
   it('la regola jsx-a11y/label-has-associated-control non dà più avvisi sul profilo (la regola resta accesa)', async () => {
-    const { ESLint } = await import('eslint');
-    const eslint = new ESLint();
-    const [r] = await eslint.lintFiles(['app/seller/profile/page.tsx']);
-    const avvisi = r.messages.filter((m) => m.ruleId === 'jsx-a11y/label-has-associated-control');
-    expect(avvisi).toEqual([]);
-    const cfg = await eslint.calculateConfigForFile('app/seller/profile/page.tsx');
-    expect(cfg.rules?.['jsx-a11y/label-has-associated-control']?.[0]).not.toBe(0);
-    expect(cfg.rules?.['jsx-a11y/label-has-associated-control']?.[0]).not.toBe('off');
+    const { execFileSync } = await import('node:child_process');
+    const lancia = (args: string[]) => {
+      try { return execFileSync('npx', ['eslint', ...args], { encoding: 'utf8' }); }
+      catch (e) { return String((e as { stdout?: string }).stdout ?? ''); }
+    };
+    const [r] = JSON.parse(lancia(['--format', 'json', 'app/seller/profile/page.tsx'])) as { messages: { ruleId: string | null }[] }[];
+    expect(r.messages.filter((m) => m.ruleId === 'jsx-a11y/label-has-associated-control')).toEqual([]);
+    const cfg = JSON.parse(lancia(['--print-config', 'app/seller/profile/page.tsx'])) as { rules?: Record<string, unknown[] | unknown> };
+    const gravita = [cfg.rules?.['jsx-a11y/label-has-associated-control']].flat()[0];
+    expect([1, 2, 'warn', 'error']).toContain(gravita);
     expect(readFileSync('app/seller/profile/page.tsx', 'utf8')).not.toContain('eslint-disable');
   }, 60000);
 
