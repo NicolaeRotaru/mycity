@@ -49,12 +49,6 @@ function bloccoGraffe(src: string, da: number): string {
 
 type Carattere = {
   nome: string;
-  /**
-   * La famiglia in cui finiscono le sue facce: quella scritta in `declarations` (`font-family`), se
-   * c'è, altrimenti il nome. Dal 22/11/2026 il corsivo sta in un'istanza a parte, senza precarico,
-   * con lo stesso nome di famiglia del dritto: le regole qui sotto valgono per famiglia.
-   */
-  famiglia: string;
   opzioni: string;
   /** Vero se il carattere sta sul disco (`next/font/local`), falso se arriva da Google. */
   locale: boolean;
@@ -98,7 +92,6 @@ function caratteriCaricati(): Carattere[] {
       const stile = opzioni.match(/style\s*:\s*\[([^\]]*)\]/);
       trovati.push({
         nome,
-        famiglia: nome.toLowerCase(),
         opzioni,
         locale: false,
         stili: stile ? stile[1].split(',').map((x) => x.trim().replace(/['"]/g, '')) : null,
@@ -113,10 +106,8 @@ function caratteriCaricati(): Carattere[] {
     for (let m = dichiarazione.exec(LAYOUT); m; m = dichiarazione.exec(LAYOUT)) {
       const opzioni = bloccoGraffe(LAYOUT, LAYOUT.indexOf('{', m.index + m[0].length - 1));
       const file = elementiDiSrc(opzioni);
-      const famigliaDichiarata = opzioni.match(/prop\s*:\s*['"]font-family['"]\s*,\s*value\s*:\s*['"]([^'"]+)['"]/)?.[1];
       trovati.push({
         nome: m[1].charAt(0).toUpperCase() + m[1].slice(1),
-        famiglia: (famigliaDichiarata ?? m[1]).toLowerCase(),
         opzioni,
         locale: true,
         stili: file.length > 0 ? file.map((f) => f.stile ?? 'normal') : null,
@@ -154,10 +145,6 @@ function catalogoDeiCaratteri(): Record<string, { styles: string[] }> | null {
 
 const CARATTERI = caratteriCaricati();
 const CATALOGO = catalogoDeiCaratteri();
-const FAMIGLIE = [...new Set(CARATTERI.map((c) => c.famiglia))].map((famiglia) => ({
-  famiglia,
-  istanze: CARATTERI.filter((c) => c.famiglia === famiglia),
-}));
 
 describe('il corsivo del sito', () => {
   it('nel sito ci sono davvero dei punti che chiedono il corsivo', () => {
@@ -175,53 +162,43 @@ describe('il corsivo del sito', () => {
     }
   });
 
-  it('le famiglie sono Inter e Fraunces', () => {
-    expect(FAMIGLIE.map((f) => f.famiglia)).toEqual(expect.arrayContaining(['inter', 'fraunces']));
-  });
-
-  for (const { famiglia, istanze } of FAMIGLIE) {
-    it(`${famiglia} chiede anche la variante inclinata, non solo quella dritta`, () => {
-      const senzaStile = istanze.filter((c) => c.stili === null).map((c) => c.nome);
+  for (const carattere of CARATTERI) {
+    it(`${carattere.nome} chiede anche la variante inclinata, non solo quella dritta`, () => {
+      const stile = carattere.stili;
       expect(
-        senzaStile,
-        `${senzaStile.join(', ')} non dichiara nessuno stile: si scarica solo il dritto e il browser inventa il corsivo`,
-      ).toEqual([]);
+        stile,
+        `${carattere.nome} non dichiara nessuno stile: si scarica solo il dritto e il browser inventa il corsivo`,
+      ).not.toBeNull();
 
-      const stiliChiesti = istanze.flatMap((c) => c.stili ?? []);
-      expect(stiliChiesti, `${famiglia} non chiede il corsivo`).toContain('italic');
-      expect(stiliChiesti, `${famiglia} non chiede più il dritto`).toContain('normal');
+      const stiliChiesti = stile!;
+      expect(stiliChiesti, `${carattere.nome} non chiede il corsivo`).toContain('italic');
+      expect(stiliChiesti, `${carattere.nome} non chiede più il dritto`).toContain('normal');
     });
 
-    it.skipIf(CATALOGO === null && !istanze.every((c) => c.locale))(
-      `${famiglia} il corsivo ce l'ha davvero: non stiamo chiedendo una variante inesistente`,
+    it.skipIf(CATALOGO === null && !carattere.locale)(
+      `${carattere.nome} il corsivo ce l'ha davvero: non stiamo chiedendo una variante inesistente`,
       () => {
-        if (istanze.every((c) => c.locale)) {
-          // Caratteri dei file del sito: la variante esiste se il woff2 inclinato sta sul disco.
-          const inclinati = istanze.flatMap((c) => c.file).filter((f) => f.stile === 'italic');
-          expect(inclinati.length, `${famiglia} non ha nessun file inclinato`).toBeGreaterThan(0);
+        if (carattere.locale) {
+          // Un carattere dei file del sito: la variante esiste se il woff2 inclinato sta sul disco.
+          const inclinati = carattere.file.filter((f) => f.stile === 'italic');
+          expect(inclinati.length, `${carattere.nome} non ha nessun file inclinato`).toBeGreaterThan(0);
           for (const f of inclinati) {
             expect(existsSync(path.join('app', f.percorso)), `${f.percorso} non esiste sul disco`).toBe(true);
           }
           return;
         }
-        for (const c of istanze) {
-          const scheda = CATALOGO![c.nome];
-          expect(scheda, `${c.nome} non è nel catalogo di Google`).toBeTruthy();
-          expect(scheda.styles).toContain('italic');
-        }
+        const scheda = CATALOGO![carattere.nome];
+        expect(scheda, `${carattere.nome} non è nel catalogo di Google`).toBeTruthy();
+        expect(scheda.styles).toContain('italic');
       },
     );
   }
 
   it('il dritto resta precaricato: il corsivo non deve rubargli il posto', () => {
-    // `preload` vale per tutta l'istanza di next/font, non per la singola variante: se
-    // qualcuno lo spegne in un'istanza che ha il dritto, spegne anche il dritto — e il
-    // dritto è quello del titolone, cioè l'elemento più grande della home. Dal 22/11/2026
-    // il corsivo sta in un'istanza sua, senza precarico (si scarica solo dove serve): lì
-    // `preload: false` è giusto, nelle istanze col dritto no.
-    const conIlDritto = CARATTERI.filter((c) => (c.stili ?? []).includes('normal'));
-    expect(conIlDritto.length, 'nessuna istanza carica il dritto').toBeGreaterThan(0);
-    for (const c of conIlDritto) {
+    // `preload` vale per tutto il carattere, non per la singola variante: se
+    // qualcuno lo spegne per alleggerire il corsivo, spegne anche il dritto —
+    // e il dritto è quello del titolone, cioè l'elemento più grande della home.
+    for (const c of CARATTERI) {
       expect(c.opzioni, `${c.nome} ha il precaricamento spento`).not.toMatch(
         /preload\s*:\s*false/,
       );

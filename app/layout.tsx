@@ -50,59 +50,31 @@ const precaricoDelSito = unstable_cache(precaricaSito, ['sito-precarico'], {
 // (Inter variabile con asse del peso; Fraunces 400-800), sottoinsieme latino, dritto e corsivo,
 // presi da @fontsource-variable/inter 5.3.0 e @fontsource/fraunces 5.3.0 (licenza OFL accanto).
 // `adjustFontFallback` come lo faceva Google per categoria: Arial per Inter, Times New Roman per Fraunces.
-//
-// 22/11/2026 — IL CORSIVO SI SCARICA QUANDO SERVE, NON SU OGNI PAGINA PRIMA DI TUTTO.
-// `preload` vale per tutta l'istanza di `localFont`: con dritto e corsivo nella stessa, il browser
-// riceveva l'ordine di scaricare SUBITO anche i sei file del corsivo (Inter e Fraunces 400-800),
-// su ogni pagina, in gara con la foto del prodotto e col JavaScript. Il corsivo vero serve davvero
-// (una ventina di punti: il «veri» del titolone della home in Fraunces, le note degli ordini e degli
-// indirizzi, la domanda senza risposta, i testi dei negozi…), quindi non si toglie: senza file il
-// browser tornerebbe a inclinare le lettere da solo. Il corsivo sta in un'istanza a parte, senza
-// precaricamento, ma con lo STESSO nome di famiglia del dritto (`font-family` nelle `declarations`):
-// per il browser è una famiglia sola, e scarica il file inclinato solo quando c'è del testo che lo
-// chiede. Niente carattere di riserva calcolato sul corsivo: quello del dritto vale per tutti e due.
-// (Le opzioni di `localFont` devono essere scritte per esteso: niente costanti condivise.)
 const inter = localFont({
-  src: [{ path: './fonts/inter-latin-wght-normal.woff2', weight: '100 900', style: 'normal' }],
-  declarations: [{ prop: 'font-family', value: 'inter' }],
+  src: [
+    { path: './fonts/inter-latin-wght-normal.woff2', weight: '100 900', style: 'normal' },
+    { path: './fonts/inter-latin-wght-italic.woff2', weight: '100 900', style: 'italic' },
+  ],
   variable: '--font-inter',
   display: 'swap',
   adjustFontFallback: 'Arial',
 });
-const interCorsivo = localFont({
-  src: [{ path: './fonts/inter-latin-wght-italic.woff2', weight: '100 900', style: 'italic' }],
-  declarations: [{ prop: 'font-family', value: 'inter' }],
-  variable: '--font-inter-corsivo',
-  display: 'swap',
-  preload: false,
-  adjustFontFallback: false,
-});
 const fraunces = localFont({
   src: [
     { path: './fonts/fraunces-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/fraunces-latin-400-italic.woff2', weight: '400', style: 'italic' },
     { path: './fonts/fraunces-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/fraunces-latin-500-italic.woff2', weight: '500', style: 'italic' },
     { path: './fonts/fraunces-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/fraunces-latin-600-italic.woff2', weight: '600', style: 'italic' },
     { path: './fonts/fraunces-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    { path: './fonts/fraunces-latin-700-italic.woff2', weight: '700', style: 'italic' },
     { path: './fonts/fraunces-latin-800-normal.woff2', weight: '800', style: 'normal' },
+    { path: './fonts/fraunces-latin-800-italic.woff2', weight: '800', style: 'italic' },
   ],
-  declarations: [{ prop: 'font-family', value: 'fraunces' }],
   variable: '--font-serif',
   display: 'swap',
   adjustFontFallback: 'Times New Roman',
-});
-const frauncesCorsivo = localFont({
-  src: [
-    { path: './fonts/fraunces-latin-400-italic.woff2', weight: '400', style: 'italic' },
-    { path: './fonts/fraunces-latin-500-italic.woff2', weight: '500', style: 'italic' },
-    { path: './fonts/fraunces-latin-600-italic.woff2', weight: '600', style: 'italic' },
-    { path: './fonts/fraunces-latin-700-italic.woff2', weight: '700', style: 'italic' },
-    { path: './fonts/fraunces-latin-800-italic.woff2', weight: '800', style: 'italic' },
-  ],
-  declarations: [{ prop: 'font-family', value: 'fraunces' }],
-  variable: '--font-serif-corsivo',
-  display: 'swap',
-  preload: false,
-  adjustFontFallback: false,
 });
 
 // metadataBase: rende assoluti i canonical/openGraph relativi delle pagine
@@ -260,7 +232,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const precarico = await precaricoDelSito().catch(() => undefined);
 
   return (
-    <html lang={locale} suppressHydrationWarning className={`${inter.variable} ${fraunces.variable} ${interCorsivo.variable} ${frauncesCorsivo.variable}`}>
+    <html lang={locale} suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
       <head>
         {SUPABASE_HOST && <link rel="preconnect" href={SUPABASE_HOST} crossOrigin="anonymous" />}
         <link rel="preconnect" href="https://js.stripe.com" crossOrigin="anonymous" />
