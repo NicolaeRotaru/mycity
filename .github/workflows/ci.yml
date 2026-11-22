@@ -135,10 +135,9 @@ jobs:
           echo "PostgreSQL c'e' e risponde: le prove col database vero girano."
 
       # Unit test + guardia integrita' file migration + le prove col database vero.
+      # Che PostgreSQL ci sia e risponda lo garantisce il passo qui sopra (fallisce se manca):
+      # nessuna variabile serve a rendere obbligatorie le prove, nessun file di prova ne legge una.
       - name: Test
-        env:
-          # Per i file di prova che lo leggono: qui saltare per mancanza di PostgreSQL e' un errore.
-          PROVE_POSTGRES_OBBLIGATORIE: "1"
         run: npm run test
 
   integration-tests:

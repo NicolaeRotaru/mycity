@@ -14,7 +14,8 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
-import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { finestraDellaFascia, motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
@@ -48,6 +49,28 @@ import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/l
 // chiuso»: il messaggio giusto c'era, e si perdeva nella forma sbagliata.
 
 export const runtime = 'nodejs';
+
+/**
+ * 22/11/2026 — LA FASCIA DETTA DAL GIORNO IN CUI ARRIVA LA RICHIESTA.
+ *
+ * L'etichetta conta il giorno da quando la cassa l'ha disegnata; la rotta la contava dal suo
+ * orologio. Lunedì alle 23:59 «Domani · 9:00–11:00» è martedì: arrivata alle 00:01, la rotta la
+ * giudicava (e la scriveva) per mercoledì. La cassa manda anche il giorno della fascia
+ * (`delivery_date`): se cade un giorno prima di quello che dice l'etichetta letta adesso, la
+ * mezzanotte è passata in viaggio, e l'etichetta si riporta a oggi con la regola della carta pagata
+ * dopo mezzanotte (`fasciaAlGiornoDellOrdine`): «Domani» di ieri è «Oggi», una fascia di ieri è
+ * passata (`null`). Uno scarto di più giorni è l'orologio del telefono sbagliato, non la
+ * mezzanotte: non sposta niente, si giudica come prima.
+ */
+function fasciaDelGiornoDellaRichiesta(fascia: string, giornoDellaFascia: string, adesso: Date): string | null {
+  const finestra = finestraDellaFascia(fascia);
+  const oggi = giornoDiPiacenza(adesso);
+  if (!finestra || !oggi || !/^\d{4}-\d{2}-\d{2}$/.test(giornoDellaFascia)) return fascia;
+  const giorniDaOggi = Math.round((Date.parse(giornoDellaFascia) - Date.parse(oggi)) / 86_400_000);
+  if (giorniDaOggi !== (finestra.giorno === 'domani' ? 0 : -1)) return fascia;
+  // Ieri a mezzogiorno (UTC): un istante del giorno in cui la cassa ha proposto la fascia.
+  return fasciaAlGiornoDellOrdine(fascia, Date.parse(oggi) - 12 * 3_600_000, adesso);
+}
 
 const ItemSchema = z.object({
   productId: z.string().uuid(),
@@ -90,6 +113,9 @@ const Body = z.object({
   // negozio può servire (vedi `negozioPuoServire`), quindi si accettano solo le
   // sette che la cassa propone davvero — l'elenco è in lib/quando-arriva.ts.
   deliverySlot: campoFasciaConsegna,
+  // 22/11/2026 — Il giorno di Roma della fascia («AAAA-MM-GG»), come l'ha contato la cassa quando
+  // l'ha proposta: lo manda già (R19-017). Serve solo a `fasciaDelGiornoDellaRichiesta`.
+  delivery_date: z.string().max(40).optional().nullable(),
   /**
    * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
    * cassa. Serve SOLO ai conti: e' l'etichetta che lega `checkout_started` agli
@@ -370,6 +396,17 @@ export const POST = withAuthRateLimit(
     // nasceva con `delivery_slot` vuoto e il negozio non sapeva per quando prepararlo (la cassa
     // del sito ne manda sempre una). Qui, dopo lo spegnimento del ritiro: un ritiro spento è una consegna.
     if (!body.pickupInStore && !body.deliverySlot) return ApiErrors.invalidRequest('Scegli quando vuoi ricevere l’ordine.');
+
+    // 22/11/2026 — «Domani» premuto alle 23:59 e arrivato dopo mezzanotte: la fascia si riporta al
+    // giorno della richiesta, una volta sola e prima di ogni uso, come il ritiro qui sopra: il
+    // controllo degli orari, l'ordine scritto e le email la vedono già giusta.
+    if (!body.pickupInStore && body.deliverySlot && body.delivery_date) {
+      const riportata = fasciaDelGiornoDellaRichiesta(body.deliverySlot, body.delivery_date, new Date());
+      if (riportata === null) {
+        return ApiErrors.conflict('La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.');
+      }
+      body.deliverySlot = riportata;
+    }
 
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
@@ -964,8 +1001,9 @@ export const POST = withAuthRateLimit(
       if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));
     }
 
-    // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
-    // fattorino approvato e online. La stessa decisione della cassa (`veloceSiPuo`).
+    // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso (e
+    // ancora per un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero (non ha
+    // già in mano tutte le veloci che può portare). La stessa decisione della cassa (`veloceSiPuo`).
     if (consegnaVeloce) {
       const veloce = veloceSiPuo({
         adesso: romeNow(),
