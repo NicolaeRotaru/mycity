@@ -141,6 +141,11 @@ const CATEGORIE_DI_RISERVA: Categoria[] = [
  *  (256 px) più i margini (2 × 32) facevano 320, e ogni pagina pubblica scorreva di lato di 8 px. */
 const COLONNE_DEL_PIEDE = 'grid-cols-[repeat(auto-fit,minmax(min(100%,max(8rem,calc((100%_-_2rem)/2))),1fr))]';
 
+/** R12-006 — Col testo al 200% le colonne (cinque da circa 118 px a 768 px) non si allargano: le voci
+ *  lunghe, come «Dichiarazione accessibilità», vanno a capo dentro la loro colonna invece di uscire dal
+ *  piede. min-w-0 sulle colonne (figli della griglia), break-words su titoli e link. */
+const COLONNE_A_CAPO = '[&>div]:min-w-0 [&_h3]:break-words [&_a]:break-words';
+
 const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
@@ -203,7 +208,7 @@ const Footer = () => {
           la pagina scorreva di lato, su ogni pagina pubblica. Adesso una colonna è larga almeno
           8rem (cresce col testo) e al massimo metà riga: due colonne col testo normale, una sola
           col testo grande. Dal computer in su, come prima. */}
-      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
+      <div className={`container mx-auto px-4 sm:px-6 py-12 grid ${COLONNE_DEL_PIEDE} ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} ${COLONNE_A_CAPO} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-full md:col-span-1">
           {/* R12-010 — I titoli delle colonne sono h3: su una pagina il cui contenuto non ha un h2 i

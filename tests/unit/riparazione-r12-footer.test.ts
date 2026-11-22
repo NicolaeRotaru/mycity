@@ -32,3 +32,27 @@ describe('R12-010 · il piede non salta dall\'h1 all\'h3', () => {
     expect(html).toMatch(/<h2 class="sr-only">[^<]+<\/h2>/);
   });
 });
+
+describe('R12-006 · col testo grande le voci lunghe del piede vanno a capo dentro la loro colonna', () => {
+  it('la griglia tiene md:grid-cols-5, rende le colonne comprimibili (min-w-0) e fa andare a capo titoli e link (break-words)', async () => {
+    const html = await rendi();
+    const griglia = (html.match(/<footer[^>]*>\s*<div class="([^"]+)"/)?.[1] ?? '').split(/\s+/);
+    expect(griglia).toContain('md:grid-cols-5');
+    expect(griglia).toContain('[&>div]:min-w-0');
+    expect(griglia).toContain('[&_h3]:break-words');
+    expect(griglia).toContain('[&_a]:break-words');
+  });
+
+  it('nell\'area venditore restano quattro colonne, comprimibili e con le voci a capo', async () => {
+    Object.assign(profilo, { isSeller: true });
+    try {
+      const html = await rendi();
+      const griglia = (html.match(/<footer[^>]*>\s*<div class="([^"]+)"/)?.[1] ?? '').split(/\s+/);
+      expect(griglia).toContain('md:grid-cols-4');
+      expect(griglia).toContain('[&>div]:min-w-0');
+      expect(griglia).toContain('[&_a]:break-words');
+    } finally {
+      Object.assign(profilo, { isSeller: false });
+    }
+  });
+});
