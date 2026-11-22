@@ -1,13 +1,13 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-22 01:45",
+  "aggiornato": "2026-11-22 03:20",
   "finita": true,
-  "testa": "1fc65eb2fb41e1570eff6c3c890ac97cfe50c554",
+  "testa": "7735a55c7c3762dd75d13eda34d1019047bb0b35",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "testa": "1fc65eb2fb41e1570eff6c3c890ac97cfe50c554",
-    "nota": "dopo il giro di correzione K01: typecheck, lint (0 errori) e vitest con 1918 file di prova passati (1 saltato già prima) e 11855 prove passate; SHA preso con git rev-parse HEAD nello stesso comando"
+    "testa": "7735a55c7c3762dd75d13eda34d1019047bb0b35",
+    "nota": "dopo la cura del bordo di R11-005: typecheck, lint (0 errori) e vitest con 1918 file di prova passati (1 saltato già prima) e 11856 prove passate; SHA preso con git rev-parse HEAD nello stesso comando"
   },
   "voci": [
     {
@@ -245,8 +245,8 @@
     {
       "id": "R11-005",
       "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
-      "esito": "parziale",
-      "commit": "50362063d76cb3b6759fec93183e184cd87cfb8f",
+      "esito": "riparato",
+      "commit": "7735a55c7c3762dd75d13eda34d1019047bb0b35",
       "file_toccati": [
         "app/rider/availability/page.tsx"
       ],
@@ -259,12 +259,11 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50362063d76cb3b6759fec93183e184cd87cfb8f^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx --json"
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7735a55c7c3762dd75d13eda34d1019047bb0b35^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx --json"
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Giro di correzione K01 (prima era segnata già riparata, a torto): le zone mostrate sono solo quelle scritte davvero, i tocchi vanno in coda sulle zone confermate, quindi su errore la zona non resta spuntata e due tocchi rapidi non si perdono; dopo un errore la riga fissa dice «Non è stato salvato: controlla il collegamento e riprova.» e torna a «salvate» al primo salvataggio riuscito.",
-      "cosa_resta": "La correzione 50362063 apre un bordo nuovo: con 6 zone confermate, se si toglie una zona e la scrittura sbaglia e subito dopo se ne aggiunge un altra che riesce, la coda scrive 7 zone e a schermo compare «7/6». Cura esatta: in app/rider/availability/page.tsx:161 e :170 (e la riga gemella di addCustomZone) la funzione di aggiunta (l) => (l.includes(zone) ? l : [...l, zone]) diventa (l) => (l.includes(zone) || l.length >= 6 ? l : [...l, zone]), con una prova: 6 zone, rimozione in errore, aggiunta subito dopo, mai più di 6 zone scritte.",
-      "verificato_da": "qa (subagente revisore del giro di correzione): prova 0, prova rimessa 0; errore poi ok, stesso tocco due volte, errore poi successo con «salvate» reggono; il limite di 6 zone si supera con la coda (sonda eseguita: 7/6)"
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Giro K01, in due commit. In 50362063 le zone mostrate sono solo quelle scritte davvero, i tocchi vanno in coda sulle zone confermate e dopo un errore la riga fissa dice «Non è stato salvato: controlla il collegamento e riprova.». In 7735a55c, applicato dalla sessione R11 con il permesso della regia quinta, l aggiunta in coda non supera 6 zone neanche quando una rimozione in volo fallisce. Il caso è nella prova: 6 zone, rimozione in errore e aggiunta subito dopo, rossa senza la cura (7 zone scritte).",
+      "verificato_da": "qa (subagente revisore del giro di correzione) sul commit 50362063: errore poi ok, stesso tocco due volte, errore poi successo reggono, e la sua sonda ha trovato il bordo 7/6. La cura è quella che ha indicato lui; la prova del bordo è rossa sulla base del commit e verde dopo (prova rimessa 0)."
     },
     {
       "id": "R11-006",
@@ -297,8 +296,8 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "2 riparatori (lotti A e B), 2 revisori, 1 riparatore e 1 revisore per il giro di correzione K01, tutti col modello piccolo; tetto di 6 raggiunto",
+    "nota": "2 riparatori (lotti A e B), 2 revisori, 1 riparatore e 1 revisore per il giro di correzione K01, tutti col modello piccolo; tetto di 6 raggiunto. Il bordo di R11-005 (2 righe e prova) l ha applicato la sessione R11 con il permesso della regia quinta.",
     "subagenti": 6
   },
-  "costo_usd": 10.19
+  "costo_usd": 12.79
 }
