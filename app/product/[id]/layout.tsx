@@ -1,10 +1,17 @@
 import type { Metadata } from 'next';
-import { disponibilitaPerGoogle, leggiProdottoPerMetadati, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
+import {
+  disponibilitaPerGoogle,
+  leggiProdottoPerMetadati,
+  prodottoDaIndicizzare,
+  type ProdottoPerMetadati,
+} from '@/lib/queries/metadati-vetrina';
 import { env } from '@/lib/env';
 import { sizedImage } from '@/lib/image-url';
 import { precaricoFoto } from '@/lib/preload-foto';
-import { HydrationBoundary } from '@tanstack/react-query';
+import { HydrationBoundary, type DehydratedState } from '@tanstack/react-query';
 import { precaricaProdotto } from '@/lib/queries/precarico';
+import { queryKeys } from '@/lib/queries/keys';
+import type { SchedaProdotto } from '@/lib/queries/catalogo';
 import { notFound } from 'next/navigation';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -44,9 +51,44 @@ async function prodottoInesistente(id: string): Promise<boolean> {
 // `profiles` per lui e' chiusa. Ogni scheda avrebbe preso «noindex».
 const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
 
+/**
+ * 22/11/2026 — I METADATI DALLA STESSA RISPOSTA DEL PRECARICO.
+ *
+ * I metadati rileggevano il prodotto e il suo negozio che il precarico aveva appena letto, con
+ * altre colonne: a ogni visita `products` due volte e `seller_public_profiles` due volte. La scheda
+ * del precarico ha già tutto quello che serve qui (nome, descrizione, foto, prezzo, stato, scorte,
+ * insegna e approvazione del negozio), e il precarico si fa una volta per richiesta
+ * (`lib/queries/precarico.ts`). Si rilegge con `fetchProduct` solo quando il precarico non ha la
+ * scheda: il precarico non fallisce mai (un guasto lo lascia vuoto), e solo quella lettura sa
+ * distinguere «non c'è» da «non riesco a leggerlo» — un guasto non deve diventare «non trovato».
+ */
+function prodottoDalPrecarico(stato: DehydratedState, id: string): ProdottoPerMetadati | null {
+  const chiave = JSON.stringify(queryKeys.products.detail(id));
+  // Uno stato senza voci (precarico vuoto) non ha la scheda.
+  const voce = (stato?.queries ?? []).find((q) => JSON.stringify(q.queryKey) === chiave);
+  const s = voce?.state.data as SchedaProdotto | null | undefined;
+  if (!s) return null;
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    price: Number(s.price),
+    images: s.images,
+    status: s.status as string,
+    stock: s.stock,
+    seller_id: s.seller_id,
+    profiles: s.profiles ? { store_name: s.profiles.store_name, is_approved: s.profiles.is_approved === true } : null,
+  };
+}
+
+/** Il prodotto per metadati e guscio: dal precarico della richiesta, o letto se lì non c'è. */
+async function prodottoDellaRichiesta(id: string, precarico?: DehydratedState): Promise<ProdottoPerMetadati | null> {
+  return prodottoDalPrecarico(precarico ?? (await precaricaProdotto(id)), id) ?? fetchProduct(id);
+}
+
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
-  const product = await fetchProduct(params.id);
+  const product = await prodottoDellaRichiesta(params.id);
   if (!product) {
     // 5/11/2026 — canonical nullo: senza, la pagina «non trovato» ereditava quello della home,
     // e noindex più canonical alla home sono due segnali in contraddizione.
@@ -114,7 +156,11 @@ export default async function ProductLayout(
   // `dynamic = 'force-dynamic'` per tutto il sito, e con quello il `revalidate` qui
   // sopra non conta. Il guscio gira a OGNI visita: ogni viaggio in piu' lo paga chi
   // apre la scheda.
-  const [product, precarico] = await Promise.all([fetchProduct(params.id), precaricaProdotto(params.id)]);
+  //
+  // 22/11/2026 — Una lettura sola: il prodotto per i metadati e la 404 viene dalla risposta del
+  // precarico (vedi `prodottoDalPrecarico`), non da una seconda domanda allo stesso prodotto.
+  const precarico = await precaricaProdotto(params.id);
+  const product = await prodottoDellaRichiesta(params.id, precarico);
   // R10-001 — Qui, nel guscio, si decide la 404. Arriva in rete solo quando sopra non c'è nessuna
   // attesa: oggi app/loading.tsx c'è ancora e fa partire la risposta con 200, quindi notFound()
   // arriva in streaming. Va tolto insieme alle prove comuni che lo leggono per nome.

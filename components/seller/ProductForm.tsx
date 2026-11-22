@@ -284,6 +284,8 @@ export default function ProductForm({
   // R03-006 — Il testo di «Genera con AI» sopra una descrizione già scritta: resta una proposta
   // finché il negoziante non sceglie.
   const [propostaDescrizione, setPropostaDescrizione] = useState<string | null>(null);
+  // Il testo che c'era quando la proposta è comparsa: se cambia, «Usa questa» chiede conferma.
+  const descrizioneAllaProposta = useRef('');
   const idTag = useId();
   const [tagInput, setTagInput] = useState('');
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
@@ -1079,7 +1081,10 @@ export default function ProductForm({
               // descrizione del negoziante, e i dettagli scritti da lui sparivano. Sopra un campo
               // vuoto entra com'era; sopra un testo già scritto si mostra come proposta.
               onResult={(text) => {
-                if ((getValues('description') ?? '').trim()) setPropostaDescrizione(text);
+                if ((getValues('description') ?? '').trim()) {
+                  descrizioneAllaProposta.current = getValues('description') ?? '';
+                  setPropostaDescrizione(text);
+                }
                 else setValue('description', text, { shouldValidate: true });
               }}
             />
@@ -1099,6 +1104,10 @@ export default function ProductForm({
               <button
                 type="button"
                 onClick={() => {
+                  if (
+                    (getValues('description') ?? '') !== descrizioneAllaProposta.current &&
+                    !window.confirm('Hai cambiato la descrizione mentre la proposta era aperta: usando la proposta le tue correzioni vanno perse. Vuoi usarla lo stesso?')
+                  ) return;
                   setValue('description', propostaDescrizione, { shouldValidate: true });
                   setPropostaDescrizione(null);
                 }}
