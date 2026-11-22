@@ -137,6 +137,9 @@ export default function ListsPage() {
       setShowNew(false);
       setNewTitle(''); setNewDesc(''); setNewEmoji('');
       qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
+      // Il menu «Aggiungi a lista» (AddToListButton) legge un'altra chiave, la versione corta delle mie liste:
+      // senza questa riga restava a quella vecchia e la lista appena creata non compariva.
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
       window.location.href = `/lists/${id}`;
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),

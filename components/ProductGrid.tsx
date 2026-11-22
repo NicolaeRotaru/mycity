@@ -24,6 +24,16 @@ import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } 
 import { trackSearchPerformed } from '@/lib/analytics/events';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
+/**
+ * R11-012 R11-007 — Quante righe ha dato il database per questa pagina, prima del filtro sui
+ * negozi (`righeLette`, attaccato alla pagina da `leggiProdottiDellaGriglia`). Dove manca vale
+ * la lunghezza, come prima. «Ce n'è un'altra» si decide su queste, non sulle righe rimaste.
+ */
+function righeLetteDellaPagina(pagina: readonly unknown[]): number {
+  const lette = (pagina as { righeLette?: unknown }).righeLette;
+  return typeof lette === 'number' ? lette : pagina.length;
+}
+
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -288,7 +298,10 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         finestra: finestraDellaPagina(pageParam as number, righePerPagina),
       });
     },
-    getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length, righePerPagina),
+    // R11-012 R11-007 — La condivisione strutturale ricopia le pagine e perderebbe `righeLette`,
+    // che viaggia attaccata alla pagina e non si può copiare: la si spegne qui.
+    structuralSharing: false,
+    getNextPageParam: (ultima, tutte) => pagineSuccessiva(righeLetteDellaPagina(ultima), tutte.length, righePerPagina),
   });
 
   const { isLoading, isError, refetch, isFetching } = domanda;
@@ -300,11 +313,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // l'elenco degli id col voto, gli stessi della lettura.
   const contaVero = !!soloNovita || prezzoSotto !== undefined || !!soloRecensiti;
   const domandaTotale = useQuery<number | null>({
-    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal, soloRecensiti }),
-    enabled: contaVero && (!vistaPerVoto || idsColVoto !== undefined) && (prezzoSotto === undefined || idsScontatiSotto !== undefined),
+    queryKey: queryKeys.products.grid({ conteggio: true, categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal, soloRecensiti, minRating, apertiOra: onlyOpenStores ? apertiOra ?? null : undefined }),
+    // R11-008 — Anche «aperti ora» e «col voto» entrano nel conteggio: finché l'elenco non c'è, non parte.
+    enabled: contaVero && (!onlyOpenStores || apertiOra !== undefined) && (!vistaPerVoto || idsColVoto !== undefined) && (prezzoSotto === undefined || idsScontatiSotto !== undefined),
     staleTime: 60_000,
     queryFn: () => contaProdottiDellaGriglia(supabase, {
       categoryId, categoryIds, sellerId, search, maxPrice, idsScontatiSotto, minPrice, onlyInStock, creatiDal,
+      apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
       idsColVoto: vistaPerVoto ? idsColVoto ?? [] : undefined,
     }),
   });
@@ -487,6 +502,22 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     isLoading || domandaAperti.isLoading || domandaVoto.isLoading || domandaPromo.isLoading || domandaScontatiSotto.isLoading;
   const inErrore = isError || filtroInErrore;
 
+  // R11-012 R11-007 — Se le righe mostrate sono zero ma il database dice che ce ne sono altre
+  // (la pagina ne ha lette tante e il filtro sui negozi le ha scartate tutte), la griglia va a
+  // prendere da sola la pagina dopo invece di dire «nessun prodotto» senza il pulsante.
+  // Scelta: lettura automatica e non solo pulsante, perché chi apre la pagina non deve premere per
+  // scoprire che c'erano prodotti. Non gira all'infinito: si ferma quando `hasNextPage` è falso
+  // (le righe lette dell'ultima pagina sono meno del tetto) o quando una lettura sbaglia (isError).
+  const { hasNextPage, isFetching: staLeggendo, fetchNextPage } = domanda;
+  const vuotaMaCeNeSonoAltre = filtered.length === 0 && !!hasNextPage && !isError;
+  // `pagineLette` fra le dipendenze: ogni pagina arrivata ancora tutta scartata rimette in moto il giro.
+  const pagineLette = domanda.data?.pages.length ?? 0;
+  useEffect(() => {
+    if (!vuotaMaCeNeSonoAltre || caricando || staLeggendo) return;
+    void fetchNextPage();
+  }, [vuotaMaCeNeSonoAltre, caricando, staLeggendo, fetchNextPage, pagineLette]);
+
+
   // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
   // il messaggio d'errore.
   useEffect(() => {
@@ -617,6 +648,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   if (filtered.length === 0) {
     // Le sezioni per-sottocategoria spariscono quando non hanno prodotti.
     if (isSection) return null;
+    // R11-012 R11-007 — Non è «nessun prodotto» finché ci sono altre pagine da leggere.
+    if (vuotaMaCeNeSonoAltre) return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
     // Stato vuoto arricchito (opt-in): titolo/descrizione personalizzati,
     // azione "Azzera filtri" e slot "Forse cercavi" + alternative. Quando
     // nessuna delle nuove prop è passata, resta lo stato storico generico.
@@ -739,7 +772,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // 30/8/2026 (R080) — E la domanda adesso e' sull'ultima pagina, non sul
   // totale: se l'ultima e' tornata piena quasi certamente ce n'e' un'altra.
   const ultimaPagina = domanda.data?.pages?.[domanda.data.pages.length - 1] ?? [];
-  const forseCeNeSonoAltri = cEUnAltraPagina(ultimaPagina.length, righePerPagina);
+  const forseCeNeSonoAltri = cEUnAltraPagina(righeLetteDellaPagina(ultimaPagina), righePerPagina);
 
   return (
     <>

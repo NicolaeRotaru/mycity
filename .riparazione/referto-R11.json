@@ -1,0 +1,303 @@
+{
+  "sessione": "R11",
+  "aggiornato": "2026-11-22 03:20",
+  "finita": true,
+  "testa": "7735a55c7c3762dd75d13eda34d1019047bb0b35",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "7735a55c7c3762dd75d13eda34d1019047bb0b35",
+    "nota": "dopo la cura del bordo di R11-005: typecheck, lint (0 errori) e vitest con 1918 file di prova passati (1 saltato già prima) e 11856 prove passate; SHA preso con git rev-parse HEAD nello stesso comando"
+  },
+  "voci": [
+    {
+      "id": "R11-012",
+      "chiave": "qa-flussi|se il filtro finale sui negozi approvati scarta righe, «carica altri» si ferma",
+      "esito": "riparato",
+      "insieme_a": [
+        "R11-007"
+      ],
+      "commit": "fa2f15880c4fed87cfc661db471057dfa985b80e",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-carica-altri.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-carica-altri.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa2f15880c4fed87cfc661db471057dfa985b80e^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-carica-altri.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima correzione d4143c9f (decidere su righeLette). Giro K01: con zero righe mostrate e hasNextPage vero la griglia non dice «Nessun prodotto», mostra lo scheletro e legge da sola la pagina dopo finché trova righe o finisce, fermandosi su errore. La prova ora monta la griglia vera, preme «Carica altri», controlla le finestre [0,3] [4,7] [8,11] e diventa rossa con getNextPageParam su ultima.length o senza structuralSharing:false.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): nessun giro infinito, stop su hasNextPage falso e su errore, «Nessun prodotto» alla fine con zero prodotti veri; mutazioni ultima.length e senza structuralSharing:false rosse; prova 0, prova rimessa 0"
+    },
+    {
+      "id": "R11-007",
+      "chiave": "qa-flussi|«carica altri» sparisce quando una pagina della griglia perde righe al filtro dei negozi",
+      "esito": "riparato",
+      "insieme_a": [
+        "R11-012"
+      ],
+      "commit": "fa2f15880c4fed87cfc661db471057dfa985b80e",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-carica-altri.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-carica-altri.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fa2f15880c4fed87cfc661db471057dfa985b80e^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-carica-altri.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stessa cura della voce gemella (d4143c9f, poi fa2f1588 nel giro K01): anche con la prima pagina tutta filtrata la griglia va avanti da sola invece di dire «Nessun prodotto».",
+      "verificato_da": "qa (subagente revisore del giro di correzione): come la voce gemella; prova 0, prova rimessa 0"
+    },
+    {
+      "id": "R11-010",
+      "chiave": "qa-flussi|il conteggio delle novità non applica il filtro sui negozi approvati",
+      "esito": "riparato",
+      "insieme_a": [
+        "R11-011"
+      ],
+      "commit": "945b6a1c1ef2be115870caedee3b7c41f2f7a0a3",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 945b6a1c1ef2be115870caedee3b7c41f2f7a0a3^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Giro di correzione K01: l'aggancio ora nomina il vincolo (seller_public_profiles!products_seller_id_fkey!inner) e il ripiego senza aggancio scatta su qualsiasi errore, non sul codice, che su una HEAD postgrest-js non dà. La prova usa il createClient vero di supabase-js con un fetch finto che risponde come PostgREST su una HEAD (300 senza vincolo, 400 senza codice): era rossa su 7bc4a923.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): vincolo products_seller_id_fkey giusto (migrations/005), sintassi !vincolo!inner valida, finto con createClient vero e HEAD senza codice, conteggio null solo se falliscono tutte e due le letture; prova 0, prova rimessa 0"
+    },
+    {
+      "id": "R11-011",
+      "chiave": "qa-flussi|nella pagina novità il numero in alto conta anche prodotti che la griglia non mostra",
+      "esito": "riparato",
+      "insieme_a": [
+        "R11-010"
+      ],
+      "commit": "945b6a1c1ef2be115870caedee3b7c41f2f7a0a3",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 945b6a1c1ef2be115870caedee3b7c41f2f7a0a3^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-conteggio-negozi-approvati.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Giro di correzione K01, stesso commit della voce gemella: la prova copre il caso novità (creatiDal) e quello in cui anche la lettura col vincolo sbaglia, dove il ripiego dà il numero senza aggancio e mai null; il conteggio della categoria madre usa la stessa funzione.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): come la voce gemella; app/category/[slug]/page.tsx:118-126 riceve un numero; prova 0, prova rimessa 0"
+    },
+    {
+      "id": "R11-008",
+      "chiave": "qa-flussi|il conteggio della griglia non riceve i filtri «aperti ora» e «col voto»",
+      "esito": "riparato",
+      "commit": "f12c937a",
+      "file_toccati": [
+        "components/ProductGrid.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-conteggio-aperti-ora.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-conteggio-aperti-ora.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f12c937a^ --file components/ProductGrid.tsx --prove tests/unit/riparazione-r11-conteggio-aperti-ora.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il conteggio ora riceve apertiOra, non parte finché l'elenco dei negozi aperti non c'è, e nella chiave della cache entrano apertiOra e minRating.",
+      "verificato_da": "qa (subagente revisore del lotto A): prova e prova rimessa (0); chiave della cache con apertiOra e minRating, enabled identico alla lettura"
+    },
+    {
+      "id": "R11-009",
+      "chiave": "qa-flussi|cercando una parola a metà il sito trova solo una parte dei prodotti, e dentro la vetrina di un negozio può dire «nessun risultato»",
+      "esito": "riparato",
+      "commit": "1fc65eb2fb41e1570eff6c3c890ac97cfe50c554",
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts",
+        "tests/unit/cercare-per-pertinenza-non-e-ordinare-per-data.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-ricerca-piu-pagine.test.ts",
+        "tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-ricerca-piu-pagine.test.ts tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1fc65eb2fb41e1570eff6c3c890ac97cfe50c554^ --file lib/queries/griglia-prodotti.ts --prove tests/unit/riparazione-r11-ricerca-piu-pagine.test.ts,tests/unit/riparazione-r11-ricerca-a-meta-parola.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima correzione 440facaa (il ripiego per nome sempre, che ha cambiato la prova comune: accettata dalla regia). Giro K01: la lista unita è stabile, cioè i pertinenti filtrati seguiti dai prodotti col nome letti con .range(a-|Pf|, b-|Pf|) e senza i pertinenti già in lista, quindi niente doppioni, niente prodotti persi e nessuna crescita con le pagine; se la lettura per nome sbaglia restano i pertinenti, con console.warn.",
+      "verificato_da": "qa (subagente revisore del giro di correzione): sonda casuale con 40 semi (0-260 pertinenti, 0-150 per nome, più di 100 pertinenti col nome, filtro prezzo): nessun doppione, nessun salto, passaggio esatto fra pertinenti e per nome; or=(id.not.in.(…)) valido e assente con zero da escludere; prove 0, prova rimessa 0"
+    },
+    {
+      "id": "R11-001",
+      "chiave": "immagini-media|quattro foto sotto la piega vengono chieste come «urgenti» su ogni home",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreProductExplorer.tsx",
+          "modifica": "riga 223: aggiungere prioritaPrimeFoto={false} al <ProductGrid> della vetrina; la sezione productGrid è l ultima della home del negozio (lib/store-site.ts:340-348), sotto la piega, e oggi le sue prime 4 foto escono priority (components/ProductGrid.tsx:692, prioritaPrimeFoto predefinito true)"
+        }
+      ],
+      "nota": "Il resto della voce era già sistemato prima: la home della città monta la griglia come fila senza priority (components/home-sections/HomeSectionRenderer.tsx:245-247; components/ProductGrid.tsx:692 esclude formaFila), components/home/PromoDeals.tsx:71 e components/store-sections/CollectionSection.tsx:98 e :156 hanno priority falso, app/promozioni/page.tsx:138 è sceso da sei a quattro su una pagina dove la griglia è in cima. Resta solo la home del negozio, e la cura sta in un file non mio. Toccare il predefinito in ProductGrid.tsx toglierebbe la priorità anche dove la griglia è in cima (categoria, ricerca, novità).",
+      "verificato_da": "qa (subagente revisore del lotto B): ha trovato la griglia della vetrina sotto la piega con priority; la sessione R11 l ha ricontrollato su lib/store-site.ts:340-348 e components/StoreProductExplorer.tsx:223"
+    },
+    {
+      "id": "R11-002",
+      "chiave": "immagini-media|next.config.js ammette ancora le immagini di placehold.co, che il sito non usa più",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "lib/indirizzo-immagine-ammesso.ts",
+          "modifica": "togliere 'placehold.co' da HOST_IMMAGINI_AMMESSI (riga 34)"
+        },
+        {
+          "file": "middleware.ts",
+          "modifica": "togliere ' https://placehold.co' dalla direttiva img-src (riga 313)"
+        },
+        {
+          "file": "lib/immagine-categoria.ts",
+          "modifica": "togliere 'placehold.co' da HOST_FOTO_AMMESSI (riga 47)"
+        },
+        {
+          "file": "lib/ai/productContext.ts",
+          "modifica": "togliere /^placehold\\.co$/i da HOST_ESTERNI_DICHIARATI (riga 50)"
+        },
+        {
+          "file": "tests/unit/le-foto-che-arrivano-al-modello-sono-le-nostre.test.ts",
+          "modifica": "riga 151: l'aspettativa su placehold.co passa da true a false"
+        },
+        {
+          "file": "next.config.js",
+          "modifica": "togliere la riga 51 { protocol: 'https', hostname: 'placehold.co' }, nello stesso commit delle modifiche sopra"
+        }
+      ],
+      "nota": "next.config.js è mio, ma toglierlo da solo fa cadere tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts (righe 284-290), che vuole HOST_IMMAGINI_AMMESSI uguale a remotePatterns e ogni host nell'img-src del middleware: le cinque copie vanno tolte insieme. Nel codice che gira placehold.co non si usa più. Restano stories/StoreAvatar.stories.tsx, documenti .md e seeds/001_piacenza_stores.sql (prodotti in bozza con foto placehold.co: se quei dati sono nel database vero perderebbero la foto, da guardare lato Nicola).",
+      "verificato_da": "qa (subagente revisore del lotto B): la prova tests/unit/l-indirizzo-che-il-sito-non-sa-mostrare-lo-dice-subito.test.ts:284-290 impone davvero HOST_IMMAGINI_AMMESSI uguale a remotePatterns"
+    },
+    {
+      "id": "R11-003",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione",
+      "esito": "parziale",
+      "commit": null,
+      "file_toccati": [],
+      "prova": "public/manifest.json sulla base ha già \"id\": \"/\" (riga 5) e \"display_override\": [\"standalone\",\"minimal-ui\"] (riga 8), e non ha più orientation: il blocco in verticale, id e display_override erano già sistemati prima.",
+      "cosa_resta": "servono schermate vere dell'app (una stretta e una larga) da mettere in public/ e in manifest.screenshots; nel deposito ci sono solo mockup in docs/mockup. Niente immagini finte, come da indicazione della regista.",
+      "copre_tutta_la_voce": false,
+      "verificato_da": "qa (subagente revisore del lotto B): c è un solo manifest (public/manifest.json, collegato da app/layout.tsx:243), senza orientation, con id e display_override"
+    },
+    {
+      "id": "R11-004",
+      "chiave": "qa-flussi|una lista creata da /lists non compare subito nel menu «aggiungi a lista»",
+      "esito": "riparato",
+      "commit": "546959a8",
+      "file_toccati": [
+        "app/lists/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-lista-nel-menu.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-lista-nel-menu.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 546959a8^ --file app/lists/page.tsx --prove tests/unit/riparazione-r11-lista-nel-menu.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il menu (components/AddToListButton.tsx) legge la chiave React Query lists.mineMin, mentre la creazione da /lists invalidava solo lists.mine. Ora invalida anche lists.mineMin. La prova monta /lists, mette in cache le liste del menu, crea una lista e controlla che quella chiave risulti da rileggere.",
+      "verificato_da": "qa (subagente revisore del lotto B): la chiave [lists, mine-min] di lib/queries/keys.ts:262 è la stessa del menu (components/AddToListButton.tsx:40); prova 0, prova rimessa 0"
+    },
+    {
+      "id": "R11-005",
+      "chiave": "qa-flussi|le zone del fattorino dicono «salvate» prima dell'esito",
+      "esito": "riparato",
+      "commit": "7735a55c7c3762dd75d13eda34d1019047bb0b35",
+      "file_toccati": [
+        "app/rider/availability/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7735a55c7c3762dd75d13eda34d1019047bb0b35^ --file app/rider/availability/page.tsx --prove tests/unit/riparazione-r11-zone-dopo-l-esito.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Giro K01, in due commit. In 50362063 le zone mostrate sono solo quelle scritte davvero, i tocchi vanno in coda sulle zone confermate e dopo un errore la riga fissa dice «Non è stato salvato: controlla il collegamento e riprova.». In 7735a55c, applicato dalla sessione R11 con il permesso della regia quinta, l aggiunta in coda non supera 6 zone neanche quando una rimozione in volo fallisce. Il caso è nella prova: 6 zone, rimozione in errore e aggiunta subito dopo, rossa senza la cura (7 zone scritte).",
+      "verificato_da": "qa (subagente revisore del giro di correzione) sul commit 50362063: errore poi ok, stesso tocco due volte, errore poi successo reggono, e la sua sonda ha trovato il bordo 7/6. La cura è quella che ha indicato lui; la prova del bordo è rossa sulla base del commit e verde dopo (prova rimessa 0)."
+    },
+    {
+      "id": "R11-006",
+      "chiave": "qa-flussi|le pagine cms caricano ancora youtube/vimeo senza clic",
+      "esito": "gia_riparato_prima",
+      "prova": "components/cms/CmsBlockRenderer.tsx:98 rende <VideoAlClic provider=… src=… titolo=… /> al posto dell'iframe; components/store-sections/VideoAlClic.tsx: pulsante type=\"button\" e l'<iframe> nasce solo dopo il clic.",
+      "copre_tutta_la_voce": true,
+      "verificato_da": "qa (subagente revisore del lotto B): l unico embed YouTube/Vimeo del CMS passa da VideoAlClic, e il testo ricco vieta iframe (lib/sanitize-html.ts:43)"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "una lista rinominata o eliminata resta com era nel menu «aggiungi a lista»",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/lists/[id]/page.tsx:123-127",
+      "descrizione": "rileggiLeListeDiLists invalida solo le chiavi mine, public e inVetrina, non mine-min (lib/queries/keys.ts:262), che è quella letta dal menu in components/AddToListButton.tsx:40; mine-min non ha mine come prefisso."
+    },
+    {
+      "titolo": "la lettura automatica della griglia con le pagine tutte filtrate non ha un tetto di pagine",
+      "dimensione": "performance-percepita",
+      "severita": "minore",
+      "file": "components/ProductGrid.tsx (vuotaMaCeNeSonoAltre, commit fa2f1588)",
+      "descrizione": "Conta anche i filtri lato client (promo, disponibili, voto): con un catalogo grande e un limit piccolo può concatenare molte letture prima di trovare righe. È finita, ma senza un tetto."
+    }
+  ],
+  "domande_per_nicola": [
+    "placehold.co (R11-002): lo togliamo da tutte e cinque le liste dei domini ammessi insieme (next.config.js, lib/indirizzo-immagine-ammesso.ts, middleware.ts, lib/immagine-categoria.ts, lib/ai/productContext.ts)? Prima conviene guardare se nel database vero ci sono ancora prodotti con foto placehold.co (seeds/001_piacenza_stores.sql ne crea in bozza).",
+    "Schermate per l installazione dell app (R11-003): servono due schermate vere, una stretta e una larga, da mettere in public/ e in manifest.screenshots. Chi le fa?"
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "2 riparatori (lotti A e B), 2 revisori, 1 riparatore e 1 revisore per il giro di correzione K01, tutti col modello piccolo; tetto di 6 raggiunto. Il bordo di R11-005 (2 righe e prova) l ha applicato la sessione R11 con il permesso della regia quinta.",
+    "subagenti": 6
+  },
+  "costo_usd": 12.79
+}

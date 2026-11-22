@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Calendar, MapPin, CheckCircle2, Circle, Plus, Save, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -59,6 +59,15 @@ export default function RiderAvailabilityPage() {
   // non compaiono finché la lettura non riesce.
   const [letturaFallita, setLetturaFallita] = useState(false);
   const [tentativo, setTentativo] = useState(0);
+  // R11-005 — Dopo un salvataggio fallito la riga in fondo non può dire «salvate».
+  const [nonSalvato, setNonSalvato] = useState(false);
+  // R11-005 — Le zone si segnano dopo l'esito. `confermate` = quelle scritte davvero; `previste` =
+  // confermate + i tocchi ancora in volo (solo per i controlli «già presente» e «massimo 6»);
+  // `coda` mette le scritture in fila, così due tocchi rapidi non si perdono a vicenda.
+  const confermate = useRef<string[]>([]);
+  const previste = useRef<string[]>([]);
+  const coda = useRef<Promise<void>>(Promise.resolve());
+  const inVolo = useRef(0);
 
   // Carica la disponibilità persistita dal profilo del rider.
   useEffect(() => {
@@ -82,7 +91,10 @@ export default function RiderAvailabilityPage() {
           online: !!data.rider_is_online,
           schedule: (data.rider_schedule as Availability['schedule'] | null) ?? DEFAULT_SCHEDULE,
         });
-        setZones((data.rider_zones as string[] | null) ?? []);
+        const lette = (data.rider_zones as string[] | null) ?? [];
+        confermate.current = lette;
+        previste.current = lette;
+        setZones(lette);
       }
       setLoading(false);
     })();
@@ -92,6 +104,7 @@ export default function RiderAvailabilityPage() {
     if (!userId) return false;
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
     if (error) toast.error('Errore nel salvataggio. Riprova.');
+    setNonSalvato(!!error);
     return !error;
   };
 
@@ -118,29 +131,43 @@ export default function RiderAvailabilityPage() {
     });
   };
 
-  const saveZones = (next: string[]) => {
-    setZones(next);
-    void persist({ rider_zones: next });
+  // Ogni cambio è una funzione sulle zone: si applica alle zone CONFERMATE al momento della
+  // scrittura, in fila. Se la scrittura cade le zone restano com'erano.
+  const cambiaZone = (cambia: (l: string[]) => string[]) => {
+    previste.current = cambia(previste.current);
+    inVolo.current += 1;
+    coda.current = coda.current.then(async () => {
+      try {
+        const next = cambia(confermate.current);
+        if (await persist({ rider_zones: next })) {
+          confermate.current = next;
+          setZones(next);
+        }
+      } finally {
+        inVolo.current -= 1;
+        if (inVolo.current === 0) previste.current = confermate.current;
+      }
+    });
   };
 
   const toggleZone = (zone: string) => {
-    if (zones.includes(zone)) {
-      saveZones(zones.filter((z) => z !== zone));
+    if (previste.current.includes(zone)) {
+      cambiaZone((l) => l.filter((z) => z !== zone));
     } else {
-      if (zones.length >= 6) {
+      if (previste.current.length >= 6) {
         toast.error('Massimo 6 zone preferite');
         return;
       }
-      saveZones([...zones, zone]);
+      cambiaZone((l) => (l.includes(zone) || l.length >= 6 ? l : [...l, zone]));
     }
   };
 
   const addCustomZone = () => {
     const z = customZone.trim();
     if (!z) return;
-    if (zones.includes(z)) { toast.error('Zona già presente'); return; }
-    if (zones.length >= 6) { toast.error('Massimo 6 zone'); return; }
-    saveZones([...zones, z]);
+    if (previste.current.includes(z)) { toast.error('Zona già presente'); return; }
+    if (previste.current.length >= 6) { toast.error('Massimo 6 zone'); return; }
+    cambiaZone((l) => (l.includes(z) || l.length >= 6 ? l : [...l, z]));
     setCustomZone('');
   };
 
@@ -324,7 +351,10 @@ export default function RiderAvailabilityPage() {
 
       <div className="px-4">
         <div className="flex items-center gap-1.5 rounded-lg border border-olive-200 bg-olive-50 p-3.5 text-[13px] text-olive-900">
-          <Save size={16} strokeWidth={2.2} className="shrink-0" aria-hidden /> Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.
+          <Save size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />{' '}
+          {nonSalvato
+            ? 'Non è stato salvato: controlla il collegamento e riprova.'
+            : 'Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.'}
         </div>
       </div>
     </div>
