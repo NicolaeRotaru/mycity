@@ -56,6 +56,8 @@ describe('il listino è quello di Nicola (22/11/2026)', () => {
     expect(LISTINO.foto_video.cadenza).toBe('mese');
     expect(DI_LISTINO.prezzi.logo).toBeNull();
     expect(DI_LISTINO.nome).toBe(NOME_AGENZIA_DI_RISERVA);
+    expect(NOME_AGENZIA_DI_RISERVA).toBe('MyCity'); // il preventivo lo firma MyCity (Nicola, 23/11)
+    expect(LISTINO.foto_video.partner).toBe('scattiDG'); // foto e video li fa il partner scattiDG
   });
 
   it('i prezzi si scrivono come li legge il cliente', () => {
@@ -172,7 +174,7 @@ describe('il preventivo', () => {
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelte: ['foto_video', 'sito_web'],
     });
     expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
-      /^Bar Roma vuole il preventivo P-20261122-A1B2C3: Foto e video, Sito web professionale\. Totale: una volta 500,00\s€; ogni mese da 50,00\s€ a 300,00\s€ al mese\. Telefono: 3331234567\.$/,
+      /^Bar Roma vuole il preventivo P-20261122-A1B2C3: Foto e video \(scattiDG\), Sito web professionale\. Totale: una volta 500,00\s€; ogni mese da 50,00\s€ a 300,00\s€ al mese\. Telefono: 3331234567\.$/,
     );
   });
 });

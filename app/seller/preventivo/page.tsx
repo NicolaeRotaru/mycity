@@ -25,10 +25,10 @@ import {
  * Nicola: «deve già essere creato prima, in formato preventivo/demo». Il cliente
  * apre questa pagina e trova un preventivo vero, con numero e data, fatto dai
  * suoi dati: cosa manca alla vetrina, perché, quanto. Toglie le voci che non
- * gli interessano, preme «Accetto» e l'agenzia lo richiama. Si stampa o si
+ * gli interessano, preme «Accetto» e MyCity lo richiama. Si stampa o si
  * salva in PDF dal pulsante (il menu e i pulsanti non escono sulla carta).
  *
- * Niente si paga qui: accettare manda la richiesta all'agenzia, che conferma
+ * Niente si paga qui: accettare manda la richiesta a MyCity, che conferma
  * prezzi e tempi e concorda il pagamento. I prezzi sono quelli di Nicola
  * (22/11/2026); dove non c'è un prezzo, la voce dice «su richiesta».
  */
@@ -153,6 +153,7 @@ export default function PreventivoAgenziaPage() {
                     />
                     <label htmlFor={`voce-${r.id}`} className="flex-1 min-w-0 cursor-pointer">
                       <span className="block font-semibold text-ink-900">{r.titolo}</span>
+                      {r.partner && <span className="block text-xs font-semibold text-primary-700">con {r.partner}, il partner di MyCity per foto e video</span>}
                       <span className="block text-sm text-ink-600">{r.descrizione}</span>
                       <span className="block text-xs text-ink-500 mt-1">Perché te lo proponiamo:</span>
                       <ul className="list-disc pl-4 text-xs text-ink-600">
