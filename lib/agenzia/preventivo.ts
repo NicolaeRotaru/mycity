@@ -86,8 +86,11 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
   },
 };
 
-/** Come si presenta l'agenzia finché Nicola non scrive il nome in `site_settings.agenzia.nome`. */
-export const NOME_AGENZIA_DI_RISERVA = 'Il team foto e video di MyCity';
+/**
+ * Il nome dell'agenzia (Nicola, 23/11/2026: «si chiama scattiDG»). Vale finché
+ * `site_settings.agenzia.nome` non dice un altro nome: da lì si cambia senza rifare il sito.
+ */
+export const NOME_AGENZIA_DI_RISERVA = 'scattiDG';
 
 /** Un prezzo oltre questo (in centesimi: 10.000 €) è un errore di battitura, non un listino. */
 const PREZZO_MASSIMO_CENTESIMI = 1_000_000;
