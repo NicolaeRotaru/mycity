@@ -1,9 +1,10 @@
 /**
  * IL PREVENTIVO DI QUELLO CHE MANCA — già pronto quando il cliente apre la dashboard.
  *
- * 22/11/2026 — Nicola ha aperto un'agenzia con un videomaker e un fotografo. La
- * dashboard di ogni attività iscritta mostra quello che le manca e il preventivo
- * per farlo fare all'agenzia. Nicola: «deve già essere creato prima, in formato
+ * 22/11/2026 — La dashboard di ogni attività iscritta mostra quello che le manca e
+ * il preventivo di MyCity per farlo. Foto e video li fa scattiDG, l'azienda partner a
+ * cui MyCity si affida per riprese, scatti, montaggio e ritocco (Nicola, 23/11);
+ * social, sito web e logo sono servizi di MyCity. Nicola: «deve già essere creato prima, in formato
  * preventivo/demo» — quindi il cliente non lo chiede: lo trova pronto, calcolato
  * dai suoi dati.
  *
@@ -14,7 +15,7 @@
  *  · foto e video, con riprese, scatti, montaggio e ritocco — da 50 a 300 € al
  *    mese, secondo quanto serve;
  *  · logo e grafica — nessun prezzo detto: «su richiesta».
- * (La vetrina sul marketplace, 50 € al mese, non è un servizio dell'agenzia: il
+ * (La vetrina sul marketplace, 50 € al mese, non è una voce del preventivo: il
  * preventivo la mostra con la frase unica dei prezzi dei negozi, che segue
  * l'interruttore dell'abbonamento.)
  *
@@ -23,8 +24,8 @@
  *    perché, con il numero vero (es. «12 prodotti sono senza foto»);
  *  · `costruisciPreventivo()` mette le voci in forma di preventivo: numero,
  *    data, prezzi, totali una tantum e al mese;
- *  · `leggiImpostazioniAgenzia()` legge da `site_settings.agenzia` il nome
- *    dell'agenzia e i prezzi che Nicola vuole cambiare, senza rifare il sito.
+ *  · `leggiImpostazioniAgenzia()` legge da `site_settings.agenzia` chi firma il
+ *    preventivo e i prezzi che Nicola vuole cambiare, senza rifare il sito.
  *
  * Lo stesso calcolo gira sul server quando il cliente accetta: il server non si
  * fida delle voci mandate dal browser.
@@ -51,9 +52,11 @@ export type Prezzo = { da: number; a: number };
 
 type VoceListino = {
   titolo: string;
-  /** Cosa comprende, detto senza promettere numeri che l'agenzia non ha fissato. */
+  /** Cosa comprende, detto senza promettere numeri che nessuno ha fissato. */
   descrizione: string;
   cadenza: Cadenza;
+  /** Chi fa il lavoro quando non è MyCity: il cliente lo legge sulla voce, Nicola nell'avviso. */
+  partner?: string;
   /** Il prezzo detto da Nicola il 22/11/2026; `null` = su richiesta. */
   prezzo: Prezzo | null;
 };
@@ -72,6 +75,8 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
     descrizione: 'Scatti e riprese nel tuo locale, con ritocco e montaggio: le foto della copertina, dei prodotti e i video per vetrina e social.',
     cadenza: 'mese',
     prezzo: { da: 5_000, a: 30_000 },
+    // Nicola, 23/11: «scattiDG è l'azienda partner a cui MyCity si affida per foto/video making/editing».
+    partner: 'scattiDG',
   },
   social: {
     titolo: 'Gestione automatica dei social',
@@ -88,10 +93,11 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
 };
 
 /**
- * Il nome dell'agenzia (Nicola, 23/11/2026: «si chiama scattiDG»). Vale finché
- * `site_settings.agenzia.nome` non dice un altro nome: da lì si cambia senza rifare il sito.
+ * Chi firma il preventivo: MyCity. scattiDG è il partner che fa foto e video, e compare
+ * sulla sua voce (Nicola, 23/11/2026). Vale finché `site_settings.agenzia.nome` non dice
+ * un altro nome: da lì si cambia senza rifare il sito.
  */
-export const NOME_AGENZIA_DI_RISERVA = 'scattiDG';
+export const NOME_AGENZIA_DI_RISERVA = 'MyCity';
 
 /** Un prezzo oltre questo (in centesimi: 10.000 €) è un errore di battitura, non un listino. */
 const PREZZO_MASSIMO_CENTESIMI = 1_000_000;
@@ -233,6 +239,7 @@ export type RigaPreventivo = VoceMancante & {
   titolo: string;
   descrizione: string;
   cadenza: Cadenza;
+  partner?: string;
   /** `null` = su richiesta. */
   prezzo: Prezzo | null;
 };
@@ -304,6 +311,7 @@ export function costruisciPreventivo(opzioni: {
     titolo: LISTINO[v.id].titolo,
     descrizione: LISTINO[v.id].descrizione,
     cadenza: LISTINO[v.id].cadenza,
+    ...(LISTINO[v.id].partner ? { partner: LISTINO[v.id].partner } : {}),
     prezzo: impostazioni.prezzi[v.id],
   }));
   const giorno = giornoDiPiacenza(adesso);
@@ -342,7 +350,8 @@ export function scriviTotale(t: Totale, cadenza: Cadenza): string {
  * quali voci e quanto (una volta / al mese), e il telefono per richiamare.
  */
 export function testoAvvisoPreventivo(p: Preventivo, telefono: string | null): string {
-  const voci = p.righe.map((r) => r.titolo).join(', ');
+  // Il partner tra parentesi: Nicola sa subito chi chiamare per foto e video.
+  const voci = p.righe.map((r) => (r.partner ? `${r.titolo} (${r.partner})` : r.titolo)).join(', ');
   const totali = [
     p.totaleUnaTantum ? `una volta ${scriviTotale(p.totaleUnaTantum, 'una_tantum')}` : '',
     p.totaleMensile ? `ogni mese ${scriviTotale(p.totaleMensile, 'mese')}` : '',

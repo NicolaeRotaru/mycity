@@ -14,7 +14,7 @@
 --    (massimo 60 caratteri, come nel modulo).
 --  · site_settings.agenzia — il nome dell'agenzia e i prezzi dei servizi, in centesimi, per
 --    cambiarli senza rifare il sito (come branding e home_site, 075). Vuota vuol dire: valgono
---    il nome scattiDG e il listino di Nicola del 22/11 scritti in lib/agenzia/preventivo.ts
+--    la firma MyCity e il listino di Nicola del 22/11 scritti in lib/agenzia/preventivo.ts
 --    (sito 500 €, social 300 € al mese, foto e video da 50 a 300 € al mese, logo su richiesta).
 --
 -- I PERMESSI NON CAMBIANO. La lettura di profiles e site_settings è già concessa a livello di
@@ -49,6 +49,6 @@ COMMENT ON COLUMN public.profiles.business_type_detail IS
 ALTER TABLE public.site_settings ADD COLUMN IF NOT EXISTS agenzia jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 COMMENT ON COLUMN public.site_settings.agenzia IS
-  'Agenzia foto e video (22-23/11/2026). Esempio: {"nome": "scattiDG", "prezzi": {"logo": null, "foto_video": {"da": 5000, "a": 30000}, "social": 30000, "sito_web": 50000}}. Chiavi dei prezzi: logo, foto_video, social, sito_web. Valori in centesimi: un numero = prezzo fisso, {"da","a"} = fascia, null = su richiesta, chiave assente = listino di lib/agenzia/preventivo.ts. Lo 0 non vale come prezzo: si legge «su richiesta».';
+  'Preventivo di MyCity, foto e video col partner scattiDG (22-23/11/2026). Esempio: {"nome": "MyCity", "prezzi": {"logo": null, "foto_video": {"da": 5000, "a": 30000}, "social": 30000, "sito_web": 50000}}. Chiavi dei prezzi: logo, foto_video, social, sito_web. Valori in centesimi: un numero = prezzo fisso, {"da","a"} = fascia, null = su richiesta, chiave assente = listino di lib/agenzia/preventivo.ts. Lo 0 non vale come prezzo: si legge «su richiesta».';
 
 NOTIFY pgrst, 'reload schema';

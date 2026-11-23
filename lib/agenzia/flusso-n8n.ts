@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger';
 import type { Preventivo } from './preventivo';
 
 /**
- * IL PREVENTIVO ACCETTATO VA AL FLUSSO DELL'AGENZIA (n8n).
+ * IL PREVENTIVO ACCETTATO VA AL FLUSSO n8n DI MYCITY.
  *
  * 22/11/2026 — Nicola: «sfrutteremo n8n per dargli il servizio di gestione dei
  * social automatico (è già pronto, basta collegarlo)». Quando un cliente accetta
@@ -53,7 +53,7 @@ export async function inviaAlFlusso(p: Preventivo, dati: DatiPerIlFlusso, fetchF
         attivita: { id: dati.idAttivita, nome: p.attivita, tipo: p.tipoAttivita },
         contatti: { email: dati.email, telefono: dati.telefono },
         socials: dati.socials ?? null,
-        voci: p.righe.map((r) => ({ id: r.id, titolo: r.titolo, cadenza: r.cadenza, prezzo: r.prezzo, perche: r.perche })),
+        voci: p.righe.map((r) => ({ id: r.id, titolo: r.titolo, cadenza: r.cadenza, prezzo: r.prezzo, perche: r.perche, partner: r.partner ?? null })),
       }),
       signal: AbortSignal.timeout(ATTESA_MASSIMA_MS),
     });
