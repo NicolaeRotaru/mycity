@@ -173,3 +173,36 @@ export const LAVORI_DI_EDITING: string[] = [
   'Il tuo nome o logo in sovrimpressione',
   'Una versione per ogni social, già nella misura giusta',
 ];
+
+/* ───────────────────── SCHEDA GOOGLE: come apparirà su Maps ───────────────────── */
+
+export type SchedaGoogle = {
+  nome: string;
+  /** La categoria che Google mostra sotto il nome. */
+  categoria: string;
+  /** Cosa sistemiamo, una riga per lavoro. */
+  lavori: string[];
+};
+
+const CATEGORIA_GOOGLE: Record<TipoAttivita, string> = {
+  negozio: 'Negozio',
+  bar: 'Bar',
+  ristorante: 'Ristorante',
+  artigiano: 'Laboratorio artigianale',
+  servizi: 'Servizi alla persona',
+  altro: 'Attività locale',
+};
+
+export function schedaGoogle(nome: string, tipo: TipoAttivita): SchedaGoogle {
+  return {
+    nome: nome.trim() || 'La tua attività',
+    categoria: `${CATEGORIA_GOOGLE[tipo]} · Piacenza`,
+    lavori: [
+      'Creiamo la scheda, o ti aiutiamo a recuperarla se esiste già',
+      'Categoria giusta, così compari quando cercano quello che vendi',
+      'Orari, giorni di chiusura e indirizzo corretti',
+      'Le foto migliori del locale e dei prodotti',
+      'Il collegamento alla tua vetrina MyCity e a WhatsApp',
+    ],
+  };
+}

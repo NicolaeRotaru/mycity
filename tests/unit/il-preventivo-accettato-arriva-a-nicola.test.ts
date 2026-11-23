@@ -88,7 +88,7 @@ describe('GET /api/seller/preventivo', () => {
     const { data } = (await r.json()) as { data: { attivita: string; tipoAttivita: string; righe: { id: string; perche: string[] }[] } };
     expect(data.attivita).toBe('Bar Roma');
     expect(data.tipoAttivita).toBe('bar');
-    expect(data.righe.map((x) => x.id)).toEqual(['foto_video', 'social', 'sito_web']);
+    expect(data.righe.map((x) => x.id)).toEqual(['foto_video', 'social', 'sito_web', 'google_maps']);
     expect(data.righe[0].perche).toContain('1 prodotto è senza foto, su 2 in catalogo.');
   });
 

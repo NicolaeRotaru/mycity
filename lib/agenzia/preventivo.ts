@@ -14,6 +14,7 @@
  *    collegarlo») — 300 € al mese;
  *  · foto e video, con riprese, scatti, montaggio e ritocco — da 50 a 300 € al
  *    mese, secondo quanto serve;
+ *  · scheda Google su Maps (23/11) — nessun prezzo detto: «su richiesta»;
  *  · logo e grafica — TOLTO dal preventivo il 23/11/2026 (Nicola: «togli sezione di
  *    logo e grafica»).
  * (La vetrina sul marketplace, 50 € al mese, non è una voce del preventivo: il
@@ -35,7 +36,7 @@
 import type { TipoAttivita } from './tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
 
-export const SERVIZI_AGENZIA = ['foto_video', 'social', 'sito_web'] as const;
+export const SERVIZI_AGENZIA = ['foto_video', 'social', 'sito_web', 'google_maps'] as const;
 export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
 
 /**
@@ -46,6 +47,7 @@ export const SLUG_SERVIZIO: Record<ServizioAgenzia, string> = {
   foto_video: 'foto-video',
   social: 'social',
   sito_web: 'sito-web',
+  google_maps: 'scheda-google',
 };
 
 /** Il servizio di un indirizzo, o `null` se l'indirizzo non è di nessun servizio. */
@@ -99,6 +101,14 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
     descrizione: 'Un sito tutto tuo, con il tuo nome, che porta i clienti alla tua vetrina MyCity.',
     cadenza: 'una_tantum',
     prezzo: fisso(50_000),
+  },
+  // Nicola, 23/11/2026: «aggiungi solo la 1» — la scheda su Google Maps. Nessun prezzo detto:
+  // «su richiesta» finché non lo scrive in site_settings.agenzia.prezzi.google_maps.
+  google_maps: {
+    titolo: 'Scheda Google su Maps',
+    descrizione: 'Creiamo o sistemiamo la tua scheda su Google Maps: categoria giusta, orari, foto e il collegamento alla tua vetrina MyCity. Chi cerca vicino a te ti trova.',
+    cadenza: 'una_tantum',
+    prezzo: null,
   },
 };
 
@@ -237,6 +247,13 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
   if (!campoPieno(d.socials, 'website')) {
     voci.push({ id: 'sito_web', perche: ['La tua attività non ha ancora un sito web suo.'] });
   }
+
+  // La scheda Google si propone sempre: MyCity non sa se ne hai una né se è curata, e il
+  // cliente può togliere la voce prima di accettare.
+  voci.push({
+    id: 'google_maps',
+    perche: ['Quando qualcuno cerca «vicino a me», Google mostra prima le schede complete di orari e foto: controlliamo la tua.'],
+  });
 
   return voci;
 }

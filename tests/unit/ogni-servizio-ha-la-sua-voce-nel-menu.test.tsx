@@ -64,7 +64,7 @@ async function monta(componente: unknown, figli?: unknown) {
 beforeEach(() => {
   stato.pathname = '/seller/dashboard';
   stato.slug = 'foto-video';
-  // Una vetrina vuota: mancano tutti e tre i servizi.
+  // Una vetrina vuota: mancano tutti e quattro i servizi.
   stato.preventivo = costruisciPreventivo({
     idAttivita: 'a1b2c3', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar',
     dati: { storeLogo: null, storeMedia: [], prodotti: [], socials: null },
@@ -86,6 +86,7 @@ describe('il menu del venditore', () => {
     expect(r.textContent).toContain('Foto e video');
     expect(r.textContent).toContain('Gestione social');
     expect(r.textContent).toContain('Sito web');
+    expect(r.textContent).toContain('Scheda Google');
     expect(r.textContent).not.toContain('Logo e grafica'); // tolto il 23/11
     expect(r.textContent).toContain('Il tuo preventivo');
     // Nicola, 23/11: «la voce preventivo, chiamala servizi»
@@ -185,12 +186,24 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).toContain('Sottotitoli');
   });
 
-  it('il preventivo intero mostra le tre anteprime, e non ha più il logo', async () => {
+  it('la scheda Google mostra come apparirà su Maps, col nome e la categoria', async () => {
+    stato.slug = 'scheda-google';
+    const r = await monta(ServizioDelPreventivoPage);
+    const scheda = r.querySelector('[aria-label="La tua scheda su Google Maps"]');
+    expect(scheda, 'anteprima della scheda non mostrata').toBeTruthy();
+    expect(scheda!.textContent).toContain('Bar Roma');
+    expect(scheda!.textContent).toContain('Bar · Piacenza');
+    expect(scheda!.textContent).toContain('vetrina MyCity');
+    expect(r.textContent).toContain('su richiesta'); // nessun prezzo deciso da Nicola
+  });
+
+  it('il preventivo intero mostra le quattro anteprime, e non ha più il logo', async () => {
     const { default: PreventivoAgenziaPage } = await import('@/app/seller/preventivo/page');
     const r = await monta(PreventivoAgenziaPage);
     expect(r.textContent).toContain('I formati che ricevi');
     expect(r.textContent).toContain('Il piano editoriale di novembre 2026');
     expect(r.textContent).toContain('La bozza del tuo sito');
+    expect(r.textContent).toContain('La tua scheda su Google Maps');
     expect(r.textContent).not.toContain('Logo e grafica');
   });
 

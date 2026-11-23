@@ -1,4 +1,4 @@
-import { Camera, CalendarDays, Film, Globe, Sparkles } from 'lucide-react';
+import { Camera, CalendarDays, Check, Film, Globe, MapPin, Sparkles } from 'lucide-react';
 import type { ServizioAgenzia } from '@/lib/agenzia/preventivo';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import {
@@ -7,13 +7,15 @@ import {
   FORMATI_VIDEO,
   LAVORI_DI_EDITING,
   pianoEditoriale,
+  schedaGoogle,
   type FormatoMedia,
 } from '@/lib/agenzia/contenuti-servizi';
 
 /**
  * COSA RICEVI — l'anteprima di un servizio, dentro il preventivo e dentro la pagina del
  * servizio (Nicola, 23/11/2026). Sito → la bozza del sito col nome del cliente; social → il
- * piano editoriale del mese con esempi; foto e video → i formati e i lavori di editing.
+ * piano editoriale del mese con esempi; foto e video → i formati e i lavori di editing;
+ * scheda Google → come apparirà su Maps e cosa sistemiamo.
  * I contenuti li calcola `lib/agenzia/contenuti-servizi.ts`: qui si disegna soltanto.
  */
 
@@ -22,6 +24,7 @@ type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: st
 export default function AnteprimaServizio({ id, nome, tipo, giorno }: Props) {
   if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} />;
   if (id === 'social') return <PianoDelMese nome={nome} tipo={tipo} giorno={giorno} />;
+  if (id === 'google_maps') return <SchedaSuMaps nome={nome} tipo={tipo} />;
   return <FormatiFotoVideo />;
 }
 
@@ -128,6 +131,29 @@ function FormatiFotoVideo() {
       <h4 className="mb-1 mt-4 text-xs font-bold uppercase tracking-wide text-ink-700">Editing compreso</h4>
       <ul className="list-disc pl-4 text-xs text-ink-600">
         {LAVORI_DI_EDITING.map((l) => <li key={l}>{l}</li>)}
+      </ul>
+    </Riquadro>
+  );
+}
+
+function SchedaSuMaps({ nome, tipo }: { nome: string; tipo: TipoAttivita }) {
+  const sc = schedaGoogle(nome, tipo);
+  return (
+    <Riquadro icona={MapPin} titolo="La tua scheda su Google Maps" nota="Come ti troverà chi cerca vicino a te: un esempio fatto con i tuoi dati.">
+      <div className="rounded-lg border border-cream-300 bg-white p-3 shadow-sm">
+        <p className="font-semibold text-ink-900">{sc.nome}</p>
+        <p className="text-xs text-ink-600">{sc.categoria}</p>
+        <p className="mt-1 text-xs text-olive-700">Aperto · orari aggiornati</p>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+          {['Indicazioni', 'Chiama', 'Sito web', 'Ordina su MyCity'].map((b) => (
+            <span key={b} className="rounded-full border border-cream-300 px-2 py-0.5 text-primary-700">{b}</span>
+          ))}
+        </div>
+      </div>
+      <ul className="mt-3 space-y-1 text-xs text-ink-700">
+        {sc.lavori.map((l) => (
+          <li key={l} className="flex gap-1.5"><Check size={14} className="mt-px shrink-0 text-olive-700" aria-hidden /> {l}</li>
+        ))}
       </ul>
     </Riquadro>
   );

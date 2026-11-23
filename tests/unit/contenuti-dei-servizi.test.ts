@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bozzaSito, indirizzoSuggerito, pianoEditoriale } from '@/lib/agenzia/contenuti-servizi';
+import { bozzaSito, indirizzoSuggerito, pianoEditoriale, schedaGoogle } from '@/lib/agenzia/contenuti-servizi';
 import { TIPI_ATTIVITA } from '@/lib/agenzia/tipi-attivita';
 
 describe('i contenuti già pronti dei servizi (23/11/2026)', () => {
@@ -29,5 +29,13 @@ describe('i contenuti già pronti dei servizi (23/11/2026)', () => {
       const testi = pianoEditoriale('Prova', tipo, '2026-11-23').post.map((x) => x.esempio).join(' ');
       expect(testi, tipo).not.toMatch(/€|%|sconto|gratis/i);
     }
+  });
+
+  it('la scheda Google porta nome, categoria del tipo e Piacenza', () => {
+    const sc = schedaGoogle('Pane Quotidiano', 'negozio');
+    expect(sc.nome).toBe('Pane Quotidiano');
+    expect(sc.categoria).toBe('Negozio · Piacenza');
+    expect(sc.lavori.some((l) => l.includes('vetrina MyCity'))).toBe(true);
+    expect(schedaGoogle('  ', 'bar').nome).toBe('La tua attività');
   });
 });

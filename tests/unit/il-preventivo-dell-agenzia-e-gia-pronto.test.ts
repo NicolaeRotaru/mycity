@@ -56,6 +56,8 @@ describe('il listino è quello di Nicola (22/11/2026)', () => {
     expect(LISTINO.foto_video.cadenza).toBe('mese');
     expect(SERVIZI_AGENZIA).not.toContain('logo' as never);
     expect('logo' in DI_LISTINO.prezzi).toBe(false);
+    expect(DI_LISTINO.prezzi.google_maps).toBeNull(); // scheda Google: prezzo non ancora deciso, «su richiesta»
+    expect(LISTINO.google_maps.cadenza).toBe('una_tantum');
     expect(DI_LISTINO.nome).toBe(NOME_AGENZIA_DI_RISERVA);
     expect(NOME_AGENZIA_DI_RISERVA).toBe('MyCity'); // il preventivo lo firma MyCity (Nicola, 23/11)
     expect(LISTINO.foto_video.partner).toBe('scattiDG'); // foto e video li fa il partner scattiDG
@@ -69,13 +71,13 @@ describe('il listino è quello di Nicola (22/11/2026)', () => {
 });
 
 describe('cosa manca alla vetrina', () => {
-  it('una vetrina vuota si vede proporre tutti e tre i servizi, nell ordine del listino', () => {
-    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'social', 'sito_web']);
+  it('una vetrina vuota si vede proporre tutti e quattro i servizi, nell ordine del listino', () => {
+    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'social', 'sito_web', 'google_maps']);
   });
 
-  it('una vetrina completa si vede proporre solo la gestione dei social', () => {
+  it('una vetrina completa si vede proporre solo i social e la scheda Google', () => {
     const voci = cosaManca(COMPLETA);
-    expect(voci.map((v) => v.id)).toEqual(['social']);
+    expect(voci.map((v) => v.id)).toEqual(['social', 'google_maps']);
     expect(voci[0].perche[0]).toContain('Instagram');
   });
 
@@ -107,9 +109,9 @@ describe('cosa manca alla vetrina', () => {
 describe('il preventivo', () => {
   it('i totali tengono separati «una volta» e «al mese», e dicono cosa è su richiesta', () => {
     const p = costruisciPreventivo({ idAttivita: 'abc123-def', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar', dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO });
-    expect(p.totaleUnaTantum).toEqual({ da: 50000, a: 50000, suRichiesta: [] });
+    expect(p.totaleUnaTantum).toEqual({ da: 50000, a: 50000, suRichiesta: ['Scheda Google su Maps'] });
     expect(p.totaleMensile).toEqual({ da: 35000, a: 60000, suRichiesta: [] });
-    expect(scriviTotale(p.totaleUnaTantum!, 'una_tantum')).toMatch(/^500,00\s€$/);
+    expect(scriviTotale(p.totaleUnaTantum!, 'una_tantum')).toMatch(/^500,00\s€ \+ Scheda Google su Maps su richiesta$/);
     expect(scriviTotale(p.totaleMensile!, 'mese')).toMatch(/^da 350,00\s€ a 600,00\s€ al mese$/);
   });
 
