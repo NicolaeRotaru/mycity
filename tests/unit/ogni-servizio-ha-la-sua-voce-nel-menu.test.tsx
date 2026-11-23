@@ -87,6 +87,11 @@ describe('il menu del venditore', () => {
     expect(r.textContent).toContain('Gestione social');
     expect(r.textContent).toContain('Sito web');
     expect(r.textContent).toContain('Logo e grafica');
+    expect(r.textContent).toContain('Il tuo preventivo');
+    // Nicola, 23/11: «la voce preventivo, chiamala servizi»
+    const gruppi = Array.from(r.querySelectorAll('*')).filter((n) => n.children.length === 0).map((n) => n.textContent?.trim());
+    expect(gruppi).toContain('Servizi');
+    expect(gruppi).not.toContain('Preventivo');
     // il menu non nomina il partner: il suo nome sta dentro il servizio
     expect(r.textContent).not.toContain('scattiDG');
   });

@@ -55,9 +55,10 @@ const NAV: NavGroup[] = [
     { href: '/seller/profile', icon: User, label: 'Profilo' },
     { href: '/seller/help', icon: LifeBuoy, label: 'Aiuto' },
   ] },
-  // 23/11/2026 — Il preventivo di MyCity, già pronto, e una voce per ogni servizio (Nicola:
-  // «ogni servizio ha la sua voce dentro il menu»). Le voci vengono dal listino.
-  { group: 'Preventivo', items: VOCI_PREVENTIVO },
+  // 23/11/2026 — I servizi di MyCity ai venditori: il preventivo già pronto e una voce per ogni
+  // servizio (Nicola: «ogni servizio ha la sua voce dentro il menu», poi «la voce preventivo,
+  // chiamala servizi»). Le voci vengono dal listino.
+  { group: 'Servizi', items: VOCI_PREVENTIVO },
 ];
 
 const COPILOT_HREF = '/seller/products/ai-batch';

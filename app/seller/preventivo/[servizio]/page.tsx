@@ -47,7 +47,7 @@ export default function ServizioDelPreventivoPage() {
 
   return (
     <div className="max-w-2xl">
-      <SellerPageTitle eyebrow="Preventivo" title={voce.titolo} sub={voce.descrizione} />
+      <SellerPageTitle eyebrow="Servizi" title={voce.titolo} sub={voce.descrizione} />
 
       {voce.partner && (
         <p className="mb-4 text-sm font-semibold text-primary-700">

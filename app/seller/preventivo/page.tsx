@@ -65,7 +65,7 @@ export default function PreventivoAgenziaPage() {
   if (isError || !p) {
     return (
       <div className="max-w-3xl">
-        <SellerPageTitle eyebrow="La tua vetrina" title="Il tuo preventivo" />
+        <SellerPageTitle eyebrow="Servizi" title="Il tuo preventivo" />
         <div className="rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
           <p className="font-semibold text-ink-900">Non sono riuscito a preparare il preventivo</p>
           <p className="mt-1 text-sm text-ink-600">
@@ -91,7 +91,7 @@ export default function PreventivoAgenziaPage() {
     <div className="max-w-3xl">
       <div className="print:hidden">
         <SellerPageTitle
-          eyebrow="La tua vetrina"
+          eyebrow="Servizi"
           title="Il tuo preventivo è pronto"
           sub="L'abbiamo preparato guardando la tua vetrina: cosa manca, perché, e cosa possiamo fare noi."
         />
