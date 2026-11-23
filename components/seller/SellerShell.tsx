@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Receipt, Package, Wand2,
   Tag, Megaphone, Camera, BarChart3,
   Users, Star, Wallet, MessageCircle,
-  Store, User, LifeBuoy, ClipboardList,
+  Store, User, LifeBuoy,
   Sparkles, Bell, Search, Plus, Menu, X,
   PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut,
   type LucideIcon,
@@ -18,6 +18,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
+import { HREF_PREVENTIVO, VOCI_PREVENTIVO } from '@/components/seller/servizi-nel-menu';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -51,11 +52,12 @@ const NAV: NavGroup[] = [
   ] },
   { group: 'Negozio', items: [
     { href: '/seller/site', icon: Store, label: 'La tua vetrina' },
-    // 22/11/2026 — Il preventivo dell'agenzia: quello che manca alla vetrina, già pronto.
-    { href: '/seller/preventivo', icon: ClipboardList, label: 'Preventivo' },
     { href: '/seller/profile', icon: User, label: 'Profilo' },
     { href: '/seller/help', icon: LifeBuoy, label: 'Aiuto' },
   ] },
+  // 23/11/2026 — Il preventivo di MyCity, già pronto, e una voce per ogni servizio (Nicola:
+  // «ogni servizio ha la sua voce dentro il menu»). Le voci vengono dal listino.
+  { group: 'Preventivo', items: VOCI_PREVENTIVO },
 ];
 
 const COPILOT_HREF = '/seller/products/ai-batch';
@@ -67,6 +69,9 @@ function isActive(pathname: string, href: string): boolean {
   }
   // Tiene attiva solo la voce più specifica: products non resta attivo su
   // products/ai-batch (che ha la sua voce AI Studio).
+  // Il preventivo intero resta acceso solo sulla sua pagina: dentro un servizio si accende
+  // la voce di quel servizio, non tutte e due.
+  if (href === HREF_PREVENTIVO) return pathname === HREF_PREVENTIVO;
   if (href === '/seller/products') {
     return pathname === '/seller/products' || pathname.startsWith('/seller/products/');
   }

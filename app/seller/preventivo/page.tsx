@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { LISTINO, sommaRighe, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
+import { hrefServizio } from '@/components/seller/servizi-nel-menu';
 import {
+  accettaPreventivo,
   CHIAVE_PREVENTIVO,
   dataLeggibile,
   leggiPreventivoAgenzia,
@@ -50,21 +52,7 @@ export default function PreventivoAgenziaPage() {
   const totaleMensile = sommaRighe(righeScelte.filter((r) => r.cadenza === 'mese'));
 
   const accetta = useMutation({
-    mutationFn: async () => {
-      const risposta = await fetch('/api/seller/preventivo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scelte: righeScelte.map((r) => r.id) }),
-      });
-      const corpo = (await risposta.json().catch(() => null)) as
-        | { ok: true; data: { numero: string } }
-        | { ok: false; error?: { message?: string } }
-        | null;
-      if (!risposta.ok || !corpo || corpo.ok !== true) {
-        throw new Error((corpo && corpo.ok === false && corpo.error?.message) || 'Non sono riuscito a inviare il preventivo. Riprova.');
-      }
-      return corpo.data.numero;
-    },
+    mutationFn: () => accettaPreventivo(righeScelte.map((r) => r.id)),
     onSuccess: (numero) => {
       setInviato(numero);
       toast.success('Preventivo inviato: ti ricontattiamo noi.');
@@ -151,15 +139,22 @@ export default function PreventivoAgenziaPage() {
                       disabled={!!inviato}
                       className="mt-1.5 h-4 w-4 accent-primary-700 print:hidden"
                     />
-                    <label htmlFor={`voce-${r.id}`} className="flex-1 min-w-0 cursor-pointer">
-                      <span className="block font-semibold text-ink-900">{r.titolo}</span>
-                      {r.partner && <span className="block text-xs font-semibold text-primary-700">con {r.partner}, il partner di MyCity per foto e video</span>}
-                      <span className="block text-sm text-ink-600">{r.descrizione}</span>
-                      <span className="block text-xs text-ink-500 mt-1">Perché te lo proponiamo:</span>
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor={`voce-${r.id}`} className="block cursor-pointer">
+                        <span className="block font-semibold text-ink-900">{r.titolo}</span>
+                        {r.partner && <span className="block text-xs font-semibold text-primary-700">con {r.partner}, il partner di MyCity per foto e video</span>}
+                        <span className="block text-sm text-ink-600">{r.descrizione}</span>
+                      </label>
+                      {/* L'elenco sta fuori dall'etichetta: dentro un <label> va solo testo. */}
+                      <p className="text-xs text-ink-500 mt-1">Perché te lo proponiamo:</p>
                       <ul className="list-disc pl-4 text-xs text-ink-600">
                         {r.perche.map((frase) => <li key={frase}>{frase}</li>)}
                       </ul>
-                    </label>
+                      {/* Ogni servizio ha anche la sua pagina, con la sua voce nel menu. */}
+                      <Link href={hrefServizio(r.id)} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline underline-offset-2 print:hidden">
+                        Apri il servizio
+                      </Link>
+                    </div>
                     <div className="text-right shrink-0 max-w-[40%]">
                       <p className="text-xs text-ink-500">{r.cadenza === 'mese' ? 'ogni mese' : 'una volta'}</p>
                       <p className="font-semibold text-ink-900">{scriviPrezzo(r.prezzo, r.cadenza)}</p>
