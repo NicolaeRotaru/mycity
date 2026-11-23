@@ -38,6 +38,22 @@ export const SERVIZI_AGENZIA = ['logo', 'foto_video', 'social', 'sito_web'] as c
 export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
 
 /**
+ * L'indirizzo della pagina di ogni servizio, dentro «Preventivo» (Nicola, 23/11: «ogni servizio
+ * ha la sua voce dentro il menu»): /seller/preventivo/<slug>.
+ */
+export const SLUG_SERVIZIO: Record<ServizioAgenzia, string> = {
+  logo: 'logo',
+  foto_video: 'foto-video',
+  social: 'social',
+  sito_web: 'sito-web',
+};
+
+/** Il servizio di un indirizzo, o `null` se l'indirizzo non è di nessun servizio. */
+export function servizioDaSlug(slug: string): ServizioAgenzia | null {
+  return SERVIZI_AGENZIA.find((id) => SLUG_SERVIZIO[id] === slug) ?? null;
+}
+
+/**
  * Sotto questo numero di foto del locale la copertina della vetrina si
  * considera da rifare. Una scelta ragionata (22/11): la copertina è un
  * carosello, e con una o due foto non scorre.

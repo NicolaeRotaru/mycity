@@ -1,4 +1,4 @@
-import type { Preventivo } from '@/lib/agenzia/preventivo';
+import type { Preventivo, ServizioAgenzia } from '@/lib/agenzia/preventivo';
 
 /**
  * Le letture del preventivo dal browser, in un posto solo: la pagina e il
@@ -19,6 +19,26 @@ export async function leggiPreventivoAgenzia(): Promise<Preventivo> {
     throw new Error(messaggio ?? 'Non sono riuscito a leggere il preventivo.');
   }
   return corpo.data;
+}
+
+/**
+ * «Accetto: contattatemi» — dal preventivo intero o dalla pagina di un servizio. Manda solo
+ * QUALI voci: il server ricalcola tutto. Risponde col numero del preventivo.
+ */
+export async function accettaPreventivo(scelte: ServizioAgenzia[]): Promise<string> {
+  const risposta = await fetch('/api/seller/preventivo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scelte }),
+  });
+  const corpo = (await risposta.json().catch(() => null)) as
+    | { ok: true; data: { numero: string } }
+    | { ok: false; error?: { message?: string } }
+    | null;
+  if (!risposta.ok || !corpo || corpo.ok !== true) {
+    throw new Error((corpo && corpo.ok === false && corpo.error?.message) || 'Non sono riuscito a inviare la richiesta. Riprova.');
+  }
+  return corpo.data.numero;
 }
 
 // Le frasi dei prezzi vivono accanto al calcolo: le usa anche l'avviso a Nicola, sul server.
