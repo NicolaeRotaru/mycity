@@ -2032,6 +2032,8 @@ export interface Database {
           stripe_subscription_id: string | null;
           founded_year: number | null;
           rejected_at: string | null;
+          business_type: string | null;
+          business_type_detail: string | null;
         };
         Insert: {
           id: string;
@@ -2121,6 +2123,8 @@ export interface Database {
           stripe_subscription_id?: string | null;
           founded_year?: number | null;
           rejected_at?: string | null;
+          business_type?: string | null;
+          business_type_detail?: string | null;
         };
         Update: {
           id?: string;
@@ -2210,6 +2214,8 @@ export interface Database {
           stripe_subscription_id?: string | null;
           founded_year?: number | null;
           rejected_at?: string | null;
+          business_type?: string | null;
+          business_type_detail?: string | null;
         };
         Relationships: [];
       };
@@ -2694,6 +2700,7 @@ export interface Database {
           branding: Json;
           updated_at: string;
           updated_by: string | null;
+          agenzia: Json;
         };
         Insert: {
           id?: number;
@@ -2701,6 +2708,7 @@ export interface Database {
           branding?: Json;
           updated_at?: string;
           updated_by?: string | null;
+          agenzia?: Json;
         };
         Update: {
           id?: number;
@@ -2708,6 +2716,7 @@ export interface Database {
           branding?: Json;
           updated_at?: string;
           updated_by?: string | null;
+          agenzia?: Json;
         };
         Relationships: [];
       };

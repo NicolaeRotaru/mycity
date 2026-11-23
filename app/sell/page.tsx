@@ -14,6 +14,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { X, Hourglass, Home, Mail, Pencil } from 'lucide-react';
+import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 
 /**
  * QUANTO CI METTIAMO A RISPONDERE A CHI CHIEDE DI VENDERE — scritto una volta sola.
@@ -165,6 +166,9 @@ export default function SellPage() {
 
       <SellerApplicationForm
         defaultValues={{
+          // 22/11/2026 — Il tipo di attività: chi corregge la richiesta ritrova quello scelto.
+          businessType:       tipoDelProfilo(profile?.business_type),
+          businessTypeDetail: profile?.business_type_detail ?? '',
           contactPhone:    profile?.phone ?? '',
           legalFirstName:  profile?.legal_first_name ?? profile?.full_name?.split(' ')[0] ?? '',
           legalLastName:   profile?.legal_last_name  ?? profile?.full_name?.split(' ').slice(1).join(' ') ?? '',

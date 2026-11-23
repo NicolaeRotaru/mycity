@@ -11,6 +11,7 @@ import { getClientIp } from '@/lib/rate-limit';
 import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
+import { MAX_DETTAGLIO_ATTIVITA, TIPI_ATTIVITA, descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 
 export const runtime = 'nodejs';
 
@@ -66,7 +67,17 @@ const normalizzaPiva = (v: string) => v.replace(/\s+/g, '').toUpperCase().replac
 
 const vero = (messaggio: string) => z.boolean().refine((v) => v === true, { message: messaggio });
 
-const RichiestaNegozio = z.object({
+const CampiRichiesta = z.object({
+  // 22/11/2026 — Non serve più essere una bottega: bar, ristoranti, artigiani, servizi.
+  // Facoltativo per il server: un modulo vecchio ancora aperto in un browser non lo manda,
+  // e in quel caso il tipo già salvato resta com'è.
+  businessType: z.enum(TIPI_ATTIVITA).optional(),
+  businessTypeDetail: z
+    .string()
+    .trim()
+    .max(MAX_DETTAGLIO_ATTIVITA, `Che attività hai: al massimo ${MAX_DETTAGLIO_ATTIVITA} caratteri`)
+    .optional()
+    .nullable(),
   contactPhone: z.string().trim().regex(/^[0-9 +]{8,16}$/, 'Numero di telefono non valido'),
   legalFirstName: z.string().trim().min(2, 'Inserisci il nome'),
   legalLastName: z.string().trim().min(2, 'Inserisci il cognome'),
@@ -112,6 +123,23 @@ const RichiestaNegozio = z.object({
   // Con l'abbonamento spento non si fa accettare nessun addebito.
   acceptBilling: ABBONAMENTO_NEGOZI_ACCESO ? vero("Devi accettare l'addebito") : z.boolean().optional(),
 });
+
+const RichiestaNegozio = CampiRichiesta.superRefine((f, ctx) => {
+  if (f.businessType === 'altro' && (f.businessTypeDetail ?? '').trim().length < 2) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessTypeDetail'], message: 'Scrivi in poche parole che attività hai' });
+  }
+});
+
+/**
+ * La migrazione 703 aggiunge le colonne del tipo di attività. Se il codice arriva online prima
+ * della migrazione, PostgREST risponde «colonna sconosciuta» e senza questo controllo nessuno
+ * potrebbe più iscriversi. In quel caso la richiesta si salva senza il tipo, e il log lo dice.
+ */
+function mancaLaColonnaDelTipo(errore: { code?: string; message?: string } | null): boolean {
+  if (!errore) return false;
+  const codiceColonna = errore.code === 'PGRST204' || errore.code === '42703';
+  return codiceColonna && /business_type/.test(errore.message ?? '');
+}
 
 export const POST = withAuthRateLimit(
   { name: 'seller-apply', max: 10, windowMs: 60_000 },
@@ -161,55 +189,72 @@ export const POST = withAuthRateLimit(
     }
 
     const adesso = new Date().toISOString();
-    const aggiorna = admin
-      .from('profiles')
-      .update({
-        phone: f.contactPhone,
-        legal_first_name: f.legalFirstName,
-        legal_last_name: f.legalLastName,
-        legal_fiscal_code: f.legalFiscalCode.toUpperCase(),
-        legal_birth_date: f.legalBirthDate,
-        legal_residence_addr: f.legalResidenceAddr,
-        legal_residence_city: f.legalResidenceCity,
-        legal_residence_zip: f.legalResidenceZip,
-        // I dati dell'impresa: sono quelli che «Venduto da» mostra al cliente
-        // e che l'amministratore controlla prima di approvare.
-        business_legal_name: f.businessLegalName,
-        business_vat_number: f.businessVatNumber,
-        business_address: f.businessAddress,
-        business_city: f.businessCity,
-        business_zip: f.businessZip,
-        business_pec: f.businessPec || null,
-        business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
-        store_name: f.storeName,
-        store_phone: f.contactPhone,
-        store_description: f.storeDescription || null,
-        store_logo: f.storeLogo ?? null,
-        store_media: f.storeMedia ?? [],
-        store_address: f.storeAddress,
-        store_lat: f.storeLat,
-        store_lng: f.storeLng,
-        billing_iban: f.billingIban ? f.billingIban : null,
-        role: 'seller',
-        is_approved: false,
-        approval_status: 'pending',
-        approval_requested_at: adesso,
-        tos_accepted_at: adesso,
-        privacy_accepted_at: adesso,
-        data_accuracy_confirmed_at: adesso,
-      })
-      .eq('id', user.id)
-      .in('role', [...RUOLI_CHE_POSSONO_CHIEDERE])
-      // NULL = profilo vecchio che non ha mai chiesto niente: può chiedere.
-      .or(`approval_status.is.null,approval_status.in.(${STATI_CHE_POSSONO_CHIEDERE.join(',')})`);
-    // R11-008 — Due invii partiti insieme leggevano lo stesso profilo e scrivevano tutti e due:
-    // due righe di consenso e due avvisi agli amministratori. La scrittura vale solo se la
-    // richiesta precedente è ancora quella letta: il secondo invio non tocca niente.
+    // 22/11/2026 — Il tipo di attività si scrive solo se il modulo lo manda.
+    const tipo = f.businessType
+      ? {
+          business_type: f.businessType,
+          business_type_detail: f.businessType === 'altro' ? (f.businessTypeDetail ?? '').trim() || null : null,
+        }
+      : {};
     const richiestaLetta = (attuale as { approval_requested_at?: string | null }).approval_requested_at ?? null;
-    const { data: scritti, error } = await (richiestaLetta
-      ? aggiorna.eq('approval_requested_at', richiestaLetta)
-      : aggiorna.or('approval_requested_at.is.null')
-    ).select('id');
+    const scrivi = (conTipo: boolean) => {
+      const aggiorna = admin
+        .from('profiles')
+        .update({
+          ...(conTipo ? tipo : {}),
+          phone: f.contactPhone,
+          legal_first_name: f.legalFirstName,
+          legal_last_name: f.legalLastName,
+          legal_fiscal_code: f.legalFiscalCode.toUpperCase(),
+          legal_birth_date: f.legalBirthDate,
+          legal_residence_addr: f.legalResidenceAddr,
+          legal_residence_city: f.legalResidenceCity,
+          legal_residence_zip: f.legalResidenceZip,
+          // I dati dell'impresa: sono quelli che «Venduto da» mostra al cliente
+          // e che l'amministratore controlla prima di approvare.
+          business_legal_name: f.businessLegalName,
+          business_vat_number: f.businessVatNumber,
+          business_address: f.businessAddress,
+          business_city: f.businessCity,
+          business_zip: f.businessZip,
+          business_pec: f.businessPec || null,
+          business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
+          store_name: f.storeName,
+          store_phone: f.contactPhone,
+          store_description: f.storeDescription || null,
+          store_logo: f.storeLogo ?? null,
+          store_media: f.storeMedia ?? [],
+          store_address: f.storeAddress,
+          store_lat: f.storeLat,
+          store_lng: f.storeLng,
+          billing_iban: f.billingIban ? f.billingIban : null,
+          role: 'seller',
+          is_approved: false,
+          approval_status: 'pending',
+          approval_requested_at: adesso,
+          tos_accepted_at: adesso,
+          privacy_accepted_at: adesso,
+          data_accuracy_confirmed_at: adesso,
+        })
+        .eq('id', user.id)
+        .in('role', [...RUOLI_CHE_POSSONO_CHIEDERE])
+        // NULL = profilo vecchio che non ha mai chiesto niente: può chiedere.
+        .or(`approval_status.is.null,approval_status.in.(${STATI_CHE_POSSONO_CHIEDERE.join(',')})`);
+      // R11-008 — Due invii partiti insieme leggevano lo stesso profilo e scrivevano tutti e due:
+      // due righe di consenso e due avvisi agli amministratori. La scrittura vale solo se la
+      // richiesta precedente è ancora quella letta: il secondo invio non tocca niente.
+      return (richiestaLetta
+        ? aggiorna.eq('approval_requested_at', richiestaLetta)
+        : aggiorna.or('approval_requested_at.is.null')
+      ).select('id');
+    };
+    let { data: scritti, error } = await scrivi(true);
+    if (f.businessType && mancaLaColonnaDelTipo(error)) {
+      logger.warn('[seller-apply] colonna del tipo di attività assente: manca la migrazione 703, salvo senza il tipo', {
+        userId: user.id, code: error?.code,
+      });
+      ({ data: scritti, error } = await scrivi(false));
+    }
 
     if (error) {
       logger.error('[seller-apply] richiesta non salvata', { userId: user.id, code: error.code, message: error.message });
@@ -261,7 +306,8 @@ export const POST = withAuthRateLimit(
     if (!eraGiaInAttesa) try {
       await notifyAdmins(
         'Nuovo negozio da approvare',
-        `${f.storeName} ha chiesto di entrare su MyCity: approva da Utenti.`,
+        // 22/11/2026 — Con il tipo: «Bar Roma (bar o caffetteria)», non più solo il nome.
+        `${f.storeName}${f.businessType ? ` (${descriviAttivita(f.businessType, f.businessTypeDetail)})` : ''} ha chiesto di entrare su MyCity: approva da Utenti.`,
         '/admin/users',
       );
     } catch (errore) {
@@ -288,13 +334,13 @@ const DatiPerIBonifici = z.object({
     .string()
     .transform(normalizzaIban)
     .refine((v) => ibanValido(v), { message: 'IBAN non valido: controlla i caratteri' }),
-  businessLegalName: RichiestaNegozio.shape.businessLegalName,
-  businessVatNumber: RichiestaNegozio.shape.businessVatNumber,
-  businessAddress: RichiestaNegozio.shape.businessAddress,
-  businessCity: RichiestaNegozio.shape.businessCity,
-  businessZip: RichiestaNegozio.shape.businessZip,
-  businessPec: RichiestaNegozio.shape.businessPec,
-  businessSdi: RichiestaNegozio.shape.businessSdi,
+  businessLegalName: CampiRichiesta.shape.businessLegalName,
+  businessVatNumber: CampiRichiesta.shape.businessVatNumber,
+  businessAddress: CampiRichiesta.shape.businessAddress,
+  businessCity: CampiRichiesta.shape.businessCity,
+  businessZip: CampiRichiesta.shape.businessZip,
+  businessPec: CampiRichiesta.shape.businessPec,
+  businessSdi: CampiRichiesta.shape.businessSdi,
 });
 
 export const PATCH = withAuthRateLimit(

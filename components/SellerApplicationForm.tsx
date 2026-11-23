@@ -25,6 +25,7 @@ import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE, P
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { MAX_DETTAGLIO_ATTIVITA, SCHEDE_ATTIVITA, TIPI_ATTIVITA, tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 
 /**
  * Form completo per la richiesta di diventare venditore business su MyCity.
@@ -50,6 +51,9 @@ import { useTranslations } from 'next-intl';
 
 
 const SellerSchema = z.object({
+  // 22/11/2026 — Non serve più essere una bottega (Nicola): bar, ristoranti, artigiani, servizi.
+  businessType: z.enum(TIPI_ATTIVITA, { errorMap: () => ({ message: 'Scegli che attività hai' }) }),
+  businessTypeDetail: z.string().trim().max(MAX_DETTAGLIO_ATTIVITA, `Al massimo ${MAX_DETTAGLIO_ATTIVITA} caratteri`).optional().or(z.literal('')),
   // Contatti operativi
   contactPhone: z.string().regex(/^[0-9 +]{8,16}$/, 'Numero di telefono non valido'),
 
@@ -94,6 +98,10 @@ const SellerSchema = z.object({
   acceptBilling: ABBONAMENTO_NEGOZI_ACCESO
     ? z.boolean().refine((v) => v === true, { message: "Devi accettare l'addebito" })
     : z.boolean().optional(),
+}).superRefine((d, ctx) => {
+  if (d.businessType === 'altro' && (d.businessTypeDetail ?? '').trim().length < 2) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessTypeDetail'], message: 'Scrivi in poche parole che attività hai' });
+  }
 });
 
 type SchemaData = z.infer<typeof SellerSchema>;
@@ -151,6 +159,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(SellerSchema),
     defaultValues: {
+      // Chi si iscrive per la prima volta parte da «negozio», il caso più frequente: una scelta in
+      // meno da fare. Chi corregge una richiesta ritrova quella che aveva mandato.
+      businessType:       tipoDelProfilo(defaultValues?.businessType),
+      businessTypeDetail: defaultValues?.businessTypeDetail ?? '',
       contactPhone:    defaultValues?.contactPhone    ?? '',
       legalFirstName:  defaultValues?.legalFirstName  ?? '',
       legalLastName:   defaultValues?.legalLastName   ?? '',
@@ -191,6 +203,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
 
   const storeName = watch('storeName');
+  const tipoScelto = tipoDelProfilo(watch('businessType'));
+  const scheda = SCHEDE_ATTIVITA[tipoScelto];
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     // R16-013 — I tipi li detta il magazzino (`mappaAccept`): erano tre scritti a mano contro i
@@ -241,13 +255,13 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
   const submit = (data: SchemaData) => {
     if (!location.address.trim()) {
-      setLocationError("Inserisci l'indirizzo del negozio");
+      setLocationError(`Inserisci l'indirizzo ${scheda.del}`);
       return;
     }
     // L'indirizzo scritto non basta: senza «Cerca», GPS o un tocco sulla mappa le coordinate sono
     // il punto in cui si apre la mappa, e il negozio verrebbe salvato dove non è.
     if (!location.confermata) {
-      setLocationError("Metti il negozio sulla mappa: premi «Cerca» accanto all'indirizzo, oppure tocca la mappa nel punto giusto. Senza la posizione, i clienti vicini non possono ordinarti la consegna.");
+      setLocationError(`Metti ${scheda.il} sulla mappa: premi «Cerca» accanto all'indirizzo, oppure tocca la mappa nel punto giusto. Senza la posizione, i clienti vicini non possono ordinarti la consegna.`);
       return;
     }
     onSubmit({
@@ -273,6 +287,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           {/* 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola. */}
           <strong className="text-white">{FRASE_PREZZO_NEGOZI}</strong> Vale dopo l&apos;approvazione del nostro team.
         </p>
+        {/* 22/11/2026 — Non solo botteghe: lo si dice prima di tutto, nel titolo della pagina. */}
+        <p className="text-primary-100 text-sm leading-relaxed mt-2">
+          Negozi, bar, ristoranti, artigiani, servizi: MyCity è aperto a ogni attività che vende qualcosa.
+        </p>
         <ul className="text-xs text-primary-100 mt-3 space-y-1">
           <li className="flex items-start gap-1.5">
             <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
@@ -297,8 +315,44 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </ul>
       </div>
 
-      {/* STEP 1: Contatti */}
-      <Section step={1} title="Contatti operativi" subtitle="Come ti contatteremo per ordini e supporto">
+      {/* STEP 1: Che attività hai (22/11/2026) */}
+      <Section step={1} title="Che attività hai?" subtitle="Non serve essere un negozio: va bene qualunque attività che vende qualcosa">
+        <fieldset>
+          <legend className="sr-only">Che attività hai?</legend>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {TIPI_ATTIVITA.map((t) => (
+              <label
+                key={t}
+                className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-colors ${
+                  tipoScelto === t ? 'border-primary-600 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
+                }`}
+              >
+                <input type="radio" value={t} {...register('businessType')} className="mt-1 accent-primary-700" />
+                <span>
+                  <span className="block font-semibold text-ink-900">{SCHEDE_ATTIVITA[t].etichetta}</span>
+                  <span className="block text-xs text-ink-500">{SCHEDE_ATTIVITA[t].esempi}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {errors.businessType?.message && (
+            <p role="alert" className="text-xs font-medium text-secondary-600 mt-1">{errors.businessType.message}</p>
+          )}
+        </fieldset>
+        {tipoScelto === 'altro' && (
+          <Input
+            label="Scrivi che attività hai"
+            required
+            maxLength={MAX_DETTAGLIO_ATTIVITA}
+            placeholder="Es. fotografo, enoteca con degustazioni, palestra…"
+            {...register('businessTypeDetail')}
+            error={errors.businessTypeDetail?.message}
+          />
+        )}
+      </Section>
+
+      {/* STEP 2: Contatti */}
+      <Section step={2} title="Contatti operativi" subtitle="Come ti contatteremo per ordini e supporto">
         <p className="text-sm text-ink-600">
           {emailAccesso
             ? <>Avvisi d&apos;ordine e risposte arrivano a <strong>{emailAccesso}</strong>, l&apos;email con cui accedi.</>
@@ -315,8 +369,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         />
       </Section>
 
-      {/* STEP 2: Anagrafica titolare */}
-      <Section step={2} title="Anagrafica del titolare" subtitle="Rappresentante legale dell'attività">
+      {/* STEP 3: Anagrafica titolare */}
+      <Section step={3} title="Anagrafica del titolare" subtitle="Rappresentante legale dell'attività">
         <div className="grid sm:grid-cols-2 gap-4">
           <Input label="Nome" required {...register('legalFirstName')} error={errors.legalFirstName?.message} />
           <Input label="Cognome" required {...register('legalLastName')} error={errors.legalLastName?.message} />
@@ -345,8 +399,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </div>
       </Section>
 
-      {/* STEP 3: Dati dell'impresa */}
-      <Section step={3} title="Dati dell'impresa" subtitle="Li vede il cliente sotto «Venduto da» e li controlliamo prima di approvare">
+      {/* STEP 4: Dati dell'impresa */}
+      <Section step={4} title="Dati dell'impresa" subtitle="Li vede il cliente sotto «Venduto da» e li controlliamo prima di approvare">
         <Input label="Ragione sociale" required placeholder="Es. Salumeria del Borgo di Mario Rossi" {...register('businessLegalName')} error={errors.businessLegalName?.message} />
         <Input
           label="Partita IVA"
@@ -369,19 +423,19 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </div>
       </Section>
 
-      {/* STEP 4: Vetrina */}
-      <Section step={4} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
+      {/* STEP 5: Vetrina */}
+      <Section step={5} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
         {/* Logo upload */}
-        <Field label="Logo del negozio">
+        <Field label={`Logo ${scheda.del}`}>
           <div className="flex items-center gap-4">
             <StoreAvatar logoUrl={logoUrl} storeName={storeName} size="lg" />
             <div
-              {...getRootProps({ role: 'button', 'aria-label': 'Carica il logo del negozio: trascina il file o premi Invio' })}
+              {...getRootProps({ role: 'button', 'aria-label': `Carica il logo ${scheda.del}: trascina il file o premi Invio` })}
               className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
                 isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
               } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
             >
-              <input {...getInputProps({ 'aria-label': 'Carica il logo del negozio' })} />
+              <input {...getInputProps({ 'aria-label': `Carica il logo ${scheda.del}` })} />
               {uploadingLogo ? <p className="text-ink-500">{tStates('loading')}</p>
                 : logoUrl ? <p className="text-ink-600"><span className="font-medium">Sostituisci</span> · trascina o clicca</p>
                 : <p className="text-ink-500"><span className="font-medium text-primary-700">Carica</span> immagine quadrata (max 3MB)</p>}
@@ -397,7 +451,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         <StoreMediaManager value={media} onChange={setMedia} onUploadingChange={setUploadingMedia} />
 
         <Input
-          label="Nome del negozio"
+          label={`Nome ${scheda.del}`}
           required
           placeholder="Es. Salumeria del Borgo"
           {...register('storeName')}
@@ -409,12 +463,12 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           label="Descrizione (opzionale)"
           rows={3}
           className="resize-none"
-          placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
+          placeholder="Cosa ti rende speciale? Storia, tradizione, quello che vendi…"
           {...register('storeDescription')}
           error={errors.storeDescription?.message}
         />
 
-        <Field label="Indirizzo del negozio (pubblico)" required hint="Dove i clienti possono ritirare. È mostrato sulla mappa nel marketplace.">
+        <Field label={`Indirizzo ${scheda.del} (pubblico)`} required hint="Dove i clienti possono ritirare. È mostrato sulla mappa nel marketplace.">
           <StoreLocationPicker
             defaultValue={{
               address: defaultValues?.storeAddress,
@@ -430,9 +484,9 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </Field>
       </Section>
 
-      {/* STEP 5: Pagamenti */}
+      {/* STEP 6: Pagamenti */}
       <Section
-        step={5}
+        step={6}
         title="Pagamenti"
         subtitle={ABBONAMENTO_NEGOZI_ACCESO ? "Come ricevi i guadagni e come ti addebitiamo l'abbonamento" : 'Come ricevi i guadagni'}
       >
@@ -461,8 +515,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         )}
       </Section>
 
-      {/* STEP 6: Consensi */}
-      <Section step={6} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
+      {/* STEP 7: Consensi */}
+      <Section step={7} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
         <Consent
           label={<>Ho letto e accetto i <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link> per venditori</>}
           register={register('acceptTos')}
