@@ -1980,6 +1980,8 @@ export interface Database {
           business_zip: string | null;
           business_pec: string | null;
           business_sdi: string | null;
+          business_type: string | null;
+          business_type_detail: string | null;
           approval_status: string | null;
           approval_requested_at: string | null;
           approved_at: string | null;
@@ -2069,6 +2071,8 @@ export interface Database {
           business_zip?: string | null;
           business_pec?: string | null;
           business_sdi?: string | null;
+          business_type?: string | null;
+          business_type_detail?: string | null;
           approval_status?: string | null;
           approval_requested_at?: string | null;
           approved_at?: string | null;
@@ -2158,6 +2162,8 @@ export interface Database {
           business_zip?: string | null;
           business_pec?: string | null;
           business_sdi?: string | null;
+          business_type?: string | null;
+          business_type_detail?: string | null;
           approval_status?: string | null;
           approval_requested_at?: string | null;
           approved_at?: string | null;
@@ -2691,6 +2697,7 @@ export interface Database {
         Row: {
           id: number;
           home_site: Json;
+          agenzia: Json;
           branding: Json;
           updated_at: string;
           updated_by: string | null;
@@ -2698,6 +2705,7 @@ export interface Database {
         Insert: {
           id?: number;
           home_site?: Json;
+          agenzia?: Json;
           branding?: Json;
           updated_at?: string;
           updated_by?: string | null;
@@ -2705,6 +2713,7 @@ export interface Database {
         Update: {
           id?: number;
           home_site?: Json;
+          agenzia?: Json;
           branding?: Json;
           updated_at?: string;
           updated_by?: string | null;

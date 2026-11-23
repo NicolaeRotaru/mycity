@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Receipt, Package, Wand2,
   Tag, Megaphone, Camera, BarChart3,
   Users, Star, Wallet, MessageCircle,
-  Store, User, LifeBuoy,
+  Store, User, LifeBuoy, ClipboardList,
   Sparkles, Bell, Search, Plus, Menu, X,
   PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut,
   type LucideIcon,
@@ -51,6 +51,8 @@ const NAV: NavGroup[] = [
   ] },
   { group: 'Negozio', items: [
     { href: '/seller/site', icon: Store, label: 'La tua vetrina' },
+    // 22/11/2026 — Il preventivo dell'agenzia: quello che manca alla vetrina, già pronto.
+    { href: '/seller/preventivo', icon: ClipboardList, label: 'Preventivo' },
     { href: '/seller/profile', icon: User, label: 'Profilo' },
     { href: '/seller/help', icon: LifeBuoy, label: 'Aiuto' },
   ] },

@@ -1,0 +1,162 @@
+import { z } from 'zod';
+import { withSellerAuthRateLimit } from '@/lib/api/middleware';
+import { getAdminSupabase } from '@/lib/supabase/server';
+import { ApiErrors, apiSuccess } from '@/lib/api/responses';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { logger } from '@/lib/logger';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import {
+  SERVIZI_AGENZIA,
+  costruisciPreventivo,
+  leggiImpostazioniAgenzia,
+  testoAvvisoPreventivo,
+  type Preventivo,
+  type ServizioAgenzia,
+} from '@/lib/agenzia/preventivo';
+import { tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
+import { inviaAlFlusso } from '@/lib/agenzia/flusso-n8n';
+
+export const runtime = 'nodejs';
+
+/**
+ * IL PREVENTIVO DELL'AGENZIA — GET lo prepara, POST lo accetta.
+ *
+ * 22/11/2026 — Nicola: la dashboard del cliente mostra «il preventivo di quello
+ * che gli manca», già pronto. Il calcolo è uno solo (`lib/agenzia/preventivo.ts`)
+ * e gira qui, sul server, con i dati letti dal database: il browser mostra il
+ * preventivo, non lo decide. Quando il cliente accetta, manda solo QUALI voci
+ * tiene; quantità, prezzi e «manca davvero?» li ricalcola il server.
+ *
+ * Quello che succede all'accettazione:
+ *  · un avviso agli amministratori, una volta sola per giorno e per scelta
+ *    (due clic di fila non mandano due avvisi);
+ *  · se Nicola l'ha collegato, il flusso n8n dell'agenzia (`lib/agenzia/flusso-n8n.ts`).
+ * Nessun addebito: i prezzi sono «su richiesta» e il pagamento lo concorda
+ * l'agenzia. Niente passa da Stripe.
+ */
+
+/** I prodotti che contano per «senza foto»: quelli ancora in catalogo. */
+const STATI_IN_CATALOGO = ['available', 'draft', 'out_of_stock', 'pending_approval'];
+
+/** Un negozio con migliaia di schede non deve far leggere tutto: oltre questo numero si conta fin qui. */
+const TETTO_PRODOTTI = 2000;
+
+type Letti = { preventivo: Preventivo; telefono: string | null; socials: unknown };
+
+async function leggiPreventivo(idAttivita: string, scelte?: readonly ServizioAgenzia[]): Promise<Letti> {
+  const admin = getAdminSupabase();
+  const [profilo, prodotti, impostazioni] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('*')
+      .eq('id', idAttivita)
+      .maybeSingle(),
+    admin
+      .from('products')
+      .select('images')
+      .eq('seller_id', idAttivita)
+      .in('status', STATI_IN_CATALOGO)
+      .limit(TETTO_PRODOTTI),
+    admin.from('site_settings').select('agenzia').eq('id', 1).maybeSingle(),
+  ]);
+  if (profilo.error) throw new Error(`profilo non letto: ${profilo.error.message}`);
+  if (!profilo.data) throw new Error('profilo non trovato');
+  // «Non ho letto i prodotti» non è «non hai prodotti»: senza questa riga un catalogo
+  // di quaranta schede senza foto risulterebbe a posto.
+  if (prodotti.error) throw new Error(`prodotti non letti: ${prodotti.error.message}`);
+  // Le impostazioni dell'agenzia sono facoltative: senza (migrazione 703 non ancora
+  // applicata, o riga vuota) i prezzi sono «su richiesta» e il nome è quello di riserva.
+  if (impostazioni.error) {
+    logger.warn('[preventivo] impostazioni dell agenzia non lette: prezzi su richiesta', { message: impostazioni.error.message });
+  }
+
+  // `select('*')`: le colonne del tipo di attività arrivano con la migrazione 703, e chiederle
+  // per nome prima di quella farebbe fallire la lettura. Con `*` ci sono se ci sono.
+  const p = profilo.data as Record<string, unknown>;
+  const personalizzazione = p.store_customization as { socials?: unknown } | null | undefined;
+  const socials = personalizzazione?.socials ?? null;
+  const preventivo = costruisciPreventivo({
+    idAttivita,
+    nomeAttivita: String(p.store_name ?? ''),
+    tipoAttivita: tipoDelProfilo(p.business_type),
+    dati: {
+      storeLogo: (p.store_logo as string | null) ?? null,
+      storeMedia: p.store_media,
+      prodotti: (prodotti.data ?? []) as { images: unknown }[],
+      socials,
+    },
+    impostazioni: leggiImpostazioniAgenzia(impostazioni.error ? null : impostazioni.data?.agenzia),
+    adesso: new Date(),
+    scelte,
+  });
+  const telefono = (p.store_phone as string | null) || (p.phone as string | null) || null;
+  return { preventivo, telefono, socials };
+}
+
+export const GET = withSellerAuthRateLimit(
+  { name: 'seller-preventivo-leggi', max: 30, windowMs: 60_000 },
+  async ({ user }) => {
+    try {
+      const { preventivo } = await leggiPreventivo(user.id);
+      return apiSuccess(preventivo, { headers: { 'Cache-Control': 'no-store' } });
+    } catch (errore) {
+      logger.error('[preventivo] non preparato', { userId: user.id, errore: String(errore) });
+      return ApiErrors.internal('Non sono riuscito a preparare il preventivo. Riprova fra un momento.');
+    }
+  },
+);
+
+const Accettazione = z.object({
+  scelte: z.array(z.enum(SERVIZI_AGENZIA)).min(1, 'Scegli almeno una voce del preventivo').max(SERVIZI_AGENZIA.length),
+});
+
+export const POST = withSellerAuthRateLimit(
+  { name: 'seller-preventivo-accetta', max: 5, windowMs: 60_000 },
+  async ({ user, req }) => {
+    let corpo: unknown;
+    try {
+      corpo = await jsonRichiesta(req, TETTO_JSON);
+    } catch (errore) {
+      if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
+      return ApiErrors.invalidRequest('Richiesta non leggibile');
+    }
+    const esito = Accettazione.safeParse(corpo);
+    if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
+    const scelte = [...new Set(esito.data.scelte)];
+
+    let letti: Letti;
+    try {
+      letti = await leggiPreventivo(user.id, scelte);
+    } catch (errore) {
+      logger.error('[preventivo] non riletto all accettazione', { userId: user.id, errore: String(errore) });
+      return ApiErrors.internal('Non sono riuscito a inviare il preventivo. Riprova fra un momento.');
+    }
+    const { preventivo, telefono, socials } = letti;
+    if (preventivo.righe.length === 0) {
+      return ApiErrors.conflict('Le voci scelte non mancano più alla tua vetrina: ricarica la pagina.');
+    }
+
+    // Una volta per giorno e per scelta: lo stesso clic ripetuto non manda due avvisi.
+    const chiave = `preventivo-agenzia:${preventivo.numero}:${preventivo.righe.map((r) => r.id).join('+')}`;
+    let avviso: Awaited<ReturnType<typeof notifyAdmins>>;
+    try {
+      avviso = await notifyAdmins(
+        `Preventivo accettato: ${preventivo.attivita}`,
+        testoAvvisoPreventivo(preventivo, telefono),
+        '/admin/users',
+        { unaVoltaPer: chiave, almenoUnDestinatario: true },
+      );
+    } catch (errore) {
+      // Senza l'avviso nessuno saprebbe che il cliente ha accettato: meglio dirgli di riprovare
+      // che fargli credere che lo richiameremo.
+      logger.error('[preventivo] avviso agli amministratori non scritto', { userId: user.id, errore: String(errore) });
+      return ApiErrors.internal('Non sono riuscito a inviare il preventivo. Riprova fra un momento.');
+    }
+
+    const flusso = avviso === 'gia-mandato'
+      ? 'spento'
+      : await inviaAlFlusso(preventivo, { idAttivita: user.id, email: user.email ?? null, telefono, socials });
+
+    return apiSuccess({ numero: preventivo.numero, giaInviato: avviso === 'gia-mandato', flusso });
+  },
+);
