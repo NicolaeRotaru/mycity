@@ -31,6 +31,7 @@
  */
 
 import type { TipoAttivita } from './tipi-attivita';
+import { formatPriceFromCents } from '@/lib/format';
 
 export const SERVIZI_AGENZIA = ['logo', 'foto_video', 'social', 'sito_web'] as const;
 export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
@@ -101,8 +102,13 @@ export type ImpostazioniAgenzia = {
   prezzi: Record<ServizioAgenzia, Prezzo | null>;
 };
 
+/**
+ * Lo 0 non è un prezzo (collaudo del 23/11): con lo 0 il cliente leggeva «Sito web
+ * professionale: 0,00 €». Nessuna voce del listino è gratis; uno 0 scritto per sbaglio
+ * nelle impostazioni diventa «su richiesta».
+ */
 const centesimiValidi = (v: unknown): v is number =>
-  typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= PREZZO_MASSIMO_CENTESIMI;
+  typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= PREZZO_MASSIMO_CENTESIMI;
 
 /**
  * Un prezzo scritto in `site_settings.agenzia.prezzi.<servizio>`:
@@ -110,7 +116,7 @@ const centesimiValidi = (v: unknown): v is number =>
  *  · `null` → su richiesta;
  *  · un numero di centesimi → prezzo fisso;
  *  · `{ "da": …, "a": … }` → fascia.
- * Qualunque altra cosa (negativo, testo, `da` più alto di `a`) diventa «su
+ * Qualunque altra cosa (zero, negativo, testo, `da` più alto di `a`) diventa «su
  * richiesta»: meglio nessun prezzo che un prezzo sbagliato davanti a un cliente.
  */
 function leggiPrezzo(v: unknown, diListino: Prezzo | null): Prezzo | null {
@@ -131,6 +137,14 @@ export function leggiImpostazioniAgenzia(grezzo: unknown): ImpostazioniAgenzia {
     SERVIZI_AGENZIA.map((id) => [id, leggiPrezzo(scritti[id], LISTINO[id].prezzo)]),
   ) as Record<ServizioAgenzia, Prezzo | null>;
   return { nome, prezzi };
+}
+
+/** Tutti i prezzi «su richiesta»: quando le impostazioni non si leggono per un guasto. */
+export function impostazioniSenzaPrezzi(): ImpostazioniAgenzia {
+  return {
+    nome: NOME_AGENZIA_DI_RISERVA,
+    prezzi: Object.fromEntries(SERVIZI_AGENZIA.map((id) => [id, null])) as Record<ServizioAgenzia, Prezzo | null>,
+  };
 }
 
 export type DatiAttivita = {
@@ -306,9 +320,33 @@ export function costruisciPreventivo(opzioni: {
   };
 }
 
-/** Il testo dell'avviso che arriva a Nicola quando il cliente accetta. */
+const DOPO_IL_PREZZO: Record<Cadenza, string> = { una_tantum: '', mese: ' al mese' };
+
+/** «500,00 €», «300,00 € al mese», «da 50,00 a 300,00 € al mese», «su richiesta». */
+export function scriviPrezzo(prezzo: Prezzo | null, cadenza: Cadenza): string {
+  if (!prezzo) return 'su richiesta';
+  if (prezzo.da === prezzo.a) return `${formatPriceFromCents(prezzo.da)}${DOPO_IL_PREZZO[cadenza]}`;
+  return `da ${formatPriceFromCents(prezzo.da)} a ${formatPriceFromCents(prezzo.a)}${DOPO_IL_PREZZO[cadenza]}`;
+}
+
+/** Un totale: la parte coi prezzi, più «+ Logo e grafica su richiesta» per le voci senza prezzo. */
+export function scriviTotale(t: Totale, cadenza: Cadenza): string {
+  const conPrezzo = t.da > 0 || t.a > 0 ? scriviPrezzo({ da: t.da, a: t.a }, cadenza) : '';
+  const senza = t.suRichiesta.length > 0 ? `${t.suRichiesta.join(', ')} su richiesta` : '';
+  if (conPrezzo && senza) return `${conPrezzo} + ${senza}`;
+  return conPrezzo || senza || 'su richiesta';
+}
+
+/**
+ * Il testo dell'avviso che arriva a Nicola quando il cliente accetta: chi, quale preventivo,
+ * quali voci e quanto (una volta / al mese), e il telefono per richiamare.
+ */
 export function testoAvvisoPreventivo(p: Preventivo, telefono: string | null): string {
   const voci = p.righe.map((r) => r.titolo).join(', ');
+  const totali = [
+    p.totaleUnaTantum ? `una volta ${scriviTotale(p.totaleUnaTantum, 'una_tantum')}` : '',
+    p.totaleMensile ? `ogni mese ${scriviTotale(p.totaleMensile, 'mese')}` : '',
+  ].filter(Boolean).join('; ');
   const contatto = telefono ? ` Telefono: ${telefono}.` : '';
-  return `${p.attivita} vuole il preventivo ${p.numero}: ${voci}.${contatto}`;
+  return `${p.attivita} vuole il preventivo ${p.numero}: ${voci}.${totali ? ` Totale: ${totali}.` : ''}${contatto}`;
 }

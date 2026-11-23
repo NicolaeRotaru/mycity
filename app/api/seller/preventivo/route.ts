@@ -9,6 +9,7 @@ import {
   SERVIZI_AGENZIA,
   costruisciPreventivo,
   leggiImpostazioniAgenzia,
+  impostazioniSenzaPrezzi,
   testoAvvisoPreventivo,
   type Preventivo,
   type ServizioAgenzia,
@@ -31,7 +32,7 @@ export const runtime = 'nodejs';
  *  · un avviso agli amministratori, una volta sola per giorno e per scelta
  *    (due clic di fila non mandano due avvisi);
  *  · se Nicola l'ha collegato, il flusso n8n dell'agenzia (`lib/agenzia/flusso-n8n.ts`).
- * Nessun addebito: i prezzi sono «su richiesta» e il pagamento lo concorda
+ * Nessun addebito: i prezzi sono quelli del listino e il pagamento lo concorda
  * l'agenzia. Niente passa da Stripe.
  */
 
@@ -64,10 +65,18 @@ async function leggiPreventivo(idAttivita: string, scelte?: readonly ServizioAge
   // «Non ho letto i prodotti» non è «non hai prodotti»: senza questa riga un catalogo
   // di quaranta schede senza foto risulterebbe a posto.
   if (prodotti.error) throw new Error(`prodotti non letti: ${prodotti.error.message}`);
-  // Le impostazioni dell'agenzia sono facoltative: senza (migrazione 703 non ancora
-  // applicata, o riga vuota) i prezzi sono «su richiesta» e il nome è quello di riserva.
+  // Le impostazioni dell'agenzia sono facoltative. Riga vuota, o migrazione 703 non ancora
+  // applicata (la colonna non c'è): valgono il nome e il listino scritti nel codice.
+  // Qualunque altro errore di lettura: tutti i prezzi «su richiesta». Se Nicola ha tolto un
+  // prezzo dalle impostazioni, un guasto di lettura non deve rimetterlo davanti al cliente.
+  const colonnaAncoraAssente = impostazioni.error && ['42703', 'PGRST204'].includes(String(impostazioni.error.code));
   if (impostazioni.error) {
-    logger.warn('[preventivo] impostazioni dell agenzia non lette: prezzi su richiesta', { message: impostazioni.error.message });
+    logger.warn(
+      colonnaAncoraAssente
+        ? '[preventivo] colonna site_settings.agenzia assente (migrazione 703): vale il listino del codice'
+        : '[preventivo] impostazioni dell agenzia non lette: prezzi su richiesta',
+      { message: impostazioni.error.message },
+    );
   }
 
   // `select('*')`: le colonne del tipo di attività arrivano con la migrazione 703, e chiederle
@@ -85,7 +94,9 @@ async function leggiPreventivo(idAttivita: string, scelte?: readonly ServizioAge
       prodotti: (prodotti.data ?? []) as { images: unknown }[],
       socials,
     },
-    impostazioni: leggiImpostazioniAgenzia(impostazioni.error ? null : impostazioni.data?.agenzia),
+    impostazioni: impostazioni.error
+      ? colonnaAncoraAssente ? leggiImpostazioniAgenzia(null) : impostazioniSenzaPrezzi()
+      : leggiImpostazioniAgenzia(impostazioni.data?.agenzia),
     adesso: new Date(),
     scelte,
   });
@@ -137,7 +148,9 @@ export const POST = withSellerAuthRateLimit(
     }
 
     // Una volta per giorno e per scelta: lo stesso clic ripetuto non manda due avvisi.
-    const chiave = `preventivo-agenzia:${preventivo.numero}:${preventivo.righe.map((r) => r.id).join('+')}`;
+    // L'id intero dell'attività: due negozi con le stesse prime sei cifre hanno lo stesso numero
+    // breve, e senza l'id il secondo avviso sarebbe scambiato per un doppione (collaudo, 23/11).
+    const chiave = `preventivo-agenzia:${user.id}:${preventivo.numero}:${preventivo.righe.map((r) => r.id).join('+')}`;
     let avviso: Awaited<ReturnType<typeof notifyAdmins>>;
     try {
       avviso = await notifyAdmins(

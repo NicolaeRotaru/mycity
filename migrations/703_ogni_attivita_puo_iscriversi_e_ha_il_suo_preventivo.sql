@@ -12,9 +12,10 @@
 --    vuol dire «iscritto prima del 22/11», cioè un negozio: il sito lo legge così.
 --  · profiles.business_type_detail — le parole del negoziante quando sceglie «altro»
 --    (massimo 60 caratteri, come nel modulo).
---  · site_settings.agenzia — il nome dell'agenzia e i prezzi dei servizi, in centesimi. Vuota
---    finché Nicola non li scrive: il preventivo dice «su richiesta» (Nicola, 22/11: «su
---    richiesta, per ora»). Si cambia senza rifare il sito, come branding e home_site (075).
+--  · site_settings.agenzia — il nome dell'agenzia e i prezzi dei servizi, in centesimi, per
+--    cambiarli senza rifare il sito (come branding e home_site, 075). Vuota vuol dire: valgono
+--    il nome scattiDG e il listino di Nicola del 22/11 scritti in lib/agenzia/preventivo.ts
+--    (sito 500 €, social 300 € al mese, foto e video da 50 a 300 € al mese, logo su richiesta).
 --
 -- I PERMESSI NON CAMBIANO. La lettura di profiles e site_settings è già concessa a livello di
 -- tabella (425): le colonne nuove seguono le regole di riga che ci sono. Il browser non può
@@ -48,6 +49,6 @@ COMMENT ON COLUMN public.profiles.business_type_detail IS
 ALTER TABLE public.site_settings ADD COLUMN IF NOT EXISTS agenzia jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 COMMENT ON COLUMN public.site_settings.agenzia IS
-  'Agenzia foto e video (22/11/2026): {"nome": "...", "prezzi": {"logo": 0, "foto_locale": 0, "foto_prodotti": 0, "video": 0, "social": 0, "sito_web": 0}} con i prezzi in centesimi (foto_prodotti a foto, social al mese). Un prezzo assente = «su richiesta». Letta da lib/agenzia/preventivo.ts.';
+  'Agenzia foto e video (22-23/11/2026). Esempio: {"nome": "scattiDG", "prezzi": {"logo": null, "foto_video": {"da": 5000, "a": 30000}, "social": 30000, "sito_web": 50000}}. Chiavi dei prezzi: logo, foto_video, social, sito_web. Valori in centesimi: un numero = prezzo fisso, {"da","a"} = fascia, null = su richiesta, chiave assente = listino di lib/agenzia/preventivo.ts. Lo 0 non vale come prezzo: si legge «su richiesta».';
 
 NOTIFY pgrst, 'reload schema';

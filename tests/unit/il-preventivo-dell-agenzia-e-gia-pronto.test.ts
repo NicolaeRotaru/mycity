@@ -12,6 +12,9 @@ import {
   type DatiAttivita,
 } from '@/lib/agenzia/preventivo';
 import { scriviPrezzo, scriviTotale } from '@/components/seller/preventivo-agenzia';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
 
 /**
  * 22/11/2026 — Nicola: la dashboard del cliente mostra «il preventivo di quello
@@ -125,6 +128,28 @@ describe('il preventivo', () => {
     expect(leggiImpostazioniAgenzia({ prezzi: { sito_web: 99_999_999 } }).prezzi.sito_web).toBeNull();
   });
 
+  it('lo 0 non è un prezzo: il cliente non legge mai «0,00 €» (collaudo del 23/11)', () => {
+    const imp = leggiImpostazioniAgenzia({ prezzi: { logo: 0, social: 0, sito_web: 0, foto_video: { da: 0, a: 30000 } } });
+    expect(Object.values(imp.prezzi).every((v) => v === null)).toBe(true);
+    const p = costruisciPreventivo({ idAttivita: 'x', nomeAttivita: 'Bar', tipoAttivita: 'bar', dati: VUOTA, impostazioni: imp, adesso: ADESSO });
+    const testi = [
+      ...p.righe.map((r) => scriviPrezzo(r.prezzo, r.cadenza)),
+      scriviTotale(p.totaleUnaTantum!, 'una_tantum'),
+      scriviTotale(p.totaleMensile!, 'mese'),
+    ];
+    expect(testi.join(' | ')).not.toMatch(/0,00/);
+  });
+
+  it('l esempio scritto nel commento della migrazione usa solo chiavi vere e non produce prezzi a zero', () => {
+    const sql = readFileSync(join(process.cwd(), 'migrations/703_ogni_attivita_puo_iscriversi_e_ha_il_suo_preventivo.sql'), 'utf8');
+    const commento = sql.match(/COMMENT ON COLUMN public\.site_settings\.agenzia IS\s*'([^']*)'/);
+    expect(commento, 'commento della colonna agenzia non trovato').toBeTruthy();
+    const esempio = JSON.parse(commento![1].match(/Esempio: (\{.*?\}\})\./)![1]) as { prezzi: Record<string, unknown> };
+    expect(Object.keys(esempio.prezzi).every((k) => (SERVIZI_AGENZIA as readonly string[]).includes(k))).toBe(true);
+    const imp = leggiImpostazioniAgenzia(esempio);
+    expect(imp.prezzi).toEqual(leggiImpostazioniAgenzia({}).prezzi); // l'esempio è il listino di Nicola
+  });
+
   it('le scelte del cliente tolgono voci ma non ne aggiungono una che non manca', () => {
     const p = costruisciPreventivo({
       idAttivita: 'x', nomeAttivita: 'Bar', tipoAttivita: 'bar', dati: COMPLETA, impostazioni: DI_LISTINO, adesso: ADESSO,
@@ -146,8 +171,8 @@ describe('il preventivo', () => {
       idAttivita: 'a1b2c3d4', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar',
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelte: ['foto_video', 'sito_web'],
     });
-    expect(testoAvvisoPreventivo(p, '3331234567')).toBe(
-      'Bar Roma vuole il preventivo P-20261122-A1B2C3: Foto e video, Sito web professionale. Telefono: 3331234567.',
+    expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
+      /^Bar Roma vuole il preventivo P-20261122-A1B2C3: Foto e video, Sito web professionale\. Totale: una volta 500,00\s€; ogni mese da 50,00\s€ a 300,00\s€ al mese\. Telefono: 3331234567\.$/,
     );
   });
 });

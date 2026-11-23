@@ -1,5 +1,4 @@
-import type { Cadenza, Preventivo, Prezzo, Totale } from '@/lib/agenzia/preventivo';
-import { formatPriceFromCents } from '@/lib/format';
+import type { Preventivo } from '@/lib/agenzia/preventivo';
 
 /**
  * Le letture del preventivo dal browser, in un posto solo: la pagina e il
@@ -22,21 +21,8 @@ export async function leggiPreventivoAgenzia(): Promise<Preventivo> {
   return corpo.data;
 }
 
-const DOPO: Record<Cadenza, string> = { una_tantum: '', mese: ' al mese' };
-
-/** «500,00 €», «300,00 € al mese», «da 50,00 a 300,00 € al mese», «su richiesta». */
-export function scriviPrezzo(prezzo: Prezzo | null, cadenza: Cadenza): string {
-  if (!prezzo) return 'su richiesta';
-  if (prezzo.da === prezzo.a) return `${formatPriceFromCents(prezzo.da)}${DOPO[cadenza]}`;
-  return `da ${formatPriceFromCents(prezzo.da)} a ${formatPriceFromCents(prezzo.a)}${DOPO[cadenza]}`;
-}
-
-/** Un totale: la parte coi prezzi, più «+ Logo e grafica su richiesta» per le voci senza prezzo. */
-export function scriviTotale(t: Totale, cadenza: Cadenza): string {
-  const conPrezzo = t.da > 0 || t.a > 0 ? scriviPrezzo({ da: t.da, a: t.a }, cadenza) : '';
-  const senza = t.suRichiesta.length > 0 ? `${t.suRichiesta.join(', ')} su richiesta` : '';
-  return conPrezzo && senza ? `${conPrezzo} + ${senza}` : conPrezzo || senza || scriviPrezzo({ da: 0, a: 0 }, cadenza);
-}
+// Le frasi dei prezzi vivono accanto al calcolo: le usa anche l'avviso a Nicola, sul server.
+export { scriviPrezzo, scriviTotale } from '@/lib/agenzia/preventivo';
 
 /** «22 novembre 2026» da «2026-11-22», senza passare dal fuso del browser. */
 export function dataLeggibile(giorno: string): string {

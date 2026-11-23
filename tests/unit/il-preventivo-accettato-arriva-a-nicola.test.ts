@@ -18,6 +18,7 @@ const stato = vi.hoisted(() => ({
   prodotti: [] as { images: unknown }[],
   erroreProdotti: null as null | { message: string },
   agenzia: {} as unknown,
+  erroreImpostazioni: null as null | { code: string; message: string },
   avvisi: [] as { titolo: string; corpo: string; opzioni: Record<string, unknown> }[],
   esitoAvviso: 'scritto' as 'scritto' | 'gia-mandato' | Error,
 }));
@@ -45,7 +46,9 @@ vi.mock('@/lib/supabase/server', () => ({
       c.maybeSingle = async () =>
         tabella === 'profiles'
           ? { data: stato.profilo, error: null }
-          : { data: { agenzia: stato.agenzia }, error: null };
+          : stato.erroreImpostazioni
+            ? { data: null, error: stato.erroreImpostazioni }
+            : { data: { agenzia: stato.agenzia }, error: null };
       return c;
     },
   }),
@@ -68,6 +71,7 @@ beforeEach(() => {
   stato.prodotti = [{ images: [] }, { images: ['https://esempio.it/a.jpg'] }];
   stato.erroreProdotti = null;
   stato.agenzia = {};
+  stato.erroreImpostazioni = null;
   stato.avvisi = [];
   stato.esitoAvviso = 'scritto';
   delete process.env.N8N_PREVENTIVO_WEBHOOK_URL;
@@ -88,6 +92,16 @@ describe('GET /api/seller/preventivo', () => {
     expect(data.righe[1].perche).toContain('1 prodotto è senza foto, su 2 in catalogo.');
   });
 
+  it('prima della migrazione 703 vale il listino; con un altro guasto di lettura tutto è «su richiesta»', async () => {
+    type R = { data: { righe: { id: string; prezzo: unknown }[] } };
+    stato.erroreImpostazioni = { code: '42703', message: 'column site_settings.agenzia does not exist' };
+    const prima = (await (await chiama('GET')).json()) as R;
+    expect(prima.data.righe.find((x) => x.id === 'sito_web')?.prezzo).toEqual({ da: 50000, a: 50000 });
+    stato.erroreImpostazioni = { code: '57014', message: 'canceling statement due to statement timeout' };
+    const guasto = (await (await chiama('GET')).json()) as R;
+    expect(guasto.data.righe.every((x) => x.prezzo === null)).toBe(true);
+  });
+
   it('se i prodotti non si leggono non dice «a posto»: dice che non è riuscito', async () => {
     stato.erroreProdotti = { message: 'timeout' };
     expect((await chiama('GET')).status).toBe(500);
@@ -102,7 +116,9 @@ describe('POST /api/seller/preventivo', () => {
     expect(stato.avvisi[0].titolo).toBe('Preventivo accettato: Bar Roma');
     expect(stato.avvisi[0].corpo).toContain('Gestione automatica dei social, Sito web professionale');
     expect(stato.avvisi[0].corpo).toContain('3331234567');
-    expect(stato.avvisi[0].opzioni.unaVoltaPer).toMatch(/^preventivo-agenzia:P-\d{8}-A1B2C3:social\+sito_web$/);
+    expect(stato.avvisi[0].corpo).toMatch(/Totale: una volta 500,00\s€; ogni mese 300,00\s€ al mese/);
+    // l'id intero dell'attività è nella chiave: due negozi con le stesse prime 6 cifre non si scambiano
+    expect(stato.avvisi[0].opzioni.unaVoltaPer).toMatch(/^preventivo-agenzia:a1b2c3d4-0000:P-\d{8}-A1B2C3:social\+sito_web$/);
     expect(stato.avvisi[0].opzioni.almenoUnDestinatario).toBe(true);
   });
 

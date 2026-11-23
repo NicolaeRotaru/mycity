@@ -337,7 +337,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </fieldset>
         {tipoScelto === 'altro' && (
           <Input
-            label="Che attività hai?"
+            label="Scrivi che attività hai"
             required
             maxLength={MAX_DETTAGLIO_ATTIVITA}
             placeholder="Es. fotografo, enoteca con degustazioni, palestra…"

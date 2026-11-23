@@ -11,7 +11,7 @@ import type { Preventivo } from './preventivo';
  *
  * SPENTO FINCHÉ NICOLA NON LO COLLEGA. Senza `N8N_PREVENTIVO_WEBHOOK_URL` non
  * parte niente: resta l'avviso agli amministratori, che è la strada sicura.
- * L'indirizzo lo sceglie Nicola nelle impostazioni del sito, non chi usa il
+ * L'indirizzo lo sceglie Nicola nelle variabili d'ambiente di Vercel, non chi usa il
  * sito: per questo non passa dal controllo anti-SSRF degli indirizzi scritti
  * dagli utenti. Si accetta solo https.
  *

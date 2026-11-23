@@ -179,8 +179,9 @@ export default function PreventivoAgenziaPage() {
             </div>
 
             <p className="mt-4 text-xs text-ink-500">
-              Per foto e video il prezzo dipende da quanto serve: lo fissiamo insieme prima di iniziare, come le voci
-              «su richiesta». Accettare non ti fa pagare niente adesso.
+              {righeScelte.some((r) => r.id === 'foto_video') && 'Per foto e video il prezzo dipende da quanto serve: lo fissiamo insieme prima di iniziare. '}
+              {righeScelte.some((r) => !r.prezzo) && 'Le voci «su richiesta» te le confermiamo prima di iniziare. '}
+              Accettare non ti fa pagare niente adesso.
             </p>
           </>
         )}
