@@ -88,8 +88,8 @@ describe('GET /api/seller/preventivo', () => {
     const { data } = (await r.json()) as { data: { attivita: string; tipoAttivita: string; righe: { id: string; perche: string[] }[] } };
     expect(data.attivita).toBe('Bar Roma');
     expect(data.tipoAttivita).toBe('bar');
-    expect(data.righe.map((x) => x.id)).toEqual(['logo', 'foto_video', 'social', 'sito_web']);
-    expect(data.righe[1].perche).toContain('1 prodotto è senza foto, su 2 in catalogo.');
+    expect(data.righe.map((x) => x.id)).toEqual(['foto_video', 'social', 'sito_web']);
+    expect(data.righe[0].perche).toContain('1 prodotto è senza foto, su 2 in catalogo.');
   });
 
   it('prima della migrazione 703 vale il listino; con un altro guasto di lettura tutto è «su richiesta»', async () => {
@@ -123,14 +123,15 @@ describe('POST /api/seller/preventivo', () => {
   });
 
   it('una voce che non manca non entra; se non resta niente lo dice e non avvisa', async () => {
-    stato.profilo = { ...stato.profilo, store_logo: 'https://esempio.it/logo.png' };
-    const r = await chiama('POST', { scelte: ['logo'] });
+    stato.profilo = { ...stato.profilo, store_customization: { socials: { instagram: 'barroma', website: 'https://barroma.it' } } };
+    const r = await chiama('POST', { scelte: ['sito_web'] });
     expect(r.status).toBe(409);
     expect(stato.avvisi).toHaveLength(0);
   });
 
   it('una voce fuori listino o nessuna voce: richiesta rifiutata', async () => {
     expect((await chiama('POST', { scelte: ['caffe_gratis'] })).status).toBe(400);
+    expect((await chiama('POST', { scelte: ['logo'] })).status).toBe(400); // il logo non è più nel preventivo (23/11)
     expect((await chiama('POST', { scelte: [] })).status).toBe(400);
     expect(stato.avvisi).toHaveLength(0);
   });

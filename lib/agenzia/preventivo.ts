@@ -4,7 +4,7 @@
  * 22/11/2026 — La dashboard di ogni attività iscritta mostra quello che le manca e
  * il preventivo di MyCity per farlo. Foto e video li fa scattiDG, l'azienda partner a
  * cui MyCity si affida per riprese, scatti, montaggio e ritocco (Nicola, 23/11);
- * social, sito web e logo sono servizi di MyCity. Nicola: «deve già essere creato prima, in formato
+ * social e sito web sono servizi di MyCity. Nicola: «deve già essere creato prima, in formato
  * preventivo/demo» — quindi il cliente non lo chiede: lo trova pronto, calcolato
  * dai suoi dati.
  *
@@ -14,7 +14,8 @@
  *    collegarlo») — 300 € al mese;
  *  · foto e video, con riprese, scatti, montaggio e ritocco — da 50 a 300 € al
  *    mese, secondo quanto serve;
- *  · logo e grafica — nessun prezzo detto: «su richiesta».
+ *  · logo e grafica — TOLTO dal preventivo il 23/11/2026 (Nicola: «togli sezione di
+ *    logo e grafica»).
  * (La vetrina sul marketplace, 50 € al mese, non è una voce del preventivo: il
  * preventivo la mostra con la frase unica dei prezzi dei negozi, che segue
  * l'interruttore dell'abbonamento.)
@@ -34,7 +35,7 @@
 import type { TipoAttivita } from './tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
 
-export const SERVIZI_AGENZIA = ['logo', 'foto_video', 'social', 'sito_web'] as const;
+export const SERVIZI_AGENZIA = ['foto_video', 'social', 'sito_web'] as const;
 export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
 
 /**
@@ -42,7 +43,6 @@ export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
  * ha la sua voce dentro il menu»): /seller/preventivo/<slug>.
  */
 export const SLUG_SERVIZIO: Record<ServizioAgenzia, string> = {
-  logo: 'logo',
   foto_video: 'foto-video',
   social: 'social',
   sito_web: 'sito-web',
@@ -80,12 +80,6 @@ type VoceListino = {
 const fisso = (centesimi: number): Prezzo => ({ da: centesimi, a: centesimi });
 
 export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
-  logo: {
-    titolo: 'Logo e grafica',
-    descrizione: 'Il logo della tua attività, pronto per la vetrina MyCity, l’insegna e i social.',
-    cadenza: 'una_tantum',
-    prezzo: null,
-  },
   foto_video: {
     titolo: 'Foto e video',
     descrizione: 'Scatti e riprese nel tuo locale, con ritocco e montaggio: le foto della copertina, dei prodotti e i video per vetrina e social.',
@@ -209,10 +203,6 @@ const PROFILI_SOCIAL = [['instagram', 'Instagram'], ['facebook', 'Facebook'], ['
 /** Quello che manca all'attività, nell'ordine del listino. */
 export function cosaManca(d: DatiAttivita): VoceMancante[] {
   const voci: VoceMancante[] = [];
-
-  if (!d.storeLogo || !String(d.storeLogo).trim()) {
-    voci.push({ id: 'logo', perche: ['La vetrina non ha ancora un logo.'] });
-  }
 
   const fotoVideo: string[] = [];
   const fotoLocale = contaMedia(d.storeMedia, 'image');
@@ -353,7 +343,7 @@ export function scriviPrezzo(prezzo: Prezzo | null, cadenza: Cadenza): string {
   return `da ${formatPriceFromCents(prezzo.da)} a ${formatPriceFromCents(prezzo.a)}${DOPO_IL_PREZZO[cadenza]}`;
 }
 
-/** Un totale: la parte coi prezzi, più «+ Logo e grafica su richiesta» per le voci senza prezzo. */
+/** Un totale: la parte coi prezzi, più «+ Sito web professionale su richiesta» per le voci senza prezzo. */
 export function scriviTotale(t: Totale, cadenza: Cadenza): string {
   const conPrezzo = t.da > 0 || t.a > 0 ? scriviPrezzo({ da: t.da, a: t.a }, cadenza) : '';
   const senza = t.suRichiesta.length > 0 ? `${t.suRichiesta.join(', ')} su richiesta` : '';

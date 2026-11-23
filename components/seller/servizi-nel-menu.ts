@@ -1,4 +1,4 @@
-import { ClipboardList, Globe, Palette, Share2, Video, type LucideIcon } from 'lucide-react';
+import { ClipboardList, Globe, Share2, Video, type LucideIcon } from 'lucide-react';
 import { LISTINO, SERVIZI_AGENZIA, SLUG_SERVIZIO, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
 
 /**
@@ -12,7 +12,6 @@ import { LISTINO, SERVIZI_AGENZIA, SLUG_SERVIZIO, type ServizioAgenzia } from '@
  */
 
 const ICONE: Record<ServizioAgenzia, LucideIcon> = {
-  logo: Palette,
   foto_video: Video,
   social: Share2,
   sito_web: Globe,
@@ -20,7 +19,6 @@ const ICONE: Record<ServizioAgenzia, LucideIcon> = {
 
 /** Le etichette corte del menu: il titolo intero del listino non ci sta nella barra. */
 const ETICHETTE: Record<ServizioAgenzia, string> = {
-  logo: 'Logo e grafica',
   foto_video: 'Foto e video',
   social: 'Gestione social',
   sito_web: 'Sito web',

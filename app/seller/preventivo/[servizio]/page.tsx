@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { LISTINO, servizioDaSlug } from '@/lib/agenzia/preventivo';
 import { HREF_PREVENTIVO } from '@/components/seller/servizi-nel-menu';
+import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import { accettaPreventivo, CHIAVE_PREVENTIVO, leggiPreventivoAgenzia, scriviPrezzo } from '@/components/seller/preventivo-agenzia';
 
 /**
@@ -22,7 +23,7 @@ import { accettaPreventivo, CHIAVE_PREVENTIVO, leggiPreventivoAgenzia, scriviPre
  * il servizio di foto e video, che è il suo.
  *
  * Il prezzo e il «perché» arrivano dallo stesso preventivo calcolato dal server: la pagina
- * non decide niente. Se il servizio non manca (per esempio il logo c'è già), lo dice.
+ * non decide niente. Se il servizio non manca (per esempio il sito c'è già), lo dice.
  */
 export default function ServizioDelPreventivoPage() {
   const params = useParams<{ servizio: string }>();
@@ -96,6 +97,9 @@ export default function ServizioDelPreventivoPage() {
           </div>
         </section>
       )}
+
+      {/* Cosa ricevi, già pronto: si vede anche prima di chiederlo (Nicola, 23/11). */}
+      {p && !giaAPosto && <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} />}
 
       {giaAPosto && (
         <section className="rounded-2xl border border-cream-300 bg-cream-50 p-5">
