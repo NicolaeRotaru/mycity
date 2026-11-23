@@ -44,6 +44,19 @@ const testoTroppoLungoPerTradurre = (p: ProductRow) =>
 /** Un lavoro in questi stati e' ancora aperto: pagato, e non ancora chiuso dal venditore. */
 const STATI_APERTI = ['submitting', 'processing', 'ready'];
 
+/**
+ * 22/11/2026 (R13-001 · R13-009) — Il segno di fine dell'applicazione. La colonna
+ * nasce con la migrazione 750, che entra insieme ai tipi rigenerati
+ * (lib/database.types.ts) e alla scrittura del segno in /apply: finche' non c'e',
+ * la lettura qui sotto cade con 42703 e l'avvio va avanti come prima. Il nome sta
+ * in una costante perche' i tipi generati non lo conoscono ancora.
+ */
+const COLONNA_FINE_APPLICAZIONE = 'applicazione_finita_il';
+/** Quanto dura al massimo un'applicazione: la rotta /apply ha 120 s. */
+const APPLICAZIONE_MAX_MS = 120_000;
+/** La colonna non c'e' ancora (la 750 non e' applicata): Postgres 42703, PostgREST PGRST204. */
+const COLONNA_ASSENTE = new Set(['42703', 'PGRST204']);
+
 type Body = { operation?: string; targetLang?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -105,6 +118,40 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ? 'Hai già un lavoro sul catalogo il cui invio è ancora da verificare: lo trovi qui sotto. Ricarica la pagina fra qualche minuto; se è ancora senza risposta, puoi scartarlo e avviarne un altro.'
       : 'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.';
     return apiError(409, messaggio, 'CONFLICT', { jobId: aperto.id, status: aperto.status });
+  }
+
+  // 22/11/2026 (R13-001 · R13-009) — UN AVVIO MENTRE UN'APPLICAZIONE È IN CORSO.
+  // /apply segna il lavoro «applicato» quando comincia, e lo rimette «pronto» se
+  // un guasto di passaggio lo lascia ripetibile. Se in mezzo qui nasce un lavoro
+  // nuovo, il database (640: un solo lavoro aperto per negozio) rifiuta il
+  // «pronto» e il lavoro pagato resta chiuso. Finche' l'ultimo applicato non ha
+  // il segno di fine ed e' di meno di 120 s, si aspetta. Senza la colonna (la
+  // 750 non ancora applicata) si va avanti come prima.
+  const { data: applicati, error: errApplicati } = await admin
+    .from('catalog_ai_jobs')
+    .select(`id, updated_at, ${COLONNA_FINE_APPLICAZIONE}`)
+    .eq('seller_id', user.id)
+    .in('status', ['applied'])
+    .order('updated_at', { ascending: false })
+    .limit(1);
+  if (errApplicati && !COLONNA_ASSENTE.has(String(errApplicati.code ?? ''))) {
+    logger.error('catalog-batch start: lettura dei lavori applicati fallita', { sellerId: user.id, status: errApplicati.code });
+    return ApiErrors.badGateway('Non sono riuscito a controllare i lavori in corso. Riprova.');
+  }
+  const ultimoApplicato = (errApplicati ? undefined : (applicati ?? [])[0]) as
+    | { id: string; updated_at?: string | null; applicazione_finita_il?: string | null }
+    | undefined;
+  if (
+    ultimoApplicato &&
+    ultimoApplicato.applicazione_finita_il == null &&
+    Date.now() - Date.parse(String(ultimoApplicato.updated_at ?? '')) < APPLICAZIONE_MAX_MS
+  ) {
+    return apiError(
+      409,
+      'Stai ancora applicando un lavoro sul catalogo: aspetta che finisca (al massimo un paio di minuti), poi avvia il prossimo.',
+      'CONFLICT',
+      { jobId: ultimoApplicato.id, status: 'applied' },
+    );
   }
 
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([

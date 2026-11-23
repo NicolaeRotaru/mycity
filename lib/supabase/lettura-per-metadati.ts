@@ -31,7 +31,9 @@ import { logger } from '@/lib/logger';
  * — prodotto, negozio, categoria — mai roba di una persona.
  *
  * Nota (collaudo del 22/11): la lettura del precarico (lib/queries/precarico.ts) è una domanda
- * diversa e NON passa da qui: la stessa riga si legge ancora una volta in più per richiesta.
+ * diversa e NON passa da qui. Per questo, dal 22/11, la scheda prodotto e la vetrina prendono i
+ * campi dei metadati dalla risposta del precarico (una per richiesta) e passano da qui solo quando
+ * il precarico non ha la riga.
  *
  * ── 21/11/2026 (R10-016) — UNA LETTURA PER RICHIESTA, NON PER DUE SECONDI ──────────────────────
  * Qui c'era scritto che `cache()` non c'è perché React è il 18. Vale per le prove e per il vecchio

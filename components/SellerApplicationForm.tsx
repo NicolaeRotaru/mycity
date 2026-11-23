@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
+import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 // 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
@@ -206,7 +207,9 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   const scheda = SCHEDE_ATTIVITA[tipoScelto];
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
+    // R16-013 — I tipi li detta il magazzino (`mappaAccept`): erano tre scritti a mano contro i
+    // sette che porta e deposito accettano, e il logo fotografato con l'iPhone (HEIC) restava fuori.
+    accept: mappaAccept(),
     maxFiles: 1,
     maxSize: 3 * 1024 * 1024,
     // Questo e' il primo modulo che compila un negozio nuovo, e il tetto dei 3 MB scartava senza
@@ -220,7 +223,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           ? 'Foto troppo pesante: serve sotto i 3 MB.'
           : motivi.includes('too-many-files')
             ? 'Una foto alla volta: trascinane una sola.'
-            : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+            : `Formato non accettato: servono foto in ${tipiScrittiPerUmani()}.`,
       );
     },
     onDrop: async (files) => {
@@ -234,7 +237,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
         // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
         const { publicUrl } = await caricaImmagine(supabase, {
-          file,
+          // Un HEIC trascinato da Windows arriva col tipo vuoto: senza il tipo giusto il deposito lo rifiuta.
+          file: fileColTipoGiusto(file),
           userId: user.id,
           cartella: 'logos',
           cacheControl: ANNO_IN_SECONDI,

@@ -3,6 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { env } from '@/lib/env';
 import { formatPrice } from '@/lib/format';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
@@ -93,6 +94,8 @@ function clampScore(n: unknown): number | null {
 }
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // Spento al lancio (carta #209): il freno vero è la rotta, prima del limite e di ogni lettura.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   const rl = await rateLimitAsync({ key: `ai-diagnose:${user.id}`, max: 20, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);

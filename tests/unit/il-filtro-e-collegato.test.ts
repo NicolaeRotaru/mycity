@@ -26,6 +26,7 @@ const runMessage = vi.fn();
 vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
   ...((await originale()) as Record<string, unknown>),
   TRADUCI_ACCESO: true,
+  AI_NEGOZI_ACCESA: true,
 }));
 
 vi.mock('@/lib/ai/run', () => ({

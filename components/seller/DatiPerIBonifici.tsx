@@ -62,7 +62,7 @@ export default function DatiPerIBonifici({ iniziali, quandoSalvati }: { iniziali
   };
 
   return (
-    <form id="bonifici" onSubmit={salva} className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6 scroll-mt-24">
+    <form id="bonifici" onSubmit={salva} className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6 scroll-mt-24 md:scroll-mt-0">
       <h2 className="font-semibold text-ink-900 mb-1 flex items-center gap-2">
         <Landmark size={18} className="text-olive-600" aria-hidden /> Dati per i bonifici
       </h2>

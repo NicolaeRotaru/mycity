@@ -6,6 +6,7 @@ import { List, Map as MapIcon, MapPin, RadioTower } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Card } from '@/components/ui/Card';
 import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
@@ -292,7 +293,7 @@ export default function NearMePage() {
       {/* L'invito, prima del permesso: si dice a cosa serve, e il riquadro di sistema arriva DOPO il
           gesto. Chi non lo tocca vede comunque tutti i negozi. */}
       {!pos && !motivo && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-cream-300 bg-surface-0 px-4 py-3 text-sm text-ink-700">
+        <Card variant="surface" padding="none" className="mb-4 flex flex-wrap items-center gap-3 px-4 py-3 text-sm text-ink-700">
           <MapPin size={18} strokeWidth={2.2} className="shrink-0 text-primary-700" aria-hidden />
           <span className="min-w-0 flex-1">Per ordinarli dal più vicino serve sapere dove sei. Il telefono te lo chiederà.</span>
           <button
@@ -303,7 +304,7 @@ export default function NearMePage() {
           >
             {cerco ? 'Cerco…' : 'Ordina per vicinanza'}
           </button>
-        </div>
+        </Card>
       )}
 
       {motivo && (
@@ -324,14 +325,18 @@ export default function NearMePage() {
       )}
 
       {/* Controlli: toggle Lista/Mappa + slider raggio */}
+      {/* R16-008 — A 280 e 320 px col testo al 200% la pagina era larga 359 px: il selettore
+          Lista/Mappa (in linea, largo quanto il suo contenuto) e il cursore del raggio (w-40, che non
+          si stringe) uscivano dallo schermo. Adesso il selettore ha un tetto e va a capo, la riga del
+          raggio va a capo e il cursore non supera la riga. Col testo normale non cambia niente. */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex w-fit rounded-xl border border-surface-200 bg-white p-1 shadow-card">
+        <div className="inline-flex w-fit max-w-full flex-wrap rounded-xl border border-surface-200 bg-white p-1 shadow-card">
           {toggleBtn('list', 'Lista', List)}
           {toggleBtn('map', 'Mappa', MapIcon)}
         </div>
 
         {pos && (
-          <label className="flex items-center gap-3 text-sm text-ink-600">
+          <label className="flex flex-wrap items-center gap-3 text-sm text-ink-600">
             <span className="whitespace-nowrap font-semibold">Raggio: {raggioScritto} km</span>
             <input
               type="range"
@@ -342,7 +347,7 @@ export default function NearMePage() {
               step={passoRaggio}
               value={radiusKm}
               onChange={(e) => setRadiusKm(Number(e.target.value))}
-              className="h-2 w-40 cursor-pointer accent-primary-600 sm:w-56"
+              className="h-2 w-40 max-w-full cursor-pointer accent-primary-600 sm:w-56"
               aria-label="Raggio di ricerca in km"
             />
           </label>

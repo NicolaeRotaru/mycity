@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Camera, Eye, Trash2, Upload, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -273,10 +273,11 @@ export default function SellerStoriesPage() {
               <li key={s.id} className="relative bg-white border border-cream-300 rounded-xl overflow-hidden">
                 <div className="relative aspect-[3/4]">
                   <Image
-                    src={sizedImage(s.image_url, 'card')}
+                    src={s.image_url}
                     alt={s.caption ?? ''}
                     fill
                     sizes="200px"
+                    loader={caricatoreFotoRemote}
                     className={`object-cover ${active ? '' : 'grayscale opacity-60'}`}
                   />
                   <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-black/60 text-white text-2xs px-2 py-0.5 rounded-full">

@@ -61,6 +61,16 @@ function finto() {
         const q: Record<string, unknown> = {
           eq: (...a: unknown[]) => (filtri.push(a), q),
           is: (...a: unknown[]) => (filtri.push(a), q),
+          select: () => q,
+          // R18-001 — La rivendicazione la scrive il giro (segno solo se vuoto, riga resa a chi la prende):
+          // come la 166, la prende solo chi mette il segno per primo.
+          maybeSingle: async () => {
+            const u = String(filtri.find((f) => f[0] === 'user_id')?.[1]);
+            marcature.push(u);
+            const primo = !segnati.has(u);
+            segnati.add(u);
+            return { data: primo ? { user_id: u } : null, error: null };
+          },
           then: (ok: (v: unknown) => unknown) => {
             if ('recovery_email_sent_at' in valori && valori.recovery_email_sent_at !== null) chiusi.push({ valori, filtri });
             return Promise.resolve({ error: null }).then(ok);

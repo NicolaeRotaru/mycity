@@ -16,6 +16,7 @@ import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
 import { domandaCategoriePiene, soloLePiene } from './CategoryShowcase';
+import { domandaAlberoCategorie } from './CategoryBar';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
@@ -169,19 +170,8 @@ const Footer = () => {
   // Stessa chiave e stessa domanda di CategoryBar: dove il piede si disegna, il
   // menu in alto ha già chiesto le categorie e la risposta è condivisa. Dove il
   // piede non si disegna — le pagine di lavoro — non si chiede niente.
-  const { data: categorie } = useQuery({
-    queryKey: ['categories', 'tree'],
-    staleTime: 10 * 60_000,
-    enabled: !areaPro && !isSellerArea,
-    queryFn: async (): Promise<Categoria[]> => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, slug, name, parent_id, icon')
-        .order('name');
-      if (error) throw error;
-      return (data ?? []) as Categoria[];
-    },
-  });
+  // R16-009 — La domanda è proprio quella del menu (`domandaAlberoCategorie`), non una sua copia.
+  const { data: categorie } = useQuery({ ...domandaAlberoCategorie(supabase), enabled: !areaPro && !isSellerArea });
 
   // 1/11/2026 — Il piede elencava nove categorie, otto senza un prodotto. Adesso restano solo
   // quelle con qualcosa dentro (stessa lettura e stessa chiave della vetrina in home). Finché la

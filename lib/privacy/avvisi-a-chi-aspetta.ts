@@ -43,6 +43,7 @@ import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { indirizzoPubblico } from '@/lib/env';
 import { PAGINA_DEI_CONTATTI, recapitoPrivacy } from '@/lib/legal/titolare';
+import { spezzaTenendo } from '@/lib/testo/scansioni-lineari';
 import { avvisoCancellazioneTemplate } from '@/lib/email/templates';
 
 export type Risposta = { data: unknown; error: { message: string } | null };
@@ -466,12 +467,23 @@ async function emailDovuta(
  * solo quando il testo non porta la pagina: mai la stessa strada due volte, mai una parola senza
  * dominio, e il collegamento non dipende dalle parole della frase.
  */
+// La pagina conta solo se prima non c'e' una lettera, una cifra, «/», «.» o «:» (lo guarda
+// `percorsoPuoPartire`, la stessa regola della pagina delle impostazioni) e dopo non c'e' una
+// lettera, una cifra, «/» o «-».
 const PERCORSO_DEI_CONTATTI = new RegExp(
-  `(?<![\\w/.:])${PAGINA_DEI_CONTATTI.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![\\w/-])`,
+  `${PAGINA_DEI_CONTATTI.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![\\w/-])`,
+  'y',
 );
+const PRIMA_DEL_PERCORSO_NO = /[\w/.:]/;
+
+/** Il testo fuori dalla pagina dei contatti, a pezzi: fra un pezzo e l'altro c'era la pagina. */
+export function pezziFuoriDalPercorso(testo: string): string[] {
+  const percorsoPuoPartire = (i: number) => i === 0 || !PRIMA_DEL_PERCORSO_NO.test(testo[i - 1]);
+  return spezzaTenendo(testo, PERCORSO_DEI_CONTATTI, percorsoPuoPartire).filter((_, k) => k % 2 === 0);
+}
 
 function rigaDelModulo(corpo: string): { testo: string; percorso: string } | null {
-  if (PERCORSO_DEI_CONTATTI.test(corpo)) return null;
+  if (pezziFuoriDalPercorso(corpo).length > 1) return null;
   const dove = recapitoPrivacy();
   if (dove.eUnaCasella) return null;
   return { testo: `${dove.testo.charAt(0).toUpperCase()}${dove.testo.slice(1)}, sul sito:`, percorso: dove.href };
@@ -483,8 +495,7 @@ export function corpoDellEmail(a: AvvisoAllInteressato): string {
     const url = escapeHtml(`${sito}${percorso}`);
     return `<a href="${url}">${url}</a>`;
   };
-  const testo = a.corpo
-    .split(PERCORSO_DEI_CONTATTI)
+  const testo = pezziFuoriDalPercorso(a.corpo)
     .map((pezzo) => escapeHtml(pezzo).replace(/\n/g, '<br>'))
     .join(collegamento(PAGINA_DEI_CONTATTI));
   const riga = rigaDelModulo(a.corpo);
@@ -498,7 +509,7 @@ function testoDellEmail(a: AvvisoAllInteressato): string {
   const sito = indirizzoPubblico().url.replace(/\/+$/, '');
   const riga = rigaDelModulo(a.corpo);
   return [
-    a.corpo.split(PERCORSO_DEI_CONTATTI).join(`${sito}${PAGINA_DEI_CONTATTI}`),
+    pezziFuoriDalPercorso(a.corpo).join(`${sito}${PAGINA_DEI_CONTATTI}`),
     riga ? `${riga.testo} ${sito}${riga.percorso}` : null,
     a.link ? `La tua richiesta, sul sito: ${sito}${a.link}` : null,
   ].filter((r): r is string => r !== null).join('\n\n');

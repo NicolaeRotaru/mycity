@@ -4,7 +4,7 @@
  * persona. Serve per i difetti che si vedono solo interagendo — un pannello che
  * si apre, il tasto Esc che non chiude, il fuoco che non torna indietro.
  */
-import { act, createElement, type ComponentType } from 'react';
+import { act, createElement, Suspense, type ComponentType } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 type Schermo = {
@@ -21,7 +21,7 @@ export function accendi(componente: unknown, proprieta: Record<string, unknown> 
   let root: Root;
   void act(() => {
     root = createRoot(radice);
-    root.render(createElement(componente as ComponentType<Record<string, unknown>>, proprieta));
+    root.render(createElement(Suspense, { fallback: null }, createElement(componente as ComponentType<Record<string, unknown>>, proprieta)));
   });
   return {
     doc: document,

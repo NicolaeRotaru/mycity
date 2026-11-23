@@ -10,7 +10,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
-import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
@@ -399,7 +399,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
               <li key={p.id} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-3 items-start">
                 <Link href={`/product/${p.id}`} className="flex-shrink-0">
                   {img ? (
-                    <Image src={sizedImage(img, 'thumb')} alt="" width={72} height={72} className="rounded-lg object-cover w-[72px] h-[72px]" />
+                    <Image src={img} alt="" width={72} height={72} loader={caricatoreFotoRemote} className="rounded-lg object-cover w-[72px] h-[72px]" />
                   ) : (
                     <div className="w-[72px] h-[72px] rounded-lg bg-cream-100 flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
                   )}

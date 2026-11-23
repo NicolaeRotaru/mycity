@@ -35,16 +35,29 @@ export function puoAvviareLavoro(job: { status: string } | null | undefined): bo
   return !job || lavoroChiuso(job.status);
 }
 
+/**
+ * 22/11/2026 — Il motivo che vieta di ripartire senza prima chiedere all'assistenza: lo scrive lo
+ * stato quando chiude un invio rimasto senza risposta per 24 ore (status/route.ts, «chiedi
+ * all'assistenza prima di avviarne un altro»). Gli altri motivi che nominano l'assistenza (il lotto
+ * chiuso dopo 24 ore, lo scarto) dicono solo dove si recuperano i risultati, e non vietano di ripartire.
+ */
+const CHIEDI_ALL_ASSISTENZA = /chiedi all['’]assistenza/i;
+
 /** La riga che spiega lo stato, quando la scheda dei risultati non c'e'. */
 export function testoStatoLavoro(job: { status: string; total: number; error?: string | null }): string | null {
   switch (job.status) {
+    // Un invio rimasto senza risposta (`incerto` dallo stato, dopo 3 minuti) non passa da qui:
+    // la pagina gli mostra il suo riquadro, senza rotella (app/seller/products/ai-batch/page.tsx).
     case 'submitting':
       return `Sto inviando il lavoro su ${job.total} prodotti… non riavviarlo: tra poco lo vedi partire.`;
     case 'processing':
       return `Sto elaborando ${job.total} prodotti… puoi lasciare aperta questa pagina o tornare più tardi.`;
     case 'failed':
-    case 'error':
-      return `Il lavoro non è andato a buon fine${job.error ? ` (${job.error})` : ''}. Puoi avviarne un altro.`;
+    case 'error': {
+      const base = `Il lavoro non è andato a buon fine${job.error ? ` (${job.error})` : ''}.`;
+      // Se il motivo dice di chiedere all'assistenza prima di ripartire, la riga non dice il contrario.
+      return CHIEDI_ALL_ASSISTENZA.test(job.error ?? '') ? base : `${base} Puoi avviarne un altro.`;
+    }
     case 'canceled':
       return 'Il lavoro è stato annullato. Puoi avviarne un altro.';
     default:

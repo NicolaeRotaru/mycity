@@ -3,7 +3,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
 
 /**
  * R01-varie — Le bozze del modulo di reclamo (app/orders/[id]/dispute/page.tsx) stanno in questa
@@ -81,6 +80,20 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         },
       })
   );
+
+  /**
+   * 22/11/2026 — IL TRADUTTORE DI ZOD ARRIVA DOPO, NON NEL PACCHETTO DI OGNI PAGINA.
+   * Qui c'era `import '@/lib/zod-i18n'`: il traduttore italiano degli errori dei moduli (e Zod con
+   * lui) viaggiava nel codice comune di ogni pagina, anche dove non c'è nessun modulo. Adesso si
+   * carica a parte, appena il provider è montato, e da lì vale per tutta la scheda (`z.setErrorMap`
+   * è globale). Caso limite: un modulo che valida prima che il pezzo sia arrivato (nei primi istanti
+   * dopo l'apertura della pagina, o se il pezzo non si scarica) mostra il testo inglese di Zod.
+   */
+  useEffect(() => {
+    import('@/lib/zod-i18n').catch(() => {
+      // Il pezzo non si è scaricato (rete caduta): restano i testi predefiniti di Zod.
+    });
+  }, []);
 
   /**
    * 5/11/2026 — CAMBIANDO ACCOUNT SULLO STESSO TELEFONO SI VEDEVANO I DATI DEL PRECEDENTE.

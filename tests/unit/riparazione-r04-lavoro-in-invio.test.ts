@@ -44,6 +44,7 @@ import { GET } from '@/app/api/ai/catalog-batch/status/route';
 import { INVIO_SENZA_RISPOSTA } from '@/lib/ai/batch';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { puoAvviareLavoro, lavoroInCorso, lavoroChiuso, testoStatoLavoro } from '@/lib/ai/statoLavoroCatalogo';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const chiedi = () => GET(new Request('http://localhost/api/ai/catalog-batch/status?jobId=job-1') as never);
 

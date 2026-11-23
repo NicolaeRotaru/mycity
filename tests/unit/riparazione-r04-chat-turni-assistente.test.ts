@@ -42,6 +42,7 @@ import { POST as catalogChat } from '@/app/api/ai/catalog-chat/route';
 import { POST as productChat } from '@/app/api/ai/product-chat/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { UnsafeContentError } from '@/lib/ai/moderation';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const HISTORY = [
   { role: 'user', content: 'ciao' },

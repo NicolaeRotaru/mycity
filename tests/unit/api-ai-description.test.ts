@@ -28,6 +28,7 @@ import { POST } from '@/app/api/ai/description/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { AiCallError } from '@/lib/ai/run';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 function makeReq(body: unknown): never {
   return new Request('http://localhost/api/ai/description', {

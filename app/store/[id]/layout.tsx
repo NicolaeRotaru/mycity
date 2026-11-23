@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
 import { descrizioneDelNegozio } from '@/lib/queries/metadati-vetrina';
-import { HydrationBoundary } from '@tanstack/react-query';
+import { HydrationBoundary, type DehydratedState } from '@tanstack/react-query';
 import { precaricaNegozio } from '@/lib/queries/precarico';
+import { queryKeys } from '@/lib/queries/keys';
 import { notFound } from 'next/navigation';
 
 /**
@@ -44,9 +45,34 @@ const fetchStore = (id: string) =>
     { id },
   );
 
+/**
+ * 22/11/2026 — LA RIGA DEL NEGOZIO DALLA STESSA RISPOSTA DEL PRECARICO.
+ *
+ * I metadati e il guscio rileggevano la riga del negozio che il precarico della vetrina aveva
+ * appena letto: a ogni visita `seller_public_profiles` una volta in più. La domanda della vetrina
+ * del precarico porta tutte le colonne che servono qui, `role` compreso (`lib/queries/precarico.ts`),
+ * e si fa una volta per richiesta. Una risposta «nessuna riga» del precarico è la stessa che
+ * darebbe `fetchStore` (stessa vista, stesso lettore): vale come «non trovato». Si rilegge con
+ * `fetchStore` solo quando il precarico non ha la voce: il precarico non fallisce mai (un guasto lo
+ * lascia vuoto), e solo quella lettura sa dire «non riesco a leggerlo» invece di «non c'è».
+ */
+function negozioDalPrecarico(stato: DehydratedState, id: string): StoreMeta | null | undefined {
+  const chiave = JSON.stringify(queryKeys.stores.detail(id));
+  // Uno stato senza voci (precarico vuoto) non ha la riga.
+  const voce = (stato?.queries ?? []).find((q) => JSON.stringify(q.queryKey) === chiave);
+  if (!voce) return undefined;
+  return (voce.state.data ?? null) as StoreMeta | null;
+}
+
+/** Il negozio per metadati e guscio: dal precarico della richiesta, o letto se lì non c'è. */
+async function negozioDellaRichiesta(id: string, precarico?: DehydratedState): Promise<StoreMeta | null> {
+  const dalPrecarico = negozioDalPrecarico(precarico ?? (await precaricaNegozio(id)), id);
+  return dalPrecarico !== undefined ? dalPrecarico : fetchStore(id);
+}
+
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
-  const store = await fetchStore(params.id);
+  const store = await negozioDellaRichiesta(params.id);
   // 17/11/2026 — Il titolo dice «non trovata» con parole sue, diverse dal riquadro della pagina
   // («Negozio non trovato», in app/store/[id]/page.tsx): Next manda i metadati in streaming dentro il
   // corpo, e con le stesse parole la scritta compariva due volte, come alla 404 prima della sua cura.
@@ -107,14 +133,14 @@ export default async function StoreLayout(
   props: { children: React.ReactNode; params: Promise<{ id: string }> },
 ) {
   const params = await props.params;
-  // R10-001 — La stessa riga dei metadati (una lettura sola, vedi lettura-per-metadati.ts). Un
-  // guasto non è «non trovato»: si lascia la pagina com'era, e il suo «Riprova».
-  const lettura = fetchStore(params.id).catch(() => undefined);
+  // R10-001 — La stessa riga dei metadati. Un guasto non è «non trovato»: si lascia la pagina
+  // com'era, e il suo «Riprova». 22/11/2026 — La riga viene dalla risposta del precarico (vedi
+  // `negozioDalPrecarico`), non da una seconda domanda allo stesso negozio.
   const precarico = await precaricaNegozio(params.id);
-  const store = await lettura;
+  const store = await negozioDellaRichiesta(params.id, precarico).catch(() => undefined);
   // R10-001 — Qui, nel guscio, si decide la 404 di un negozio che non c'è, con la condizione con cui
   // la pagina dice «Negozio non trovato». Arriva in rete solo togliendo le attese sopra: oggi
-  // app/loading.tsx e app/store/loading.tsx ci sono ancora e fanno partire la risposta con 200.
+  // app/loading.tsx c'è ancora e fa partire la risposta con 200 (app/store/loading.tsx è tolto).
   if (store === null || (store && (store.role !== 'seller' || !store.is_approved || !store.store_name))) notFound();
 
   return <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>;
