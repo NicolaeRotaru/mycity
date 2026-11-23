@@ -113,7 +113,7 @@ function makeReq(): never {
   return new Request('http://localhost/api/ai/catalog-batch/apply', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jobId: 'job-1' }),
+    body: JSON.stringify({ jobId: 'job-1', productIds: ['p1', 'p2'] }),
   }) as never;
 }
 

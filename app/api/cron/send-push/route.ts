@@ -8,8 +8,9 @@ import { isPushConfigured, iscrizioniPerUtenti, sendPushToUser } from '@/lib/pus
 import { CONSEGNA_PER_CATEGORIA, contrassegno } from '@/lib/push/subito';
 
 // 20/11/2026 (R02-004) — Quanto vale un avviso (`CONSEGNA_PER_CATEGORIA`) e quale sostituisce sul
-// telefono (`contrassegno`) stanno in lib/push/subito.ts: le usa anche l'invio subito della push del
-// nuovo ordine, e devono restare uguali.
+// telefono (`contrassegno`) stanno in lib/push/subito.ts: le usa anche l'aiutante per l'invio subito
+// della push del nuovo ordine (`mandaSubitoLaPushDelNuovoOrdine`), che oggi nessuna rotta chiama
+// ancora (vedi sotto), e devono restare uguali.
 
 /** Le categorie che possono aspettare: senza la preferenza letta non partono. */
 const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
@@ -21,10 +22,11 @@ const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
  * rimosse dal sender.
  *
  * Cadenza: ogni 5 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
- * 20/11/2026 (R02-004) — Per il nuovo ordine non si aspetta questo giro: la push al negozio parte
- * subito, alla creazione dell'ordine (`mandaSubitoLaPushDelNuovoOrdine`, lib/push/subito.ts), e
- * segna `pushed_at`, così qui non torna. Questo giro resta la rete di sicurezza: riprende quelle
- * che l'invio subito non è riuscito a mandare (e ha lasciato con `pushed_at` vuoto).
+ * Oggi il nuovo ordine aspetta questo giro: la push al negozio la manda solo lui, quindi può
+ * arrivare fino a 5 minuti dopo l'ordine. L'aiutante per mandarla subito alla creazione
+ * dell'ordine esiste (`mandaSubitoLaPushDelNuovoOrdine`, lib/push/subito.ts), ma nessuna rotta
+ * lo chiama ancora: quando lo farà, segnerà `pushed_at` e qui la push non tornerà; questo giro
+ * resterà la rete di sicurezza per quelle che l'invio subito non è riuscito a mandare.
  * A mano si chiama così:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://yoursite/api/cron/send-push
  */

@@ -122,7 +122,9 @@ function idDelFiltro(filtro: unknown, products: ProductRow[], categories: Catego
   // Giro di correzione (22/11) — Un criterio scritto ma non valido (uno stato fuori
   // elenco, una categoria vuota o non testo) non si salta: saltarlo allargava il
   // filtro («Available» + Abbigliamento sceglieva tutta la categoria). Non sceglie niente.
-  if ((stato !== undefined && !conStato) || (categoria !== undefined && !nomeCat)) return [];
+  // 22/11/2026 (R13-002) — Un null e' il campo che il modello non usa, non un criterio
+  // scritto: {stato:'available', categoria:null} sono «tutti i disponibili», non zero.
+  if ((stato != null && !conStato) || (categoria != null && !nomeCat)) return [];
   if (!conStato && !nomeCat) return [];
   let categorieOk: Set<string> | null = null;
   if (nomeCat) {

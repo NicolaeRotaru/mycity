@@ -35,7 +35,9 @@ describe('R02-001 · campo del testo alternativo del banner', () => {
     const onChange = vi.fn();
     const campo = trova(albero({}, onChange), 'Testo alternativo della foto');
     expect(campo).not.toBeNull();
-    expect(campo!.maxLength).toBe(160);
+    expect(campo!.maxLength).toBeUndefined();
+    expect(trova(albero({ alt: 'a'.repeat(161) }), 'Testo alternativo della foto')!.error).toMatch(/161 caratteri su 160/);
+    expect(trova(albero({ alt: 'a'.repeat(160) }), 'Testo alternativo della foto')!.error).toBeUndefined();
     (campo!.onChange as (e: unknown) => void)({ target: { value: 'Il bancone del forno' } });
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0][0].config.alt).toBe('Il bancone del forno');

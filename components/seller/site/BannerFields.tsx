@@ -7,6 +7,20 @@ import type { SiteSection } from '@/lib/store-site';
 import { SingleImageUpload } from './ImageUpload';
 import CategorySelect from './CategorySelect';
 
+/**
+ * R16-004 — Niente `maxLength` sui campi del banner: il browser tagliava in silenzio titolo,
+ * sottotitolo, testo alternativo e testo del pulsante incollati oltre il tetto. Il testo resta intero
+ * e, oltre il tetto che lo schema rifiuta al salvataggio (`lib/store-site.ts`, bannerConfig), l'errore
+ * lo dice sotto il campo. Si conta come lo schema (`z.string().trim().max(n)`); stessa funzione di
+ * `SectionConfigForm.tsx`, che non la esporta.
+ */
+function sopraIlTetto(valore: string | undefined, max: number): string | undefined {
+  const n = (valore ?? '').trim().length;
+  return n > max
+    ? `Troppo lungo: ${n.toLocaleString('it-IT')} caratteri su ${max.toLocaleString('it-IT')}. Accorcialo, così si salva.`
+    : undefined;
+}
+
 type BannerSec = Extract<SiteSection, { type: 'banner' }>;
 type Cfg = BannerSec['config'];
 type Target = NonNullable<Cfg['cta']>['target'];
@@ -57,14 +71,14 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
       <Input
         label="Titolo"
         value={c.heading ?? ''}
-        maxLength={120}
+        error={sopraIlTetto(c.heading, 120)}
         onChange={(e) => set({ heading: e.target.value })}
         placeholder="Es. Saldi di stagione"
       />
       <Textarea
         label="Sottotitolo"
         value={c.subheading ?? ''}
-        maxLength={200}
+        error={sopraIlTetto(c.subheading, 200)}
         rows={2}
         onChange={(e) => set({ subheading: e.target.value })}
         placeholder="Una frase breve di accompagnamento"
@@ -72,7 +86,7 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
       <Input
         label="Testo alternativo della foto"
         value={c.alt ?? ''}
-        maxLength={160}
+        error={sopraIlTetto(c.alt, 160)}
         onChange={(e) => set({ alt: e.target.value })}
         placeholder="Descrivi la foto per chi non la vede (vuoto = foto solo di sfondo)"
       />
@@ -95,7 +109,7 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
             <Input
               label="Testo del pulsante"
               value={c.cta.label}
-              maxLength={40}
+              error={sopraIlTetto(c.cta.label, 40)}
               onChange={(e) => set({ cta: { ...c.cta!, label: e.target.value } })}
               placeholder="Es. Scopri"
             />

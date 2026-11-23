@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, type LucideIcon } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
 // Le promesse pubbliche nascono dagli stessi interruttori che le mantengono: il ritiro in negozio
 // e' spento nel checkout e nelle due rotte, ma questa pagina lo prometteva lo stesso, con tanto di
 // istruzione per selezionare un'opzione che non c'e'.
@@ -237,7 +238,7 @@ export default function FaqPage() {
                 const key = `${section.title}-${i}`;
                 const isOpen = !!open[key];
                 return (
-                  <div key={key} className="bg-white border border-cream-300 rounded-lg overflow-hidden">
+                  <Card key={key} radius="lg" padding="none" className="overflow-hidden">
                     <button
                       type="button"
                       onClick={() => toggle(key)}
@@ -252,7 +253,7 @@ export default function FaqPage() {
                         {item.a}
                       </div>
                     )}
-                  </div>
+                  </Card>
                 );
               })}
             </div>

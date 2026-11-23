@@ -52,6 +52,7 @@ import {
   PROPRIETA_EDITORIALI,
   CAMPI_NON_EDITORIALI,
 } from '@/lib/ai/patchSchema';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 function req(url: string, body: unknown): never {
   return new Request(url, {

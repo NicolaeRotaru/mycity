@@ -101,6 +101,7 @@ import { GET as documentiRider } from '@/app/api/kyc/documenti-rider/[id]/route'
 import { GET as datiIdentita } from '@/app/api/admin/users/[id]/kyc/route';
 import { POST as riepilogoRecensioni } from '@/app/api/ai/reviews-summary/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 type Rotta = (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
 

@@ -32,6 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { POST } from '@/app/api/ai/catalog-batch/cancel/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as Record<string, unknown>), AI_NEGOZI_ACCESA: true }));
 
 const scarta = () =>
   POST(new Request('http://localhost/api/ai/catalog-batch/cancel', {

@@ -6,7 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Crown, Vote, ArrowRight, Trophy, Medal, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage, logoNegozio } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { friendlyError } from '@/lib/errors';
@@ -168,7 +169,8 @@ export default function ShopOfMonthPage() {
             {pick.cover_image_url && (
               <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-white/20">
                 <Image
-                  src={sizedImage(pick.cover_image_url, 'detail')}
+                  src={pick.cover_image_url}
+                  loader={caricatoreFotoRemote}
                   alt={pick.seller.store_name ?? ''}
                   fill
                   sizes="(max-width: 768px) 100vw, 500px"
@@ -217,7 +219,8 @@ export default function ShopOfMonthPage() {
                   <Link href={`/store/${row.seller_id}`} className="flex items-center gap-3 flex-1 min-w-0 hover:underline">
                     {row.store_logo ? (
                       <Image
-                        src={logoNegozio(row.store_logo, 48)}
+                        src={row.store_logo}
+                        loader={caricatoreLogoNegozio}
                         alt={row.store_name ?? ''}
                         width={48}
                         height={48}

@@ -9,7 +9,11 @@
     "deny": [
       "mcp__Supabase",
       "mcp__Vercel",
-      "mcp__Stripe"
+      "mcp__Stripe",
+      "mcp__3c86ea8d-8cd5-4174-b668-50984ed77950",
+      "mcp__8b8d3eec-114e-4750-b77f-b25f3e8aa503",
+      "mcp__supabase-marketplace",
+      "mcp__supabase-memoria"
     ]
   },
   "hooks": {

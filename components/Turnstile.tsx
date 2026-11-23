@@ -76,6 +76,8 @@ function TurnstileConReset(
         widgetId.current = window.turnstile.render(ref.current, {
           sitekey: siteKey,
           theme,
+          // Il widget normale è largo 300 px: sotto i 340 px di schermo non ci sta, si usa il compatto (150 px).
+          size: typeof window !== 'undefined' && window.innerWidth < 340 ? 'compact' : 'normal',
           callback: (token: string) => richiami.current.onVerify(token),
           'expired-callback': () => richiami.current.onExpire?.(),
           'error-callback': () => fallito('Il controllo anti-bot non ha risposto.'),

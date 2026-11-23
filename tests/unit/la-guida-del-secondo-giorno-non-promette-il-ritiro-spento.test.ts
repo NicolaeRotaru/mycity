@@ -145,9 +145,9 @@ function paroleDellHtml(html: string): string {
  */
 // 5/11/2026 (S04, schede 2072, 2076, 2075) — Mancava il modo più comune di dirlo, «passa a
 // prenderla (tu)», e «passa tu dal negozio»: un «Se preferisci, passa a prenderla tu» nel benvenuto
-// restava verde. «Un rider passa a prenderlo» resta fuori: lo esclude il «rider» davanti.
+// restava verde. «Un rider passa a prenderlo» resta fuori: lo esclude il «rider» (o «fattorino») davanti.
 const PAROLE_DEL_RITIRO =
-  /ritir|in negozio|al banco|in bottega|prendi tu|passi a prender|passare a prender|vieni a prender|venire a prender|(?<!rider\s)passa (?:tu )?a prender|passa tu|dal negozio a prender/i;
+  /ritir|in negozio|al banco|in bottega|prendi tu|passi a prender|passare a prender|vieni a prender|venire a prender|(?<!(?:rider|fattorino)\s)passa (?:tu )?a prender|passa tu|dal negozio a prender/i;
 
 /**
  * 5/11/2026 (S04, scheda 2075) — Le parole che stanno DENTRO i tag e che un lettore di schermo o un
@@ -236,6 +236,7 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
       expect(frase).toMatch(PAROLE_DEL_RITIRO);
     }
     expect('un rider passa a prenderlo a breve').not.toMatch(PAROLE_DEL_RITIRO);
+    expect('un fattorino passa a prenderlo a breve').not.toMatch(PAROLE_DEL_RITIRO);
   });
 
   it('nessun modello di email del file, di servizio o commerciale, nomina il ritiro', () => {
