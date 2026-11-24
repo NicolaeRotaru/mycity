@@ -72,7 +72,7 @@ export const HOME_SECTION_CATALOG: {
   { type: 'howItWorks',      label: 'Come funziona',       description: 'I 3 passi (scegli → ordina → ricevi)',    group: 'struttura' },
   { type: 'categories',      label: 'Categorie',           description: 'Griglia delle categorie del mercato',     group: 'struttura' },
   { type: 'dropOfDay',       label: 'Drop del giorno',     description: "L'offerta del giorno (si auto-nasconde)", group: 'struttura' },
-  { type: 'popularProducts', label: 'Prodotti popolari',   description: 'Griglia dei prodotti più amati',          group: 'struttura' },
+  { type: 'popularProducts', label: 'Appena arrivati',      description: 'Fila degli ultimi prodotti arrivati dai negozi', group: 'struttura' },
   { type: 'liveActivity',    label: 'Attività live + Trust', description: 'Feed ordini in tempo reale + perché MyCity', group: 'struttura' },
   { type: 'nearbyStores',    label: 'Negozi vicini',       description: 'Vetrina dei negozi di Piacenza',          group: 'struttura' },
   { type: 'reorder',         label: 'Ordina di nuovo',     description: 'Riordino rapido dai tuoi ordini recenti (si auto-nasconde)', group: 'struttura' },
