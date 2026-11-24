@@ -82,7 +82,7 @@ function PianoDelMese({ nome, tipo, giorno }: { nome: string; tipo: TipoAttivita
     <Riquadro
       icona={CalendarDays}
       titolo={`Il piano editoriale di ${piano.mese}`}
-      nota={`${piano.post.length} post, 3 a settimana. Sono esempi: i post veri li prepara il nostro sistema automatico con le foto della tua vetrina, e tu li approvi prima che escano.`}
+      nota={`${piano.post.length} post, 3 a settimana. Sono esempi: i post veri li prepariamo noi con le foto della tua vetrina, e tu li approvi prima che escano.`}
     >
       <ol className="divide-y divide-cream-200 rounded-lg border border-cream-200 bg-white">
         {piano.post.map((p) => (
@@ -119,7 +119,7 @@ function TabellaFormati({ formati }: { formati: FormatoMedia[] }) {
 
 function FormatiFotoVideo() {
   return (
-    <Riquadro icona={Sparkles} titolo="I formati che ricevi" nota="Quanti scatti e quanti video ogni mese lo fissiamo insieme, dentro la fascia di prezzo.">
+    <Riquadro icona={Sparkles} titolo="I formati che ricevi" nota="Quanti scatti e quanti video ogni mese lo dice il tuo abbonamento: Base, Business o Premium.">
       <h4 className="mb-2 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-700">
         <Camera size={14} aria-hidden /> Foto
       </h4>

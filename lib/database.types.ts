@@ -38,6 +38,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      abbonamenti_servizi: {
+        Row: {
+          id: string;
+          seller_id: string;
+          fascia: string;
+          canone_centesimi: number;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string;
+          stato: string;
+          rinnovo_il: string | null;
+          creato_il: string;
+          aggiornato_il: string;
+        };
+        Insert: {
+          id?: string;
+          seller_id: string;
+          fascia: string;
+          canone_centesimi: number;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id: string;
+          stato: string;
+          rinnovo_il?: string | null;
+          creato_il?: string;
+          aggiornato_il?: string;
+        };
+        Update: {
+          id?: string;
+          seller_id?: string;
+          fascia?: string;
+          canone_centesimi?: number;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string;
+          stato?: string;
+          rinnovo_il?: string | null;
+          creato_il?: string;
+          aggiornato_il?: string;
+        };
+        Relationships: [];
+      };
       achievements: {
         Row: {
           id: string;

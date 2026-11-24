@@ -196,6 +196,8 @@ const scarica = withAuthRateLimit(
       .from('subscription_orders')
       .select('*')
       .or(`user_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    // 24/11/2026 — Gli abbonamenti dei servizi (MyCity tramite SDG), migrazione 706.
+    abbonamenti_dei_servizi: tutta((da, a) => admin.from('abbonamenti_servizi').select('*').eq('seller_id', userId).order('id').range(da, a)),
     tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
     casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).order('id').range(da, a)),
     casse_contanti: tutta((da, a) => admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).order('chiave').range(da, a)),

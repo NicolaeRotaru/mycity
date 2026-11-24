@@ -10,7 +10,8 @@ import { liberaIlTurno, prendiIlTurno, statoDellAvvisoOccupato } from '@/lib/str
 import { handleCheckoutCompleted, handleCheckoutExpired } from '@/lib/stripe/webhook/ordini';
 import { handleGiftCardPurchase } from '@/lib/stripe/webhook/giftcard';
 import { handleSponsoredPurchase } from '@/lib/stripe/webhook/sponsorizzati';
-import { handleSellerSubscription, handleSubscriptionChanged, handleInvoicePaymentFailed } from '@/lib/stripe/webhook/abbonamenti';
+import { handleSubscriptionChanged, handleInvoicePaymentFailed } from '@/lib/stripe/webhook/abbonamenti';
+import { eSessioneDiAbbonamento, handleAbbonamentoPagato } from '@/lib/stripe/webhook/servizi';
 import { handleChargeRefunded, handleRefundUpdated } from '@/lib/stripe/webhook/rimborsi';
 import { handleDisputeCreated, handleDisputeClosed } from '@/lib/stripe/webhook/dispute';
 import { handleTransferReversed, handlePayoutFailed, handleAccountUpdated } from '@/lib/stripe/webhook/trasferimenti';
@@ -154,8 +155,8 @@ export async function POST(req: NextRequest) {
           await handleGiftCardPurchase(session);
         } else if (session.metadata?.kind === 'sponsored') {
           await handleSponsoredPurchase(session);
-        } else if (session.metadata?.kind === 'seller_subscription') {
-          await handleSellerSubscription(session);
+        } else if (eSessioneDiAbbonamento(session)) {
+          await handleAbbonamentoPagato(session); // la vetrina, o i servizi tramite SDG (24/11/2026)
         } else {
           await handleCheckoutCompleted(session);
         }

@@ -777,25 +777,45 @@ async function propagaLaCancellazioneAStripe(
     if (!annotato.ok) return annotato;
   }
 
-  if (!clienteStripe) return { ok: true };
+  // 24/11/2026 (collaudo) — L'ABBONAMENTO DEI SERVIZI HA UN CLIENTE STRIPE SUO, e la sua riga sparisce
+  // col profilo (ON DELETE CASCADE): senza questa lettura chi chiudeva l'account continuava a pagare
+  // 300, 500 o 999 euro al mese, e noi perdevamo il filo per ritrovarlo. Si legge prima del passo
+  // irreversibile; la tabella che non c'è ancora (migrazione 706) vale «nessun abbonamento».
+  const { data: servizi, error: erroreServizi } = await admin
+    .from('abbonamenti_servizi')
+    .select('stripe_customer_id')
+    .eq('seller_id', userId);
+  if (erroreServizi && !['42P01', 'PGRST205'].includes(String((erroreServizi as { code?: string }).code))) {
+    logger.error('[cancellazione] abbonamenti dei servizi non letti', { userId, err: erroreServizi.message });
+    return { ok: false, errore: `gli abbonamenti dei servizi non sono stati letti (${erroreServizi.message})` };
+  }
+  const clienti = [...new Set([
+    clienteStripe,
+    ...((erroreServizi ? [] : (servizi ?? [])) as { stripe_customer_id?: string | null }[]).map((r) => r.stripe_customer_id),
+  ].filter((c): c is string => !!c))];
+
+  if (clienti.length === 0) return { ok: true };
 
   if (!isStripeConfigured()) {
     logger.error('[cancellazione] cliente Stripe da cancellare ma Stripe non è configurato', { userId });
     return { ok: false, errore: 'Stripe non è configurato e il cliente collegato non può essere cancellato' };
   }
 
-  try {
-    await getStripe().customers.del(clienteStripe);
-    logger.info('[cancellazione] cliente Stripe cancellato', { userId });
-    return { ok: true };
-  } catch (err) {
-    // Su Stripe non c'è già più: la promessa è mantenuta, si tira dritto.
-    const codice = (err as { code?: string })?.code;
-    if (codice === 'resource_missing') return { ok: true };
-    const messaggio = err instanceof Error ? err.message : 'errore sconosciuto';
-    logger.error('[cancellazione] cliente Stripe non cancellato', { userId, err: messaggio });
-    return { ok: false, errore: `il cliente su Stripe non è stato cancellato (${messaggio})` };
+  for (const cliente of clienti) {
+    try {
+      // Cancellare il cliente chiude anche i suoi abbonamenti aperti (vedi sopra).
+      await getStripe().customers.del(cliente);
+      logger.info('[cancellazione] cliente Stripe cancellato', { userId });
+    } catch (err) {
+      // Su Stripe non c'è già più: la promessa è mantenuta, si tira dritto.
+      const codice = (err as { code?: string })?.code;
+      if (codice === 'resource_missing') continue;
+      const messaggio = err instanceof Error ? err.message : 'errore sconosciuto';
+      logger.error('[cancellazione] cliente Stripe non cancellato', { userId, err: messaggio });
+      return { ok: false, errore: `il cliente su Stripe non è stato cancellato (${messaggio})` };
+    }
   }
+  return { ok: true };
 }
 
 /**

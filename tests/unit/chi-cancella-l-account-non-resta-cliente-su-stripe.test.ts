@@ -46,7 +46,7 @@ import { cancellaAccount } from '@/lib/account/cancellazione';
 const UTENTE = '11111111-1111-4111-8111-111111111111';
 
 /** Il finto mondo: come quello condiviso, ma il profilo ha un cliente Stripe. */
-function fintoMondo(opzioni: { clienteStripe?: string | null; erroreLettura?: string } = {}) {
+function fintoMondo(opzioni: { clienteStripe?: string | null; erroreLettura?: string; clientiServizi?: string[]; erroreServizi?: { code: string; message: string } } = {}) {
   const diario: string[] = [];
   const admin = {
     from(tabella: string) {
@@ -58,6 +58,10 @@ function fintoMondo(opzioni: { clienteStripe?: string | null; erroreLettura?: st
               if (tabella === 'profiles') {
                 if (opzioni.erroreLettura) return { data: null, error: { message: opzioni.erroreLettura } };
                 return { data: [{ stripe_customer_id: opzioni.clienteStripe ?? null }], error: null };
+              }
+              if (tabella === 'abbonamenti_servizi') {
+                if (opzioni.erroreServizi) return { data: null, error: opzioni.erroreServizi };
+                return { data: (opzioni.clientiServizi ?? []).map((c) => ({ stripe_customer_id: c })), error: null };
               }
               return { data: [], error: null };
             },
@@ -109,6 +113,25 @@ describe('quando si cancella un account che su Stripe è un cliente', () => {
       stripe.cancellati,
       'i dati restano su Stripe sotto un codice che dopo non conosciamo più',
     ).toEqual(['cus_fornaio']);
+  });
+
+  // 24/11/2026 (collaudo) — L'abbonamento dei servizi ha un cliente Stripe suo: senza questa riga chi
+  // chiudeva l'account continuava a pagare 300, 500 o 999 euro al mese.
+  it('si cancella anche il cliente Stripe dei servizi, che chiude il loro abbonamento', async () => {
+    const { admin, diario } = fintoMondo({ clienteStripe: 'cus_vetrina', clientiServizi: ['cus_servizi', 'cus_servizi'] });
+    const esito = await cancellaAccount(admin as never, UTENTE);
+    expect(esito.ok).toBe(true);
+    expect(stripe.cancellati).toEqual(['cus_vetrina', 'cus_servizi']);
+    expect(diario.indexOf('select:abbonamenti_servizi')).toBeLessThan(diario.indexOf('cancella-account'));
+  });
+
+  it('se gli abbonamenti dei servizi non si leggono, l account non si cancella; senza la tabella (706) si va avanti', async () => {
+    const guasto = fintoMondo({ clienteStripe: null, erroreServizi: { code: '57014', message: 'timeout' } });
+    expect((await cancellaAccount(guasto.admin as never, UTENTE)).ok).toBe(false);
+    expect(guasto.diario).not.toContain('cancella-account');
+    const senzaTabella = fintoMondo({ clienteStripe: 'cus_vetrina', erroreServizi: { code: '42P01', message: 'relation does not exist' } });
+    expect((await cancellaAccount(senzaTabella.admin as never, UTENTE)).ok).toBe(true);
+    expect(stripe.cancellati).toEqual(['cus_vetrina']);
   });
 
   it('se Stripe non risponde, l account NON si cancella: la richiesta resta in coda', async () => {

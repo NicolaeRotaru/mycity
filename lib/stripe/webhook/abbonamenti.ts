@@ -21,6 +21,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { scritturaFacoltativa, scritturaObbligatoria } from './esito';
+import { KIND_SERVIZI } from './tipi-abbonamento';
 
 /** Mappa lo stato Stripe della subscription sul nostro enum profili. */
 export function mapSubscriptionStatus(status: Stripe.Subscription.Status): 'active' | 'past_due' | 'canceled' {
@@ -204,6 +205,18 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
  */
 export async function handleSubscriptionChanged(sub: Stripe.Subscription) {
   const admin = getAdminSupabase();
+  // 24/11/2026 — L'abbonamento dei servizi (MyCity tramite SDG) vive nella sua tabella, mai sul profilo.
+  if (sub.metadata?.kind === KIND_SERVIZI) {
+    const adesso = await statoDaStripe(sub.id);
+    scritturaObbligatoria(
+      await admin
+        .from('abbonamenti_servizi')
+        .update({ stato: adesso.subscription_status, rinnovo_il: adesso.subscription_renews_at, aggiornato_il: new Date().toISOString() })
+        .eq('stripe_subscription_id', sub.id),
+      'stato abbonamento dei servizi',
+    );
+    return;
+  }
   // Lo stato di ADESSO, non la fotografia dentro l'avviso (vedi `statoDaStripe`).
   scritturaObbligatoria(
     await admin
@@ -221,6 +234,8 @@ export async function handleSubscriptionChanged(sub: Stripe.Subscription) {
 export async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   const customerId = typeof invoice.customer === 'string' ? invoice.customer : (invoice.customer?.id ?? null);
   if (!customerId) return;
+  // 24/11/2026 — Prima si guarda se è un abbonamento dei servizi: in quel caso la vetrina non si tocca.
+  if (await fatturaServiziRifiutata(abbonamentoDellaFattura(invoice))) return;
   const admin = getAdminSupabase();
   // 16/10/2026 (quinto riesame del lotto) — La fattura rifiutata può essere un
   // ritentativo di Stripe arrivato dopo che il negozio ha già pagato: si chiede
@@ -262,3 +277,39 @@ export async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     );
   }
 }
+
+/**
+ * 24/11/2026 — Una fattura rifiutata di un abbonamento dei servizi: lo segna in ritardo nella sua
+ * tabella e avvisa il negozio, e risponde `true`. Risponde `false` se non è dei servizi (o la
+ * tabella non c'è ancora, migrazione 706): allora decide il gestore della vetrina, come prima.
+ */
+export async function fatturaServiziRifiutata(subscriptionId: string | null): Promise<boolean> {
+  if (!subscriptionId) return false;
+  const admin = getAdminSupabase();
+  const { data, error } = await admin
+    .from('abbonamenti_servizi')
+    .select('seller_id, fascia')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+  if (error && ['42P01', 'PGRST205'].includes(String(error.code))) return false;
+  if (error) throw new Error(`[stripe] abbonamento dei servizi non letto: ${error.message}`);
+  if (!data) return false;
+  const adesso = await statoDaStripe(subscriptionId);
+  if (adesso.subscription_status !== 'past_due') return true; // già pagato nel frattempo: niente da dire
+  scritturaObbligatoria(
+    await admin.from('abbonamenti_servizi').update({ stato: 'past_due', aggiornato_il: new Date().toISOString() }).eq('stripe_subscription_id', subscriptionId),
+    'abbonamento dei servizi in ritardo',
+  );
+  scritturaFacoltativa(
+    await admin.from('notifications').insert({
+      category: 'order',
+      user_id: (data as { seller_id: string }).seller_id,
+      title: '⚠️ Pagamento dell’abbonamento non riuscito',
+      body: 'Non siamo riusciti ad addebitare l’abbonamento dei servizi di questo mese. Scrivici dall’Aiuto e lo sistemiamo insieme.',
+      link: '/seller/preventivo',
+    }),
+    'avviso pagamento abbonamento servizi non riuscito',
+  );
+  return true;
+}
+

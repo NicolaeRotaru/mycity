@@ -1,12 +1,12 @@
 import { logger } from '@/lib/logger';
-import type { Preventivo } from './preventivo';
+import { FASCE, type Preventivo } from './preventivo';
 
 /**
  * IL PREVENTIVO ACCETTATO VA AL FLUSSO n8n DI MYCITY.
  *
  * 22/11/2026 — Nicola: «sfrutteremo n8n per dargli il servizio di gestione dei
  * social automatico (è già pronto, basta collegarlo)». Quando un cliente accetta
- * il preventivo, il sito manda qui le voci scelte e i contatti, e il flusso
+ * il preventivo, il sito manda qui l'abbonamento scelto, cosa manca e i contatti, e il flusso
  * n8n parte da solo (per esempio: apre la scheda del cliente e avvia i social).
  *
  * SPENTO FINCHÉ NICOLA NON LO COLLEGA. Senza `N8N_PREVENTIVO_WEBHOOK_URL` non
@@ -53,7 +53,11 @@ export async function inviaAlFlusso(p: Preventivo, dati: DatiPerIlFlusso, fetchF
         attivita: { id: dati.idAttivita, nome: p.attivita, tipo: p.tipoAttivita },
         contatti: { email: dati.email, telefono: dati.telefono },
         socials: dati.socials ?? null,
-        voci: p.righe.map((r) => ({ id: r.id, titolo: r.titolo, cadenza: r.cadenza, prezzo: r.prezzo, perche: r.perche, partner: r.partner ?? null })),
+        abbonamento: (() => {
+          const id = p.scelto ?? p.consigliato;
+          return { id, nome: FASCE[id].nome, canoneMeseCentesimi: p.prezzi[id], servizi: FASCE[id].servizi };
+        })(),
+        manca: p.righe.map((r) => ({ id: r.id, titolo: r.titolo, perche: r.perche, partner: r.partner ?? null })),
       }),
       signal: AbortSignal.timeout(ATTESA_MASSIMA_MS),
     });

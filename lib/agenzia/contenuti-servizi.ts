@@ -117,22 +117,36 @@ const TEMA_DEL_MESE = [
 
 const NOMI_MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
 
-/** La rotazione dei contenuti: ogni settimana mescola prodotto, persone, vetrina e stagione. */
+/**
+ * Quanti post mostra il piano: 12, come il Business («12 post al mese, 3 a settimana»). Fino al
+ * 24/11 i post erano 6 ripetuti due volte (il 3 uguale al 17, il 5 al 19…): si notava, e faceva
+ * sembrare tutto automatico proprio dove il preventivo promette «su misura per te».
+ */
+export const POST_NEL_PIANO = 12;
+
+/** I 12 contenuti del mese, tutti diversi: prodotto, persone, vetrina, clienti e stagione. */
 function postNumero(i: number, nome: string, tipo: TipoAttivita, mese: number): Omit<PostDelPiano, 'data'> {
   const c = COSA[tipo];
   const stagione = TEMA_DEL_MESE[mese];
+  const Stagione = `${stagione.charAt(0).toUpperCase()}${stagione.slice(1)}`;
   const rotazione: Omit<PostDelPiano, 'data'>[] = [
     { formato: 'Post foto', tema: 'Il prodotto in primo piano', esempio: `Oggi vi presentiamo ${c.prodotto}. Lo trovate ${c.luogo} e sulla nostra vetrina MyCity.` },
     { formato: 'Reel', tema: 'Dietro le quinte', esempio: `Ore 7: ${c.gesto}. Ecco come nasce una giornata da ${nome}.` },
     { formato: 'Carosello', tema: 'Ordina da casa', esempio: `Non riesci a passare? Ordina dalla vetrina MyCity di ${nome}: te lo portiamo noi a Piacenza.` },
     { formato: 'Storia', tema: 'La domanda ai clienti', esempio: `Qual è il vostro preferito da ${nome}? Rispondete al sondaggio!` },
     { formato: 'Post foto', tema: 'Chi siamo', esempio: `Dietro ${nome} ci sono persone vere: vi raccontiamo chi siamo e perché facciamo questo lavoro.` },
-    { formato: 'Reel', tema: `Il tema del mese: ${stagione}`, esempio: `${stagione.charAt(0).toUpperCase()}${stagione.slice(1)}: ecco cosa abbiamo preparato ${c.luogo}.` },
+    { formato: 'Reel', tema: `Il tema del mese: ${stagione}`, esempio: `${Stagione}: ecco cosa abbiamo preparato ${c.luogo}.` },
+    { formato: 'Carosello', tema: 'I più scelti della settimana', esempio: `I tre più scelti questa settimana da ${nome}: scorri e dicci qual è il tuo.` },
+    { formato: 'Post foto', tema: 'Le mani al lavoro', esempio: `Ogni mattina ${c.gesto}: le mani di ${nome} al lavoro, da vicino.` },
+    { formato: 'Storia', tema: 'Le novità', esempio: `Cosa c’è di nuovo ${c.luogo} questa settimana? Ve lo mostriamo qui, prima di tutti.` },
+    { formato: 'Reel', tema: 'Una giornata in 30 secondi', esempio: `Dall’apertura alla chiusura: una giornata da ${nome} in 30 secondi.` },
+    { formato: 'Post foto', tema: 'La domanda che ci fate più spesso', esempio: `La domanda che ci fate più spesso ${c.luogo}, e la nostra risposta.` },
+    { formato: 'Carosello', tema: 'Il tema del mese, a domicilio', esempio: `${Stagione}: ordina dalla vetrina MyCity di ${nome} e te lo portiamo noi.` },
   ];
   return rotazione[i % rotazione.length];
 }
 
-/** Il piano del mese del preventivo: 3 post a settimana, dal primo all'ultimo giorno. */
+/** Il piano del mese del preventivo: 3 post a settimana dal primo del mese, fino a 12 post. */
 export function pianoEditoriale(nome: string, tipo: TipoAttivita, giorno: string): PianoEditoriale {
   const [anno, mese] = giorno.split('-').map(Number);
   const m = (Number.isInteger(mese) && mese >= 1 && mese <= 12 ? mese : 1) - 1;
@@ -140,7 +154,7 @@ export function pianoEditoriale(nome: string, tipo: TipoAttivita, giorno: string
   const n = nome.trim() || 'noi';
   const giorniNelMese = new Date(Date.UTC(a, m + 1, 0)).getUTCDate();
   const post: PostDelPiano[] = [];
-  for (let g = 1; g <= giorniNelMese; g++) {
+  for (let g = 1; g <= giorniNelMese && post.length < POST_NEL_PIANO; g++) {
     const data = new Date(Date.UTC(a, m, g));
     if (!GIORNI_DI_PUBBLICAZIONE.includes(data.getUTCDay())) continue;
     post.push({ data: data.toISOString().slice(0, 10), ...postNumero(post.length, n, tipo, m) });
