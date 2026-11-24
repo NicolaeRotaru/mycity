@@ -267,8 +267,6 @@ export function commitDelRilascio(rilascio) {
  *   · se il dominio non si sa, si sceglie solo quando c'e' un candidato solo
  *     (un commit solo). Con due o piu' commit diversi e' tirare a indovinare,
  *     e la risposta giusta e' nessun indirizzo: il ritorno si fa a mano.
- *     (24/11/2026: sapendo il commit che esce, anche con un candidato solo
- *     nessun indirizzo — vedi sotto.)
  *
  * 1/11/2026 (ondata 9) — IL SECONDO PUNTO TORNAVA AL RILASCIO GIA' SCARTATO.
  * Prima diceva «prima c'era l'ultimo rilascio di un altro commit, si torna a
@@ -302,40 +300,55 @@ function indirizzoDiProduzione(rilascio) {
  * @returns {string | null}
  */
 export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulDominio = null } = {}) {
+  const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];
   const daScartare = String(commitCheEsce ?? '').trim().toLowerCase();
+  const candidati = [];
+  // I commit di tutti i rilasci di produzione pronti, nell'ordine dell'elenco (dal piu' recente),
+  // compresi quelli del commit che esce: servono alla regola del dominio non letto, sotto.
+  const commitDeiPronti = [];
+  for (const rilascio of elenco) {
+    const indirizzo = indirizzoDiProduzione(rilascio);
+    if (!indirizzo) continue;
+    const commit = commitDelRilascio(rilascio);
+    commitDeiPronti.push(commit);
+    if (daScartare && commit === daScartare) continue;
+    candidati.push({ indirizzo, commit });
+  }
+
   const deiClienti = indirizzoDiProduzione(sulDominio);
   // Sul dominio un altro commit: e' quello che usano i clienti, si torna li'.
   // Sul dominio il commit che esce: chi c'era prima non si sa piu', e la
-  // risposta e' nessun indirizzo (mai il primo dell'elenco: puo' essere un
+  // risposta e' nessun indirizzo (mai `candidati[0]`: puo' essere un
   // rilascio gia' tolto perche' rotto).
   // 12/11/2026 (R07-011) — un dominio che non dice il suo commit non e' «un altro
   // commit»: '' e' diverso da qualunque sha, e il dominio veniva preso per buono
-  // anche quando era proprio il rilascio rotto che esce.
+  // anche quando era proprio il rilascio rotto che esce. Senza commit, nessun
+  // indirizzo (R02-005, sotto).
   const commitDeiClienti = commitDelRilascio(sulDominio);
-  if (deiClienti && commitDeiClienti && commitDeiClienti !== daScartare) return deiClienti;
-  // 24/11/2026 — Decisione della regia: nei due casi dubbi nessun indirizzo, e il
-  // ritorno indietro si fa a mano (la strada che c'e' gia').
-  //  · Il dominio risponde ma non dice il suo commit: nessun indirizzo SEMPRE,
-  //    anche quando il commit che esce non si sa. Prima, senza il commit che
-  //    esce, quel dominio si prendeva per buono, e poteva essere proprio il
-  //    rilascio che esce, messo li' dal rilascio automatico di Vercel.
-  //  · Il dominio non si legge: l'elenco degli ultimi 20 rilasci non distingue un
-  //    rilascio vivo da uno gia' tolto perche' rotto, e anche quando dice un solo
-  //    altro commit quello puo' essere proprio il rilascio tolto (X rotto,
-  //    riportato a W che e' fuori dai 20; esce Y: l'elenco dice [Y, X]). Prima,
-  //    con un solo altro commit, si tornava li'. Adesso, sapendo il commit che
-  //    esce (il lavoro di rilascio lo passa sempre), l'elenco non sceglie piu'.
-  if (deiClienti || daScartare) return null;
+  if (deiClienti && (!daScartare || (commitDeiClienti && commitDeiClienti !== daScartare))) return deiClienti;
+  // 21/11/2026 (R02-005, scelta di Nicola) — il dominio si legge ma dice il
+  // commit che esce, oppure non dice il suo commit: dove fossero i clienti prima
+  // non si sa piu'. Nell'elenco degli ultimi 20 rilasci anche un solo altro
+  // commit puo' essere un rilascio gia' tolto perche' rotto, e quello dei
+  // clienti puo' stare piu' indietro. Nessun indirizzo: il ritorno si fa a mano.
+  // La regola dell'elenco qui sotto resta solo per quando il dominio non si
+  // legge affatto (la scena di ogni giorno: in cima il commit che esce, sotto
+  // quello di prima).
+  if (deiClienti) return null;
 
-  // Senza il commit che esce (mai nel lavoro di rilascio) resta la regola di prima:
-  // si sceglie solo quando l'elenco dice un commit solo. Un rilascio senza commit
-  // conta come un commit a se': non si sa se e' lo stesso di un altro.
-  const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];
-  const candidati = [];
-  for (const rilascio of elenco) {
-    const indirizzo = indirizzoDiProduzione(rilascio);
-    if (indirizzo) candidati.push({ indirizzo, commit: commitDelRilascio(rilascio) });
+  // 21/11/2026 (R02-008) — il dominio non si legge: la regola dell'elenco vale solo se il commit
+  // che esce compare AL PIU' UNA VOLTA fra i rilasci di produzione pronti, e se compare e' il
+  // primo. Il commit che esce gia' rilasciato piu' volte (o non in cima) vuol dire che un ritorno
+  // indietro puo' essere gia' passato di qui: Y uscito, riportato a X perche' rotto, Y di nuovo
+  // fuori. In [Y, Y, X] X puo' essere proprio il rilascio tolto, e dove siano i clienti non si sa
+  // piu'. Nessun indirizzo: il ritorno si fa a mano. La scena di ogni giorno [Y, X] non cambia.
+  if (daScartare) {
+    const volte = commitDeiPronti.filter((commit) => commit === daScartare).length;
+    if (volte > 1 || (volte === 1 && commitDeiPronti[0] !== daScartare)) return null;
   }
+
+  // Un rilascio senza commit conta come un commit a se': non si sa se e' lo
+  // stesso di un altro.
   const commitDiversi = new Set(candidati.map((c, i) => c.commit || `senza-commit-${i}`));
   return commitDiversi.size === 1 ? candidati[0].indirizzo : null;
 }
@@ -351,7 +364,7 @@ export function motivoSenzaRilascio(sulDominio) {
   if (indirizzoDiProduzione(sulDominio)) {
     return "Non so quale rilascio usano i clienti adesso: il dominio ha risposto, ma dice il commit che sta uscendo o non dice il suo commit, e chi c'era prima non si sa piu'. Non scelgo a caso dove tornare indietro.";
   }
-  return "Non so quale rilascio usano i clienti adesso: il dominio non ha risposto con un rilascio di produzione pronto, e l'elenco dei rilasci non dice quale e' vivo (anche un solo altro commit puo' essere un rilascio gia' tolto perche' rotto). Non scelgo a caso dove tornare indietro.";
+  return "Non so quale rilascio usano i clienti adesso: il dominio non ha risposto con un rilascio di produzione pronto, e dall'elenco non si capisce (non c'e' un solo commit diverso da quello che sta uscendo, oppure quello che esce e' gia' stato rilasciato piu' volte o non e' il piu' recente). Non scelgo a caso dove tornare indietro.";
 }
 
 /**

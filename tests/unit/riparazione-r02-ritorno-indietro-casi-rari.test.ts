@@ -8,9 +8,6 @@ import { rilascioDaTornare } from '@/scripts/prova-di-fumo.mjs';
  * In tutti e due chi usavano i clienti prima non si sa: nessun indirizzo, il
  * ritorno si fa a mano. Quando il dominio non si legge affatto resta la regola
  * dell'elenco (la scena di ogni giorno).
- * 24/11/2026 — Non piu': col dominio non letto e il commit che esce noto anche un
- * solo altro commit puo' essere il rilascio gia' tolto, e la risposta e' nessun
- * indirizzo (decisione della regia, prova riparazione-r06-ritorno-indietro-casi-dubbi).
  */
 const ESCE = '3333333333333333333333333333333333333333';
 const ROTTO = '1111111111111111111111111111111111111111';
@@ -40,8 +37,8 @@ describe('R02-005 · il ritorno indietro non tira a indovinare nei due casi rari
     expect(rilascioDaTornare(elenco, { commitCheEsce: ESCE, sulDominio: dominio(PRIMA) })).toBe('https://mycity-sul-dominio.vercel.app');
   });
 
-  it('il dominio non si legge: neanche un solo altro commit nell elenco e un posto dove tornare (puo essere il rilascio gia tolto)', () => {
+  it('il dominio non si legge: resta la regola dell elenco, un solo altro commit e quello', () => {
     const elenco = { deployments: [rilascio(ESCE, 'esce'), rilascio(PRIMA, 'prima')] };
-    expect(rilascioDaTornare(elenco, { commitCheEsce: ESCE })).toBeNull();
+    expect(rilascioDaTornare(elenco, { commitCheEsce: ESCE })).toBe('https://mycity-prima.vercel.app');
   });
 });
