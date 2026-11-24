@@ -19,10 +19,10 @@ import { SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
 /**
  * 22/11/2026 — Nicola: la dashboard del cliente mostra «il preventivo di quello
  * che gli manca», già pronto. Listino di Nicola, stesso giorno: sito 500 €,
- * social 300 € al mese, foto e video da 50 a 300 € al mese; il logo non ha
- * prezzo («su richiesta»). Queste prove dicono cosa deve succedere davvero:
+ * social 300 € al mese, foto e video da 50 a 300 € al mese. Il logo è stato
+ * tolto dal preventivo il 23/11/2026 (Nicola: «togli sezione di logo e grafica»). Queste prove dicono cosa deve succedere davvero:
  *  · ogni voce nasce da un dato vero, col numero vero («3 prodotti sono senza foto»);
- *  · una vetrina completa non si vede proporre logo, foto, video o sito;
+ *  · una vetrina completa non si vede proporre foto, video o sito;
  *  · i prezzi sono quelli di Nicola, e i totali tengono separati «una volta» e «al mese»;
  *  · un prezzo scritto male nelle impostazioni non arriva al cliente;
  *  · quando il cliente toglie una voce, il server non la rimette, e non ne aggiunge
@@ -47,14 +47,17 @@ const DI_LISTINO = leggiImpostazioniAgenzia({});
 const ADESSO = new Date('2026-11-22T10:00:00Z');
 
 describe('il listino è quello di Nicola (22/11/2026)', () => {
-  it('sito 500 € una volta, social 300 € al mese, foto e video da 50 a 300 € al mese, logo su richiesta', () => {
+  it('sito 500 € una volta, social 300 € al mese, foto e video da 50 a 300 € al mese; il logo non c è più', () => {
     expect(DI_LISTINO.prezzi.sito_web).toEqual({ da: 50000, a: 50000 });
     expect(LISTINO.sito_web.cadenza).toBe('una_tantum');
     expect(DI_LISTINO.prezzi.social).toEqual({ da: 30000, a: 30000 });
     expect(LISTINO.social.cadenza).toBe('mese');
     expect(DI_LISTINO.prezzi.foto_video).toEqual({ da: 5000, a: 30000 });
     expect(LISTINO.foto_video.cadenza).toBe('mese');
-    expect(DI_LISTINO.prezzi.logo).toBeNull();
+    expect(SERVIZI_AGENZIA).not.toContain('logo' as never);
+    expect('logo' in DI_LISTINO.prezzi).toBe(false);
+    expect(DI_LISTINO.prezzi.google_maps).toBeNull(); // scheda Google: prezzo non ancora deciso, «su richiesta»
+    expect(LISTINO.google_maps.cadenza).toBe('una_tantum');
     expect(DI_LISTINO.nome).toBe(NOME_AGENZIA_DI_RISERVA);
     expect(NOME_AGENZIA_DI_RISERVA).toBe('MyCity'); // il preventivo lo firma MyCity (Nicola, 23/11)
     expect(LISTINO.foto_video.partner).toBe('scattiDG'); // foto e video li fa il partner scattiDG
@@ -69,12 +72,12 @@ describe('il listino è quello di Nicola (22/11/2026)', () => {
 
 describe('cosa manca alla vetrina', () => {
   it('una vetrina vuota si vede proporre tutti e quattro i servizi, nell ordine del listino', () => {
-    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['logo', 'foto_video', 'social', 'sito_web']);
+    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'social', 'sito_web', 'google_maps']);
   });
 
-  it('una vetrina completa si vede proporre solo la gestione dei social', () => {
+  it('una vetrina completa si vede proporre solo i social e la scheda Google', () => {
     const voci = cosaManca(COMPLETA);
-    expect(voci.map((v) => v.id)).toEqual(['social']);
+    expect(voci.map((v) => v.id)).toEqual(['social', 'google_maps']);
     expect(voci[0].perche[0]).toContain('Instagram');
   });
 
@@ -106,24 +109,23 @@ describe('cosa manca alla vetrina', () => {
 describe('il preventivo', () => {
   it('i totali tengono separati «una volta» e «al mese», e dicono cosa è su richiesta', () => {
     const p = costruisciPreventivo({ idAttivita: 'abc123-def', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar', dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO });
-    expect(p.totaleUnaTantum).toEqual({ da: 50000, a: 50000, suRichiesta: ['Logo e grafica'] });
+    expect(p.totaleUnaTantum).toEqual({ da: 50000, a: 50000, suRichiesta: ['Scheda Google su Maps'] });
     expect(p.totaleMensile).toEqual({ da: 35000, a: 60000, suRichiesta: [] });
-    expect(scriviTotale(p.totaleUnaTantum!, 'una_tantum')).toMatch(/^500,00\s€ \+ Logo e grafica su richiesta$/);
+    expect(scriviTotale(p.totaleUnaTantum!, 'una_tantum')).toMatch(/^500,00\s€ \+ Scheda Google su Maps su richiesta$/);
     expect(scriviTotale(p.totaleMensile!, 'mese')).toMatch(/^da 350,00\s€ a 600,00\s€ al mese$/);
   });
 
   it('Nicola cambia un prezzo dalle impostazioni, senza rifare il sito', () => {
     const imp = leggiImpostazioniAgenzia({ nome: 'Studio Prova', prezzi: { logo: 15000, social: { da: 20000, a: 30000 }, sito_web: null } });
+    expect('logo' in imp.prezzi).toBe(false); // una vecchia chiave «logo» nelle impostazioni si ignora
     expect(imp.nome).toBe('Studio Prova');
-    expect(imp.prezzi.logo).toEqual({ da: 15000, a: 15000 });
     expect(imp.prezzi.social).toEqual({ da: 20000, a: 30000 });
     expect(imp.prezzi.sito_web).toBeNull(); // null scritto = su richiesta
     expect(imp.prezzi.foto_video).toEqual({ da: 5000, a: 30000 }); // non scritto = listino
   });
 
   it('un prezzo scritto male diventa «su richiesta», non un prezzo sbagliato', () => {
-    const imp = leggiImpostazioniAgenzia({ prezzi: { logo: -5, social: '300', sito_web: 12.5, foto_video: { da: 30000, a: 5000 } } });
-    expect(imp.prezzi.logo).toBeNull();
+    const imp = leggiImpostazioniAgenzia({ prezzi: { social: '300', sito_web: 12.5, foto_video: { da: 30000, a: 5000 } } });
     expect(imp.prezzi.social).toBeNull();
     expect(imp.prezzi.sito_web).toBeNull();
     expect(imp.prezzi.foto_video).toBeNull();
@@ -131,7 +133,7 @@ describe('il preventivo', () => {
   });
 
   it('lo 0 non è un prezzo: il cliente non legge mai «0,00 €» (collaudo del 23/11)', () => {
-    const imp = leggiImpostazioniAgenzia({ prezzi: { logo: 0, social: 0, sito_web: 0, foto_video: { da: 0, a: 30000 } } });
+    const imp = leggiImpostazioniAgenzia({ prezzi: { social: 0, sito_web: 0, foto_video: { da: 0, a: 30000 } } });
     expect(Object.values(imp.prezzi).every((v) => v === null)).toBe(true);
     const p = costruisciPreventivo({ idAttivita: 'x', nomeAttivita: 'Bar', tipoAttivita: 'bar', dati: VUOTA, impostazioni: imp, adesso: ADESSO });
     const testi = [
@@ -143,7 +145,7 @@ describe('il preventivo', () => {
   });
 
   it('l esempio scritto nel commento della migrazione usa solo chiavi vere e non produce prezzi a zero', () => {
-    const sql = readFileSync(join(process.cwd(), 'migrations/703_ogni_attivita_puo_iscriversi_e_ha_il_suo_preventivo.sql'), 'utf8');
+    const sql = readFileSync(join(process.cwd(), 'migrations/704_il_preventivo_non_ha_piu_il_logo.sql'), 'utf8');
     const commento = sql.match(/COMMENT ON COLUMN public\.site_settings\.agenzia IS\s*'([^']*)'/);
     expect(commento, 'commento della colonna agenzia non trovato').toBeTruthy();
     const esempio = JSON.parse(commento![1].match(/Esempio: (\{.*?\}\})\./)![1]) as { prezzi: Record<string, unknown> };
@@ -155,10 +157,10 @@ describe('il preventivo', () => {
   it('le scelte del cliente tolgono voci ma non ne aggiungono una che non manca', () => {
     const p = costruisciPreventivo({
       idAttivita: 'x', nomeAttivita: 'Bar', tipoAttivita: 'bar', dati: COMPLETA, impostazioni: DI_LISTINO, adesso: ADESSO,
-      scelte: ['logo', 'social'],
+      scelte: ['sito_web', 'social'],
     });
-    expect(p.righe.map((r) => r.id)).toEqual(['social']); // il logo c'è già: non entra anche se scelto
-    expect(p.giaAPosto).toContain('logo');
+    expect(p.righe.map((r) => r.id)).toEqual(['social']); // il sito c'è già: non entra anche se scelto
+    expect(p.giaAPosto).toContain('sito_web');
     expect(p.totaleUnaTantum).toBeNull();
   });
 

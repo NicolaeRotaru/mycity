@@ -86,7 +86,8 @@ describe('il menu del venditore', () => {
     expect(r.textContent).toContain('Foto e video');
     expect(r.textContent).toContain('Gestione social');
     expect(r.textContent).toContain('Sito web');
-    expect(r.textContent).toContain('Logo e grafica');
+    expect(r.textContent).toContain('Scheda Google');
+    expect(r.textContent).not.toContain('Logo e grafica'); // tolto il 23/11
     expect(r.textContent).toContain('Il tuo preventivo');
     // Nicola, 23/11: «la voce preventivo, chiamala servizi»
     const gruppi = Array.from(r.querySelectorAll('*')).filter((n) => n.children.length === 0).map((n) => n.textContent?.trim());
@@ -131,10 +132,10 @@ describe('la pagina di un servizio', () => {
   });
 
   it('un servizio che c è già lo dice, senza prezzo né pulsante', async () => {
-    stato.slug = 'logo';
+    stato.slug = 'sito-web';
     stato.preventivo = costruisciPreventivo({
       idAttivita: 'a1b2c3', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar',
-      dati: { storeLogo: 'https://esempio.it/logo.png', storeMedia: [], prodotti: [], socials: null },
+      dati: { storeLogo: null, storeMedia: [], prodotti: [], socials: { website: 'https://barroma.it' } },
       impostazioni: leggiImpostazioniAgenzia({}), adesso: new Date('2026-11-23T10:00:00Z'),
     });
     const r = await monta(ServizioDelPreventivoPage);
@@ -144,6 +145,74 @@ describe('la pagina di un servizio', () => {
 
   it('un indirizzo che non è di nessun servizio non apre una pagina', () => {
     expect(servizioDaSlug('caffe-gratis')).toBeNull();
+    expect(servizioDaSlug('logo')).toBeNull(); // tolto dal preventivo il 23/11
     expect(servizioDaSlug('foto-video')).toBe('foto_video');
+  });
+});
+
+/**
+ * 23/11/2026 — Nicola: «inserisci già quel servizio disponibile: dentro il sito una bozza del
+ * sito, dentro social manager il piano editoriale del mese (con già degli esempi), dentro
+ * foto/video i formati; e togli sezione di logo e grafica».
+ */
+describe('cosa ricevi, già pronto dentro il servizio', () => {
+  it('il sito web mostra la bozza col nome dell attività e un indirizzo suggerito', async () => {
+    stato.slug = 'sito-web';
+    const r = await monta(ServizioDelPreventivoPage);
+    expect(r.textContent).toContain('La bozza del tuo sito');
+    expect(r.textContent).toContain('barroma.it');
+    expect(r.querySelector('[aria-label="La bozza del tuo sito"]')?.textContent).toContain('Bar Roma');
+    expect(r.textContent).toContain('Chi siamo');
+  });
+
+  it('la gestione social mostra il piano di novembre 2026: 12 post, 3 a settimana, con esempi', async () => {
+    stato.slug = 'social';
+    const r = await monta(ServizioDelPreventivoPage);
+    const piano = r.querySelector('[aria-label="Il piano editoriale di novembre 2026"]');
+    expect(piano, 'piano editoriale non mostrato').toBeTruthy();
+    expect(piano!.querySelectorAll('li')).toHaveLength(12); // mar/gio/sab di novembre 2026
+    expect(piano!.textContent).toContain('Sono esempi');
+    expect(piano!.textContent).toContain('Bar Roma');
+    expect(piano!.textContent).not.toMatch(/€|%|sconto/i); // nessun prezzo o sconto inventato nei post
+  });
+
+  it('foto e video mostra i formati di foto, video ed editing', async () => {
+    stato.slug = 'foto-video';
+    const r = await monta(ServizioDelPreventivoPage);
+    expect(r.textContent).toContain('I formati che ricevi');
+    expect(r.textContent).toContain('Reel');
+    expect(r.textContent).toContain('verticale 9:16');
+    expect(r.textContent).toContain('Foto dei prodotti');
+    expect(r.textContent).toContain('Sottotitoli');
+  });
+
+  it('la scheda Google mostra come apparirà su Maps, col nome e la categoria', async () => {
+    stato.slug = 'scheda-google';
+    const r = await monta(ServizioDelPreventivoPage);
+    const scheda = r.querySelector('[aria-label="La tua scheda su Google Maps"]');
+    expect(scheda, 'anteprima della scheda non mostrata').toBeTruthy();
+    expect(scheda!.textContent).toContain('Bar Roma');
+    expect(scheda!.textContent).toContain('Bar · Piacenza');
+    expect(scheda!.textContent).toContain('vetrina MyCity');
+    expect(r.textContent).toContain('su richiesta'); // nessun prezzo deciso da Nicola
+  });
+
+  it('il preventivo intero mostra le quattro anteprime, e non ha più il logo', async () => {
+    const { default: PreventivoAgenziaPage } = await import('@/app/seller/preventivo/page');
+    const r = await monta(PreventivoAgenziaPage);
+    expect(r.textContent).toContain('I formati che ricevi');
+    expect(r.textContent).toContain('Il piano editoriale di novembre 2026');
+    expect(r.textContent).toContain('La bozza del tuo sito');
+    expect(r.textContent).toContain('La tua scheda su Google Maps');
+    expect(r.textContent).not.toContain('Logo e grafica');
+  });
+
+  it('togliendo la spunta, l anteprima di quella voce sparisce', async () => {
+    const { default: PreventivoAgenziaPage } = await import('@/app/seller/preventivo/page');
+    const r = await monta(PreventivoAgenziaPage);
+    const casella = r.querySelector<HTMLInputElement>('#voce-sito_web')!;
+    await act(async () => { casella.click(); });
+    expect(r.textContent).not.toContain('La bozza del tuo sito');
+    expect(r.textContent).toContain('Il piano editoriale di novembre 2026');
   });
 });
