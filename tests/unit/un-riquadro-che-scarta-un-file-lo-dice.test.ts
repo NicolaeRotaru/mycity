@@ -182,7 +182,8 @@ describe('un riquadro che scarta un file lo dice', () => {
   });
 
   it('i tre riquadri riparati il 6/9/2026 parlano davvero', () => {
-    for (const rel of ['components/VendorForm.tsx', 'components/ImageUrlField.tsx', 'components/SellerApplicationForm.tsx', 'components/StoreMediaManager.tsx']) {
+    // 25/11/2026 — SellerApplicationForm non ha più un riquadro: il modulo corto non carica foto.
+    for (const rel of ['components/VendorForm.tsx', 'components/ImageUrlField.tsx', 'components/StoreMediaManager.tsx']) {
       const suoi = riquadriDi(readFileSync(join(RADICE, rel), 'utf8'), rel);
       expect(suoi.length, `${rel}: nessun riquadro letto, il lettore si e' perso`).toBeGreaterThan(0);
       for (const r of suoi) expect(r.parla, `${rel} scarta [${r.limiti.join(', ')}] senza dirlo`).toBe(true);

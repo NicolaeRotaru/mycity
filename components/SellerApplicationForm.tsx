@@ -1,100 +1,69 @@
 'use client';
 
-import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { useState } from 'react';
 import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useDropzone } from 'react-dropzone';
-import { toast } from 'sonner';
 import Link from 'next/link';
 import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
-import StoreAvatar from './StoreAvatar';
-import StoreMediaManager from './StoreMediaManager';
-import { supabase } from '@/lib/supabase/client';
-import type { StoreMediaItem } from './StoreMediaCarousel';
-import { friendlyError } from '@/lib/errors';
-import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
-import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';
-import { Input, Textarea, Checkbox } from '@/components/ui/Field';
+import { Input, Checkbox } from '@/components/ui/Field';
 // 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
 // viene poi trattenuta davvero.
 // R10-005 — Il prezzo dell'abbonamento arriva da dove si calcola l'addebito.
 import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
-import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { Store, Send } from 'lucide-react';
 import { MAX_DETTAGLIO_ATTIVITA, SCHEDE_ATTIVITA, TIPI_ATTIVITA, tipoDelProfilo } from '@/lib/agenzia/tipi-attivita';
 
 /**
- * Form completo per la richiesta di diventare venditore business su MyCity.
+ * Il modulo per chiedere di vendere su MyCity.
  *
- * Differenze rispetto al vecchio VendorForm:
- *  - raccoglie dati anagrafici del titolare (richiesti per legge)
- *  - raccoglie i dati dell'impresa (ragione sociale, partita IVA, sede legale):
- *    sono quelli che «Venduto da» mostra al cliente sotto ogni prodotto, e che
- *    l'amministratore controlla prima di approvare. Fino al 31/10/2026 erano
- *    «disattivati, verranno raccolti più avanti» — ma il «più avanti» non
- *    esisteva: il negozio veniva approvato senza partita IVA.
- *  - richiede consensi espliciti a ToS, Privacy, accuratezza dati; l'addebito
- *    mensile dell'abbonamento SOLO se l'abbonamento è acceso
- *    (`ABBONAMENTO_NEGOZI_ACCESO`): al lancio è sospeso, e far accettare un
- *    addebito che non faremo è una promessa falsa scritta in un contratto.
- *  - non chiede un'«email operativa»: non c'era nessuna colonna dove salvarla e
- *    il valore veniva buttato via. Avvisi e risposte vanno all'email di accesso.
- *  - dopo l'invio NON attiva il negozio: parte la procedura di approvazione admin
+ * 25/11/2026 — IL MINIMO PER RICONOSCERE L'ATTIVITÀ. Nicola: «questa pagina è
+ * troppo lunga, lascia il minimo indispensabile per identificare quella
+ * attività facilmente». Erano 7 riquadri e 23 campi da scrivere o caricare.
+ * Ne restano cinque, quelli che bastano a riconoscerla:
+ *  - che attività è (negozio, bar, ristorante, artigiano, servizi, altro);
+ *  - come si chiama;
+ *  - dove sta, sulla mappa;
+ *  - la partita IVA: la identifica senza dubbi, ed è l'unico dato che lo staff
+ *    deve avere per approvare (lib/admin/regole-approvazione.ts);
+ *  - il telefono, per parlarci.
+ * Più le spunte legali, che si firmano qui e vanno a verbale.
  *
- * Il form è lungo ma in una pagina sola (no wizard) per consentire la
- * compilazione "tutta insieme" tipica del primo onboarding.
+ * Il resto si chiede dopo l'approvazione, nel Profilo del negozio: i dati del
+ * titolare (components/seller/DatiDelTitolare), IBAN e dati per la fattura
+ * (components/seller/DatiPerIBonifici), logo, foto e descrizione (la vetrina).
+ * La data di nascita qui non si chiede più: chi firma dichiara di avere 18
+ * anni nella spunta dei dati (condizioni d'uso, punto 3).
+ *
+ * Resta vero quello che c'era prima:
+ *  - l'addebito mensile dell'abbonamento si fa accettare SOLO se l'abbonamento
+ *    è acceso (`ABBONAMENTO_NEGOZI_ACCESO`): far accettare un addebito che non
+ *    faremo è una promessa falsa scritta in un contratto;
+ *  - non chiede un'«email operativa»: avvisi e risposte vanno all'email di accesso;
+ *  - dopo l'invio NON attiva il negozio: parte l'approvazione dello staff.
  */
-
 
 const SellerSchema = z.object({
   // 22/11/2026 — Non serve più essere una bottega (Nicola): bar, ristoranti, artigiani, servizi.
   businessType: z.enum(TIPI_ATTIVITA, { errorMap: () => ({ message: 'Scegli che attività hai' }) }),
   businessTypeDetail: z.string().trim().max(MAX_DETTAGLIO_ATTIVITA, `Al massimo ${MAX_DETTAGLIO_ATTIVITA} caratteri`).optional().or(z.literal('')),
-  // Contatti operativi
-  contactPhone: z.string().regex(/^[0-9 +]{8,16}$/, 'Numero di telefono non valido'),
 
-  // Anagrafica titolare
-  legalFirstName: z.string().min(2, 'Inserisci il nome'),
-  legalLastName:  z.string().min(2, 'Inserisci il cognome'),
-  legalFiscalCode: z.string().regex(/^[A-Z0-9]{11,16}$/i, 'Codice fiscale non valido (11-16 caratteri)'),
-  legalBirthDate: z.string().min(1, 'Inserisci la data di nascita'),
-  legalResidenceAddr: z.string().min(3, 'Inserisci la via di residenza'),
-  legalResidenceCity: z.string().min(2, 'Inserisci la città'),
-  legalResidenceZip:  z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
-
-  // Dati dell'impresa: li mostra «Venduto da» e li controlla l'amministratore.
-  // Il controllo completo della partita IVA (la cifra finale) lo fa il server.
-  businessLegalName: z.string().min(2, 'Inserisci la ragione sociale'),
-  businessVatNumber: z.string().regex(/^\s*(IT)?\s*[0-9]{11}\s*$/i, 'Partita IVA non valida (11 cifre)'),
-  businessAddress: z.string().min(3, 'Inserisci la via della sede legale'),
-  businessCity: z.string().min(2, 'Inserisci la città della sede legale'),
-  businessZip: z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
-
-  // Vetrina pubblica
   // R28-011 — Come la rotta (app/api/seller/apply): senza spazi ai lati, da 3 a 80 caratteri, e l'avviso dice cosa correggere.
   storeName: z.string().trim().min(3, 'Il nome del negozio deve avere almeno 3 caratteri').max(80, 'Il nome del negozio può avere al massimo 80 caratteri: accorcialo'),
-  storeDescription: z.string().max(500, 'Massimo 500 caratteri').optional().or(z.literal('')),
 
-  // Pagamenti
-  billingIban: z
-    .string()
-    .refine((v) => normalizzaIban(v) === '' || ibanValido(v), { message: 'IBAN non valido: controlla i caratteri' })
-    .optional(),
+  // Il controllo completo della partita IVA (la cifra finale) lo fa il server.
+  businessVatNumber: z.string().regex(/^\s*(IT)?\s*[0-9]{11}\s*$/i, 'Partita IVA non valida (11 cifre)'),
 
-  // Fattura elettronica: facoltativi.
-  businessPec: z.string().trim().email('PEC non valida').optional().or(z.literal('')),
-  businessSdi: z.string().trim().regex(/^[A-Z0-9]{7}$/i, 'Codice SDI non valido: sono 7 caratteri').optional().or(z.literal('')),
+  contactPhone: z.string().regex(/^[0-9 +]{8,16}$/, 'Numero di telefono non valido'),
 
   // Consensi legali
   // boolean + refine (non literal(true)): permette default false nel form
   // ma valida che sia true al submit. Evita il cast `false as unknown as true`.
   acceptTos: z.boolean().refine((v) => v === true, { message: 'Devi accettare i Termini di servizio' }),
   acceptPrivacy: z.boolean().refine((v) => v === true, { message: 'Devi accettare la Privacy policy' }),
-  acceptAccuracy: z.boolean().refine((v) => v === true, { message: 'Devi confermare i dati' }),
+  acceptAccuracy: z.boolean().refine((v) => v === true, { message: 'Devi confermare i dati e la maggiore età' }),
   acceptBilling: ABBONAMENTO_NEGOZI_ACCESO
     ? z.boolean().refine((v) => v === true, { message: "Devi accettare l'addebito" })
     : z.boolean().optional(),
@@ -107,15 +76,13 @@ const SellerSchema = z.object({
 type SchemaData = z.infer<typeof SellerSchema>;
 
 export type SellerApplicationData = SchemaData & {
-  storeLogo: string | null;
-  storeMedia: StoreMediaItem[];
   storeAddress: string;
   storeLat: number;
   storeLng: number;
 };
 
 interface Props {
-  defaultValues?: Partial<SchemaData & { storeLogo: string | null; storeMedia: StoreMediaItem[]; storeAddress: string; storeLat: number; storeLng: number }>;
+  defaultValues?: Partial<SchemaData & { storeAddress: string; storeLat: number; storeLng: number }>;
   onSubmit: (data: SellerApplicationData) => void;
   isLoading?: boolean;
   /** L'email con cui la persona accede: è lì che arrivano avvisi e risposte. */
@@ -125,7 +92,7 @@ interface Props {
 const Section = ({
   step, title, subtitle, children,
 }: { step: number; title: string; subtitle?: string; children: React.ReactNode }) => (
-  <section className="bg-white border rounded-2xl p-6 space-y-4">
+  <section className="bg-white border rounded-2xl p-5 space-y-4">
     <header className="flex items-start gap-3 -mt-1">
       <span className="w-8 h-8 bg-primary-100 text-primary-800 rounded-full flex items-center justify-center font-bold shrink-0">
         {step}
@@ -155,7 +122,6 @@ const Field = ({
 );
 
 export default function SellerApplicationForm({ defaultValues, onSubmit, isLoading = false, emailAccesso = null }: Props) {
-  const tStates = useTranslations('states');
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(SellerSchema),
     defaultValues: {
@@ -163,24 +129,9 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       // meno da fare. Chi corregge una richiesta ritrova quella che aveva mandato.
       businessType:       tipoDelProfilo(defaultValues?.businessType),
       businessTypeDetail: defaultValues?.businessTypeDetail ?? '',
-      contactPhone:    defaultValues?.contactPhone    ?? '',
-      legalFirstName:  defaultValues?.legalFirstName  ?? '',
-      legalLastName:   defaultValues?.legalLastName   ?? '',
-      legalFiscalCode: defaultValues?.legalFiscalCode ?? '',
-      legalBirthDate:  defaultValues?.legalBirthDate  ?? '',
-      legalResidenceAddr: defaultValues?.legalResidenceAddr ?? '',
-      legalResidenceCity: defaultValues?.legalResidenceCity ?? '',
-      legalResidenceZip:  defaultValues?.legalResidenceZip  ?? '',
-      businessLegalName: defaultValues?.businessLegalName ?? '',
-      businessVatNumber: defaultValues?.businessVatNumber ?? '',
-      businessAddress:   defaultValues?.businessAddress   ?? '',
-      businessCity:      defaultValues?.businessCity      ?? '',
-      businessZip:       defaultValues?.businessZip       ?? '',
       storeName:         defaultValues?.storeName         ?? '',
-      storeDescription:  defaultValues?.storeDescription  ?? '',
-      billingIban:       defaultValues?.billingIban       ?? '',
-      businessPec:       defaultValues?.businessPec       ?? '',
-      businessSdi:       defaultValues?.businessSdi       ?? '',
+      businessVatNumber: defaultValues?.businessVatNumber ?? '',
+      contactPhone:      defaultValues?.contactPhone      ?? '',
       acceptTos:         false,
       acceptPrivacy:     false,
       acceptAccuracy:    false,
@@ -196,62 +147,9 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
     confermata: false,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
 
-  const storeName = watch('storeName');
   const tipoScelto = tipoDelProfilo(watch('businessType'));
   const scheda = SCHEDE_ATTIVITA[tipoScelto];
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    // R16-013 — I tipi li detta il magazzino (`mappaAccept`): erano tre scritti a mano contro i
-    // sette che porta e deposito accettano, e il logo fotografato con l'iPhone (HEIC) restava fuori.
-    accept: mappaAccept(),
-    maxFiles: 1,
-    maxSize: 3 * 1024 * 1024,
-    // Questo e' il primo modulo che compila un negozio nuovo, e il tetto dei 3 MB scartava senza
-    // dire niente: una foto fatta col telefono lo supera quasi sempre, e il negoziante restava a
-    // guardare un riquadro vuoto alla sua prima impressione di MyCity. Stesse parole di
-    // StoreMediaManager, cosi' il sito dice no in un modo solo.
-    onDropRejected: (rifiutati) => {
-      const motivi = rifiutati.flatMap((r) => r.errors.map((e) => e.code));
-      toast.error(
-        motivi.includes('file-too-large')
-          ? 'Foto troppo pesante: serve sotto i 3 MB.'
-          : motivi.includes('too-many-files')
-            ? 'Una foto alla volta: trascinane una sola.'
-            : `Formato non accettato: servono foto in ${tipiScrittiPerUmani()}.`,
-      );
-    },
-    onDrop: async (files) => {
-      const file = files[0];
-      if (!file) return;
-      setUploadingLogo(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Non autenticato');
-        // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
-        // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
-        // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
-        const { publicUrl } = await caricaImmagine(supabase, {
-          // Un HEIC trascinato da Windows arriva col tipo vuoto: senza il tipo giusto il deposito lo rifiuta.
-          file: fileColTipoGiusto(file),
-          userId: user.id,
-          cartella: 'logos',
-          cacheControl: ANNO_IN_SECONDI,
-        });
-        setLogoUrl(publicUrl);
-        toast.success('Logo caricato');
-      } catch (err) {
-      toast.error(friendlyError(err));
-    } finally {
-        setUploadingLogo(false);
-      }
-    },
-  });
 
   const submit = (data: SchemaData) => {
     if (!location.address.trim()) {
@@ -266,8 +164,6 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
     }
     onSubmit({
       ...data,
-      storeLogo: logoUrl,
-      storeMedia: media,
       storeAddress: location.address,
       storeLat: location.lat,
       storeLng: location.lng,
@@ -275,63 +171,42 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   };
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-5">
-      {/* INFO HEADER */}
-      <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600 text-white rounded-2xl p-6">
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      {/* INFO HEADER: il prezzo resta qui, è dove il negozio lo legge prima di firmare (R037). */}
+      <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600 text-white rounded-2xl p-5">
         <h1 className="text-2xl md:text-3xl font-extrabold mb-1 flex items-center gap-2">
           <Store size={28} aria-hidden />
           Diventa venditore business
         </h1>
+        {/* 22/11/2026 — Non solo botteghe: lo si dice prima di tutto. */}
         <p className="text-primary-100 text-sm leading-relaxed">
-          Vetrina dedicata, prodotti illimitati.{' '}
-          {/* 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola. */}
-          <strong className="text-white">{FRASE_PREZZO_NEGOZI}</strong> Vale dopo l&apos;approvazione del nostro team.
+          Negozi, bar, ristoranti, artigiani, servizi: va bene ogni attività che vende qualcosa.
         </p>
-        {/* 22/11/2026 — Non solo botteghe: lo si dice prima di tutto, nel titolo della pagina. */}
         <p className="text-primary-100 text-sm leading-relaxed mt-2">
-          Negozi, bar, ristoranti, artigiani, servizi: MyCity è aperto a ogni attività che vende qualcosa.
+          {/* 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola. */}
+          <strong className="text-white">{FRASE_PREZZO_NEGOZI}</strong>{' '}
+          {ABBONAMENTO_NEGOZI_ACCESO
+            ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese + commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite.`
+            : `Commissione ${COMMISSIONE_DEL_PERCENTO} solo sul venduto tramite MyCity, ${IVA_SULLA_COMMISSIONE}.`}
+          {' '}Vale dopo l&apos;approvazione del nostro team.
         </p>
-        <ul className="text-xs text-primary-100 mt-3 space-y-1">
-          <li className="flex items-start gap-1.5">
-            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
-            <span>Vetrina pubblica con logo, copertina, descrizione</span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
-            <span>Pubblica prodotti illimitati e gestisci ordini da dashboard</span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
-            <span>
-              {ABBONAMENTO_NEGOZI_ACCESO
-                ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese + commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite`
-                : `Commissione ${COMMISSIONE_DEL_PERCENTO} solo sul venduto tramite MyCity, ${IVA_SULLA_COMMISSIONE}`}
-            </span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
-            <span>Bonifico settimanale su IBAN per i tuoi incassi</span>
-          </li>
-        </ul>
       </div>
 
       {/* STEP 1: Che attività hai (22/11/2026) */}
-      <Section step={1} title="Che attività hai?" subtitle="Non serve essere un negozio: va bene qualunque attività che vende qualcosa">
+      <Section step={1} title="Che attività hai?">
         <fieldset>
           <legend className="sr-only">Che attività hai?</legend>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {TIPI_ATTIVITA.map((t) => (
               <label
                 key={t}
-                className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-colors ${
+                title={SCHEDE_ATTIVITA[t].esempi}
+                className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 cursor-pointer transition-colors ${
                   tipoScelto === t ? 'border-primary-600 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
                 }`}
               >
-                <input type="radio" value={t} {...register('businessType')} className="mt-1 accent-primary-700" />
-                <span>
-                  <span className="block font-semibold text-ink-900">{SCHEDE_ATTIVITA[t].etichetta}</span>
-                  <span className="block text-xs text-ink-500">{SCHEDE_ATTIVITA[t].esempi}</span>
-                </span>
+                <input type="radio" value={t} {...register('businessType')} className="accent-primary-700" />
+                <span className="font-semibold text-ink-900 text-sm">{SCHEDE_ATTIVITA[t].etichetta}</span>
               </label>
             ))}
           </div>
@@ -351,124 +226,18 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         )}
       </Section>
 
-      {/* STEP 2: Contatti */}
-      <Section step={2} title="Contatti operativi" subtitle="Come ti contatteremo per ordini e supporto">
-        <p className="text-sm text-ink-600">
-          {emailAccesso
-            ? <>Avvisi d&apos;ordine e risposte arrivano a <strong>{emailAccesso}</strong>, l&apos;email con cui accedi.</>
-            : <>Avvisi d&apos;ordine e risposte arrivano all&apos;email con cui accedi.</>}
-        </p>
-        <Input
-          label="Telefono"
-          required
-          type="tel"
-          inputMode="tel"
-          placeholder="3331234567"
-          {...register('contactPhone')}
-          error={errors.contactPhone?.message}
-        />
-      </Section>
-
-      {/* STEP 3: Anagrafica titolare */}
-      <Section step={3} title="Anagrafica del titolare" subtitle="Rappresentante legale dell'attività">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="Nome" required {...register('legalFirstName')} error={errors.legalFirstName?.message} />
-          <Input label="Cognome" required {...register('legalLastName')} error={errors.legalLastName?.message} />
-          <Input
-            label="Codice fiscale"
-            required
-            className="uppercase"
-            maxLength={16}
-            {...register('legalFiscalCode')}
-            error={errors.legalFiscalCode?.message}
-            hint="16 caratteri alfanumerici"
-          />
-          <Input label="Data di nascita" required type="date" {...register('legalBirthDate')} error={errors.legalBirthDate?.message} />
-        </div>
-        <Input
-          label="Indirizzo di residenza"
-          required
-          placeholder="Via, numero civico"
-          {...register('legalResidenceAddr')}
-          error={errors.legalResidenceAddr?.message}
-          hint="Resta privato, non viene mostrato ai clienti"
-        />
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="Città di residenza" required {...register('legalResidenceCity')} error={errors.legalResidenceCity?.message} />
-          <Input label="CAP" required inputMode="numeric" maxLength={5} {...register('legalResidenceZip')} error={errors.legalResidenceZip?.message} />
-        </div>
-      </Section>
-
-      {/* STEP 4: Dati dell'impresa */}
-      <Section step={4} title="Dati dell'impresa" subtitle="Li vede il cliente sotto «Venduto da» e li controlliamo prima di approvare">
-        <Input label="Ragione sociale" required placeholder="Es. Salumeria del Borgo di Mario Rossi" {...register('businessLegalName')} error={errors.businessLegalName?.message} />
-        <Input
-          label="Partita IVA"
-          required
-          inputMode="numeric"
-          maxLength={13}
-          placeholder="01234567890"
-          {...register('businessVatNumber')}
-          error={errors.businessVatNumber?.message}
-          hint="11 cifre"
-        />
-        <Input label="Sede legale" required placeholder="Via, numero civico" {...register('businessAddress')} error={errors.businessAddress?.message} />
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="Città della sede legale" required {...register('businessCity')} error={errors.businessCity?.message} />
-          <Input label="CAP della sede legale" required inputMode="numeric" maxLength={5} {...register('businessZip')} error={errors.businessZip?.message} />
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="PEC (facoltativa)" type="email" placeholder="negozio@pec.it" {...register('businessPec')} error={errors.businessPec?.message} hint="Per la fattura elettronica" />
-          <Input label="Codice destinatario SDI (facoltativo)" className="uppercase" maxLength={7} placeholder="ABC1234" {...register('businessSdi')} error={errors.businessSdi?.message} hint="7 caratteri, te lo dà il commercialista" />
-        </div>
-      </Section>
-
-      {/* STEP 5: Vetrina */}
-      <Section step={5} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
-        {/* Logo upload */}
-        <Field label={`Logo ${scheda.del}`}>
-          <div className="flex items-center gap-4">
-            <StoreAvatar logoUrl={logoUrl} storeName={storeName} size="lg" />
-            <div
-              {...getRootProps({ role: 'button', 'aria-label': `Carica il logo ${scheda.del}: trascina il file o premi Invio` })}
-              className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
-                isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
-              } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
-            >
-              <input {...getInputProps({ 'aria-label': `Carica il logo ${scheda.del}` })} />
-              {uploadingLogo ? <p className="text-ink-500">{tStates('loading')}</p>
-                : logoUrl ? <p className="text-ink-600"><span className="font-medium">Sostituisci</span> · trascina o clicca</p>
-                : <p className="text-ink-500"><span className="font-medium text-primary-700">Carica</span> immagine quadrata (max 3MB)</p>}
-            </div>
-            {logoUrl && (
-              <button type="button" onClick={() => setLogoUrl(null)} className="text-sm text-ink-500 hover:text-secondary-600 underline">
-                Rimuovi
-              </button>
-            )}
-          </div>
-        </Field>
-
-        <StoreMediaManager value={media} onChange={setMedia} onUploadingChange={setUploadingMedia} />
-
+      {/* STEP 2: chi è e dove sta — il minimo per riconoscerla */}
+      <Section step={2} title="La tua attività" subtitle="Bastano questi dati per riconoscerla">
         <Input
           label={`Nome ${scheda.del}`}
           required
           placeholder="Es. Salumeria del Borgo"
           {...register('storeName')}
           error={errors.storeName?.message}
-          hint="Come ti chiameranno i clienti (può essere diverso dalla ragione sociale)"
+          hint="Come lo chiamano i clienti"
         />
 
-        <Textarea
-          label="Descrizione (opzionale)"
-          rows={3}
-          className="resize-none"
-          placeholder="Cosa ti rende speciale? Storia, tradizione, quello che vendi…"
-          {...register('storeDescription')}
-          error={errors.storeDescription?.message}
-        />
-
-        <Field label={`Indirizzo ${scheda.del} (pubblico)`} required hint="Dove i clienti possono ritirare. È mostrato sulla mappa nel marketplace.">
+        <Field label={`Indirizzo ${scheda.del}`} required hint="Si vede sulla mappa del marketplace.">
           <StoreLocationPicker
             defaultValue={{
               address: defaultValues?.storeAddress,
@@ -482,41 +251,33 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           />
           {locationError && <p role="alert" className="text-xs font-medium text-secondary-600 mt-1">{locationError}</p>}
         </Field>
-      </Section>
 
-      {/* STEP 6: Pagamenti */}
-      <Section
-        step={6}
-        title="Pagamenti"
-        subtitle={ABBONAMENTO_NEGOZI_ACCESO ? "Come ricevi i guadagni e come ti addebitiamo l'abbonamento" : 'Come ricevi i guadagni'}
-      >
-        <Input
-          label="IBAN per i bonifici dei tuoi incassi"
-          className="uppercase font-mono text-xs"
-          placeholder="IT60X0542811101000000123456"
-          {...register('billingIban')}
-          error={errors.billingIban?.message}
-          hint="Italiano (IT) o europeo. Lo riceveremo cifrato."
-        />
-
-        {ABBONAMENTO_NEGOZI_ACCESO && (
-        <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-sm text-accent-900">
-          <p className="font-semibold mb-1 inline-flex items-center gap-1.5">
-            <CreditCard size={18} aria-hidden />
-            Carta di credito per abbonamento
-          </p>
-          <p>
-            {/* R10-020 — La regola firmata: il canone parte dopo il primo incasso, non all'approvazione. */}
-            L'abbonamento ({PREZZO_ABBONAMENTO_MESE}/mese) parte <strong>solo dopo il tuo primo incasso con MyCity</strong>.
-            In quel momento ti chiederemo di inserire la carta tramite un pagamento sicuro (Stripe). Non ti chiediamo i
-            dati carta adesso per ridurre i tuoi rischi.
-          </p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input
+            label="Partita IVA"
+            required
+            inputMode="numeric"
+            maxLength={13}
+            placeholder="01234567890"
+            {...register('businessVatNumber')}
+            error={errors.businessVatNumber?.message}
+            hint="11 cifre"
+          />
+          <Input
+            label="Telefono"
+            required
+            type="tel"
+            inputMode="tel"
+            placeholder="3331234567"
+            {...register('contactPhone')}
+            error={errors.contactPhone?.message}
+            hint={emailAccesso ? `Gli avvisi arrivano anche a ${emailAccesso}` : undefined}
+          />
         </div>
-        )}
       </Section>
 
-      {/* STEP 7: Consensi */}
-      <Section step={7} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
+      {/* STEP 3: Consensi */}
+      <Section step={3} title="Consensi">
         <Consent
           label={<>Ho letto e accetto i <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link> per venditori</>}
           register={register('acceptTos')}
@@ -528,7 +289,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           error={errors.acceptPrivacy?.message as string | undefined}
         />
         <Consent
-          label="Confermo che i dati anagrafici forniti sono corretti e completi"
+          label="Confermo che i dati sono corretti e che ho almeno 18 anni"
           register={register('acceptAccuracy')}
           error={errors.acceptAccuracy?.message as string | undefined}
         />
@@ -543,7 +304,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
       <button
         type="submit"
-        disabled={isLoading || uploadingLogo || uploadingMedia}
+        disabled={isLoading}
         className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
       >
         {isLoading ? (
@@ -556,7 +317,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         )}
       </button>
       <p className="text-center text-xs text-ink-500">
-        Risposta entro 48 ore lavorative. Sarai notificato via email e dentro la piattaforma.
+        Risposta entro 48 ore lavorative. Logo, foto, IBAN e dati per la fattura li aggiungi dopo, dal tuo profilo.
       </p>
     </form>
   );

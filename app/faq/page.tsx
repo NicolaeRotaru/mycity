@@ -81,8 +81,9 @@ const SECTIONS: Section[] = [
         // 17/10/2026 («Semplifica») — l'IBAN DEL RIMBORSO non sta in nessun modulo
         // del sito e in nessuna colonna del database: lo chiede l'email del rimborso.
         // Collaudo del 17/10 — la frase senza «Se compri» e senza «del rimborso» era
-        // falsa: il modulo per diventare venditore (/sell) chiede l'IBAN degli incassi
-        // e lo salva (profiles.billing_iban), e l'informativa lo dice. Vale per chi
+        // falsa: al venditore l'IBAN degli incassi lo chiediamo (dal 25/11/2026 nel
+        // Profilo del negozio, «Dati per i bonifici», non più in /sell) e lo salviamo
+        // (profiles.billing_iban), e l'informativa lo dice. Vale per chi
         // compra, con le stesse parole dell'informativa.
         a: (
           <>

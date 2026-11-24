@@ -99,10 +99,8 @@ const CASELLE: Array<{ nome: string; carica: () => Promise<[ComponentType<Record
     nome: 'VendorForm (logo del negozio)',
     carica: async () => [(await import('@/components/VendorForm')).default as never, { onSubmit: () => undefined, mode: 'branding', defaultValues: { storeName: 'Pane Quotidiano' } }],
   },
-  {
-    nome: 'SellerApplicationForm (logo della domanda)',
-    carica: async () => [(await import('@/components/SellerApplicationForm')).default as never, { onSubmit: () => undefined }],
-  },
+  // 25/11/2026 — La domanda d'iscrizione (SellerApplicationForm) non carica più il logo: il modulo
+  // corto chiede solo i dati per riconoscere l'attività, e il logo si mette dopo, dalla vetrina.
 ];
 
 describe('R16-013 — le caselle delle foto accettano quello che il magazzino accetta', () => {

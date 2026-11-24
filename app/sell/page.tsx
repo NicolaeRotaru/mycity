@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
 import { friendlyError } from '@/lib/errors';
-import { controlloEta } from '@/lib/maggiore-eta';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
@@ -68,20 +67,9 @@ export default function SellPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      /**
-       * 8/9/2026 — LA SECONDA PORTA CHE SCRIVE LA DATA DI NASCITA.
-       *
-       * Il difetto era stato visto sul modulo del fattorino, ma `legal_birth_date`
-       * ce l'hanno due strade, e sono tutte e due `update` fatti dal browser: se
-       * si chiude il cancello solo di là, un quindicenne si iscrive come negozio.
-       * Le condizioni d'uso, al punto 3, dicono diciotto anni — non «diciotto
-       * anni se consegni».
-       *
-       * Questo è il freno del browser. Quello che non si scavalca è il vincolo
-       * sul database (migrazione 156).
-       */
-      const eta = controlloEta(form.legalBirthDate);
-      if (!eta.ok) throw new Error(eta.messaggio ?? 'Controlla la data di nascita.');
+      // 25/11/2026 — La data di nascita qui non si chiede più (modulo corto, Nicola): la maggiore età
+      // si dichiara nella spunta dei dati. Il freno vero resta sul database (migrazione 156) e sulla
+      // rotta del titolare, dove la data si scrive dopo l'approvazione.
 
       /**
        * 31/10/2026 (ondata 4) — LA RICHIESTA LA SCRIVE IL SERVER.
@@ -169,30 +157,10 @@ export default function SellPage() {
           // 22/11/2026 — Il tipo di attività: chi corregge la richiesta ritrova quello scelto.
           businessType:       tipoDelProfilo(profile?.business_type),
           businessTypeDetail: profile?.business_type_detail ?? '',
-          contactPhone:    profile?.phone ?? '',
-          legalFirstName:  profile?.legal_first_name ?? profile?.full_name?.split(' ')[0] ?? '',
-          legalLastName:   profile?.legal_last_name  ?? profile?.full_name?.split(' ').slice(1).join(' ') ?? '',
-          legalFiscalCode: profile?.legal_fiscal_code ?? '',
-          legalBirthDate:  profile?.legal_birth_date ?? '',
-          // R16-010 (13/11/2026) — La residenza non si precompila più da indirizzo, CAP e città
-          // del profilo: dal 5/11 il Profilo non li mostra e nessuno li può più correggere, quindi
-          // qui arrivava un indirizzo vecchio che il negoziante non aveva modo di rettificare.
-          // Si precompila solo con la residenza che ha scritto lui in questo modulo.
-          legalResidenceAddr: profile?.legal_residence_addr ?? '',
-          legalResidenceCity: profile?.legal_residence_city ?? '',
-          legalResidenceZip:  profile?.legal_residence_zip  ?? '',
-          businessLegalName: profile?.business_legal_name ?? '',
-          businessVatNumber: profile?.business_vat_number ?? '',
-          businessAddress:   profile?.business_address ?? '',
-          businessCity:      profile?.business_city ?? '',
-          businessZip:       profile?.business_zip ?? '',
+          // 25/11/2026 — Solo i cinque dati che restano nel modulo corto: il resto si scrive dal Profilo.
           storeName:         profile?.store_name ?? '',
-          storeDescription:  profile?.store_description ?? '',
-          billingIban:       profile?.billing_iban ?? '',
-          businessPec:       profile?.business_pec ?? '',
-          businessSdi:       profile?.business_sdi ?? '',
-          storeLogo:         profile?.store_logo ?? null,
-          storeMedia:        Array.isArray(profile?.store_media) ? profile.store_media : [],
+          businessVatNumber: profile?.business_vat_number ?? '',
+          contactPhone:      profile?.phone ?? '',
           storeAddress:      profile?.store_address ?? '',
           storeLat:          profile?.store_lat ?? undefined,
           storeLng:          profile?.store_lng ?? undefined,
