@@ -212,7 +212,9 @@ export function strutturaSenzaIndirizzi(valore: unknown): unknown {
   try {
     return ripulisci(valore, 0, { pezzi: 0 });
   } catch {
-    return valore;
+    // 24/11/2026 — In eccezione si chiude a chiave, come a fine budget: restituire
+    // l'originale portava fuori proprio quello che la rete doveva togliere.
+    return VALORE_NASCOSTO;
   }
 }
 
