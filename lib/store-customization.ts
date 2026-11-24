@@ -320,7 +320,7 @@ export type SocialLink = { key: string; label: string; href: string };
  * unico fermava anche un profilo vero di Instagram o TikTok chiamato «live», «help» o «business».
  */
 const RISERVATI_FACEBOOK = new RegExp(
-  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu)$',
+  '^(?:profile\\.php|p|reel|reels|share|groups|pages|watch|people|events|photo|photo\\.php|photos|marketplace|hashtag|stories|story\\.php|permalink\\.php|pg|gaming|video|videos|media|sharer|sharer\\.php|login|login\\.php|plugins|dialog|l\\.php|ads|business|help|policies|privacy|settings|notifications|messages|friends|bookmarks|search|public|fundraisers|live|reviews|lite|home|notes|recover|places|saved|memories|jobs|offers|menu|me|pymk|find-friends|onthisday|games|latest|feed|feeds|donate|fundraiser|watchparty|about|legal|terms|careers)$',
   'i',
 );
 const RISERVATI_INSTAGRAM = /^(?:p|reel|reels|stories|explore|direct|accounts|tv|share|about|legal|developer|web)$/i;
@@ -336,6 +336,9 @@ const SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK =
   /^(?:posts|photos|videos|about|reviews|events|mentions|reels|live|menu|shop|services|followers|friends|community|grid|map)$/i;
 function percorsoDiUnProfiloFacebook(nome: string, resto: string): boolean {
   if (/\.php$/i.test(nome)) return false;
+  // R07-009 — Il nome di un profilo Facebook è fatto di lettere, cifre e punti, mai del trattino basso:
+  // «business_help», «coronavirus_info» e simili sono pagine di Facebook, non un nome.
+  if (nome.includes('_')) return false;
   const pezzi = resto.split('/').filter(Boolean);
   return pezzi.length === 0 || SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK.test(pezzi[0]);
 }

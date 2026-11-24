@@ -45,7 +45,7 @@ export default function RiderProfilePage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url, rider_haccp_url')
+        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url, rider_haccp_url, approved_at, kyc_provider_status, kyc_provider_checked_at')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -167,6 +167,27 @@ export default function RiderProfilePage() {
   const testoDellaScadenza = (d: string, ferma = true) =>
     scaduto(d) ? `Scaduta il ${fmtDate(d)}${ferma ? ' · non puoi prendere consegne' : ''}` : `Scade ${fmtDate(d)}`;
   const approvato = (p?.is_approved as boolean | null) === true;
+  // 24/11/2026 (R07-001) — Approvato non basta per dire «Verificato»: chi è già approvato e carica un
+  // documento d'identità nuovo lo vedeva subito verificato. La rotta del caricamento azzera lo stato
+  // della verifica (app/api/kyc/upload-document), e un nuovo invio la fa ripartire dopo l'approvazione:
+  // in tutti e due i casi nessuno ha ancora guardato il documento che c'è adesso.
+  // Conta l'ultimo esame del documento che c'è adesso, e l'ora del caricamento è scritta nel percorso
+  // del file (`{userId}/{kind}-{Date.now()}.{ext}`): l'approvazione vale se è venuta dopo il caricamento;
+  // un controllo partito dopo il caricamento e dopo l'approvazione decide col suo esito (APPROVED).
+  const noto = (t: number) => !Number.isNaN(t);
+  const statoVerifica = (p?.kyc_provider_status as string | null) ?? null;
+  const verificaDel = Date.parse(String(p?.kyc_provider_checked_at ?? ''));
+  const approvatoIl = Date.parse(String(p?.approved_at ?? ''));
+  const caricatoIl = Number(/-(\d{13})\.[^./]+$/.exec(String(p?.kyc_id_doc_front_url ?? ''))?.[1] ?? NaN);
+  const controlloSulDocumento = noto(verificaDel) && (!noto(caricatoIl) || verificaDel >= caricatoIl);
+  const controlloDopoApprovazione = controlloSulDocumento && noto(approvatoIl) && verificaDel > approvatoIl;
+  // Senza approved_at (profili approvati prima della colonna) resta il segno dell'azzeramento della rotta.
+  const approvazioneCopre = noto(approvatoIl)
+    ? !noto(caricatoIl) || caricatoIl <= approvatoIl
+    : !(statoVerifica === null && noto(verificaDel));
+  const idVerificato = approvato && (controlloDopoApprovazione
+    ? statoVerifica === 'APPROVED'
+    : approvazioneCopre || (controlloSulDocumento && statoVerifica === 'APPROVED'));
   // In bici patente e polizza non servono (lib/admin/regole-approvazione.ts): niente «Mancante» rosso.
   const inBici = vehicleType === 'BIKE' || vehicleType === 'EBIKE';
   const docs: { Icon: LucideIcon; label: string; sub: string; status: DocStatus }[] = [
@@ -182,8 +203,8 @@ export default function RiderProfilePage() {
     },
     {
       Icon: FileCheck, label: 'Documento identità',
-      sub: idUploaded ? (approvato ? 'Verificato' : 'Caricato · In attesa di verifica') : 'Da caricare',
-      status: idUploaded ? (approvato ? 'ok' : 'review') : 'missing',
+      sub: idUploaded ? (idVerificato ? 'Verificato' : 'Caricato · In attesa di verifica') : 'Da caricare',
+      status: idUploaded ? (idVerificato ? 'ok' : 'review') : 'missing',
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',

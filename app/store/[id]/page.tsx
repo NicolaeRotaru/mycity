@@ -1,7 +1,7 @@
 'use client';
 import { VendutoDa } from '@/components/products/VendutoDa';
 import { Segnala } from '@/components/Segnala';
-import { use } from 'react';
+import { use, useState } from 'react';
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -22,6 +22,7 @@ import { trackStoreViewed } from '@/lib/analytics/events';
 import { riepilogoRecensioni } from '@/components/store-sections/riepilogo-recensioni';
 import { orariPerLoSchema } from '@/components/store-sections/orari-schema';
 import { DOMINIO_MYCITY } from '@/lib/contatti-pubblici';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 /** Letto in modo statico, così Next lo scrive uguale nel pacchetto del server e del browser. */
 const INDIRIZZO_DEL_SITO = (process.env.NEXT_PUBLIC_APP_URL || `https://${DOMINIO_MYCITY}`).replace(/\/+$/, '');
@@ -39,6 +40,15 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
     staleTime: 60_000,
   });
+
+  // R07-003 — L'annuncio «fino al 24/11» si decideva solo al disegno della pagina: una vetrina
+  // lasciata aperta oltre mezzanotte lo mostrava anche il giorno dopo. Il giorno di Piacenza si
+  // ricontrolla ogni minuto e, quando cambia, la pagina si ridisegna e rilegge l'annuncio.
+  const [, setGiorno] = useState(() => giornoPiacenza());
+  useEffect(() => {
+    const id = setInterval(() => setGiorno(giornoPiacenza()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // 3/9/2026 — qui c'era un cerchietto che gira dentro una pagina alta poche
   // righe: era la SECONDA impaginazione dopo lo scheletro del server e prima del
