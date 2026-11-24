@@ -1,6 +1,7 @@
 import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { discountedUnitCents } from '@/lib/promotions';
+import { eDiSdg, MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO } from '@/lib/products/sdgSeller';
 
 /**
  * «QUESTA RIGA DEL CARRELLO SI PUÒ VENDERE?» — LA RISPOSTA IN UN POSTO SOLO.
@@ -60,7 +61,8 @@ export type MotivoScarto =
   | 'PRODOTTO_NON_DISPONIBILE'
   | 'VARIANTE_DA_SCEGLIERE'
   | 'VARIANTE_NON_VALIDA'
-  | 'SCORTE_INSUFFICIENTI';
+  | 'SCORTE_INSUFFICIENTI'
+  | 'ABBONAMENTO_NON_IN_CARRELLO';
 
 export type CarrelloNonVendibile = {
   motivo: MotivoScarto;
@@ -110,6 +112,19 @@ export function validaRigaDelCarrello<P extends ProdottoDelCatalogo>(input: {
   const p = prodotti.find((x) => x.id === riga.productId);
   if (!p) {
     return { ok: false, scarto: { motivo: 'PRODOTTO_NON_TROVATO', messaggio: `Prodotto ${riga.productId} non trovato` } };
+  }
+  /**
+   * 24/11/2026 — UN ABBONAMENTO DI SDG NON DIVENTA UN ORDINE.
+   *
+   * I prodotti di SDG Agenzia sono i tre abbonamenti ai servizi: si pagano dal preventivo,
+   * in abbonamento Stripe, mai come un ordine con la consegna. Si guarda sia il negozio del
+   * prodotto sia quello dichiarato dal browser, prima di ogni altro controllo.
+   */
+  if (eDiSdg(p.seller_id) || eDiSdg(sellerId)) {
+    return {
+      ok: false,
+      scarto: { motivo: 'ABBONAMENTO_NON_IN_CARRELLO', messaggio: `${p.name} ${MESSAGGIO_ABBONAMENTO_NON_IN_CARRELLO}` },
+    };
   }
   if (p.seller_id !== sellerId) {
     return {

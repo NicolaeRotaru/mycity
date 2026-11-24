@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { discountedUnitCents } from '@/lib/promotions';
@@ -88,7 +89,8 @@ const ProductCard = ({
     // 108 — Prima, sui prodotti con varianti, la funzione usciva in silenzio: il
     // clic sul «+» non faceva assolutamente niente, e il cliente lo ripeteva
     // due o tre volte prima di rinunciare. La taglia va scelta: si va lì.
-    if (hasVariants) {
+    // 24/11/2026 — Un abbonamento di SDG non va nel carrello: la sua pagina dice come si attiva.
+    if (hasVariants || eDiSdg(sellerId)) {
       router.push(`/product/${id}`);
       return;
     }

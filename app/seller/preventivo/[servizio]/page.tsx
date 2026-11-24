@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { ABBONAMENTI, FASCE, FRASE_PARTNER, LISTINO, servizioDaSlug } from '@/lib/agenzia/preventivo';
 import { HREF_PREVENTIVO } from '@/components/seller/servizi-nel-menu';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
-import { CHIAVE_PREVENTIVO, leggiPreventivoAgenzia, scriviCanone } from '@/components/seller/preventivo-agenzia';
+import { CHIAVE_PREVENTIVO, CHIAVE_SCHEDA, leggiPreventivoAgenzia, leggiSchedaDelNegozio, scriviCanone } from '@/components/seller/preventivo-agenzia';
 
 /**
  * UN SERVIZIO DEL PREVENTIVO, CON LA SUA VOCE NEL MENU — 23/11/2026.
@@ -30,6 +30,7 @@ export default function ServizioDelPreventivoPage() {
   if (!id) notFound();
 
   const { data: p, isLoading, isError, refetch } = useQuery({ queryKey: CHIAVE_PREVENTIVO, queryFn: leggiPreventivoAgenzia });
+  const { data: scheda } = useQuery({ queryKey: CHIAVE_SCHEDA, queryFn: leggiSchedaDelNegozio });
   const voce = LISTINO[id];
   const riga = p?.righe.find((r) => r.id === id) ?? null;
   const giaAPosto = !!p && !riga && p.giaAPosto.includes(id);
@@ -85,7 +86,7 @@ export default function ServizioDelPreventivoPage() {
       )}
 
       {/* Cosa ricevi, già pronto: si vede anche prima di chiederlo (Nicola, 23/11). */}
-      {p && !giaAPosto && <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} />}
+      {p && !giaAPosto && <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />}
 
       {giaAPosto && (
         <section className="rounded-2xl border border-cream-300 bg-cream-50 p-5">
