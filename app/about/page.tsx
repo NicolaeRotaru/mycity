@@ -168,7 +168,7 @@ export default async function AboutPage() {
       {/* I nostri valori — banda */}
       <section className="bg-cream-100 border-y border-cream-300">
         <div className="container mx-auto px-6 max-w-5xl py-14 md:py-16">
-          <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">
+          <h2 className="min-w-0 font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 break-words hyphens-auto">
             I nostri valori
           </h2>
           <p className="text-lg leading-relaxed text-ink-700 max-w-[64ch]">
@@ -221,8 +221,8 @@ export default async function AboutPage() {
         {/* CTA band scura */}
         <section className="pb-16">
           <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
-            <div>
-              <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2">
+            <div className="min-w-0">
+              <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2 break-words hyphens-auto">
                 Vuoi farne parte?
               </h2>
               <p className="text-white/80 text-base max-w-[46ch]">
