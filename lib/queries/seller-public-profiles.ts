@@ -308,6 +308,9 @@ export type LettoreConFunzioni = LettoreVista & {
 /** Il tetto di righe di ogni lettura degli ordini nel ripiego senza la 181. */
 const RIGHE_PER_LETTURA_DEGLI_ORDINI = 1000;
 
+/** L'avviso «funzione assente» è già nel registro di questo processo. */
+let avvisoSenzaLaFunzioneDato = false;
+
 /** La funzione non esiste ancora (migrazione non applicata): PostgREST dice PGRST202, Postgres 42883. */
 function funzioneNonAncoraCreata(errore: unknown): boolean {
   const code = (errore as { code?: string } | null)?.code;
@@ -329,7 +332,12 @@ export async function fetchNomiDeiClienti(
     if (!error) {
       righe = (data ?? []) as Array<{ id: string; full_name: string | null }>;
     } else if (funzioneNonAncoraCreata(error)) {
-      logger.warn('[nomi] funzione nomi_dei_clienti_del_negozio assente (migrazione 181 non applicata): leggo il nome di consegna degli ordini', error);
+      // 24/11/2026 — L'avviso si scrive una volta, non a ogni apertura della chat o delle recensioni:
+      // finché la funzione manca diceva la stessa cosa a ogni chiamata, solo rumore nel registro.
+      if (!avvisoSenzaLaFunzioneDato) {
+        avvisoSenzaLaFunzioneDato = true;
+        logger.warn('[nomi] funzione nomi_dei_clienti_del_negozio assente (migrazione 181 non applicata): leggo il nome di consegna degli ordini', error);
+      }
       // 24/11/2026 — Il tetto di 1000 righe valeva per tutti gli id insieme: un cliente con mille
       // ordini recenti nascondeva chi aveva ordinato una volta, tempo fa. A pagina piena si cercano
       // ancora gli id che non sono usciti; chi è uscito ha già letto i suoi ordini più recenti.
