@@ -55,7 +55,7 @@ export default function OffertaSuMisura({ offerta, fascia, servizi, titolo, comp
       <div className="mt-3 space-y-3">
         {gruppi.map((s) => (
           <div key={s}>
-            {piuServizi && <h3 className="text-xs font-bold uppercase tracking-wide text-ink-700">{LISTINO[s].titolo}</h3>}
+            {piuServizi && <p role="heading" aria-level={3} className="text-xs font-bold uppercase tracking-wide text-ink-700">{LISTINO[s].titolo}</p>}
             <ul className="mt-1 space-y-2">
               {comprese.filter((x) => x.servizio === s).map((x) => (
                 <li key={x.id} data-proposta={x.id} className="rounded-lg border border-cream-200 bg-white p-3">
