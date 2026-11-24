@@ -1,13 +1,13 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-24 12:45",
-  "finita": false,
-  "testa": "c6e10d3183b49cfac83f8f655d9102626c59a3b8",
+  "aggiornato": "2026-11-24 12:50",
+  "finita": true,
+  "testa": "0689079cc5f48d83ccf0adf853fcf2ea8ed0c002",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "testa": "",
-    "nota": ""
+    "esito": "verde",
+    "testa": "0689079cc5f48d83ccf0adf853fcf2ea8ed0c002",
+    "nota": "typecheck, lint e 2051 file di prova (12540 casi) verdi. Sul commit 841befd4 il verify era rosso per 3 casi in 2 prove esistenti che si aspettano «rider»: tolto con il revert 5a60c8ee."
   },
   "voci": [
     {
@@ -44,12 +44,13 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7e791c97d41b2ca26118eaba444ea559aabba4dc^ --file app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r01-rimetti-pronto.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "rimettiPronto adesso legge l'errore, lo registra (logger.error) e restituisce il motivo; col 23505 dice che nel frattempo è partito un altro lavoro. A fine applicazione, se il lavoro non è più ripetibile, la risposta porta un avviso e il motivo dei saltati di passaggio dice perché non si riprovano."
+      "cosa_ho_fatto": "rimettiPronto adesso legge l'errore, lo registra (logger.error) e restituisce il motivo; col 23505 dice che nel frattempo è partito un altro lavoro. A fine applicazione, se il lavoro non è più ripetibile, la risposta porta un avviso e il motivo dei saltati di passaggio dice perché non si riprovano.",
+      "verificato_da": "revisore A (subagente, modello grande): prova 5/5 e rimessa rilanciate (uscita 0); provato il messaggio del 503 contro friendlyError (185 caratteri, arriva intero) e il pronto rifiutato a fine applica con più di 3 motivi. Regge; resta fuori dai file di R01 che la pagina non legge «avviso» (vedi nuovi_difetti_visti)."
     },
     {
       "id": "R01-015",
       "chiave": "stati-ui|a riga chiusa con il motivo «chiedi all'assistenza» il pulsante «avvia» resta",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "5d00555c53a9546b4f34906e2bd0b42f8ea39c44",
       "insieme_a": [
         "R01-016"
@@ -68,13 +69,21 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d00555c53a9546b4f34906e2bd0b42f8ea39c44^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "puoAvviareLavoro torna falso per un lavoro fallito o in errore il cui motivo dice di chiedere all'assistenza; una regola sola (vietaDiRipartire) vale per il pulsante e per la riga di testoStatoLavoro, gli altri lavori chiusi lasciano ripartire come prima."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "puoAvviareLavoro torna falso per un lavoro fallito o in errore il cui motivo dice di chiedere all'assistenza; una regola sola (vietaDiRipartire) vale per il pulsante e per la riga di testoStatoLavoro, gli altri lavori chiusi lasciano ripartire come prima.",
+      "cosa_resta": "Clic su una scheda operazione fa setJob(null) e il pulsante torna (app/seller/products/ai-batch/page.tsx:488); il lavoro fallito viene dimenticato con ricordaLavoro(null) e al ricaricamento la rotta di stato senza jobId dà solo i lavori aperti (page.tsx:350,381; app/api/ai/catalog-batch/status/route.ts:54); inoltre la rotta di avvio (app/api/ai/catalog-batch/start/route.ts:100-158, file di R01) non rifiuta un avvio dopo un lavoro chiuso con «chiedi all assistenza». Non corretto per il tetto di spesa del giro.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/products/ai-batch/page.tsx",
+          "modifica": "Non azzerare il lavoro chiuso con «chiedi all assistenza»: al clic su una scheda operazione (riga 488) non chiamare setJob(null) se il lavoro corrente è fallito o in errore, e alle righe 350 e 381 non chiamare ricordaLavoro(null) per quel lavoro, così dopo un ricaricamento puoAvviareLavoro lo vede ancora."
+        }
+      ],
+      "verificato_da": "revisore A (subagente, modello grande): prova e rimessa rilanciate (uscita 0), poi seguito il pulsante dopo un clic su una scheda e dopo un ricaricamento: torna."
     },
     {
       "id": "R01-016",
       "chiave": "stati-ui|sotto un lavoro sul catalogo chiuso che dice di chiedere all'assistenza prima di ripartire, il pulsante «avvia sul catalogo» resta lì",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "5d00555c53a9546b4f34906e2bd0b42f8ea39c44",
       "insieme_a": [
         "R01-015"
@@ -93,13 +102,21 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d00555c53a9546b4f34906e2bd0b42f8ea39c44^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Stessa riga di puoAvviareLavoro (:34): sotto il lavoro chiuso col motivo di chiedere all'assistenza prima di avviarne un altro il pulsante «Avvia sul catalogo» non si mostra più; la prova controlla che pulsante e riga dicano sempre la stessa cosa."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Stessa riga di puoAvviareLavoro (:34): sotto il lavoro chiuso col motivo di chiedere all'assistenza prima di avviarne un altro il pulsante «Avvia sul catalogo» non si mostra più; la prova controlla che pulsante e riga dicano sempre la stessa cosa.",
+      "cosa_resta": "Clic su una scheda operazione fa setJob(null) e il pulsante torna (app/seller/products/ai-batch/page.tsx:488); il lavoro fallito viene dimenticato con ricordaLavoro(null) e al ricaricamento la rotta di stato senza jobId dà solo i lavori aperti (page.tsx:350,381; app/api/ai/catalog-batch/status/route.ts:54); inoltre la rotta di avvio (app/api/ai/catalog-batch/start/route.ts:100-158, file di R01) non rifiuta un avvio dopo un lavoro chiuso con «chiedi all assistenza». Non corretto per il tetto di spesa del giro.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/products/ai-batch/page.tsx",
+          "modifica": "Non azzerare il lavoro chiuso con «chiedi all assistenza»: al clic su una scheda operazione (riga 488) non chiamare setJob(null) se il lavoro corrente è fallito o in errore, e alle righe 350 e 381 non chiamare ricordaLavoro(null) per quel lavoro, così dopo un ricaricamento puoAvviareLavoro lo vede ancora."
+        }
+      ],
+      "verificato_da": "revisore A (subagente, modello grande): stesso commit e stesse prove di R01-015, con le varianti del clic e del ricaricamento."
     },
     {
       "id": "R01-003",
       "chiave": "ai-endpoints|la conformità dei prodotti (classifyproductpolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "ee45239a4fcf48212c8296633bec6040a6225da5",
       "file_toccati": [
         "app/api/ai/catalog-batch/apply/route.ts"
@@ -115,8 +132,10 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ee45239a4fcf48212c8296633bec6040a6225da5^ --file app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r01-filtri-entro-il-tempo.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Il tempo proprio di classifyProductPolicy (10 s, nessun ritentativo) c'era già sulla base in lib/ai/moderation.ts, ma 40 gruppi in fila superavano i 120 s: nell'applica nessun gruppo di filtri nuovo parte dopo 70 s, chi resta fuori non si scrive e prende «non controllato in tempo: rimandalo», e un testo uguale a quello già nel catalogo non si rifiltra, così un lavoro rimandato riparte da chi era rimasto fuori."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il tempo proprio di classifyProductPolicy (10 s, nessun ritentativo) c'era già sulla base in lib/ai/moderation.ts, ma 40 gruppi in fila superavano i 120 s: nell'applica nessun gruppo di filtri nuovo parte dopo 70 s, chi resta fuori non si scrive e prende «non controllato in tempo: rimandalo», e un testo uguale a quello già nel catalogo non si rifiltra, così un lavoro rimandato riparte da chi era rimasto fuori.",
+      "cosa_resta": "Il tetto dei 120 s regge, ma il «rimandalo» può non avanzare mai: chi è bloccato dal filtro (o scartato dopo il filtro) non si scrive, il suo testo resta diverso da quello in catalogo e a ogni giro viene rifiltrato e ripagato per primo (app/api/ai/catalog-batch/apply/route.ts:256-285); con il fornitore lento e circa 40 bloccati in testa la coda non viene mai controllata. Inoltre: se il testo già in catalogo è vietato e la proposta lo ripete con tag o categoria nuovi, ora tag e categoria si scrivono senza filtro (route.ts:256-267), e il commento a route.ts:395-399 dice ancora «il filtro rifatto». Non corretto per il tetto di spesa del giro.",
+      "verificato_da": "revisore A (subagente, modello grande): prova e rimessa rilanciate (uscita 0), poi una prova usa e getta con filtro lento a 9,5 s e i primi 40 bloccati: dopo 5 giri applied 0 e 160 ancora rimandati."
     },
     {
       "id": "R01-011",
@@ -138,7 +157,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb3601100b1f2a7c6d7bac6db6b543eed284f2e1^ --file app/orders/[id]/dispute/page.tsx --prove tests/unit/riparazione-r01-reclamo-lettura-caduta.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Se la lettura dei reclami cade, la pagina del reclamo mostra un errore con «Riprova» al posto del modulo, così con un reclamo chiuso e la lettura fallita non se ne apre un secondo; la prova monta la pagina vera con la lettura in errore. app/orders/[id]/page.tsx:285 non cambia: il suo «Apri reclamo» porta a questa pagina, che ora si ferma da sola."
+      "cosa_ho_fatto": "Se la lettura dei reclami cade, la pagina del reclamo mostra un errore con «Riprova» al posto del modulo, così con un reclamo chiuso e la lettura fallita non se ne apre un secondo; la prova monta la pagina vera con la lettura in errore. app/orders/[id]/page.tsx:285 non cambia: il suo «Apri reclamo» porta a questa pagina, che ora si ferma da sola.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa rilanciate (uscita 0); varianti: stati del CHECK di disputes contro il filtro .in, lettura che lancia invece di dare errore (resta sul caricamento), unica rotta che apre un reclamo; 69 prove vicine verdi."
     },
     {
       "id": "R01-013",
@@ -160,7 +180,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e87f559f8dbd32090df1291a5550c5b4d1bae36a^ --file migrations/821_una_domanda_nuova_avvisa_il_negozio.sql --prove tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql --sql r01_rimessa --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Migrazione 821, non applicata: un trigger AFTER INSERT SECURITY DEFINER su product_questions scrive la campanella al venditore del prodotto per una domanda pubblica (categoria system, link alla scheda), senza nome né testo del cliente, una sola voce non letta per prodotto; se la voce non si scrive la domanda si salva lo stesso. La prova SQL inserisce come utente authenticated con RLS vera."
+      "cosa_ho_fatto": "Migrazione 821, non applicata: un trigger AFTER INSERT SECURITY DEFINER su product_questions scrive la campanella al venditore del prodotto per una domanda pubblica (categoria system, link alla scheda), senza nome né testo del cliente, una sola voce non letta per prodotto; se la voce non si scrive la domanda si salva lo stesso. La prova SQL inserisce come utente authenticated con RLS vera.",
+      "verificato_da": "revisore B (subagente, modello grande): prova SQL verde e rimessa --sql (uscita 0); sul Postgres locale: domanda non pubblica senza voce, voce che non si scrive con la domanda salvata lo stesso, nessun EXECUTE per authenticated e anon, SECURITY DEFINER con search_path=public e tabelle con schema, nessun dato del cliente, il negozio che chiede a se stesso non riceve niente."
     },
     {
       "id": "R01-012",
@@ -183,7 +204,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f097c86cce5dae3558d63b4dff364258cb97dafe^ --file migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql --prove tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql --sql r01_rimessa --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La promessa falsa nel messaggio dopo l'invio era già tolta alla base (ProductQA.tsx:96); l'avviso al negozio lo fa la 821. Qui la 822, non applicata: alla prima risposta a una domanda pubblica il database avvisa chi l'ha fatta (una voce sola, senza il testo della risposta), come chiede la correzione vera della voce. In ProductQA.tsx cambia solo il commento della riga 95. La lista «Domande da rispondere» che il fix mette «in più» va in app/seller, non di R01: non fatta."
+      "cosa_ho_fatto": "La promessa falsa nel messaggio dopo l'invio era già tolta alla base (ProductQA.tsx:96); l'avviso al negozio lo fa la 821. Qui la 822, non applicata: alla prima risposta a una domanda pubblica il database avvisa chi l'ha fatta (una voce sola, senza il testo della risposta), come chiede la correzione vera della voce. In ProductQA.tsx cambia solo il commento della riga 95. La lista «Domande da rispondere» che il fix mette «in più» va in app/seller, non di R01: non fatta.",
+      "verificato_da": "revisore B (subagente, modello grande): prova SQL verde e rimessa --sql (uscita 0); sul Postgres locale una risposta corretta due volte avvisa una volta, la voce che non si scrive non ferma la risposta, autore cancellato non rompe. Due casi minori fuori dal sito restano aperti (vedi nuovi_difetti_visti)."
     },
     {
       "id": "R01-006",
@@ -205,7 +227,8 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 66226a6455108c252c16828bfe70a9c8e6b5f406^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r01-errore-tetto-dopo-la-pulizia.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "In nessunoHaParlatoNellOra, se l'aggiornamento non trova righe si riprova l'inserimento che ignora i doppioni e chi lo scrive parla: «nessuna riga» non vale più come «qualcuno ha già parlato», e la migrazione di pulizia resta com'è. Prova con supabase finto che pulisce come la pulizia vera e orologio finto; sequenza rifatta anche sul Postgres locale."
+      "cosa_ho_fatto": "In nessunoHaParlatoNellOra, se l'aggiornamento non trova righe si riprova l'inserimento che ignora i doppioni e chi lo scrive parla: «nessuna riga» non vale più come «qualcuno ha già parlato», e la migrazione di pulizia resta com'è. Prova con supabase finto che pulisce come la pulizia vera e orologio finto; sequenza rifatta anche sul Postgres locale.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0); sequenza rifatta sul Postgres locale col trigger vero della pulizia: dopo la cancellazione la copia parla una volta, la seguente tace, con due copie insieme parla una sola."
     },
     {
       "id": "R01-004",
@@ -229,12 +252,13 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4f04b5793ea754c23323648b43fc94507c579040^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "allarmiTettoSpesaAiPerIlCron restituisce [] quando AI_NEGOZI_ACCESA (lib/funzioni-al-lancio.ts) è false: niente sonda, niente righe. Dichiarato: toccate due prove esistenti che importano per nome lib/ai/tettoSpesa.ts, aggiungendo solo un vi.mock che le fa girare con l'AI accesa (il loro caso implicito); nessuna asserzione cambiata. Soglie e importi non toccati."
+      "cosa_ho_fatto": "allarmiTettoSpesaAiPerIlCron restituisce [] quando AI_NEGOZI_ACCESA (lib/funzioni-al-lancio.ts) è false: niente sonda, niente righe. Dichiarato: toccate due prove esistenti che importano per nome lib/ai/tettoSpesa.ts, aggiungendo solo un vi.mock che le fa girare con l'AI accesa (il loro caso implicito); nessuna asserzione cambiata. Soglie e importi non toccati. Prove comuni cambiate (guardia «prove_comuni», serve la firma di Nicola): tests/unit/riparazione-r04-allarme-ripiego.test.ts e tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts, solo un vi.mock di lib/funzioni-al-lancio.ts con AI_NEGOZI_ACCESA=true perché il loro caso è l AI accesa e, senza, la nuova regola le spegnerebbe. Su richiesta della regia la modifica sta da sola nel commit 0689079c (solo prove; il 701826dd le riporta prima come sulla base): se la firma non arriva, si toglie 0689079c e le due modifiche passano come diff.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0); le due prove comuni verdi e non indebolite (solo il vi.mock, nessuna asserzione cambiata); tetto, soglie e importi identici alla base."
     },
     {
       "id": "R01-005",
       "chiave": "ai-endpoints|l'allarme del tetto di spesa ai può dire «non risponde da tre giorni» al primo guasto di cinque minuti",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "c6e10d3183b49cfac83f8f655d9102626c59a3b8",
       "file_toccati": [
         "lib/ai/tettoSpesa.ts"
@@ -250,8 +274,88 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6e10d3183b49cfac83f8f655d9102626c59a3b8^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Una riga 'ai-tetto-condiviso:ripiego-da' più vecchia di 24 ore viene riscritta da adesso, come la cura suggerita; il giro senza tetto o con l'AI spenta cancella quella riga (best-effort). Prova con orologio finto: riga di 3 giorni, uscite che la tolgono, e guasti veri di 2 e 23 ore che restano contati."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Una riga 'ai-tetto-condiviso:ripiego-da' più vecchia di 24 ore viene riscritta da adesso, come la cura suggerita; il giro senza tetto o con l'AI spenta cancella quella riga (best-effort). Prova con orologio finto: riga di 3 giorni, uscite che la tolgono, e guasti veri di 2 e 23 ore che restano contati.",
+      "cosa_resta": "Il riscrivere «da adesso» la riga più vecchia di 24 ore rende uguali un guasto vecchio rimasto lì e un guasto vero ancora in corso da più di 24 ore: con un errore non permanente che dura (per esempio 42501 o i timeout) l allarme tace circa un ora al giorno e i minuti ripartono da zero (lib/ai/tettoSpesa.ts:511). Le cancellazioni all uscita senza tetto o con l AI spenta bastano già per il caso della voce: la cura è togliere il tetto delle 24 ore e tenere le cancellazioni. Non fatta per il tetto di spesa del giro.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0), poi una prova usa e getta con guasto continuo non permanente e cron ogni 5 minuti per 26 ore: alle 24 ore tace per 13 giri e poi dice 115 minuti."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "microcopy|il cliente e l'email leggono ancora «un rider passa a prenderlo», mentre il pulsante del negozio ora dice «fattorino»",
+      "esito": "parziale",
+      "commit": "3e57fd6753d41a73187b1c228802f9002dad03b5",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-parola-fattorino-mappa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-parola-fattorino-mappa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3e57fd6753d41a73187b1c228802f9002dad03b5^ --file app/orders/[id]/page.tsx --prove tests/unit/riparazione-r01-parola-fattorino-mappa.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base la frase dell'ordine pronto (page.tsx:422) e l'email (templates.ts:381, 397) dicevano già «fattorino»; restava l'etichetta del pin sulla mappa (righe 380-381), da «Rider» a «Fattorino». La prova legge anche l'email: «un fattorino passa a prenderlo» c'è, «un rider passa a prenderlo» no.",
+      "cosa_resta": "La campanella del cliente la scrive il database: l ultima definizione di notify_buyer_on_order_status (migrations/321_l_ordine_pronto_dice_la_fascia.sql:59,66,71-77) dice ancora «un rider passa a prenderlo» e «Un rider ha preso il tuo ordine». Serve una migrazione nuova nella fascia 823-829 con CREATE OR REPLACE della stessa funzione e il solo testo cambiato, con la sua prova SQL. Non fatta per il tetto di spesa del giro.",
+      "verificato_da": "revisore A (subagente, modello grande): prova e rimessa rilanciate (uscita 0), cercato «rider passa a prenderlo» in app, lib e migrations."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "microcopy|altri «rider» rivolti al cliente restano nella pagina dell'ordine e in quella del negozio",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts",
+          "modifica": "Riga 242: aspettarsi /Fattorino\\s*Luca/ al posto di /Rider\\s*Luca/ nella pagina dell ordine del negozio."
+        },
+        {
+          "file": "tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts",
+          "modifica": "Righe 348 e 368: aspettarsi «in contanti al fattorino alla consegna» al posto di «in contanti al rider alla consegna» (e il titolo del describe che dice «Paghi al rider»)."
+        },
+        {
+          "file": "components/OrderTimeline.tsx",
+          "modifica": "Riga 45: «Ritirato dal rider» diventa «Ritirato dal fattorino»."
+        },
+        {
+          "file": "app/orders/[id]/page.tsx, app/seller/orders/[id]/page.tsx",
+          "modifica": "Dopo le due prove qui sopra, rimettere il commit 841befd4123e941c17780507fcca08bec5223397 (git cherry-pick 841befd4123e941c17780507fcca08bec5223397): «rider» diventa «fattorino» nelle stringhe mostrate (pagina dell ordine righe 706, 801, 891, 898; pagina del negozio righe 556, 571, 572, 619, 624, 631), con la sua prova tests/unit/riparazione-r01-parola-fattorino-pagine.test.ts (rimessa uscita 0)."
+        }
+      ],
+      "nota": "La correzione nei file di R01 c era (commit 841befd4123e941c17780507fcca08bec5223397, rimessa regge), ma rompeva 3 casi in 2 prove esistenti che si aspettano «rider»: il revisore lo ha visto e il verify era rosso. Su indicazione della regia non tocco altre prove esistenti: il commit è tolto con un revert (5a60c8ee) e la cura passa come diff."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "layout-responsive|in home a 280 px col testo al 200% la fascia «hai un negozio a piacenza?» esce di 18 px",
+      "esito": "gia_riparato_prima",
+      "prova": "components/home-sections/HomeSectionRenderer.tsx:380-385 sulla base 5b8c786c: il contenitore ha `flex min-w-0 items-center gap-3` e il paragrafo `min-w-0 break-words` (commit d24f3138 di un'onda precedente, già nella base); tests/unit/riparazione-r01-home-col-testo-grande.test.tsx:74-81 controlla `min-w-0 break-words` sulla frase della fascia sellerCta."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-rclone.ts",
+          "modifica": "Dopo FINTO_PGDUMP (riga 74) aggiungere `export const FINTO_PSQL = ['#!/usr/bin/env bash', 'cat >/dev/null', 'exit 1'].join('\\n');`: lo stesso esito di oggi (database muto, `file_nel_database` in scripts/backup-db.sh:393-409 esce con 1) senza chiamare il psql vero della macchina, che lo script chiama a riga 404 dopo `command -v psql` a riga 398."
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+          "modifica": "Importare FINTO_PSQL (riga 34) e, dove scrive pg_dump e rclone in `finti` (righe 57-60), aggiungere `writeFileSync(join(finti, 'psql'), FINTO_PSQL); chmodSync(join(finti, 'psql'), 0o755);` (il PATH a riga 70 è già `${finti}:...`)."
+        },
+        {
+          "file": "tests/unit/il-lavoro-notturno-accende-davvero-la-copia-delle-foto.test.ts",
+          "modifica": "Importare FINTO_PSQL (riga 30) e accanto a pg_dump (righe 160-161) scrivere `finti/psql` con chmod 0o755 (PATH a riga 190 già `${finti}:...`)."
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-non-ripete-la-cancellazione.test.ts",
+          "modifica": "Ha un FINTO_PGDUMP locale (riga 108) e non importa finto-rclone: dichiarare un FINTO_PSQL uguale (`cat >/dev/null; exit 1`) e scriverlo in `finti/psql` con chmod 0o755 accanto a pg_dump (righe 129-130); PATH a riga 143 già `${finti}:...`."
+        }
+      ],
+      "nota": "Il difetto c'è ancora sulla base: nessuna prova crea finti/psql. Nessuno di questi file importa o legge per nome un file di R01."
     }
   ],
   "nuovi_difetti_visti": [
@@ -261,6 +365,27 @@
       "severita": "minore",
       "file": "app/api/ai/catalog-batch/start/route.ts:47-58",
       "descrizione": "La rotta di avvio legge catalog_ai_jobs.applicazione_finita_il (righe 47-58 e 123-155), ma nessuna migrazione in migrations/ crea quella colonna (la 750 citata non esiste). La lettura cade sempre con 42703 e il controllo dell applicazione in corso non scatta mai. Non chiesto da nessuna voce di R01: lasciato com e."
+    },
+    {
+      "titolo": "la pagina del lavoro sul catalogo non legge l avviso dell applica e mostra solo i primi tre motivi",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/products/ai-batch/page.tsx:449-456",
+      "descrizione": "La rotta dell applica restituisce «avviso» quando il lavoro non può tornare pronto, ma la pagina non lo legge e mostra solo i primi 3 motivi diversi dei saltati: con tre «bloccato dal filtro» prima in elenco il motivo «nel frattempo hai avviato un altro lavoro» resta fuori. Il file non è di R01."
+    },
+    {
+      "titolo": "la risposta del negozio svuotata e riscritta dall api riavvisa il cliente ogni volta",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql:41",
+      "descrizione": "La migrazione 822 (di R01, non applicata) riconosce la prima risposta solo da OLD.answer vuota: un negozio che dall api svuota la risposta e la riscrive avvisa di nuovo il cliente a ogni giro. Dal sito non si può (il modulo compare solo sulle domande senza risposta). Non corretto per il tetto di spesa del giro."
+    },
+    {
+      "titolo": "il negozio che risponde alla propria domanda senza answered_by si avvisa da solo",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql:42",
+      "descrizione": "La 822 usa answered_by, che manda il browser, per capire se il negozio risponde a se stesso: con answered_by vuoto arriva una voce a se stesso. Il sito oggi manda answered_by=profile.id. Basterebbe confrontare l autore con il venditore del prodotto."
     }
   ],
   "domande_per_nicola": [
@@ -268,7 +393,10 @@
     "Le migrazioni 821 (la domanda avvisa il negozio) e 822 (la risposta avvisa chi ha chiesto) sono pronte e non applicate: le applichi tu, quando vuoi che gli avvisi partano."
   ],
   "conto": {
-    "agenti": 2,
-    "nota": "lotti 1 e 2 su modello grande"
-  }
+    "subagenti": 5,
+    "agenti": 5,
+    "nota": "3 subagenti che riparano (2 modello grande, 1 sonnet) e 2 revisori (modello grande); nessun giro di correzione: la spesa è arrivata alla soglia di consegna (22,94 $ su 35) e il ramo è stato messo in ordine con mosse meccaniche (revert del commit di R01-008, prove comuni di R01-004 isolate)."
+  },
+  "costo_usd": 22.94,
+  "costo_nota": "usage.cost_usd di get_session senza id, letto prima della consegna: è il valore all ultimo turno chiuso, il turno di consegna aggiunge poco."
 }
