@@ -1,0 +1,352 @@
+{
+  "sessione": "R07",
+  "aggiornato": "2026-11-24 12:40",
+  "finita": false,
+  "testa": "dd73ecf10f8f29adc7c11d15880257f79311c220",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "testa": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R07-001",
+      "chiave": "frontend-ux|nel profilo del fattorino il documento risulta «verificato» appena caricato, e l'attestato haccp resta «mancante» anche dopo il caricamento",
+      "esito": "riparato",
+      "commit": "55d79fba7ac2e10317565d1a6f32d4b203d47b2d",
+      "file_toccati": [
+        "app/rider/profile/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-documento-ricaricato-dopo-l-approvazione.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-documento-ricaricato-dopo-l-approvazione.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 55d79fba7ac2e10317565d1a6f32d4b203d47b2d^ --file app/rider/profile/page.tsx --prove tests/unit/riparazione-r07-documento-ricaricato-dopo-l-approvazione.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base l'HACCP caricato si riconosceva già dal file e il fattorino non approvato leggeva già «in verifica» (commit 7d54bb48). Restava il fattorino già approvato che ricarica il documento d'identità: lo vedeva subito «Verificato». Ora «Verificato» vale solo se la verifica non è stata riaperta: stato azzerato dalla rotta del caricamento (kyc_provider_status vuoto con una verifica già fatta) o nuovo invio dopo l'approvazione (kyc_provider_checked_at dopo approved_at). Un profilo approvato senza nessuna verifica registrata resta «Verificato» come prima. Nessuna migrazione: le colonne si leggono già.",
+      "nota": "Non toccati, perché la voce non li nomina (in nuovi_difetti_visti): fattorino respinto o sospeso che legge «In attesa di verifica»; HACCP caricato da approvato che passa a «Caricato · OK» senza esame."
+    },
+    {
+      "id": "R07-002",
+      "chiave": "frontend-ux|un negozio senza nome ha metadati indicizzabili mentre la sua pagina risponde «non trovato»",
+      "esito": "riparato",
+      "commit": "dd73ecf10f8f29adc7c11d15880257f79311c220",
+      "file_toccati": [
+        "app/store/[id]/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-negozio-senza-nome-non-indicizzabile.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-negozio-senza-nome-non-indicizzabile.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base <sha>^ --file app/store/[id]/layout.tsx --prove tests/unit/riparazione-r07-negozio-senza-nome-non-indicizzabile.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "generateMetadata dà i metadati di «vetrina non trovata» (noindex, senza canonico) anche quando manca store_name, con la stessa condizione con cui il guscio chiama notFound()."
+    },
+    {
+      "id": "R07-003",
+      "chiave": "frontend-ux|una vetrina lasciata aperta oltre mezzanotte continua a mostrare l'annuncio del giorno prima finché la pagina non si ridisegna",
+      "esito": "riparato",
+      "commit": "11160caf49c79575bf25ae0d027a50eb6d54c64d",
+      "file_toccati": [
+        "app/store/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-annuncio-della-vetrina-a-mezzanotte.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-annuncio-della-vetrina-a-mezzanotte.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 11160caf49c79575bf25ae0d027a50eb6d54c64d^ --file app/store/[id]/page.tsx --prove tests/unit/riparazione-r07-annuncio-della-vetrina-a-mezzanotte.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La pagina del negozio tiene in uno stato il giorno di Piacenza e lo ricontrolla ogni minuto: quando cambia si ridisegna, e announcementActive rilegge l'annuncio col giorno nuovo. La prova monta la pagina con l'orologio finto alle 23:58 del 24/11 (annuncio fino al 24): c'è, e tre minuti dopo non c'è più.",
+      "nota": "La cache del server resta fuori, come dice la voce."
+    },
+    {
+      "id": "R07-004",
+      "chiave": "frontend-ux|lo scheletro del negozio impedisce il 404 vero sulle pagine dei negozi anche senza lo scheletro della radice",
+      "esito": "scelta_di_nicola",
+      "domanda": "Lo scheletro sopra il guscio (app/store/loading.tsx, rimesso da 4c619346 perché la prova comune aprendo-un-negozio-si-vede-una-cosa-sola-mentre-arriva lo pretende) contro il 404 vero dei negozi inesistenti (riparazione-r10-pagine-inesistenti): vuoi il sipario col volto del negozio o il codice 404 vero? Togliere il file richiede anche di cambiare quella prova comune (che la pretende) e, per il 404 in rete, di togliere app/loading.tsx (non nostro).",
+      "nota": "Non toccato: il conflitto è fra due prove comuni e app/loading.tsx, che non è di R07, c'è ancora."
+    },
+    {
+      "id": "R07-005",
+      "chiave": "frontend-ux|altri campi brevi del sito del negozio tagliano ancora in silenzio con maxlength",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/site/GalleryFields.tsx",
+          "modifica": "righe 99 e 119: togliere maxLength={120} da «Titolo (opzionale)» e dal testo alternativo e dire il tetto con un messaggio visibile sotto il campo (stesso metodo di BannerFields.tsx: «Troppo lungo: N caratteri su 120. Accorcialo, così si salva.»)"
+        },
+        {
+          "file": "components/seller/site/MenuEditor.tsx",
+          "modifica": "riga 61: togliere maxLength={30} dall'Etichetta e mostrare l'errore «Troppo lungo…» sotto il campo come in BannerFields.tsx"
+        },
+        {
+          "file": "components/seller/site/PageEditor.tsx",
+          "modifica": "righe 89, 110, 111: togliere maxLength 60 (Titolo), 70 (Titolo SEO), 180 (Descrizione SEO) e mostrare l'errore «Troppo lungo…» sotto ciascun campo come in BannerFields.tsx"
+        }
+      ],
+      "insieme_a": [
+        "R07-006"
+      ],
+      "nota": "I file di R07 (SectionConfigForm.tsx:54,132,140,162,171,172 e CollectionFields.tsx:24) non hanno più maxLength sulla base: già chiusi da 266a5540 (R10-008 R10-009), i commenti SectionConfigForm.tsx:14 e CollectionFields.tsx:9 lo dichiarano. Restano solo i file di altri."
+    },
+    {
+      "id": "R07-006",
+      "chiave": "frontend-ux|il costruttore della vetrina ha ancora campi brevi che tagliano in silenzio",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/site/GalleryFields.tsx",
+          "modifica": "righe 99 e 119: togliere maxLength={120} da «Titolo (opzionale)» e dal testo alternativo e dire il tetto con un messaggio visibile sotto il campo (stesso metodo di BannerFields.tsx: «Troppo lungo: N caratteri su 120. Accorcialo, così si salva.»)"
+        },
+        {
+          "file": "components/seller/site/MenuEditor.tsx",
+          "modifica": "riga 61: togliere maxLength={30} dall'Etichetta e mostrare l'errore «Troppo lungo…» sotto il campo come in BannerFields.tsx"
+        },
+        {
+          "file": "components/seller/site/PageEditor.tsx",
+          "modifica": "righe 89, 110, 111: togliere maxLength 60 (Titolo), 70 (Titolo SEO), 180 (Descrizione SEO) e mostrare l'errore «Troppo lungo…» sotto ciascun campo come in BannerFields.tsx"
+        }
+      ],
+      "insieme_a": [
+        "R07-005"
+      ],
+      "nota": "I file di R07 (SectionConfigForm.tsx:54,132,140,162,171,172 e CollectionFields.tsx:24) non hanno più maxLength sulla base: già chiusi da 266a5540 (R10-008 R10-009), i commenti SectionConfigForm.tsx:14 e CollectionFields.tsx:9 lo dichiarano. Restano solo i file di altri."
+    },
+    {
+      "id": "R07-007",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "riparato",
+      "commit": "602c64d75dfc896038d954a317377a07dc03aff4",
+      "file_toccati": [
+        "components/VendorForm.tsx",
+        "tests/unit/riparazione-r10-slogan-e-social.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-social-sbagliato-il-resto-e-salvato-dopo.test.tsx",
+        "tests/unit/riparazione-r10-slogan-e-social.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-social-sbagliato-il-resto-e-salvato-dopo.test.tsx tests/unit/riparazione-r10-slogan-e-social.test.ts tests/unit/riparazione-r02-social-link-incollati.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 602c64d75dfc896038d954a317377a07dc03aff4^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r07-social-sbagliato-il-resto-e-salvato-dopo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base i tre esempi della voce erano già a posto (link Instagram ridotto al nome, https aggiunto al sito, errore sotto il campo giusto con la sezione che si apre, il resto si salva: R02-007 e R10-010). Restava quello che il collaudo K04 aveva trovato rotto: «Il resto è salvato» si leggeva prima che il salvataggio partisse. Ora all'invio compare solo l'errore col nome del campo, e la frase arriva con salvataggioRiuscito; al plurale con due campi («sono rimasti com'erano») e «non si è salvato» per un campo che prima era vuoto.",
+      "nota": "Prova esistente modificata: tests/unit/riparazione-r10-slogan-e-social.test.ts (importa components/VendorForm, mio file): l'asserzione «Il resto è salvato» ora si fa dopo aver passato salvataggioRiuscito, stesso numero di expect."
+    },
+    {
+      "id": "R07-008",
+      "chiave": "frontend-ux|il modulo del prodotto non dice che il nome ha al massimo 120 caratteri: il negozio legge solo «il valore inserito non è valido»",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/products/schema.ts:161-165 (name .refine ≤ NOME_PRODOTTO_MAX con messaggio «Il nome può avere al massimo 120 caratteri: accorcialo.»); components/seller/ProductForm.tsx:1069 (hint «Al massimo 120 caratteri (n/120)»); lib/errors.ts:234 (23514 products_name_lunghezza tradotto). Fatto da 403a6681 (R10-013), già sulla base."
+    },
+    {
+      "id": "R07-009",
+      "chiave": "frontend-ux|altri percorsi di facebook non elencati possono essere salvati come nome del profilo",
+      "esito": "parziale",
+      "commit": "2ba05d79fe5caac829d7749108c4e9be9a85e0a3",
+      "file_toccati": [
+        "lib/store-customization.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-facebook-percorsi-di-una-parola.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-facebook-percorsi-di-una-parola.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2ba05d79fe5caac829d7749108c4e9be9a85e0a3^ --file lib/store-customization.ts --prove tests/unit/riparazione-r07-facebook-percorsi-di-una-parola.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il collaudo K04 del 22/11 aveva trovato undici percorsi di una parola fuori elenco che passavano come nome. Ora un nome col trattino basso non è mai un profilo Facebook (Facebook non lo ammette nei nomi: chiude la classe business_help, coronavirus_info e simili), e i percorsi di una parola trovati (find-friends, pymk, onthisday, games, latest, feed/feeds, donate, fundraiser, watchparty) più me, about, legal, terms, careers sono nell'elenco. Restano com'erano e il controllo li ferma sul campo Facebook; i profili veri (coi punti, la pagina di prima Nome-Nome-123456789012345, ?mibextid) restano un nome.",
+      "cosa_resta": "Un percorso di Facebook di una parola sola fatto di lettere, cifre e punti (o col trattino), che non è nell'elenco, si salva ancora come nome: non si distingue da un nome vero senza chiedere a Facebook. Il link ricostruito porta comunque alla stessa pagina incollata, senza la coda. Il trattino non l'ho escluso perché la prova esistente riparazione-r10-facebook-percorsi-non-profilo.test.ts:47 tiene «pane-quotidiano» come profilo vero."
+    },
+    {
+      "id": "R07-010",
+      "chiave": "performance-percepita|il traduttore degli errori di zod entra in ogni pagina passando dal piede del sito",
+      "esito": "parziale",
+      "commit": "a61f24dea93b7c2cf9aee2a4bd92afec447c6821",
+      "file_toccati": [
+        "lib/errors.ts",
+        "lib/zod-frasi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-errori-senza-traduttore-zod.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-errori-senza-traduttore-zod.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base <sha>^ --file lib/errors.ts,lib/zod-frasi.ts --prove tests/unit/riparazione-r07-errori-senza-traduttore-zod.test.ts --json",
+        "nota": "② lib/errors.ts alla base: rossa sul comportamento (Zod già tradotto dopo l'import); ma togliendo il file nuovo lib/zod-frasi.ts errors.ts non si carica più, quindi rossa solo per struttura: inevitabile, il file nuovo è importato da errors.ts. Il file di prova non nomina zod-frasi."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Le frasi italiane di Zod (FRASI_ZOD) in un file nuovo lib/zod-frasi.ts senza Zod; lib/errors.ts importa da lì invece che da lib/zod-i18n, così il piede del sito non accende z.setErrorMap né porta Zod. Prova: dopo l'import di lib/errors Zod parla ancora inglese e i testi del server escono in italiano.",
+      "cosa_resta": "lib/zod-i18n.ts ha ancora la sua copia di TIPI_IN_ITALIANO/quanti/FRASI_ZOD: va tolta e sostituita con import e re-export da ./zod-frasi (altrimenti due copie delle stesse frasi possono divergere).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/zod-i18n.ts",
+          "modifica": "togliere TIPI_IN_ITALIANO, quanti e la definizione di FRASI_ZOD (righe 21-57 circa) e al loro posto: import { FRASI_ZOD } from './zod-frasi'; export { FRASI_ZOD };"
+        }
+      ]
+    },
+    {
+      "id": "R07-011",
+      "chiave": "qa-flussi|le maschere di caricamento delle foto accettano solo jpg, png e webp, mentre la porta e lo storage ne accettano sette",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/StoreMediaManager.tsx",
+          "modifica": "Aggiungere l'import `import { fileColTipoGiusto, mappaAccept, tipiScrittiPerUmani } from '@/lib/storage/casella-di-caricamento';`. Righe 54-58: sostituire `accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },` con `accept: mappaAccept(),`. Riga 66: `'Formato non accettato: servono foto in JPG, PNG o WEBP.'` diventa `` `Formato non accettato: servono foto in ${tipiScrittiPerUmani()}.` ``. Riga 78: `for (const file of files) {` diventa `for (const grezzo of files) { const file = fileColTipoGiusto(grezzo);` (un HEIC col tipo vuoto, come da Windows, passa `file.type.startsWith('image/')` e arriva al deposito come image/heic). Prova: la stessa di tests/unit/riparazione-r16-foto-sette-tipi.test.tsx estesa a StoreMediaManager (react-dropzone finto che cattura accept: sette tipi con .heic; avviso con HEIC e AVIF; HEIC col tipo vuoto caricato come image/heic)."
+        }
+      ],
+      "prova": "Le mie tre caselle sono già a posto sulla base 5b8c786c (commit 7598e314, R16-013): components/ImageUrlField.tsx:63 `accept: mappaAccept(bucket)`, components/VendorForm.tsx:213 `accept: mappaAccept()`, components/SellerApplicationForm.tsx:212 `accept: mappaAccept()`, con avviso tipiScrittiPerUmani() e fileColTipoGiusto(). Resta solo components/StoreMediaManager.tsx:54-58 (file non di R07), che accetta ancora JPG, PNG e WEBP.",
+      "copre_tutta_la_voce": false,
+      "nota": "Il registro scrive components/seller/StoreMediaManager.tsx: il file vero è components/StoreMediaManager.tsx. Nessun commit per questa voce."
+    },
+    {
+      "id": "R07-012",
+      "chiave": "qa-flussi|il modulo prodotto del negozio si blocca se le categorie formano un cerchio",
+      "esito": "riparato",
+      "commit": "f30bed1cf20e4f28e9bea76543e162958eeaf444",
+      "file_toccati": [
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-categorie-a-cerchio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-categorie-a-cerchio.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base <sha>^ --file components/seller/ProductForm.tsx --prove tests/unit/riparazione-r07-categorie-a-cerchio.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "resolveTop tiene l'elenco dei nodi già visti e si ferma al primo ripetuto: con A dentro B dentro A il modulo si apre invece di girare per sempre."
+    },
+    {
+      "id": "R07-013",
+      "chiave": "qa-flussi|due guardie sulla veloce controllano il testo del sorgente e non il comportamento",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts",
+          "modifica": "Righe 135-145, caso «la cassa offre «Adesso» solo con il sì del server»: le quattro expect(...).toContain(...) sul testo di components/checkout/DeliverySlotPicker.tsx e app/checkout/page.tsx diventano quattro expect sulla cassa montata, con lo stesso finto di tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts:30-128 (funzione `cassa`, monta('app/checkout/page.tsx'), fetch finto, orologio fermo a 2026-10-29T09:00:00Z): ① una sola domanda a /api/consegna/veloce con negozi = il negozio del carrello; ② prima della risposta la tessera «Adesso» è disabilitata; ③ con {possibile:true} «Adesso» si sceglie (aria-pressed='true'); ④ con {possibile:false} no. Stesso numero di asserzioni (guardia-ramo vieta di toglierne). In alternativa togliere il caso, già coperto da riparazione-r22-veloce-cassa-chiede-al-server.test.ts:131-190 e riparazione-r04-veloce.test.ts:136-166, ma solo con la deroga firmata per le asserzioni tolte."
+        },
+        {
+          "file": "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+          "modifica": "Righe 327-336 (la riga 330 del registro), caso «la fascia si ricontrolla anche AL MOMENTO di ordinare»: le tre toMatch sul testo di handleSubmit (/consegnaScelta\\(/, /ora: romeNow\\(\\)\\.getHours\\(\\)/, /if \\(!siPuoConfermare\\(/) diventano tre expect sulla cassa montata, con il finto di tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts:141-180: ① fascia di oggi scelta alle 19:55 e «Ordina» alle 20:05 senza ridisegno → nessuna chiamata alla rotta d'ordine; ② lo stesso caso mostra il messaggio che la fascia è passata; ③ telefono a Londra alle 20:05 (a Roma le 21:05) con «Adesso» → l'ordine non parte. Se invece la guardia intesa è il caso sopra, «la riga sotto le mattonelle non è più un testo fisso» (righe 314-325, regex /rigaQuandoArriva\\(consegna\\)/ sul testo), la sostituta è riparazione-r04-veloce.test.ts:168-190 (con «Adesso» la riga dice i minuti; scelto domani, la fascia di domani), con lo stesso numero di asserzioni."
+        }
+      ],
+      "prova": "Nessuno dei due file importa o legge per nome un file di R07: leggono components/checkout/DeliverySlotPicker.tsx, app/checkout/page.tsx, app/api/orders/cod/route.ts, app/api/stripe/checkout/route.ts, app/cart/page.tsx. Le prove di comportamento sostitutive sono già sulla base e verdi: npx vitest run tests/unit/riparazione-r22-veloce-cassa-chiede-al-server.test.ts tests/unit/riparazione-r22-veloce-l-invio-rilegge-l-ora.test.ts tests/unit/riparazione-r04-veloce.test.ts tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx --reporter=dot → 4 file, tutti verdi.",
+      "copre_tutta_la_voce": false,
+      "nota": "Nessun commit per questa voce. Le due guardie sul testo sono ancora alle righe indicate sulla base 5b8c786c."
+    },
+    {
+      "id": "R07-014",
+      "chiave": "stati-ui|senza database la categoria e la scheda prodotto mostrano «qualcosa è andato storto» invece del loro errore con «riprova»",
+      "esito": "parziale",
+      "commit": "9d4b57b205747c160dbe5ee1a47b03c46be88e88",
+      "file_toccati": [
+        "app/category/error.tsx",
+        "app/product/error.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r07-categoria-e-scheda-senza-database.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r07-categoria-e-scheda-senza-database.test.tsx --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9d4b57b205747c160dbe5ee1a47b03c46be88e88^ --file app/category/error.tsx,app/product/error.tsx --prove tests/unit/riparazione-r07-categoria-e-scheda-senza-database.test.tsx --json",
+        "a_mano": {
+          "comando": "stessa prova-rimessa: passi ② «app/category/error.tsx tolto da solo: rossa», «app/product/error.tsx tolto da solo: rossa»; nel log le cadute sono AssertionError sul testo («expected 'Qualcosa è andato storto …' to contain 'Non riesco a caricare questa categoria'»), non moduli mancanti",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        }
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La causa: il guscio del prodotto (app/product/[id]/layout.tsx) e i metadati della categoria (app/category/[slug]/layout.tsx) lanciano di proposito quando la lettura non arriva; l'error.tsx di [id] non copre il guscio della sua stessa cartella e la categoria non ne aveva, quindi vinceva app/error.tsx. Due file nuovi, app/product/error.tsx e app/category/error.tsx, sopra i due gusci: dicono lo stesso titolo e testo del ramo isError della pagina, con «Riprova» (router.refresh() + reset) e il link «Vedi tutte le categorie». La prova verifica che i due gusci lancino senza database e, con la regola dei confini di Next (il guscio lo copre l'error.tsx sopra la sua cartella, pagina e metadati quello dalla cartella in su), disegna il confine scelto: senza i due file è la pagina generica.",
+      "cosa_resta": "Il codice chiude la voce; manca solo la certificazione: prova-rimessa.mjs dà uscita 3 perché un error.tsx è un file di convenzione di Next che nessun file importa («codice che nessun file della correzione usa»), anche se togliendo ciascun file la prova cade sull'asserzione del testo. Serve il giudizio del collaudo con la rimessa a mano (deroga «rimessa_a_mano») per passarla a riparato. Non provato in un browser vero senza chiavi.",
+      "nota": "I gusci non sono file di R07 e non li ho toccati: il lancio resta voluto (un guasto non diventa «non trovato» per Google)."
+    },
+    {
+      "id": "R07-015",
+      "chiave": "stati-ui|con la proposta di «genera con ai» aperta, le correzioni fatte a mano nel frattempo si perdono premendo «usa questa»",
+      "esito": "gia_riparato_prima",
+      "prova": "components/seller/ProductForm.tsx:1107-1111 («Usa questa» confronta getValues('description') con descrizioneAllaProposta e chiede conferma prima di sostituire); fatto da 3fcec934 (R17-012), già sulla base."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il fattorino respinto o sospeso legge nel profilo «Caricato · In attesa di verifica» sui documenti",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/rider/profile/page.tsx:169-196",
+      "descrizione": "La pagina guarda solo is_approved e non approval_status: un fattorino respinto (approval_status='rejected') o sospeso vede i documenti «In verifica» come se qualcuno li stesse guardando. Visto dal collaudo del 15/11 sulla stessa voce; non è nel titolo della voce."
+    },
+    {
+      "titolo": "Da approvato, l'attestato HACCP appena caricato passa subito a «Caricato · OK» senza che nessuno lo guardi",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/rider/profile/page.tsx:200-203",
+      "descrizione": "L'HACCP non è fra i documenti per l'approvazione (lib/admin/regole-approvazione.ts:24-28): con is_approved vero lo stato è 'ok' appena c'è il file. Facoltativo: serve una scelta su chi lo controlla."
+    },
+    {
+      "titolo": "Il sorvegliante avvisa per una verifica d'identità «in attesa» anche dopo che lo staff ha approvato il fattorino o il negozio",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "app/api/cron/operational-alerts/route.ts:244-252 · app/api/admin/users/[id]/moderate/route.ts:83",
+      "descrizione": "Col fornitore della revisione manuale start-check scrive kyc_provider_status='PENDING'; l'approvazione dello staff (moderate, action approve) scrive is_approved/approval_status ma non chiude kyc_provider_status. Il controllo 4 di operational-alerts filtra solo kyc_provider_status='PENDING' e checked_at > 48 ore, senza guardare approval_status: un profilo già approvato resta per sempre fra le «verifiche ferme». Da lettura del codice, non provato."
+    },
+    {
+      "titolo": "Alcune sottopagine vere di un profilo Facebook (/nome/timeline, /nome/info, /nome/photos_by) vengono rifiutate invece di tenere il nome",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/store-customization.ts:335-336",
+      "descrizione": "SOTTOPAGINE_DI_UN_PROFILO_FACEBOOK non comprende timeline, info, photos_by (trovato dal collaudo K04 il 22/11, ancora vero sulla base 5b8c786c): il link di un profilo vero copiato da quelle sottopagine resta intero e il controllo lo ferma."
+    },
+    {
+      "titolo": "Il link TikTok di un profilo vero chiamato come un percorso riservato (tiktok.com/@live) viene rifiutato anche con la @",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "lib/store-customization.ts:327 · :356-366",
+      "descrizione": "handleDaLink controlla RISERVATI_TIKTOK anche quando il percorso comincia con @, che su TikTok indica sempre un profilo."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 2,
+    "nota": "lotto 1 modello grande, lotto 2 sonnet"
+  }
+}
