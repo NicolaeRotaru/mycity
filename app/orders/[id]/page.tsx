@@ -377,8 +377,8 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       lng: order.rider_lng,
       // Chi ascolta la pagina sente l'etichetta intera: ci mettiamo anche l'età.
       label: posizioneRider.fresca || posizioneRider.minuti == null
-        ? 'Rider'
-        : `Rider · ultima posizione ${daQuantoTempo(posizioneRider.minuti)}`,
+        ? 'Fattorino'
+        : `Fattorino · ultima posizione ${daQuantoTempo(posizioneRider.minuti)}`,
       color: 'amber',
     });
   }

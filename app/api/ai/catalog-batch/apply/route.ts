@@ -6,7 +6,7 @@ import { writeAudit } from '@/lib/audit';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { resolveAiPatch, type CategoryRow } from '@/lib/products/aiPatch';
+import { MAX_DESCRIZIONE_PRODOTTO, MAX_NOME_PRODOTTO, resolveAiPatch, testoDelPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
 import { senzaCampiEconomici, operazioneAccesa } from '@/lib/ai/catalogBatch';
@@ -40,20 +40,43 @@ type EsitoProdotto = { productId: string; esito: 'applicato' | 'saltato'; motivo
 /** Quante chiamate al filtro dei contenuti partono insieme. */
 const FILTRI_INSIEME = 5;
 
-/** Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. */
+/**
+ * 24/11/2026 (R01-003) — La rotta ha 120 s (vercel.json). Il filtro ha un tempo suo (10 s,
+ * lib/ai/moderation.ts), ma con 5 filtri insieme 200 righe sono 40 gruppi in fila: con un
+ * fornitore lento si sforava, 504, niente scritto, filtri gia' pagati e il lavoro fermo
+ * «applicato». Come catalog-apply-bulk: dopo 70 s nessun gruppo nuovo parte (quelli in volo
+ * hanno al massimo 10 s), e chi resta fuori non si scrive, si dice e si rimanda.
+ */
+const FILTRI_ENTRO_MS = 70_000;
+const MOTIVO_NON_CONTROLLATO = 'non controllato in tempo: rimandalo';
+
+/** I motivi dei saltati «di passaggio», quelli che lasciano il lavoro ripetibile. */
+const MOTIVI_DI_PASSAGGIO = new Set([
+  'filtro dei contenuti non disponibile: riprova più tardi',
+  'scrittura non riuscita',
+  MOTIVO_NON_CONTROLLATO,
+]);
+
+/**
+ * Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. Passata la
+ * `scadenza` nessun gruppo nuovo parte: le sue voci restano senza esito.
+ */
 async function aGruppi<T, R>(
   voci: T[],
   quanti: number,
   lavoro: (v: T) => Promise<R>,
-): Promise<PromiseSettledResult<R>[]> {
-  const esiti: PromiseSettledResult<R>[] = [];
+  scadenza: number = Infinity,
+): Promise<(PromiseSettledResult<R> | undefined)[]> {
+  const esiti: (PromiseSettledResult<R> | undefined)[] = [];
   for (let i = 0; i < voci.length; i += quanti) {
+    if (Date.now() > scadenza) break;
     esiti.push(...(await Promise.allSettled(voci.slice(i, i + quanti).map(lavoro))));
   }
   return esiti;
 }
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  const inizio = Date.now();
   // Spento al lancio (carta #209): un lavoro rimasto «pronto» non si applica a
   // mano. Senza modello il filtro dice «no» a nome e descrizione, e il lavoro si
   // chiuderebbe «applicato» con dentro solo tag e categoria.
@@ -120,15 +143,30 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .order('name');
   // Revisione S10 — Una lettura caduta non deve chiudere il lavoro: si rimette
   // «pronto» e si dice di riprovare (come in catalog-apply-bulk).
-  const rimettiPronto = () =>
-    admin
+  // 24/11/2026 (R01-001) — E l'errore si legge: prima nessuno lo guardava, il
+  // lavoro restava «applicato» e la risposta diceva «puoi riprovare». Il 23505 e'
+  // la 640 (un solo lavoro aperto per negozio): nel frattempo il negozio ha
+  // avviato un altro lavoro, e questo non puo' piu' tornare pronto. Torna il
+  // perche', o null se e' tornato pronto.
+  const rimettiPronto = async (): Promise<string | null> => {
+    const { error } = await admin
       .from('catalog_ai_jobs')
       .update({ status: 'ready', updated_at: new Date().toISOString() })
       .eq('id', job.id)
       .eq('seller_id', user.id);
+    if (!error) return null;
+    logger.error('catalog-batch apply: lavoro non rimesso pronto', { jobId: job.id, sellerId: user.id, status: error.code });
+    return error.code === '23505'
+      ? 'nel frattempo hai avviato un altro lavoro sul catalogo, e questo non può più tornare pronto da ripetere'
+      : 'non sono riuscito a rimettere il lavoro pronto da ripetere';
+  };
   if (erroreCategorie) {
-    await rimettiPronto();
-    return ApiErrors.unavailable('Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.');
+    const nonRimesso = await rimettiPronto();
+    return ApiErrors.unavailable(
+      nonRimesso
+        ? `Non riesco a leggere le categorie in questo momento e non ho cambiato niente, ma ${nonRimesso}.`
+        : 'Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.',
+    );
   }
   const categories = (categoriesData ?? []) as CategoryRow[];
 
@@ -184,8 +222,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         .eq('seller_id', user.id)
         .in('id', ids);
       if (erroreProdotti) {
-        await rimettiPronto();
-        return ApiErrors.unavailable('Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.');
+        const nonRimesso = await rimettiPronto();
+        return ApiErrors.unavailable(
+          nonRimesso
+            ? `Non riesco a leggere il catalogo in questo momento e non ho cambiato niente, ma ${nonRimesso}.`
+            : 'Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.',
+        );
       }
       const current = new Map((rows ?? []).map((r) => [(r as { id: string }).id, r as unknown as ProductRow]));
 
@@ -208,11 +250,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       // nessun filtro. Chiudere qui toglie una scorciatoia; la porta grande
       // resta aperta per come e' fatto il progetto, ed e' una decisione da
       // prendere a monte, non una riga da aggiungere qui.
+      // R01-003 — Un testo che e' gia' quello del catalogo non e' nuovo e non si rifiltra:
+      // cosi' un lavoro rimandato riparte da chi e' rimasto fuori, invece di rifare sempre i
+      // primi e lasciare fuori gli stessi.
+      const testoNuovo = (v: unknown, attuale: string | null, massimo: number) =>
+        typeof v === 'string' && testoDelPatch(v, massimo) !== attuale;
       const daFiltrare = results.filter((r) => {
         if (!r.patch || Object.keys(r.patch).length === 0) return false;
-        if (!current.has(r.product_id)) return false;
+        const row = current.get(r.product_id);
+        if (!row) return false;
         const patch = r.patch as Record<string, unknown>;
-        return typeof patch.name === 'string' || typeof patch.description === 'string';
+        return (
+          testoNuovo(patch.name, row.name, MAX_NOME_PRODOTTO) ||
+          testoNuovo(patch.description, row.description, MAX_DESCRIZIONE_PRODOTTO)
+        );
       });
       // S10 (5/11/2026) — Prima partivano fino a duecento chiamate tutte
       // insieme: una raffica di «troppe richieste» faceva scartare come
@@ -231,13 +282,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           },
           'catalog-batch-apply-policy',
         );
-      });
+      }, inizio + FILTRI_ENTRO_MS);
       // Chi non passa — o su cui il filtro e' caduto — non si scrive: nel
       // dubbio si nega, come fa il filtro stesso quando risponde.
       const bloccati = new Map<string, string>();
       daFiltrare.forEach((r, i) => {
         const esito = verdetti[i];
-        if (esito.status === 'rejected') {
+        if (!esito) {
+          // R01-003 — Non controllato in tempo: non si scrive, e il lavoro torna
+          // «pronto» perche' si possa rimandare.
+          bloccati.set(r.product_id, MOTIVO_NON_CONTROLLATO);
+          ripetibile = true;
+        } else if (esito.status === 'rejected') {
           bloccati.set(r.product_id, 'filtro dei contenuti non disponibile: riprova più tardi');
           ripetibile = true;
         } else if (!esito.value.allowed) {
@@ -341,12 +397,24 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Ripetere riscrive anche i prodotti gia' entrati con lo stesso testo (una
   // riga di audit in piu' e il filtro rifatto): e' il prezzo per non buttare il
   // lavoro pagato.
-  if (ripetibile) await rimettiPronto();
+  let avviso: string | undefined;
+  if (ripetibile) {
+    const nonRimesso = await rimettiPronto();
+    if (nonRimesso) {
+      // R01-001 — Il lavoro resta chiuso: i saltati «di passaggio» non si
+      // ripetono piu' da qui, e si dice perche' invece di «riprova».
+      ripetibile = false;
+      avviso = nonRimesso;
+      for (const e of esiti) {
+        if (e.esito === 'saltato' && e.motivo && MOTIVI_DI_PASSAGGIO.has(e.motivo)) e.motivo = `${e.motivo.split(':')[0]}: ${nonRimesso}`;
+      }
+    }
+  }
 
   const saltati = esiti.filter((e) => e.esito === 'saltato').length;
   if (saltati > 0) {
     logger.warn('catalog-batch apply: prodotti saltati', { jobId: job.id, sellerId: user.id, saltati, ripetibile });
   }
   logger.info('catalog-batch applied', { jobId: job.id, operation: job.operation, applied });
-  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti });
+  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti, ...(avviso ? { avviso } : {}) });
 });

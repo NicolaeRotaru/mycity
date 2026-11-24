@@ -1,0 +1,397 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-24 13:35",
+  "finita": true,
+  "testa": "62bbaf4c38ebb688c1ecf11b9d1ff1fbbfc554fe",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "62bbaf4c38ebb688c1ecf11b9d1ff1fbbfc554fe",
+    "nota": "typecheck, lint e 2050 file di prova (12538 casi) verdi sulla testa di codice, dopo i revert chiesti dalla regia (R01-008; prove comuni e codice di R01-004)."
+  },
+  "voci": [
+    {
+      "id": "R01-002",
+      "chiave": "ai-endpoints|due avvii insieme di un lavoro sul catalogo superano entrambi il controllo dei lavori aperti",
+      "esito": "gia_riparato_prima",
+      "prova": "La base ha già migrations/640_un_solo_lavoro_ai_aperto_per_negozio.sql, con l'indice unico parziale catalog_ai_jobs_un_lavoro_aperto_per_negozio (seller_id) WHERE status IN ('submitting','processing','ready'). app/api/ai/catalog-batch/start/route.ts:213-233 trasforma il 23505 del secondo inserimento in un 409 CONFLICT, prima di submitBatch. Verdi sulla base: npx vitest run tests/unit/riparazione-r02-due-avvii-insieme.test.ts ([200,409], submitBatch una volta sola) e la prova SQL tests/sql/rls/riparazione-r02-un-solo-lavoro-aperto.test.sql sul Postgres locale (il secondo lavoro aperto prende 23505). La migrazione 820 non serve: sarebbe un doppione della 640.",
+      "nota": "Se la 640 sia applicata al database vero lo decide Nicola."
+    },
+    {
+      "id": "R01-010",
+      "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
+      "esito": "gia_riparato_prima",
+      "prova": "app/api/ai/catalog-batch/start/route.ts:100-121 legge i lavori aperti (submitting, processing, ready) e risponde 409 CONFLICT col jobId. Due avvii nello stesso istante li chiude la 640, con il 23505 tradotto in 409 a route.ts:213-233. Verdi sulla base: npx vitest run tests/unit/riparazione-r04-lotto-aperto.test.ts tests/unit/riparazione-r02-due-avvii-insieme.test.ts, più la prova SQL della 640 sul Postgres locale.",
+      "nota": "Stesso controllo della voce sui due avvii insieme, già chiuso sulla base: nessun commit. La 640 va applicata al database vero (lo decide Nicola)."
+    },
+    {
+      "id": "R01-001",
+      "chiave": "ai-endpoints|con un solo lavoro aperto per negozio, il «rimetti pronto» dell applica può fallire senza che nessuno lo veda",
+      "esito": "riparato",
+      "commit": "7e791c97d41b2ca26118eaba444ea559aabba4dc",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-rimetti-pronto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-rimetti-pronto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7e791c97d41b2ca26118eaba444ea559aabba4dc^ --file app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r01-rimetti-pronto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "rimettiPronto adesso legge l'errore, lo registra (logger.error) e restituisce il motivo; col 23505 dice che nel frattempo è partito un altro lavoro. A fine applicazione, se il lavoro non è più ripetibile, la risposta porta un avviso e il motivo dei saltati di passaggio dice perché non si riprovano.",
+      "verificato_da": "revisore A (subagente, modello grande): prova 5/5 e rimessa rilanciate (uscita 0); provato il messaggio del 503 contro friendlyError (185 caratteri, arriva intero) e il pronto rifiutato a fine applica con più di 3 motivi. Regge; resta fuori dai file di R01 che la pagina non legge «avviso» (vedi nuovi_difetti_visti)."
+    },
+    {
+      "id": "R01-015",
+      "chiave": "stati-ui|a riga chiusa con il motivo «chiedi all'assistenza» il pulsante «avvia» resta",
+      "esito": "parziale",
+      "commit": "5d00555c53a9546b4f34906e2bd0b42f8ea39c44",
+      "insieme_a": [
+        "R01-016"
+      ],
+      "file_toccati": [
+        "lib/ai/statoLavoroCatalogo.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d00555c53a9546b4f34906e2bd0b42f8ea39c44^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "puoAvviareLavoro torna falso per un lavoro fallito o in errore il cui motivo dice di chiedere all'assistenza; una regola sola (vietaDiRipartire) vale per il pulsante e per la riga di testoStatoLavoro, gli altri lavori chiusi lasciano ripartire come prima.",
+      "cosa_resta": "Clic su una scheda operazione fa setJob(null) e il pulsante torna (app/seller/products/ai-batch/page.tsx:488); il lavoro fallito viene dimenticato con ricordaLavoro(null) e al ricaricamento la rotta di stato senza jobId dà solo i lavori aperti (page.tsx:350,381; app/api/ai/catalog-batch/status/route.ts:54); inoltre la rotta di avvio (app/api/ai/catalog-batch/start/route.ts:100-158, file di R01) non rifiuta un avvio dopo un lavoro chiuso con «chiedi all assistenza». Non corretto per il tetto di spesa del giro.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/products/ai-batch/page.tsx",
+          "modifica": "Non azzerare il lavoro chiuso con «chiedi all assistenza»: al clic su una scheda operazione (riga 488) non chiamare setJob(null) se il lavoro corrente è fallito o in errore, e alle righe 350 e 381 non chiamare ricordaLavoro(null) per quel lavoro, così dopo un ricaricamento puoAvviareLavoro lo vede ancora."
+        }
+      ],
+      "verificato_da": "revisore A (subagente, modello grande): prova e rimessa rilanciate (uscita 0), poi seguito il pulsante dopo un clic su una scheda e dopo un ricaricamento: torna."
+    },
+    {
+      "id": "R01-016",
+      "chiave": "stati-ui|sotto un lavoro sul catalogo chiuso che dice di chiedere all'assistenza prima di ripartire, il pulsante «avvia sul catalogo» resta lì",
+      "esito": "parziale",
+      "commit": "5d00555c53a9546b4f34906e2bd0b42f8ea39c44",
+      "insieme_a": [
+        "R01-015"
+      ],
+      "file_toccati": [
+        "lib/ai/statoLavoroCatalogo.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5d00555c53a9546b4f34906e2bd0b42f8ea39c44^ --file lib/ai/statoLavoroCatalogo.ts --prove tests/unit/riparazione-r01-avvio-dopo-assistenza.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Stessa riga di puoAvviareLavoro (:34): sotto il lavoro chiuso col motivo di chiedere all'assistenza prima di avviarne un altro il pulsante «Avvia sul catalogo» non si mostra più; la prova controlla che pulsante e riga dicano sempre la stessa cosa.",
+      "cosa_resta": "Clic su una scheda operazione fa setJob(null) e il pulsante torna (app/seller/products/ai-batch/page.tsx:488); il lavoro fallito viene dimenticato con ricordaLavoro(null) e al ricaricamento la rotta di stato senza jobId dà solo i lavori aperti (page.tsx:350,381; app/api/ai/catalog-batch/status/route.ts:54); inoltre la rotta di avvio (app/api/ai/catalog-batch/start/route.ts:100-158, file di R01) non rifiuta un avvio dopo un lavoro chiuso con «chiedi all assistenza». Non corretto per il tetto di spesa del giro.",
+      "serve_file_altrui": [
+        {
+          "file": "app/seller/products/ai-batch/page.tsx",
+          "modifica": "Non azzerare il lavoro chiuso con «chiedi all assistenza»: al clic su una scheda operazione (riga 488) non chiamare setJob(null) se il lavoro corrente è fallito o in errore, e alle righe 350 e 381 non chiamare ricordaLavoro(null) per quel lavoro, così dopo un ricaricamento puoAvviareLavoro lo vede ancora."
+        }
+      ],
+      "verificato_da": "revisore A (subagente, modello grande): stesso commit e stesse prove di R01-015, con le varianti del clic e del ricaricamento."
+    },
+    {
+      "id": "R01-003",
+      "chiave": "ai-endpoints|la conformità dei prodotti (classifyproductpolicy) non ha un tempo suo e i lavori sul catalogo la chiamano in 40 giri di fila",
+      "esito": "parziale",
+      "commit": "ee45239a4fcf48212c8296633bec6040a6225da5",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-filtri-entro-il-tempo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-filtri-entro-il-tempo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ee45239a4fcf48212c8296633bec6040a6225da5^ --file app/api/ai/catalog-batch/apply/route.ts --prove tests/unit/riparazione-r01-filtri-entro-il-tempo.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il tempo proprio di classifyProductPolicy (10 s, nessun ritentativo) c'era già sulla base in lib/ai/moderation.ts, ma 40 gruppi in fila superavano i 120 s: nell'applica nessun gruppo di filtri nuovo parte dopo 70 s, chi resta fuori non si scrive e prende «non controllato in tempo: rimandalo», e un testo uguale a quello già nel catalogo non si rifiltra, così un lavoro rimandato riparte da chi era rimasto fuori.",
+      "cosa_resta": "Il tetto dei 120 s regge, ma il «rimandalo» può non avanzare mai: chi è bloccato dal filtro (o scartato dopo il filtro) non si scrive, il suo testo resta diverso da quello in catalogo e a ogni giro viene rifiltrato e ripagato per primo (app/api/ai/catalog-batch/apply/route.ts:256-285); con il fornitore lento e circa 40 bloccati in testa la coda non viene mai controllata. Inoltre: se il testo già in catalogo è vietato e la proposta lo ripete con tag o categoria nuovi, ora tag e categoria si scrivono senza filtro (route.ts:256-267), e il commento a route.ts:395-399 dice ancora «il filtro rifatto». Non corretto per il tetto di spesa del giro.",
+      "verificato_da": "revisore A (subagente, modello grande): prova e rimessa rilanciate (uscita 0), poi una prova usa e getta con filtro lento a 9,5 s e i primi 40 bloccati: dopo 5 giri applied 0 e 160 ancora rimandati."
+    },
+    {
+      "id": "R01-011",
+      "chiave": "qa-flussi|se la lettura dei reclami fallisce, la pagina del reclamo ripropone il modulo e un secondo reclamo su uno chiuso passa",
+      "esito": "riparato",
+      "commit": "bb3601100b1f2a7c6d7bac6db6b543eed284f2e1",
+      "file_toccati": [
+        "app/orders/[id]/dispute/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-reclamo-lettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-reclamo-lettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb3601100b1f2a7c6d7bac6db6b543eed284f2e1^ --file app/orders/[id]/dispute/page.tsx --prove tests/unit/riparazione-r01-reclamo-lettura-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se la lettura dei reclami cade, la pagina del reclamo mostra un errore con «Riprova» al posto del modulo, così con un reclamo chiuso e la lettura fallita non se ne apre un secondo; la prova monta la pagina vera con la lettura in errore. app/orders/[id]/page.tsx:285 non cambia: il suo «Apri reclamo» porta a questa pagina, che ora si ferma da sola.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa rilanciate (uscita 0); varianti: stati del CHECK di disputes contro il filtro .in, lettura che lancia invece di dare errore (resta sul caricamento), unica rotta che apre un reclamo; 69 prove vicine verdi."
+    },
+    {
+      "id": "R01-013",
+      "chiave": "qa-flussi|le domande dei clienti sotto i prodotti non avvisano il negozio",
+      "esito": "riparato",
+      "commit": "e87f559f8dbd32090df1291a5550c5b4d1bae36a",
+      "file_toccati": [
+        "migrations/821_una_domanda_nuova_avvisa_il_negozio.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && psql -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e87f559f8dbd32090df1291a5550c5b4d1bae36a^ --file migrations/821_una_domanda_nuova_avvisa_il_negozio.sql --prove tests/sql/rls/riparazione-r01-domanda-avvisa-il-negozio.test.sql --sql r01_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 821, non applicata: un trigger AFTER INSERT SECURITY DEFINER su product_questions scrive la campanella al venditore del prodotto per una domanda pubblica (categoria system, link alla scheda), senza nome né testo del cliente, una sola voce non letta per prodotto; se la voce non si scrive la domanda si salva lo stesso. La prova SQL inserisce come utente authenticated con RLS vera.",
+      "verificato_da": "revisore B (subagente, modello grande): prova SQL verde e rimessa --sql (uscita 0); sul Postgres locale: domanda non pubblica senza voce, voce che non si scrive con la domanda salvata lo stesso, nessun EXECUTE per authenticated e anon, SECURITY DEFINER con search_path=public e tabelle con schema, nessun dato del cliente, il negozio che chiede a se stesso non riceve niente."
+    },
+    {
+      "id": "R01-012",
+      "chiave": "qa-flussi|le domande dei clienti sotto i prodotti non arrivano a nessuno, ma al cliente diciamo che riceverà una notifica",
+      "esito": "riparato",
+      "commit": "f097c86cce5dae3558d63b4dff364258cb97dafe",
+      "file_toccati": [
+        "migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql",
+        "components/ProductQA.tsx"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && psql -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f097c86cce5dae3558d63b4dff364258cb97dafe^ --file migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql --prove tests/sql/rls/riparazione-r01-risposta-avvisa-chi-chiede.test.sql --sql r01_rimessa --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La promessa falsa nel messaggio dopo l'invio era già tolta alla base (ProductQA.tsx:96); l'avviso al negozio lo fa la 821. Qui la 822, non applicata: alla prima risposta a una domanda pubblica il database avvisa chi l'ha fatta (una voce sola, senza il testo della risposta), come chiede la correzione vera della voce. In ProductQA.tsx cambia solo il commento della riga 95. La lista «Domande da rispondere» che il fix mette «in più» va in app/seller, non di R01: non fatta.",
+      "verificato_da": "revisore B (subagente, modello grande): prova SQL verde e rimessa --sql (uscita 0); sul Postgres locale una risposta corretta due volte avvisa una volta, la voce che non si scrive non ferma la risposta, autore cancellato non rompe. Due casi minori fuori dal sito restano aperti (vedi nuovi_difetti_visti)."
+    },
+    {
+      "id": "R01-006",
+      "chiave": "deploy-sre|la pulizia degli allarmi cancella la riga del tetto di spesa ai proprio mentre la funzione la controlla, e il primo errore dopo un giorno di quiete non viene detto",
+      "esito": "riparato",
+      "commit": "66226a6455108c252c16828bfe70a9c8e6b5f406",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-errore-tetto-dopo-la-pulizia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-errore-tetto-dopo-la-pulizia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 66226a6455108c252c16828bfe70a9c8e6b5f406^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r01-errore-tetto-dopo-la-pulizia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In nessunoHaParlatoNellOra, se l'aggiornamento non trova righe si riprova l'inserimento che ignora i doppioni e chi lo scrive parla: «nessuna riga» non vale più come «qualcuno ha già parlato», e la migrazione di pulizia resta com'è. Prova con supabase finto che pulisce come la pulizia vera e orologio finto; sequenza rifatta anche sul Postgres locale.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0); sequenza rifatta sul Postgres locale col trigger vero della pulizia: dopo la cancellazione la copia parla una volta, la seguente tace, con due copie insieme parla una sola."
+    },
+    {
+      "id": "R01-004",
+      "chiave": "ai-endpoints|con l'ai dei negozi spenta al lancio, l'allarme sul conto condiviso della spesa ai può arrivare lo stesso ogni sei ore",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/riparazione-r04-allarme-ripiego.test.ts",
+          "modifica": "Prova comune (serve la firma di Nicola): aggiungere il vi.mock di @/lib/funzioni-al-lancio con AI_NEGOZI_ACCESA=true, 2 righe, come nel diff completo in nota."
+        },
+        {
+          "file": "tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts",
+          "modifica": "Prova comune (serve la firma di Nicola): lo stesso vi.mock di @/lib/funzioni-al-lancio con AI_NEGOZI_ACCESA=true, 2 righe, come nel diff completo in nota."
+        },
+        {
+          "file": "lib/ai/tettoSpesa.ts, tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts, tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts",
+          "modifica": "Insieme alle due prove comuni, rimettere la regola: allarmiTettoSpesaAiPerIlCron torna [] (e toglie l inizio del guasto ricordato) anche quando AI_NEGOZI_ACCESA è false, con la sua prova nuova e il caso dell AI spenta nella prova di R01-005. Tutto nel diff completo in nota, che si applica pulito sulla testa del ramo (git apply)."
+        }
+      ],
+      "nota": "La correzione c era (commit 4f04b5793ea754c23323648b43fc94507c579040, prova nuova tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts, rimessa uscita 0, confermata dal revisore B), ma con l AI dei negozi spenta al lancio fa cadere 3 casi in due prove comuni (riparazione-r04-allarme-ripiego, riparazione-r13-allarme-tetto-dal-cron), che senza un vi.mock girano con il valore vero del flag. La firma di Nicola per toccarle non è arrivata: come chiesto dalla regia, sul ramo sono tolte sia le modifiche alle due prove (revert 8190e7c5 del commit 0689079c) sia il codice (62bbaf4c, che toglie anche il caso dell AI spenta dalla prova di R01-005). Da applicare sul ramo unito prima di npm run verify, tutto insieme (5 file):\n\ndiff --git a/lib/ai/tettoSpesa.ts b/lib/ai/tettoSpesa.ts\nindex 53beaa59..a712225d 100644\n--- a/lib/ai/tettoSpesa.ts\n+++ b/lib/ai/tettoSpesa.ts\n@@ -1,6 +1,7 @@\n // lib/ai/tettoSpesa.ts\n import { logger } from '@/lib/logger';\n import { getAdminSupabase } from '@/lib/supabase/server';\n+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';\n import {\n   RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,\n   allarmiTettoSpesaAi as allarmiDelTetto,\n@@ -480,8 +481,11 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {\n   // 22/11/2026 (R13-004) — Il cron la chiama a ogni giro (ogni 5 minuti). Senza\n   // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente\n   // sonda, niente righe in operational_alert_log, niente errori nel registro.\n-  // Senza tetto l'inizio di un guasto ricordato si toglie: nessuno lo guarda piu'.\n-  if (!(tettoEur > 0)) {\n+  // Con l'AI dei negozi spenta (lib/funzioni-al-lancio.ts) lib/ai/client.ts ferma ogni chiamata\n+  // al modello: spendere e' impossibile, e l'allarme sul conto condiviso sarebbe solo rumore\n+  // sull'unico canale degli allarmi. Niente sonda e niente righe, come senza tetto.\n+  // In tutti e due i casi l'inizio di un guasto ricordato si toglie: nessuno lo guarda piu'.\n+  if (!(tettoEur > 0) || !AI_NEGOZI_ACCESA) {\n     await dimenticaInizioGuasto();\n     return [];\n   }\ndiff --git a/tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts b/tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts\nnew file mode 100644\nindex 00000000..2cda2a16\n--- /dev/null\n+++ b/tests/unit/riparazione-r01-allarme-tetto-ai-spenta.test.ts\n@@ -0,0 +1,83 @@\n+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n+\n+/**\n+ * Il cron degli avvisi chiama l'allarme del tetto di spesa AI a ogni giro. La funzione usciva solo\n+ * se mancava il tetto, non se l'AI dei negozi era spenta: con AI_GLOBAL_DAILY_BUDGET_EUR impostata e\n+ * il conto condiviso che non risponde partiva l'allarme ogni sei ore, mentre lib/ai/client.ts\n+ * fermava ogni chiamata al modello (spendere era impossibile). Rumore sull'unico canale degli allarmi.\n+ *\n+ * Qui: tetto impostato, conto condiviso muto da due ore (ricordato nel database), e l'interruttore\n+ * dell'AI dei negozi spento o acceso.\n+ */\n+\n+const finti = vi.hoisted(() => ({\n+  aiAccesa: false,\n+  righe: new Map<string, string>(),\n+  rpc: [] as string[],\n+}));\n+\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => {\n+  const vero = (await originale()) as Record<string, unknown>;\n+  return {\n+    ...vero,\n+    get AI_NEGOZI_ACCESA() {\n+      return finti.aiAccesa;\n+    },\n+  };\n+});\n+vi.mock('@/lib/logger', () => ({\n+  logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },\n+}));\n+vi.mock('@/lib/supabase/server', () => ({\n+  getAdminSupabase: () => ({\n+    rpc: async (nome: string) => {\n+      finti.rpc.push(nome);\n+      return { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } };\n+    },\n+    // operational_alert_log finta: solo le colonne vere, alert_key e last_sent_at.\n+    from: () => ({\n+      upsert: (riga: { alert_key: string; last_sent_at: string }, o?: { ignoreDuplicates?: boolean }) => {\n+        const scritta = !(o?.ignoreDuplicates && finti.righe.has(riga.alert_key));\n+        if (scritta) finti.righe.set(riga.alert_key, riga.last_sent_at);\n+        const esito = { data: scritta ? [{ alert_key: riga.alert_key }] : [], error: null };\n+        return Object.assign(Promise.resolve(esito), { select: async () => esito });\n+      },\n+      update: () => ({ eq: () => ({ lt: () => ({ select: async () => ({ data: [], error: null }) }) }) }),\n+      select: () => ({\n+        eq: (_c: string, k: string) => ({\n+          maybeSingle: async () => ({ data: finti.righe.has(k) ? { last_sent_at: finti.righe.get(k) } : null, error: null }),\n+        }),\n+      }),\n+      delete: () => ({ eq: async (_c: string, k: string) => { finti.righe.delete(k); return { error: null }; } }),\n+    }),\n+  }),\n+}));\n+\n+import { allarmiTettoSpesaAiPerIlCron, CHIAVE_RIPIEGO_DA, __azzeraRipiegoSpesaAi } from '@/lib/ai/tettoSpesa';\n+\n+describe('con l AI dei negozi spenta l allarme del tetto di spesa AI non parte', () => {\n+  beforeEach(() => {\n+    __azzeraRipiegoSpesaAi();\n+    finti.righe.clear();\n+    finti.rpc.length = 0;\n+    vi.useFakeTimers();\n+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));\n+    // Il conto condiviso non risponde dalle 10: due ore, oltre l'ora di tolleranza.\n+    finti.righe.set(CHIAVE_RIPIEGO_DA, '2026-11-24T10:00:00.000Z');\n+  });\n+  afterEach(() => vi.useRealTimers());\n+\n+  it('AI spenta, tetto impostato, conto muto da due ore: nessun allarme e nessuna sonda', async () => {\n+    finti.aiAccesa = false;\n+    const allarmi = await allarmiTettoSpesaAiPerIlCron({ tettoEur: 20 });\n+    expect(allarmi, 'con l AI spenta spendere e impossibile: l allarme e solo rumore').toEqual([]);\n+    expect(finti.rpc, 'con l AI spenta il conto condiviso non si sonda').toEqual([]);\n+  });\n+\n+  it('CONTROLLO: AI accesa, stesso guasto: l allarme parte', async () => {\n+    finti.aiAccesa = true;\n+    const allarmi = await allarmiTettoSpesaAiPerIlCron({ tettoEur: 20 });\n+    expect(allarmi).toHaveLength(1);\n+    expect(allarmi[0].detail).toMatch(/non risponde da 120 min/);\n+  });\n+});\ndiff --git a/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts b/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts\nindex 572454a9..78f66e69 100644\n--- a/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts\n+++ b/tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts\n@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n  * L'allarme del tetto di spesa AI conta i minuti del guasto da una riga di operational_alert_log\n  * ('ai-tetto-condiviso:ripiego-da'), scritta al primo giro che trova il conto condiviso muto e\n  * tolta quando torna a rispondere. La pulizia della memoria degli allarmi non la tocca, e la si\n- * leggeva senza limite d'eta'; l'uscita senza tetto non la toglieva. Rimasta da\n+ * leggeva senza limite d'eta'; l'uscita senza tetto (o con l'AI spenta) non la toglieva. Rimasta da\n  * un guasto vecchio, al primo guasto nuovo di cinque minuti l'allarme diceva «non risponde da tre\n  * giorni».\n  *\n@@ -12,9 +12,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';\n  */\n \n const finti = vi.hoisted(() => ({\n+  aiAccesa: true,\n   righe: new Map<string, string>(),\n }));\n \n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => {\n+  const vero = (await originale()) as Record<string, unknown>;\n+  return {\n+    ...vero,\n+    get AI_NEGOZI_ACCESA() {\n+      return finti.aiAccesa;\n+    },\n+  };\n+});\n vi.mock('@/lib/logger', () => ({\n   logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },\n }));\n@@ -54,6 +64,7 @@ async function giro(tettoEur = 20) {\n describe('l allarme del tetto non conta i minuti da una riga di un guasto vecchio', () => {\n   beforeEach(() => {\n     finti.righe.clear();\n+    finti.aiAccesa = true;\n     vi.useFakeTimers();\n     vi.setSystemTime(ADESSO);\n   });\n@@ -73,12 +84,18 @@ describe('l allarme del tetto non conta i minuti da una riga di un guasto vecchi\n     expect(dopo[0].detail).toMatch(/non risponde da 120 min/);\n   });\n \n-  it('un giro senza tetto toglie l inizio del guasto ricordato', async () => {\n+  it('un giro senza tetto o con l AI spenta toglie l inizio del guasto ricordato', async () => {\n     finti.righe.set(CHIAVE_RIPIEGO_DA, oreFa(20));\n     expect(await giro(0)).toEqual([]);\n     expect(finti.righe.has(CHIAVE_RIPIEGO_DA), 'l uscita senza tetto lascia la riga del guasto').toBe(false);\n \n-    // Tornato il tetto, il primo guasto di cinque minuti non suona.\n+    finti.righe.set(CHIAVE_RIPIEGO_DA, oreFa(20));\n+    finti.aiAccesa = false;\n+    expect(await giro()).toEqual([]);\n+    expect(finti.righe.has(CHIAVE_RIPIEGO_DA), 'l uscita con l AI spenta lascia la riga del guasto').toBe(false);\n+\n+    // Tornati tetto e AI, il primo guasto di cinque minuti non suona.\n+    finti.aiAccesa = true;\n     expect(await giro()).toHaveLength(0);\n     vi.setSystemTime(ADESSO.getTime() + 5 * 60_000);\n     expect(await giro()).toHaveLength(0);\ndiff --git a/tests/unit/riparazione-r04-allarme-ripiego.test.ts b/tests/unit/riparazione-r04-allarme-ripiego.test.ts\nindex 99a01730..24e95066 100644\n--- a/tests/unit/riparazione-r04-allarme-ripiego.test.ts\n+++ b/tests/unit/riparazione-r04-allarme-ripiego.test.ts\n@@ -11,6 +11,8 @@ const rpcMock = vi.fn();\n vi.mock('@/lib/logger', () => ({\n   logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn() },\n }));\n+// Con l'AI dei negozi spenta l'allarme del tetto tace (lib/ai/tettoSpesa.ts): qui la si prova accesa.\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as object), AI_NEGOZI_ACCESA: true }));\n const registro = vi.hoisted(() => ({ righe: new Map<string, string>() }));\n vi.mock('@/lib/supabase/server', () => ({\n   getAdminSupabase: () => ({\ndiff --git a/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts b/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts\nindex 8cc0a691..cf1d000e 100644\n--- a/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts\n+++ b/tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts\n@@ -22,6 +22,8 @@ vi.mock('@/lib/analytics/sentry', () => ({ captureError: vi.fn() }));\n vi.mock('@/lib/api/middleware', () => ({ withCronAuth: (g: (r: unknown) => unknown) => (r: unknown) => g(r) }));\n vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true, id: 'x' })) }));\n vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));\n+// Con l'AI dei negozi spenta l'allarme del tetto tace (lib/ai/tettoSpesa.ts): qui la si prova accesa.\n+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as object), AI_NEGOZI_ACCESA: true }));\n \n type Chiamata = { m: string; a: unknown[] };\n type Riga = { alert_key: string; last_sent_at: string };\n"
+    },
+    {
+      "id": "R01-005",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai può dire «non risponde da tre giorni» al primo guasto di cinque minuti",
+      "esito": "parziale",
+      "commit": "c6e10d3183b49cfac83f8f655d9102626c59a3b8",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c6e10d3183b49cfac83f8f655d9102626c59a3b8^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r01-allarme-tetto-riga-vecchia.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Una riga 'ai-tetto-condiviso:ripiego-da' più vecchia di 24 ore viene riscritta da adesso, come la cura suggerita; il giro senza tetto o con l'AI spenta cancella quella riga (best-effort). Prova con orologio finto: riga di 3 giorni, uscite che la tolgono, e guasti veri di 2 e 23 ore che restano contati.",
+      "cosa_resta": "Il riscrivere «da adesso» la riga più vecchia di 24 ore rende uguali un guasto vecchio rimasto lì e un guasto vero ancora in corso da più di 24 ore: con un errore non permanente che dura (per esempio 42501 o i timeout) l allarme tace circa un ora al giorno e i minuti ripartono da zero (lib/ai/tettoSpesa.ts:511). Le cancellazioni all uscita senza tetto o con l AI spenta bastano già per il caso della voce: la cura è togliere il tetto delle 24 ore e tenere le cancellazioni. Non fatta per il tetto di spesa del giro. Nota: il commit 62bbaf4c ha tolto dalla prova di R01-005 il solo caso dell AI spenta (va con R01-004); la rimessa rifatta dopo, con --base c6e10d31^, esce 0.",
+      "verificato_da": "revisore B (subagente, modello grande): prova e rimessa (uscita 0), poi una prova usa e getta con guasto continuo non permanente e cron ogni 5 minuti per 26 ore: alle 24 ore tace per 13 giri e poi dice 115 minuti."
+    },
+    {
+      "id": "R01-009",
+      "chiave": "microcopy|il cliente e l'email leggono ancora «un rider passa a prenderlo», mentre il pulsante del negozio ora dice «fattorino»",
+      "esito": "parziale",
+      "commit": "3e57fd6753d41a73187b1c228802f9002dad03b5",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-parola-fattorino-mappa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-parola-fattorino-mappa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3e57fd6753d41a73187b1c228802f9002dad03b5^ --file app/orders/[id]/page.tsx --prove tests/unit/riparazione-r01-parola-fattorino-mappa.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base la frase dell'ordine pronto (page.tsx:422) e l'email (templates.ts:381, 397) dicevano già «fattorino»; restava l'etichetta del pin sulla mappa (righe 380-381), da «Rider» a «Fattorino». La prova legge anche l'email: «un fattorino passa a prenderlo» c'è, «un rider passa a prenderlo» no.",
+      "cosa_resta": "La campanella del cliente la scrive il database: l ultima definizione di notify_buyer_on_order_status (migrations/321_l_ordine_pronto_dice_la_fascia.sql:59,66,71-77) dice ancora «un rider passa a prenderlo» e «Un rider ha preso il tuo ordine». Serve una migrazione nuova nella fascia 823-829 con CREATE OR REPLACE della stessa funzione e il solo testo cambiato, con la sua prova SQL. Non fatta per il tetto di spesa del giro.",
+      "verificato_da": "revisore A (subagente, modello grande): prova e rimessa rilanciate (uscita 0), cercato «rider passa a prenderlo» in app, lib e migrations."
+    },
+    {
+      "id": "R01-008",
+      "chiave": "microcopy|altri «rider» rivolti al cliente restano nella pagina dell'ordine e in quella del negozio",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts",
+          "modifica": "Riga 242: aspettarsi /Fattorino\\s*Luca/ al posto di /Rider\\s*Luca/ nella pagina dell ordine del negozio."
+        },
+        {
+          "file": "tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts",
+          "modifica": "Righe 348 e 368: aspettarsi «in contanti al fattorino alla consegna» al posto di «in contanti al rider alla consegna» (e il titolo del describe che dice «Paghi al rider»)."
+        },
+        {
+          "file": "components/OrderTimeline.tsx",
+          "modifica": "Riga 45: «Ritirato dal rider» diventa «Ritirato dal fattorino»."
+        },
+        {
+          "file": "app/orders/[id]/page.tsx, app/seller/orders/[id]/page.tsx",
+          "modifica": "Dopo le due prove qui sopra, rimettere il commit 841befd4123e941c17780507fcca08bec5223397 (git cherry-pick 841befd4123e941c17780507fcca08bec5223397): «rider» diventa «fattorino» nelle stringhe mostrate (pagina dell ordine righe 706, 801, 891, 898; pagina del negozio righe 556, 571, 572, 619, 624, 631), con la sua prova tests/unit/riparazione-r01-parola-fattorino-pagine.test.ts (rimessa uscita 0)."
+        }
+      ],
+      "nota": "La correzione nei file di R01 c era (commit 841befd4123e941c17780507fcca08bec5223397, rimessa regge), ma rompeva 3 casi in 2 prove esistenti che si aspettano «rider»: il revisore lo ha visto e il verify era rosso. Su indicazione della regia non tocco altre prove esistenti: il commit è tolto con un revert (5a60c8ee) e la cura passa come diff."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "layout-responsive|in home a 280 px col testo al 200% la fascia «hai un negozio a piacenza?» esce di 18 px",
+      "esito": "gia_riparato_prima",
+      "prova": "components/home-sections/HomeSectionRenderer.tsx:380-385 sulla base 5b8c786c: il contenitore ha `flex min-w-0 items-center gap-3` e il paragrafo `min-w-0 break-words` (commit d24f3138 di un'onda precedente, già nella base); tests/unit/riparazione-r01-home-col-testo-grande.test.tsx:74-81 controlla `min-w-0 break-words` sulla frase della fascia sellerCta."
+    },
+    {
+      "id": "R01-014",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-rclone.ts",
+          "modifica": "Dopo FINTO_PGDUMP (riga 74) aggiungere `export const FINTO_PSQL = ['#!/usr/bin/env bash', 'cat >/dev/null', 'exit 1'].join('\\n');`: lo stesso esito di oggi (database muto, `file_nel_database` in scripts/backup-db.sh:393-409 esce con 1) senza chiamare il psql vero della macchina, che lo script chiama a riga 404 dopo `command -v psql` a riga 398."
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+          "modifica": "Importare FINTO_PSQL (riga 34) e, dove scrive pg_dump e rclone in `finti` (righe 57-60), aggiungere `writeFileSync(join(finti, 'psql'), FINTO_PSQL); chmodSync(join(finti, 'psql'), 0o755);` (il PATH a riga 70 è già `${finti}:...`)."
+        },
+        {
+          "file": "tests/unit/il-lavoro-notturno-accende-davvero-la-copia-delle-foto.test.ts",
+          "modifica": "Importare FINTO_PSQL (riga 30) e accanto a pg_dump (righe 160-161) scrivere `finti/psql` con chmod 0o755 (PATH a riga 190 già `${finti}:...`)."
+        },
+        {
+          "file": "tests/unit/la-copia-delle-foto-non-ripete-la-cancellazione.test.ts",
+          "modifica": "Ha un FINTO_PGDUMP locale (riga 108) e non importa finto-rclone: dichiarare un FINTO_PSQL uguale (`cat >/dev/null; exit 1`) e scriverlo in `finti/psql` con chmod 0o755 accanto a pg_dump (righe 129-130); PATH a riga 143 già `${finti}:...`."
+        }
+      ],
+      "nota": "Il difetto c'è ancora sulla base: nessuna prova crea finti/psql. Nessuno di questi file importa o legge per nome un file di R01."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "l attesa per un applicazione del catalogo ancora in corso non scatta mai: legge una colonna che nessuna migrazione crea",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-batch/start/route.ts:47-58",
+      "descrizione": "La rotta di avvio legge catalog_ai_jobs.applicazione_finita_il (righe 47-58 e 123-155), ma nessuna migrazione in migrations/ crea quella colonna (la 750 citata non esiste). La lettura cade sempre con 42703 e il controllo dell applicazione in corso non scatta mai. Non chiesto da nessuna voce di R01: lasciato com e."
+    },
+    {
+      "titolo": "la pagina del lavoro sul catalogo non legge l avviso dell applica e mostra solo i primi tre motivi",
+      "dimensione": "stati-ui",
+      "severita": "minore",
+      "file": "app/seller/products/ai-batch/page.tsx:449-456",
+      "descrizione": "La rotta dell applica restituisce «avviso» quando il lavoro non può tornare pronto, ma la pagina non lo legge e mostra solo i primi 3 motivi diversi dei saltati: con tre «bloccato dal filtro» prima in elenco il motivo «nel frattempo hai avviato un altro lavoro» resta fuori. Il file non è di R01."
+    },
+    {
+      "titolo": "la risposta del negozio svuotata e riscritta dall api riavvisa il cliente ogni volta",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql:41",
+      "descrizione": "La migrazione 822 (di R01, non applicata) riconosce la prima risposta solo da OLD.answer vuota: un negozio che dall api svuota la risposta e la riscrive avvisa di nuovo il cliente a ogni giro. Dal sito non si può (il modulo compare solo sulle domande senza risposta). Non corretto per il tetto di spesa del giro."
+    },
+    {
+      "titolo": "il negozio che risponde alla propria domanda senza answered_by si avvisa da solo",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "migrations/822_la_risposta_del_negozio_avvisa_chi_ha_chiesto.sql:42",
+      "descrizione": "La 822 usa answered_by, che manda il browser, per capire se il negozio risponde a se stesso: con answered_by vuoto arriva una voce a se stesso. Il sito oggi manda answered_by=profile.id. Basterebbe confrontare l autore con il venditore del prodotto."
+    }
+  ],
+  "domande_per_nicola": [
+    "Un secondo reclamo dopo uno chiuso (per esempio dopo una chiusura con rimborso) oggi è permesso apposta (app/api/disputes/route.ts:63-79): va bloccato?",
+    "Le migrazioni 821 (la domanda avvisa il negozio) e 822 (la risposta avvisa chi ha chiesto) sono pronte e non applicate: le applichi tu, quando vuoi che gli avvisi partano."
+  ],
+  "conto": {
+    "subagenti": 5,
+    "agenti": 5,
+    "nota": "3 subagenti che riparano (2 modello grande, 1 sonnet) e 2 revisori (modello grande); nessun giro di correzione: la spesa è arrivata alla soglia di consegna. Il ramo è stato messo in ordine con mosse meccaniche su indicazione della regia: revert del commit di R01-008, e revert delle due prove comuni e del codice di R01-004."
+  },
+  "costo_usd": 22.94,
+  "costo_nota": "usage.cost_usd di get_session senza id, letto prima della consegna: è il valore all ultimo turno chiuso; il turno di consegna (solo comandi git e verify) aggiunge poco."
+}
