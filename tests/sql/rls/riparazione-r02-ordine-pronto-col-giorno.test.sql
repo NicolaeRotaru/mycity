@@ -15,7 +15,10 @@
 --   ⑤ tutte le campanelle «ordine pronto» a domicilio dicono «un fattorino passa a prenderlo»,
 --     anche la veloce e quella senza fascia, e nessuna dice «rider»
 --   ⑥ il ritiro in negozio resta com'era
--- Senza la correzione ①, ②, ③ e ⑤ sono rossi. Tutto in transazione, ROLLBACK.
+--   ⑦ l'ordine assegnato a un fattorino: al cliente «Un fattorino ha preso il tuo ordine» / «Il
+--     fattorino passa a prendere l'ordine #… e te lo porta.», al negozio «Fattorino assegnato» /
+--     «Un fattorino passa a prendere l'ordine #….», e nessuna delle due dice «rider»
+-- Senza la correzione ①, ②, ③, ⑤ e ⑦ sono rossi. Tutto in transazione, ROLLBACK.
 -- =============================================================================
 
 BEGIN;
@@ -27,11 +30,14 @@ CREATE TEMP TABLE esiti (nome text, ok boolean, dettaglio text) ON COMMIT DROP;
 
 INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at) VALUES
   ('e0289000-0000-0000-0000-000000000001', 'forno-r02g@test.it', '{"role":"seller"}', now()),
-  ('e0289000-0000-0000-0000-000000000003', 'maria-r02g@test.it', '{"role":"buyer"}',  now());
+  ('e0289000-0000-0000-0000-000000000003', 'maria-r02g@test.it', '{"role":"buyer"}',  now()),
+  ('e0289000-0000-0000-0000-000000000004', 'gino-r02g@test.it',  '{"role":"rider"}',  now());
 
 UPDATE public.profiles
    SET is_approved = true, approval_status = 'approved', store_name = 'Forno R02', store_address = 'Via Roma 1, Piacenza'
  WHERE id = 'e0289000-0000-0000-0000-000000000001';
+UPDATE public.profiles SET is_approved = true, approval_status = 'approved', rider_is_online = true
+ WHERE id = 'e0289000-0000-0000-0000-000000000004';
 
 -- Mezzogiorno di N giorni fa a Piacenza.
 CREATE TEMP TABLE giorni ON COMMIT DROP AS
@@ -82,6 +88,31 @@ INSERT INTO esiti SELECT '⑥ il ritiro in negozio resta «passare a ritirarlo i
   coalesce(bool_and(body LIKE '%passare a ritirarlo in negozio%'), false), string_agg(body, ' / ')
   FROM pronti WHERE ordine = 'e0289000-0000-0000-0000-0000000000a7';
 INSERT INTO esiti SELECT 'una campanella per ordine', count(*) = 7, count(*) || ' avvisi' FROM pronti;
+
+-- ⑦ L'ordine veloce passa al fattorino.
+UPDATE public.orders SET delivery_status = 'ASSIGNED', rider_id = 'e0289000-0000-0000-0000-000000000004'
+ WHERE id = 'e0289000-0000-0000-0000-0000000000a5';
+
+CREATE TEMP TABLE assegnati ON COMMIT DROP AS
+SELECT user_id, title, body
+  FROM public.notifications
+ WHERE link IN ('/orders/e0289000-0000-0000-0000-0000000000a5', '/seller/orders/e0289000-0000-0000-0000-0000000000a5')
+   AND title NOT IN ('Ordine pronto', 'Ordine accettato');
+
+INSERT INTO esiti SELECT '⑦ al cliente: «Un fattorino ha preso il tuo ordine» / «Il fattorino passa a prendere l''ordine #… e te lo porta.»',
+  coalesce(bool_and(title = 'Un fattorino ha preso il tuo ordine'
+                    AND body LIKE 'Il fattorino passa a prendere l''ordine #% e te lo porta.'), false) AND count(*) = 1,
+  count(*) || ' avvisi: ' || string_agg(title || ' | ' || body, ' / ')
+  FROM assegnati WHERE user_id = 'e0289000-0000-0000-0000-000000000003';
+INSERT INTO esiti SELECT '⑦ al negozio: «Fattorino assegnato» / «Un fattorino passa a prendere l''ordine #….»',
+  coalesce(bool_and(title = 'Fattorino assegnato'
+                    AND body LIKE 'Un fattorino passa a prendere l''ordine #%.'), false) AND count(*) = 1,
+  count(*) || ' avvisi: ' || string_agg(title || ' | ' || body, ' / ')
+  FROM assegnati WHERE user_id = 'e0289000-0000-0000-0000-000000000001';
+INSERT INTO esiti SELECT '⑦ nessuna campanella dell''ordine assegnato dice «rider»',
+  coalesce(bool_and(title NOT ILIKE '%rider%' AND body NOT ILIKE '%rider%'), false) AND count(*) = 2,
+  count(*) || ' avvisi: ' || string_agg(title || ' | ' || body, ' / ')
+  FROM assegnati WHERE user_id IN ('e0289000-0000-0000-0000-000000000003', 'e0289000-0000-0000-0000-000000000001');
 
 DO $$
 DECLARE r record; rossi int;

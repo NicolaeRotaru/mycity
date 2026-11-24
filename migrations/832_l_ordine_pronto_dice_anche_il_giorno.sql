@@ -19,7 +19,10 @@
 --
 -- NELLA STESSA FUNZIONE, chiesto dalla regia: la campanella «ordine pronto» non dice più «rider»
 -- ma «fattorino», come la pagina dell'ordine e l'email («un fattorino passa a prenderlo»), in tutti
--- e due i rami a domicilio. Il resto della funzione è identico alla 321 (l'ultima versione).
+-- e due i rami a domicilio; e così anche la campanella dell'ordine assegnato, al cliente («Un
+-- fattorino ha preso il tuo ordine», «Il fattorino passa a prendere…») e al negozio («Fattorino
+-- assegnato», «Un fattorino passa a prendere…»). Il resto della funzione è identico alla 321
+-- (l'ultima versione).
 -- CREATE OR REPLACE tiene i permessi (EXECUTE tolto a tutti in migrations/106) e il trigger.
 --
 -- NON si applica a mano: lo decide Nicola, come ogni migrazione. Si può rieseguire.
@@ -98,13 +101,13 @@ BEGIN
         END IF;
       ELSIF NEW.delivery_status = 'ASSIGNED' THEN
         INSERT INTO public.notifications (user_id, title, body, link, category) VALUES
-          (NEW.user_id, 'Un rider ha preso il tuo ordine',
-           'Il rider passa a prendere l''ordine #' || short_id || ' e te lo porta.',
+          (NEW.user_id, 'Un fattorino ha preso il tuo ordine',
+           'Il fattorino passa a prendere l''ordine #' || short_id || ' e te lo porta.',
            '/orders/' || NEW.id, 'order');
         IF NEW.seller_id IS NOT NULL THEN
           INSERT INTO public.notifications (user_id, title, body, link, category) VALUES
-            (NEW.seller_id, 'Rider assegnato',
-             'Un rider passa a prendere l''ordine #' || short_id || '.',
+            (NEW.seller_id, 'Fattorino assegnato',
+             'Un fattorino passa a prendere l''ordine #' || short_id || '.',
              '/seller/orders/' || NEW.id, 'order');
         END IF;
       ELSIF NEW.delivery_status = 'OUT_FOR_DELIVERY' THEN
