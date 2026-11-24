@@ -7,6 +7,7 @@ import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import {
@@ -664,7 +665,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     // prodotto» (ce ne sono altre): si dice com'è e si lascia il pulsante.
     if (vuotaMaCeNeSonoAltre) {
       return (
-        <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
+        <Card variant="bordered" radius="xl" padding="none" className="text-center py-16">
           <p className="text-ink-700 font-semibold mb-1">Ancora nessun prodotto da mostrare</p>
           <p className="text-sm text-ink-400 mb-4">Nelle prime pagine non c&apos;era niente per questi filtri, ma ce ne sono altre.</p>
           <button
@@ -675,7 +676,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
           >
             {isFetching ? 'Carico…' : 'Carica altri prodotti'}
           </button>
-        </div>
+        </Card>
       );
     }
     // Stato vuoto arricchito (opt-in): titolo/descrizione personalizzati,
@@ -684,7 +685,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     const enriched = !!emptyTitle || !!emptyDescription || !!onReset || !!emptySuggestions;
     if (enriched) {
       return (
-        <div className="bg-white border border-cream-300 rounded-2xl px-4 py-12">
+        <Card variant="bordered" radius="2xl" padding="none" className="px-4 py-12">
           <div className="text-center">
             <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-cream-100 text-ink-400">
               <SearchX size={30} strokeWidth={1.7} aria-hidden />
@@ -704,15 +705,15 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
             )}
           </div>
           {emptySuggestions}
-        </div>
+        </Card>
       );
     }
     return (
-      <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
+      <Card variant="bordered" radius="xl" padding="none" className="text-center py-16">
         <SearchX size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" />
         <p className="text-ink-700 font-semibold mb-1">Nessun prodotto trovato</p>
         <p className="text-sm text-ink-400">Prova a modificare i filtri o cerca qualcos&apos;altro</p>
-      </div>
+      </Card>
     );
   }
 

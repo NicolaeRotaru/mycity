@@ -15,6 +15,7 @@ import { type OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
@@ -558,10 +559,10 @@ export default function RiderDashboardPage() {
           ['Consegne', today ? String(today.count) : '—'],
           ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-cream-300 bg-surface-0 px-3 py-2.5 text-center">
+          <Card key={label} variant="surface" radius="lg" padding="none" className="px-3 py-2.5 text-center">
             <p className="font-serif text-[17px] font-extrabold text-ink-900">{value}</p>
             <p className="text-[10px] font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
-          </div>
+          </Card>
         ))}
       </div>
 
@@ -680,13 +681,13 @@ export default function RiderDashboardPage() {
 
           <SectionLabel>Ordini disponibili ({available.length})</SectionLabel>
           {available.length === 0 && bachecaGuasta ? null : available.length === 0 ? (
-            <div className="rounded-xl border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
+            <Card variant="surface" radius="xl" padding="none" className="p-8 text-center text-sm text-ink-500">
               Nessun ordine pronto al momento. Riprova tra un po'.
-            </div>
+            </Card>
           ) : (
             <div className="flex flex-col gap-2.5">
               {available.map((o) => (
-                <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
+                <Card key={o.id} variant="surface" radius="xl" padding="none" className="p-3.5">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Badge variant="new" icon={Package}>Pronto</Badge>
@@ -720,7 +721,7 @@ export default function RiderDashboardPage() {
                       Accetta
                     </Button>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}
@@ -732,7 +733,7 @@ export default function RiderDashboardPage() {
               <div className="flex flex-col gap-2.5">
                 {/* R20-002 — Niente più opacity-75: targhetta e compenso scendevano sotto 4,5:1. */}
                 {inPrep.map((o) => (
-                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
+                  <Card key={o.id} variant="surface" radius="xl" padding="none" className="p-3.5">
                     <div className="mb-2 flex items-center justify-between">
                       <Badge variant="local" icon={ChefHat}>In preparazione</Badge>
                       <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</span>
@@ -743,7 +744,7 @@ export default function RiderDashboardPage() {
                       small
                     />
                     <RigaFascia ordine={o} />
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>
@@ -751,7 +752,7 @@ export default function RiderDashboardPage() {
         </div>
       ) : statoOnline !== 'offline' ? null : (
         <div className="px-4">
-          <div className="rounded-xl border border-cream-300 bg-surface-0 px-5 py-8 text-center">
+          <Card variant="surface" radius="xl" padding="none" className="px-5 py-8 text-center">
             <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-olive-50">
               <Power size={26} className="text-olive-600" aria-hidden />
             </span>
@@ -761,7 +762,7 @@ export default function RiderDashboardPage() {
               Gestisci orari e zone nella pagina{' '}
               <Link href="/rider/availability" className="text-olive-700 underline">Turni</Link>.
             </p>
-          </div>
+          </Card>
         </div>
       )}
     </div>
