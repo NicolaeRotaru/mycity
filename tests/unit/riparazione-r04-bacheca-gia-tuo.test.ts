@@ -23,6 +23,8 @@ const mondo = vi.hoisted(() => ({
   presa: (async () => ({ data: null, error: null })) as (id: string) => Promise<{ data: unknown; error: unknown }>,
   /** Gli ordini che sono già del fattorino «luca». */
   suoi: new Set<string>(),
+  /** Fra i suoi, quelli annullati (gli altri sono ASSIGNED). */
+  annullati: new Set<string>(),
   avvisiErrore: [] as string[],
   avvisiOk: [] as string[],
   vaiA: [] as string[],
@@ -57,6 +59,7 @@ vi.mock('@/lib/supabase/client', () => {
   });
   const catena = (tavola: string) => {
     const uguale: Record<string, unknown> = {};
+    const dentro: Record<string, unknown[]> = {};
     const risposta = (una: boolean) => {
       // La bacheca è ancora quella letta prima del secondo tocco: l'ordine A c'è ancora.
       if (tavola === 'ordini_disponibili_rider') return { data: [ordine(A)], error: null };
@@ -64,12 +67,15 @@ vi.mock('@/lib/supabase/client', () => {
       if (tavola === 'orders' && una) {
         // Il fattorino legge un ordine solo se è suo (la regola del database sugli ordini).
         const id = String(uguale.id ?? '');
-        return { data: uguale.rider_id === 'luca' && mondo.suoi.has(id) ? { id } : null, error: null };
+        const stato = mondo.annullati.has(id) ? 'CANCELED' : 'ASSIGNED';
+        const passaGliStati = !dentro.delivery_status || dentro.delivery_status.includes(stato);
+        return { data: uguale.rider_id === 'luca' && mondo.suoi.has(id) && passaGliStati ? { id } : null, error: null };
       }
       return { data: [], error: null };
     };
     const c: Record<string, unknown> = {};
-    for (const m of ['select', 'in', 'order', 'gte', 'update', 'limit']) c[m] = () => c;
+    for (const m of ['select', 'order', 'gte', 'update', 'limit']) c[m] = () => c;
+    c.in = (col: string, v: unknown[]) => { dentro[col] = v; return c; };
     c.eq = (col: string, v: unknown) => { uguale[col] = v; return c; };
     c.single = async () => risposta(true);
     c.maybeSingle = async () => risposta(true);
@@ -125,6 +131,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-24T10:00:00Z'));
   mondo.suoi = new Set();
+  mondo.annullati = new Set();
   mondo.avvisiErrore = [];
   mondo.avvisiOk = [];
   mondo.vaiA = [];
@@ -169,6 +176,19 @@ describe('R04-011 — un doppio tocco su un ordine già suo dice «è già tuo»
     expect(mondo.avvisiErrore).toHaveLength(1);
     expect(mondo.avvisiErrore[0]).toMatch(/non è più disponibile/i);
     expect(mondo.avvisiOk).toEqual([]);
+    expect(mondo.vaiA).toEqual([]);
+  }, 30000);
+
+  it('un ordine suo ma annullato non è «già tuo»: resta «non è più disponibile» e non porta alla consegna', async () => {
+    mondo.suoi.add(A);
+    mondo.annullati.add(A);
+    mondo.presa = async () => ({ data: { ok: false, motivo: 'NON_PIU_DISPONIBILE' }, error: null });
+    const d = await accendi();
+    await tocca(accettaDi(d, A));
+    await avanza(500);
+    expect(mondo.avvisiOk, 'un ordine annullato non si dice «già tuo»').toEqual([]);
+    expect(mondo.avvisiErrore).toHaveLength(1);
+    expect(mondo.avvisiErrore[0]).toMatch(/non è più disponibile/i);
     expect(mondo.vaiA).toEqual([]);
   }, 30000);
 });
