@@ -5,6 +5,12 @@ import {
   FOTO_LOCALE_CONSIGLIATE,
   LISTINO,
   PRODOTTI_PER_IL_PREMIUM,
+  CONDIZIONI,
+  FRASE_CONDIZIONI,
+  SCONTRINO_DI_PARTENZA,
+  canonePrimoMese,
+  cosaCiGuadagni,
+  pareggio,
   NOME_AGENZIA_DI_RISERVA,
   costruisciPreventivo,
   cosaManca,
@@ -169,7 +175,55 @@ describe('il preventivo', () => {
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelto: 'premium',
     });
     expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
-      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video \(scattiDG\), Gestione automatica dei social, Sito web professionale, Scheda Google su Maps\. Telefono: 3331234567\.$/,
+      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video \(scattiDG\), Gestione automatica dei social, Sito web professionale, Scheda Google su Maps\. Telefono: 3331234567\.$/,
     );
   });
 });
+
+describe('le condizioni e il pareggio (24/11/2026)', () => {
+  it('nessun vincolo, 30 giorni di preavviso, primo mese a metà prezzo', () => {
+    expect(CONDIZIONI).toEqual({ preavvisoGiorni: 30, primoMeseFrazione: 0.5 });
+    expect(FRASE_CONDIZIONI).toBe('Nessun vincolo di durata: disdici quando vuoi, con 30 giorni di preavviso. Il primo mese costa la metà.');
+    expect([30000, 50000, 99900].map(canonePrimoMese)).toEqual([15000, 25000, 49950]);
+    expect(canonePrimoMese(null)).toBeNull();
+  });
+
+  it('il pareggio dice gli euro al giorno e quanti scontrini in più, arrotondati in su', () => {
+    // bar, colazione da 3 €: 300 € → 10 €/giorno → 4 colazioni; 500 € → 16,67 → 6; 999 € → 33,30 → 12
+    expect(SCONTRINO_DI_PARTENZA.bar).toEqual({ centesimi: 300, cosa: 'colazioni' });
+    expect(pareggio(30000, 300)).toEqual({ alGiornoCentesimi: 1000, quanti: 4 });
+    expect(pareggio(50000, 300)).toEqual({ alGiornoCentesimi: 1667, quanti: 6 });
+    expect(pareggio(99900, 300)).toEqual({ alGiornoCentesimi: 3330, quanti: 12 });
+    expect(pareggio(50000, 2500)).toEqual({ alGiornoCentesimi: 1667, quanti: 1 });
+  });
+
+  it('senza canone o con uno scontrino non valido il pareggio non si scrive', () => {
+    expect(pareggio(null, 300)).toBeNull();
+    expect(pareggio(50000, 0)).toBeNull();
+    expect(pareggio(50000, Number.NaN)).toBeNull();
+  });
+
+  it('un canone sotto i 10 € è quasi certamente scritto in euro: diventa «su richiesta» (collaudo del 24/11)', () => {
+    const imp = leggiImpostazioniAgenzia({ abbonamenti: { base: 300, business: 999, premium: 1000 } });
+    expect(imp.prezzi).toEqual({ base: null, business: null, premium: 1000 });
+  });
+});
+
+describe('cosa ci guadagni: solo frasi vere', () => {
+  it('parte dai fatti della vetrina, senza numeri di piattaforma', () => {
+    const g = cosaCiGuadagni(cosaManca(VUOTA), 'bar');
+    expect(g.oggi).toEqual([
+      'Chi apre la tua vetrina su MyCity oggi trova questo: la copertina della vetrina non ha nessuna foto del locale.',
+      'Chi ti cerca per nome su internet non trova una pagina tua.',
+      'Chi cerca «bar vicino a me» vede prima le schede Google complete di orari e foto: se la tua non lo è, vede gli altri.',
+    ]);
+    // nessun «X volte», nessuna percentuale: al 24/11 non ci sono dati per dirlo
+    expect([...g.oggi, g.conNoi].join(' ')).not.toMatch(/\d+\s*(volte|%)/);
+  });
+
+  it('a una vetrina completa non dice che manca qualcosa', () => {
+    const g = cosaCiGuadagni(cosaManca(COMPLETA), 'bar');
+    expect(g.oggi.join(' ')).not.toMatch(/foto del locale|pagina tua/);
+  });
+});
+

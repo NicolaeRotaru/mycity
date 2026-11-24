@@ -176,6 +176,9 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     const piano = r.querySelector('[aria-label="Il piano editoriale di novembre 2026"]');
     expect(piano, 'piano editoriale non mostrato').toBeTruthy();
     expect(piano!.querySelectorAll('li')).toHaveLength(12); // mar/gio/sab di novembre 2026
+    // 24/11/2026: i 12 esempi sono tutti diversi (prima il 3 era uguale al 17, il 5 al 19…)
+    const esempi = [...piano!.querySelectorAll('li')].map((li) => li.textContent);
+    expect(new Set(esempi).size).toBe(12);
     expect(piano!.textContent).toContain('Sono esempi');
     expect(piano!.textContent).toContain('Bar Roma');
     expect(piano!.textContent).not.toMatch(/€|%|sconto/i); // nessun prezzo o sconto inventato nei post
@@ -221,6 +224,17 @@ describe('cosa ricevi, già pronto dentro il servizio', () => {
     expect(r.textContent).toContain('Ti consigliamo il Business.');
     await act(async () => { radio[2].click(); });
     expect(r.textContent).toContain('Accetto il Premium: contattatemi');
+    // in cima «Cosa ci guadagni»; sotto ogni piano il primo mese e il pareggio in colazioni
+    expect(r.textContent!.indexOf('Cosa ci guadagni')).toBeLessThan(r.textContent!.indexOf('Cosa manca alla tua vetrina'));
+    expect(r.textContent).toMatch(/Il primo mese 250,00\s€/);
+    expect(r.textContent).toContain('l’incasso di 6 colazioni in più');
+    expect(r.textContent).toContain('disdici quando vuoi, con 30 giorni di preavviso');
+    expect(r.textContent).toContain('Ogni mese ti mandiamo il resoconto');
+    // il titolare cambia lo scontrino e i conti si rifanno
+    const casella = r.querySelector<HTMLInputElement>('#scontrino-medio')!;
+    const imposta = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => { imposta.call(casella, '5'); casella.dispatchEvent(new Event('input', { bubbles: true })); });
+    expect(r.textContent).toContain('l’incasso di 4 colazioni in più'); // 500 € / 30 / 5 € = 3,3 → 4
   });
 
 });

@@ -4,11 +4,24 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Check, CheckCircle2, Printer, Send } from 'lucide-react';
+import { Check, CheckCircle2, Printer, Send, TrendingUp } from 'lucide-react';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { ABBONAMENTI, FASCE, LISTINO, SERVIZI_AGENZIA, type Abbonamento } from '@/lib/agenzia/preventivo';
+import {
+  ABBONAMENTI,
+  FASCE,
+  FRASE_CONDIZIONI,
+  LISTINO,
+  RESOCONTO_MENSILE,
+  SCONTRINO_DI_PARTENZA,
+  SERVIZI_AGENZIA,
+  canonePrimoMese,
+  cosaCiGuadagni,
+  pareggio,
+  type Abbonamento,
+} from '@/lib/agenzia/preventivo';
+import { formatPriceFromCents } from '@/lib/format';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import { hrefServizio } from '@/components/seller/servizi-nel-menu';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
@@ -40,6 +53,8 @@ export default function PreventivoAgenziaPage() {
   });
   const [scelto, setScelto] = useState<Abbonamento | null>(null);
   const [inviato, setInviato] = useState<string | null>(null);
+  // Lo scontrino medio per il pareggio, in euro come lo scrive il titolare: parte dalla stima per tipo.
+  const [scontrino, setScontrino] = useState<string | null>(null);
 
   // Appena arriva il preventivo, è scelto l'abbonamento che consigliamo: il cliente può cambiarlo.
   useEffect(() => {
@@ -75,6 +90,10 @@ export default function PreventivoAgenziaPage() {
   }
 
   const fascia = scelto ?? p.consigliato;
+  const partenza = SCONTRINO_DI_PARTENZA[p.tipoAttivita];
+  const testoScontrino = scontrino ?? (partenza.centesimi / 100).toFixed(2).replace('.', ',');
+  const scontrinoCentesimi = Math.round(Number(testoScontrino.replace(',', '.')) * 100);
+  const guadagni = cosaCiGuadagni(p.righe, p.tipoAttivita);
 
   return (
     <div className="max-w-3xl">
@@ -103,6 +122,19 @@ export default function PreventivoAgenziaPage() {
             <dd className="font-semibold text-ink-900">{dataLeggibile(p.data)}</dd>
           </dl>
         </header>
+
+        {/* Cosa ci guadagni: prima di tutto, solo frasi vere lette dalla sua vetrina (24/11). */}
+        <section aria-labelledby="cosa-ci-guadagni" className="mt-5 rounded-xl border-2 border-olive-300 bg-olive-50 p-4 sm:p-5">
+          <h2 id="cosa-ci-guadagni" className="inline-flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
+            <TrendingUp size={18} className="text-olive-700" aria-hidden /> Cosa ci guadagni
+          </h2>
+          {guadagni.oggi.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-800">
+              {guadagni.oggi.map((frase) => <li key={frase}>{frase}</li>)}
+            </ul>
+          )}
+          <p className="mt-2 text-sm font-semibold text-ink-900">{guadagni.conNoi}</p>
+        </section>
 
         {/* Cosa manca alla vetrina: il perché del preventivo, col numero vero. */}
         {p.righe.length === 0 ? (
@@ -143,11 +175,29 @@ export default function PreventivoAgenziaPage() {
           <p className="mt-2 text-sm text-ink-700">
             <strong>Ti consigliamo il {FASCE[p.consigliato].nome}.</strong> {p.perche_consigliato}
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-700">
+            <label htmlFor="scontrino-medio">Il tuo scontrino medio:</label>
+            <span className="inline-flex items-center gap-1">
+              <input
+                id="scontrino-medio"
+                type="text"
+                inputMode="decimal"
+                value={testoScontrino}
+                onChange={(e) => setScontrino(e.target.value.replace(/[^0-9.,]/g, '').slice(0, 7))}
+                aria-describedby="scontrino-nota"
+                className="w-20 rounded-lg border border-cream-300 px-2 py-1 text-right font-semibold text-ink-900"
+              />
+              <span aria-hidden>€</span>
+            </span>
+            <span id="scontrino-nota" className="text-xs text-ink-500">È una stima: scrivi il tuo e i conti sotto ogni piano si rifanno.</span>
+          </div>
           <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={!!inviato}>
             <legend className="sr-only">Abbonamento</legend>
             {ABBONAMENTI.map((id) => {
               const f = FASCE[id];
               const attivo = fascia === id;
+              const primo = canonePrimoMese(p.prezzi[id]);
+              const pari = pareggio(p.prezzi[id], scontrinoCentesimi);
               return (
                 <label
                   key={id}
@@ -159,15 +209,23 @@ export default function PreventivoAgenziaPage() {
                     value={id}
                     checked={attivo}
                     onChange={() => setScelto(id)}
+                    aria-labelledby={`fascia-${id}-nome fascia-${id}-prezzo`}
+                    aria-describedby={`fascia-${id}-servizi`}
                     className="sr-only"
                   />
                   {id === p.consigliato && (
                     <span className="mb-1 self-start rounded-full bg-olive-700 px-2 py-0.5 text-[11px] font-bold text-white">Consigliato</span>
                   )}
-                  <span className="font-serif text-xl font-bold text-ink-900">{f.nome}</span>
-                  <span className="text-lg font-semibold text-ink-900">{scriviCanone(p.prezzi[id])}</span>
-                  <span className="mt-1 text-xs text-ink-600">{f.perChi}</span>
-                  <ul className="mt-3 space-y-1.5 text-xs text-ink-700">
+                  <span id={`fascia-${id}-nome`} className="font-serif text-xl font-bold text-ink-900">{f.nome}</span>
+                  <span id={`fascia-${id}-prezzo`} className="text-lg font-semibold text-ink-900">{scriviCanone(p.prezzi[id])}</span>
+                  {primo !== null && <span className="text-xs font-semibold text-olive-800">Il primo mese {formatPriceFromCents(primo)}</span>}
+                  {pari && (
+                    <span className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs text-ink-800">
+                      Circa <strong>{Math.round(pari.alGiornoCentesimi / 100)} € al giorno</strong>: l’incasso di <strong>{pari.quanti} {partenza.cosa} in più</strong> al giorno.
+                    </span>
+                  )}
+                  <span className="mt-2 text-xs text-ink-600">{f.perChi}</span>
+                  <ul id={`fascia-${id}-servizi`} className="mt-3 space-y-1.5 text-xs text-ink-700">
                     {SERVIZI_AGENZIA.map((s) => (
                       <li key={s}>
                         <span className="font-semibold text-ink-900">{LISTINO[s].titolo}:</span> {f.servizi[s]}
@@ -181,7 +239,11 @@ export default function PreventivoAgenziaPage() {
               );
             })}
           </fieldset>
-          <p className="mt-4 text-xs text-ink-500">
+          <ul className="mt-4 space-y-1.5 text-sm text-ink-800">
+            <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {FRASE_CONDIZIONI}</li>
+            <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-olive-700" aria-hidden /> {RESOCONTO_MENSILE}</li>
+          </ul>
+          <p className="mt-3 text-xs text-ink-500">
             {Object.values(p.prezzi).some((v) => !v) && 'I canoni «su richiesta» te li confermiamo prima di iniziare. '}
             Accettare non ti fa pagare niente adesso: ti richiamiamo per fissare l’inizio.
           </p>

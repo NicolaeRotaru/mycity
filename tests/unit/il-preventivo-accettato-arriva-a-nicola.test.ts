@@ -116,7 +116,7 @@ describe('POST /api/seller/preventivo', () => {
     expect(((await r.json()) as { data: { abbonamento: string } }).data.abbonamento).toBe('business');
     expect(stato.avvisi).toHaveLength(1);
     expect(stato.avvisi[0].titolo).toBe('Preventivo accettato: Bar Roma');
-    expect(stato.avvisi[0].corpo).toMatch(/sceglie l'abbonamento Business \(500,00\s€ al mese\)/);
+    expect(stato.avvisi[0].corpo).toMatch(/sceglie l'abbonamento Business \(500,00\s€ al mese, il primo mese 250,00\s€\)/);
     expect(stato.avvisi[0].corpo).toContain('3331234567');
     // l'id intero dell'attività è nella chiave: due negozi con le stesse prime 6 cifre non si scambiano
     expect(stato.avvisi[0].opzioni.unaVoltaPer).toMatch(/^preventivo-agenzia:a1b2c3d4-0000:P-\d{8}-A1B2C3:business$/);
@@ -127,7 +127,7 @@ describe('POST /api/seller/preventivo', () => {
     stato.agenzia = { abbonamenti: { premium: 120000 } };
     const r = await chiama('POST', { abbonamento: 'premium', prezzo: 1 });
     expect(r.status).toBe(200);
-    expect(stato.avvisi[0].corpo).toMatch(/Premium \(1\.?200,00\s€ al mese\)/);
+    expect(stato.avvisi[0].corpo).toMatch(/Premium \(1\.?200,00\s€ al mese, il primo mese 600,00\s€\)/);
   });
 
   it('una fascia fuori listino, le vecchie voci o niente: richiesta rifiutata', async () => {

@@ -164,6 +164,11 @@ export const NOME_AGENZIA_DI_RISERVA = 'MyCity';
 
 /** Un canone oltre questo (in centesimi: 10.000 € al mese) è un errore di battitura, non un listino. */
 const PREZZO_MASSIMO_CENTESIMI = 1_000_000;
+/**
+ * Sotto questo (in centesimi: 10 € al mese) è quasi certamente un canone scritto in euro invece
+ * che in centesimi: «"base": 300» farebbe leggere al cliente «3,00 € al mese» (collaudo del 24/11).
+ */
+const PREZZO_MINIMO_CENTESIMI = 1_000;
 
 export type ImpostazioniAgenzia = {
   nome: string;
@@ -176,14 +181,14 @@ export type ImpostazioniAgenzia = {
  * Uno 0 scritto per sbaglio nelle impostazioni diventa «su richiesta».
  */
 const centesimiValidi = (v: unknown): v is number =>
-  typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= PREZZO_MASSIMO_CENTESIMI;
+  typeof v === 'number' && Number.isInteger(v) && v >= PREZZO_MINIMO_CENTESIMI && v <= PREZZO_MASSIMO_CENTESIMI;
 
 /**
  * Un canone scritto in `site_settings.agenzia.abbonamenti.<fascia>`:
  *  · assente → vale il prezzo di Nicola;
  *  · `null` → su richiesta;
  *  · un numero di centesimi → quel canone.
- * Qualunque altra cosa (zero, negativo, testo, decimali) diventa «su richiesta»: meglio
+ * Qualunque altra cosa (zero, negativo, sotto i 10 €, testo, decimali) diventa «su richiesta»: meglio
  * nessun prezzo che un prezzo sbagliato davanti a un cliente. La vecchia chiave `prezzi`
  * (un prezzo per servizio, fino al 23/11) si ignora.
  */
@@ -351,6 +356,88 @@ export function numeroPreventivo(idAttivita: string, giorno: string): string {
   return `P-${giorno.replace(/-/g, '')}-${sigla}`;
 }
 
+/**
+ * LE CONDIZIONI DELL'ABBONAMENTO — Nicola, 24/11/2026: «disdici quando vuoi», «preavviso di 30
+ * giorni», «primo mese a metà prezzo». Messe insieme: nessuna durata minima, la disdetta si dà
+ * quando si vuole e vale dopo 30 giorni, e il primo mese costa la metà.
+ */
+export const CONDIZIONI = {
+  preavvisoGiorni: 30,
+  /** Il primo mese costa la metà: Base 150 €, Business 250 €, Premium 499,50 €. */
+  primoMeseFrazione: 0.5,
+} as const;
+
+/** Il canone del primo mese, in centesimi; `null` se il canone è su richiesta. */
+export function canonePrimoMese(centesimi: number | null): number | null {
+  return centesimi ? Math.round(centesimi * CONDIZIONI.primoMeseFrazione) : null;
+}
+
+export const FRASE_CONDIZIONI =
+  `Nessun vincolo di durata: disdici quando vuoi, con ${CONDIZIONI.preavvisoGiorni} giorni di preavviso. Il primo mese costa la metà.`;
+
+/**
+ * IL PAREGGIO IN SCONTRINI — 24/11/2026. Un titolare non ragiona in canoni ma in scontrini:
+ * «500 € al mese» spaventa, «l'incasso di 6 colazioni in più al giorno» si capisce. È l'incasso,
+ * non il guadagno netto: il margine di ogni locale non lo conosciamo, e non lo inventiamo.
+ *
+ * Lo scontrino di partenza è una stima dell'AD per tipo di attività (24/11), non un dato: sulla
+ * pagina il titolare lo cambia col suo, e i conti si rifanno.
+ */
+export const SCONTRINO_DI_PARTENZA: Record<TipoAttivita, { centesimi: number; cosa: string }> = {
+  negozio: { centesimi: 1_500, cosa: 'scontrini' },
+  bar: { centesimi: 300, cosa: 'colazioni' },
+  ristorante: { centesimi: 2_500, cosa: 'coperti' },
+  artigiano: { centesimi: 2_000, cosa: 'scontrini' },
+  servizi: { centesimi: 3_000, cosa: 'clienti' },
+  altro: { centesimi: 1_500, cosa: 'scontrini' },
+};
+
+/** I giorni su cui si divide il canone: un mese di calendario. */
+export const GIORNI_DEL_MESE = 30;
+
+export type Pareggio = { alGiornoCentesimi: number; quanti: number };
+
+/** Quanto fa il canone al giorno, e quanti scontrini in più al giorno lo incassano (arrotondato in su). */
+export function pareggio(canoneCentesimi: number | null, scontrinoCentesimi: number): Pareggio | null {
+  if (!canoneCentesimi || !Number.isFinite(scontrinoCentesimi) || scontrinoCentesimi < 1) return null;
+  const alGiorno = canoneCentesimi / GIORNI_DEL_MESE;
+  return { alGiornoCentesimi: Math.round(alGiorno), quanti: Math.ceil(alGiorno / scontrinoCentesimi) };
+}
+
+/** Le parole del motore di ricerca per tipo: quello che scrive chi cerca «… vicino a me». */
+const CERCA_VICINO: Record<TipoAttivita, string> = {
+  negozio: 'negozio vicino a me',
+  bar: 'bar vicino a me',
+  ristorante: 'ristorante vicino a me',
+  artigiano: 'laboratorio artigiano vicino a me',
+  servizi: 'vicino a me',
+  altro: 'vicino a me',
+};
+
+/**
+ * COSA CI GUADAGNI — il blocco in cima al preventivo (24/11/2026). Solo frasi vere: i fatti della
+ * sua vetrina letti dai dati, e cosa cambia con l'abbonamento. Niente numeri di piattaforma
+ * («chi ha le foto vende X volte di più») finché non ci sono: al 24/11 il sito ha 2 ordini in
+ * tutto, e un numero inventato davanti a un cliente è una bugia (Nicola: «solo frasi vere»).
+ */
+export function cosaCiGuadagni(righe: readonly VoceMancante[], tipo: TipoAttivita): { oggi: string[]; conNoi: string } {
+  const oggi: string[] = [];
+  const foto = righe.find((r) => r.id === 'foto_video');
+  if (foto) oggi.push(`Chi apre la tua vetrina su MyCity oggi trova questo: ${foto.perche[0].charAt(0).toLowerCase()}${foto.perche[0].slice(1)}`);
+  if (righe.some((r) => r.id === 'sito_web')) oggi.push('Chi ti cerca per nome su internet non trova una pagina tua.');
+  if (righe.some((r) => r.id === 'google_maps')) {
+    oggi.push(`Chi cerca «${CERCA_VICINO[tipo]}» vede prima le schede Google complete di orari e foto: se la tua non lo è, vede gli altri.`);
+  }
+  return {
+    oggi: oggi.slice(0, 3),
+    conNoi: 'Con l’abbonamento le foto, i post, il sito e la scheda Google li facciamo noi, ogni mese. Tu resti al bancone; ai clienti che arrivano pensa MyCity.',
+  };
+}
+
+/** Il resoconto che il cliente riceve ogni mese (24/11/2026): il valore si vede anche dopo la firma. */
+export const RESOCONTO_MENSILE =
+  'Ogni mese ti mandiamo il resoconto: quante persone hanno visto la tua vetrina, quanti ordini e quanto hai incassato su MyCity, e quante persone hanno visto e chiamato dalla tua scheda Google.';
+
 export function costruisciPreventivo(opzioni: {
   idAttivita: string;
   nomeAttivita: string;
@@ -402,5 +489,7 @@ export function testoAvvisoPreventivo(p: Preventivo, telefono: string | null): s
     ? ` Alla vetrina mancano: ${p.righe.map((r) => (r.partner ? `${r.titolo} (${r.partner})` : r.titolo)).join(', ')}.`
     : '';
   const contatto = telefono ? ` Telefono: ${telefono}.` : '';
-  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}), preventivo ${p.numero}.${manca}${contatto}`;
+  const primo = canonePrimoMese(p.prezzi[fascia]);
+  const primoMese = primo ? `, il primo mese ${formatPriceFromCents(primo)}` : '';
+  return `${p.attivita} sceglie l'abbonamento ${FASCE[fascia].nome} (${scriviCanone(p.prezzi[fascia])}${primoMese}), preventivo ${p.numero}.${manca}${contatto}`;
 }
