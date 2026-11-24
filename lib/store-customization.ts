@@ -155,7 +155,7 @@ const handleSchema = z
   .string()
   .trim()
   .max(64, 'Troppo lungo')
-  .regex(/^@?[A-Za-z0-9._-]+$/, 'Scrivi solo il nome del profilo, per esempio panequotidiano')
+  .regex(/^@?[A-Za-z0-9._-]+$/, 'Scrivi solo il nome del profilo, per esempio iltuonegozio')
   .optional()
   .or(z.literal(''));
 
@@ -173,7 +173,7 @@ const whatsappSchema = z
 const websiteSchema = z
   .string()
   .trim()
-  .url("Scrivi l'indirizzo del sito, per esempio www.panequotidiano.it")
+  .url("Scrivi l'indirizzo del sito, per esempio www.iltuonegozio.it")
   .max(200)
   .optional()
   .or(z.literal(''));

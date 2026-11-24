@@ -33,7 +33,7 @@ export const CanaliInArrivo = z.object(Object.fromEntries(CANALI.map((c) => [c, 
 
 export type EsitoCanali = { ok: true; canali: Canali } | { ok: false; errori: Partial<Record<Canale, string>> };
 
-const MESSAGGIO_SITO = 'Scrivi l’indirizzo pubblico del tuo sito, per esempio www.panequotidiano.it (solo https).';
+const MESSAGGIO_SITO = 'Scrivi l’indirizzo pubblico del tuo sito, per esempio www.iltuonegozio.it (solo https).';
 
 /**
  * Controlla e ripulisce i canali scritti dal titolare. Un campo vuoto vuol dire «non ce l'ho»: si

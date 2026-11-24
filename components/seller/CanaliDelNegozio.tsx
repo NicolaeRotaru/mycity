@@ -18,11 +18,11 @@ import { queryKeys } from '@/lib/queries/keys';
  */
 
 const CAMPI: Record<Canale, { icona: ReactNode; esempio: string; aiuto: string }> = {
-  instagram: { icona: <Instagram size={16} />, esempio: 'panequotidiano', aiuto: 'Il nome del profilo, o il link copiato dall’app.' },
-  facebook: { icona: <Facebook size={16} />, esempio: 'panequotidiano', aiuto: 'Il nome della pagina, o il suo link.' },
-  tiktok: { icona: <Music2 size={16} />, esempio: 'panequotidiano', aiuto: 'Il nome del profilo, o il suo link.' },
+  instagram: { icona: <Instagram size={16} />, esempio: 'nome del profilo', aiuto: 'Il nome del profilo, o il link copiato dall’app.' },
+  facebook: { icona: <Facebook size={16} />, esempio: 'nome della pagina', aiuto: 'Il nome della pagina, o il suo link.' },
+  tiktok: { icona: <Music2 size={16} />, esempio: 'nome del profilo', aiuto: 'Il nome del profilo, o il suo link.' },
   google_maps: { icona: <MapPin size={16} />, esempio: 'https://maps.app.goo.gl/…', aiuto: 'Su Google Maps apri la tua scheda, tocca «Condividi» e incolla qui il link.' },
-  website: { icona: <Globe size={16} />, esempio: 'www.panequotidiano.it', aiuto: 'L’indirizzo del tuo sito, se ce l’hai.' },
+  website: { icona: <Globe size={16} />, esempio: 'www.iltuonegozio.it', aiuto: 'L’indirizzo del tuo sito, se ce l’hai.' },
 };
 
 export default function CanaliDelNegozio({ titolo = 'I tuoi canali' }: { titolo?: string }) {

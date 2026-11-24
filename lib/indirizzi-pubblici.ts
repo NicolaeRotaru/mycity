@@ -9,7 +9,7 @@
  *  · un indirizzo https con un nome di dominio vero (lettere, un punto, un suffisso di lettere);
  *  · niente numeri IP, niente porte, niente nome e password dentro l'indirizzo;
  *  · niente suffissi riservati alle reti di casa o di prova (.local, .lan, .internal, .test…).
- * «www.panequotidiano.it» si accetta e diventa «https://www.panequotidiano.it/».
+ * «www.iltuonegozio.it» si accetta e diventa «https://www.iltuonegozio.it/».
  * «http://…» no: chiediamo l'indirizzo sicuro, quello che Google mostra.
  */
 

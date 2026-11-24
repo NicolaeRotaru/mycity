@@ -23,7 +23,7 @@ describe('295 — social scritti come li scrive una persona', () => {
     expect(r.success).toBe(false);
     const p = !r.success ? r.error.issues[0] : null;
     expect(campoDellErrore(p!.path)).toBe('Facebook');
-    expect(p!.message).toContain('per esempio panequotidiano');
+    expect(p!.message).toContain('per esempio iltuonegozio');
     expect(readFileSync('components/VendorForm.tsx', 'utf8')).toContain('normalizzaSocials(custom.socials)');
   });
 });
