@@ -184,11 +184,11 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
             />
           </div>
 
-          {/* Rating minimo */}
+          {/* Voto minimo */}
           <div>
             <span id={`${idBase}-voto`} className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-wider flex items-center gap-1">
               <Star size={11} strokeWidth={2.2} aria-hidden />
-              Rating minimo
+              Voto minimo
             </span>
             <div className="flex gap-1.5" role="group" aria-labelledby={`${idBase}-voto`}>
               {[0, 3, 4, 4.5].map((r) => (
