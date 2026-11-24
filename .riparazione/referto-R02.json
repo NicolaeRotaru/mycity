@@ -429,6 +429,8 @@
   ],
   "conto": {
     "agenti": 5,
-    "nota": "3 subagenti che riparano (lotto 1 e 3 sul modello grande, lotto 2 sul piccolo) e 2 collaudi (grande sulle voci dei dati, piccolo sulle leggere). Spesa letta da get_session prima del collaudo: 20,06 $."
-  }
+    "nota": "3 subagenti che riparano (lotto 1 e 3 sul modello grande, lotto 2 sul piccolo) e 2 collaudi (grande sulle voci dei dati, piccolo sulle leggere). Spesa letta da get_session senza id alla consegna: 24,64 $ (passata la soglia dei 24 $ durante il collaudo, che era il lotto in corso).",
+    "subagenti": 5
+  },
+  "costo_usd": 24.64
 }
