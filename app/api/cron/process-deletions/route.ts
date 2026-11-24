@@ -192,6 +192,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // pubblica. E non si aggiusta da sola: se il database rifiuta stanotte,
   // rifiutera' anche domani.
   if (potature.fallite > 0) await svegliaPerLaRitenzione(admin, potature);
+  // R02-002 — Tutte le pulizie riuscite: il guasto è finito, il suo allarme si toglie (vedi sotto).
+  else await chiudiGliAllarmiDellaRitenzione(admin);
 
   // Chiama la function SQL che ritorna gli userId scaduti
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
@@ -598,12 +600,41 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
   const chiave = `ritenzione-non-riuscita:${[...new Set(rapporto.esiti.filter((e) => !e.ok).map((e) => e.cosa))].sort().join(',')}`;
   await avvisaAmministratori(
     admin,
-    'Dati vecchi non cancellati',
+    TITOLO_RITENZIONE,
     `${quali} I dati che dovevamo cancellare sono ancora al loro posto, oltre il tempo che ` +
       'promettiamo nella pagina della privacy. Non si sistema da sola: se il database ha detto di ' +
       'no stanotte, dirà di no anche domani.',
     chiave,
   );
+}
+
+/** Il titolo dell'allarme delle pulizie non riuscite: lo scrive `svegliaPerLaRitenzione`, lo toglie la chiusura qui sotto. */
+const TITOLO_RITENZIONE = 'Dati vecchi non cancellati';
+
+/**
+ * 24/11/2026 (R02-002) — «DATI VECCHI NON CANCELLATI» VALE FINCHÉ IL GUASTO DURA.
+ *
+ * L'allarme ha un identificativo ricavato da quali pulizie non riescono: la notte dopo, con lo
+ * stesso guasto, la riga c'è già e non se ne scrive un'altra. Ma nessuno la toglieva: se il guasto
+ * si sistemava e settimane dopo tornava uguale, la riga di allora (già letta) bloccava l'allarme
+ * nuovo e gli amministratori non sapevano niente. La notte in cui tutte le pulizie riescono il
+ * guasto è finito: gli allarmi «Dati vecchi non cancellati» degli amministratori si tolgono, così
+ * se torna se ne scrive uno nuovo. Il guasto di allora resta nel registro degli errori (Sentry) e
+ * nella notte rossa. Non lancia: un allarme non tolto è un fastidio da annotare, non un guasto.
+ */
+async function chiudiGliAllarmiDellaRitenzione(admin: Admin): Promise<void> {
+  try {
+    const { data, error } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (error) throw new Error(error.message);
+    for (const a of (data ?? []) as { id: string }[]) {
+      const tolti = await admin.from('notifications').delete().eq('user_id', a.id).eq('title', TITOLO_RITENZIONE);
+      if (tolti.error) throw new Error(tolti.error.message);
+    }
+  } catch (e) {
+    logger.warn('[cron-deletions] allarme «Dati vecchi non cancellati» non tolto dopo le pulizie riuscite', {
+      errore: e instanceof Error ? e.message : 'errore',
+    });
+  }
 }
 
 /**
