@@ -12,6 +12,7 @@ import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { MAX_DETTAGLIO_ATTIVITA, TIPI_ATTIVITA, descriviAttivita } from '@/lib/agenzia/tipi-attivita';
+import { inviaNuovaAttivitaAlFlusso } from '@/lib/agenzia/nuovo-cliente-n8n';
 
 export const runtime = 'nodejs';
 
@@ -312,6 +313,23 @@ export const POST = withAuthRateLimit(
       );
     } catch (errore) {
       logger.error('[seller-apply] avviso agli amministratori non partito', { userId: user.id, errore });
+    }
+
+    // 24/11/2026 — Nicola: «un nuovo cliente che si collega a MyCity si inserisce nel database dei
+    // clienti, e deve sfruttare il modulo 12». La nuova attività va anche al flusso n8n «16 · Nuovo
+    // cliente da MyCity», che prepara la sua scheda nel foglio Clienti come fa il modulo 12.
+    // Stessa regola dell'avviso: una richiesta già in attesa che il negozio corregge non è un cliente
+    // nuovo. Spento finché Nicola non scrive indirizzo e segreto; non blocca mai l'iscrizione.
+    if (!eraGiaInAttesa) {
+      await inviaNuovaAttivitaAlFlusso({
+        idAttivita: user.id,
+        nome: f.storeName,
+        tipo: f.businessType ?? null,
+        tipoDescritto: f.businessType ? descriviAttivita(f.businessType, f.businessTypeDetail) : null,
+        indirizzo: f.storeAddress,
+        citta: f.businessCity,
+        descrizione: f.storeDescription ?? null,
+      });
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
