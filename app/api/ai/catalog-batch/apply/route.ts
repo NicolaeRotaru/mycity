@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
@@ -177,8 +178,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Un salto «di passaggio» (filtro caduto, scrittura non riuscita) lascia il
   // lavoro ripetibile: il lavoro pagato non si butta per un guasto di un attimo.
   let ripetibile = false;
-  // R08-001 — Chi ha avuto un verdetto del filtro e non e' stato scritto: al giro dopo passa per ultimo.
-  const guardatiENonScritti = new Set<string>();
+  // R08-001 — Chi ha avuto dal filtro un verdetto VERO di blocco in questo giro: se il lavoro torna
+  // pronto, il verdetto e la sua impronta restano nei risultati e al giro dopo non si ripaga.
+  const bloccatiDalFiltro = new Map<string, { impronta: string; motivo: string }>();
 
   if (job.operation === 'moderate') {
     // "Applica" = metti in bozza i prodotti segnalati (de-pubblica).
@@ -283,33 +285,41 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           ((typeof patch.name === 'string' || typeof patch.description === 'string') && cambiaQualcosaDiAltro(r, row))
         );
       });
-      // R08-001 — Chi il filtro l'ha gia' guardato in un giro precedente e non e' stato scritto
-      // (bloccato, o scartato dopo il filtro) resta con il testo diverso dal catalogo: se andasse
-      // sempre in testa verrebbe ripagato a ogni giro e la coda non verrebbe mai controllata. Passa
-      // per ultimo; l'ordine fra gli altri resta quello del lavoro.
-      const giaGuardato = (r: CatalogJobResult) => (r as CatalogJobResult & { filtro_gia_chiesto?: boolean }).filtro_gia_chiesto === true;
-      const daFiltrare = [...daFiltrareTutti.filter((r) => !giaGuardato(r)), ...daFiltrareTutti.filter(giaGuardato)];
+      // R08-001 — Chi e' gia' stato BLOCCATO dal filtro (verdetto vero, non un errore o un tempo scaduto)
+      // con la stessa proposta non si rifiltra e non si ripaga: resta bloccato col suo motivo, e il tempo
+      // va a chi non e' ancora controllato. Se la proposta cambia, l'impronta non torna e si rifiltra.
+      const testoPerIlFiltro = (r: CatalogJobResult) => {
+        const row = current.get(r.product_id) as ProductRow;
+        const patch = r.patch as Record<string, unknown>;
+        return {
+          name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
+          description: typeof patch.description === 'string' ? patch.description : (row.description ?? ''),
+        };
+      };
+      const improntaDi = (r: CatalogJobResult) =>
+        createHash('sha1').update(JSON.stringify([testoPerIlFiltro(r), r.patch])).digest('hex');
+      const bloccoRicordato = (r: CatalogJobResult): string | null => {
+        const m = (r as CatalogJobResult & { filtro_bloccato?: { impronta?: unknown; motivo?: unknown } }).filtro_bloccato;
+        return m && typeof m.motivo === 'string' && m.impronta === improntaDi(r) ? m.motivo : null;
+      };
+      const daFiltrare = daFiltrareTutti.filter((r) => bloccoRicordato(r) === null);
       // S10 (5/11/2026) — Prima partivano fino a duecento chiamate tutte
       // insieme: una raffica di «troppe richieste» faceva scartare come
       // vietati anche i prodotti puliti. Adesso al massimo FILTRI_INSIEME alla
       // volta, e un filtro caduto non si chiama «vietato».
-      const verdetti = await aGruppi(daFiltrare, FILTRI_INSIEME, (r) => {
-        const row = current.get(r.product_id) as ProductRow;
-        const patch = r.patch as Record<string, unknown>;
-        return classifyProductPolicy(
-          {
-            name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
-            description:
-              typeof patch.description === 'string'
-                ? patch.description
-                : (row.description ?? ''),
-          },
-          'catalog-batch-apply-policy',
-        );
-      }, inizio + FILTRI_ENTRO_MS);
+      const verdetti = await aGruppi(
+        daFiltrare,
+        FILTRI_INSIEME,
+        (r) => classifyProductPolicy(testoPerIlFiltro(r), 'catalog-batch-apply-policy'),
+        inizio + FILTRI_ENTRO_MS,
+      );
       // Chi non passa — o su cui il filtro e' caduto — non si scrive: nel
       // dubbio si nega, come fa il filtro stesso quando risponde.
       const bloccati = new Map<string, string>();
+      for (const r of daFiltrareTutti) {
+        const ricordato = bloccoRicordato(r);
+        if (ricordato !== null) bloccati.set(r.product_id, ricordato);
+      }
       daFiltrare.forEach((r, i) => {
         const esito = verdetti[i];
         if (!esito) {
@@ -321,7 +331,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           bloccati.set(r.product_id, 'filtro dei contenuti non disponibile: riprova più tardi');
           ripetibile = true;
         } else if (!esito.value.allowed) {
-          bloccati.set(r.product_id, `bloccato dal filtro dei contenuti${esito.value.reason ? `: ${esito.value.reason}` : ''}`);
+          const motivo = `bloccato dal filtro dei contenuti${esito.value.reason ? `: ${esito.value.reason}` : ''}`;
+          bloccati.set(r.product_id, motivo);
+          bloccatiDalFiltro.set(r.product_id, { impronta: improntaDi(r), motivo });
         }
       });
       if (bloccati.size > 0) {
@@ -332,10 +344,6 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         });
       }
 
-      const controllati = new Set<string>();
-      daFiltrare.forEach((r, i) => {
-        if (verdetti[i]?.status === 'fulfilled') controllati.add(r.product_id);
-      });
       for (const r of results) {
         const bloccato = bloccati.get(r.product_id);
         if (bloccato) {
@@ -417,8 +425,6 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           if (voce) void writeAudit(voce);
         }
       }
-      const scritti = new Set(esiti.filter((e) => e.esito === 'applicato').map((e) => e.productId));
-      for (const id of controllati) if (!scritti.has(id)) guardatiENonScritti.add(id);
     }
   }
 
@@ -429,12 +435,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // lavoro pagato.
   let avviso: string | undefined;
   if (ripetibile) {
-    // R08-001 — Il lavoro torna pronto portandosi dietro chi il filtro l'ha gia' guardato senza scriverlo.
+    // R08-001 — Il lavoro torna pronto portandosi dietro il verdetto di chi il filtro ha bloccato davvero.
     const risultatiMarcati =
-      guardatiENonScritti.size > 0
-        ? (Array.isArray(job.results) ? job.results : []).map((r) =>
-            guardatiENonScritti.has(r.product_id) ? { ...r, filtro_gia_chiesto: true } : r,
-          )
+      bloccatiDalFiltro.size > 0
+        ? (Array.isArray(job.results) ? job.results : []).map((r) => {
+            const m = bloccatiDalFiltro.get(r.product_id);
+            return m ? { ...r, filtro_bloccato: m } : r;
+          })
         : undefined;
     const nonRimesso = await rimettiPronto(risultatiMarcati);
     if (nonRimesso) {
