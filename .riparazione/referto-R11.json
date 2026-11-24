@@ -1,0 +1,212 @@
+{
+  "sessione": "R11",
+  "aggiornato": "2026-11-24 19:00",
+  "finita": true,
+  "testa": "62882d888a0cca73045c8d90d175ce370f503179",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "62882d888a0cca73045c8d90d175ce370f503179",
+    "nota": "typecheck, lint e vitest: 2104 file di prova passati, 1 saltato (non del ramo), 12736 casi passati; 467 s"
+  },
+  "voci": [
+    {
+      "id": "R11-001",
+      "chiave": "ai-endpoints|con l'ai dei negozi spenta al lancio, l'allarme sul conto condiviso della spesa ai può arrivare lo stesso ogni sei ore",
+      "esito": "riparato",
+      "commit": "242eafd01522a6f2f18d77e0e40f0a6afdfbaf2b",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts",
+        "tests/unit/riparazione-r04-allarme-ripiego.test.ts",
+        "tests/unit/riparazione-r13-allarme-tetto-dal-cron.test.ts",
+        "tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts",
+        "tests/unit/riparazione-r11-allarme-tetto-ai-spenta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-allarme-tetto-ai-spenta.test.ts",
+        "tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r11-allarme-tetto-ai-spenta.test.ts tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 242eafd01522a6f2f18d77e0e40f0a6afdfbaf2b^ --file lib/ai/tettoSpesa.ts --prove tests/unit/riparazione-r11-allarme-tetto-ai-spenta.test.ts,tests/unit/riparazione-r08-allarme-tetto-riga-vecchia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "allarmiTettoSpesaAiPerIlCron torna [] e toglie l inizio del guasto ricordato anche con AI_NEGOZI_ACCESA falso, senza sondare il conto. Le prove comuni r04 e r13 fissano AI_NEGOZI_ACCESA=true con un vi.mock; il caso dell AI spenta sta nella prova della riga vecchia, che sulla base si chiama riparazione-r08-allarme-tetto-riga-vecchia.test.ts (non r01 come nella scheda) e importa lib/ai/tettoSpesa.ts: per questo l ho potuta toccare. Il diff della nota non si applicava pulito: adattato a mano nel minimo.",
+      "verificato_da": "collaudatore (subagente generico, mandato di smentire): prova rimessa rilanciata su 242eafd con la r11, la r08, la r04 e la r13, uscita 0. Variante scomoda non cercata (collaudo fermato per il budget)."
+    },
+    {
+      "id": "R11-002",
+      "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+      "esito": "parziale",
+      "commit": "62882d888a0cca73045c8d90d175ce370f503179",
+      "file_toccati": [
+        "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "a mano: una mailto concatenata finta in components/ (e una col modello ${} in app/) → 1 rossa su 56 in tutti e due i casi; tolte → 56 verdi. Punto 1: guasto dell invio degli avvisi reso nullo → 3 rosse; rimesso → verdi",
+        "a_mano": {
+          "comando": "npx vitest run --reporter=dot tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        }
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Punto 1: adminDiProva tolto, si usa stato.mondo.admin del finto comune con gli indirizzi e i guasti al posto dei quattro interruttori. Punto 3: la scansione guarda anche components/ e i .ts di app/ e lib/, con la regex della concatenazione; esclude solo lib/legal/titolare.ts, dove sta recapitoPrivacy(), la funzione giusta da usare. 165 expect e 48 casi come prima.",
+      "cosa_resta": "Punto 2: spezzare il file in tre (le rotte, la notte, il sorgente) con la preparazione comune in tests/unit/aiuti/: toglie asserzioni dal file vecchio e serve la deroga firmata da Nicola.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-003",
+      "chiave": "deploy-sre|il ritorno indietro può ancora scegliere il rilascio sbagliato in due casi rari: un solo altro commit negli ultimi 20 rilasci, o un dominio che non dice il suo commit",
+      "esito": "riparato",
+      "commit": "2ebb80ee34cf34c86e62f1113c0c99535729deba",
+      "file_toccati": [
+        "scripts/prova-di-fumo.mjs",
+        "tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts",
+        "tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts",
+        "tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts",
+        "tests/unit/riparazione-r11-ritorno-indietro-casi-dubbi.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-ritorno-indietro-casi-dubbi.test.ts",
+        "tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts",
+        "tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts",
+        "tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r11-ritorno-indietro-casi-dubbi.test.ts tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2ebb80ee34cf34c86e62f1113c0c99535729deba^ --file scripts/prova-di-fumo.mjs --prove tests/unit/riparazione-r11-ritorno-indietro-casi-dubbi.test.ts,tests/unit/il-ritorno-indietro-non-torna-sullo-stesso-commit.test.ts,tests/unit/riparazione-r02-ritorno-indietro-casi-rari.test.ts,tests/unit/riparazione-r02-ritorno-indietro-commit-ripetuto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nei due casi dubbi (dominio non letto con un solo altro commit nell elenco; dominio che risponde senza dire il suo commit) il ritorno indietro non sceglie nessun indirizzo e si torna a mano. Diff della scheda applicati puliti; la prova nuova porta il nome r11.",
+      "verificato_da": "collaudatore (subagente generico, mandato di smentire): prova rimessa rilanciata su 2ebb80e, uscita 0; diff uguale a quello della scheda; COMMIT arriva sempre al passo di rilascio nel workflow. Prove vicine che importano lo script non rilanciate da lui (verdi nel verify)."
+    },
+    {
+      "id": "R11-004",
+      "chiave": "microcopy|altri «rider» rivolti al cliente restano nella pagina dell'ordine e in quella del negozio",
+      "esito": "riparato",
+      "commit": "981868bc85467e6eaabf315d7810087799b0e978",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx",
+        "app/seller/orders/[id]/page.tsx",
+        "components/OrderTimeline.tsx",
+        "tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts",
+        "tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts",
+        "tests/unit/riparazione-r11-parola-fattorino.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-parola-fattorino.test.ts",
+        "tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts",
+        "tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/riparazione-r11-parola-fattorino.test.ts tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 981868bc85467e6eaabf315d7810087799b0e978^ --file app/orders/[id]/page.tsx,app/seller/orders/[id]/page.tsx,components/OrderTimeline.tsx --prove tests/unit/riparazione-r11-parola-fattorino.test.ts,tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts,tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«rider» diventa «fattorino» nei testi mostrati della pagina dell ordine e di quella del negozio, e in «Ritirato dal fattorino» della linea del tempo. Le due prove comuni aspettano la parola nuova; la prova nuova ha anche un caso sulla linea del tempo.",
+      "verificato_da": "collaudatore (subagente generico, mandato di smentire): prova rimessa rilanciata su 981868b, uscita 0; ognuno dei tre file rimesso alla base da solo fa cadere la prova. Non ha cercato altri «rider» rimasti."
+    },
+    {
+      "id": "R11-005",
+      "chiave": "qa-flussi|due guardie sulla veloce controllano il testo del sorgente e non il comportamento",
+      "esito": "riparato",
+      "commit": "33541c52b8729877d735dfa8a1360a6d211b67d1",
+      "file_toccati": [
+        "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts",
+        "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts",
+        "tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "a mano, 3 mutanti sul sito rimessi con git checkout: DeliverySlotPicker.tsx:192 senza «&& veloceDisponibile === true» → 1 rossa su 10 nel primo file; app/checkout/page.tsx:1386 ricontrollo siPuoConfermare spento → 1 rossa su 29 nel secondo; page.tsx:1379 new Date().getHours() al posto dell ora di Roma → 1 rossa su 29; rimessi → verdi",
+        "a_mano": {
+          "comando": "npx vitest run --reporter=dot tests/unit/la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino.test.ts tests/unit/l-ordine-con-un-appuntamento-gia-passato.test.ts",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        }
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le due guardie sul testo del sorgente diventano prove sulla cassa montata (jsdom), col finto delle prove r22 portato dentro i due file: 5 expect al posto di 4 nella prima, 5 al posto di 3 nella seconda (il caso di handleSubmit con le tre toMatch).",
+      "verificato_da": "capo R11 (non il riparatore), dopo che il collaudatore e stato fermato per il budget: mutanti a mano rifatti da me su 62882d8 — DeliverySlotPicker.tsx:192 senza «&& veloceDisponibile === true» → 1 rossa su 10; app/checkout/page.tsx:1386 ricontrollo siPuoConfermare spento → 1 rossa su 29; rimessi → verdi. Variante scomoda non cercata."
+    },
+    {
+      "id": "R11-006",
+      "chiave": "qa-flussi|una prova del promemoria del carrello resta verde solo per caso",
+      "esito": "riparato",
+      "commit": "7071aca91b88083f152b541bc2d2ad4152e5e447",
+      "file_toccati": [
+        "tests/unit/le-email-d-ordine-escono-senza-il-tasto-per-smettere.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/le-email-d-ordine-escono-senza-il-tasto-per-smettere.test.ts"
+      ],
+      "prova_comando": "npx vitest run --reporter=dot tests/unit/le-email-d-ordine-escono-senza-il-tasto-per-smettere.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "a mano: maybeSingle del finto reso null sul vuoto senza la riga nuova → 3 rosse su 3; con la riga nuova → 3 verdi; la riga nuova che rende data:null → 1 rossa; rimessa → 3 verdi",
+        "a_mano": {
+          "comando": "npx vitest run --reporter=dot tests/unit/le-email-d-ordine-escono-senza-il-tasto-per-smettere.test.ts",
+          "uscita_senza_correzione": 1,
+          "uscita_con_correzione": 0
+        }
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una riga prima del return di risposta(): la rivendicazione del carrello rende una riga vera invece del vettore vuoto, che valeva «preso» solo per caso.",
+      "verificato_da": "capo R11 (non il riparatore), dopo che il collaudatore e stato fermato per il budget: mutante a mano — la riga nuova rende data:null (rivendicazione persa) → 1 rossa su 3; rimessa → 3 verdi. Variante scomoda non cercata."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "il commento del ritorno indietro dice ancora che un rilascio senza commit resta un posto buono, come prima",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": "scripts/prova-di-fumo.mjs:244",
+      "descrizione": "Dopo R11-003, quando si sa il commit che esce, un rilascio senza commit non e piu un posto dove tornare: il commento intorno alle righe 244-246 dice il contrario. Solo testo, il comportamento e giusto. Visto dal collaudo, non corretto per il budget."
+    },
+    {
+      "titolo": "il commento del lavoro di rilascio dice ancora «se i candidati sono piu di uno»",
+      "dimensione": "deploy-sre",
+      "severita": "minore",
+      "file": ".github/workflows/deploy-dopo-ci.yml:650",
+      "descrizione": "Col commit che esce noto, adesso l elenco non sceglie mai: il commento intorno alle righe 650-653 descrive la regola di prima. Solo testo; non e un file di R11."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 2,
+    "subagenti": 2,
+    "nota": "un subagente che ripara (sonnet) e un collaudatore, fermato a meta su richiesta della regista per il limite di spesa (R11-001, R11-003, R11-004 collaudate da lui; R11-005 e R11-006 coi mutanti rifatti dal capo; R11-002 parziale senza collaudo)."
+  },
+  "costo_usd": 6.06
+}

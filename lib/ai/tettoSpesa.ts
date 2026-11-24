@@ -1,6 +1,7 @@
 // lib/ai/tettoSpesa.ts
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,
   allarmiTettoSpesaAi as allarmiDelTetto,
@@ -463,10 +464,13 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   // 22/11/2026 (R13-004) — Il cron la chiama a ogni giro (ogni 5 minuti). Senza
   // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente
   // sonda, niente righe in operational_alert_log, niente errori nel registro.
+  // Con l'AI dei negozi spenta (lib/funzioni-al-lancio.ts) lib/ai/client.ts ferma ogni chiamata
+  // al modello: spendere e' impossibile, e l'allarme sul conto condiviso sarebbe solo rumore
+  // sull'unico canale degli allarmi. Niente sonda e niente righe, come senza tetto.
   // R08-002: un giro che non guarda il conto non ne ricorda il guasto. Se la riga dell'inizio di
   // un guasto vecchio restasse, al primo guasto nuovo l'allarme direbbe «non risponde da tre
   // giorni». Si toglie (best-effort); nessun limite d'eta': un guasto vero lungo conta tutti i suoi minuti.
-  if (!(tettoEur > 0)) {
+  if (!(tettoEur > 0) || !AI_NEGOZI_ACCESA) {
     try {
       await getAdminSupabase().from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
     } catch {

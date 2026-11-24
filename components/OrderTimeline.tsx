@@ -42,7 +42,7 @@ export default function OrderTimeline(p: Props) {
     // 5/11/2026 — Dalla fonte unica (`etichettaPronto`): era «Pronto per il ritiro» scritto a mano, e
     // sulla stessa pagina la targhetta diceva «Pronto per il rider».
     { label: etichettaPronto(!!p.ritiroInNegozio), at: p.readyAt },
-    { label: 'Ritirato dal rider', at: p.pickedUpAt },
+    { label: 'Ritirato dal fattorino', at: p.pickedUpAt },
     { label: 'Consegnato', at: p.deliveredAt },
   ];
 
