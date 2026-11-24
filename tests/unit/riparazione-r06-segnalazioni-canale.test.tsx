@@ -42,37 +42,53 @@ import Pagina from '@/app/admin/segnalazioni/page';
 
 const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
 
+async function inviaDecisione(esito: Record<string, unknown>): Promise<{ messaggio: string; smonta: () => void }> {
+  errori.length = 0;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify(esito), { status: 502 })
+  ) as unknown as typeof fetch;
+
+  const box = document.createElement('div');
+  document.body.appendChild(box);
+  const root = createRoot(box);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await act(async () => { root.render(createElement(QueryClientProvider, { client: qc }, createElement(Pagina))); });
+  await flush();
+  await vi.waitFor(() => { if (!box.querySelector('li select')) throw new Error('scheda non ancora disegnata'); }, { timeout: 5000 });
+
+  const select = box.querySelector('li select') as HTMLSelectElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, 'respinta');
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const area = box.querySelector('li textarea') as HTMLTextAreaElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'Il prodotto riporta un marchio non autorizzato e viene rimosso.');
+    area.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const form = box.querySelector('li form') as HTMLFormElement;
+  await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  await flush();
+  await vi.waitFor(() => { if (!errori.length) throw new Error('messaggio non ancora mostrato'); }, { timeout: 5000 });
+
+  return { messaggio: errori[0], smonta: () => act(() => root.unmount()) };
+}
+
 describe('R06-014 · il messaggio dice quale canale non è partito', () => {
   it('con solo il venditore caduto, il messaggio nomina il venditore e non chi ha segnalato', async () => {
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ ok: false, segnalanteEmail: 'inviata', segnalanteNotifica: 'inviata', venditore: 'fallita' }), { status: 502 })
-    ) as unknown as typeof fetch;
+    const { messaggio, smonta } = await inviaDecisione({ ok: false, segnalanteEmail: 'inviata', segnalanteNotifica: 'inviata', venditore: 'fallita' });
+    expect(messaggio).toContain('avviso al venditore');
+    expect(messaggio).not.toContain('a chi ha segnalato');
+    expect(messaggio).toContain('rimandare solo quello.');
+    smonta();
+  });
 
-    const box = document.createElement('div');
-    document.body.appendChild(box);
-    const root = createRoot(box);
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    await act(async () => { root.render(createElement(QueryClientProvider, { client: qc }, createElement(Pagina))); });
-    await flush();
-    await vi.waitFor(() => { if (!box.querySelector('li select')) throw new Error('scheda non ancora disegnata'); }, { timeout: 5000 });
-
-    const select = box.querySelector('li select') as HTMLSelectElement;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, 'respinta');
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    const area = box.querySelector('li textarea') as HTMLTextAreaElement;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'Il prodotto riporta un marchio non autorizzato e viene rimosso.');
-      area.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    const form = box.querySelector('li form') as HTMLFormElement;
-    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
-    await flush();
-    await vi.waitFor(() => { if (!errori.length) throw new Error('messaggio non ancora mostrato'); }, { timeout: 5000 });
-
-    expect(errori[0]).toContain('avviso al venditore');
-    expect(errori[0]).not.toContain('a chi ha segnalato');
-    act(() => root.unmount());
+  it('con due canali caduti, il messaggio li nomina e parla al plurale', async () => {
+    const { messaggio, smonta } = await inviaDecisione({ ok: false, segnalanteEmail: 'inviata', segnalanteNotifica: 'fallita', venditore: 'fallita' });
+    expect(messaggio).toContain('la notifica a chi ha segnalato');
+    expect(messaggio).toContain("l'avviso al venditore");
+    expect(messaggio).toContain('rimandare solo quelli.');
+    expect(messaggio).not.toContain('solo quello.');
+    smonta();
   });
 });

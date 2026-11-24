@@ -74,7 +74,7 @@ function messaggioEsitoNonPartito(canali: string[]): string {
   if (canali.length === 0) {
     return "L'esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.";
   }
-  return `L'esito non è partito: ${canali.join(', ')}. Registra di nuovo la decisione per rimandare solo quello.`;
+  return `L'esito non è partito: ${canali.join(', ')}. Registra di nuovo la decisione per rimandare solo ${canali.length === 1 ? 'quello' : 'quelli'}.`;
 }
 
 function dove(s: Pick<Segnalazione, 'tipo' | 'oggetto_id'>): string | null {
