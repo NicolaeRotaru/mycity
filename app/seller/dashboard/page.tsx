@@ -22,7 +22,6 @@ import { useProfile } from '@/components/hooks/useProfile';
 import StoreAvatar from '@/components/StoreAvatar';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
-import PreventivoAgenziaCard from '@/components/seller/PreventivoAgenziaCard';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
@@ -412,9 +411,6 @@ export default function SellerDashboard() {
 
       {/* ===== Onboarding (si nasconde da solo al 100%) ===== */}
       <SellerOnboardingChecklist />
-
-      {/* ===== Il preventivo dell'agenzia: cosa manca alla vetrina, già pronto (22/11/2026) ===== */}
-      <PreventivoAgenziaCard />
 
       {/* ===== Quello che non sono riuscito a leggere =====
           Il trattino su una targhetta dice «questo numero no», ma solo a chi la

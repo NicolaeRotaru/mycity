@@ -18,7 +18,6 @@ import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
-import { HREF_PREVENTIVO, VOCI_PREVENTIVO } from '@/components/seller/servizi-nel-menu';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -55,10 +54,9 @@ const NAV: NavGroup[] = [
     { href: '/seller/profile', icon: User, label: 'Profilo' },
     { href: '/seller/help', icon: LifeBuoy, label: 'Aiuto' },
   ] },
-  // 23/11/2026 — I servizi di MyCity ai venditori: il preventivo già pronto e una voce per ogni
-  // servizio (Nicola: «ogni servizio ha la sua voce dentro il menu», poi «la voce preventivo,
-  // chiamala servizi»). Le voci vengono dal listino.
-  { group: 'Servizi', items: VOCI_PREVENTIVO },
+  // 24/11/2026 — Il gruppo «Servizi» (foto e video, social, sito, scheda Google) è uscito da
+  // MyCity: Nicola, «questa zona di servizi non c'entra niente con mycity, sono servizi offerti
+  // da SDG», la sua agenzia. Il preventivo di quei servizi lo fa SDG, fuori dal marketplace.
 ];
 
 const COPILOT_HREF = '/seller/products/ai-batch';
@@ -70,9 +68,6 @@ function isActive(pathname: string, href: string): boolean {
   }
   // Tiene attiva solo la voce più specifica: products non resta attivo su
   // products/ai-batch (che ha la sua voce AI Studio).
-  // Il preventivo intero resta acceso solo sulla sua pagina: dentro un servizio si accende
-  // la voce di quel servizio, non tutte e due.
-  if (href === HREF_PREVENTIVO) return pathname === HREF_PREVENTIVO;
   if (href === '/seller/products') {
     return pathname === '/seller/products' || pathname.startsWith('/seller/products/');
   }
