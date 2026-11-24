@@ -11,6 +11,9 @@ import { rilascioDaTornare } from '@/scripts/prova-di-fumo.mjs';
  * dell'elenco vale solo se il commit che esce compare al piu' una volta fra i rilasci di
  * produzione pronti, e se compare e' il primo; altrimenti nessun indirizzo (ritorno a mano).
  * La scena di ogni giorno [Y, X] resta com'era: si torna a X.
+ * 24/11/2026 — Non piu': anche in [Y, X] X puo' essere il rilascio gia' tolto (riportato a W,
+ * fuori dai 20 dell'elenco), e col dominio non letto la risposta e' nessun indirizzo (decisione
+ * della regia, prova riparazione-r06-ritorno-indietro-casi-dubbi).
  *
  * In piu' il messaggio di `--rilascio-di-adesso` diceva sempre «il dominio non ha risposto»,
  * anche quando aveva risposto.
@@ -55,12 +58,10 @@ describe('R02-008 · col dominio non letto, il commit che esce gia\' rilasciato 
     expect(rilascioDaTornare(elenco, { commitCheEsce: Y })).toBeNull();
   });
 
-  it('[Y, X] col dominio non letto (la scena di ogni giorno): si torna a X, come prima', () => {
+  it('[Y, X] col dominio non letto (la scena di ogni giorno): nessun indirizzo, X puo\' essere il rilascio gia\' tolto', () => {
     const elenco = { deployments: [rilascio(Y, 'y-esce'), rilascio(X, 'x-prima')] };
-    expect(rilascioDaTornare(elenco, { commitCheEsce: Y })).toBe('https://mycity-x-prima.vercel.app');
-    expect(rilascioDaTornare(elenco, { commitCheEsce: Y, sulDominio: { error: { code: 'forbidden' } } })).toBe(
-      'https://mycity-x-prima.vercel.app',
-    );
+    expect(rilascioDaTornare(elenco, { commitCheEsce: Y })).toBeNull();
+    expect(rilascioDaTornare(elenco, { commitCheEsce: Y, sulDominio: { error: { code: 'forbidden' } } })).toBeNull();
   });
 
   it('da riga di comando, [Y, Y, X] senza dominio: nessun indirizzo e il messaggio dice che il dominio non ha detto chi serve', () => {
@@ -68,7 +69,7 @@ describe('R02-008 · col dominio non letto, il commit che esce gia\' rilasciato 
     expect(esito.status).not.toBe(0);
     expect(esito.stdout.trim()).toBe('');
     expect(esito.stderr).toMatch(/il dominio non ha risposto con un rilascio di produzione pronto/);
-    expect(esito.stderr).toMatch(/gia' stato rilasciato piu' volte/);
+    expect(esito.stderr).toMatch(/anche un solo altro commit puo' essere un rilascio gia' tolto/);
   });
 
   it('da riga di comando, il dominio ha risposto col commit che esce: il messaggio non dice «non ha risposto»', () => {
