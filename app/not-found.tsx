@@ -46,10 +46,12 @@ export default function NotFound() {
         La pagina che cerchi non esiste o è stata spostata. Ma i negozi di Piacenza sono sempre qui.
       </p>
 
-      <div className="flex items-center justify-center gap-3 flex-wrap mb-10">
-        <Button href="/" size="lg"><span className="inline-flex items-center gap-2"><Home size={20} aria-hidden /> Torna alla home</span></Button>
-        <Button href="/stores" variant="secondary" size="lg"><span className="inline-flex items-center gap-2"><Store size={20} aria-hidden /> Esplora i negozi</span></Button>
-        <Button href="/search" variant="secondary" size="lg"><span className="inline-flex items-center gap-2"><Search size={20} aria-hidden /> Cerca prodotti</span></Button>
+      {/* R08-004 — I bottoni non superano mai il contenitore: max-w-full e il testo va a capo anche dentro
+          una parola, centrato. Da sm in su la larghezza naturale resta quella di prima. */}
+      <div className="flex items-center justify-center gap-3 flex-wrap mb-10 max-w-full">
+        <Button href="/" size="lg" className="max-w-full"><span className="inline-flex max-w-full items-center gap-2 text-center [overflow-wrap:anywhere]"><Home size={20} className="shrink-0" aria-hidden /> Torna alla home</span></Button>
+        <Button href="/stores" variant="secondary" size="lg" className="max-w-full"><span className="inline-flex max-w-full items-center gap-2 text-center [overflow-wrap:anywhere]"><Store size={20} className="shrink-0" aria-hidden /> Esplora i negozi</span></Button>
+        <Button href="/search" variant="secondary" size="lg" className="max-w-full"><span className="inline-flex max-w-full items-center gap-2 text-center [overflow-wrap:anywhere]"><Search size={20} className="shrink-0" aria-hidden /> Cerca prodotti</span></Button>
       </div>
 
       <div className="bg-white border border-cream-300 rounded-2xl p-6 text-left max-w-full">

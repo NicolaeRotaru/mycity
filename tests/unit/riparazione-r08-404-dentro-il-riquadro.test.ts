@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs';
  *    padding del contenitore (px-6 = 48 px): 19-261 px su un contenitore che va da 48 a 232;
  *  · il riquadro «Link utili» era largo 270 px (da 5 a 275) su un contenitore di 184: la parola piu'
  *    lunga di ogni voce, con l'icona e il padding, non poteva stringersi.
+ *  · i tre bottoni («Torna alla home», «Esplora i negozi», «Cerca prodotti») andavano da 20,2 a 259,8 px:
+ *    28 px oltre il padding per lato; ora max-w-full + testo a capo (misurato: 48-232 a 280/r32, 48-272 a 320/r32).
  * Dopo: il numero e' di 70 px (141 px di testo, 70-211) e il riquadro coincide col contenitore (48-232),
  * con le voci che vanno a capo dentro.
  */
@@ -32,5 +34,18 @@ describe('R08-004 — la 404 sta dentro il suo contenitore col testo molto grand
     const voci = [...src.matchAll(/<Link href="[^"]*" className="([^"]*)">/g)].map((m) => classi(m[1]));
     expect(voci.length).toBe(6);
     for (const v of voci) expect(v).toContain('max-w-full');
+  });
+
+  it('i tre bottoni non superano il contenitore: max-w-full, testo a capo e centrato, icona che non si schiaccia', () => {
+    const bottoni = [...src.matchAll(/<Button href="([^"]*)"[^>]*className="([^"]*)"><span className="([^"]*)">/g)];
+    expect(bottoni.map((m) => m[1])).toEqual(['/', '/stores', '/search']);
+    for (const m of bottoni) {
+      expect(classi(m[2])).toContain('max-w-full');
+      const s = classi(m[3]);
+      expect(s).toContain('max-w-full');
+      expect(s).toContain('text-center');
+      expect(s).toContain('[overflow-wrap:anywhere]');
+    }
+    expect(src.match(/className="shrink-0" aria-hidden/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });
