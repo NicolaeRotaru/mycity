@@ -24,7 +24,7 @@ import { CHIAVE_ANALISI, CHIAVE_CANALI, analizzaIlSito, leggiAnalisiDelNegozio, 
  * L'ANALISI DEL BUSINESS, GIÀ PRONTA DENTRO LA PAGINA DEL SERVIZIO — 24/11/2026.
  *
  * Nicola: «quando dico preventivo intendo un'anteprima/demo già creata di tutte quelle cose». Qui il
- * titolare vede la sua analisi: l'attività (n8n, flusso 18, dalla scheda), i canali (social e scheda
+ * titolare vede la sua analisi: l'attività (n8n, flusso 16, dalla scheda), i canali (social e scheda
  * Google, da n8n), il sito (Google PageSpeed). Dove un'analisi non c'è ancora la pagina lo dice e non
  * inventa niente. Sotto, «I tuoi canali», dove li scrive.
  */

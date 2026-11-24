@@ -216,6 +216,7 @@ const ANALISI = {
       consigli: ['Tre post a settimana, con le storie del mattino'],
     },
     facebook: { stato: 'non_trovato' },
+    tiktok: { stato: 'non_disponibile' },
   },
 };
 
@@ -234,6 +235,8 @@ describe('/api/agenzia/analisi-canali', () => {
     expect(canali.instagram.osservazioni).toEqual(['Pubblica circa una volta a settimana']);
     expect(canali.instagram.numeri).toEqual({ follower: 812, post_ultimi_30_giorni: 3 });
     expect(typeof riga.canali_il).toBe('string');
+    // «non_disponibile» (sessione n8n, 24/11): canale che non si legge coi mezzi consentiti.
+    expect(canali.tiktok.stato).toBe('non_disponibile');
   });
 
   it('senza segreto, col segreto sbagliato, in http o senza segreto configurato non entra niente', async () => {

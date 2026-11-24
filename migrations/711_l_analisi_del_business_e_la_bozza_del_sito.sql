@@ -11,7 +11,7 @@
 --     · canali / canali_il: l'analisi di social e scheda Google che manda n8n dai dati pubblici
 --       (app/api/agenzia/analisi-canali), con data e fonte di ogni canale;
 --     · canali_richiesti_il: quando il titolare ha cambiato i suoi canali, cioè quando n8n deve rifare.
---     L'analisi dell'attività (flusso 18) resta dov'è: nella scheda del cliente (schede_clienti, 708).
+--     L'analisi dell'attività (flusso 16) resta dov'è: nella scheda del cliente (schede_clienti, 708).
 --  2. bozze_sito — la bozza del sito scritta dall'AD (app/api/agenzia/bozza-sito): quattro sezioni,
 --     senza prezzi, ogni testo da confermare dal titolare. La pagina «Sito web» la mostra al posto di
 --     quella fatta coi dati.

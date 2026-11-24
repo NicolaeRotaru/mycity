@@ -11,7 +11,7 @@ import { senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-clien
  * settimana» (Base, Business, Premium: lo dice `FASCE` in preventivo.ts).
  *
  * Tre parti, e da dove arriva ognuna:
- *  1. L'ATTIVITÀ — la lettura di n8n (flusso 18) che arriva dentro la scheda del cliente, sezione
+ *  1. L'ATTIVITÀ — la lettura di n8n (flusso 16, la ricerca sul web) che arriva dentro la scheda del cliente, sezione
  *     `analisi` (lib/agenzia/scheda-cliente.ts): tipo di locale, pubblico, punti di forza, idee.
  *  2. I CANALI — social e scheda Google, letti da n8n dai dati pubblici e mandati a
  *     /api/agenzia/analisi-canali (formato `AnalisiCanaliInArrivo` qui sotto).
@@ -59,7 +59,10 @@ export function analisiDellAttivita(scheda: SchedaCliente | null | undefined): A
 export const CANALI_ANALIZZATI = ['instagram', 'facebook', 'tiktok', 'google'] as const;
 export type CanaleAnalizzato = (typeof CANALI_ANALIZZATI)[number];
 
-export const STATI_ANALISI_CANALE = ['fatta', 'non_trovato', 'privato', 'errore'] as const;
+// `non_disponibile` (sessione n8n, 24/11): il canale non si può leggere coi mezzi consentiti — le pagine
+// di Meta e Google non si leggono mai in automatico, si usano solo le API ufficiali (TikTok non ne ha,
+// Facebook senza la revisione di Meta nemmeno, Google Places aspetta la decisione di Nicola sui costi).
+export const STATI_ANALISI_CANALE = ['fatta', 'non_trovato', 'privato', 'non_disponibile', 'errore'] as const;
 
 const fonteHttps = z.string().trim().max(500).regex(/^https:\/\//i, 'la fonte è un indirizzo https');
 const intero = z.number().int().min(0).max(100_000_000);
@@ -134,6 +137,7 @@ export const STATO_CANALE_IN_PAROLE: Record<(typeof STATI_ANALISI_CANALE)[number
   fatta: 'Analizzato',
   non_trovato: 'Non l’abbiamo trovato: controlla di averlo scritto giusto.',
   privato: 'Il profilo è privato: dai dati pubblici non si legge.',
+  non_disponibile: 'Per ora questo canale non lo possiamo leggere in automatico: lo guardiamo insieme a te.',
   errore: 'La lettura non è riuscita: la rifacciamo noi.',
 };
 
