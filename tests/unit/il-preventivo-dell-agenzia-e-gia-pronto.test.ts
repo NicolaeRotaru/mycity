@@ -87,13 +87,13 @@ describe('i tre abbonamenti sono quelli di Nicola (24/11/2026)', () => {
 });
 
 describe('cosa manca alla vetrina', () => {
-  it('una vetrina vuota si vede proporre tutti e tre i servizi, nell ordine del listino', () => {
-    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'sito_web', 'social']);
+  it('una vetrina vuota si vede proporre tutti i servizi, nell ordine del listino (quattro dal 24/11 sera)', () => {
+    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'sito_web', 'social', 'analisi']);
   });
 
-  it('una vetrina completa si vede proporre solo la gestione social, con dentro la scheda Google', () => {
+  it('una vetrina completa si vede proporre solo la gestione social, con dentro la scheda Google, e l analisi', () => {
     const voci = cosaManca(COMPLETA);
-    expect(voci.map((v) => v.id)).toEqual(['social']);
+    expect(voci.map((v) => v.id)).toEqual(['social', 'analisi']);
     expect(voci[0].perche[0]).toContain('Instagram');
     expect(voci[0].perche[1]).toContain('Google');
   });
@@ -127,7 +127,7 @@ describe('il preventivo', () => {
   it('porta i canoni delle tre fasce e cosa manca, senza prezzi per servizio', () => {
     const p = costruisciPreventivo({ idAttivita: 'abc123-def', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar', dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO });
     expect(p.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
-    expect(p.righe.map((r) => r.id)).toEqual(['foto_video', 'sito_web', 'social']);
+    expect(p.righe.map((r) => r.id)).toEqual(['foto_video', 'sito_web', 'social', 'analisi']);
     expect(p.righe.some((r) => 'prezzo' in r)).toBe(false);
     expect(p.scelto).toBeNull();
   });
@@ -181,7 +181,7 @@ describe('il preventivo', () => {
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelto: 'premium',
     });
     expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
-      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Sito web professionale, Gestione dei social e di Google Maps\. Telefono: 3331234567\.$/,
+      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Sito web professionale, Gestione dei social e di Google Maps, Analisi del business\. Telefono: 3331234567\.$/,
     );
   });
 });

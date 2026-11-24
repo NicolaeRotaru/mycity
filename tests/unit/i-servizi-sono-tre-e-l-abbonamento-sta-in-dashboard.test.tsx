@@ -51,6 +51,7 @@ vi.mock('@tanstack/react-query', () => ({
     return { data: 0 };
   },
   useMutation: () => ({ mutate: () => undefined, isPending: false }),
+  useQueryClient: () => ({ setQueryData: () => undefined, invalidateQueries: () => undefined }),
 }));
 vi.mock('sonner', () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: { auth: { signOut: async () => ({}) }, from: () => ({}), rpc: async () => ({ data: null }) } }));
@@ -122,7 +123,7 @@ describe('il menu: «Servizi» è il secondo gruppo, coi servizi in alto', () =>
 
   it('le voci portano alle pagine nuove', async () => {
     const r = await monta(SellerShell, null, createElement('p', null, 'x'));
-    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/abbonamento']) {
+    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/servizi/analisi', '/seller/abbonamento']) {
       expect(r.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
     expect(r.querySelector('a[href^="/seller/preventivo"]')).toBeNull();
@@ -130,8 +131,8 @@ describe('il menu: «Servizi» è il secondo gruppo, coi servizi in alto', () =>
 });
 
 describe('da quattro servizi a tre', () => {
-  it('foto e video, sito web, gestione social', () => {
-    expect([...SERVIZI_AGENZIA]).toEqual(['foto_video', 'sito_web', 'social']);
+  it('foto e video, sito web, gestione social (e dal 24/11 sera l analisi del business, in fondo)', () => {
+    expect([...SERVIZI_AGENZIA]).toEqual(['foto_video', 'sito_web', 'social', 'analisi']);
     expect(servizioDaSlug('scheda-google')).toBeNull();
   });
 
@@ -222,7 +223,7 @@ describe('la pagina Abbonamento serve solo a scegliere e pagare', () => {
 
   it('porta alle pagine dei tre servizi, per rileggere cosa si riceve (collaudo del 24/11)', async () => {
     const r = await monta(PaginaAbbonamento);
-    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social']) {
+    for (const href of ['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/servizi/analisi']) {
       expect(r.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
   });
@@ -262,7 +263,7 @@ describe('il riquadro «Abbonamento» in dashboard', () => {
     expect(cima.textContent).toBe('');
     const r = await monta(RiquadroAbbonamento, { posizione: 'dopo-numeri' });
     expect(r.textContent).toContain('Il tuo abbonamento Business è attivo, lo realizza SDG Agenzia');
-    expect(r.querySelectorAll('a[href^="/seller/servizi/"]')).toHaveLength(3);
+    expect(r.querySelectorAll('a[href^="/seller/servizi/"]')).toHaveLength(4);
     expect(r.textContent).not.toContain('Premium');
   });
 
@@ -292,7 +293,7 @@ describe('il riquadro «Abbonamento» in dashboard', () => {
     expect(statoRiquadro(null, null)).toEqual({ tipo: 'scegli', vetrina: 'sconosciuta' });
     expect(statoRiquadro({ fascia: 'premium', stato: 'active', rinnovoIl: null }, true)).toEqual({ tipo: 'attivo', fascia: 'premium' });
     expect(statoRiquadro({ fascia: 'base', stato: 'past_due', rinnovoIl: null }, true)).toEqual({ tipo: 'in_ritardo', fascia: 'base' });
-    expect(pulsantiServizi(null).map((p) => p.href)).toEqual(['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social']);
+    expect(pulsantiServizi(null).map((p) => p.href)).toEqual(['/seller/servizi/foto-video', '/seller/servizi/sito-web', '/seller/servizi/social', '/seller/servizi/analisi']);
   });
 
   it('la dashboard lo mette in cima e dopo i numeri, al posto del preventivo e dell avviso demo', () => {
@@ -315,7 +316,7 @@ describe('nell area del negozio non resta la parola «preventivo»', () => {
     testi.push((await monta(SellerShell, null, createElement('p', null, 'x'))).textContent ?? '');
     testi.push((await monta(PaginaAbbonamento)).textContent ?? '');
     for (const id of SERVIZI_AGENZIA) {
-      stato.slug = ({ foto_video: 'foto-video', sito_web: 'sito-web', social: 'social' } as const)[id];
+      stato.slug = ({ foto_video: 'foto-video', sito_web: 'sito-web', social: 'social', analisi: 'analisi' } as const)[id];
       testi.push((await monta(PaginaDelServizio)).textContent ?? '');
     }
     testi.push((await monta(RiquadroAbbonamento, { posizione: 'cima' })).textContent ?? '');

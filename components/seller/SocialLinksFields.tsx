@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Instagram, Facebook, Globe, MessageCircle, Music2 } from 'lucide-react';
+import { Instagram, Facebook, Globe, MapPin, MessageCircle, Music2 } from 'lucide-react';
 import type { StoreCustomization } from '@/lib/store-customization';
 
 type Socials = NonNullable<StoreCustomization['socials']>;
@@ -19,6 +19,8 @@ const FIELDS: { key: keyof Socials; label: string; placeholder: string; icon: Re
   { key: 'tiktok', label: 'TikTok', placeholder: 'nomenegozio', icon: <Music2 size={16} /> },
   { key: 'whatsapp', label: 'WhatsApp', placeholder: '+39 333 1234567', icon: <MessageCircle size={16} /> },
   { key: 'website', label: 'Sito web', placeholder: 'https://...', icon: <Globe size={16} /> },
+  // 24/11/2026 — Il link della scheda su Google Maps, per l'analisi del business (non va in vetrina).
+  { key: 'google_maps', label: 'Scheda Google Maps', placeholder: 'https://maps.app.goo.gl/...', icon: <MapPin size={16} /> },
 ];
 
 /** Input dei link social — si salva solo handle/numero/URL, gli href li costruisce il sito. */

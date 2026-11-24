@@ -33,8 +33,12 @@
 import type { TipoAttivita } from './tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
 
-/** Nell'ordine del menu «Servizi» (Nicola, 24/11/2026: «foto e video, sito e social, gestione di social»). */
-export const SERVIZI_AGENZIA = ['foto_video', 'sito_web', 'social'] as const;
+/**
+ * Nell'ordine del menu «Servizi» (Nicola, 24/11/2026: «foto e video, sito e social, gestione di social»).
+ * Il quarto, l'analisi del business, è arrivato la sera del 24/11 (Nicola: «manca un'ultima cosa dentro
+ * i servizi, l'analisi del business, la fa n8n»): sta dopo i social, prima di «Abbonamento».
+ */
+export const SERVIZI_AGENZIA = ['foto_video', 'sito_web', 'social', 'analisi'] as const;
 export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
 
 /**
@@ -45,6 +49,7 @@ export const SLUG_SERVIZIO: Record<ServizioAgenzia, string> = {
   foto_video: 'foto-video',
   sito_web: 'sito-web',
   social: 'social',
+  analisi: 'analisi',
 };
 
 /** Il servizio di un indirizzo, o `null` se l'indirizzo non è di nessun servizio. */
@@ -86,6 +91,12 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
     titolo: 'Gestione dei social e di Google Maps',
     descrizione: 'I post sui tuoi social li prepariamo e li pubblichiamo noi, in automatico, con le foto della tua vetrina. E curiamo la tua scheda su Google Maps: categoria giusta, orari, foto e il collegamento alla tua vetrina MyCity. Chi cerca vicino a te ti trova.',
   },
+  // 24/11/2026 — Nicola: «dentro il servizio di analisi, oltre all'analisi che già n8n fa, ci deve
+  // essere anche l'analisi dei social, google, sito». Solo fonti gratuite (sua scelta, stesso giorno).
+  analisi: {
+    titolo: 'Analisi del business',
+    descrizione: 'Ti diciamo cosa funziona e cosa migliorare: la tua attività, i tuoi social, la scheda Google e il sito, letti da noi e spiegati in parole semplici.',
+  },
 };
 
 type Fascia = {
@@ -120,6 +131,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Una sessione di foto all’avvio: copertina e prodotti principali.',
       sito_web: 'Un sito di una pagina col tuo nome, collegato alla vetrina.',
       social: '8 post al mese, preparati e pubblicati da noi. Scheda Google Maps creata o sistemata all’avvio.',
+      analisi: 'Un’analisi completa all’avvio: la tua attività, i social, la scheda Google e il sito, con cosa migliorare.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio.',
     assistenza: 'Su WhatsApp, risposta entro 24 ore lavorative.',
@@ -132,6 +144,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.',
       sito_web: 'Un sito completo di più pagine, col tuo nome.',
       social: '12 post al mese, 3 a settimana, con 2 video brevi. Scheda Google Maps sistemata, più le risposte alle recensioni scritte da noi.',
+      analisi: 'L’analisi completa all’avvio e una nuova ogni mese: cosa è cambiato e cosa fare il mese dopo.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.',
     assistenza: 'Su WhatsApp, risposta entro 4 ore lavorative.',
@@ -144,6 +157,7 @@ export const FASCE: Record<Abbonamento, Fascia> = {
       foto_video: 'Una sessione di foto e video ogni mese.',
       sito_web: 'Un sito completo, aggiornato da noi ogni mese.',
       social: '20 post al mese, 4 video brevi e le storie. Scheda Google Maps curata ogni mese: foto nuove, post e risposte alle recensioni.',
+      analisi: 'L’analisi ogni settimana, e un incontro al mese per leggerla insieme.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in home page due settimane al mese.',
     assistenza: 'Un referente tutto tuo e una visita nel locale ogni mese.',
@@ -224,7 +238,7 @@ export type DatiAttivita = {
   storeMedia: unknown;
   /** I prodotti ancora in catalogo (non venduti, non esauriti per sempre), con le loro foto. */
   prodotti: { images: unknown }[];
-  /** `store_customization.socials`: instagram, facebook, tiktok, whatsapp, website. */
+  /** `store_customization.socials`: instagram, facebook, tiktok, whatsapp, website e, dal 24/11/2026, google_maps. */
   socials?: unknown;
 };
 
@@ -255,6 +269,9 @@ const elenco = (parole: string[]) =>
   parole.length <= 1 ? parole.join('') : `${parole.slice(0, -1).join(', ')} e ${parole[parole.length - 1]}`;
 
 const PROFILI_SOCIAL = [['instagram', 'Instagram'], ['facebook', 'Facebook'], ['tiktok', 'TikTok']] as const;
+
+/** I canali che l'analisi legge (24/11/2026): i social, la scheda Google su Maps e il sito. */
+const CANALI_DA_ANALIZZARE = [...PROFILI_SOCIAL, ['google_maps', 'la scheda Google'], ['website', 'il sito']] as const;
 
 /** Quello che manca all'attività, nell'ordine del listino. */
 export function cosaManca(d: DatiAttivita): VoceMancante[] {
@@ -292,6 +309,19 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
         ? 'Nessun profilo social è collegato alla vetrina.'
         : `Hai già ${elenco(profili)}: i post possono partire in automatico, senza che tu li scriva.`,
       'Quando qualcuno cerca «vicino a me», Google mostra prima le schede complete di orari e foto: controlliamo la tua.',
+    ],
+  });
+
+  // L'analisi del business (24/11/2026) si propone sempre, come i social: serve anche a chi ha già
+  // tutto, e dai dati si vede solo quali canali il titolare ci ha scritto.
+  const canali = CANALI_DA_ANALIZZARE.filter(([chiave]) => campoPieno(d.socials, chiave)).map(([, nome]) => nome);
+  voci.push({
+    id: 'analisi',
+    perche: [
+      canali.length === 0
+        ? 'Non ci hai ancora scritto i tuoi canali: social, scheda Google e sito. Scrivili e li leggiamo noi.'
+        : `Ci hai scritto ${elenco(canali)}: li leggiamo e ti diciamo cosa funziona e cosa migliorare.`,
+      'L’analisi ti dice, in parole semplici, chi sono i tuoi clienti e cosa fare il mese prossimo.',
     ],
   });
 

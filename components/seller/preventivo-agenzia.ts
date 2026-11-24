@@ -1,5 +1,8 @@
 import type { Abbonamento, Preventivo } from '@/lib/agenzia/preventivo';
 import { leggiSchedaSalvata, type SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import type { Canale, Canali } from '@/lib/agenzia/canali';
+import { leggiAnalisiCanali, leggiRisultatoSito, type AnalisiCanali, type RisultatoSito } from '@/lib/agenzia/analisi';
+import { leggiBozzaSalvata, type BozzaSitoAd } from '@/lib/agenzia/bozza-sito-ad';
 
 /**
  * Le letture del preventivo dal browser, in un posto solo: la pagina e il
@@ -87,4 +90,82 @@ export async function leggiSchedaDelNegozio(): Promise<SchedaCliente | null> {
   const { data, error } = await supabase.from('schede_clienti').select('scheda').eq('id_attivita', chi.user.id).maybeSingle();
   if (error || !data) return null;
   return leggiSchedaSalvata((data as { scheda?: unknown }).scheda);
+}
+
+/* ───────────── 24/11/2026 — L'analisi del business e la bozza del sito dell'AD ───────────── */
+
+
+export const CHIAVE_ANALISI = ['seller', 'analisi-del-negozio'] as const;
+export const CHIAVE_CANALI = ['seller', 'canali'] as const;
+export const CHIAVE_BOZZA_AD = ['seller', 'bozza-sito-ad'] as const;
+
+export type AnalisiDelNegozio = {
+  sito: RisultatoSito | null;
+  canali: AnalisiCanali | null;
+  canaliRichiestiIl: string | null;
+};
+
+/** L'analisi del negozio (migrazione 711): la regola di riga fa leggere solo la sua. Senza, tutto `null`. */
+export async function leggiAnalisiDelNegozio(): Promise<AnalisiDelNegozio> {
+  const vuota: AnalisiDelNegozio = { sito: null, canali: null, canaliRichiestiIl: null };
+  const { supabase } = await import('@/lib/supabase/client');
+  const { data: chi } = await supabase.auth.getUser();
+  if (!chi.user) return vuota;
+  const { data, error } = await supabase
+    .from('analisi_negozi')
+    .select('sito, canali, canali_richiesti_il, canali_il')
+    .eq('id_attivita', chi.user.id)
+    .maybeSingle();
+  if (error || !data) return vuota;
+  const r = data as { sito: unknown; canali: unknown; canali_richiesti_il: string | null; canali_il: string | null };
+  const inAttesa = r.canali_richiesti_il && (!r.canali_il || new Date(r.canali_richiesti_il) > new Date(r.canali_il));
+  return { sito: leggiRisultatoSito(r.sito), canali: leggiAnalisiCanali(r.canali), canaliRichiestiIl: inAttesa ? r.canali_richiesti_il : null };
+}
+
+/** La bozza del sito scritta dall'AD, se c'è (migrazione 711). */
+export async function leggiBozzaDellAd(): Promise<BozzaSitoAd | null> {
+  const { supabase } = await import('@/lib/supabase/client');
+  const { data: chi } = await supabase.auth.getUser();
+  if (!chi.user) return null;
+  const { data, error } = await supabase.from('bozze_sito').select('bozza').eq('id_attivita', chi.user.id).maybeSingle();
+  if (error || !data) return null;
+  return leggiBozzaSalvata((data as { bozza?: unknown }).bozza);
+}
+
+export async function leggiCanali(): Promise<Canali> {
+  const r = await fetch('/api/seller/canali', { cache: 'no-store' });
+  const corpo = (await r.json().catch(() => null)) as { ok?: boolean; data?: { canali: Canali }; error?: { message?: string } } | null;
+  if (!r.ok || !corpo?.ok || !corpo.data) throw new Error(corpo?.error?.message ?? 'Non sono riuscito a leggere i tuoi canali.');
+  return corpo.data.canali;
+}
+
+export class ErroreCanali extends Error {
+  constructor(message: string, readonly errori: Partial<Record<Canale, string>>) {
+    super(message);
+  }
+}
+
+export async function salvaCanali(canali: Canali): Promise<{ canali: Canali; analisiChiesta: boolean }> {
+  const r = await fetch('/api/seller/canali', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(canali) });
+  const corpo = (await r.json().catch(() => null)) as
+    | { ok: true; data: { canali: Canali; analisiChiesta: boolean } }
+    | { ok: false; error?: { message?: string; details?: { errori?: Partial<Record<Canale, string>> } } }
+    | null;
+  if (!r.ok || !corpo || corpo.ok !== true) {
+    const e = corpo && corpo.ok === false ? corpo.error : undefined;
+    throw new ErroreCanali(e?.message ?? 'Non sono riuscito a salvare. Riprova.', e?.details?.errori ?? {});
+  }
+  return corpo.data;
+}
+
+export async function analizzaIlSito(): Promise<{ sito: RisultatoSito; giaFattaOggi: boolean }> {
+  const r = await fetch('/api/seller/analisi-sito', { method: 'POST' });
+  const corpo = (await r.json().catch(() => null)) as
+    | { ok: true; data: { sito: RisultatoSito; giaFattaOggi: boolean } }
+    | { ok: false; error?: { message?: string } }
+    | null;
+  if (!r.ok || !corpo || corpo.ok !== true) {
+    throw new Error((corpo && corpo.ok === false && corpo.error?.message) || 'L’analisi del sito non è riuscita. Riprova fra poco.');
+  }
+  return corpo.data;
 }

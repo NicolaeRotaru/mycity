@@ -1,7 +1,8 @@
-import { Camera, CalendarDays, Check, Film, Globe, MapPin, Sparkles } from 'lucide-react';
+import { Camera, CalendarDays, Check, Film, Globe, MapPin, Sparkles, TrendingUp } from 'lucide-react';
 import type { ServizioAgenzia } from '@/lib/agenzia/preventivo';
 import type { TipoAttivita } from '@/lib/agenzia/tipi-attivita';
 import type { SchedaCliente } from '@/lib/agenzia/scheda-cliente';
+import { sezioniDellaBozza, type BozzaSitoAd } from '@/lib/agenzia/bozza-sito-ad';
 import {
   bozzaSito,
   FORMATI_FOTO,
@@ -20,11 +21,15 @@ import {
  * I contenuti li calcola `lib/agenzia/contenuti-servizi.ts`: qui si disegna soltanto.
  */
 
-/** `scheda`: la scheda del locale mandata da n8n (24/11/2026). Senza, la bozza e il piano restano generici. */
-type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null };
+/**
+ * `scheda`: la scheda del locale mandata da n8n (24/11/2026). Senza, la bozza e il piano restano generici.
+ * `bozzaAd`: la bozza del sito scritta dall'AD (24/11/2026). Se c'è, i testi del sito sono i suoi.
+ */
+type Props = { id: ServizioAgenzia; nome: string; tipo: TipoAttivita; giorno: string; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null };
 
-export default function AnteprimaServizio({ id, nome, tipo, giorno, scheda }: Props) {
-  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} scheda={scheda} />;
+export default function AnteprimaServizio({ id, nome, tipo, giorno, scheda, bozzaAd }: Props) {
+  if (id === 'sito_web') return <BozzaDelSito nome={nome} tipo={tipo} scheda={scheda} bozzaAd={bozzaAd} />;
+  if (id === 'analisi') return <CosaContieneLAnalisi />;
   if (id === 'social') {
     return (
       <>
@@ -48,14 +53,24 @@ function Riquadro({ icona: Icona, titolo, nota, children }: { icona: typeof Glob
   );
 }
 
-function DaConfermare() {
-  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-800">da confermare</span>;
+function DaConfermare({ testo = 'da confermare' }: { testo?: string }) {
+  return <span className="ml-1 rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-800">{testo}</span>;
 }
 
-function BozzaDelSito({ nome, tipo, scheda }: { nome: string; tipo: TipoAttivita; scheda?: SchedaCliente | null }) {
-  const b = bozzaSito(nome, tipo, scheda);
+function BozzaDelSito({ nome, tipo, scheda, bozzaAd }: { nome: string; tipo: TipoAttivita; scheda?: SchedaCliente | null; bozzaAd?: BozzaSitoAd | null }) {
+  const fattaCoiDati = bozzaSito(nome, tipo, scheda);
+  // La bozza dell'AD prende il posto dei testi; indirizzo, nome e pulsante restano quelli calcolati.
+  const b = bozzaAd
+    ? { ...fattaCoiDati, sottotitolo: bozzaAd.sottotitolo ?? fattaCoiDati.sottotitolo, sezioni: sezioniDellaBozza(bozzaAd) }
+    : fattaCoiDati;
   return (
-    <Riquadro icona={Globe} titolo="La bozza del tuo sito" nota="Una prima bozza fatta con i tuoi dati: testi e foto li completiamo insieme.">
+    <Riquadro
+      icona={Globe}
+      titolo="La bozza del tuo sito"
+      nota={bozzaAd
+        ? 'I testi li abbiamo scritti per te con quello che sappiamo del tuo locale. Ogni testo è da confermare: li correggi tu, prima che il sito vada online.'
+        : 'Una prima bozza fatta con i tuoi dati: testi e foto li completiamo insieme.'}
+    >
       <div className="overflow-hidden rounded-lg border border-cream-300 bg-white shadow-sm">
         {/* La barra del browser: l'indirizzo è un suggerimento, da verificare se è libero. */}
         <div className="flex items-center gap-2 border-b border-cream-200 bg-cream-100 px-3 py-1.5">
@@ -74,7 +89,7 @@ function BozzaDelSito({ nome, tipo, scheda }: { nome: string; tipo: TipoAttivita
         <div className="grid gap-px bg-cream-200 sm:grid-cols-2">
           {b.sezioni.map((s) => (
             <div key={s.titolo} className="bg-white p-3">
-              <p className="text-xs font-bold text-ink-900">{s.titolo}{s.daConfermare && <DaConfermare />}</p>
+              <p className="text-xs font-bold text-ink-900">{s.titolo}{s.daConfermare && <DaConfermare testo={bozzaAd ? 'da confermare dal titolare' : undefined} />}</p>
               <p className="mt-0.5 text-xs text-ink-600">{s.testo}</p>
             </div>
           ))}
@@ -84,7 +99,9 @@ function BozzaDelSito({ nome, tipo, scheda }: { nome: string; tipo: TipoAttivita
         {b.indirizzoEsistente
           ? `${b.indirizzo} è l’indirizzo del sito che hai già: lo teniamo, e il sito nuovo va lì.`
           : `L’indirizzo ${b.indirizzo} è un suggerimento: prima di comprarlo verifichiamo che sia libero.`}
-        {b.sezioni.some((s) => s.dalLocale) && ' I dati del tuo locale li abbiamo trovati in rete: quelli «da confermare» li controlli tu.'}
+        {bozzaAd
+          ? ' Ogni testo lo confermi tu: niente va online senza il tuo sì.'
+          : b.sezioni.some((s) => s.dalLocale) && ' I dati del tuo locale li abbiamo trovati in rete: quelli «da confermare» li controlli tu.'}
       </p>
     </Riquadro>
   );
@@ -169,6 +186,28 @@ function SchedaSuMaps({ nome, tipo }: { nome: string; tipo: TipoAttivita }) {
       </div>
       <ul className="mt-3 space-y-1 text-xs text-ink-700">
         {sc.lavori.map((l) => (
+          <li key={l} className="flex gap-1.5"><Check size={14} className="mt-px shrink-0 text-olive-700" aria-hidden /> {l}</li>
+        ))}
+      </ul>
+    </Riquadro>
+  );
+}
+
+/**
+ * L'analisi del business nell'anteprima (24/11/2026): qui si dice solo cosa contiene. L'analisi vera,
+ * coi dati del negozio, sta nella pagina del servizio dentro l'area del negozio, non nel link col codice.
+ */
+function CosaContieneLAnalisi() {
+  const parti = [
+    'La tua attività: che locale sei, chi sono i tuoi clienti, i tuoi punti di forza.',
+    'I tuoi social e la scheda Google: cosa funziona, cosa migliorare.',
+    'Il tuo sito: velocità dal telefono, se Google ti trova, se è facile da usare.',
+    'Cosa fare il mese prossimo, in parole semplici.',
+  ];
+  return (
+    <Riquadro icona={TrendingUp} titolo="Cosa contiene l’analisi" nota="Solo fonti pubbliche e gratuite: i tuoi canali li scrivi tu, e non ci servono password.">
+      <ul className="space-y-1 text-xs text-ink-700">
+        {parti.map((l) => (
           <li key={l} className="flex gap-1.5"><Check size={14} className="mt-px shrink-0 text-olive-700" aria-hidden /> {l}</li>
         ))}
       </ul>

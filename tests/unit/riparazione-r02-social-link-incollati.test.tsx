@@ -89,7 +89,7 @@ describe('R02-007 · link social incollati', () => {
     await invia(radice);
     expect(onSubmit).not.toHaveBeenCalled();
     const errore = radice.querySelector('#social-facebook-errore');
-    expect(errore?.textContent).toBe('Scrivi solo il nome del profilo, per esempio panequotidiano');
+    expect(errore?.textContent).toBe('Scrivi solo il nome del profilo, per esempio iltuonegozio');
     expect(campo(radice, 'facebook').getAttribute('aria-invalid')).toBe('true');
     expect(radice.querySelector('#social-instagram-errore')).toBeNull();
     expect(sezione(radice).open).toBe(true);

@@ -38,6 +38,7 @@ vi.mock('@tanstack/react-query', () => ({
       ? { data: stato.preventivo, isLoading: false, isError: false, refetch: () => undefined }
       : { data: 0 },
   useMutation: () => ({ mutate: () => undefined, isPending: false }),
+  useQueryClient: () => ({ setQueryData: () => undefined, invalidateQueries: () => undefined }),
 }));
 vi.mock('sonner', () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: { auth: { signOut: async () => ({}) }, from: () => ({}) } }));

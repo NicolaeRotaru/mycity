@@ -37,6 +37,8 @@ const NAV: NavGroup[] = [
     { href: '/admin/users', icon: Users, label: 'Utenti' },
     // 24/11/2026 — Il link del preventivo per chi è in «modalità preventivo» (Ora del Gusto).
     { href: '/admin/preventivi', icon: FileText, label: 'Preventivi col link' },
+    // 24/11/2026 — I negozi che aspettano la bozza del sito scritta dall'AD nel suo giro.
+    { href: '/admin/bozze-sito', icon: FileText, label: 'Bozze del sito' },
   ] },
   { group: 'Trust & Safety', items: [
     { href: '/admin/disputes', icon: Gavel, label: 'Reclami', badge: 'disputes' },

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, BadgeCheck, EyeOff, Globe, Share2, Sparkles, Video, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BadgeCheck, EyeOff, Globe, Share2, Sparkles, TrendingUp, Video, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { Button } from '@/components/ui/Button';
@@ -21,7 +21,7 @@ import { formatPriceFromCents } from '@/lib/format';
  * disegna solo se lo stato è il suo: le letture sono le stesse e React Query le fa una volta.
  */
 
-const ICONE: Record<ServizioAgenzia, LucideIcon> = { foto_video: Video, sito_web: Globe, social: Share2 };
+const ICONE: Record<ServizioAgenzia, LucideIcon> = { foto_video: Video, sito_web: Globe, social: Share2, analisi: TrendingUp };
 
 export default function RiquadroAbbonamento({ posizione }: { posizione: 'cima' | 'dopo-numeri' }) {
   const { profile } = useProfile();
@@ -92,7 +92,7 @@ function DaScegliere({ stato, p, servizi }: {
     <Cornice tono={nascosta ? 'giallo' : 'crema'}>
       <Titolo icona={nascosta ? EyeOff : Sparkles}>{nascosta ? TESTI_RIQUADRO.nascosta : TESTI_RIQUADRO.visibile}</Titolo>
       <p className="mt-1 text-sm text-ink-700">{nascosta ? TESTI_RIQUADRO.nascostaSotto : TESTI_RIQUADRO.visibileSotto}</p>
-      <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Le tre fasce dell'abbonamento">
+      <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Le tre fasce dell'abbonamento">
         {ABBONAMENTI.map((f) => {
           const primo = p.primoMeseScontato ? canonePrimoMese(p.prezzi[f]) : null;
           const consigliata = f === p.consigliato;
@@ -116,7 +116,7 @@ function DaScegliere({ stato, p, servizi }: {
 
 function PulsantiServizi({ righe }: { righe: Parameters<typeof pulsantiServizi>[0] }) {
   return (
-    <nav aria-label="I servizi" className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <nav aria-label="I servizi" className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
       {pulsantiServizi(righe).map((s) => {
         const Icona = ICONE[s.id];
         return (

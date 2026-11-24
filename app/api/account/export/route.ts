@@ -201,6 +201,9 @@ const scarica = withAuthRateLimit(
     // 24/11/2026 — La scheda del locale mandata da n8n e il preventivo col link (migrazione 708).
     // Del link non si esporta il codice: è una chiave, non un dato della persona.
     scheda_del_locale: tutta((da, a) => admin.from('schede_clienti').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
+    // 24/11/2026 — L'analisi del business (sito e canali) e la bozza del sito scritta dall'AD (migrazione 711).
+    analisi_del_negozio: tutta((da, a) => admin.from('analisi_negozi').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
+    bozza_del_sito: tutta((da, a) => admin.from('bozze_sito').select('*').eq('id_attivita', userId).order('id_attivita').range(da, a)),
     preventivo_col_link: tutta((da, a) => admin.from('preventivi_con_codice').select('seller_id, stato, fascia_scelta, creato_il, accettato_il, condizioni_accettate_il').eq('seller_id', userId).order('seller_id').range(da, a)),
     tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
     casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).order('id').range(da, a)),

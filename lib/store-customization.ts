@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
 import { giornoPiacenza } from './tempo-piacenza';
+import { linkGoogleMaps } from './indirizzi-pubblici';
 
 /**
  * Personalizzazione vetrina negozio — tipi, validazione (zod), cataloghi curati
@@ -154,7 +155,7 @@ const handleSchema = z
   .string()
   .trim()
   .max(64, 'Troppo lungo')
-  .regex(/^@?[A-Za-z0-9._-]+$/, 'Scrivi solo il nome del profilo, per esempio panequotidiano')
+  .regex(/^@?[A-Za-z0-9._-]+$/, 'Scrivi solo il nome del profilo, per esempio iltuonegozio')
   .optional()
   .or(z.literal(''));
 
@@ -172,8 +173,18 @@ const whatsappSchema = z
 const websiteSchema = z
   .string()
   .trim()
-  .url("Scrivi l'indirizzo del sito, per esempio www.panequotidiano.it")
+  .url("Scrivi l'indirizzo del sito, per esempio www.iltuonegozio.it")
   .max(200)
+  .optional()
+  .or(z.literal(''));
+
+// 24/11/2026 — Il link della scheda su Google Maps, per l'analisi del business: solo un link di Google,
+// https, mai un indirizzo interno (lib/indirizzi-pubblici.ts).
+const googleMapsSchema = z
+  .string()
+  .trim()
+  .max(300, 'Troppo lungo')
+  .refine((v) => linkGoogleMaps(v) !== null, 'Incolla il link della tua scheda da Google Maps, per esempio https://maps.app.goo.gl/…')
   .optional()
   .or(z.literal(''));
 
@@ -192,6 +203,7 @@ export const storeCustomizationSchema = z.object({
       tiktok: handleSchema,
       whatsapp: whatsappSchema,
       website: websiteSchema,
+      google_maps: googleMapsSchema,
     })
     .optional(),
   announcement: z
@@ -404,6 +416,10 @@ export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustom
     const w = s.website.trim();
     out.website = w && !/^https?:\/\//i.test(w) && /\./.test(w) ? `https://${w}` : w;
   }
+  if (s.google_maps !== undefined) {
+    const g = s.google_maps.trim();
+    out.google_maps = g ? (linkGoogleMaps(g) ?? g) : '';
+  }
   if (s.whatsapp !== undefined) {
     const n = numeroWhatsappItaliano(s.whatsapp);
     out.whatsapp = s.whatsapp.trim() ? (n ? `+${n}` : s.whatsapp.trim()) : '';
@@ -415,6 +431,7 @@ export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustom
 export function campoDellErrore(path: ReadonlyArray<PropertyKey>): string | null {
   const nomi: Record<string, string> = {
     instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', whatsapp: 'WhatsApp', website: 'Sito web',
+    google_maps: 'Scheda Google Maps',
   };
   if (path[0] === 'socials' && typeof path[1] === 'string') return nomi[path[1]] ?? path[1];
   return null;

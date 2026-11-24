@@ -36,7 +36,7 @@ export const TESTI_RIQUADRO = {
   nascosta: 'La tua vetrina non è ancora visibile sul marketplace',
   nascostaSotto: 'Scegli un abbonamento: appena è attivo, la tua vetrina va online e i servizi li facciamo noi.',
   visibile: 'Scegli il tuo abbonamento ai servizi',
-  visibileSotto: 'Foto e video, sito web e gestione dei social con Google Maps: li facciamo noi, tu resti al bancone.',
+  visibileSotto: 'Foto e video, sito web, gestione dei social con Google Maps e analisi del business: li facciamo noi, tu resti al bancone.',
   pulsante: 'Scegli l’abbonamento',
   inRitardoSotto: 'Il pagamento di questo mese non è riuscito: scrivici dall’Aiuto e lo sistemiamo insieme.',
 } as const;
@@ -51,9 +51,10 @@ const GIA_A_POSTO: Record<ServizioAgenzia, string> = {
   foto_video: 'La tua vetrina ha già foto e video.',
   sito_web: 'Hai già un sito: lo possiamo rifare o tenere aggiornato.',
   social: 'Post e scheda Google: li prepariamo noi.',
+  analisi: 'Ti diciamo cosa funziona e cosa migliorare.',
 };
 
-/** I tre pulsanti verso i servizi, ognuno col primo «perché» vero letto dalla vetrina. */
+/** I pulsanti verso i servizi (quattro dal 24/11/2026, con l'analisi del business), ognuno col primo «perché» vero letto dalla vetrina. */
 export function pulsantiServizi(righe: Preventivo['righe'] | null | undefined): PulsanteServizio[] {
   return SERVIZI_AGENZIA.map((id) => {
     const riga = righe?.find((r) => r.id === id);

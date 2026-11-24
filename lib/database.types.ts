@@ -206,6 +206,39 @@ export interface Database {
         };
         Relationships: [];
       };
+      analisi_negozi: {
+        Row: {
+          id_attivita: string;
+          sito: Json | null;
+          sito_il: string | null;
+          sito_tentato_il: string | null;
+          canali: Json | null;
+          canali_il: string | null;
+          canali_richiesti_il: string | null;
+          aggiornata_il: string;
+        };
+        Insert: {
+          id_attivita: string;
+          sito?: Json | null;
+          sito_il?: string | null;
+          sito_tentato_il?: string | null;
+          canali?: Json | null;
+          canali_il?: string | null;
+          canali_richiesti_il?: string | null;
+          aggiornata_il?: string;
+        };
+        Update: {
+          id_attivita?: string;
+          sito?: Json | null;
+          sito_il?: string | null;
+          sito_tentato_il?: string | null;
+          canali?: Json | null;
+          canali_il?: string | null;
+          canali_richiesti_il?: string | null;
+          aggiornata_il?: string;
+        };
+        Relationships: [];
+      };
       audit_logs: {
         Row: {
           id: string;
@@ -239,6 +272,27 @@ export interface Database {
           ip?: string | null;
           user_agent?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      bozze_sito: {
+        Row: {
+          id_attivita: string;
+          bozza: Json;
+          origine: string;
+          ricevuta_il: string;
+        };
+        Insert: {
+          id_attivita: string;
+          bozza: Json;
+          origine?: string;
+          ricevuta_il?: string;
+        };
+        Update: {
+          id_attivita?: string;
+          bozza?: Json;
+          origine?: string;
+          ricevuta_il?: string;
         };
         Relationships: [];
       };

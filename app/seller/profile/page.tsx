@@ -17,6 +17,7 @@ import VendorForm, { type VendorFormData } from '@/components/VendorForm';
 import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import DatiPerIBonifici from '@/components/seller/DatiPerIBonifici';
+import CanaliDelNegozio from '@/components/seller/CanaliDelNegozio';
 
 /**
  * Profilo negozio = dati di CONTATTO + impostazioni operative/private.
@@ -160,6 +161,10 @@ export default function SellerProfilePage() {
           salvataggioRiuscito={updateContact.isSuccess ? updateContact.submittedAt : 0}
         />
       </Card>
+
+      {/* 24/11/2026 — I canali per l'analisi del business (Nicola: «un luogo dove l'imprenditore deve
+          inserire l'id dei social e google»): lo stesso modulo della pagina dell'analisi. */}
+      <CanaliDelNegozio titolo="I tuoi canali, per l’analisi del business" />
 
       {/* R11-003 — IBAN e dati della ditta: prima si scrivevano solo dal modulo d'iscrizione,
           che a un negozio approvato non si apre più. */}
