@@ -139,7 +139,17 @@ async function nessunoHaParlatoNellOra(adesso: number): Promise<boolean> {
       .lt('last_sent_at', new Date(adesso - RIPETI_ALLARME_MS).toISOString())
       .select('alert_key');
     if (presa.error) return true;
-    return (presa.data ?? []).length > 0;
+    if ((presa.data ?? []).length > 0) return true;
+    // La pulizia della memoria degli allarmi (migrazione 660) scatta anche sull'inserimento che
+    // non inserisce niente e toglie le righe di piu' di 24 ore: la riga vecchia sparisce fra
+    // l'inserimento e l'aggiornamento, che allora non trova niente. «Nessuna riga» non vuol dire
+    // «qualcuno ha gia' parlato»: si riprova a scriverla, e chi la scrive parla.
+    const dinuovo = await admin
+      .from('operational_alert_log')
+      .upsert({ alert_key: CHIAVE_ERRORE_RIPIEGO, last_sent_at: ora }, { onConflict: 'alert_key', ignoreDuplicates: true })
+      .select('alert_key');
+    if (dinuovo.error) return true;
+    return (dinuovo.data ?? []).length > 0;
   } catch {
     return true;
   }
