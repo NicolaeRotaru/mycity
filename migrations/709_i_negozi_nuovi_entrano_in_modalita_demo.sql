@@ -20,7 +20,8 @@
 --   · prodotto_in_vetrina (recensioni, varianti), la regola delle recensioni dei negozi;
 --   · le viste pubbliche seller_public_profiles (liste, ricerca, pagina del negozio, sitemap),
 --     shop_of_month_leaderboard, live_activity_public, nomi_pubblici;
---   · search_products_smart e active_promo_products.
+--   · search_products_smart e active_promo_products;
+--   · le storie, le promozioni e product_active_discounts (dal collaudo del 24/11).
 -- Non cambia negozio_approvato: la usa il salvataggio dei prodotti (405), e un negozio in demo i suoi
 -- prodotti li prepara. Il negozio stesso vede sempre i suoi prodotti (regola «Sellers can view their
 -- own products») e la sua riga nella vista seller_public_profiles, per l'anteprima.
@@ -294,6 +295,47 @@ $function$
 
 ;
 
+
+
+-- 6) Storie e promozioni (dal collaudo del 24/11) ------------------------------------------------
+-- Le storie e le promozioni di un negozio in demo si leggevano dall'API con la chiave pubblica, e una
+-- promo di un negozio in demo accendeva la striscia «promo attive» su tutto il sito. Il proprietario
+-- le vede sempre (le sue regole di scrittura e lettura restano: seller_stories_* e promotions_seller_rw).
+DROP POLICY IF EXISTS seller_stories_public_read ON public.seller_stories;
+CREATE POLICY seller_stories_public_read ON public.seller_stories
+  FOR SELECT
+  USING (expires_at > now() AND (public.negozio_in_vetrina(seller_id) OR seller_id = (SELECT auth.uid())));
+
+DROP POLICY IF EXISTS promotions_public_read ON public.seller_promotions;
+CREATE POLICY promotions_public_read ON public.seller_promotions
+  FOR SELECT
+  USING (status = 'active' AND starts_at <= now() AND ends_at >= now() AND public.negozio_in_vetrina(seller_id));
+
+-- Lo sconto di un prodotto: per un negozio in demo vale 0 (la riga resta, chi chiama se l'aspetta).
+CREATE OR REPLACE FUNCTION public.product_active_discounts(p_products uuid[])
+ RETURNS TABLE(product_id uuid, discount_percent integer)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT pr.id AS product_id,
+         COALESCE((
+           SELECT MAX(sp.discount_percent)
+             FROM public.seller_promotions sp
+            WHERE sp.seller_id = pr.seller_id
+              AND public.negozio_in_vetrina(pr.seller_id)
+              AND sp.status = 'active'
+              AND sp.starts_at <= now()
+              AND sp.ends_at   >= now()
+              AND (
+                sp.scope = 'store'
+                OR (sp.scope = 'category' AND sp.category_id = pr.category_id)
+                OR (sp.scope = 'products' AND pr.id = ANY(sp.product_ids))
+              )
+         ), 0)::int AS discount_percent
+    FROM public.products pr
+   WHERE pr.id = ANY(p_products);
+$function$;
 
 COMMIT;
 

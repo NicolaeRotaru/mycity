@@ -17,6 +17,7 @@ import path from 'node:path';
 const stato = vi.hoisted(() => ({
   profilo: { id: 'u1', role: 'seller', is_approved: false } as Record<string, unknown>,
   approvalStatus: 'pending' as string | null,
+  richiestaIl: '2026-11-24T10:00:00Z' as string | null,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -27,7 +28,7 @@ vi.mock('@/lib/supabase/server', () => ({
       select: vi.fn((colonne: string) => ({
         eq: vi.fn(() => ({
           single: vi.fn(async () => ({
-            data: colonne.includes('approval_status') ? { approval_status: stato.approvalStatus } : stato.profilo,
+            data: colonne.includes('approval_status') ? { approval_status: stato.approvalStatus, approval_requested_at: stato.richiestaIl } : stato.profilo,
             error: null,
           })),
         })),
@@ -64,6 +65,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
   stato.profilo = { id: 'u1', role: 'seller', is_approved: false };
   stato.approvalStatus = 'pending';
+  stato.richiestaIl = '2026-11-24T10:00:00Z';
 });
 
 describe('le rotte del preventivo e il negozio in revisione', () => {
@@ -83,6 +85,11 @@ describe('le rotte del preventivo e il negozio in revisione', () => {
       stato.approvalStatus = s;
       expect(await chiama(), String(s)).toEqual({ status: 403, chiamato: false });
     }
+  });
+
+  it('«pending» senza una richiesta mandata (un rifiutato che si riscrive lo stato da sé): resta fuori', async () => {
+    stato.richiestaIl = null;
+    expect(await chiama()).toEqual({ status: 403, chiamato: false });
   });
 
   it('un cliente o un fattorino: resta fuori, anche se «pending»', async () => {

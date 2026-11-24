@@ -36,6 +36,11 @@ INSERT INTO public.products (id, seller_id, name, description, price, stock, sta
   ('d709aaaa-0000-0000-0000-000000000001', 'd7091111-1111-1111-1111-111111111111', 'Zzdemo torta', 'prova', 9.00, 5, 'available'),
   ('d709aaaa-0000-0000-0000-000000000002', 'd7092222-2222-2222-2222-222222222222', 'Zzdemo pane', 'prova', 3.00, 5, 'available');
 
+INSERT INTO public.seller_stories (seller_id, image_url, caption, expires_at)
+VALUES ('d7091111-1111-1111-1111-111111111111', 'https://example.org/s.jpg', 'storia demo', now() + interval '1 day');
+INSERT INTO public.seller_promotions (seller_id, title, discount_percent, scope, starts_at, ends_at, status)
+VALUES ('d7091111-1111-1111-1111-111111111111', 'promo demo', 20, 'store', now() - interval '1 hour', now() + interval '1 day', 'active');
+
 RESET mycity.allow_profile_write;
 
 CREATE OR REPLACE FUNCTION pg_temp.guarda(chi text) RETURNS void LANGUAGE plpgsql AS $$
@@ -45,6 +50,9 @@ BEGIN
   INSERT INTO visto SELECT chi, 'vetrina demo', count(*) FROM public.seller_public_profiles WHERE id = 'd7091111-1111-1111-1111-111111111111';
   INSERT INTO visto SELECT chi, 'vetrina storica', count(*) FROM public.seller_public_profiles WHERE id = 'd7092222-2222-2222-2222-222222222222';
   INSERT INTO visto SELECT chi, 'classifica demo', count(*) FROM public.shop_of_month_leaderboard WHERE seller_id = 'd7091111-1111-1111-1111-111111111111';
+  INSERT INTO visto SELECT chi, 'storie demo', count(*) FROM public.seller_stories WHERE seller_id = 'd7091111-1111-1111-1111-111111111111';
+  INSERT INTO visto SELECT chi, 'promo demo', count(*) FROM public.seller_promotions WHERE seller_id = 'd7091111-1111-1111-1111-111111111111';
+  INSERT INTO visto SELECT chi, 'sconto demo', count(*) FROM public.product_active_discounts(ARRAY['d709aaaa-0000-0000-0000-000000000001'::uuid]) d WHERE d.discount_percent > 0;
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.guarda(text) TO anon, authenticated;
 
@@ -84,7 +92,7 @@ BEGIN
       'senza abbonamento, ' || r.chi || ': ' || r.cosa,
       CASE
         WHEN r.cosa LIKE '%storic%' THEN r.quanti = 1                         -- chi era già online resta
-        WHEN r.chi = 'il negozio' AND r.cosa IN ('prodotto demo', 'vetrina demo') THEN r.quanti = 1  -- si vede da sé
+        WHEN r.chi = 'il negozio' AND r.cosa IN ('prodotto demo', 'vetrina demo', 'storie demo', 'promo demo') THEN r.quanti = 1  -- si vede da sé
         ELSE r.quanti = 0                                                      -- il resto del mondo no
       END,
       r.quanti || ' righe');
@@ -123,7 +131,7 @@ RESET ROLE;
 DO $$
 DECLARE r record;
 BEGIN
-  FOR r IN SELECT * FROM visto WHERE cosa IN ('prodotto demo', 'vetrina demo', 'classifica demo') LOOP
+  FOR r IN SELECT * FROM visto WHERE cosa IN ('prodotto demo', 'vetrina demo', 'classifica demo', 'storie demo', 'promo demo', 'sconto demo') LOOP
     INSERT INTO esiti VALUES (
       r.chi || ': ' || r.cosa,
       CASE WHEN r.chi LIKE '%canceled' THEN r.quanti = 0 ELSE r.quanti = 1 END,

@@ -550,11 +550,18 @@ export function withSellerAnchePendingRateLimit(opts: AuthRateLimitOpts, handler
     let ammesso = profile.role === 'admin' || (profile.role === 'seller' && profile.is_approved);
     if (!ammesso && profile.role === 'seller') {
       const { getAdminSupabase } = await import('@/lib/supabase/server');
-      const { data, error } = await getAdminSupabase().from('profiles').select('approval_status').eq('id', auth.user.id).single();
+      const { data, error } = await getAdminSupabase()
+        .from('profiles')
+        .select('approval_status, approval_requested_at')
+        .eq('id', auth.user.id)
+        .single();
       if (error && error.code !== 'PGRST116') {
         return ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.');
       }
-      ammesso = (data as { approval_status?: string | null } | null)?.approval_status === 'pending';
+      // «In attesa» vuol dire una richiesta mandata davvero, come chiede il layout: approval_status il
+      // negozio se lo scrive da sé (anche un rifiutato), approval_requested_at lo mette /sell (collaudo del 24/11).
+      const riga = data as { approval_status?: string | null; approval_requested_at?: string | null } | null;
+      ammesso = riga?.approval_status === 'pending' && !!riga?.approval_requested_at;
     }
     if (!ammesso) return ApiErrors.forbidden('Solo seller approvati, in attesa di approvazione, o admin');
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
