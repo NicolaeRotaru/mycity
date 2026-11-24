@@ -1,0 +1,418 @@
+{
+ "sessione": "R03",
+ "aggiornato": "2026-11-24 12:35",
+ "finita": true,
+ "testa": "8defebc41cf1a3bc50cc820db2420384a2a2b543",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "verde",
+  "testa": "8defebc41cf1a3bc50cc820db2420384a2a2b543",
+  "nota": "tsc + eslint + vitest: 2046 file passati (1 saltato, preesistente), 12535 prove, uscita 0, 7 min 15 s"
+ },
+ "voci": [
+  {
+   "id": "R03-001",
+   "chiave": "architettura|commenti delle rotte della veloce dicono ancora «un fattorino approvato e online»",
+   "esito": "serve_file_altrui",
+   "commit": "",
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": "grep -rn 'approvato e online' app lib",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "prova": "Nei miei due file la frase non c'è più alla base 5b8c786c: app/api/orders/cod/route.ts:1004-1006 dice già «almeno un fattorino approvato, con l'interruttore acceso e libero (non ha già in mano tutte le veloci che può portare)» (commit a3c58389 del 22/11); app/api/consegna/veloce/route.ts non nomina i fattorini nei commenti («La decisione è `veloceSiPuo`»). `grep -rn 'approvato e online' app lib` trova solo app/api/stripe/checkout/route.ts:530 e app/checkout/page.tsx:661.",
+   "cosa_ho_fatto": "Controllato: i commenti delle due rotte mie dicono già la regola di oggi (un fattorino libero); restano la rotta della carta e la cassa, non mie. Nessun commit. Non è da dichiarare insieme a R03-012: quella voce ha solo aggiunto due righe sotto il commento, che era già giusto.",
+   "cosa_resta": "Il commento della rotta della carta e quello della cassa dicono ancora «un fattorino approvato e online».",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "righe 529-530: «// 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un / // fattorino approvato e online. La stessa decisione della cassa e dei contanti (`veloceSiPuo`).» → «// 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso (e ancora per / // un quarto d'ora), almeno un fattorino approvato, con l'interruttore acceso e libero (non ha già in mano / // tutte le veloci che può portare). La stessa decisione della cassa e dei contanti (`veloceSiPuo`).» (solo commento)"
+    },
+    {
+     "file": "app/checkout/page.tsx",
+     "modifica": "righe 660-661: «negozi aperti, un fattorino approvato e online (`veloceSiPuo`, la stessa decisione delle due» → «negozi aperti, un fattorino approvato, acceso e libero, cioè senza una veloce già in mano (`veloceSiPuo`, la stessa decisione delle due» (solo commento; a capo come serve)"
+    }
+   ],
+   "verificato_da": ""
+  },
+  {
+   "id": "R03-002",
+   "chiave": "architettura|email partita ma non segnata: la notte dopo riparte, e se fallisce l'allarme dice «non partita» per un'email già arrivata",
+   "esito": "parziale",
+   "commit": "59ddbb471eae511e43aa2a7fd96df18688a4f70a",
+   "file_toccati": [
+    "lib/privacy/avvisi-a-chi-aspetta.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-email-partita.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r03-email-partita.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 59ddbb471eae511e43aa2a7fd96df18688a4f70a^ --file lib/privacy/avvisi-a-chi-aspetta.ts --prove tests/unit/riparazione-r03-email-partita.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Dopo un invio non riuscito emailDovuta scrive anche il no («email_fallita» per quel tentativo); il turno nuovo porta segnaIlNo. Un tentativo con segnaIlNo senza «partita» né «fallita» è senza esito: se poi l'email non riparte, l'esito è 'forse-partita', contato come bloccata (la notte resta rossa, nessun allarme perso) ma con forsePartita: true nella voce di emailBloccateAvvisi. Prova di comportamento col finto unico del giro notturno e orologio/timer finti: partita senza segno + seconda notte caduta → forsePartita; due no segnati → come prima; turni scritti prima della modifica → come prima.",
+   "cosa_resta": "1) Il testo dell'allarme lo scrive la rotta notturna (non mia): finché non legge forsePartita dice ancora «non è partita per email» (vedi serve_file_altrui). 2) La seconda spedizione la notte dopo resta voluta (scelta del 27/10, «meglio due volte che nessuna»): un giro caduto a metà o un no non segnato non si distinguono da una partita non segnata; toglierla vorrebbe dire rischiare zero email per un avviso dovuto per legge, ed è una scelta di Nicola.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/cron/process-deletions/route.ts",
+     "modifica": "riga 718: il tipo del parametro diventa `avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso; forsePartita?: true }>`; riga 735: `for (const { id: idAvviso, userId, tappa, forsePartita } of avvisiFermi) {`; riga 758: la prima frase del corpo diventa `(forsePartita ? \"Una spiegazione dell'attesa per la cancellazione non risulta partita per email: una notte prima è stata spedita ma il registro non l'ha segnata, quindi può essere arrivata. \" : \"Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. \") +` (il resto del corpo, il titolo e l'id dell'allarme restano uguali). La riga 520 (`uno.emailBloccateAvvisi.map((x) => ({ ...x, tappa: dovuti[i].tappa }))`) porta già il campo."
+    }
+   ],
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): righe vecchie senza segnaIlNo danno gli esiti di prima; errore nello scrivere email_fallita in try/catch non blocca il giro; la notte resta rossa; 44 file / 360 prove verdi. Parziale confermato: l'allarme in app/api/cron/process-deletions/route.ts non legge ancora forsePartita (serve_file_altrui)."
+  },
+  {
+   "id": "R03-003",
+   "chiave": "architettura|il parametro propostail di negoziopuoservire non lo passa nessuno",
+   "esito": "parziale",
+   "insieme_a": "R03-006",
+   "cosa_ho_fatto": "motivoFasciaRifiutata ora accetta propostaIl (4° argomento) e lo passa a negozioPuoServire, che già contava «domani» da lì: prima il parametro non scendeva a nessuno. Prova con orologio finto: proposta lunedì 23:59, giudicata martedì 00:01, negozio aperto solo martedì → passa; senza propostaIl → rifiutata.",
+   "cosa_resta": "Dal lato mio il parametro ora scende fino a negozioPuoServire. Nessuna rotta lo passa ancora: i contanti non ne hanno bisogno (riportano l'etichetta), la carta sì (vedi R03-006). Anche il webhook degli ordini pagati con la carta (lib/stripe/webhook/ordini.ts:292) chiama motivoFasciaRifiutata senza propostaIl.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "aggiungere allo schema `delivery_date: z.string().max(40).optional().nullable()` come nei contanti e, nella chiamata a motivoFasciaRifiutata (riga ~522), passare come 4° argomento (dopo `undefined`) un Date di Roma del giorno della cassa ricavato da delivery_date (mezzogiorno di quel giorno, in ora di Roma, come romeNow)"
+    },
+    {
+     "file": "app/checkout/page.tsx",
+     "modifica": "mandare delivery_date (il giorno di Roma della fascia scelta, come già per i contanti) anche nella richiesta alla rotta della carta"
+    },
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "riga 292, chiamata a motivoFasciaRifiutata: passare come 4° argomento il momento della proposta preso dal server, non dal cliente (la data di creazione della sessione di checkout, new Date(session.created * 1000), oppure il delivery_date che la rotta della carta metterà nei metadata), così un pagamento confermato dopo mezzanotte giudica la fascia «Domani» sul giorno in cui la cassa l'ha proposta"
+    }
+   ],
+   "commit": "fd05bc7181e4529f5c1470de36d70bece47271ee",
+   "file_toccati": [
+    "lib/quando-arriva.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-fascia-domani-proposta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r03-fascia-domani-proposta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd05bc7181e4529f5c1470de36d70bece47271ee^ --file lib/quando-arriva.ts --prove tests/unit/riparazione-r03-fascia-domani-proposta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): senza il 4° argomento motivoFasciaRifiutata si comporta come prima; 120 file / 914 prove verdi. Parziale confermato: nessun chiamante passa ancora propostaIl (carta e webhook non miei, in serve_file_altrui); propostaIl oggi non arriva dal cliente, quindi nessuna apertura; chi lo collegherà deve prenderlo dal server."
+  },
+  {
+   "id": "R03-004",
+   "chiave": "architettura|da controllare sui dati: un negozio che oggi ha salvato 7 giorni vuoti diventa chiuso sempre appena esce la modifica",
+   "esito": "non_codice",
+   "nota": "Il codice (lib/store-hours.ts:267-275) è coerente con la regola dichiarata nel commento del 31/10: 7 giorni scritti e tutti vuoti = chiuso sempre. L'editor (components/seller/StoreHoursEditor.tsx:20-23) scrive sempre tutti e sette i giorni a ogni modifica. Nicola deve contare sul database i negozi in questa situazione e decidere se vanno avvisati. Query di SOLA LETTURA, da lanciare lui (non lanciata): SELECT id, store_name FROM profiles WHERE jsonb_typeof(store_hours) = 'object' AND (SELECT count(*) FROM jsonb_each(store_hours) e WHERE jsonb_typeof(e.value) = 'array') >= 4 AND NOT EXISTS (SELECT 1 FROM jsonb_each(store_hours) e WHERE jsonb_typeof(e.value) = 'array' AND jsonb_array_length(e.value) > 0);  (con >= 7 invece di >= 4 sono i soli «sette vuoti»; la differenza con >= 4 sono già i casi di R03-005 con 4-6 giorni)."
+  },
+  {
+   "id": "R03-005",
+   "chiave": "architettura|ferie salvate con l'editor di prima su 3 giorni o meno: il negozio resta aperto a qualunque ora",
+   "esito": "scelta_di_nicola",
+   "domanda": "Un negozio con 1-3 giorni salvati e tutti vuoti (lo scrisse l'editor di prima toccando solo quei giorni) è «chiuso» o «orari non impostati»? Abbassare la soglia di 4 giorni (lib/store-hours.ts:265) chiuderebbe anche chi ha premuto «Chiudi» su un giorno solo, che oggi resta aperto per scelta dichiarata.",
+   "nota": "Nessuna modifica: è una regola di business, non un difetto di codice."
+  },
+  {
+   "id": "R03-006",
+   "chiave": "architettura|una fascia «domani» inviata alle 23:59 e arrivata alla rotta dopo mezzanotte si giudica sul giorno dopo",
+   "esito": "parziale",
+   "insieme_a": "R03-003",
+   "cosa_ho_fatto": "motivoFasciaRifiutata ora accetta propostaIl (4° argomento) e lo passa a negozioPuoServire, che già contava «domani» da lì: prima il parametro non scendeva a nessuno. Prova con orologio finto: proposta lunedì 23:59, giudicata martedì 00:01, negozio aperto solo martedì → passa; senza propostaIl → rifiutata.",
+   "cosa_resta": "La rotta dei contanti (app/api/orders/cod/route.ts) copre già il caso riportando l'etichetta al giorno della cassa (fasciaDelGiornoDellaRichiesta, da delivery_date), quindi non ha bisogno di propostaIl. Resta la rotta della carta, che non riceve delivery_date né passa propostaIl. Anche il webhook degli ordini pagati con la carta (lib/stripe/webhook/ordini.ts:292) chiama motivoFasciaRifiutata senza propostaIl.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/stripe/checkout/route.ts",
+     "modifica": "aggiungere allo schema `delivery_date: z.string().max(40).optional().nullable()` come nei contanti e, nella chiamata a motivoFasciaRifiutata (riga ~522), passare come 4° argomento (dopo `undefined`) un Date di Roma del giorno della cassa ricavato da delivery_date (mezzogiorno di quel giorno, in ora di Roma, come romeNow)"
+    },
+    {
+     "file": "app/checkout/page.tsx",
+     "modifica": "mandare delivery_date (il giorno di Roma della fascia scelta, come già per i contanti) anche nella richiesta alla rotta della carta"
+    },
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "riga 292, chiamata a motivoFasciaRifiutata: passare come 4° argomento il momento della proposta preso dal server, non dal cliente (la data di creazione della sessione di checkout, new Date(session.created * 1000), oppure il delivery_date che la rotta della carta metterà nei metadata), così un pagamento confermato dopo mezzanotte giudica la fascia «Domani» sul giorno in cui la cassa l'ha proposta"
+    }
+   ],
+   "commit": "fd05bc7181e4529f5c1470de36d70bece47271ee",
+   "file_toccati": [
+    "lib/quando-arriva.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-fascia-domani-proposta.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r03-fascia-domani-proposta.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base fd05bc7181e4529f5c1470de36d70bece47271ee^ --file lib/quando-arriva.ts --prove tests/unit/riparazione-r03-fascia-domani-proposta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): senza il 4° argomento motivoFasciaRifiutata si comporta come prima; 120 file / 914 prove verdi. Parziale confermato: nessun chiamante passa ancora propostaIl (carta e webhook non miei, in serve_file_altrui); propostaIl oggi non arriva dal cliente, quindi nessuna apertura; chi lo collegherà deve prenderlo dal server."
+  },
+  {
+   "id": "R03-007",
+   "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito",
+   "esito": "scelta_di_nicola",
+   "domanda": "Le 8 falle di soli strumenti di sviluppo (Storybook e il suo builder webpack5: webpack-dev-middleware <7.4.5 alta, @storybook/builder-webpack5 e @storybook/nextjs alte; e a cascata browserify-sign, create-ecdh, crypto-browserify, elliptic, node-polyfill-webpack-plugin basse) non hanno correzione in npm: le accettiamo finché Storybook non esce con una versione che le chiude, o togliamo/sostituiamo @storybook/nextjs?",
+   "nota": "npm audit di oggi: 18 totali (5 basse, 9 medie, 4 alte), di cui 10 nel sito (npm audit --omit=dev: 9 medie, 1 alta = zod) e 8 solo di sviluppo. `npm audit fix --dry-run` (/tmp/r03-l2-fix.json) lascia IDENTICO il conto (18) e cambia solo aggiornamenti minori di Storybook/webpack (10.6.7→10.6.8 ecc.) più 194 pacchetti binari opzionali di altre piattaforme nel lockfile: non chiude nessun avviso, quindi non l'ho applicato. I numeri della voce (19/10) erano di un'altra data. Prova: comando npm audit prima/dopo, rimessa non applicabile a un lockfile (rimessa null).",
+   "rimessa": null,
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "prova_comando": "npm audit --json; npm audit --omit=dev --json; npm audit fix --dry-run --json",
+   "copre_tutta_la_voce": false,
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "verificato_da": ""
+  },
+  {
+   "id": "R03-008",
+   "chiave": "architettura|zod, resend, @sentry/nextjs, minimatch e glob, librerie che vanno nel sito, hanno 10 avvisi pubblici di npm audit (zod alto) che si chiudono solo con aggiornamenti che rompono",
+   "esito": "scelta_di_nicola",
+   "domanda": "Autorizzi i salti di versione maggiore di zod (3.25.76→4.6.7, alto), resend (3.5.0→6.39.0, chiude anche @react-email/render, editorconfig, glob, js-beautify, minimatch) e @sentry/nextjs (10.78.0→11.x, chiude @sentry/bundler-plugins e @sentry/webpack-plugin), che cambiano API e come gira il sito, oppure restiamo e li accettiamo (zod: memoria su collezioni enormi; gli altri: avvisi moderati su strumenti di build)?",
+   "nota": "Da /tmp/r03-l2-audit-prod.json (10 avvisi: 9 medi, 1 alto). Versione di oggi → prima che chiude: zod 3.25.76 → 4.6.7 (major); resend 3.5.0 → 6.39.0 (major, per via di @react-email/render e a cascata editorconfig, glob, js-beautify, minimatch); @sentry/nextjs 10.78.0 → 11.x (major, ultima 11.17.0; il package.json ha ^10.53.1 e non la raggiunge); minimatch (7.0.0-11.0.0, via resend e Sentry) e glob (9.0.0-14.0.1) si chiudono con i salti di resend e Sentry. Nessun aggiornamento compatibile (stessa major) chiude un avviso: niente applicato. Nessun commit; prova = comando npm audit, rimessa null.",
+   "rimessa": null,
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "prova_comando": "npm audit --omit=dev --json",
+   "copre_tutta_la_voce": false,
+   "commit": null,
+   "file_toccati": [],
+   "prova_file": [],
+   "verificato_da": ""
+  },
+  {
+   "id": "R03-009",
+   "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+   "esito": "serve_file_altrui",
+   "commit": "",
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": "wc -l tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts; grep -n 'adminDiProva\\|readdirSync' tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "prova": "Alla base 5b8c786c: il finto unico c'è già (tests/unit/aiuti/finto-giro-notturno.ts, con guasti, indirizzi, chiavi uniche e .single()) e lo usano la-spiegazione-…, chi-aspetta-… e anche minori-s08-avvisi.test.ts (la quinta copia è già passata al finto). Resta tutto in tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts (1035 righe): adminDiProva :70-129 rifà a mano insert/eq/select sopra il finto; il file mescola le rotte (describe da :323, :580-670, :838, :897), la notte (:267, :429-561, :672-837, :878, :925-979) e la scansione del sorgente (:562-578, readdirSync su app/ con la sola forma `mailto:${…emailPrivacy}`).",
+   "cosa_ho_fatto": "Controllato che cosa resta. tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts importa la rotta notturna (app/api/cron/process-deletions/route.ts, file di R02 in quest'onda) e altre rotte: è una prova comune, non la tocco. Il finto unico non è mio e non importa niente di mio. la-spiegazione-… e chi-aspetta-… usano già il finto unico: non c'è niente da togliere senza indebolirle. Nessun commit.",
+   "cosa_resta": "Il riordino della prova lunga (adminDiProva, la divisione in tre file, la scansione che non guarda components/ e si aggira con una concatenazione): solo la regia può farlo, perché guardia-ramo segna rossa una prova esistente che perde asserzioni anche quando i casi si spostano in file nuovi (successo il 17/11: 165 → 49).",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+     "modifica": "1) adminDiProva (:70-129): nelle tre `fintoGiroNotturno({ … })` di :200, :806, :853 aggiungere `indirizzi: Object.fromEntries(PERSONE.map((p) => [p.id, p.email]))` (al posto del getUserById scritto in adminDiProva), passare `stato.mondo.admin` dove oggi si passa `adminDiProva()` e sostituire le quattro patch a mano con guasti del finto: stato.rifiutaAvvisiA → `{ tabella: 'notifications', azione: 'insert', messaggio: 'permission denied', seRiga: (r) => r.user_id === stato.rifiutaAvvisiA }`; stato.rifiutaLetturaDi → `{ tabella: 'notifications', azione: 'select', seFiltro: ['id', stato.rifiutaLetturaDi], messaggio: 'canceling statement due to statement timeout' }`; stato.registroInviiRotto → due guasti `{ tabella: 'audit_logs', azione: 'select' | 'insert', messaggio: 'permission denied for table audit_logs' }`; stato.registroInviiRifiutaLeRighe → `{ tabella: 'audit_logs', azione: 'insert', codice: '23514', messaggio: 'new row for relation \"audit_logs\" violates check constraint \"audit_logs_action_check\"' }`; `.single()` e getUserById ci sono già nel finto (le prove li impostano oggi con flag: al posto dei flag, push nei `guasti` a notte in corso). 2) Spezzare il file in tre senza perdere nessun caso né asserzione: chi-vuole-cancellarsi-le-rotte.test.ts (describe :323, :580, :609, :631, :653, :838, :897), chi-vuole-cancellarsi-la-notte.test.ts (:267, :429, :481, :672, :772, :878, :925, :966, :980), chi-vuole-cancellarsi-il-sorgente.test.ts (:562), con la preparazione comune (vi.mock e aiuti :1-266) in tests/unit/aiuti/. 3) La scansione (:562-578): visitare anche components/ e i .ts di app/ e lib/, e cercare anche la concatenazione: `/mailto:(?:\\$\\{[^}]*|['\"`]\\s*\\+\\s*[\\w.()]*)emailPrivacy/`. Va firmato dalla regia (perdita di asserzioni nel file vecchio)."
+    },
+    {
+     "file": "tests/unit/aiuti/finto-giro-notturno.ts",
+     "modifica": "nessuna modifica necessaria: guasti (select con seFiltro, insert con seRiga), indirizzi, chiaviUniche e single() bastano per il punto 1 qui sopra."
+    }
+   ],
+   "verificato_da": "",
+   "nota": "Il caso «la posta dice di no la prima notte» in chi-vuole:482 passa dalla rotta vera (la notte intera), quello di la-spiegazione:78 dalla libreria: non sono doppioni da togliere; toglierne uno indebolirebbe una prova."
+  },
+  {
+   "id": "R03-010",
+   "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+   "esito": "serve_file_altrui",
+   "commit": "",
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": "grep -n \"cod_reconciliations\" tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts app/api/account/export/route.ts",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "prova": "Il difetto c'è ancora alla base 5b8c786c: tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts:44 esclude `cod_reconciliations` («registro contabile») mentre app/api/account/export/route.ts:215 la esporta (`giornate_di_cassa_del_fattorino: … admin.from('cod_reconciliations')…`). La prova legge solo app/api/account/export/route.ts e la cartella migrations/ (nessun file mio per nome): non posso toccarla.",
+   "cosa_ho_fatto": "Controllato che il difetto c'è ancora e che la prova non legge per nome nessuno dei miei file; scritta la modifica esatta.",
+   "serve_file_altrui": [
+    {
+     "file": "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts",
+     "modifica": "riga 44: togliere `  cod_reconciliations: 'quadratura della cassa contanti: registro contabile',` da FUORI_DALL_EXPORT. Perché non si ripeta, in fondo al describe aggiungere: `it('una tabella esclusa non è anche nell export: l esclusione direbbe il falso', () => { const doppie = Object.keys(FUORI_DALL_EXPORT).filter((t) => t !== 'profiles' && rotta.includes(`from('${t}')`)); expect(doppie).toEqual([]); });` (oggi, senza la prima modifica, darebbe ['cod_reconciliations']; `profiles` resta fuori perché esce già come «profile»)."
+    }
+   ],
+   "verificato_da": ""
+  },
+  {
+   "id": "R03-011",
+   "chiave": "qa-flussi|faccine nei titoli delle notifiche scritte dal codice del sito",
+   "esito": "serve_file_altrui",
+   "commit": "",
+   "file_toccati": [],
+   "prova_file": [],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r31-titoli-senza-faccine.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": null,
+   "copre_tutta_la_voce": false,
+   "prova": "Le tre rotte mie sono già senza faccine alla base 5b8c786c: app/api/orders/[id]/cancel/route.ts:87,95 («Ordine annullato», «Ordine annullato dal cliente»), app/api/seller/orders/[id]/reject/route.ts:129,137 («Ordine rifiutato dal negozio», «Ordine annullato»), app/api/orders/cod/route.ts:1764,1773 («Nuovo ordine!», «Ordine ricevuto»); le guarda già tests/unit/riparazione-r31-titoli-senza-faccine.test.ts (verde, riparazione del 17/11). Nessuna faccina nelle stringhe delle tre rotte, solo frecce nei commenti.",
+   "cosa_ho_fatto": "Controllato: nelle tre rotte della voce i titoli non hanno più faccine (chiusi il 17/11, con la loro prova); niente da cambiare nei miei file, nessun commit. Le faccine restano solo nei file webhook, non miei: elencate riga per riga.",
+   "cosa_resta": "Le faccine nei titoli scritti da lib/stripe/webhook/*.ts: 7 titoli di campanelle a negozi/clienti (abbonamenti.ts:156,193,257; fascia-al-pagamento.ts:149; sponsorizzati.ts:161; trasferimenti.ts:135,217) e circa 30 titoli degli avvisi agli amministratori (notifyAdmins). Gli oggetti delle email (fascia-al-pagamento.ts:133,194, «💶 Rimborso…») non sono titoli di notifiche: fuori da questa voce.",
+   "serve_file_altrui": [
+    {
+     "file": "lib/stripe/webhook/abbonamenti.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 156: «⚠️ Hai due abbonamenti» → «Hai due abbonamenti»; riga 193: «✅ Abbonamento attivo» → «Abbonamento attivo»; riga 257: «⚠️ Pagamento abbonamento non riuscito» → «Pagamento abbonamento non riuscito»"
+    },
+    {
+     "file": "lib/stripe/webhook/carrello-scaduto.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 63: «⚠️ Merce non rimessa in vendita» → «Merce non rimessa in vendita»"
+    },
+    {
+     "file": "lib/stripe/webhook/contestazione-buoni.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 32: «ℹ️ La banca chiede informazioni su un pagamento» → «La banca chiede informazioni su un pagamento»; riga 56: «⚠️ Contestazione vinta: buono regalo da riattivare» → «Contestazione vinta: buono regalo da riattivare»"
+    },
+    {
+     "file": "lib/stripe/webhook/contestazione-parziale-vinta.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 66: «⚠️ Contestazione vinta: quota del negozio da restituire a mano» → «Contestazione vinta: quota del negozio da restituire a mano»; riga 92: «⚠️ Contestazione vinta: quota del negozio da restituire a mano» → «Contestazione vinta: quota del negozio da restituire a mano»"
+    },
+    {
+     "file": "lib/stripe/webhook/dispute.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 138: «ℹ️ La banca chiede informazioni su un pagamento» → «La banca chiede informazioni su un pagamento»; riga 280: «⚠️ Storno al negozio da controllare» → «Storno al negozio da controllare»; riga 289: «⚠️ Chargeback aperto» → «Chargeback aperto»; riga 449: «✓ Chargeback vinto» → «Chargeback vinto»; riga 459: «✕ Chargeback perso su una parte del carrello» → «Chargeback perso su una parte del carrello»; riga 540: «✕ Chargeback perso» → «Chargeback perso»; riga 560: «ℹ️ Richiesta di informazioni chiusa» → «Richiesta di informazioni chiusa»"
+    },
+    {
+     "file": "lib/stripe/webhook/fascia-al-pagamento.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 105: «⚠️ Pagamento rimborsato: fascia non più possibile» → «Pagamento rimborsato: fascia non più possibile»; riga 149: «💶 Pagamento rimborsato: nessun ordine creato» → «Pagamento rimborsato: nessun ordine creato»"
+    },
+    {
+     "file": "lib/stripe/webhook/ordini.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 152: «⚠️ Carrello scaduto con ordini gia creati» → «Carrello scaduto con ordini gia creati»; riga 174: «⚠️ Pagamento su carrello scaduto» → «Pagamento su carrello scaduto»; riga 201: «⚠️ Incasso diverso dal preventivo» → «Incasso diverso dal preventivo»; riga 433: «⚠️ Ordine fantasma da ripulire a mano» → «Ordine fantasma da ripulire a mano»"
+    },
+    {
+     "file": "lib/stripe/webhook/posta-non-partita.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 27: «📭 Email non partita» → «Email non partita»"
+    },
+    {
+     "file": "lib/stripe/webhook/quadratura.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 107: «⚠️ Merce non rimessa in vendita» → «Merce non rimessa in vendita»"
+    },
+    {
+     "file": "lib/stripe/webhook/rimborsi-da-fuori.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 508: «⚠️ Quota del negozio da recuperare a mano» → «Quota del negozio da recuperare a mano»; riga 545: «⚠️ Storno al venditore non riuscito» → «Storno al venditore non riuscito»; riga 581: «⚠️ Rimborso dal cruscotto da dividere fra i negozi» → «Rimborso dal cruscotto da dividere fra i negozi»"
+    },
+    {
+     "file": "lib/stripe/webhook/rimborsi.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 244: «⚠️ Rimborso registrato a metà» → «Rimborso registrato a metà»; riga 284: «⚠️ Quota del negozio da recuperare a mano» → «Quota del negozio da recuperare a mano»; riga 295: «⚠️ Storno al venditore non riuscito» → «Storno al venditore non riuscito»; riga 322: «⚠️ Merce non rimessa in vendita» → «Merce non rimessa in vendita»"
+    },
+    {
+     "file": "lib/stripe/webhook/rimborso-respinto-dalla-banca.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 119: «⚠️ Rimborso senza ordine respinto dalla banca» → «Rimborso senza ordine respinto dalla banca»; riga 158: «⚠️ Rimborso rifiutato dalla banca» → «Rimborso rifiutato dalla banca»"
+    },
+    {
+     "file": "lib/stripe/webhook/sponsorizzati.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 61: «⚠️ Sponsorizzazione in pausa per una contestazione» → «Sponsorizzazione in pausa per una contestazione»; riga 161: «✨ Sponsorizzazione attiva» → «Sponsorizzazione attiva»"
+    },
+    {
+     "file": "lib/stripe/webhook/trasferimenti.ts",
+     "modifica": "togliere la faccina (e lo spazio dopo) in testa al titolo della notifica: riga 135: «⚠️ Il tuo conto Stripe ha bisogno di te» → «Il tuo conto Stripe ha bisogno di te»; riga 144: «⚠️ Conto Stripe bloccato» → «Conto Stripe bloccato»; riga 217: «⚠️ Il bonifico non è arrivato in banca» → «Il bonifico non è arrivato in banca»; riga 238 (tutte e due le stringhe del ternario): «⚠️ Bonifico al fattorino rifiutato dalla banca» → «Bonifico al fattorino rifiutato dalla banca», «⚠️ Bonifico al negozio rifiutato dalla banca» → «Bonifico al negozio rifiutato dalla banca»"
+    },
+    {
+     "file": "tests/unit/riparazione-r31-titoli-senza-faccine.test.ts",
+     "modifica": "aggiungere a FILE i file qui sopra che scrivono `title:`/`titolo:` (lib/stripe/webhook/abbonamenti.ts, fascia-al-pagamento.ts, sponsorizzati.ts, trasferimenti.ts); per i titoli passati a notifyAdmins (primo argomento) aggiungere un caso che li legge (es. matchAll su /notifyAdmins\\(\\s*(['`])((?:\\\\.|(?!\\1)[^\\\\\\n])*)\\1/g e sulla forma su più righe) e pretende nessuna FACCINA. Le prove che oggi cercano quei titoli con la faccina (es. tests/unit/un-avviso-ripetuto-non-rifa-il-lavoro.test.ts, la-contestazione-vinta-ripaga-il-negozio-del-giusto.test.ts, il-rimborso-respinto-si-rimette-a-posto-una-volta-sola.test.ts: grep '⚠️\\|ℹ️\\|📭\\|✓ Chargeback\\|✕ Chargeback' tests/unit) vanno aggiornate nello stesso giro."
+    }
+   ],
+   "nota": "La regia si aspettava `parziale` con le tre rotte riparate: alla base erano già pulite, quindi l'esito è serve_file_altrui. Gli avvisi agli amministratori con ⚠️ erano rimasti fermi il 17/11 «in attesa della domanda per Nicola» (se tenere un segno per gli allarmi): se Nicola vuole tenerlo, si cambiano solo i 7 titoli ai negozi/clienti.",
+   "verificato_da": ""
+  },
+  {
+   "id": "R03-012",
+   "chiave": "qa-flussi|due veloci vendute nello stesso istante con un solo fattorino passano tutte e due",
+   "esito": "riparato",
+   "commit": "3ded946e720350f0c113c11663ffade486af2f64",
+   "file_toccati": [
+    "app/api/orders/cod/route.ts",
+    "migrations/840_due_veloci_insieme_non_passano_con_un_fattorino_solo.sql"
+   ],
+   "prova_file": [
+    "tests/sql/rls/riparazione-r03-veloce.test.sql",
+    "tests/unit/riparazione-r03-veloce.test.ts"
+   ],
+   "prova_comando": "bash tests/sql/harness/apply.sh r03_prova_tutto && psql -d r03_prova_tutto -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r03-veloce.test.sql ; npx vitest run tests/unit/riparazione-r03-veloce.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ded946e720350f0c113c11663ffade486af2f64^ --file migrations/840_due_veloci_insieme_non_passano_con_un_fattorino_solo.sql --prove tests/sql/rls/riparazione-r03-veloce.test.sql --sql r03_rimessa_veloce --json"
+   },
+   "rimessa_rotta": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3ded946e720350f0c113c11663ffade486af2f64^ --file app/api/orders/cod/route.ts --prove tests/unit/riparazione-r03-veloce.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Migrazione 840: un trigger BEFORE INSERT su orders, solo per la veloce in contanti a domicilio, prende un lucchetto (pg_advisory_xact_lock) e ferma con 23514 + segno veloce_senza_fattorino_libero la veloce che supera i fattorini accesi (stessa regola di contaFattoriniOnline/contaVelociInCorso: una per fattorino, per cliente, ultime 3 ore); la rotta dei contanti trasforma quel rifiuto nel 409 «non c'è un fattorino libero» con la merce rimessa, invece di un 500. Ordini non veloci, ritiro e veloci con la carta escono subito dal controllo: le prove (SQL e rotta) hanno il caso esplicito «un ordine non veloce passa come prima».",
+   "nota": "La migrazione non è applicata (lo decide Nicola): finché non c'è, la rotta si comporta come prima. Provata anche a mano con due sessioni psql insieme sul Postgres locale: la seconda aspetta il commit della prima e si ferma. Le veloci pagate con la carta nascono nel webhook dopo il pagamento e non si fermano qui (contano però fra le consegne in corso): la corsa fra due veloci con la carta resta fuori da questa voce (riga in nuovi_difetti_visti). Se la regola della veloce cambia nel codice (fascia, stati, 3 ore, una per fattorino) va cambiata anche nella 840.",
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo, mandato di smentire): harness locale 220 migrazioni + run.sh verdi con la 840; prova SQL sua sullo stesso db: ordine non veloce (fascia «Oggi…» e fascia nulla) nasce col fattorino occupato, veloce con la carta nasce, insert di due righe con due clienti → la seconda 23514, carrello di due righe dello stesso cliente passa; regola SQL confrontata con lib/ordini/consegna-veloce.ts (stati, 3 ore, fattorini approvati e accesi); lato rotta rollback + restore_stock + credito e 409; 93 file / 650 prove verdi. Regge."
+  },
+  {
+   "id": "R03-013",
+   "chiave": "qa-flussi|il logger oscura solo le chiavi del contesto, non il testo del messaggio né un contesto stringa",
+   "esito": "riparato",
+   "commit": "8defebc41cf1a3bc50cc820db2420384a2a2b543",
+   "file_toccati": [
+    "lib/logger.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r03-logger-testo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r03-logger-testo.test.ts --reporter=dot",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "timeout 540 node /home/user/ad-mycity/cervello/prova-rimessa.mjs --repo . --base 24b217dc^ --file lib/logger.ts --prove tests/unit/riparazione-r03-logger-testo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il primo commit (24b217dc) introduce oscuraTesto: email, IBAN, codice fiscale, JWT e telefoni si oscurano nel messaggio, nel contesto stringa, nei valori del contesto, negli Error e verso Sentry. Il secondo (8defebc4, giro di correzione chiesto dal revisore) restringe la regola numerica alla forma del telefono, così timestamp, numeri d'ordine, id nei percorsi, date con ora e versioni restano leggibili; niente lookbehind, regex a costo lineare.",
+   "nota": "Un oggetto Error passato come primo argomento va ancora a Sentry intero (captureException(err)): il suo message non si riscrive per non toccare l'oggetto di chi chiama; la riga di log e l'extra sono già oscurati. Nomi e vie scritti dentro una frase non si riconoscono dalla forma: per quelli resta la regola delle chiavi.",
+   "verificato_da": "revisore R03 (subagente generico, modello piccolo): sul primo commit uuid/id Stripe/date ISO intatti, 100k caratteri ostili sotto 7 ms, nessun lookbehind, annidati/array/null senza crash; trovato che la regola delle 9+ cifre oscurava timestamp, id negli URL e date con ora → giro di correzione 8defebc4 (subagente nuovo) con quei casi nella prova. Dopo la correzione il capo squadra R03 ha sondato altre 9 varianti (+39 06…, 333 1234567, 333.123.4567 oscurati; ISO con millisecondi, pi_…, importo 1.250.000,00, cap 00184, ordine #13 cifre, «12:30 del 24-11-2026» leggibili): tutte come attese.",
+   "commit_prima": "24b217dc80ee4283789aed42baaea08237994597"
+  },
+  {
+   "id": "R03-014",
+   "chiave": "qa-flussi|le prove unitarie montano i componenti con react 18.3.1, ma il sito gira con il react 19.2 di next",
+   "esito": "scelta_di_nicola",
+   "domanda": "Portare react/react-dom a 19.x nel package.json (cambia il React di tutto il sito, anche fuori dall'app router, e di Storybook/Sentry che oggi usano 18.3.1) oppure far usare alle prove il React interno di next (19.2.0-canary) con un alias in vitest.config.ts?",
+   "nota": "Controllato senza cambiare niente: package.json:51-52 react e react-dom ^18.2.0 (installato 18.3.1, usato dalle prove e dai pacchetti fuori da next); next 15.5.29 accetta ^18.2.0 o ^19 come peer e porta dentro di sé React 19.2.0-canary-0bdb9206-20250818 (node_modules/next/dist/compiled/react), usato solo dall'app router; vitest.config.ts non ha alias per react."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Due veloci pagate con la carta nello stesso momento con un fattorino solo passano tutte e due",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "app/api/stripe/checkout/route.ts:530",
+   "descrizione": "La rotta della carta decide la veloce con veloceSiPuo prima della sessione Stripe; l'ordine nasce nel webhook dopo il pagamento e lì non si può più rifiutare. Il lucchetto della 840 vale solo per i contanti: due veloci con la carta (o una con la carta dopo una in contanti già decisa) possono ancora nascere insieme con un fattorino solo. Servirebbe una prenotazione del fattorino prima del pagamento."
+  },
+  {
+   "titolo": "Un contesto circolare passato al logger fa lanciare un errore invece di scrivere la riga",
+   "dimensione": "qa-flussi",
+   "severita": "minore",
+   "file": "lib/logger.ts (line(), JSON.stringify)",
+   "descrizione": "redact restituisce l'oggetto com'è oltre il limite di profondità, e JSON.stringify in line() lancia TypeError su un riferimento circolare: la riga di log si perde e l'errore sale a chi chiama. Preesistente, fuori dalla voce del logger."
+  }
+ ],
+ "domande_per_nicola": [
+  "R03-012: applicare la migrazione 840 (lucchetto sulle veloci in contanti)? Finché non è applicata la rotta si comporta come prima.",
+  "R03-005: un negozio con 1-3 giorni salvati, tutti vuoti, con l'editor di prima: «chiuso» o «orari non impostati»?",
+  "R03-004: contare sul database (in sola lettura, lo fai tu) i negozi con 7 giorni vuoti salvati, prima che esca la regola «7 vuoti = chiuso sempre».",
+  "R03-007: accettare gli 8 avvisi di solo sviluppo (Storybook, webpack-dev-middleware, polyfill di node) finché Storybook non li chiude, o togliere/sostituire @storybook/nextjs?",
+  "R03-008: saltare di major zod (3→4), resend (3→6) e @sentry/nextjs (10→11) per chiudere i 10 avvisi che vanno nel sito? Ogni salto rompe qualcosa e va provato.",
+  "R03-014: portare react/react-dom a 19 nel package.json (cambia il React di tutto il sito, Storybook e Sentry compresi) o dare alle prove il react interno di next con un alias in vitest.config.ts?",
+  "R03-002: tenere la seconda spedizione la notte dopo per un'email partita ma non segnata (scelta del 27/10, «meglio due volte che nessuna»)?"
+ ],
+ "conto": {
+  "agenti": 4,
+  "nota": "4 subagenti su 6: lotto 1 (modello grande), lotto 2 (piccolo), revisore (piccolo, per stare nel tetto), correzione R03-013 (piccolo). Nessun Workflow, niente ultracode. Spesa letta con get_session prima della consegna: 18,73 $ (tetto 35, soglia 24).",
+  "subagenti": 4
+ },
+ "costo_usd": 18.73
+}

@@ -1,4 +1,5 @@
 import { captureError } from '@/lib/analytics/sentry';
+import { testoSenzaEmail } from '@/lib/analytics/filmato-senza-dati-personali';
 
 /**
  * Logger wrapper — strutturato, integrato con Sentry.
@@ -36,8 +37,45 @@ type LogContext = Record<string, unknown> | unknown;
 const PII_KEYS =
   /(email|password|passwd|\bpass\b|token|authorization|\bauth\b|cookie|phone|tel|iban|card|cvv|secret|api_?key|ssn|fiscal|codice_?fiscale|\bcf\b|vat|partita_?iva|pec|address|indirizzo|name|nome|cognome|surname|birth|nascita)/i;
 
+/**
+ * 24/11/2026 (R03-013) — IL TESTO SI OSCURA COME LE CHIAVI.
+ *
+ * Il filtro guardava solo i NOMI delle chiavi del contesto: un contesto stringa diventava
+ * `{ detail }` senza essere guardato, e il messaggio arrivava com'era. `logger.warn('x',
+ * 'mario@x.it')` mandava l'indirizzo in chiaro nei log e a Sentry. Adesso ogni testo passa da qui
+ * — il messaggio, un contesto stringa, i valori stringa del contesto, il messaggio e la pila di un
+ * Error messo nel contesto — e quello che si riconosce dalla forma diventa `[redacted]`: email,
+ * IBAN, codice fiscale, gettoni (JWT) e numeri di telefono (dalla forma, non «9 cifre qualunque»:
+ * timestamp, id, date e versioni restano leggibili). Un nome o una via scritti in una frase non si riconoscono dalla forma: per
+ * quelli resta la regola delle chiavi.
+ */
+const DATI_NEL_TESTO: Array<[forma: RegExp, sostituto: string]> = [
+  // IBAN (anche a gruppi di quattro), codice fiscale, gettone JWT.
+  [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b/g, '[redacted]'],
+  [/\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/gi, '[redacted]'],
+  [/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[redacted]'],
+  // Telefono o carta: il carattere prima si cattura e si rimette (niente lookbehind: Safari prima
+  // della 16.4 non lo legge, e il logger gira anche nel browser).
+  // Solo la FORMA di un telefono italiano: prefisso facoltativo (+39, 0039, +), poi un cellulare (3xx,
+  // 9-10 cifre) o un fisso (0x.., 9-11 cifre), con spazi/punti/trattini fra gruppi tipici. Non
+  // attaccato a lettere, cifre, `/`, `:`, `_`, `-`: così restano leggibili timestamp, id in URL,
+  // date e versioni. Scelta: un numero nudo di 9-11 cifre che inizia con 3 o 0 è ambiguo, e si oscura.
+  [
+    /(^|[^\w/:-])(?:(?:\+|00)39[ .-]?|\+)?(?:3\d{2}[ .-]?\d{3}[ .-]?\d{3,4}|0\d{1,3}[ .-]?\d{3,4}[ .-]?\d{3,4})(?![\w/:-])/g,
+    '$1[redacted]',
+  ],
+];
+
+function oscuraTesto(testo: string): string {
+  // L'email con la scansione lineare già usata per il filmato dello schermo (niente lookbehind).
+  let t = testoSenzaEmail(testo, '[redacted]');
+  for (const [forma, sostituto] of DATI_NEL_TESTO) t = t.replace(forma, sostituto);
+  return t;
+}
+
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 4 || value == null) return value;
+  if (typeof value === 'string') return oscuraTesto(value);
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   // #232 — Un Error va trattato per quello che è, PRIMA del ramo «oggetto».
   // Un Error non ha proprietà enumerabili: Object.entries() su di lui torna
@@ -46,7 +84,11 @@ function redact(value: unknown, depth = 0): unknown {
   // restava la frase («rimborso fallito») e spariva il motivo. Chi apriva il
   // log dopo un rimborso fallito leggeva: rimborso fallito, {}.
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, stack: value.stack };
+    return {
+      name: value.name,
+      message: oscuraTesto(value.message),
+      stack: typeof value.stack === 'string' ? oscuraTesto(value.stack) : value.stack,
+    };
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
@@ -239,7 +281,7 @@ function contaErroreDelSito(adesso: number = Date.now()): void {
 
 // Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
 function line(level: string, msg: string, ctx?: LogContext): string {
-  return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
+  return JSON.stringify({ level, msg: oscuraTesto(msg), ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
 }
 
 /**
@@ -275,7 +317,7 @@ export const logger = {
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
     console.warn(line('warn', msg, ctx));
-    if (!eServer) void captureClientWarning(msg, toCtx(ctx));
+    if (!eServer) void captureClientWarning(oscuraTesto(msg), toCtx(ctx));
   },
 
   error: (err: unknown, ctx?: LogContext) => {
@@ -292,6 +334,8 @@ export const logger = {
       errore = ctx;
       contesto = { messaggio: err };
     }
+    // R03-013 — Una frase passata come errore va a Sentry così com'è: si oscura prima.
+    if (typeof errore === 'string') errore = oscuraTesto(errore);
     if (eServer || process.env.NODE_ENV !== 'production') {
       console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
     }
