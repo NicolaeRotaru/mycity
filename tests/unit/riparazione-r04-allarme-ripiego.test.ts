@@ -11,8 +11,6 @@ const rpcMock = vi.fn();
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), spesa: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-// Con l'AI dei negozi spenta l'allarme del tetto tace (lib/ai/tettoSpesa.ts): qui la si prova accesa.
-vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as object), AI_NEGOZI_ACCESA: true }));
 const registro = vi.hoisted(() => ({ righe: new Map<string, string>() }));
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
