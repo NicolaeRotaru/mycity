@@ -1,5 +1,5 @@
 import { type NextRequest, type NextResponse } from 'next/server';
-import { withSellerAuth, type ClientDiChiChiama } from '@/lib/api/middleware';
+import { withSellerAnchePending, type ClientDiChiChiama } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { writeAudit } from '@/lib/audit';
@@ -88,6 +88,6 @@ async function handler(
   }
 }
 
-export const PATCH = withSellerAuth(({ req, user, supaUtente, params }) =>
+export const PATCH = withSellerAnchePending(({ req, user, supaUtente, params }) =>
   handler(req, user, supaUtente, String(params.id ?? '')),
 );

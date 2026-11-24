@@ -1,5 +1,5 @@
 import { type NextRequest, type NextResponse } from 'next/server';
-import { withSellerAuthRateLimit, type ClientDiChiChiama } from '@/lib/api/middleware';
+import { withSellerAnchePendingRateLimit, type ClientDiChiChiama } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { writeAudit } from '@/lib/audit';
@@ -87,7 +87,7 @@ async function handler(req: NextRequest, user: { id: string }, db: ClientDiChiCh
   return apiSuccess({ importati: daScrivere.length, bozze, perMotivo });
 }
 
-export const POST = withSellerAuthRateLimit(
+export const POST = withSellerAnchePendingRateLimit(
   { name: 'seller-products-import', max: 10, windowMs: 60_000 },
   ({ req, user, supaUtente }) => handler(req, user, supaUtente),
 );

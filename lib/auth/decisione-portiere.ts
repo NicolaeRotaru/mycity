@@ -249,6 +249,18 @@ export const PAGINA_ATTESA_NEGOZIO = '/seller/dashboard';
 export const PERCORSO_PREVENTIVO = '/seller/preventivo';
 
 /**
+ * Le parti del pannello aperte al negozio in revisione (modalità demo, 24/11/2026): il preventivo, e i
+ * prodotti, che prepara subito (Nicola: «Sì, li prepara subito») e restano invisibili finché il
+ * negozio non è in vetrina.
+ */
+export const PERCORSI_IN_REVISIONE = [PERCORSO_PREVENTIVO, '/seller/products'] as const;
+
+export function percorsoInRevisione(pathname: string): boolean {
+  const p = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  return PERCORSI_IN_REVISIONE.some((base) => p === base || p.startsWith(`${base}/`));
+}
+
+/**
  * ONDATA 10 — «RUOLO SBAGLIATO» E «NON ANCORA APPROVATO» NON SONO LA STESSA COSA.
  *
  * Prima erano un solo ramo: chi non era approvato veniva rimandato a
@@ -280,9 +292,9 @@ export function decidiAccessoArea(stato: {
   if (role === 'admin' || approved) return { azione: 'entra' };
   const percorso = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (role === 'seller' && percorso === PAGINA_ATTESA_NEGOZIO) return { azione: 'entra' };
-  // 24/11/2026 — Modalità demo: il preventivo (e il pagamento dell'abbonamento) si apre anche a chi è
+  // 24/11/2026 — Modalità demo: il preventivo (col pagamento) e i prodotti si aprono anche a chi è
   // in revisione. Il layout lo mostra solo a chi è «in attesa»; le rotte lo ricontrollano
   // (withSellerAnchePendingRateLimit). Rifiutati e sospesi vedono la loro schermata.
-  if (role === 'seller' && (percorso === PERCORSO_PREVENTIVO || percorso.startsWith(`${PERCORSO_PREVENTIVO}/`))) return { azione: 'entra' };
+  if (role === 'seller' && percorsoInRevisione(percorso)) return { azione: 'entra' };
   return fuori;
 }

@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const stato = vi.hoisted(() => ({ errore: null as unknown, log: [] as unknown[] }));
 
 vi.mock('@/lib/api/middleware', () => ({
-  withSellerAuth:
+  withSellerAnchePending:
     (h: (ctx: Record<string, unknown>) => unknown) =>
     async (req: Request) => h({ req, user: { id: 'seller-1' }, supaUtente: {}, params: { id: 'p1' } }),
 }));

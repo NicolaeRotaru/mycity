@@ -57,11 +57,19 @@ describe('il negozio in attesa di approvazione', () => {
     const html = disegna();
     expect(html).toContain('Stiamo verificando i dati');
     expect(html).toContain('href="/seller/preventivo"');
+    expect(html).toContain('href="/seller/products"');
     expect(html).not.toContain('il-preventivo');
   });
 
-  it('il resto del pannello resta chiuso', () => {
+  it('apre anche i suoi prodotti, per prepararli', () => {
     indirizzo = '/seller/products';
+    expect(disegna()).toContain('il-preventivo');
+    indirizzo = '/seller/products/new';
+    expect(disegna()).toContain('il-preventivo');
+  });
+
+  it('il resto del pannello resta chiuso', () => {
+    indirizzo = '/seller/orders';
     expect(disegna()).not.toContain('il-preventivo');
     indirizzo = '/seller/preventivo-falso';
     expect(disegna()).not.toContain('il-preventivo');

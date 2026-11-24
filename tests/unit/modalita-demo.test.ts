@@ -37,7 +37,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-import { withSellerAnchePendingRateLimit } from '@/lib/api/middleware';
+import { withSellerAnchePending, withSellerAnchePendingRateLimit } from '@/lib/api/middleware';
 import { decidiAccessoArea, PERCORSO_PREVENTIVO } from '@/lib/auth/decisione-portiere';
 import { inModalitaDemo } from '@/lib/modalita-demo';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
@@ -51,9 +51,11 @@ function richiesta(): NextRequest {
   } as unknown as NextRequest;
 }
 
-async function chiama() {
+async function chiama(senzaFreno = false) {
   const gestore = vi.fn(async () => new Response('ok', { status: 200 }) as never);
-  const rotta = withSellerAnchePendingRateLimit({ name: 'prova-demo', max: 100, windowMs: 60_000 }, gestore);
+  const rotta = senzaFreno
+    ? withSellerAnchePending(gestore)
+    : withSellerAnchePendingRateLimit({ name: 'prova-demo', max: 100, windowMs: 60_000 }, gestore);
   const r = await rotta(richiesta());
   return { status: r.status, chiamato: gestore.mock.calls.length > 0 };
 }
@@ -92,6 +94,12 @@ describe('le rotte del preventivo e il negozio in revisione', () => {
     expect(await chiama()).toEqual({ status: 403, chiamato: false });
   });
 
+  it('la stessa regola vale per le rotte dei prodotti (senza freno): dentro in attesa, fuori rifiutato', async () => {
+    expect(await chiama(true)).toEqual({ status: 200, chiamato: true });
+    stato.approvalStatus = 'rejected';
+    expect(await chiama(true)).toEqual({ status: 403, chiamato: false });
+  });
+
   it('un cliente o un fattorino: resta fuori, anche se «pending»', async () => {
     stato.profilo = { id: 'u1', role: 'buyer', is_approved: true };
     expect((await chiama()).chiamato).toBe(false);
@@ -110,8 +118,15 @@ describe('il portiere delle pagine', () => {
     expect(entra(`${PERCORSO_PREVENTIVO}/`)).toBe(true);
   });
 
+  it('e nei suoi prodotti, che prepara subito', () => {
+    expect(entra('/seller/products')).toBe(true);
+    expect(entra('/seller/products/new')).toBe(true);
+    expect(entra('/seller/products/abc/edit')).toBe(true);
+  });
+
   it('ma non nel resto del pannello, né in indirizzi che somigliano', () => {
-    expect(entra('/seller/products')).toBe(false);
+    expect(entra('/seller/products-falso')).toBe(false);
+    expect(entra('/seller/earnings')).toBe(false);
     expect(entra('/seller/orders')).toBe(false);
     expect(entra('/seller/preventivo-falso')).toBe(false);
     expect(entra(PERCORSO_PREVENTIVO, false, 'buyer')).toBe(false);

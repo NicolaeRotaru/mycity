@@ -21,7 +21,7 @@ const supaUtente = {
     : { insert: async (righe: Array<Record<string, unknown>>) => { stato.scritte.push(...righe); return { error: null }; } }),
 };
 vi.mock('@/lib/api/middleware', () => ({
-  withSellerAuthRateLimit: (_o: unknown, h: (a: unknown) => unknown) => (req: unknown) =>
+  withSellerAnchePendingRateLimit: (_o: unknown, h: (a: unknown) => unknown) => (req: unknown) =>
     h({ req, user: { id: 'negozio-1' }, supaUtente, params: {} }),
 }));
 

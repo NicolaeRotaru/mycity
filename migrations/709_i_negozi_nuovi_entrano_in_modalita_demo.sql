@@ -400,6 +400,192 @@ BEGIN
 END;
 $function$;
 
+
+-- 8) Il negozio in verifica prepara già i suoi prodotti (Nicola, 24/11: «Sì, li prepara subito») ----
+-- Un negozio iscritto e non ancora approvato (richiesta mandata e «in attesa») crea e modifica i suoi
+-- prodotti mentre aspetta. Restano invisibili sul marketplace: la lettura pubblica chiede
+-- negozio_in_vetrina, cioè approvato E (già online O abbonamento), qualunque sia lo stato del prodotto.
+-- Rifiutati, sospesi e chi non ha mandato la richiesta non scrivono. Lo stato della richiesta lo
+-- scrive solo il server (punto 7), quindi il negozio non può fingersi «in attesa».
+CREATE OR REPLACE FUNCTION public.negozio_puo_preparare(p_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.id = p_id
+       AND p.role = 'seller'
+       AND (
+         p.is_approved = true
+         OR (p.approval_status = 'pending' AND p.approval_requested_at IS NOT NULL)
+       )
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.negozio_puo_preparare(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.negozio_puo_preparare(uuid) TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.negozio_puo_preparare(uuid) IS
+  'Il negozio può creare e modificare i suoi prodotti: approvato, o in attesa con la richiesta mandata. Non dice niente sulla visibilità (quella è negozio_in_vetrina). Migrazione 709.';
+
+DROP POLICY IF EXISTS "Approved sellers can insert products" ON public.products;
+CREATE POLICY "Approved sellers can insert products"
+  ON public.products FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    seller_id = (SELECT auth.uid())
+    AND public.negozio_puo_preparare((SELECT auth.uid()))
+  );
+
+CREATE OR REPLACE FUNCTION public.salva_prodotto_e_varianti(p_product_id uuid, p_prodotto jsonb DEFAULT '{}'::jsonb, p_scorta_vista integer DEFAULT NULL::integer, p_varianti jsonb DEFAULT NULL::jsonb, p_scorte_viste jsonb DEFAULT NULL::jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_servizio  boolean := current_user NOT IN ('anon', 'authenticated') AND (current_user = 'service_role' OR coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role');
+  v_chi       uuid    := auth.uid();
+  v_patch     jsonb   := coalesce(p_prodotto, '{}'::jsonb);
+  v_ammesse   text[]  := ARRAY['name', 'description', 'price', 'compare_at_price', 'unit', 'condition',
+                               'stock', 'category_id', 'images', 'attributes', 'tags', 'express_enabled',
+                               'status', 'non_recedibile'];
+  v_negozio   uuid;
+  v_scorta    integer;
+  v_colonna   text;
+  v_set       text;
+  v_riga      public.products;
+  v_esistenti jsonb   := '{}'::jsonb;
+  v_var       jsonb;
+  v_pos       integer;
+  v_id        text;
+  v_stock     integer;
+  v_vista     numeric;
+  v_adesso    integer;
+  v_scrivi    boolean;
+  v_tenute    text[]  := '{}';
+  v_update    jsonb   := '[]'::jsonb;
+  v_insert    jsonb   := '[]'::jsonb;
+  v_cancella  uuid[];
+BEGIN
+  IF p_product_id IS NULL THEN
+    RAISE EXCEPTION 'prodotto_mancante' USING ERRCODE = '22023';
+  END IF;
+  IF jsonb_typeof(v_patch) <> 'object'
+     OR (p_varianti IS NOT NULL AND jsonb_typeof(p_varianti) <> 'array')
+     OR (p_scorte_viste IS NOT NULL AND jsonb_typeof(p_scorte_viste) <> 'object') THEN
+    RAISE EXCEPTION 'argomenti_non_validi' USING ERRCODE = '22023';
+  END IF;
+
+  -- Chi chiama: la chiave di servizio (la rotta dell'amministrazione), oppure un
+  -- negozio approvato o un amministratore, che deve essere il proprietario.
+  IF NOT v_servizio THEN
+    IF v_chi IS NULL THEN
+      RAISE EXCEPTION 'prodotto_non_tuo' USING ERRCODE = '42501';
+    END IF;
+    IF NOT (public.is_admin() OR public.negozio_puo_preparare(v_chi)) THEN
+      RAISE EXCEPTION 'negozio_non_approvato' USING ERRCODE = '42501';
+    END IF;
+  ELSE
+    v_ammesse := v_ammesse || ARRAY['seller_id', 'external_source_url', 'external_marketplace',
+                                    'external_data', 'external_synced_at', 'external_sync_status'];
+  END IF;
+
+  -- Le righe si bloccano come in reserve_stock: prima le varianti, poi il prodotto.
+  IF p_varianti IS NOT NULL THEN
+    PERFORM 1 FROM public.product_variants WHERE product_id = p_product_id ORDER BY id FOR UPDATE;
+  END IF;
+  SELECT p.seller_id, p.stock INTO v_negozio, v_scorta
+    FROM public.products p WHERE p.id = p_product_id FOR UPDATE;
+  IF NOT FOUND THEN
+    IF v_servizio THEN
+      RAISE EXCEPTION 'prodotto_non_trovato' USING ERRCODE = 'P0002';
+    END IF;
+    RAISE EXCEPTION 'prodotto_non_tuo' USING ERRCODE = '42501';
+  END IF;
+  IF NOT v_servizio AND v_negozio IS DISTINCT FROM v_chi THEN
+    RAISE EXCEPTION 'prodotto_non_tuo' USING ERRCODE = '42501';
+  END IF;
+
+  -- Il prodotto: lista chiusa delle colonne, prezzo, scorta vista.
+  FOR v_colonna IN SELECT jsonb_object_keys(v_patch) LOOP
+    IF NOT (v_colonna = ANY (v_ammesse)) THEN
+      RAISE EXCEPTION 'colonna_non_ammessa' USING ERRCODE = '42501', DETAIL = v_colonna;
+    END IF;
+  END LOOP;
+  v_riga := jsonb_populate_record(NULL::public.products, v_patch);
+  IF NOT v_servizio AND v_patch ? 'price' AND (v_riga.price IS NULL OR v_riga.price <= 0) THEN
+    RAISE EXCEPTION 'prezzo_non_valido' USING ERRCODE = '22023';
+  END IF;
+  IF v_patch ? 'stock' AND p_scorta_vista IS NOT NULL AND v_scorta IS DISTINCT FROM p_scorta_vista THEN
+    RAISE EXCEPTION 'scorta_prodotto_cambiata' USING ERRCODE = 'P0001',
+      DETAIL = jsonb_build_object('vista', p_scorta_vista, 'adesso', v_scorta)::text;
+  END IF;
+
+  -- Le varianti: cosa cancellare, aggiornare e inserire, con le stesse regole di
+  -- persistVariantsServer.ts. Tutto controllato prima di scrivere qualunque cosa.
+  IF p_varianti IS NOT NULL THEN
+    SELECT coalesce(jsonb_object_agg(v.id::text, v.stock), '{}'::jsonb) INTO v_esistenti
+      FROM public.product_variants v WHERE v.product_id = p_product_id;
+
+    FOR v_var, v_pos IN
+      SELECT e.value, (e.ordinality - 1)::integer FROM jsonb_array_elements(p_varianti) WITH ORDINALITY AS e
+    LOOP
+      IF jsonb_typeof(v_var) <> 'object' THEN
+        RAISE EXCEPTION 'variante_non_valida' USING ERRCODE = '22023', DETAIL = '';
+      END IF;
+      -- La scorta scritta: un numero intero non negativo (vuota = 0).
+      IF v_var -> 'stock' IS NULL OR jsonb_typeof(v_var -> 'stock') = 'null' THEN
+        v_stock := 0;
+      ELSIF jsonb_typeof(v_var -> 'stock') = 'number' THEN
+        v_stock := greatest(trunc((v_var ->> 'stock')::numeric), 0)::integer;
+      ELSE
+        RAISE EXCEPTION 'variante_non_valida' USING ERRCODE = '22023', DETAIL = coalesce(v_var ->> 'label', '');
+      END IF;
+
+      v_id := nullif(v_var ->> 'id', '');
+      IF v_id IS NOT NULL AND v_esistenti ? v_id THEN
+        v_tenute := v_tenute || v_id;
+        v_vista := CASE WHEN jsonb_typeof(p_scorte_viste -> v_id) = 'number'
+                        THEN (p_scorte_viste ->> v_id)::numeric END;
+        -- La scorta non toccata (uguale a quella vista) non si riscrive.
+        v_scrivi := v_vista IS NULL OR v_stock <> v_vista;
+        v_adesso := (v_esistenti ->> v_id)::integer;
+        IF v_scrivi AND v_vista IS NOT NULL AND v_adesso IS DISTINCT FROM v_vista THEN
+          RAISE EXCEPTION 'scorta_variante_cambiata' USING ERRCODE = 'P0001',
+            DETAIL = jsonb_build_object('id', v_id, 'label', v_var ->> 'label',
+                                        'vista', v_vista, 'adesso', v_adesso)::text;
+        END IF;
+        v_update := v_update || jsonb_build_array(
+          jsonb_build_object('id', v_id, 'options', v_var -> 'options', 'label', v_var ->> 'label', 'position', v_pos)
+          || CASE WHEN v_scrivi THEN jsonb_build_object('stock', v_stock) ELSE '{}'::jsonb END);
+      ELSE
+        v_insert := v_insert || jsonb_build_array(
+          jsonb_build_object('options', v_var -> 'options', 'label', v_var ->> 'label',
+                             'stock', v_stock, 'position', v_pos));
+      END IF;
+    END LOOP;
+
+    -- Si cancella solo la variante che il negoziante ha visto e tolto.
+    SELECT coalesce(array_agg(k::uuid), '{}'::uuid[]) INTO v_cancella
+      FROM jsonb_object_keys(v_esistenti) AS k
+     WHERE NOT (k = ANY (v_tenute))
+       AND (p_scorte_viste IS NULL OR p_scorte_viste ? k);
+  END IF;
+
+  -- Le scritture: prima il prodotto (coi suoi trigger), poi le varianti.
+  IF v_patch <> '{}'::jsonb THEN
+    SELECT string_agg(format('%1$I = ($1).%1$I', k), ', ') INTO v_set FROM jsonb_object_keys(v_patch) AS k;
+    EXECUTE format('UPDATE public.products SET %s WHERE id = $2', v_set) USING v_riga, p_product_id;
+  END IF;
+  IF p_varianti IS NOT NULL THEN
+    PERFORM public.salva_varianti(p_product_id, v_cancella, v_update, v_insert);
+  END IF;
+END;
+$function$;
+
 COMMIT;
 
 NOTIFY pgrst, 'reload schema';
