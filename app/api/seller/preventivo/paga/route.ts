@@ -41,7 +41,7 @@ export const runtime = 'nodejs';
  */
 
 /** Il buono del primo mese: -50%, una volta sola. Lo stesso per tutti, creato la prima volta che serve. */
-export const BUONO_PRIMO_MESE = 'mycity-servizi-primo-mese-meta';
+const BUONO_PRIMO_MESE = 'mycity-servizi-primo-mese-meta';
 
 /** Le richieste dello stesso negozio e della stessa fascia dentro questa finestra ricevono la stessa cassa. */
 const FINESTRA_CASSA_MS = 10 * 60_000;
