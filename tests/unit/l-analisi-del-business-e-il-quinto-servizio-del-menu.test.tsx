@@ -8,7 +8,8 @@
  * dentro una voce dei servizi e ci deve essere il preventivo di questo… un'anteprima/demo già creata».
  * Sue scelte: ritmo «Avvio, mese, settimana»; fonti solo gratuite; la bozza del sito la scrive l'AD.
  *
- *  · la voce «Analisi del business» sta nel menu Servizi, prima di «Abbonamento»;
+ *  · la voce «Analisi del business» sta nel menu Servizi, l'ultima (dalla sera del 24/11
+ *    «Abbonamento» sta sotto il nome del negozio, come su Claude);
  *  · Base: un'analisi all'avvio; Business: ogni mese; Premium: ogni settimana più un incontro al mese;
  *  · la pagina mostra l'analisi già pronta; dove non c'è ancora lo dice, e non inventa numeri;
  *  · «I tuoi canali» sta nella pagina dell'analisi e nel Profilo;
@@ -104,15 +105,14 @@ describe('il quarto servizio, nel listino e nel menu', () => {
     expect(FASCE.premium.servizi.analisi).toMatch(/incontro al mese/);
   });
 
-  it('nel menu la voce sta fra «Gestione social» e «Abbonamento»', async () => {
+  it('nel menu la voce sta dopo «Gestione social», l ultima dei servizi', async () => {
     stato.pathname = '/seller/dashboard';
     const r = await monta(SellerShell, createElement('p', null, 'x'));
     const voci = Array.from(r.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     const social = voci.indexOf('/seller/servizi/social');
     const analisi = voci.indexOf('/seller/servizi/analisi');
-    const abbonamento = voci.indexOf('/seller/abbonamento');
     expect(analisi).toBeGreaterThan(social);
-    expect(abbonamento).toBeGreaterThan(analisi);
+    expect(voci).not.toContain('/seller/abbonamento'); // sta sotto il nome del negozio, nel menu dell account
     expect(r.querySelector('a[href="/seller/servizi/analisi"]')?.textContent).toContain('Analisi del business');
   });
 });

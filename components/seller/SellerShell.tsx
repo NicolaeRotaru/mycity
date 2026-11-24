@@ -10,7 +10,7 @@ import {
   Users, Star, Wallet, MessageCircle,
   Store, User, LifeBuoy,
   Sparkles, Bell, Search, Plus, Menu, X,
-  PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut,
+  PanelLeftClose, PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -19,6 +19,7 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { VOCI_SERVIZI } from '@/components/seller/servizi-nel-menu';
+import MenuAccount, { usePianoDelNegozio } from '@/components/seller/MenuAccount';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -38,7 +39,8 @@ const NAV: NavGroup[] = [
     ...(AI_NEGOZI_ACCESA ? [{ href: '/seller/products/ai-batch', icon: Wand2, label: 'AI Studio' }] : []),
   ] },
   // 24/11/2026 — I servizi di MyCity ai venditori, subito dopo la gestione (Nicola: «le voci dei
-  // servizi mettili in alto»): una voce per servizio, poi «Abbonamento». Le voci vengono dal listino.
+  // servizi mettili in alto»): una voce per servizio, dal listino. «Abbonamento» sta in fondo al
+  // menu, sotto il nome del negozio, come su Claude (MenuAccount).
   { group: 'Servizi', items: VOCI_SERVIZI },
   { group: 'Crescita', items: [
     { href: '/seller/promotions', icon: Tag, label: 'Promozioni' },
@@ -242,6 +244,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
   const todo = useSellerTodoCount(profile?.id ?? null);
   const notifUnread = useNotifUnread(profile?.id ?? null);
+  const { etichetta: piano } = usePianoDelNegozio();
 
   const storeName = profile?.store_name || profile?.full_name || profile?.email || userEmail || 'Negozio';
   const initials =
@@ -309,7 +312,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         aria-hidden={menuNascosto || undefined}
         className={`fixed inset-y-0 left-0 z-modal flex h-dvh lg:h-screen w-[260px] max-w-[82vw] flex-col bg-ink-900 text-white transition-transform duration-200 ${
           navOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:sticky lg:top-0 lg:z-base lg:max-w-none lg:translate-x-0 ${asideWidth}`}
+        } lg:sticky lg:top-0 lg:z-sidebar lg:max-w-none lg:translate-x-0 ${asideWidth}`}
         aria-label="Menu venditore"
       >
         {/* Brand + collapse */}
@@ -420,29 +423,16 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           ))}
         </nav>
 
-        {/* Footer: marketplace + logout */}
+        {/* Footer: il negozio e il suo piano, come su Claude (24/11/2026). Il menu che si apre porta
+            all'abbonamento, al Profilo, al marketplace e all'uscita. */}
         <div className={`shrink-0 border-t border-white/10 p-3 pb-safe ${collapsed ? 'lg:px-2' : ''}`}>
-          <Link
-            href="/?shop=1"
-            title="Vai al marketplace"
-            className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white ${
-              collapsed ? 'lg:justify-center lg:px-2.5' : ''
-            }`}
-          >
-            <ExternalLink size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />
-            {!collapsed && <span>Vai al marketplace</span>}
-          </Link>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            title="Esci"
-            className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium text-white/[0.78] transition-colors hover:bg-secondary-600/20 hover:text-white ${
-              collapsed ? 'lg:justify-center lg:px-2.5' : ''
-            }`}
-          >
-            <LogOut size={16} strokeWidth={2.2} className="shrink-0" aria-hidden />
-            {!collapsed && <span>Esci</span>}
-          </button>
+          <MenuAccount
+            nome={storeName}
+            iniziali={initials}
+            email={profile?.email || userEmail || null}
+            compatto={collapsed}
+            onEsci={handleSignOut}
+          />
         </div>
       </aside>
 
@@ -515,14 +505,17 @@ export default function SellerShell({ children }: { children: React.ReactNode })
               )}
             </div>
 
-            {/* Avatar negozio */}
-            <Link href="/seller/profile" className="flex items-center gap-2" title={storeName}>
+            {/* Avatar negozio — sul computer il negozio e il piano stanno in fondo al menu
+                (MenuAccount); qui restano per il telefono e il tablet, dove il menu è chiuso. */}
+            <Link href="/seller/profile" className="flex items-center gap-2 lg:hidden" title={`${storeName} · ${piano.testo}`}>
               <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
                 {initials}
               </span>
               <span className="hidden leading-tight md:block">
                 <span className="block max-w-[140px] truncate text-sm font-bold text-ink-900">{storeName}</span>
-                <span className="block text-xs text-ink-400">Venditore</span>
+                <span className={`block text-xs ${piano.tono === 'attivo' ? 'font-semibold text-primary-700' : piano.tono === 'da_sistemare' ? 'font-semibold text-amber-700' : 'text-ink-400'}`}>
+                  {piano.testo}
+                </span>
               </span>
             </Link>
           </div>
