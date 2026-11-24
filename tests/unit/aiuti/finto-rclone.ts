@@ -78,3 +78,6 @@ export const FINTO_PGDUMP = [
   '[ -n "$uscita" ] && printf "copia finta\\n" > "$uscita"',
   'exit 0',
 ].join('\n');
+
+/** Un `psql` muto: legge e basta, poi esce con 1 (database muto), senza chiamare quello vero della macchina. */
+export const FINTO_PSQL = ['#!/usr/bin/env bash', 'cat >/dev/null', 'exit 1'].join('\n');

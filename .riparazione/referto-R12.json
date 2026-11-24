@@ -1,0 +1,171 @@
+{
+  "sessione": "R12",
+  "aggiornato": "2026-11-24 18:55",
+  "finita": true,
+  "testa": "2549d2c876def9840b159926aadc78ea2a4b30b4",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "testa": "2549d2c876def9840b159926aadc78ea2a4b30b4",
+    "nota": "2105 file di prova passati, 1 saltato; 12733 prove passate, 1 saltata; uscita 0. SHA preso con git rev-parse HEAD nello stesso comando."
+  },
+  "voci": [
+    {
+      "id": "R12-001",
+      "chiave": "api-backend|l'invio subito delle notifiche push prende le righe guardando solo pushed_at, e può correre col giro del cron",
+      "esito": "parziale",
+      "commit": "4847bd9db869b9245d83bc6364257e8f98785e57",
+      "file_toccati": [
+        "app/api/cron/send-push/route.ts",
+        "tests/unit/api-cron-send-push.test.ts",
+        "tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts",
+        "tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts",
+        "tests/unit/minori-s03-push.test.ts",
+        "tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts",
+        "tests/unit/riparazione-r12-onda3-giro-prende-in-carico.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-onda3-giro-prende-in-carico.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-onda3-giro-prende-in-carico.test.ts tests/unit/api-cron-send-push.test.ts tests/unit/le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts tests/unit/le-notifiche-push-non-restano-appese-ne-arrivano-in-ritardo.test.ts tests/unit/minori-s03-push.test.ts tests/unit/riparazione-r26-push-ordine-prima-delle-promozioni.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4847bd9^ --file app/api/cron/send-push/route.ts --prove tests/unit/riparazione-r12-onda3-giro-prende-in-carico.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il giro del cron prende in carico le notifiche con update(pushed_at).in(ids).is('pushed_at', null).select(): lavora solo le righe prese e ridà le altre con .eq('pushed_at', nowIso). I finti delle 5 prove esistenti sono cambiati come scritto nella scheda (firma prove_comuni): 26 prove verdi su 6 file. lib/push/subito.ts prendeva già con .is('pushed_at', null), quindi non è stato toccato.",
+      "cosa_resta": "La doppia push per la corsa fra i giri è chiusa (rimessa uscita 0). Il revisore ha trovato però un caso accanto: se il giro muore fra la presa (app/api/cron/send-push/route.ts:96-113) e l'invio o la restituzione (:255-269), per un timeout, un'eccezione o le rpc a :153, le righe restano con pushed_at valorizzato e non partono più. Prima restavano NULL e il giro dopo riprovava. Lo stesso succede se fallisce l'update di restituzione (:262-267), che oggi viene solo loggato. Serve un modo di riprendere le prese rimaste appese: una colonna o un valore di presa distinto da «inviata», con scadenza. È una scelta di schema (migrazione nella fascia 930-939). Non l'ho fatta per il limite di spesa.",
+      "verificato_da": "subagente revisore (sonnet): 16 prove su cron/send-push e push/subito, 128 verdi; ha letto il flusso; ha trovato il caso del giro morto dopo la presa"
+    },
+    {
+      "id": "R12-002",
+      "chiave": "architettura|la prova sull'export elenca ancora cod_reconciliations fra le tabelle escluse",
+      "esito": "parziale",
+      "commit": "d39c12e634f62a9bb086d8d8707e2850f93cde3b",
+      "file_toccati": [
+        "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge_a_mano",
+        "uscita": 2,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d39c12e^ --file tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts --prove tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts --json",
+        "nota": "Il programma esce con 2: un file non può essere insieme correzione e prova. Rimessa fatta a mano: la prova della base con solo il caso nuovo aggiunto dà 1 rossa su 5 (expected ['cod_reconciliations'] to deeply equal [])."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ho tolto cod_reconciliations da FUORI_DALL_EXPORT e aggiunto il caso «una tabella esclusa non è anche nell export»: sulla base trova ['cod_reconciliations']. 5 prove verdi.",
+      "verificato_da": "subagente revisore (sonnet): prova verde, voce coperta com'è scritta; rimessa fatta a mano dal capo squadra, rossa sulla base",
+      "cosa_resta": "La modifica è fatta ed è verde. Manca solo la prova rimessa del programma: correzione e prova sono lo stesso file, e prova-rimessa.mjs esce con 2. A mano regge: sulla base il caso nuovo è rosso. Per farla diventare riparato serve una prova separata che legga il file di prova come testo. Non l'ho scritta perché la spesa ha passato i 3 $."
+    },
+    {
+      "id": "R12-003",
+      "chiave": "frontend-ux|incollare il link di instagram o scrivere il sito senza https blocca il salvataggio di tutta la vetrina con un messaggio che non dice dove",
+      "esito": "riparato",
+      "commit": "50d55e939df7541b14ad1f59953b23520187b0aa",
+      "file_toccati": [
+        "components/VendorForm.tsx",
+        "tests/unit/riparazione-r10-slogan-e-social.test.ts",
+        "tests/unit/riparazione-r12-onda3-social.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-onda3-social.test.tsx",
+        "tests/unit/riparazione-r10-slogan-e-social.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-onda3-social.test.tsx tests/unit/riparazione-r10-slogan-e-social.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 50d55e9^ --file components/VendorForm.tsx --prove tests/unit/riparazione-r12-onda3-social.test.tsx,tests/unit/riparazione-r10-slogan-e-social.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La base sistemava già da sola i link incollati e il sito senza https (normalizzaSocials), e il social sbagliato non bloccava più tutta la vetrina. Mancava che «il resto è salvato» comparisse solo a salvataggio riuscito, con il plurale e con «non si è salvato» per un campo prima vuoto: l'ho riapplicato in VendorForm. Ho fatto la modifica scritta alla prova r10 (firma prove_comuni) senza togliere asserzioni. Le 18 prove che importano VendorForm sono verdi (148).",
+      "verificato_da": "subagente revisore (sonnet): 29 prove su VendorForm/social/store-customization, 322 verdi; ha controllato i chiamanti app/seller/profile/page.tsx:160 e components/seller/site/StoreDetailsEditor.tsx:102",
+      "nota": "Il commit riporta nel codice un commento che cita la voce dell'onda prima (components/VendorForm.tsx, commento in testa al blocco): è nel codice, non nel messaggio del commit."
+    },
+    {
+      "id": "R12-004",
+      "chiave": "qa-flussi|l'aiutante di prova accendi, con la suspense, rende vuoto in silenzio un componente che resta sospeso per sempre: una prova che controlla un'assenza può passare senza aver provato niente",
+      "esito": "riparato",
+      "commit": "9c8d5c2636f1178f9216c328ab80ac8f0bb09bba",
+      "file_toccati": [
+        "tests/unit/aiuti/schermo.ts",
+        "tests/unit/riparazione-r12-onda3-schermo-sospeso.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-onda3-schermo-sospeso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-onda3-schermo-sospeso.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c8d5c2^ --file tests/unit/aiuti/schermo.ts --prove tests/unit/riparazione-r12-onda3-schermo-sospeso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ho applicato a schermo.ts il diff esatto della scheda (firma prove_comuni). Un componente sospeso per sempre fa rigettare attendi(); con permettiSospeso: true no. Le 286 prove che importano l'aiutante sono verdi (1733).",
+      "verificato_da": "subagente revisore (sonnet): 286 prove che importano l'aiutante, 1733 verdi; ha visto rischi di instabilità futura del diff della scheda (vedi nuovi_difetti_visti)"
+    },
+    {
+      "id": "R12-005",
+      "chiave": "qa-flussi|le prove che fanno girare tutto lo script del backup non hanno un psql finto",
+      "esito": "riparato",
+      "commit": "2549d2c876def9840b159926aadc78ea2a4b30b4",
+      "file_toccati": [
+        "tests/unit/aiuti/finto-rclone.ts",
+        "tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts",
+        "tests/unit/il-lavoro-notturno-accende-davvero-la-copia-delle-foto.test.ts",
+        "tests/unit/la-copia-delle-foto-non-ripete-la-cancellazione.test.ts",
+        "tests/unit/riparazione-r12-onda3-backup-psql-finto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r12-onda3-backup-psql-finto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r12-onda3-backup-psql-finto.test.ts tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts tests/unit/il-lavoro-notturno-accende-davvero-la-copia-delle-foto.test.ts tests/unit/la-copia-delle-foto-non-ripete-la-cancellazione.test.ts --reporter=dot",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2549d2c^ --file tests/unit/aiuti/finto-rclone.ts,tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts --prove tests/unit/riparazione-r12-onda3-backup-psql-finto.test.ts --json",
+        "nota": "Con tutti e 4 i file in --file l'uscita è 1: tolte da sole, le modifiche a il-lavoro-notturno-… e a la-copia-delle-foto-non-ripete-… lasciano la prova verde, perché in quelle due prove lo script non arriva al psql. Le ho lasciate perché la scheda le chiede, e non fanno danno."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "FINTO_PSQL è in finto-rclone.ts e viene scritto in finti/psql nelle 3 prove del backup; nella terza come costante locale. La prova nuova mette un psql trappola in testa al PATH, lancia le 3 prove e controlla che la trappola non sia mai stata chiamata. 18 prove verdi.",
+      "verificato_da": "subagente revisore (sonnet): 3 prove del backup + prova trappola verdi; ha letto scripts/backup-db.sh: gpg parte solo con BACKUP_PASSPHRASE, che la prova lascia vuota"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "una notifica push presa dal giro del cron si perde per sempre se il giro muore prima di mandarla o ridarla",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "app/api/cron/send-push/route.ts:96-113",
+      "descrizione": "La presa scrive pushed_at = l'ora del giro, lo stesso valore di «inviata». Se il giro va in timeout o lancia fra la presa e la restituzione (:255-269), oppure se la restituzione fallisce (:262-267, solo loggata), le righe sembrano inviate e nessuno le riprende. Serve un segno di presa distinto, con scadenza."
+    },
+    {
+      "titolo": "l'aiutante attendi() può dire «sospeso per sempre» per un import solo lento, e il permesso permettiSospeso vale per l'ultima accendi",
+      "dimensione": "qa-flussi",
+      "severita": "minore",
+      "file": "tests/unit/aiuti/schermo.ts:22-31 e :70-77",
+      "descrizione": "Il tetto è di 20 giri setTimeout(0), pochi ms, e sotto carico un import pigro lento può farlo scattare per sbaglio. permettiSospesoDaAccendi è una variabile di modulo, non una per schermo. Il controllo guarda tutto il document, quindi un segnaposto di una radice non smontata da un'altra prova lo fa fallire. Un componente che si risospende dopo un clic fa lanciare l'attendi successivo."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 2,
+    "subagenti": 2,
+    "nota": "1 subagente sonnet ha riparato il lotto unico di 5 voci, 1 subagente sonnet ha smentito. Spesa oltre i 3 $ prima della consegna: chiuso senza altri giri."
+  },
+  "costo_usd": 3.07
+}

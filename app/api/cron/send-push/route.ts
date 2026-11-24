@@ -17,9 +17,10 @@ const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
 
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
- * create nell'ultima ora. Ogni notifica viene processata una sola volta
- * (pushed_at marcato dopo il tentativo). Le subscription morte (404/410) vengono
- * rimosse dal sender.
+ * create nell'ultima ora. Ogni notifica viene processata una sola volta: prima
+ * di mandarla il giro la prende in carico (pushed_at da vuoto ad adesso, solo
+ * dove è ancora vuoto) e, se non la gestisce, la ridà al giro dopo. Le
+ * subscription morte (404/410) vengono rimosse dal sender.
  *
  * Cadenza: ogni 5 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
  * Oggi il nuovo ordine aspetta questo giro: la push al negozio la manda solo lui, quindi può
@@ -92,6 +93,25 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     }
   }
 
+  // 24/11/2026 — Il giro PRENDE IN CARICO le righe lette, con la stessa condizione dell'invio subito
+  // (lib/push/subito.ts): `pushed_at` da vuoto ad adesso, solo dove è ancora vuoto. Fra la lettura e
+  // l'invio, l'invio subito poteva aver preso e mandato la stessa campanella: il giro la rimandava,
+  // e il telefono suonava due volte. Adesso il giro lavora solo le righe che ha preso lui.
+  const nowIso = new Date().toISOString();
+  const { data: prese, error: errorePresa } = await supa
+    .from('notifications')
+    .update({ pushed_at: nowIso })
+    .in('id', pending.map((n) => n.id))
+    .is('pushed_at', null)
+    .select('id, user_id, title, body, link, category');
+  if (errorePresa) {
+    logger.error('[cron] notifiche push non prese in carico', { message: errorePresa.message });
+    return ApiErrors.unavailable('notifiche non leggibili');
+  }
+  const idPresi = new Set((prese ?? []).map((n) => n.id));
+  pending = pending.filter((n) => idPresi.has(n.id));
+  if (!pending.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });
+
   /**
    * 22/8/2026 — TRE VIAGGI AL DATABASE PER OGNI SINGOLA NOTIFICA.
    *
@@ -114,7 +134,6 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let retried = 0;
   let saltate = 0;
   let rimandate = 0;
-  const nowIso = new Date().toISOString();
 
   // ① Le preferenze, una volta per persona+categoria invece che per notifica.
   const chiavi = new Map<string, { user: string; categoria: string }>();
@@ -226,9 +245,26 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
       .update({ pushed_at: nowIso })
       .in('id', daSegnare);
     if (error) {
-      logger.error('[cron] push mandate ma non registrate: il prossimo giro le rimanda', {
+      // Restano comunque prese da questo giro (pushed_at già scritto dalla presa): non ripartono.
+      logger.error('[cron] push mandate ma non riscritte: restano prese dal giro', {
         quante: daSegnare.length, message: error.message,
       });
+    }
+  }
+
+  // ⑤ Le prese non gestite (preferenza non letta, iscrizioni non lette, invio non andato) tornano al
+  // giro dopo, come quando non si prendevano: `pushed_at` di nuovo vuoto, solo dove c'è ancora la
+  // presa di questo giro.
+  const gestite = new Set(daSegnare);
+  const daRidare = notifiche.filter((n) => !gestite.has(n.id)).map((n) => n.id);
+  if (daRidare.length > 0) {
+    const { error } = await supa
+      .from('notifications')
+      .update({ pushed_at: null })
+      .in('id', daRidare)
+      .eq('pushed_at', nowIso);
+    if (error) {
+      logger.error('[cron] push non mandate e non ridate al giro', { quante: daRidare.length, message: error.message });
     }
   }
 
