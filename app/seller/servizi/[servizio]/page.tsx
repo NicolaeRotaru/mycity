@@ -11,6 +11,7 @@ import { ABBONAMENTI, FASCE, FRASE_PARTNER, LISTINO, servizioDaSlug } from '@/li
 import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import AnalisiDelBusiness from '@/components/seller/AnalisiDelBusiness';
+import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import {
   CHIAVE_BOZZA_AD,
   CHIAVE_PREVENTIVO,
@@ -80,6 +81,9 @@ export default function PaginaDelServizio() {
           </ul>
         </section>
       )}
+
+      {/* Le cose precise che facciamo per lui in questo servizio, coi suoi dati (24/11). */}
+      {p && <div className="mb-4"><OffertaSuMisura offerta={p.offerta} fascia={p.attivo?.fascia ?? p.consigliato} servizi={[id]} titolo={`Cosa facciamo per te, col ${FASCE[p.attivo?.fascia ?? p.consigliato].nome}`} completa={false} /></div>}
 
       {giaAPosto && (
         <section className="mb-4 rounded-2xl border border-cream-300 bg-cream-50 p-5">

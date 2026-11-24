@@ -9,6 +9,7 @@ import { CODICE_VALIDO, leggiPreventivoColCodice } from '@/lib/agenzia/preventiv
 import { leggiSchedaSalvata, soloConfermati } from '@/lib/agenzia/scheda-cliente';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
+import OffertaSuMisura from '@/components/seller/OffertaSuMisura';
 import AccettaDalLink from './AccettaDalLink';
 import PagaDalLink from './PagaDalLink';
 
@@ -88,7 +89,8 @@ export default async function PreventivoDalLink({
   let scheda = null;
   try {
     const [l, s] = await Promise.all([
-      leggiPreventivo(pc.sellerId),
+      // Pubblico: l'offerta su misura usa solo i dati confermati, senza le analisi (24/11).
+      leggiPreventivo(pc.sellerId, undefined, { pubblico: true }),
       getAdminSupabase().from('schede_clienti').select('scheda').eq('id_attivita', pc.sellerId).maybeSingle(),
     ]);
     letti = l;
@@ -130,6 +132,8 @@ export default async function PreventivoDalLink({
           ))}
         </ul>
       </section>
+
+      <OffertaSuMisura offerta={p.offerta} fascia={p.consigliato} />
 
       <section className="mt-6" aria-labelledby="abbonamenti">
         <h2 id="abbonamenti" className="text-lg font-bold text-ink-900">I tre abbonamenti</h2>

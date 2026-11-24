@@ -10,6 +10,7 @@ import {
 } from '@/lib/agenzia/preventivo';
 import { inviaAlFlusso } from '@/lib/agenzia/flusso-n8n';
 import { leggiPreventivo, type Letti } from '@/lib/agenzia/leggi-preventivo';
+import { testoOffertaPerAvviso } from '@/lib/agenzia/offerta-su-misura';
 
 export const runtime = 'nodejs';
 
@@ -79,7 +80,8 @@ export const POST = withSellerAnchePendingRateLimit(
     try {
       avviso = await notifyAdmins(
         `Preventivo accettato: ${preventivo.attivita}`,
-        testoAvvisoPreventivo(preventivo, telefono),
+        // L'offerta su misura nella fascia scelta: Nicola sa subito cosa fare per lui (24/11).
+        testoAvvisoPreventivo(preventivo, telefono) + testoOffertaPerAvviso(preventivo.offerta, scelto),
         '/admin/users',
         { unaVoltaPer: chiave, almenoUnDestinatario: true },
       );

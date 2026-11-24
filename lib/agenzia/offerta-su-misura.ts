@@ -1,0 +1,434 @@
+import { ABBONAMENTI, FASCE, FOTO_LOCALE_CONSIGLIATE, PRODOTTI_PER_IL_PREMIUM, type Abbonamento, type DatiAttivita, type ServizioAgenzia } from './preventivo';
+import { datoDi, prodottiTipici, senzaPrezzo, vociSenzaPrezzo, type SchedaCliente } from './scheda-cliente';
+import { votoDi, type AnalisiCanali, type RisultatoSito } from './analisi';
+import type { TipoAttivita } from './tipi-attivita';
+
+/**
+ * L'OFFERTA SU MISURA — dentro il preventivo, 24/11/2026.
+ *
+ * Nicola: «sulla base dei dati che hai recuperato sul cliente devi trovare esattamente tutte le cose
+ * che possiamo offrirgli con i nostri servizi… dentro il preventivo deve esserci un'offerta
+ * personalizzata per il cliente, siccome hai già tanti dati su di lui».
+ *
+ * Il preventivo diceva cosa manca in generale; questa è la lista delle cose precise che faremo per
+ * QUEL negozio, ognuna col suo perché vero e con l'abbonamento da cui è compresa. Le fonti sono tutte
+ * quelle che il sito ha già:
+ *  · la vetrina MyCity: prodotti e loro foto, copertina, video, canali scritti dal titolare;
+ *  · la scheda del locale di n8n (flusso 16): indirizzo, orari, prenotazioni, prodotti tipici, punti di
+ *    forza, idee, domande per il titolare;
+ *  · l'analisi dei canali di n8n: post al mese, recensioni, osservazioni sulla scheda Google;
+ *  · l'analisi del sito (Google PageSpeed): velocità, Google, cose da sistemare.
+ *
+ * REGOLE.
+ *  · Solo frasi vere: ogni proposta nasce da un dato letto, e lo cita. Senza il dato, niente proposta.
+ *  · Nessun prezzo per proposta: si vende l'abbonamento (Nicola, 24/11). La proposta dice da quale
+ *    fascia è compresa, secondo `FASCE` (per esempio il video non è nel Base, le risposte alle
+ *    recensioni partono dal Business).
+ *  · Il titolare non deve fare niente: le proposte dicono cosa facciamo NOI.
+ *  · Dove la pagina non è del negozio (il link col codice) il chiamante passa la scheda coi soli dati
+ *    confermati e nessuna analisi: l'offerta si fa con quello che resta.
+ * Qui solo regole, senza rete: si prova con i dati in mano.
+ */
+
+export type Proposta = {
+  /** Una chiave stabile, per React e per le prove. */
+  id: string;
+  servizio: ServizioAgenzia;
+  /** Cosa facciamo, detto al titolare: «Fotografiamo i tuoi 12 prodotti senza foto». */
+  cosa: string;
+  /** Perché, col dato vero: «Su 30 prodotti in catalogo, 12 non hanno nessuna foto». */
+  perche: string;
+  /** Da dove viene il dato, in parole: «la tua vetrina», «Google PageSpeed»… */
+  fonte: string;
+  /** La fascia più leggera che la comprende. */
+  daFascia: Abbonamento;
+  /**
+   * Come cambia la stessa cosa salendo di fascia (Nicola, 24/11 sera: «il servizio deve essere anche in
+   * base all'abbonamento»). Le quantità sono solo quelle di `FASCE`; dove una fascia non c'è vale il testo
+   * della fascia sotto, o `cosa`.
+   */
+  perFascia?: Partial<Record<Abbonamento, string>>;
+};
+
+export type OffertaSuMisura = {
+  proposte: Proposta[];
+  /** Quante proposte comprende ogni fascia. */
+  perFascia: Record<Abbonamento, number>;
+  /** La fascia più leggera che le comprende tutte; `null` se non ci sono proposte. */
+  tuttoCon: Abbonamento | null;
+  /** Le domande da fare al titolare al primo incontro (dalla scheda di n8n). */
+  domande: string[];
+};
+
+export type DatiPerLOfferta = {
+  nome: string;
+  tipo: TipoAttivita;
+  dati: DatiAttivita;
+  scheda?: SchedaCliente | null;
+  canali?: AnalisiCanali | null;
+  sito?: RisultatoSito | null;
+};
+
+const FONTE = {
+  vetrina: 'la tua vetrina su MyCity',
+  scheda: 'le fonti pubbliche del tuo locale',
+  sito: 'Google PageSpeed Insights',
+  instagram: 'il tuo profilo Instagram',
+  facebook: 'la tua pagina Facebook',
+  google: 'la tua scheda Google Maps',
+} as const;
+
+/** I post al mese di ogni fascia, letti dal testo del listino (`FASCE`): se cambia lì, cambia qui. */
+// Calcolato quando serve, non quando il file si carica: preventivo.ts e questo file si importano a
+// vicenda, e a caricamento `FASCE` può non esserci ancora.
+export const postAlMese = (f: Abbonamento): number => Number(/(\d+) post al mese/.exec(FASCE[f].servizi.social)?.[1] ?? 0);
+
+/** Un numero di telefono in un testo libero (n8n può averlo trovato in rete): può essere del titolare. */
+const TELEFONO = /\+?\d[\d\s./-]{7,}\d/;
+const ORARIO = /\b\d{1,2}[.:]\d{2}\b/g;
+/** Una frase libera si cita solo senza prezzi e senza telefoni. */
+const citabile = (t: string) => senzaPrezzo(t) && !TELEFONO.test(t);
+const vociCitabili = (v: readonly string[] | undefined, quante: number, max = 140) => vociSenzaPrezzo(v, quante, max).filter((x) => !TELEFONO.test(x));
+/** Gli orari hanno cifre per forza («7.30–19.30»): si guardano senza gli orari, poi come una frase. */
+const orariCitabili = (t: string) => citabile(t.replace(ORARIO, ' '));
+
+const ORDINE: Record<Abbonamento, number> = { base: 0, business: 1, premium: 2 };
+
+const contaMedia = (media: unknown, tipo: 'image' | 'video') =>
+  Array.isArray(media)
+    ? media.filter((m) => m && typeof m === 'object' && (m as { type?: unknown }).type === tipo && typeof (m as { url?: unknown }).url === 'string' && ((m as { url: string }).url).trim()).length
+    : 0;
+const haFoto = (images: unknown) => Array.isArray(images) && images.some((i) => typeof i === 'string' && i.trim().length > 0);
+const pieno = (o: unknown, k: string) => {
+  const v = o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined;
+  return typeof v === 'string' && v.trim().length > 0;
+};
+const elenco = (v: string[]) => (v.length <= 1 ? v.join('') : `${v.slice(0, -1).join(', ')} e ${v[v.length - 1]}`);
+const it = (n: number) => n.toLocaleString('it-IT');
+const minuscola = (t: string) => `${t.charAt(0).toLowerCase()}${t.slice(1)}`;
+
+/** Il video di presentazione, detto per tipo di attività: quello che un cliente vuole vedere. */
+const VIDEO_PER_TIPO: Record<TipoAttivita, string> = {
+  negozio: 'un video della bottega e dei prodotti più scelti',
+  bar: 'un video del bancone e delle colazioni, dal primo caffè',
+  ristorante: 'un video della cucina e dei piatti che escono',
+  artigiano: 'un video del laboratorio, con le mani al lavoro',
+  servizi: 'un video dello studio e di come lavorate',
+  altro: 'un video del locale e di chi ci lavora',
+};
+
+export function offertaSuMisura(d: DatiPerLOfferta): OffertaSuMisura {
+  const p: Proposta[] = [];
+  const aggiungi = (x: Proposta) => p.push(x);
+  const { dati, scheda, canali, sito, tipo } = d;
+
+  /* ─────────── FOTO E VIDEO ─────────── */
+  const prodotti = dati.prodotti.length;
+  const senzaFoto = dati.prodotti.filter((x) => !haFoto(x.images)).length;
+  if (senzaFoto > 0) {
+    aggiungi({
+      id: 'foto-prodotti',
+      servizio: 'foto_video',
+      cosa: senzaFoto === 1 ? 'Fotografiamo il prodotto che non ha ancora una foto' : `Fotografiamo i tuoi ${it(senzaFoto)} prodotti senza foto`,
+      perFascia: {
+        // Il Base dice «copertina e prodotti principali» (FASCE): non tutti, se sono tanti.
+        base: senzaFoto <= 1 ? 'Fotografiamo il prodotto senza foto, nella sessione di foto all’avvio' : `Fotografiamo i prodotti principali fra i ${it(senzaFoto)} senza foto, nella sessione di foto all’avvio`,
+        business: `${senzaFoto === 1 ? 'Fotografiamo il prodotto senza foto' : `Fotografiamo i tuoi ${it(senzaFoto)} prodotti senza foto`} all’avvio, e ogni tre mesi anche quelli nuovi`,
+        premium: `${senzaFoto === 1 ? 'Fotografiamo il prodotto senza foto' : `Fotografiamo i tuoi ${it(senzaFoto)} prodotti senza foto`} all’avvio, e ogni mese quelli nuovi`,
+      },
+      perche: `Su ${it(prodotti)} ${prodotti === 1 ? 'prodotto' : 'prodotti'} in catalogo, ${it(senzaFoto)} ${senzaFoto === 1 ? 'non ha' : 'non hanno'} nessuna foto: chi li vede non sa cosa compra.`,
+      fonte: FONTE.vetrina,
+      daFascia: 'base',
+    });
+  }
+  const fotoLocale = contaMedia(dati.storeMedia, 'image');
+  if (fotoLocale < FOTO_LOCALE_CONSIGLIATE) {
+    aggiungi({
+      id: 'foto-copertina',
+      servizio: 'foto_video',
+      cosa: `Scattiamo le foto della copertina: il locale, l’ingresso${tipo === 'bar' || tipo === 'ristorante' ? ', il bancone' : ''} e chi ci lavora`,
+      perche: fotoLocale === 0 ? 'La copertina della tua vetrina non ha nessuna foto del locale.' : `La copertina ha ${fotoLocale} foto del locale: ne servono almeno ${FOTO_LOCALE_CONSIGLIATE} perché scorra.`,
+      fonte: FONTE.vetrina,
+      daFascia: 'base',
+    });
+  }
+  if (contaMedia(dati.storeMedia, 'video') === 0) {
+    aggiungi({
+      id: 'video-presentazione',
+      servizio: 'foto_video',
+      cosa: `Giriamo ${VIDEO_PER_TIPO[tipo]}, per la vetrina e i social`,
+      perFascia: {
+        business: `Giriamo ${VIDEO_PER_TIPO[tipo]}, e poi un video nuovo ogni mese`,
+        premium: `Giriamo ${VIDEO_PER_TIPO[tipo]}, e poi foto e video nuovi ogni mese`,
+      },
+      perche: 'Nella tua vetrina non c’è nessun video: oggi è il formato che si guarda di più.',
+      fonte: FONTE.vetrina,
+      // Il Base ha solo le foto all'avvio; il video al mese parte dal Business (FASCE).
+      daFascia: 'business',
+    });
+  }
+  if (prodotti >= PRODOTTI_PER_IL_PREMIUM) {
+    aggiungi({
+      id: 'foto-ogni-mese',
+      servizio: 'foto_video',
+      cosa: 'Una sessione di foto e video ogni mese, per tenere in ordine tutto il catalogo',
+      perche: `Hai ${it(prodotti)} prodotti: con tante schede, una foto nuova ogni tanto non basta.`,
+      fonte: FONTE.vetrina,
+      daFascia: 'premium',
+    });
+  }
+
+  /* ─────────── SITO WEB ─────────── */
+  const haSito = pieno(dati.socials, 'website');
+  const indirizzo = datoDi(scheda, 'indirizzo');
+  const orariGrezzi = datoDi(scheda, 'orari');
+  const orari = orariGrezzi && orariCitabili(orariGrezzi.valore) ? orariGrezzi : null;
+  const prenota = datoDi(scheda, 'link_prenotazione');
+  const tipici = prodottiTipici(scheda, 5);
+  if (!haSito) {
+    const conDentro = [indirizzo ? 'l’indirizzo' : null, orari ? 'gli orari' : null, tipici.length ? 'i tuoi prodotti tipici' : null].filter(Boolean) as string[];
+    aggiungi({
+      id: 'sito-nuovo',
+      servizio: 'sito_web',
+      cosa: `Il tuo sito col tuo nome, collegato alla vetrina${conDentro.length ? `, con dentro ${elenco(conDentro)}` : ''}`,
+      perFascia: {
+        base: `Un sito di una pagina col tuo nome, collegato alla vetrina${conDentro.length ? `, con dentro ${elenco(conDentro)}` : ''}`,
+        business: `Un sito completo di più pagine col tuo nome, collegato alla vetrina${conDentro.length ? `, con dentro ${elenco(conDentro)}` : ''}`,
+        premium: `Un sito completo col tuo nome${conDentro.length ? `, con dentro ${elenco(conDentro)}` : ''}, aggiornato da noi ogni mese`,
+      },
+      perche: conDentro.length
+        ? `Non hai un sito tuo, e i dati per farlo li abbiamo già trovati: li confermi tu prima che vada online.`
+        : 'Non hai ancora un sito tutto tuo, con il tuo nome.',
+      fonte: conDentro.length ? FONTE.scheda : FONTE.vetrina,
+      daFascia: 'base',
+    });
+    if (tipici.length >= 3 || prodotti >= 10) {
+      aggiungi({
+        id: 'sito-piu-pagine',
+        servizio: 'sito_web',
+        cosa: tipici.length >= 3
+          ? `Una pagina per quello che offri: ${elenco(tipici.slice(0, 3))} e il resto del menu`
+          : `Una pagina per il catalogo, coi tuoi ${it(prodotti)} prodotti presi dalla vetrina`,
+        perche: 'Hai abbastanza da raccontare per un sito di più pagine, non solo una.',
+        fonte: tipici.length >= 3 ? FONTE.scheda : FONTE.vetrina,
+        daFascia: 'business',
+      });
+    }
+  }
+  if (prenota && tipo !== 'negozio') {
+    aggiungi({
+      id: 'sito-prenota',
+      servizio: 'sito_web',
+      cosa: 'Il pulsante «Prenota» sul sito, collegato al sistema che usi già',
+      perche: 'Abbiamo trovato il tuo link per le prenotazioni: lo mettiamo in vista, a un tocco.',
+      fonte: FONTE.scheda,
+      daFascia: 'base',
+    });
+  }
+  // Il sito che ha già: nessuna fascia dice «sistemiamo il tuo sito di oggi». Il sito è compreso in ogni
+  // fascia: lo rifacciamo noi, e il nuovo non ha i difetti che Google trova in quello di oggi.
+  if (haSito && sito) {
+    const lento = sito.velocita !== null && votoDi(sito.velocita) !== 'bene';
+    const daSistemare = vociCitabili(sito.daSistemare, 2, 300);
+    if (lento || daSistemare.length) {
+      const veloce = lento ? ', veloce dal telefono' : '';
+      aggiungi({
+        id: 'sito-rifatto',
+        servizio: 'sito_web',
+        cosa: `Rifacciamo il tuo sito${veloce}, senza le cose che Google segnala`,
+        perFascia: {
+          base: `Rifacciamo il tuo sito in una pagina col tuo nome${veloce}, senza le cose che Google segnala`,
+          business: `Rifacciamo il tuo sito completo, di più pagine${veloce}, senza le cose che Google segnala`,
+          premium: `Rifacciamo il tuo sito completo${veloce}, e lo aggiorniamo noi ogni mese`,
+        },
+        perche: [
+          lento ? `Oggi Google gli dà ${sito.velocita} su 100 per la velocità dal telefono${sito.secondiPerVedere !== null ? `: la parte principale si vede dopo ${sito.secondiPerVedere.toLocaleString('it-IT')} secondi` : ''}.` : null,
+          ...daSistemare,
+        ].filter(Boolean).join(' '),
+        fonte: FONTE.sito,
+        daFascia: 'base',
+      });
+    }
+  }
+
+  /* ─────────── SOCIAL E GOOGLE MAPS ─────────── */
+  const ig = canali?.canali.instagram;
+  const postIg = ig?.stato === 'fatta' ? ig.numeri?.post_ultimi_30_giorni : undefined;
+  if (postIg !== undefined) {
+    // Solo le fasce che fanno DAVVERO più post di quanti ne esce già: «da 30 a 8» sarebbe un calo.
+    const sopra = ABBONAMENTI.filter((f) => postAlMese(f) > postIg);
+    const follower = ig?.numeri?.follower;
+    const extra: Record<Abbonamento, string> = { base: ', preparati e pubblicati da noi', business: ' (3 a settimana), con 2 video brevi', premium: ', con 4 video brevi e le storie' };
+    if (sopra.length) {
+      aggiungi({
+        id: 'social-costanza',
+        servizio: 'social',
+        cosa: `Da ${postIg} a ${postAlMese(sopra[0])} post al mese su Instagram${extra[sopra[0]]}`,
+        perFascia: Object.fromEntries(sopra.map((f) => [f, `Da ${postIg} a ${postAlMese(f)} post al mese su Instagram${extra[f]}`])),
+        perche: `Negli ultimi 30 giorni su Instagram sono usciti ${postIg} post${follower !== undefined ? `, con ${it(follower)} persone che ti seguono` : ''}.`,
+        fonte: FONTE.instagram,
+        daFascia: sopra[0],
+      });
+    }
+  }
+  const profili = (['instagram', 'facebook', 'tiktok'] as const).filter((k) => pieno(dati.socials, k));
+  if (profili.length === 0) {
+    aggiungi({
+      id: 'social-apertura',
+      servizio: 'social',
+      cosa: 'Apriamo o sistemiamo il tuo profilo Instagram e la pagina Facebook, e li colleghiamo alla vetrina',
+      perche: 'Nella tua vetrina non c’è nessun profilo social collegato.',
+      fonte: FONTE.vetrina,
+      daFascia: 'base',
+    });
+  } else if (pieno(dati.socials, 'facebook') && canali?.canali.facebook?.stato === 'non_trovato') {
+    aggiungi({
+      id: 'social-facebook',
+      servizio: 'social',
+      cosa: 'Sistemiamo la tua pagina Facebook, o la creiamo, e ci pubblichiamo gli stessi post',
+      perche: 'La pagina Facebook che ci hai scritto non l’abbiamo trovata.',
+      fonte: FONTE.facebook,
+      daFascia: 'base',
+    });
+  }
+  const idee = vociCitabili(scheda?.analisi?.idee_contenuti, 3);
+  const punti = vociCitabili(scheda?.analisi?.punti_di_forza, 3);
+  if (idee.length) {
+    aggiungi({
+      id: 'social-idee',
+      servizio: 'social',
+      cosa: `I primi post partono da qui: ${elenco(idee.map(minuscola))}`,
+      perche: 'Sono le idee che abbiamo trovato guardando il tuo locale: le rivediamo insieme.',
+      fonte: FONTE.scheda,
+      daFascia: 'base',
+    });
+  } else if (punti.length) {
+    aggiungi({
+      id: 'social-punti',
+      servizio: 'social',
+      cosa: `Nei post raccontiamo quello che ti distingue: ${elenco(punti.map(minuscola))}`,
+      perche: 'È quello che di te si legge già in rete: lo facciamo vedere di più.',
+      fonte: FONTE.scheda,
+      daFascia: 'base',
+    });
+  }
+  if (idee.some((x) => /video|reel|dietro le quinte/i.test(x))) {
+    aggiungi({
+      id: 'social-video-brevi',
+      servizio: 'social',
+      cosa: 'Video brevi per Instagram e TikTok, girati nel tuo locale',
+      perFascia: { business: '2 video brevi al mese per Instagram e TikTok, girati nel tuo locale', premium: '4 video brevi al mese e le storie, girati nel tuo locale' },
+      perche: 'Fra le idee trovate per te ci sono contenuti che rendono solo in video.',
+      fonte: FONTE.scheda,
+      daFascia: 'business',
+    });
+  }
+  // Google Maps, dentro la gestione dei social (Nicola, 24/11).
+  const google = canali?.canali.google;
+  if (!pieno(dati.socials, 'google_maps') && google?.stato !== 'fatta') {
+    aggiungi({
+      id: 'google-scheda',
+      servizio: 'social',
+      cosa: 'Creiamo o recuperiamo la tua scheda su Google Maps, con categoria, orari, foto e il link alla vetrina',
+      perFascia: {
+        base: 'Creiamo o sistemiamo all’avvio la tua scheda su Google Maps: categoria, orari, foto e il link alla vetrina',
+        business: 'Creiamo e sistemiamo la tua scheda su Google Maps, e rispondiamo noi alle recensioni',
+        premium: 'Creiamo la tua scheda su Google Maps e la curiamo ogni mese: foto nuove, post e risposte alle recensioni',
+      },
+      perche: 'Non ci hai ancora dato il link della tua scheda Google: chi cerca «vicino a me» vede prima le schede complete.',
+      fonte: FONTE.vetrina,
+      daFascia: 'base',
+    });
+  }
+  if (google?.stato === 'fatta') {
+    for (const [i, oss] of vociCitabili(google.osservazioni, 2, 240).entries()) {
+      aggiungi({ id: `google-sistema-${i}`, servizio: 'social', cosa: 'Sistemiamo la tua scheda Google', perche: oss, fonte: FONTE.google, daFascia: 'base' });
+    }
+    const recensioni = google.numeri?.recensioni;
+    if (recensioni !== undefined && recensioni > 0) {
+      aggiungi({
+        id: 'google-recensioni',
+        servizio: 'social',
+        cosa: 'Rispondiamo noi alle recensioni su Google, con il tuo tono',
+        perFascia: { premium: 'Rispondiamo noi alle recensioni su Google e curiamo la scheda ogni mese, con foto nuove e post' },
+        perche: `La tua scheda ha ${it(recensioni)} ${recensioni === 1 ? 'recensione' : 'recensioni'}${google.numeri?.valutazione !== undefined ? ` e ${google.numeri.valutazione.toLocaleString('it-IT', { maximumFractionDigits: 1 })} stelle su 5` : ''}: chi risponde viene scelto di più.`,
+        fonte: FONTE.google,
+        // Le risposte alle recensioni partono dal Business (FASCE).
+        daFascia: 'business',
+      });
+    }
+  }
+  if (orari && !orari.confermato) {
+    aggiungi({
+      id: 'google-orari',
+      servizio: 'social',
+      cosa: 'Mettiamo gli stessi orari, giusti, su Google, sul sito e nella vetrina',
+      perche: `In rete i tuoi orari risultano «${orari.valore.slice(0, 80)}»: li confermi tu e li allineiamo dappertutto.`,
+      fonte: FONTE.scheda,
+      daFascia: 'base',
+    });
+  }
+
+  /* ─────────── ANALISI DEL BUSINESS ─────────── */
+  const canaliScritti = (['instagram', 'facebook', 'tiktok', 'google_maps', 'website'] as const).filter((k) => pieno(dati.socials, k)).length;
+  aggiungi({
+    id: 'analisi',
+    servizio: 'analisi',
+    cosa: 'Un’analisi completa della tua attività, dei social, della scheda Google e del sito',
+    // Il ritmo scelto da Nicola il 24/11: avvio, mese, settimana (FASCE).
+    perFascia: {
+      base: 'Un’analisi completa all’avvio: la tua attività, i social, la scheda Google e il sito, con cosa migliorare',
+      business: 'L’analisi completa all’avvio e una nuova ogni mese: cosa è cambiato e cosa fare il mese dopo',
+      premium: 'L’analisi ogni settimana, e un incontro al mese per leggerla insieme',
+    },
+    perche: canaliScritti === 0
+      ? 'Oggi non conosciamo nessuno dei tuoi canali: scrivili nella pagina dell’analisi e partiamo da lì.'
+      : `Ci hai dato ${canaliScritti} ${canaliScritti === 1 ? 'canale' : 'canali'} da seguire.`,
+    fonte: FONTE.vetrina,
+    daFascia: 'base',
+  });
+
+  const perFascia = Object.fromEntries(ABBONAMENTI.map((f) => [f, p.filter((x) => ORDINE[x.daFascia] <= ORDINE[f]).length])) as Record<Abbonamento, number>;
+  const tuttoCon = p.length ? p.reduce<Abbonamento>((max, x) => (ORDINE[x.daFascia] > ORDINE[max] ? x.daFascia : max), 'base') : null;
+  const domande = vociCitabili(scheda?.analisi?.cosa_chiedere_al_titolare, 4, 200);
+  return { proposte: p, perFascia, tuttoCon, domande };
+}
+
+/** Il testo di una proposta in una fascia, o `null` se quella fascia non la comprende. */
+export function cosaInFascia(x: Proposta, f: Abbonamento): string | null {
+  if (ORDINE[x.daFascia] > ORDINE[f]) return null;
+  for (const g of [...ABBONAMENTI].reverse()) {
+    if (ORDINE[g] <= ORDINE[f] && x.perFascia?.[g]) return x.perFascia[g]!;
+  }
+  return x.cosa;
+}
+
+/** La fascia sopra, o `null` dal Premium. */
+export const fasciaSopra = (f: Abbonamento): Abbonamento | null => ABBONAMENTI[ORDINE[f] + 1] ?? null;
+
+/**
+ * Cosa aggiunge per questo cliente la fascia sopra `f`: le proposte nuove e quelle che cambiano
+ * (più post, più spesso, più pagine). Vuoto dal Premium.
+ */
+export function inPiuSalendo(o: OffertaSuMisura | null | undefined, f: Abbonamento): { fascia: Abbonamento; voci: Array<{ id: string; cosa: string }> } | null {
+  const sopra = fasciaSopra(f);
+  if (!o || !sopra) return null;
+  const voci = o.proposte.flatMap((x) => {
+    const ora = cosaInFascia(x, f);
+    const dopo = cosaInFascia(x, sopra);
+    return dopo && dopo !== ora ? [{ id: x.id, cosa: dopo }] : [];
+  });
+  return { fascia: sopra, voci };
+}
+
+/**
+ * La riga dell'avviso a Nicola quando il cliente accetta (24/11/2026): cosa fare per lui nella fascia
+ * scelta. Vuota senza offerta. Sta qui e non in preventivo.ts per non far importare i due file a vicenda.
+ */
+export function testoOffertaPerAvviso(o: OffertaSuMisura | null | undefined, f: Abbonamento): string {
+  const voci = (o?.proposte ?? []).map((x) => cosaInFascia(x, f)).filter((x): x is string => x !== null);
+  return voci.length ? ` Da fare per lui col ${FASCE[f].nome}: ${voci.slice(0, 8).join('; ')}.` : '';
+}
+
+/** Le proposte di un servizio, per la sua pagina. */
+export const proposteDi = (o: OffertaSuMisura | null | undefined, servizio: ServizioAgenzia) => (o?.proposte ?? []).filter((x) => x.servizio === servizio);
