@@ -20,6 +20,12 @@ export function useQuery(opzioni) {
   if (Array.isArray(globalThis.__OPZIONI_QUERY__)) globalThis.__OPZIONI_QUERY__.push(opzioni);
   const sorgente = globalThis.__DATI_QUERY__;
   const data = typeof sorgente === 'function' ? sorgente(opzioni) : sorgente;
+  // 24/11/2026 — Se la prova mette una Map in `globalThis.__CACHE_QUERY__`, è la memoria del finto:
+  // ogni domanda servita ci resta come `JSON(queryKey) → { queryKey, data }`, e `setQueriesData` la
+  // aggiorna. Chi non la mette non si accorge di niente.
+  if (globalThis.__CACHE_QUERY__ instanceof Map && Array.isArray(opzioni?.queryKey)) {
+    globalThis.__CACHE_QUERY__.set(JSON.stringify(opzioni.queryKey), { queryKey: opzioni.queryKey, data });
+  }
   const base = {
     data,
     isLoading: false,
@@ -104,6 +110,29 @@ export const useQueryClient = () => ({
   },
   setQueryData: (chiave, valore) => {
     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([chiave, valore]);
+  },
+  // 24/11/2026 — Come l'API vera: tutte le domande in memoria che corrispondono al filtro
+  // (`queryKey` come prefisso, o uguale con `exact`; più `predicate`) prendono il dato nuovo (un
+  // valore, o una funzione del dato di prima; `undefined` lascia la domanda com'era). Ritorna
+  // `[queryKey, dato][]`; ogni scrittura finisce anche in `__CACHE_SCRITTA__`, se c'è.
+  setQueriesData: (filtro, aggiorna) => {
+    const memoria = globalThis.__CACHE_QUERY__;
+    if (!(memoria instanceof Map)) return [];
+    const parziale = (a, b) =>
+      a === b ||
+      (typeof a === typeof b && !!a && !!b && typeof a === 'object' && Object.keys(b).every((k) => parziale(a[k], b[k])));
+    const corrisponde = ({ queryKey, data }) => {
+      const k = filtro?.queryKey;
+      if (k && (filtro.exact ? JSON.stringify(queryKey) !== JSON.stringify(k) : !parziale(queryKey, k))) return false;
+      return filtro?.predicate ? !!filtro.predicate({ queryKey, state: { data } }) : true;
+    };
+    return [...memoria.entries()].filter(([, q]) => corrisponde(q)).map(([hash, q]) => {
+      const nuovo = typeof aggiorna === 'function' ? aggiorna(q.data) : aggiorna;
+      if (nuovo === undefined) return [q.queryKey, undefined];
+      memoria.set(hash, { queryKey: q.queryKey, data: nuovo });
+      if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([q.queryKey, nuovo]);
+      return [q.queryKey, nuovo];
+    });
   },
   getQueryData: () => undefined,
   cancelQueries: async (filtro) => {
