@@ -92,7 +92,9 @@ export default function ProductQA({ productId, sellerId }: Props) {
     onSuccess: () => {
       setText('');
       qc.invalidateQueries({ queryKey: queryKeys.qa.product(productId) });
-      // 5/11/2026 — Nessuna notifica parte davvero (né al negozio né a chi chiede): non la si promette.
+      // 5/11/2026 — Il testo non promette notifiche. Dal 24/11 le scrive il database (migrazione 821
+      // al negozio per la domanda, 822 a chi chiede alla prima risposta), ma partono solo da quando
+      // le migrazioni sono applicate: fino ad allora una promessa qui sarebbe di nuovo falsa.
       toast.success('Domanda pubblicata: la risposta del negozio comparirà qui sotto.');
     },
     onError: (err: unknown) => {
