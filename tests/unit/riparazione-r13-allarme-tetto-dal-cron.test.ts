@@ -22,6 +22,8 @@ vi.mock('@/lib/analytics/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/api/middleware', () => ({ withCronAuth: (g: (r: unknown) => unknown) => (r: unknown) => g(r) }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true, id: 'x' })) }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
+// Con l'AI dei negozi spenta l'allarme del tetto tace (lib/ai/tettoSpesa.ts): qui la si prova accesa.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({ ...((await originale()) as object), AI_NEGOZI_ACCESA: true }));
 
 type Chiamata = { m: string; a: unknown[] };
 type Riga = { alert_key: string; last_sent_at: string };

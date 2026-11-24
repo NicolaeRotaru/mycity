@@ -1,6 +1,7 @@
 // lib/ai/tettoSpesa.ts
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,
   allarmiTettoSpesaAi as allarmiDelTetto,
@@ -464,6 +465,10 @@ export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
   // tetto configurato non c'e' niente da dire (allarmiDelTetto torna vuoto): niente
   // sonda, niente righe in operational_alert_log, niente errori nel registro.
   if (!(tettoEur > 0)) return [];
+  // Con l'AI dei negozi spenta (lib/funzioni-al-lancio.ts) lib/ai/client.ts ferma ogni chiamata
+  // al modello: spendere e' impossibile, e l'allarme sul conto condiviso sarebbe solo rumore
+  // sull'unico canale degli allarmi. Niente sonda e niente righe, come senza tetto.
+  if (!AI_NEGOZI_ACCESA) return [];
   const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
   const primo = await sondaContoCondiviso(opzioni.quando);
   try {
