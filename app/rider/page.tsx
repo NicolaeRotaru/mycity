@@ -436,6 +436,11 @@ export default function RiderDashboardPage() {
       return next;
     },
     onSuccess: (next) => {
+      // R04-015 — La scrittura è riuscita: lo stato nuovo è quello vero. Si mette subito nella scheda,
+      // poi si rilegge: se la rilettura cade la scheda non torna sul vecchio stato.
+      qc.setQueryData<{ online: boolean; zones: string[] }>(queryKeys.rider.pref, (prima) =>
+        prima ? { ...prima, online: next } : prima,
+      );
       qc.invalidateQueries({ queryKey: queryKeys.rider.pref });
       toast.success(next ? 'Sei online! Ora ricevi le consegne disponibili.' : 'Sei offline.');
     },
