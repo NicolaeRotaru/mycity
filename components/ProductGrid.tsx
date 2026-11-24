@@ -34,6 +34,13 @@ function righeLetteDellaPagina(pagina: readonly unknown[]): number {
   return typeof lette === 'number' ? lette : pagina.length;
 }
 
+/**
+ * R04-010 — Quante pagine la griglia legge da sola quando quelle arrivate sono tutte scartate dal
+ * filtro dei negozi. Senza tetto, un catalogo lungo di negozi fuori vetrina faceva leggere pagina
+ * dopo pagina (96 righe con le foto ciascuna) finché finiva, con lo scheletro a schermo. Tetto
+ * tecnico: cinque pagine in tutto, la prima compresa; poi decide chi guarda, col pulsante.
+ */
+const PAGINE_LETTE_DA_SOLA = 5;
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -512,10 +519,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const vuotaMaCeNeSonoAltre = filtered.length === 0 && !!hasNextPage && !isError;
   // `pagineLette` fra le dipendenze: ogni pagina arrivata ancora tutta scartata rimette in moto il giro.
   const pagineLette = domanda.data?.pages.length ?? 0;
+  // R04-010 — Il giro da solo ha un tetto: al massimo `PAGINE_LETTE_DA_SOLA` pagine in tutto. Oltre,
+  // la griglia lo dice e lascia «Carica altri prodotti» a chi guarda, una pagina per pressione.
+  const leggeDaSola = vuotaMaCeNeSonoAltre && pagineLette < PAGINE_LETTE_DA_SOLA;
   useEffect(() => {
-    if (!vuotaMaCeNeSonoAltre || caricando || staLeggendo) return;
+    if (!leggeDaSola || caricando || staLeggendo) return;
     void fetchNextPage();
-  }, [vuotaMaCeNeSonoAltre, caricando, staLeggendo, fetchNextPage, pagineLette]);
+  }, [leggeDaSola, caricando, staLeggendo, fetchNextPage, pagineLette]);
 
 
   // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
@@ -649,7 +659,25 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     // Le sezioni per-sottocategoria spariscono quando non hanno prodotti.
     if (isSection) return null;
     // R11-012 R11-007 — Non è «nessun prodotto» finché ci sono altre pagine da leggere.
-    if (vuotaMaCeNeSonoAltre) return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
+    if (leggeDaSola) return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
+    // R04-010 — Tetto del giro da solo raggiunto: niente scheletro per sempre, e niente «nessun
+    // prodotto» (ce ne sono altre): si dice com'è e si lascia il pulsante.
+    if (vuotaMaCeNeSonoAltre) {
+      return (
+        <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
+          <p className="text-ink-700 font-semibold mb-1">Ancora nessun prodotto da mostrare</p>
+          <p className="text-sm text-ink-400 mb-4">Nelle prime pagine non c&apos;era niente per questi filtri, ma ce ne sono altre.</p>
+          <button
+            type="button"
+            onClick={() => void fetchNextPage()}
+            disabled={isFetching}
+            className="rounded-full border border-cream-300 bg-white px-6 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
+          >
+            {isFetching ? 'Carico…' : 'Carica altri prodotti'}
+          </button>
+        </div>
+      );
+    }
     // Stato vuoto arricchito (opt-in): titolo/descrizione personalizzati,
     // azione "Azzera filtri" e slot "Forse cercavi" + alternative. Quando
     // nessuna delle nuove prop è passata, resta lo stato storico generico.
