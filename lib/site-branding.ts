@@ -1,5 +1,4 @@
 import { CONSEGNA_ALL_ORA_CHE_SCEGLI, CONSEGNA_FRASE_INTERA } from '@/lib/promessa-consegna';
-import { z } from 'zod';
 import {
   Banknote, Zap, MapPin, Truck, ShieldCheck, Tag, Sparkles, Gift, Heart, Check,
   Store, Clock, type LucideIcon,
@@ -35,29 +34,69 @@ export function wedgeIcon(key: string): LucideIcon {
 
 export const MAX_WEDGE_ITEMS = 5;
 
-const wedgeItemSchema = z.object({
-  icon: z.enum(WEDGE_ICON_KEYS),
-  text: z.string().trim().min(1).max(60),
-});
+export type Branding = {
+  announcement: { items: { icon: WedgeIconKey; text: string }[]; promoLinkEnabled: boolean };
+  wordmark: { accent: string; rest: string };
+  footerTagline: string;
+};
 
-export const brandingSchema = z
-  .object({
-    announcement: z
-      .object({
-        items: z.array(wedgeItemSchema).max(MAX_WEDGE_ITEMS).default([]),
-        promoLinkEnabled: z.boolean().default(true),
-      })
-      .default({}),
-    wordmark: z
-      .object({
-        accent: z.string().trim().max(20).default('My'),
-        rest: z.string().trim().max(20).default('City'),
-      })
-      .default({}),
-    footerTagline: z.string().trim().max(220).default(''),
-  })
-  .default({});
-export type Branding = z.infer<typeof brandingSchema>;
+type Esito<T> = { success: true; data: T } | { success: false; error: { issues: { message: string }[] } };
+
+/*
+ * 24/11/2026 — La validazione era scritta con zod, che entrava intero nel pacchetto comune solo per
+ * questo marchio. Stesse regole a mano (potare gli spazi, limiti di lunghezza, valori di partenza,
+ * campi sconosciuti scartati); `safeParse` ha la stessa forma di prima per chi la chiama
+ * (app/admin/branding, app/api/admin/branding).
+ */
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+function parseBranding(input: unknown): Esito<Branding> {
+  const issues: { message: string }[] = [];
+  const err = (m: string) => { issues.push({ message: m }); };
+  const gruppo = (v: unknown): Record<string, unknown> => {
+    if (v === undefined) return {};
+    if (isObj(v)) return v;
+    err('Valore non valido: serve un gruppo di dati');
+    return {};
+  };
+  const testo = (v: unknown, max: number, def: string, minUno = false): string => {
+    if (v === undefined && !minUno) return def;
+    if (typeof v !== 'string') { err(v === undefined ? 'Campo obbligatorio' : 'Valore non valido: serve un testo'); return def; }
+    const t = v.trim();
+    if (minUno && t.length < 1) err('Campo obbligatorio');
+    if (t.length > max) err(`Massimo ${max} caratteri`);
+    return t;
+  };
+
+  const root = gruppo(input);
+  const ann = gruppo(root.announcement);
+  const items: Branding['announcement']['items'] = [];
+  if (ann.items !== undefined) {
+    if (!Array.isArray(ann.items)) err('Valore non valido: serve un elenco');
+    else {
+      if (ann.items.length > MAX_WEDGE_ITEMS) err(`Massimo ${MAX_WEDGE_ITEMS} elementi`);
+      for (const it of ann.items) {
+        if (!isObj(it)) { err('Valore non valido: serve un gruppo di dati'); continue; }
+        if (!(WEDGE_ICON_KEYS as readonly unknown[]).includes(it.icon)) err('Valore non valido: scegline uno fra quelli proposti');
+        items.push({ icon: it.icon as WedgeIconKey, text: testo(it.text, 60, '', true) });
+      }
+    }
+  }
+  let promoLinkEnabled = true;
+  if (ann.promoLinkEnabled !== undefined) {
+    if (typeof ann.promoLinkEnabled === 'boolean') promoLinkEnabled = ann.promoLinkEnabled;
+    else err('Valore non valido: serve sì o no');
+  }
+  const wm = gruppo(root.wordmark);
+  const accent = testo(wm.accent, 20, 'My');
+  const rest = testo(wm.rest, 20, 'City');
+  const footerTagline = testo(root.footerTagline, 220, '');
+
+  if (issues.length > 0) return { success: false, error: { issues } };
+  return { success: true, data: { announcement: { items, promoLinkEnabled }, wordmark: { accent, rest }, footerTagline } };
+}
+
+export const brandingSchema = { safeParse: parseBranding };
 
 export const DEFAULT_WEDGE_ITEMS: { icon: WedgeIconKey; text: string }[] = [
   { icon: 'banknote', text: 'Paghi alla consegna' },
