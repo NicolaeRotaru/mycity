@@ -74,7 +74,7 @@ describe('i cambi degli abbonamenti dei servizi', () => {
     await handleInvoicePaymentFailed({ id: 'in_1', customer: 'cus_servizi', subscription: 'sub_servizi' } as never);
     expect(stato.scritture.map((w) => w.tabella)).toEqual(['abbonamenti_servizi', 'notifications']);
     expect(stato.scritture[0].valori).toMatchObject({ stato: 'past_due' });
-    expect(stato.scritture[1].valori).toMatchObject({ user_id: 'negozio-1', link: '/seller/preventivo' });
+    expect(stato.scritture[1].valori).toMatchObject({ user_id: 'negozio-1', link: '/seller/abbonamento' });
   });
 
   it('se nel frattempo è stata pagata, non scrive e non avvisa', async () => {

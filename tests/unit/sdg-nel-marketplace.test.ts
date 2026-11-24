@@ -20,6 +20,7 @@ import { FASCE, ABBONAMENTI, FRASE_PARTNER } from '@/lib/agenzia/preventivo';
 
 const RADICE = path.resolve(__dirname, '../..');
 const MIGRAZIONE = readFileSync(path.join(RADICE, 'migrations/707_sdg_agenzia_nel_marketplace.sql'), 'utf8');
+const MIGRAZIONE_710 = readFileSync(path.join(RADICE, 'migrations/710_gli_abbonamenti_di_sdg_dicono_i_servizi_a_tre.sql'), 'utf8');
 
 const abbonamento = (p: Partial<ProdottoDelCatalogo> = {}): ProdottoDelCatalogo => ({
   id: ID_PRODOTTO_SDG.base, name: 'Abbonamento Base — 300 € al mese', price: 300,
@@ -30,12 +31,13 @@ describe('la regola del carrello rifiuta gli abbonamenti di SDG (carta e contant
   const valida = (p: ProdottoDelCatalogo, sellerId: string) =>
     validaRigaDelCarrello({ riga: { productId: p.id, quantity: 1 }, sellerId, prodotti: [p], varianti: new Map(), sconti: new Map() });
 
-  it('un abbonamento di SDG non si vende, e il messaggio manda al preventivo', () => {
+  it('un abbonamento di SDG non si vende, e il messaggio manda alla pagina Abbonamento', () => {
     const esito = valida(abbonamento(), SDG_SELLER_ID);
     expect(esito.ok).toBe(false);
     if (esito.ok) return;
     expect(esito.scarto.motivo).toBe('ABBONAMENTO_NON_IN_CARRELLO');
-    expect(esito.scarto.messaggio).toContain('preventivo');
+    expect(esito.scarto.messaggio).toContain('pagina Abbonamento');
+    expect(esito.scarto.messaggio).not.toContain('preventivo');
     expect(rispostaPerCarrelloNonVendibile(esito.scarto).status).toBe(400);
   });
 
@@ -73,9 +75,10 @@ describe('il carrello del browser non prende un abbonamento di SDG', () => {
   });
 });
 
-describe('la pagina prodotto porta al preventivo, non al carrello', () => {
-  it('un negozio va al suo preventivo, chi non lo è va a iscriversi', () => {
-    expect(doveSiAttivaLAbbonamento(true).href).toBe('/seller/preventivo');
+describe('la pagina prodotto porta alla pagina Abbonamento, non al carrello', () => {
+  it('un negozio va alla sua pagina Abbonamento, chi non lo è va a iscriversi', () => {
+    expect(doveSiAttivaLAbbonamento(true).href).toBe('/seller/abbonamento');
+    expect(doveSiAttivaLAbbonamento(true).testo).not.toContain('preventivo');
     expect(doveSiAttivaLAbbonamento(false).href).toBe('/sell');
   });
 
@@ -107,11 +110,22 @@ describe('i tre prodotti dicono quello che dice il listino', () => {
     }
   });
 
-  it('la migrazione 707 scrive gli stessi id, nomi, prezzi e descrizioni', () => {
-    const sql = MIGRAZIONE.replace(/''/g, "'");
+  it('la migrazione 707 scrive gli stessi id, nomi e prezzi', () => {
     for (const p of PRODOTTI_SDG) {
-      expect(sql).toContain(`('${p.id}'::uuid, '${p.nome}', '${p.descrizione}', ${p.prezzoEuro})`);
+      expect(MIGRAZIONE).toMatch(new RegExp(`\\('${p.id}'::uuid, '${p.nome}', '[^]*?', ${p.prezzoEuro.replace('.', '\\.')}\\)`));
     }
     expect(MIGRAZIONE).toContain(SDG_SELLER_ID);
+  });
+
+  // 24/11/2026 — Servizi da 4 a 3 (la scheda Google dentro la gestione social) e «si attiva dalla
+  // pagina Abbonamento»: la 710 riscrive le descrizioni, che devono essere quelle del listino.
+  it('la migrazione 710 scrive le descrizioni di oggi, coi servizi a 3', () => {
+    const sql = MIGRAZIONE_710.replace(/''/g, "'");
+    for (const p of PRODOTTI_SDG) {
+      expect(sql).toContain(`('${p.id}'::uuid, '${p.descrizione}')`);
+      expect(p.descrizione).not.toContain('Scheda Google su Maps:');
+      expect(p.descrizione).not.toContain('preventivo');
+    }
+    expect(MIGRAZIONE_710).toContain(`p.seller_id = '${SDG_SELLER_ID}'::uuid`);
   });
 });

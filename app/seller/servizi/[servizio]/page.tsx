@@ -8,23 +8,25 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { ABBONAMENTI, FASCE, FRASE_PARTNER, LISTINO, servizioDaSlug } from '@/lib/agenzia/preventivo';
-import { HREF_PREVENTIVO } from '@/components/seller/servizi-nel-menu';
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import { CHIAVE_PREVENTIVO, CHIAVE_SCHEDA, leggiPreventivoAgenzia, leggiSchedaDelNegozio, scriviCanone } from '@/components/seller/preventivo-agenzia';
 
 /**
- * UN SERVIZIO DEL PREVENTIVO, CON LA SUA VOCE NEL MENU — 23/11/2026.
+ * UN SERVIZIO, CON LA SUA VOCE NEL MENU — 23/11/2026, rifatto il 24/11/2026.
  *
- * Nicola: «è dentro preventivo, ma ogni servizio ha la sua voce dentro il menu». Questa è la
- * pagina di un servizio solo: cosa comprende, perché te lo proponiamo (dai dati veri della
- * vetrina) e come è compreso in ognuno dei tre abbonamenti (24/11/2026: non si vende più da
- * solo, il pulsante porta al preventivo intero per scegliere la fascia). Il nome di SDG Agenzia compare dentro
- * il servizio di foto e video, che è il suo.
+ * Nicola (24/11): «ognuna di quelle sezioni è di per sé un preventivo… togli anche l'opzione di
+ * scegliere preventivo dentro ogni voce… fai in modo che ci sia poi un bottone che manda alla
+ * pagina dove si sceglie quell'abbonamento». La pagina di un servizio dice:
+ *  · perché te lo proponiamo, coi dati veri della vetrina;
+ *  · cosa ricevi, già pronto (la bozza del sito, il piano dei post con la scheda Google, i formati);
+ *  · com'è compreso in Base, Business e Premium, solo da leggere;
+ *  · un solo pulsante, «Scegli l'abbonamento», che porta alla pagina Abbonamento.
  *
- * I canoni e il «perché» arrivano dallo stesso preventivo calcolato dal server: la pagina
- * non decide niente. Se il servizio non manca (per esempio il sito c'è già), lo dice.
+ * Il «perché» e i canoni arrivano dal calcolo del server (/api/seller/preventivo): la pagina non
+ * decide niente. Se il servizio non manca (per esempio il sito c'è già), lo dice.
  */
-export default function ServizioDelPreventivoPage() {
+export default function PaginaDelServizio() {
   const params = useParams<{ servizio: string }>();
   const id = servizioDaSlug(String(params?.servizio ?? ''));
   if (!id) notFound();
@@ -63,9 +65,24 @@ export default function ServizioDelPreventivoPage() {
         </section>
       )}
 
+      {giaAPosto && (
+        <section className="mb-4 rounded-2xl border border-cream-300 bg-cream-50 p-5">
+          <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
+            <Check size={18} className="text-olive-700" aria-hidden /> Questo ce l&apos;hai già
+          </p>
+          <p className="mt-1 text-sm text-ink-700">
+            Dalla tua vetrina risulta a posto. Se vuoi rifarlo o migliorarlo,{' '}
+            <Link href="/seller/help" className="font-semibold text-primary-700 underline underline-offset-2">scrivici dall&apos;Aiuto</Link>.
+          </p>
+        </section>
+      )}
+
+      {/* Cosa ricevi, già pronto: si vede anche prima di sceglierlo (Nicola, 23/11). */}
+      {p && !giaAPosto && <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />}
+
       {p && (
-        <section className="mb-4 rounded-2xl border border-cream-300 bg-white p-5 sm:p-6 shadow-warm">
-          <h2 className="text-sm font-bold text-ink-900">È compreso in tutti e tre gli abbonamenti</h2>
+        <section className="mt-4 rounded-2xl border border-cream-300 bg-white p-5 sm:p-6 shadow-warm" aria-labelledby="compreso-nei-piani">
+          <h2 id="compreso-nei-piani" className="text-sm font-bold text-ink-900">È compreso in tutti e tre gli abbonamenti</h2>
           <ul className="mt-3 space-y-3">
             {ABBONAMENTI.map((f) => (
               <li key={f} className={`rounded-xl border p-3 ${f === p.consigliato ? 'border-primary-700 bg-cream-50' : 'border-cream-200'}`}>
@@ -78,33 +95,12 @@ export default function ServizioDelPreventivoPage() {
             ))}
           </ul>
           <div className="mt-5">
-            <Button href={HREF_PREVENTIVO} iconRight={ArrowRight}>
+            <Button href={PERCORSO_ABBONAMENTO} iconRight={ArrowRight}>
               Scegli l&apos;abbonamento
             </Button>
           </div>
         </section>
       )}
-
-      {/* Cosa ricevi, già pronto: si vede anche prima di chiederlo (Nicola, 23/11). */}
-      {p && !giaAPosto && <AnteprimaServizio id={id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />}
-
-      {giaAPosto && (
-        <section className="rounded-2xl border border-cream-300 bg-cream-50 p-5">
-          <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
-            <Check size={18} className="text-olive-700" aria-hidden /> Questo ce l&apos;hai già
-          </p>
-          <p className="mt-1 text-sm text-ink-700">
-            Dalla tua vetrina risulta a posto. Se vuoi rifarlo o migliorarlo, scrivici dall&apos;Aiuto.
-          </p>
-          <Link href="/seller/help" className="mt-3 inline-block text-sm font-semibold text-primary-700 underline underline-offset-2">
-            Vai all&apos;Aiuto
-          </Link>
-        </section>
-      )}
-
-      <Link href={HREF_PREVENTIVO} className="mt-6 inline-block text-sm font-semibold text-primary-700 underline underline-offset-2">
-        Torna al preventivo intero
-      </Link>
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function prodottoSdg(fascia: Abbonamento): ProdottoSdg {
     `· Vetrina: ${f.vetrina}`,
     `· Assistenza: ${f.assistenza}`,
     '',
-    `Si attiva dal preventivo del tuo negozio, non dal carrello. ${FRASE_CONDIZIONI}`,
+    `Si attiva dalla pagina Abbonamento del tuo negozio, non dal carrello. ${FRASE_CONDIZIONI}`,
     FRASE_PARTNER,
   ].join('\n');
   return {

@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 /**
- * 24/11/2026 — MODALITÀ DEMO: IL NEGOZIO IN REVISIONE VEDE IL SUO PREVENTIVO E PAGA.
+ * 24/11/2026 — MODALITÀ DEMO: IL NEGOZIO IN REVISIONE VEDE I SERVIZI, SCEGLIE L ABBONAMENTO E PAGA.
  *
  * Il negozio che ha mandato la richiesta ed è «in attesa» (per esempio Ora del Gusto dopo aver
- * accettato dal link) apre /seller/preventivo e le pagine dei servizi, e dalla pagina d'attesa ha il
+ * accettato dal link) apre /seller/abbonamento e le pagine dei servizi (/seller/servizi/…), e dalla pagina d'attesa ha il
  * pulsante per arrivarci. Il resto del pannello resta chiuso; rifiutati e sospesi vedono la loro
- * schermata anche sull'indirizzo del preventivo. Il finto è quello della prova
+ * schermata anche sulla pagina Abbonamento. Il finto è quello della prova
  * il-negozio-che-non-ha-mandato-la-richiesta-non-legge-stiamo-verificando.
  */
 
@@ -42,21 +42,23 @@ const IN_ATTESA = { approval_status: 'pending', approval_requested_at: '2026-11-
 beforeEach(() => {
   profilo = { id: 'u-1', role: 'seller', is_approved: false };
   lettura = { data: IN_ATTESA, isLoading: false, isError: false, status: 'success' };
-  indirizzo = '/seller/preventivo';
+  indirizzo = '/seller/abbonamento';
 });
 
 describe('il negozio in attesa di approvazione', () => {
-  it('apre il preventivo e le pagine dei servizi', () => {
+  it('apre la pagina Abbonamento e le pagine dei servizi', () => {
     expect(disegna()).toContain('il-preventivo');
-    indirizzo = '/seller/preventivo/social';
+    indirizzo = '/seller/servizi/social';
     expect(disegna()).toContain('il-preventivo');
   });
 
-  it('dalla pagina d attesa ha il pulsante per il preventivo', () => {
+  it('dalla pagina d attesa ha il pulsante per scegliere l abbonamento, senza la parola preventivo', () => {
     indirizzo = '/seller/dashboard';
     const html = disegna();
     expect(html).toContain('Stiamo verificando i dati');
-    expect(html).toContain('href="/seller/preventivo"');
+    expect(html).toContain('href="/seller/abbonamento"');
+    expect(html).toContain('Scegli l’abbonamento');
+    expect(html.toLowerCase()).not.toContain('preventivo');
     expect(html).toContain('href="/seller/products"');
     expect(html).not.toContain('il-preventivo');
   });
@@ -71,7 +73,7 @@ describe('il negozio in attesa di approvazione', () => {
   it('il resto del pannello resta chiuso', () => {
     indirizzo = '/seller/orders';
     expect(disegna()).not.toContain('il-preventivo');
-    indirizzo = '/seller/preventivo-falso';
+    indirizzo = '/seller/abbonamento-falso';
     expect(disegna()).not.toContain('il-preventivo');
   });
 

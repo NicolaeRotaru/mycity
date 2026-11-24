@@ -38,7 +38,8 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 import { withSellerAnchePending, withSellerAnchePendingRateLimit } from '@/lib/api/middleware';
-import { decidiAccessoArea, PERCORSO_PREVENTIVO } from '@/lib/auth/decisione-portiere';
+import { decidiAccessoArea } from '@/lib/auth/decisione-portiere';
+import { PERCORSO_ABBONAMENTO, PERCORSO_SERVIZI } from '@/lib/agenzia/indirizzi-servizi';
 import { inModalitaDemo } from '@/lib/modalita-demo';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
@@ -112,10 +113,11 @@ describe('il portiere delle pagine', () => {
   const entra = (pathname: string, approved = false, role: 'seller' | 'buyer' = 'seller') =>
     decidiAccessoArea({ role, approved, allowed: ['seller', 'admin'], pathname }).azione === 'entra';
 
-  it('il negozio non approvato entra nel preventivo e nelle pagine dei servizi', () => {
-    expect(entra(PERCORSO_PREVENTIVO)).toBe(true);
-    expect(entra(`${PERCORSO_PREVENTIVO}/social`)).toBe(true);
-    expect(entra(`${PERCORSO_PREVENTIVO}/`)).toBe(true);
+  it('il negozio non approvato entra nella pagina Abbonamento e nelle pagine dei servizi', () => {
+    expect(entra(PERCORSO_ABBONAMENTO)).toBe(true);
+    expect(entra(`${PERCORSO_ABBONAMENTO}/`)).toBe(true);
+    expect(entra(`${PERCORSO_SERVIZI}/social`)).toBe(true);
+    expect(entra(`${PERCORSO_SERVIZI}/foto-video`)).toBe(true);
   });
 
   it('e nei suoi prodotti, che prepara subito', () => {
@@ -128,8 +130,9 @@ describe('il portiere delle pagine', () => {
     expect(entra('/seller/products-falso')).toBe(false);
     expect(entra('/seller/earnings')).toBe(false);
     expect(entra('/seller/orders')).toBe(false);
-    expect(entra('/seller/preventivo-falso')).toBe(false);
-    expect(entra(PERCORSO_PREVENTIVO, false, 'buyer')).toBe(false);
+    expect(entra('/seller/abbonamento-falso')).toBe(false);
+    expect(entra('/seller/servizi-falsi')).toBe(false);
+    expect(entra(PERCORSO_ABBONAMENTO, false, 'buyer')).toBe(false);
   });
 });
 

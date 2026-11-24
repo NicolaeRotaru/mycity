@@ -34,7 +34,8 @@ import { SERVIZI_AGENZIA } from '@/lib/agenzia/preventivo';
  * servizi in misura diversa; i servizi non si vendono più uno per uno. Queste
  * prove dicono cosa deve succedere davvero:
  *  · ogni voce del «cosa manca» nasce da un dato vero, col numero vero;
- *  · i canoni sono quelli di Nicola, e ogni fascia comprende tutti e quattro i servizi;
+ *  · i canoni sono quelli di Nicola, e ogni fascia comprende tutti e tre i servizi (dal 24/11 la
+ *    scheda Google è dentro la gestione social);
  *  · la fascia consigliata segue i dati della vetrina;
  *  · un canone scritto male nelle impostazioni non arriva al cliente;
  *  · la fascia la sceglie il cliente, il canone lo rilegge il server.
@@ -69,7 +70,7 @@ describe('i tre abbonamenti sono quelli di Nicola (24/11/2026)', () => {
     expect(SERVIZI_AGENZIA).not.toContain('logo' as never);
   });
 
-  it('ogni fascia comprende tutti e quattro i servizi, la vetrina e l assistenza, con parole diverse', () => {
+  it('ogni fascia comprende tutti e tre i servizi, la vetrina e l assistenza, con parole diverse', () => {
     for (const s of SERVIZI_AGENZIA) {
       const testi = ABBONAMENTI.map((f) => FASCE[f].servizi[s]);
       expect(testi.every((t) => t.trim().length > 10), s).toBe(true);
@@ -86,14 +87,15 @@ describe('i tre abbonamenti sono quelli di Nicola (24/11/2026)', () => {
 });
 
 describe('cosa manca alla vetrina', () => {
-  it('una vetrina vuota si vede proporre tutti e quattro i servizi, nell ordine del listino', () => {
-    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'social', 'sito_web', 'google_maps']);
+  it('una vetrina vuota si vede proporre tutti e tre i servizi, nell ordine del listino', () => {
+    expect(cosaManca(VUOTA).map((v) => v.id)).toEqual(['foto_video', 'sito_web', 'social']);
   });
 
-  it('una vetrina completa si vede proporre solo i social e la scheda Google', () => {
+  it('una vetrina completa si vede proporre solo la gestione social, con dentro la scheda Google', () => {
     const voci = cosaManca(COMPLETA);
-    expect(voci.map((v) => v.id)).toEqual(['social', 'google_maps']);
+    expect(voci.map((v) => v.id)).toEqual(['social']);
     expect(voci[0].perche[0]).toContain('Instagram');
+    expect(voci[0].perche[1]).toContain('Google');
   });
 
   it('foto e video elenca ogni cosa che manca, col numero vero dei prodotti senza foto', () => {
@@ -125,7 +127,7 @@ describe('il preventivo', () => {
   it('porta i canoni delle tre fasce e cosa manca, senza prezzi per servizio', () => {
     const p = costruisciPreventivo({ idAttivita: 'abc123-def', nomeAttivita: 'Bar Roma', tipoAttivita: 'bar', dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO });
     expect(p.prezzi).toEqual({ base: 30000, business: 50000, premium: 99900 });
-    expect(p.righe.map((r) => r.id)).toEqual(['foto_video', 'social', 'sito_web', 'google_maps']);
+    expect(p.righe.map((r) => r.id)).toEqual(['foto_video', 'sito_web', 'social']);
     expect(p.righe.some((r) => 'prezzo' in r)).toBe(false);
     expect(p.scelto).toBeNull();
   });
@@ -179,7 +181,7 @@ describe('il preventivo', () => {
       dati: VUOTA, impostazioni: DI_LISTINO, adesso: ADESSO, scelto: 'premium',
     });
     expect(testoAvvisoPreventivo(p, '3331234567')).toMatch(
-      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Gestione automatica dei social, Sito web professionale, Scheda Google su Maps\. Telefono: 3331234567\.$/,
+      /^Bar Roma sceglie l'abbonamento Premium \(999,00\s€ al mese, il primo mese 499,50\s€\), preventivo P-20261122-A1B2C3\. Alla vetrina mancano: Foto e video, Sito web professionale, Gestione dei social e di Google Maps\. Telefono: 3331234567\.$/,
     );
   });
 });

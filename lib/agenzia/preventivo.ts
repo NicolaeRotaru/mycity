@@ -8,12 +8,14 @@
  * preventivo/demo» — quindi il cliente non lo chiede: lo trova pronto, calcolato
  * dai suoi dati.
  *
- * I servizi sono quattro: foto e video, gestione automatica dei social (il
- * flusso n8n), sito web professionale, scheda Google su Maps. Il logo è stato tolto il 23/11.
+ * I servizi sono tre: foto e video, sito web professionale, gestione dei social (il flusso
+ * n8n) con dentro la scheda Google su Maps. Il logo è stato tolto il 23/11; la scheda Google è
+ * entrata nella gestione social il 24/11 (Nicola: «gestione di social dentro è compreso anche
+ * Google Maps»).
  *
  * Dal 24/11/2026 non si vendono più uno per uno: Nicola, «l'abbonamento comprende tutti i
  * servizi ma in modi diversi» — tre fasce, Base 300 €, Business 500 €, Premium 999 € al mese,
- * solo canone e niente percentuale sul venduto. Ogni fascia comprende tutti e quattro i
+ * solo canone e niente percentuale sul venduto. Ogni fascia comprende tutti e tre i
  * servizi più la vetrina; cambia quanto (`FASCE`).
  *
  * Tutto quello che si decide sta qui, in funzioni senza rete:
@@ -31,18 +33,18 @@
 import type { TipoAttivita } from './tipi-attivita';
 import { formatPriceFromCents } from '@/lib/format';
 
-export const SERVIZI_AGENZIA = ['foto_video', 'social', 'sito_web', 'google_maps'] as const;
+/** Nell'ordine del menu «Servizi» (Nicola, 24/11/2026: «foto e video, sito e social, gestione di social»). */
+export const SERVIZI_AGENZIA = ['foto_video', 'sito_web', 'social'] as const;
 export type ServizioAgenzia = (typeof SERVIZI_AGENZIA)[number];
 
 /**
- * L'indirizzo della pagina di ogni servizio, dentro «Preventivo» (Nicola, 23/11: «ogni servizio
- * ha la sua voce dentro il menu»): /seller/preventivo/<slug>.
+ * L'indirizzo della pagina di ogni servizio (Nicola, 23/11: «ogni servizio ha la sua voce dentro il
+ * menu»): /seller/servizi/<slug> dal 24/11/2026 (lib/agenzia/indirizzi-servizi.ts).
  */
 export const SLUG_SERVIZIO: Record<ServizioAgenzia, string> = {
   foto_video: 'foto-video',
-  social: 'social',
   sito_web: 'sito-web',
-  google_maps: 'scheda-google',
+  social: 'social',
 };
 
 /** Il servizio di un indirizzo, o `null` se l'indirizzo non è di nessun servizio. */
@@ -74,17 +76,15 @@ export const LISTINO: Record<ServizioAgenzia, VoceListino> = {
     titolo: 'Foto e video',
     descrizione: 'Scatti e riprese nel tuo locale, con ritocco e montaggio: le foto della copertina, dei prodotti e i video per vetrina e social.',
   },
-  social: {
-    titolo: 'Gestione automatica dei social',
-    descrizione: 'I post sui tuoi social li prepariamo e li pubblichiamo noi, in automatico, con le foto della tua vetrina.',
-  },
   sito_web: {
     titolo: 'Sito web professionale',
     descrizione: 'Un sito tutto tuo, con il tuo nome, che porta i clienti alla tua vetrina MyCity.',
   },
-  google_maps: {
-    titolo: 'Scheda Google su Maps',
-    descrizione: 'Creiamo o sistemiamo la tua scheda su Google Maps: categoria giusta, orari, foto e il collegamento alla tua vetrina MyCity. Chi cerca vicino a te ti trova.',
+  // 24/11/2026 — La scheda Google è dentro la gestione social (Nicola: «gestione di social dentro è
+  // compreso anche Google Maps»): un servizio solo, con i testi dei due di prima messi insieme.
+  social: {
+    titolo: 'Gestione dei social e di Google Maps',
+    descrizione: 'I post sui tuoi social li prepariamo e li pubblichiamo noi, in automatico, con le foto della tua vetrina. E curiamo la tua scheda su Google Maps: categoria giusta, orari, foto e il collegamento alla tua vetrina MyCity. Chi cerca vicino a te ti trova.',
   },
 };
 
@@ -118,9 +118,8 @@ export const FASCE: Record<Abbonamento, Fascia> = {
     perChi: 'Per essere online e vendere da subito, con un aiuto costante ma leggero.',
     servizi: {
       foto_video: 'Una sessione di foto all’avvio: copertina e prodotti principali.',
-      social: '8 post al mese, preparati e pubblicati da noi.',
       sito_web: 'Un sito di una pagina col tuo nome, collegato alla vetrina.',
-      google_maps: 'Scheda creata o sistemata all’avvio.',
+      social: '8 post al mese, preparati e pubblicati da noi. Scheda Google Maps creata o sistemata all’avvio.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio.',
     assistenza: 'Su WhatsApp, risposta entro 24 ore lavorative.',
@@ -131,9 +130,8 @@ export const FASCE: Record<Abbonamento, Fascia> = {
     perChi: 'Per crescere ogni settimana: più contenuti, più clienti che ti trovano.',
     servizi: {
       foto_video: 'Foto all’avvio e una nuova sessione ogni tre mesi, più un video al mese.',
-      social: '12 post al mese, 3 a settimana, con 2 video brevi.',
       sito_web: 'Un sito completo di più pagine, col tuo nome.',
-      google_maps: 'Scheda sistemata, più le risposte alle recensioni scritte da noi.',
+      social: '12 post al mese, 3 a settimana, con 2 video brevi. Scheda Google Maps sistemata, più le risposte alle recensioni scritte da noi.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in evidenza nella tua categoria una settimana al mese.',
     assistenza: 'Su WhatsApp, risposta entro 4 ore lavorative.',
@@ -144,9 +142,8 @@ export const FASCE: Record<Abbonamento, Fascia> = {
     perChi: 'Il servizio completo: foto e video ogni mese, un referente tutto tuo.',
     servizi: {
       foto_video: 'Una sessione di foto e video ogni mese.',
-      social: '20 post al mese, 4 video brevi e le storie.',
       sito_web: 'Un sito completo, aggiornato da noi ogni mese.',
-      google_maps: 'Scheda curata ogni mese: foto nuove, post e risposte alle recensioni.',
+      social: '20 post al mese, 4 video brevi e le storie. Scheda Google Maps curata ogni mese: foto nuove, post e risposte alle recensioni.',
     },
     vetrina: 'Vetrina su MyCity con ordini, consegna e ritiro in negozio, in home page due settimane al mese.',
     assistenza: 'Un referente tutto tuo e una visita nel locale ogni mese.',
@@ -281,8 +278,12 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
   }
   if (fotoVideo.length > 0) voci.push({ id: 'foto_video', perche: fotoVideo });
 
-  // La gestione dei social si propone sempre: dai dati non si vede chi pubblica già con
-  // costanza, e il cliente può togliere la voce prima di accettare.
+  if (!campoPieno(d.socials, 'website')) {
+    voci.push({ id: 'sito_web', perche: ['La tua attività non ha ancora un sito web suo.'] });
+  }
+
+  // La gestione dei social, con dentro la scheda Google (24/11/2026), si propone sempre: dai dati
+  // non si vede chi pubblica già con costanza, e MyCity non sa se hai una scheda Google né se è curata.
   const profili = PROFILI_SOCIAL.filter(([chiave]) => campoPieno(d.socials, chiave)).map(([, nome]) => nome);
   voci.push({
     id: 'social',
@@ -290,18 +291,8 @@ export function cosaManca(d: DatiAttivita): VoceMancante[] {
       profili.length === 0
         ? 'Nessun profilo social è collegato alla vetrina.'
         : `Hai già ${elenco(profili)}: i post possono partire in automatico, senza che tu li scriva.`,
+      'Quando qualcuno cerca «vicino a me», Google mostra prima le schede complete di orari e foto: controlliamo la tua.',
     ],
-  });
-
-  if (!campoPieno(d.socials, 'website')) {
-    voci.push({ id: 'sito_web', perche: ['La tua attività non ha ancora un sito web suo.'] });
-  }
-
-  // La scheda Google si propone sempre: MyCity non sa se ne hai una né se è curata, e il
-  // cliente può togliere la voce prima di accettare.
-  voci.push({
-    id: 'google_maps',
-    perche: ['Quando qualcuno cerca «vicino a me», Google mostra prima le schede complete di orari e foto: controlliamo la tua.'],
   });
 
   return voci;
@@ -451,7 +442,7 @@ export function cosaCiGuadagni(righe: readonly VoceMancante[], tipo: TipoAttivit
   // Solo il fatto letto dai dati: manca l'indirizzo di un sito suo. Non «non trova una pagina tua»:
   // la vetrina MyCity è già nella mappa del sito per Google, e spesso ci sono i social (collaudo, 24/11).
   if (righe.some((r) => r.id === 'sito_web')) oggi.push('Non hai ancora un sito tutto tuo, con il tuo nome.');
-  if (righe.some((r) => r.id === 'google_maps')) {
+  if (righe.some((r) => r.id === 'social')) {
     oggi.push(`Chi cerca «${CERCA_VICINO[tipo]}» vede prima le schede Google complete di orari e foto: se la tua non lo è, vede gli altri.`);
   }
   return {

@@ -2,7 +2,7 @@
  * GLI ABBONAMENTI DEI SERVIZI — 24/11/2026.
  *
  * Nicola: «sono servizi che offre mycity, ma tramite SDG». Il negozio sceglie Base, Business o
- * Premium dalla pagina «Il tuo preventivo» e paga con Stripe (`app/api/seller/preventivo/paga`).
+ * Premium dalla pagina «Abbonamento» e paga con Stripe (`app/api/seller/preventivo/paga`).
  * Qui arrivano gli avvisi di quell'abbonamento, riconosciuto da `metadata.kind =
  * servizi_subscription`, e si scrivono SOLO nella tabella `abbonamenti_servizi`: mai sul
  * profilo, dove vive l'abbonamento della vetrina. Le due cose hanno prezzi e storie diverse.
@@ -10,6 +10,7 @@
  * Lo stato si rilegge da Stripe ogni volta (`statoDaStripe`): un avviso vecchio arrivato dopo
  * uno nuovo non rimette «attivo» un abbonamento disdetto.
  */
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -89,7 +90,7 @@ export async function handleServiziSubscription(session: Stripe.Checkout.Session
         user_id: sellerId,
         title: '⚠️ Hai due abbonamenti ai servizi',
         body: 'Risultano due abbonamenti ai servizi. Non devi fare niente: lo togliamo noi e ti rimborsiamo quello in più.',
-        link: '/seller/preventivo',
+        link: PERCORSO_ABBONAMENTO,
       }),
       'avviso abbonamento servizi doppio',
     );
@@ -117,7 +118,7 @@ export async function handleServiziSubscription(session: Stripe.Checkout.Session
       user_id: sellerId,
       title: `✅ Abbonamento ${nome} attivo`,
       body: `Grazie! Il tuo abbonamento ${nome} è attivo. Ti contattiamo per fissare l’incontro nel locale.`,
-      link: '/seller/preventivo',
+      link: PERCORSO_ABBONAMENTO,
     }),
     'avviso abbonamento servizi attivo',
   );

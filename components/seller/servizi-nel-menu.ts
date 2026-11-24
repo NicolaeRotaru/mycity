@@ -1,41 +1,38 @@
-import { ClipboardList, Globe, MapPin, Share2, Video, type LucideIcon } from 'lucide-react';
-import { LISTINO, SERVIZI_AGENZIA, SLUG_SERVIZIO, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
+import { BadgeCheck, Globe, Share2, Video, type LucideIcon } from 'lucide-react';
+import { LISTINO, SERVIZI_AGENZIA, type ServizioAgenzia } from '@/lib/agenzia/preventivo';
+import { PERCORSO_ABBONAMENTO, hrefServizio } from '@/lib/agenzia/indirizzi-servizi';
 
 /**
- * LE VOCI DEL MENU «SERVIZI» — 23/11/2026.
+ * LE VOCI DEL MENU «SERVIZI» — 23/11/2026, rifatte il 24/11/2026.
  *
- * Nicola: «è dentro preventivo, ma ogni servizio ha la sua voce dentro il menu», poi «la voce
- * preventivo, chiamala servizi». Il menu del venditore ha un gruppo «Servizi»: la prima voce è
- * il preventivo intero, poi una voce per
- * ogni servizio, nell'ordine del listino. Le voci nascono da SERVIZI_AGENZIA: un servizio nuovo
- * nel listino ha la sua voce senza toccare il menu.
+ * Nicola (24/11): «togli sempre la voce preventivo… Di per sé il preventivo sono quelle tre voci:
+ * foto e video, sito e social, gestione di social». Il gruppo «Servizi» ha una voce per ogni
+ * servizio, nell'ordine del listino, e in fondo «Abbonamento», la pagina dove si sceglie e si
+ * paga. Le voci dei servizi nascono da SERVIZI_AGENZIA: un servizio nuovo nel listino ha la sua
+ * voce senza toccare il menu.
  */
 
 const ICONE: Record<ServizioAgenzia, LucideIcon> = {
   foto_video: Video,
-  social: Share2,
   sito_web: Globe,
-  google_maps: MapPin,
+  social: Share2,
 };
 
 /** Le etichette corte del menu: il titolo intero del listino non ci sta nella barra. */
-const ETICHETTE: Record<ServizioAgenzia, string> = {
+export const ETICHETTE_SERVIZI: Record<ServizioAgenzia, string> = {
   foto_video: 'Foto e video',
-  social: 'Gestione social',
   sito_web: 'Sito web',
-  google_maps: 'Scheda Google',
+  social: 'Gestione social',
 };
 
-export const HREF_PREVENTIVO = '/seller/preventivo';
-
-export const hrefServizio = (id: ServizioAgenzia) => `${HREF_PREVENTIVO}/${SLUG_SERVIZIO[id]}`;
+export { PERCORSO_ABBONAMENTO, hrefServizio };
 
 export type VoceDelMenu = { href: string; icon: LucideIcon; label: string };
 
-export const VOCI_PREVENTIVO: VoceDelMenu[] = [
-  { href: HREF_PREVENTIVO, icon: ClipboardList, label: 'Il tuo preventivo' },
-  ...SERVIZI_AGENZIA.map((id) => ({ href: hrefServizio(id), icon: ICONE[id], label: ETICHETTE[id] })),
+export const VOCI_SERVIZI: VoceDelMenu[] = [
+  ...SERVIZI_AGENZIA.map((id) => ({ href: hrefServizio(id), icon: ICONE[id], label: ETICHETTE_SERVIZI[id] })),
+  { href: PERCORSO_ABBONAMENTO, icon: BadgeCheck, label: 'Abbonamento' },
 ];
 
-/** Il titolo intero del servizio, per la pagina: lo stesso del preventivo. */
+/** Il titolo intero del servizio, per la pagina. */
 export const titoloServizio = (id: ServizioAgenzia) => LISTINO[id].titolo;

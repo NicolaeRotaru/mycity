@@ -283,7 +283,10 @@ export const LAVORI_DI_EDITING: string[] = [
   'Una versione per ogni social, già nella misura giusta',
 ];
 
-/* ───────────────────── SCHEDA GOOGLE: come apparirà su Maps ───────────────────── */
+/* ──────────── SCHEDA GOOGLE: come apparirà su Maps (dentro la gestione social) ────────────
+ * 24/11/2026 — Nicola: «gestione di social dentro è compreso anche Google Maps». La scheda non è
+ * più un servizio a sé: la pagina della gestione social mostra il piano dei post e, sotto, questa.
+ */
 
 export type SchedaGoogle = {
   nome: string;

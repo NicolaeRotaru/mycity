@@ -173,8 +173,8 @@ describe('la cassa dell abbonamento dei servizi', () => {
     expect(stato.clientiCreati[0]).toMatchObject({ email: 'oradelgusto@esempio.it', metadata: { kind: 'servizi_subscription', seller_id: 'negozio-1' } });
     expect('client_reference_id' in s).toBe(false); // il gestore delle casse scadute lo leggerebbe come carrello
     expect(s.expires_at - Math.floor(Date.now() / 1000)).toBeGreaterThanOrEqual(30 * 60); // la cassa scade presto
-    expect(s.success_url).toBe('https://www.mycity-marketplace.com/seller/preventivo?pagato=1');
-    expect(s.cancel_url).toBe('https://www.mycity-marketplace.com/seller/preventivo?pagato=0');
+    expect(s.success_url).toBe('https://www.mycity-marketplace.com/seller/abbonamento?pagato=1');
+    expect(s.cancel_url).toBe('https://www.mycity-marketplace.com/seller/abbonamento?pagato=0');
     expect(String(stato.opzioniSessioni[0].idempotencyKey)).toMatch(/^servizi:negozio-1:business:50000:\d+$/);
   });
 
@@ -193,7 +193,7 @@ describe('la cassa dell abbonamento dei servizi', () => {
   it('una cassa aperta della stessa fascia si ridà; una di un altra fascia si chiude prima di aprirne una nuova (collaudo)', async () => {
     stato.clienti = [{ id: 'cus_servizi', metadata: { kind: 'servizi_subscription', seller_id: 'negozio-1' } }];
     // 24/11 — Stripe ridà anche l'indirizzo di ritorno: si riusa solo una cassa che torna allo stesso posto.
-    stato.casseAperte = [{ id: 'cs_vecchia', url: 'https://checkout.stripe.com/c/pay/cs_vecchia', success_url: 'https://www.mycity-marketplace.com/seller/preventivo?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
+    stato.casseAperte = [{ id: 'cs_vecchia', url: 'https://checkout.stripe.com/c/pay/cs_vecchia', success_url: 'https://www.mycity-marketplace.com/seller/abbonamento?pagato=1', metadata: { kind: 'servizi_subscription', fascia: 'business', canone_centesimi: '50000' } }];
     const r = await paga({ abbonamento: 'business' });
     expect(((await r.json()) as { data: { url: string } }).data.url).toBe('https://checkout.stripe.com/c/pay/cs_vecchia');
     expect(stato.sessioni).toHaveLength(0);

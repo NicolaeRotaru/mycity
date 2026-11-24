@@ -1,3 +1,5 @@
+import { PERCORSO_ABBONAMENTO } from '@/lib/agenzia/indirizzi-servizi';
+
 /**
  * LA MODALITÀ DEMO — 24/11/2026.
  *
@@ -18,5 +20,5 @@ export const TESTO_MODALITA_DEMO = {
   titolo: 'Sei in modalità demo',
   testo: 'La tua vetrina non è ancora visibile sul marketplace. Attiva un abbonamento per andare online.',
   pulsante: 'Scegli l’abbonamento',
-  href: '/seller/preventivo',
+  href: PERCORSO_ABBONAMENTO,
 } as const;

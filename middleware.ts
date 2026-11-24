@@ -30,6 +30,7 @@ import {
   decidiAccessoArea,
   PAGINA_ATTESA_NEGOZIO,
 } from '@/lib/auth/decisione-portiere';
+import { indirizzoDopoIlPreventivo } from '@/lib/agenzia/indirizzi-servizi';
 import {
   chiediConTettoSuScritturaDiSessione,
   creaRaccoglitoreCookie,
@@ -405,6 +406,19 @@ export async function middleware(req: NextRequest) {
       path: '/',
       sameSite: 'lax',
     });
+  }
+
+  // 24/11/2026 — Il vecchio preventivo del negozio non c'è più: ogni servizio ha la sua pagina e
+  // l'abbonamento si sceglie su /seller/abbonamento. Email, notifiche e casse Stripe già aperte
+  // portano ancora a /seller/preventivo…: si rimandano ai nuovi indirizzi, con la stessa domanda
+  // (?pagato=1 al ritorno da Stripe), prima di guardare chi è.
+  const dopoIlPreventivo = indirizzoDopoIlPreventivo(pathname);
+  if (dopoIlPreventivo) {
+    const url = req.nextUrl.clone();
+    url.pathname = dopoIlPreventivo;
+    const r = NextResponse.redirect(url);
+    conPoliticaDiSicurezza(r.headers, csp);
+    return r;
   }
 
   // Uscita esplicita dalla modalità acquisto venditore.

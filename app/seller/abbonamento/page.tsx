@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, CheckCircle2, CreditCard, Printer, Send, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, CreditCard, Send, TrendingUp } from 'lucide-react';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -26,45 +26,42 @@ import {
 } from '@/lib/agenzia/preventivo';
 import { formatPriceFromCents } from '@/lib/format';
 import { descriviAttivita } from '@/lib/agenzia/tipi-attivita';
-import { hrefServizio } from '@/components/seller/servizi-nel-menu';
-import AnteprimaServizio from '@/components/seller/AnteprimaServizio';
 import {
   accettaPreventivo,
   CHIAVE_PREVENTIVO,
-  CHIAVE_SCHEDA,
-  leggiSchedaDelNegozio,
-  dataLeggibile,
   leggiPreventivoAgenzia,
   pagaAbbonamento,
   scriviCanone,
 } from '@/components/seller/preventivo-agenzia';
 
 /**
- * IL PREVENTIVO GIÀ PRONTO — 22/11/2026, coi tre abbonamenti dal 24/11/2026.
+ * LA PAGINA ABBONAMENTO — 24/11/2026.
  *
- * Nicola: «deve già essere creato prima, in formato preventivo/demo». Il cliente
- * apre questa pagina e trova un preventivo vero, con numero e data, fatto dai
- * suoi dati: cosa manca alla vetrina e perché. Poi i tre abbonamenti — Base,
- * Business, Premium — che comprendono tutti i servizi in misura diversa (Nicola,
- * 24/11). Ne sceglie uno (parte già scelto quello che consigliamo), preme
- * «Accetto» e MyCity lo richiama. Si stampa o si salva in PDF dal pulsante.
+ * Nicola, dal telefono: «qua nel preventivo non posso selezionare l'abbonamento… togli la sezione
+ * preventivo, perché ognuna di quelle sezioni è di per sé un preventivo… fai in modo che ci sia poi
+ * un bottone che manda alla pagina dove si sceglie quell'abbonamento». Questa è quella pagina, e
+ * serve SOLO a scegliere e pagare:
+ *  · «Cosa ci guadagni», con le frasi vere lette dalla vetrina;
+ *  · le tre fasce selezionabili, con la consigliata, il primo mese a metà e il pareggio;
+ *  · condizioni e resoconto mensile;
+ *  · «Paga e attiva» e «Preferisco essere richiamato»;
+ *  · lo stato dell'abbonamento, se c'è già.
+ * Cosa manca e cosa ricevi stanno nelle pagine dei servizi (/seller/servizi/<slug>).
  *
- * Niente si paga qui: accettare manda la richiesta a MyCity, che conferma e
- * concorda il pagamento.
+ * I canoni e la fascia consigliata li calcola il server (/api/seller/preventivo); al pagamento il
+ * server rilegge il canone dal listino e non si fida del browser.
  */
-export default function PreventivoAgenziaPage() {
+export default function PaginaAbbonamento() {
   const { data: p, isLoading, isError, error, refetch } = useQuery({
     queryKey: CHIAVE_PREVENTIVO,
     queryFn: leggiPreventivoAgenzia,
   });
-  // 24/11/2026 — La scheda del locale (da n8n): la bozza del sito e il piano dei post la usano.
-  const { data: scheda } = useQuery({ queryKey: CHIAVE_SCHEDA, queryFn: leggiSchedaDelNegozio });
   const [scelto, setScelto] = useState<Abbonamento | null>(null);
-  const [inviato, setInviato] = useState<string | null>(null);
+  const [inviato, setInviato] = useState(false);
   // Lo scontrino medio per il pareggio, in euro come lo scrive il titolare: parte dalla stima per tipo.
   const [scontrino, setScontrino] = useState<string | null>(null);
 
-  // Appena arriva il preventivo, è scelto l'abbonamento che consigliamo: il cliente può cambiarlo.
+  // Appena arrivano i dati, è scelto l'abbonamento che consigliamo: il cliente può cambiarlo.
   useEffect(() => {
     if (p) setScelto((prima) => prima ?? p.consigliato);
   }, [p]);
@@ -84,13 +81,13 @@ export default function PreventivoAgenziaPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Non sono riuscito ad aprire il pagamento. Riprova.'),
   });
 
-  const accetta = useMutation({
+  const richiama = useMutation({
     mutationFn: (fascia: Abbonamento) => accettaPreventivo(fascia),
-    onSuccess: (numero) => {
-      setInviato(numero);
-      toast.success('Preventivo inviato: ti ricontattiamo noi.');
+    onSuccess: () => {
+      setInviato(true);
+      toast.success('Richiesta inviata: ti richiamiamo noi.');
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Non sono riuscito a inviare il preventivo. Riprova.'),
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Non sono riuscito a inviare la richiesta. Riprova.'),
   });
 
   if (isLoading) return <LoadingState />;
@@ -98,9 +95,9 @@ export default function PreventivoAgenziaPage() {
   if (isError || !p) {
     return (
       <div className="max-w-3xl">
-        <SellerPageTitle eyebrow="Servizi" title="Il tuo preventivo" />
+        <SellerPageTitle eyebrow="Servizi" title="Abbonamento" />
         <div className="rounded-2xl border-2 border-cream-300 bg-surface-0 p-5">
-          <p className="font-semibold text-ink-900">Non sono riuscito a preparare il preventivo</p>
+          <p className="font-semibold text-ink-900">Non sono riuscito a preparare la pagina</p>
           <p className="mt-1 text-sm text-ink-600">
             {error instanceof Error ? error.message : 'La lettura non è riuscita.'} Non vuol dire che manchi qualcosa.
           </p>
@@ -120,17 +117,16 @@ export default function PreventivoAgenziaPage() {
 
   return (
     <div className="max-w-3xl">
-      <div className="print:hidden">
-        <SellerPageTitle
-          eyebrow="Servizi"
-          title="Il tuo preventivo è pronto"
-          sub="L'abbiamo preparato guardando la tua vetrina: cosa manca, perché, e l'abbonamento che fa per te."
-        />
-      </div>
+      <SellerPageTitle
+        eyebrow="Servizi"
+        title="Scegli il tuo abbonamento"
+        sub={`Per ${p.attivita} · ${descriviAttivita(p.tipoAttivita)}. Foto e video, sito web e gestione dei social con Google Maps: tutti e tre in ogni abbonamento.`}
+      />
+      <p className="-mt-2 mb-4 text-sm font-semibold text-primary-700">{FRASE_PARTNER}</p>
 
       {/* Lo stato dell'abbonamento: già pagato, appena pagato, o pagamento annullato (24/11). */}
       {p.attivo ? (
-        <div role="status" className={`mb-4 rounded-2xl border-2 p-4 print:hidden ${p.attivo.stato === 'active' ? 'border-olive-300 bg-olive-50' : 'border-amber-300 bg-amber-50'}`}>
+        <div role="status" className={`mb-4 rounded-2xl border-2 p-4 ${p.attivo.stato === 'active' ? 'border-olive-300 bg-olive-50' : 'border-amber-300 bg-amber-50'}`}>
           {p.attivo.stato === 'active' ? (
             <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
               <CheckCircle2 size={18} className="text-olive-700" aria-hidden /> Il tuo abbonamento {FASCE[p.attivo.fascia].nome} è attivo
@@ -147,38 +143,20 @@ export default function PreventivoAgenziaPage() {
           </p>
         </div>
       ) : ritorno === 'pagato' ? (
-        <div role="status" className="mb-4 rounded-2xl border-2 border-olive-300 bg-olive-50 p-4 print:hidden">
+        <div role="status" className="mb-4 rounded-2xl border-2 border-olive-300 bg-olive-50 p-4">
           <p className="font-semibold text-ink-900">Pagamento ricevuto, grazie!</p>
           <p className="text-sm text-ink-700 mt-1">L’abbonamento si attiva in pochi secondi: ricarica la pagina fra un momento.</p>
         </div>
       ) : ritorno === 'annullato' ? (
-        <div role="status" className="mb-4 rounded-2xl border-2 border-cream-300 bg-cream-50 p-4 print:hidden">
+        <div role="status" className="mb-4 rounded-2xl border-2 border-cream-300 bg-cream-50 p-4">
           <p className="font-semibold text-ink-900">Pagamento annullato</p>
           <p className="text-sm text-ink-700 mt-1">Non ti abbiamo addebitato niente. Puoi riprovare quando vuoi.</p>
         </div>
       ) : null}
 
-      <article className="rounded-2xl border border-cream-300 bg-white p-5 sm:p-8 shadow-warm print:shadow-none print:border-0 print:p-0">
-        {/* Intestazione del documento */}
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-cream-200 pb-5">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-primary-700">{p.agenzia}</p>
-            <h1 className="font-serif text-3xl font-bold text-ink-900 mt-1">Preventivo</h1>
-            <p className="text-sm text-ink-600 mt-1">
-              per <strong className="text-ink-900">{p.attivita}</strong> · {descriviAttivita(p.tipoAttivita)}
-            </p>
-            <p className="text-xs font-semibold text-primary-700 mt-1">{FRASE_PARTNER}</p>
-          </div>
-          <dl className="text-sm text-right">
-            <dt className="text-ink-500">Numero</dt>
-            <dd className="font-mono font-semibold text-ink-900">{p.numero}</dd>
-            <dt className="text-ink-500 mt-2">Data</dt>
-            <dd className="font-semibold text-ink-900">{dataLeggibile(p.data)}</dd>
-          </dl>
-        </header>
-
+      <article className="rounded-2xl border border-cream-300 bg-white p-5 sm:p-8 shadow-warm">
         {/* Cosa ci guadagni: prima di tutto, solo frasi vere lette dalla sua vetrina (24/11). */}
-        <section aria-labelledby="cosa-ci-guadagni" className="mt-5 rounded-xl border-2 border-olive-300 bg-olive-50 p-4 sm:p-5">
+        <section aria-labelledby="cosa-ci-guadagni" className="rounded-xl border-2 border-olive-300 bg-olive-50 p-4 sm:p-5">
           <h2 id="cosa-ci-guadagni" className="inline-flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
             <TrendingUp size={18} className="text-olive-700" aria-hidden /> Cosa ci guadagni
           </h2>
@@ -190,38 +168,9 @@ export default function PreventivoAgenziaPage() {
           <p className="mt-2 text-sm font-semibold text-ink-900">{guadagni.conNoi}</p>
         </section>
 
-        {/* Cosa manca alla vetrina: il perché del preventivo, col numero vero. */}
-        {p.righe.length === 0 ? (
-          <div className="py-6 text-center">
-            <CheckCircle2 size={36} className="mx-auto text-olive-700" aria-hidden />
-            <p className="mt-2 font-semibold text-ink-900">Alla tua vetrina non manca niente.</p>
-            <p className="text-sm text-ink-600">Con un abbonamento la teniamo viva noi, ogni mese.</p>
-          </div>
-        ) : (
-          <section className="mt-5">
-            <h2 className="font-serif text-lg font-bold text-ink-900">Cosa manca alla tua vetrina</h2>
-            <ul className="mt-2 divide-y divide-cream-200">
-              {p.righe.map((r) => (
-                <li key={r.id} className="py-4">
-                  <p className="font-semibold text-ink-900">{r.titolo}</p>
-                  <p className="text-sm text-ink-600">{r.descrizione}</p>
-                  <ul className="mt-1 list-disc pl-4 text-xs text-ink-600">
-                    {r.perche.map((frase) => <li key={frase}>{frase}</li>)}
-                  </ul>
-                  {/* Cosa ricevi, già pronto: la bozza del sito, il piano del mese, i formati (Nicola, 23/11). */}
-                  <AnteprimaServizio id={r.id} nome={p.attivita} tipo={p.tipoAttivita} giorno={p.data} scheda={scheda} />
-                  <Link href={hrefServizio(r.id)} className="mt-1 inline-block text-xs font-semibold text-primary-700 underline underline-offset-2 print:hidden">
-                    Apri il servizio
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {/* I tre abbonamenti: tutti comprendono tutti i servizi, cambia quanto (Nicola, 24/11). */}
-        <section className="mt-6">
-          <h2 className="font-serif text-lg font-bold text-ink-900">Scegli il tuo abbonamento</h2>
+        <section className="mt-6" aria-labelledby="le-tre-fasce">
+          <h2 id="le-tre-fasce" className="font-serif text-lg font-bold text-ink-900">Base, Business o Premium</h2>
           <p className="mt-1 text-sm text-ink-600">
             Tutti e tre comprendono tutti i servizi e la vetrina su MyCity: cambia quanto ne facciamo per te.
           </p>
@@ -248,7 +197,7 @@ export default function PreventivoAgenziaPage() {
                 : 'Scrivi uno scontrino in euro, per esempio 3,50, per vedere i conti.'}
             </span>
           </div>
-          <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={!!inviato || !!p.attivo}>
+          <fieldset className="mt-4 grid gap-3 sm:grid-cols-3" disabled={inviato || !!p.attivo}>
             <legend className="sr-only">Abbonamento</legend>
             {ABBONAMENTI.map((id) => {
               const f = FASCE[id];
@@ -258,7 +207,7 @@ export default function PreventivoAgenziaPage() {
               return (
                 <label
                   key={id}
-                  className={`relative flex cursor-pointer flex-col rounded-xl border-2 p-4 focus-within:ring-2 focus-within:ring-primary-500 ${attivo ? 'border-primary-700 bg-cream-50' : 'border-cream-200 print:hidden'}`}
+                  className={`relative flex cursor-pointer flex-col rounded-xl border-2 p-4 focus-within:ring-2 focus-within:ring-primary-500 ${attivo ? 'border-primary-700 bg-cream-50' : 'border-cream-200'}`}
                 >
                   <input
                     type="radio"
@@ -308,42 +257,29 @@ export default function PreventivoAgenziaPage() {
             Il pagamento è con carta, sicuro con Stripe: ogni mese si rinnova da solo. Se preferisci parlarne prima, chiedi di essere richiamato: non paghi niente.
           </p>
         </section>
-
-        {p.giaAPosto.length > 0 && (
-          <section className="mt-6 rounded-xl bg-cream-50 p-4">
-            <h2 className="text-sm font-bold text-ink-900">Già a posto</h2>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-700">
-              {p.giaAPosto.map((id) => (
-                <li key={id} className="inline-flex items-center gap-1.5">
-                  <Check size={14} className="text-olive-700" aria-hidden /> {LISTINO[id].titolo}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </article>
 
-      <div className="mt-5 flex flex-wrap gap-3 print:hidden">
+      <div className="mt-5 flex flex-wrap gap-3">
         {inviato ? (
           <div role="status" className="w-full rounded-2xl border-2 border-olive-300 bg-olive-50 p-4">
             <p className="font-semibold text-ink-900 inline-flex items-center gap-2">
-              <CheckCircle2 size={18} className="text-olive-700" aria-hidden /> Ricevuto: preventivo {inviato}
+              <CheckCircle2 size={18} className="text-olive-700" aria-hidden /> Ricevuto: ti richiamiamo noi
             </p>
-            <p className="text-sm text-ink-700 mt-1">Abbonamento {FASCE[fascia].nome}. Ti ricontattiamo noi per fissare l’inizio. Non devi fare altro.</p>
+            <p className="text-sm text-ink-700 mt-1">Abbonamento {FASCE[fascia].nome}. Ti ricontattiamo per fissare l’inizio. Non devi fare altro.</p>
           </div>
         ) : (
           !p.attivo && (
             <>
               {p.prezzi[fascia] ? (
-                <Button onClick={() => paga.mutate(fascia)} loading={paga.isPending} disabled={accetta.isPending} icon={CreditCard}>
+                <Button onClick={() => paga.mutate(fascia)} loading={paga.isPending} disabled={richiama.isPending} icon={CreditCard}>
                   Paga e attiva il {FASCE[fascia].nome}
                   {p.primoMeseScontato && canonePrimoMese(p.prezzi[fascia]) ? ` · il primo mese ${formatPriceFromCents(canonePrimoMese(p.prezzi[fascia])!)}` : ''}
                 </Button>
               ) : null}
               <button
                 type="button"
-                onClick={() => accetta.mutate(fascia)}
-                disabled={accetta.isPending || paga.isPending}
+                onClick={() => richiama.mutate(fascia)}
+                disabled={richiama.isPending || paga.isPending}
                 className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold disabled:opacity-60"
               >
                 <Send size={18} aria-hidden /> Preferisco essere richiamato
@@ -351,13 +287,6 @@ export default function PreventivoAgenziaPage() {
             </>
           )
         )}
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold"
-        >
-          <Printer size={18} aria-hidden /> Stampa o salva in PDF
-        </button>
         <Link href="/seller/dashboard" className="inline-flex items-center px-3 py-2.5 text-sm font-semibold text-primary-700 underline underline-offset-2">
           Torna alla dashboard
         </Link>

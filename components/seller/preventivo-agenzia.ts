@@ -17,7 +17,7 @@ export async function leggiPreventivoAgenzia(): Promise<Preventivo> {
     | null;
   if (!risposta.ok || !corpo || corpo.ok !== true) {
     const messaggio = corpo && corpo.ok === false ? corpo.error?.message : undefined;
-    throw new Error(messaggio ?? 'Non sono riuscito a leggere il preventivo.');
+    throw new Error(messaggio ?? 'Non sono riuscito a leggere la tua vetrina per i servizi.');
   }
   return corpo.data;
 }
