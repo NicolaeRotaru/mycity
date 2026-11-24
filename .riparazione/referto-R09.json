@@ -1,13 +1,13 @@
 {
  "sessione": "R09",
- "aggiornato": "2026-11-24 17:45",
+ "aggiornato": "2026-11-24 17:58",
  "finita": true,
- "testa": "5381741c7e426fb6a4ccf047807a74cf0d99ca9f",
+ "testa": "10f73a8c8cf527d0d0b63922194f53293a91906c",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
-  "testa": "5381741c7e426fb6a4ccf047807a74cf0d99ca9f",
-  "nota": "typecheck, lint e 2092 file di prova (12686 test) verdi, 1 saltato già sulla base"
+  "testa": "10f73a8c8cf527d0d0b63922194f53293a91906c",
+  "nota": "typecheck, lint e 2092 file di prova (12686 test) verdi, 1 saltato già sulla base; guardia-ramo verde"
  },
  "voci": [
   {
@@ -148,8 +148,7 @@
    "commit": "d695062a533ca7913c42689d6ac1caa3bab38cbd",
    "file_toccati": [
     "app/api/ai/catalog-batch/status/route.ts",
-    "app/seller/products/ai-batch/page.tsx",
-    "tests/unit/riparazione-r04-lavoro-ritrovato.test.ts"
+    "app/seller/products/ai-batch/page.tsx"
    ],
    "prova_file": [
     "tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx"
@@ -160,11 +159,12 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d695062a533ca7913c42689d6ac1caa3bab38cbd^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx --json"
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d695062a533ca7913c42689d6ac1caa3bab38cbd^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Pagina: il clic su una scheda operazione tiene un lavoro chiuso con «chiedi all'assistenza» (regola puoAvviareLavoro già esistente), e poll/riprendiUltimo non lo dimenticano con ricordaLavoro(null). Rotta di stato senza jobId: se non ci sono lavori aperti restituisce l'ultimo lavoro DEL VENDITORE se è chiuso con quel motivo, altrimenti null. La rotta di avvio non si tocca (decisione della regia). Ho esteso il finto database di tests/unit/riparazione-r04-lavoro-ritrovato.test.ts (aggiunto order() dopo eq(), perché la rotta ora fa una seconda lettura): nessuna asserzione cambiata.",
-   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova + r04-lavoro-ritrovato 10/10 e rimessa (uscita 0), 15 file di prove vicine (131 test) verdi; la rotta filtra sempre per seller_id e guarda solo l'ultimo lavoro (created_at desc, limit 1), la seconda lettura in errore non rompe la risposta; clic sulla scheda e ricordaLavoro(null) non perdono il lavoro vietato; start non toccata."
+   "cosa_ho_fatto": "Pagina: il clic su una scheda operazione tiene un lavoro chiuso con «chiedi all'assistenza» (regola puoAvviareLavoro già esistente), e poll/riprendiUltimo non lo dimenticano con ricordaLavoro(null). Rotta di stato senza jobId: se non ci sono lavori aperti restituisce l'ultimo lavoro DEL VENDITORE se è chiuso con quel motivo, altrimenti null. La rotta di avvio non si tocca (decisione della regia). Ho esteso il finto database di tests/unit/riparazione-r04-lavoro-ritrovato.test.ts (aggiunto order() dopo eq(), perché la rotta ora fa una seconda lettura): nessuna asserzione cambiata. Seguito in 10f73a8c: la guardia del ramo era rossa perché d695062a aveva ritoccato il finto database di una prova esistente di un'altra sessione (riparazione-r04-lavoro-ritrovato); la prova è tornata com'era e la seconda lettura della rotta di stato sta in un try/catch (una lettura che non riesce risponde «nessun lavoro», come prima, con un avviso nel registro). Rimessa rifatta sulla testa con la base prima di d695062a.",
+   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova + r04-lavoro-ritrovato 10/10 e rimessa (uscita 0), 15 file di prove vicine (131 test) verdi; la rotta filtra sempre per seller_id e guarda solo l'ultimo lavoro (created_at desc, limit 1), la seconda lettura in errore non rompe la risposta; clic sulla scheda e ricordaLavoro(null) non perdono il lavoro vietato; start non toccata. Dopo il seguito 10f73a8c: prova r09 + r04 (intatta) + r01 15/15 verdi, rimessa uscita 0, guardia-ramo verde, verify verde (riprovato dal capo squadra, non dal revisore).",
+   "commit_seguito": "10f73a8c8cf527d0d0b63922194f53293a91906c"
   },
   {
    "id": "R09-007",
@@ -176,8 +176,7 @@
    "commit": "d695062a533ca7913c42689d6ac1caa3bab38cbd",
    "file_toccati": [
     "app/api/ai/catalog-batch/status/route.ts",
-    "app/seller/products/ai-batch/page.tsx",
-    "tests/unit/riparazione-r04-lavoro-ritrovato.test.ts"
+    "app/seller/products/ai-batch/page.tsx"
    ],
    "prova_file": [
     "tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx"
@@ -188,11 +187,12 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d695062a533ca7913c42689d6ac1caa3bab38cbd^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx --json"
+    "comando": "timeout 540 node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d695062a533ca7913c42689d6ac1caa3bab38cbd^ --file app/api/ai/catalog-batch/status/route.ts,app/seller/products/ai-batch/page.tsx --prove tests/unit/riparazione-r09-pulsante-dopo-assistenza.test.tsx --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Pagina: il clic su una scheda operazione tiene un lavoro chiuso con «chiedi all'assistenza» (regola puoAvviareLavoro già esistente), e poll/riprendiUltimo non lo dimenticano con ricordaLavoro(null). Rotta di stato senza jobId: se non ci sono lavori aperti restituisce l'ultimo lavoro DEL VENDITORE se è chiuso con quel motivo, altrimenti null. La rotta di avvio non si tocca (decisione della regia). Ho esteso il finto database di tests/unit/riparazione-r04-lavoro-ritrovato.test.ts (aggiunto order() dopo eq(), perché la rotta ora fa una seconda lettura): nessuna asserzione cambiata.",
-   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova + r04-lavoro-ritrovato 10/10 e rimessa (uscita 0), 15 file di prove vicine (131 test) verdi; la rotta filtra sempre per seller_id e guarda solo l'ultimo lavoro (created_at desc, limit 1), la seconda lettura in errore non rompe la risposta; clic sulla scheda e ricordaLavoro(null) non perdono il lavoro vietato; start non toccata."
+   "cosa_ho_fatto": "Pagina: il clic su una scheda operazione tiene un lavoro chiuso con «chiedi all'assistenza» (regola puoAvviareLavoro già esistente), e poll/riprendiUltimo non lo dimenticano con ricordaLavoro(null). Rotta di stato senza jobId: se non ci sono lavori aperti restituisce l'ultimo lavoro DEL VENDITORE se è chiuso con quel motivo, altrimenti null. La rotta di avvio non si tocca (decisione della regia). Ho esteso il finto database di tests/unit/riparazione-r04-lavoro-ritrovato.test.ts (aggiunto order() dopo eq(), perché la rotta ora fa una seconda lettura): nessuna asserzione cambiata. Seguito in 10f73a8c: la guardia del ramo era rossa perché d695062a aveva ritoccato il finto database di una prova esistente di un'altra sessione (riparazione-r04-lavoro-ritrovato); la prova è tornata com'era e la seconda lettura della rotta di stato sta in un try/catch (una lettura che non riesce risponde «nessun lavoro», come prima, con un avviso nel registro). Rimessa rifatta sulla testa con la base prima di d695062a.",
+   "verificato_da": "revisore B (subagente generico, sonnet, copia separata): prova + r04-lavoro-ritrovato 10/10 e rimessa (uscita 0), 15 file di prove vicine (131 test) verdi; la rotta filtra sempre per seller_id e guarda solo l'ultimo lavoro (created_at desc, limit 1), la seconda lettura in errore non rompe la risposta; clic sulla scheda e ricordaLavoro(null) non perdono il lavoro vietato; start non toccata. Dopo il seguito 10f73a8c: prova r09 + r04 (intatta) + r01 15/15 verdi, rimessa uscita 0, guardia-ramo verde, verify verde (riprovato dal capo squadra, non dal revisore).",
+   "commit_seguito": "10f73a8c8cf527d0d0b63922194f53293a91906c"
   }
  ],
  "nuovi_difetti_visti": [
@@ -212,7 +212,7 @@
   "agenti": 3,
   "subagenti": 3,
   "costo_usd": 3.46,
-  "nota": "1 subagente che ripara (sonnet, ripreso una volta per R09-002 con un'altra strada), 2 revisori (sonnet) in parallelo su copie separate; costo letto da get_session (usage.cost_usd 3.4645) prima della consegna"
+  "nota": "1 subagente che ripara (sonnet, ripreso una volta per R09-002 con un'altra strada), 2 revisori (sonnet) in parallelo su copie separate; costo letto da get_session (usage.cost_usd 3.4645) prima della consegna; il seguito di R09-006/007 (10f73a8c) l'ha fatto il capo squadra, al tetto dei subagenti. get_session dà ancora 3,46 $ con updated_at fermo alle 16:31: il numero può essere indietro."
  },
  "costo_usd": 3.46
 }
