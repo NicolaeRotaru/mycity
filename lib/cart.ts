@@ -3,6 +3,7 @@
 // 30/8/2026 (R164) — la copia sul server sta in un file suo: prima era privata
 // qui dentro e nessuna prova poteva guardarla lavorare.
 import { syncAbandonedCart } from '@/lib/cart-sync';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 
 export type CartItem = {
   id: string;
@@ -148,6 +149,9 @@ function avvisaTetto(nome?: string) {
 }
 
 export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
+  // 24/11/2026 — Gli abbonamenti di SDG Agenzia non entrano nel carrello: si attivano dal
+  // preventivo (lib/products/sdgSeller.ts). Anche le casse li rifiutano, sul server.
+  if (eDiSdg(item.sellerId)) return;
   const cart = getCart();
   const existing = cart.find((c) => sameLine(c, item));
   const qty = item.quantity ?? 1;

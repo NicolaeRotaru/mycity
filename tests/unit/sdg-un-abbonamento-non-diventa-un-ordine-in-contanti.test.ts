@@ -1,0 +1,301 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FASCE_DI_DOMANI } from '@/lib/quando-arriva';
+
+/**
+ * 24/11/2026 — UN ABBONAMENTO DI SDG AGENZIA NON DIVENTA UN ORDINE IN CONTANTI.
+ *
+ * I tre abbonamenti ai servizi sono prodotti nella vetrina di SDG (migrazione 707), ma non si
+ * comprano col carrello: si attivano dal preventivo e si pagano in abbonamento Stripe. Questa prova
+ * percorre la cassa in contanti fino in fondo e diventa rossa se una riga di SDG entra in un ordine,
+ * da sola o in mezzo alla spesa di un altro negozio. Il finto del database è quello di
+ * contanti-la-chiave-si-prende-prima.test.ts.
+ */
+const righeOrdine: unknown[] = [];
+const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+const inseriti: Array<Record<string, unknown>> = [];
+const cancellati: Array<{ tabella: string; valore: unknown }> = [];
+// #159 — campanelle e posta partite davvero.
+const campanelle: Array<Record<string, unknown>> = [];
+const postaInviata: Array<Record<string, unknown>> = [];
+// #208 — acquisti contati dal server.
+const acquistiContati: Array<Record<string, unknown>> = [];
+
+/** Le righe della tabella dei tentativi, come le vedrebbe il database. */
+const tentativi = new Map<string, { user_id: string; order_ids: unknown[]; created_at: string }>();
+/** In che ordine sono successe le cose: serve a provare che la chiave viene PRIMA. */
+const cronologia: string[] = [];
+
+/** Fa fallire la riserva della merce a partire da questa chiamata (1-based). */
+let riservaFallisceAllaChiamata = 0;
+let chiamateRiserva = 0;
+
+function risolvibile(valore: unknown) {
+  const b: Record<string, unknown> = {
+    select: () => b,
+    eq: () => b,
+    in: () => b,
+    insert: () => b,
+    update: () => b,
+    delete: () => b,
+    limit: () => b,
+    single: () => Promise.resolve(valore),
+    maybeSingle: () => Promise.resolve(valore),
+    then: (res: (v: unknown) => unknown) => res(valore),
+  };
+  return b;
+}
+
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
+vi.mock('@/lib/api/middleware', () => ({
+  // Il wrapper vero prende (opzioni, gestore) e passa al gestore
+  // { user, profile, req }: qui si salta autenticazione e limite di richieste.
+  withAuthRateLimit: (
+    _opts: unknown,
+    h: (ctx: { user: { id: string; email: string; email_confirmed_at: string }; profile: unknown; req: unknown }) => unknown,
+  ) => (req: unknown) => h({
+    user: { id: 'cliente-1', email: 'cliente@test.it', email_confirmed_at: '2026-01-01T00:00:00Z' },
+    profile: { role: 'buyer', is_approved: true },
+    req,
+  }),
+  // Restituisce una risposta solo quando BLOCCA: null = via libera.
+  assertCanPurchase: vi.fn(() => null),
+}));
+vi.mock('@/lib/coupons', () => ({ validateCoupon: vi.fn(async () => ({ ok: false, reason: 'nessuno' })) }));
+vi.mock('@/lib/shipping', () => ({
+  shippingCentsFor: vi.fn(() => 500),
+  compensoRiderCents: vi.fn(() => 250),
+}));
+vi.mock('@/lib/shipping-coordinate', () => ({
+  coordinateDaIndirizziSalvati: vi.fn(async () => null),
+}));
+// 3/9/2026 — la rotta adesso decide con `negozioPuoServire`, che guarda la fascia
+// scelta e non solo l'orologio (l'ordine serale per domani non si rifiuta piu').
+vi.mock('@/lib/store-hours', () => ({
+  negozioPuoServire: vi.fn(() => true),
+  motivoNegozioChiuso: vi.fn((n: string) => `${n} è chiuso in questo momento.`),
+}));
+vi.mock('@/lib/promotions', () => ({
+  fetchActiveDiscounts: vi.fn(async () => new Map()),
+  discountedUnitCents: vi.fn((prezzo: number) => Math.round(prezzo * 100)),
+}));
+vi.mock('@/lib/email/client', () => ({
+  sendEmail: vi.fn(async (m: Record<string, unknown>) => { postaInviata.push(m); return { ok: true, id: 'e1' }; }),
+}));
+vi.mock('@/lib/email/templates', () => ({
+  orderConfirmedBuyerTemplate: vi.fn(() => ({ subject: 's', html: 'h' })),
+  newOrderSellerTemplate: vi.fn(() => ({ subject: 's', html: 'h' })),
+}));
+vi.mock('@/lib/stripe/client', () => ({
+  computeOrderSplit: vi.fn(() => ({ applicationFeeCents: 100, sellerPayoutCents: 900 })),
+}));
+vi.mock('@/lib/analytics/server', () => ({
+  contaAcquisto: vi.fn(async (a: Record<string, unknown>) => { acquistiContati.push(a); }),
+  misuraAttiva: () => true,
+  // 21/8/2026 — Il consenso all'analitica adesso lo legge il server prima di
+  // contare: senza questa riga il finto non ha la funzione e la rotta cade.
+  analyticsConsentita: vi.fn(async () => true),
+}));
+
+vi.mock('@/lib/supabase/server', () => {
+  const prodotti = [
+    { id: '11111111-1111-1111-1111-111111111111', seller_id: 'aaaaaaaa-0000-0000-0000-000000000001', name: 'Pane', price: 5, stock: 10, has_variants: false, images: [], status: 'available' },
+    { id: '22222222-2222-2222-2222-222222222222', seller_id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'Fiori', price: 8, stock: 10, has_variants: false, images: [], status: 'available' },
+    // Il prodotto di SDG Agenzia: l'abbonamento Base, come lo scrive la migrazione 707.
+    { id: '11111111-1111-1111-1111-5d9000000101', seller_id: '11111111-1111-1111-1111-5d9000000001', name: 'Abbonamento Base — 300 € al mese', price: 300, stock: null, has_variants: false, images: [], status: 'available' },
+  ];
+  const venditori = [
+    { id: 'aaaaaaaa-0000-0000-0000-000000000001', store_name: 'Forno', full_name: null, store_lat: 45.05, store_lng: 9.69, store_hours: null, email: 'a@b.it', role: 'seller', is_approved: true },
+    { id: 'bbbbbbbb-0000-0000-0000-000000000002', store_name: 'Fiorista', full_name: null, store_lat: 45.06, store_lng: 9.70, store_hours: null, email: 'c@d.it', role: 'seller', is_approved: true },
+    { id: '11111111-1111-1111-1111-5d9000000001', store_name: 'SDG Agenzia', full_name: null, store_lat: 45.05, store_lng: 9.69, store_hours: null, email: 'sdg.servizi@mycity-system.local', role: 'seller', is_approved: true },
+  ];
+
+  const from = (table: string): Record<string, unknown> => {
+    // Come il database: si leggono solo i prodotti chiesti (.in('id', …)).
+    if (table === 'products') {
+      const b = risolvibile({ data: prodotti, error: null });
+      b.in = (_c: string, ids: string[]) => risolvibile({ data: prodotti.filter((p) => ids.includes(p.id)), error: null });
+      return b;
+    }
+    if (table === 'profiles') return risolvibile({ data: venditori, error: null });
+    // Il ramo della cassa ora vuole ogni negozio del carrello in vetrina (o approvato
+    // nel profilo): la vetrina finta restituisce i due negozi, come in produzione.
+    if (table === 'seller_public_profiles') return risolvibile({ data: venditori, error: null });
+    if (table === 'product_variants') return risolvibile({ data: [], error: null });
+    if (table === 'orders') {
+      return {
+        insert: (valori: Record<string, unknown>) => {
+          cronologia.push('ordine');
+          inseriti.push(valori);
+          return {
+            select: () => ({
+              single: () => Promise.resolve({ data: { id: `ord-${inseriti.length}` }, error: null }),
+            }),
+          };
+        },
+        delete: () => ({
+          eq: (_c: string, v: unknown) => {
+            cancellati.push({ tabella: 'orders', valore: v });
+            return Promise.resolve({ error: null });
+          },
+        }),
+        select: () => risolvibile({ data: [], error: null }),
+      };
+    }
+    if (table === 'order_items') {
+      return {
+        insert: (righe: unknown) => { righeOrdine.push(righe); return Promise.resolve({ error: null }); },
+        delete: () => ({
+          eq: (_c: string, v: unknown) => {
+            cancellati.push({ tabella: 'order_items', valore: v });
+            return Promise.resolve({ error: null });
+          },
+        }),
+      };
+    }
+    if (table === 'cod_checkout_attempts') {
+      return {
+        delete: () => {
+          const libera = (chiave: string) => { tentativi.delete(chiave); };
+          return { eq: (_c: string, chiave: string) => ({ eq: () => { libera(chiave); return Promise.resolve({ error: null }); } }) };
+        },
+        insert: (v: Record<string, unknown>) => {
+          const chiave = v.chiave as string;
+          if (tentativi.has(chiave)) {
+            return Promise.resolve({ error: { code: '23505', message: 'duplicato' } });
+          }
+          cronologia.push('chiave');
+          tentativi.set(chiave, {
+            user_id: v.user_id as string,
+            order_ids: (v.order_ids as unknown[]) ?? [],
+            created_at: new Date().toISOString(),
+          });
+          return Promise.resolve({ error: null });
+        },
+        update: (v: Record<string, unknown>) => {
+          const applica = (chiave: string) => {
+            const riga = tentativi.get(chiave);
+            if (riga) riga.order_ids = (v.order_ids as unknown[]) ?? riga.order_ids;
+          };
+          const dopoPrimoEq = (chiave: string) => ({
+            eq: () => { applica(chiave); return Promise.resolve({ error: null }); },
+            then: (res: (x: unknown) => unknown) => { applica(chiave); return res({ error: null }); },
+          });
+          return { eq: (_c: string, chiave: string) => dopoPrimoEq(chiave) };
+        },
+        select: () => ({
+          eq: (_c1: string, chiave: string) => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: tentativi.get(chiave) ?? null, error: null }),
+            }),
+            maybeSingle: () => Promise.resolve({ data: tentativi.get(chiave) ?? null, error: null }),
+          }),
+        }),
+      };
+    }
+    if (table === 'notifications') {
+      return {
+        insert: (valori: Record<string, unknown> | Record<string, unknown>[]) => {
+          if (Array.isArray(valori)) campanelle.push(...valori);
+          else campanelle.push(valori);
+          return Promise.resolve({ error: null });
+        },
+      };
+    }
+    return risolvibile({ data: [], error: null });
+  };
+
+  const rpc = (name: string, args: Record<string, unknown>) => {
+    rpcCalls.push({ name, args });
+    if (name === 'reserve_stock') {
+      chiamateRiserva++;
+      if (riservaFallisceAllaChiamata > 0 && chiamateRiserva >= riservaFallisceAllaChiamata) {
+        return Promise.resolve({ data: null, error: { message: 'merce finita' } });
+      }
+    }
+    if (name === 'wallet_debit') return Promise.resolve({ data: 0, error: null });
+    return Promise.resolve({ data: null, error: null });
+  };
+
+  return {
+    getAdminSupabase: () => ({
+      from,
+      rpc,
+      // Serve alla mail «Nuovo ordine» verso il venditore: senza, quel ramo
+      // finiva nel catch e la posta al negozio non veniva nemmeno tentata.
+      auth: { admin: { getUserById: async (id: string) => ({ data: { user: { id, email: `${id}@test.it` } } }) } },
+    }),
+    getServerSupabase: async () => ({
+      auth: { getUser: async () => ({ data: { user: { id: 'cliente-1', email: 'cliente@test.it' } } }) },
+      from,
+    }),
+  };
+});
+
+const SDG = '11111111-1111-1111-1111-5d9000000001';
+const ABBONAMENTO_BASE = '11111111-1111-1111-1111-5d9000000101';
+
+function richiesta(groups: unknown[]): never {
+  return new Request('http://localhost/api/orders/cod', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      groups,
+      delivery: { fullName: 'Maria Rossi', address: 'Via Verdi 10', city: 'Piacenza', zip: '29121', phone: '3331234567' },
+      pickupInStore: false,
+      deliverySlot: FASCE_DI_DOMANI[0],
+      useCredit: false,
+    }),
+  }) as never;
+}
+
+async function esegui(groups: unknown[]) {
+  const { POST } = await import('@/app/api/orders/cod/route');
+  return (POST as unknown as (req: never) => Promise<Response>)(richiesta(groups));
+}
+
+const pane = { sellerId: 'aaaaaaaa-0000-0000-0000-000000000001', items: [{ productId: '11111111-1111-1111-1111-111111111111', quantity: 1 }], shippingCents: 0 };
+
+beforeEach(() => {
+  righeOrdine.length = 0;
+  rpcCalls.length = 0;
+  inseriti.length = 0;
+  cancellati.length = 0;
+  campanelle.length = 0;
+  postaInviata.length = 0;
+  acquistiContati.length = 0;
+  chiamateRiserva = 0;
+  riservaFallisceAllaChiamata = 0;
+  tentativi.clear();
+  cronologia.length = 0;
+  vi.resetModules();
+});
+
+describe('la cassa in contanti e gli abbonamenti di SDG', () => {
+  it('la spesa normale passa: il finto regge un ordine vero', async () => {
+    const res = await esegui([pane]);
+    expect(res.status).toBe(200);
+    expect(inseriti.length).toBe(1);
+  });
+
+  it('un abbonamento di SDG da solo non crea nessun ordine', async () => {
+    const res = await esegui([{ sellerId: SDG, items: [{ productId: ABBONAMENTO_BASE, quantity: 1 }], shippingCents: 0 }]);
+    expect(res.status).toBe(400);
+    const corpo = JSON.stringify(await res.json());
+    expect(corpo).toContain('preventivo');
+    expect(inseriti, 'è nato un ordine con un abbonamento di SDG').toHaveLength(0);
+    expect(righeOrdine).toHaveLength(0);
+    expect(rpcCalls.filter((c) => c.name === 'reserve_stock')).toHaveLength(0);
+  });
+
+  it('un abbonamento di SDG in mezzo alla spesa ferma tutto il carrello', async () => {
+    const res = await esegui([pane, { sellerId: SDG, items: [{ productId: ABBONAMENTO_BASE, quantity: 1 }], shippingCents: 0 }]);
+    expect(res.status).toBe(400);
+    expect(inseriti).toHaveLength(0);
+  });
+
+  it('un abbonamento di SDG dichiarato sotto un altro negozio non passa lo stesso', async () => {
+    const res = await esegui([{ sellerId: 'aaaaaaaa-0000-0000-0000-000000000001', items: [{ productId: ABBONAMENTO_BASE, quantity: 1 }], shippingCents: 0 }]);
+    expect(res.status).toBe(400);
+    expect(inseriti).toHaveLength(0);
+  });
+});

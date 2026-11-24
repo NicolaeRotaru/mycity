@@ -37,6 +37,8 @@ import ProductViewTracker from '@/components/ProductViewTracker';
 import ProductQA from '@/components/ProductQA';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
+import { AttivaAbbonamento } from '@/components/products/AttivaAbbonamento';
+import { eDiSdg } from '@/lib/products/sdgSeller';
 import QuandoSiVede from '@/components/QuandoSiVede';
 import SimilarProducts from '@/components/SimilarProducts';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
@@ -579,7 +581,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const tutteLeVariantiEsaurite =
     hasVariants && variants.length > 0 && variants.every((v) => v.stock === 0);
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
-  const canAdd = !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
+  // 24/11/2026 — I prodotti di SDG Agenzia sono abbonamenti: niente carrello, si attivano dal preventivo.
+  const eAbbonamentoSdg = eDiSdg(product.seller_id);
+  const canAdd = !eAbbonamentoSdg && !isOutOfStock && !needsVariantChoice && !combinazioneMancante && mayPurchase;
 
   // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
   // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
@@ -1270,6 +1274,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         <div className="md:col-span-2 lg:col-span-1 lg:sticky lg:top-[var(--header-height)] h-fit">
           <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
             <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
+            {eAbbonamentoSdg ? (
+              <AttivaAbbonamento chiGuardaEUnNegozio={isSeller} />
+            ) : (
+            <>
             {consegnaSenzaCosto && (
               <Badge variant="free" icon={Bike}>{spedizione.titolo}</Badge>
             )}
@@ -1356,6 +1364,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             >
               {inPartenza ? 'Apro la cassa…' : contantiQui ? 'Compra ora · paghi alla consegna' : 'Compra ora'}
             </button>
+            </>
+            )}
 
             {(sellerProfile?.id ?? product.seller_id) && (
               <ContactSellerButton
@@ -1366,7 +1376,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
+              {eAbbonamentoSdg ? (
+                <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">MyCity</strong> · lo realizza {product.profiles?.store_name}</p>
+              ) : (
               <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
+              )}
               {contantiSuTutteEDue && (
                 <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
               )}
@@ -1687,6 +1701,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       </section>
 
       {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}
+      {!eAbbonamentoSdg && (
       <StickyAddToCart
         price={price}
         // R02-012 — Con la promo attiva la barra riceve anche il pieno e lo barra accanto, come il
@@ -1706,6 +1721,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         canDec={qty > 1}
         canInc={qty < maxQty}
       />
+      )}
 
       {/* Tracking view (side-effect only) */}
       <ProductViewTracker
