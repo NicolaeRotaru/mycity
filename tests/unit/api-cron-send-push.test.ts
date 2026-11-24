@@ -49,18 +49,8 @@ vi.mock('@supabase/supabase-js', () => ({
         // anche a quella.
         in: (_c: string, valori: string[]) => {
           if (b._update) {
-            // La presa del giro (`.is().select()`) ridà le righe prese e la restituzione (`.eq()`)
-            // rimette pushed_at vuoto: nessuna delle due segna. Segna la scrittura finale, attesa da sola.
-            const scrittura = {
-              is: () => scrittura,
-              select: () => Promise.resolve({ data: pending.filter((n) => valori.includes(n.id)), error: null }),
-              eq: () => Promise.resolve({ error: null }),
-              then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
-                for (const v of valori) marked.push(v);
-                return Promise.resolve({ error: null }).then(ok, ko);
-              },
-            };
-            return scrittura;
+            for (const v of valori) marked.push(v);
+            return Promise.resolve({ error: null });
           }
           return b;
         },

@@ -62,16 +62,7 @@ function tabella() {
     update: () => { inAggiornamento = true; return b; },
     limit: () => Promise.resolve({ data: inSospeso, error: null }),
     in: (_c: string, valori: string[]) => {
-      if (inAggiornamento) {
-        // La presa del giro continua con `.is().select()` e ridà le righe prese; la restituzione con `.eq()`.
-        const scrittura = {
-          is: () => scrittura,
-          eq: () => Promise.resolve({ error: null }),
-          select: () => Promise.resolve({ data: inSospeso.filter((n) => valori.includes(n.id)), error: null }),
-          then: (ok: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(ok),
-        };
-        return scrittura;
-      }
+      if (inAggiornamento) return Promise.resolve({ error: null });
       filtroUtenti = valori;
       return b;
     },

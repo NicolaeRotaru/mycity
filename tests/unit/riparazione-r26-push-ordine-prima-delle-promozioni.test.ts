@@ -32,23 +32,10 @@ vi.mock('@/lib/supabase/server', () => ({
           return { data: righe.slice(0, n), error: null };
         },
         update: () => ((b._update = true), b),
-        in: (_c: string, valori: string[]) => {
-          // La presa del giro (`.is().select()`) ridà le righe prese e la restituzione (`.eq()`) non segna:
-          // segna solo la scrittura finale, attesa da sola.
-          if (b._update) {
-            const scrittura = {
-              is: () => scrittura,
-              select: async () => ({ data: tutte.filter((r) => valori.includes(r.id as string)), error: null }),
-              eq: async () => ({ error: null }),
-              then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
-                segnate.push(...valori);
-                return Promise.resolve({ error: null }).then(ok, ko);
-              },
-            };
-            return scrittura;
-          }
-          if (tabella === 'push_subscriptions') return Promise.resolve({ data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null });
-          return Promise.resolve({ data: [], error: null });
+        in: async (_c: string, valori: string[]) => {
+          if (b._update) { segnate.push(...valori); return { error: null }; }
+          if (tabella === 'push_subscriptions') return { data: valori.map((u) => ({ id: `s-${u}`, user_id: u, endpoint: 'e', p256dh: 'p', auth: 'a' })), error: null };
+          return { data: [], error: null };
         },
       });
       return b;
