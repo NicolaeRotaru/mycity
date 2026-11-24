@@ -14,7 +14,7 @@ import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react
  */
 
 const stato = vi.hoisted(() => ({ risposta: null as null | Promise<unknown> }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), usePathname: () => '/seller/dashboard' }));
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: () => ({ select: () => ({ eq: () => ({ single: () => stato.risposta }) }) }),

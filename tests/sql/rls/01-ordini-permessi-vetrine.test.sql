@@ -31,10 +31,10 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
 
 -- Il negoziante e il fattorino sono approvati dallo staff (qui a mano).
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Bottega di prova'
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Bottega di prova'
  WHERE id IN ('11111111-1111-1111-1111-111111111111', '55555555-5555-5555-5555-555555555555');
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved'
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved'
  WHERE id = '22222222-2222-2222-2222-222222222222';
 
 -- Un ordine pronto, senza fattorino assegnato, con i dati di casa del cliente.

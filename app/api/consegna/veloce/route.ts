@@ -75,7 +75,7 @@ export async function GET(req: Request) {
     let negozi: Array<{ nome: string; orari: unknown }> | null = [];
     if (ids.length > 0) {
       const { data, error } = await admin
-        .from('profiles')
+        .from('seller_public_profiles') // 24/11/2026: solo i negozi in vetrina (modalità demo, 709)
         .select('id, store_name, store_hours')
         .eq('role', 'seller')
         .eq('is_approved', true)

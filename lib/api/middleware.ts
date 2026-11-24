@@ -501,7 +501,12 @@ export function withSellerAuth(handler: GenericHandler) {
     if (!auth.ok) return auth.response;
     const { profile } = auth;
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
-      return ApiErrors.forbidden('Solo seller approvati o admin');
+      // 24/11/2026 (modalità demo) — Il negozio in verifica prepara i prodotti, ma gli strumenti in più
+      // (intelligenza artificiale, importazione da link, foto lette in automatico) si attivano con
+      // l'approvazione: lo si dice in chiaro invece di un «vietato».
+      return ApiErrors.forbidden(profile.role === 'seller'
+        ? 'Questa funzione si attiva quando il tuo negozio è approvato. Intanto puoi scrivere i prodotti a mano o caricarli da file.'
+        : 'Solo seller approvati o admin');
     }
     return handler({
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
@@ -523,8 +528,72 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
     if (!auth.ok) return auth.response;
     const { profile } = auth;
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
-      return ApiErrors.forbidden('Solo seller approvati o admin');
+      // 24/11/2026 (modalità demo) — Il negozio in verifica prepara i prodotti, ma gli strumenti in più
+      // (intelligenza artificiale, importazione da link, foto lette in automatico) si attivano con
+      // l'approvazione: lo si dice in chiaro invece di un «vietato».
+      return ApiErrors.forbidden(profile.role === 'seller'
+        ? 'Questa funzione si attiva quando il tuo negozio è approvato. Intanto puoi scrivere i prodotti a mano o caricarli da file.'
+        : 'Solo seller approvati o admin');
     }
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+    return handler({
+      user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
+      params: await risolviParametri(ctx),
+    });
+  }) as RottaDiNext;
+}
+
+/** Il venditore entra se è approvato, o se è «in attesa» con la richiesta mandata (stato scritto solo dal server). */
+async function venditoreAncheInAttesa(
+  auth: { user: User; profile: Profile },
+): Promise<'si' | 'no' | 'guasto'> {
+  const { profile } = auth;
+  if (profile.role === 'admin' || (profile.role === 'seller' && profile.is_approved)) return 'si';
+  if (profile.role !== 'seller') return 'no';
+  const { getAdminSupabase } = await import('@/lib/supabase/server');
+  const { data, error } = await getAdminSupabase()
+    .from('profiles')
+    .select('approval_status, approval_requested_at')
+    .eq('id', auth.user.id)
+    .single();
+  if (error && error.code !== 'PGRST116') return 'guasto';
+  // «In attesa» vuol dire una richiesta mandata davvero, come chiede il layout. I due campi li scrive
+  // solo il server (guardia dei profili, migrazione 709): il negozio non può fingersi in attesa.
+  const riga = data as { approval_status?: string | null; approval_requested_at?: string | null } | null;
+  return riga?.approval_status === 'pending' && !!riga?.approval_requested_at ? 'si' : 'no';
+}
+
+/**
+ * 24/11/2026 — MODALITÀ DEMO: IL NEGOZIO IN REVISIONE VEDE IL PREVENTIVO E PREPARA I PRODOTTI.
+ *
+ * Come `withSellerAuth` / `withSellerAuthRateLimit`, ma lascia passare anche il venditore non ancora
+ * approvato la cui richiesta è «in attesa»: vede il suo preventivo e paga l'abbonamento (per esempio
+ * Ora del Gusto dopo aver accettato dal link), e prepara i suoi prodotti (Nicola, 24/11: «Sì, li
+ * prepara subito»), che restano invisibili finché il negozio non è in vetrina. Rifiutati e sospesi
+ * restano fuori. Si usa SOLO sulle rotte del preventivo e dei prodotti del negozio.
+ */
+export function withSellerAnchePending(handler: GenericHandler) {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+    const auth = await authenticate(req, ctx);
+    if (!auth.ok) return auth.response;
+    const esito = await venditoreAncheInAttesa(auth);
+    if (esito === 'guasto') return ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.');
+    if (esito === 'no') return ApiErrors.forbidden('Solo seller approvati, in attesa di approvazione, o admin');
+    return handler({
+      user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
+      params: await risolviParametri(ctx),
+    });
+  }) as RottaDiNext;
+}
+
+export function withSellerAnchePendingRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+    const auth = await authenticate(req, ctx);
+    if (!auth.ok) return auth.response;
+    const esito = await venditoreAncheInAttesa(auth);
+    if (esito === 'guasto') return ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.');
+    if (esito === 'no') return ApiErrors.forbidden('Solo seller approvati, in attesa di approvazione, o admin');
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({

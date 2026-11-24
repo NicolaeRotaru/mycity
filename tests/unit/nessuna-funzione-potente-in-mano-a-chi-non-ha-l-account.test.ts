@@ -58,6 +58,7 @@ const FUNZIONI_PUBBLICHE_VOLUTE: Record<string, string> = {
   is_rider_approvato: 'la richiama la regola di lettura di orders; risponde solo su chi chiama',
   negozio_approvato: 'la richiamano le regole di lettura di products e store_reviews',
   prodotto_in_vetrina: 'la richiamano le regole di lettura di reviews e product_variants',
+  negozio_in_vetrina: 'modalità demo (709): la richiamano le regole di lettura di products e store_reviews e le viste pubbliche; risponde si/no su un id',
   // Vetrina e filtri del catalogo: chi cerca spesso non ha ancora un account.
   categorie_per_negozio: 'quali categorie tocca ogni negozio, per i filtri di app/stores',
   event_rsvp_counts: 'quante persone vanno a ogni evento, un conteggio per tutti',

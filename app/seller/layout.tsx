@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
@@ -15,6 +15,7 @@ import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'luc
 // 31/8/2026 (R037) — La commissione qui non si ribatte a mano: viene da dove la
 // tratteniamo davvero, cosi' il giorno che cambia questa pagina non resta indietro.
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
+import { PERCORSO_PREVENTIVO, percorsoInRevisione } from '@/lib/auth/decisione-portiere';
 
 /**
  * Ondata 10 — lo stato della richiesta del negozio, letto davvero.
@@ -35,6 +36,7 @@ type StatoRichiestaNegozio = {
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname() ?? '';
   const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider, isError, refetch } = useProfile();
   const isApproved = !!profile?.is_approved;
   const allowed = (isSeller && isApproved) || isAdmin;
@@ -219,6 +221,25 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     );
   }
 
+  // 24/11/2026 — Modalità demo: chi è in attesa di approvazione vede il suo preventivo e paga
+  // l'abbonamento, senza il resto del pannello (le rotte lo ricontrollano sul server).
+  if (isPending && richiestaInviata && percorsoInRevisione(pathname)) {
+    return (
+      <div className="container mx-auto p-4 sm:p-6 max-w-5xl">
+        <p className="mb-4 rounded-xl border border-accent-200 bg-accent-50 px-3 py-2 text-sm text-ink-700">
+          Il tuo negozio è in verifica: intanto prepari i tuoi prodotti e scegli l’abbonamento ai servizi. Sul marketplace
+          non si vede niente finché non è approvato e attivo.{' '}
+          <Link href="/seller/products" className="font-semibold underline">I tuoi prodotti</Link>
+          {' · '}
+          <Link href={PERCORSO_PREVENTIVO} className="font-semibold underline">Il preventivo</Link>
+          {' · '}
+          <Link href="/seller/dashboard" className="font-semibold underline">Pagina d’attesa</Link>
+        </p>
+        {children}
+      </div>
+    );
+  }
+
   if (isPending || pending) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
@@ -232,6 +253,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             il nostro team avrà approvato la richiesta (entro 48 ore lavorative).
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
+            {isPending && richiestaInviata && <Button href="/seller/products">Prepara i tuoi prodotti</Button>}
+            {isPending && richiestaInviata && <Button href={PERCORSO_PREVENTIVO}>Il tuo preventivo dei servizi</Button>}
             <Button href="/sell" variant="secondary" icon={Pencil}>Modifica richiesta</Button>
             <Button href="/?shop=1" icon={Home}>Vai al marketplace</Button>
             <Button href="/contact" variant="secondary" icon={Mail}>Contatti</Button>

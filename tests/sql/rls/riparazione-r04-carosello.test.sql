@@ -27,7 +27,7 @@ GRANT EXECUTE ON FUNCTION pg_temp.negozio(integer) TO anon, authenticated;
 INSERT INTO auth.users (id, email, raw_user_meta_data)
 SELECT pg_temp.negozio(i), format('negozio-662-%s@test.it', i), '{"role":"seller"}'::jsonb
   FROM generate_series(1, 42) i;
-UPDATE public.profiles SET role = 'seller', is_approved = true, approval_status = 'approved',
+UPDATE public.profiles SET role = 'seller', is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved',
        store_name = 'Negozio 662 n.' || right(id::text, 2)
  WHERE id IN (SELECT pg_temp.negozio(i) FROM generate_series(1, 40) i);
 UPDATE public.profiles SET role = 'seller', is_approved = false, approval_status = 'suspended', store_name = 'Sospeso 662'

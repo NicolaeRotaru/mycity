@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { withSellerAuthRateLimit } from '@/lib/api/middleware';
+import { withSellerAnchePendingRateLimit } from '@/lib/api/middleware';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -42,7 +42,7 @@ export const runtime = 'nodejs';
 
 const Richiesta = z.object({ abbonamento: z.enum(ABBONAMENTI, { message: 'Scegli uno dei tre abbonamenti' }) });
 
-export const POST = withSellerAuthRateLimit(
+export const POST = withSellerAnchePendingRateLimit(
   { name: 'seller-preventivo-paga', max: 10, windowMs: 10 * 60_000 },
   async ({ user, req }): Promise<NextResponse> => {
     if (!isStripeConfigured()) return ApiErrors.unavailable('I pagamenti non sono disponibili in questo momento. Scrivici e ti richiamiamo.');

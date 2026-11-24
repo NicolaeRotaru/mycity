@@ -5,7 +5,9 @@
 --   ① un negozio sospeso che rimanda il modulo dal browser non torna «in attesa»;
 --   ② non cancella la sospensione mettendo lo stato vuoto;
 --   ③ in banca dati resta «sospeso»;
---   ④ un negozio rifiutato può ancora ripresentare la richiesta;
+--   ④ un negozio rifiutato può ancora ripresentare la richiesta, passando dal server come fa /sell
+--     (/api/seller/apply, chiave di servizio); dal browser no (migrazione 709, modalità demo:
+--     lo stato della richiesta lo scrive solo il server);
 --   ⑤ il negozio sospeso cambia ancora il telefono del negozio;
 --   ⑥ il server (chiave di servizio) toglie ancora la sospensione.
 -- Senza la migrazione 400 ①, ② e ③ sono ROSSI.
@@ -55,9 +57,14 @@ INSERT INTO esiti VALUES ('2 il negozio sospeso non cancella la sospensione con 
 INSERT INTO esiti VALUES ('5 il negozio sospeso cambia ancora il telefono del negozio',
   pg_temp.telefono('e4000000-0000-0000-0000-000000000001'), '');
 SET LOCAL request.jwt.claims = '{"sub":"e4000000-0000-0000-0000-000000000002","role":"authenticated"}';
-INSERT INTO esiti VALUES ('4 il negozio rifiutato può ripresentare la richiesta',
-  pg_temp.rimanda('e4000000-0000-0000-0000-000000000002', 'pending'), '');
+INSERT INTO esiti VALUES ('4b dal browser il negozio rifiutato non si rimette da solo in attesa',
+  NOT pg_temp.rimanda('e4000000-0000-0000-0000-000000000002', 'pending'), '');
 RESET ROLE;
+
+SET LOCAL request.jwt.claims = '{"role":"service_role"}';
+INSERT INTO esiti VALUES ('4 il negozio rifiutato può ripresentare la richiesta (dal server, come /sell)',
+  pg_temp.rimanda('e4000000-0000-0000-0000-000000000002', 'pending'), '');
+RESET request.jwt.claims;
 
 INSERT INTO esiti SELECT '3 in banca dati il negozio è ancora sospeso',
   approval_status IS NOT DISTINCT FROM 'suspended', coalesce(approval_status, '(vuoto)')

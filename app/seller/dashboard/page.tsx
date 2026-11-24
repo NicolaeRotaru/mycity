@@ -23,6 +23,7 @@ import StoreAvatar from '@/components/StoreAvatar';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
 import PreventivoAgenziaCard from '@/components/seller/PreventivoAgenziaCard';
+import BannerModalitaDemo from '@/components/seller/BannerModalitaDemo';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
@@ -409,6 +410,9 @@ export default function SellerDashboard() {
           </div>
         </section>
       )}
+
+      {/* ===== Modalità demo: la vetrina non si vede finché non c'è un abbonamento (24/11/2026) ===== */}
+      <BannerModalitaDemo />
 
       {/* ===== Onboarding (si nasconde da solo al 100%) ===== */}
       <SellerOnboardingChecklist />

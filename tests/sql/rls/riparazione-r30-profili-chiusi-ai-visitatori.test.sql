@@ -24,7 +24,7 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('e2400000-0000-0000-0000-000000000001', 'negozio-r30v@test.it', '{"role":"seller"}'),
   ('e2400000-0000-0000-0000-000000000002', 'cliente-r30v@test.it', '{"role":"buyer"}');
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Bottega di prova',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Bottega di prova',
        store_address = 'Via Roma 1', store_lat = 45.05, store_lng = 9.69
  WHERE id = 'e2400000-0000-0000-0000-000000000001';
 

@@ -2103,6 +2103,7 @@ export interface Database {
           rejected_at: string | null;
           business_type: string | null;
           business_type_detail: string | null;
+          visibile_senza_abbonamento: boolean;
         };
         Insert: {
           id: string;
@@ -2194,6 +2195,7 @@ export interface Database {
           rejected_at?: string | null;
           business_type?: string | null;
           business_type_detail?: string | null;
+          visibile_senza_abbonamento?: boolean;
         };
         Update: {
           id?: string;
@@ -2285,6 +2287,7 @@ export interface Database {
           rejected_at?: string | null;
           business_type?: string | null;
           business_type_detail?: string | null;
+          visibile_senza_abbonamento?: boolean;
         };
         Relationships: [];
       };

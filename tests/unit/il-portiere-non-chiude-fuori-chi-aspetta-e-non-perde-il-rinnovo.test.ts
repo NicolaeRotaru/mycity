@@ -92,7 +92,10 @@ describe('chi aspetta l approvazione non gira in tondo', () => {
 
   it('il resto del pannello resta chiuso al negozio non approvato', async () => {
     conProfilo('seller', false);
-    const res = await middleware(richiesta('/seller/products', SESSIONE_VALIDA()));
+    // 24/11/2026 (modalità demo, migrazione 709) — Nicola: il negozio in verifica prepara già i suoi
+    // prodotti, quindi /seller/products e /seller/preventivo gli si aprono. Il resto, per esempio gli
+    // ordini, resta chiuso come prima.
+    const res = await middleware(richiesta('/seller/orders', SESSIONE_VALIDA()));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get('location')!).pathname).toBe('/seller/dashboard');
   });

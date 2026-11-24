@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { withSellerAuthRateLimit } from '@/lib/api/middleware';
+import { withSellerAnchePendingRateLimit } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
@@ -31,7 +31,7 @@ export const runtime = 'nodejs';
  * l'agenzia. Niente passa da Stripe.
  */
 
-export const GET = withSellerAuthRateLimit(
+export const GET = withSellerAnchePendingRateLimit(
   { name: 'seller-preventivo-leggi', max: 30, windowMs: 60_000 },
   async ({ user }) => {
     try {
@@ -48,7 +48,7 @@ const Accettazione = z.object({
   abbonamento: z.enum(ABBONAMENTI, { message: 'Scegli uno dei tre abbonamenti' }),
 });
 
-export const POST = withSellerAuthRateLimit(
+export const POST = withSellerAnchePendingRateLimit(
   { name: 'seller-preventivo-accetta', max: 5, windowMs: 60_000 },
   async ({ user, req }) => {
     let corpo: unknown;

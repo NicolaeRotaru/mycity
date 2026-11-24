@@ -25,7 +25,7 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
 
 -- Un negozio aperto ORA: la fascia copre l'intera giornata di oggi.
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Sempre Aperto',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Sempre Aperto',
        store_hours = jsonb_build_object(
          lower(to_char(now() AT TIME ZONE 'Europe/Rome', 'Dy')),
          '[["00:00","23:59"]]'::jsonb
@@ -34,7 +34,7 @@ UPDATE public.profiles
 
 -- Un negozio che oggi non apre affatto.
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Chiuso Oggi',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Chiuso Oggi',
        store_hours = jsonb_build_object(
          lower(to_char(now() AT TIME ZONE 'Europe/Rome', 'Dy')),
          '[]'::jsonb
@@ -43,7 +43,7 @@ UPDATE public.profiles
 
 -- Un negozio che non ha mai dichiarato gli orari.
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Senza Orari',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Senza Orari',
        store_hours = NULL
  WHERE id = 'cccccccc-0000-0000-0000-00000000000c';
 

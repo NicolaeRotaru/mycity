@@ -36,11 +36,11 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('33333333-3333-3333-3333-333333333333', 'cliente@test.it',  '{"role":"buyer"}');
 
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Pane Quotidiano',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Pane Quotidiano',
        store_address = 'Via Roma 1', store_lat = 45.05, store_lng = 9.69
  WHERE id = '11111111-1111-1111-1111-111111111111';
 UPDATE public.profiles
-   SET is_approved = true, approval_status = 'approved', store_name = 'Fiori di Via Verdi',
+   SET is_approved = true, visibile_senza_abbonamento = true, approval_status = 'approved', store_name = 'Fiori di Via Verdi',
        store_address = 'Via Verdi 3', store_lat = 45.06, store_lng = 9.70
  WHERE id = '22222222-2222-2222-2222-222222222222';
 

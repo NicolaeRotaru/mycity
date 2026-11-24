@@ -110,10 +110,11 @@ BEGIN
   INSERT INTO auth.users (id, email) VALUES (v_negozio, 'vetrina-prova@example.invalid')
     ON CONFLICT (id) DO NOTHING;
   SET session_replication_role = replica;   -- i trigger di coerenza qui non servono
-  INSERT INTO public.profiles (id, role, store_name, is_approved, approval_status)
-  VALUES (v_negozio, 'seller', 'Negozio di prova', true, 'approved')
+  -- 24/11/2026 (709): un negozio «in vetrina» è anche già online (o ha un abbonamento ai servizi).
+  INSERT INTO public.profiles (id, role, store_name, is_approved, approval_status, visibile_senza_abbonamento)
+  VALUES (v_negozio, 'seller', 'Negozio di prova', true, 'approved', true)
   ON CONFLICT (id) DO UPDATE SET role = 'seller', store_name = 'Negozio di prova',
-                                 is_approved = true, approval_status = 'approved';
+                                 is_approved = true, approval_status = 'approved', visibile_senza_abbonamento = true;
   SET session_replication_role = origin;
 
   SET LOCAL ROLE anon;

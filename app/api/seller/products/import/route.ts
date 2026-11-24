@@ -1,5 +1,6 @@
 import { type NextRequest, type NextResponse } from 'next/server';
-import { withSellerAuthRateLimit, type ClientDiChiChiama } from '@/lib/api/middleware';
+import { withSellerAnchePendingRateLimit, type ClientDiChiChiama } from '@/lib/api/middleware';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { writeAudit } from '@/lib/audit';
@@ -87,7 +88,28 @@ async function handler(req: NextRequest, user: { id: string }, db: ClientDiChiCh
   return apiSuccess({ importati: daScrivere.length, bozze, perMotivo });
 }
 
-export const POST = withSellerAuthRateLimit(
+/**
+ * 24/11/2026 (modalità demo, dal collaudo) — Il negozio in verifica carica i prodotti da file, ma non è
+ * ancora stato verificato da nessuno: un tetto più basso (un caricamento al minuto) e al massimo
+ * PRODOTTI_MAX_IN_VERIFICA prodotti finché lo staff non lo approva, perché un account appena iscritto
+ * non riempia il catalogo di migliaia di righe.
+ */
+const PRODOTTI_MAX_IN_VERIFICA = 200;
+
+export const POST = withSellerAnchePendingRateLimit(
   { name: 'seller-products-import', max: 10, windowMs: 60_000 },
-  ({ req, user, supaUtente }) => handler(req, user, supaUtente),
+  async ({ req, user, profile, supaUtente }) => {
+    const approvato = (profile as { role?: string; is_approved?: boolean }).role === 'admin'
+      || (profile as { is_approved?: boolean }).is_approved === true;
+    if (!approvato) {
+      const rl = await rateLimitAsync({ key: `seller-products-import-in-verifica:${user.id}`, max: 1, windowMs: 60_000 });
+      if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+      const { count, error } = await supaUtente.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', user.id);
+      if (error) return ApiErrors.unavailable('Non riesco a contare i tuoi prodotti. Riprova fra poco.');
+      if ((count ?? 0) >= PRODOTTI_MAX_IN_VERIFICA) {
+        return ApiErrors.conflict(`Finché il negozio è in verifica puoi preparare fino a ${PRODOTTI_MAX_IN_VERIFICA} prodotti. Gli altri li carichi appena è approvato.`);
+      }
+    }
+    return handler(req, user, supaUtente);
+  },
 );

@@ -245,6 +245,25 @@ export type AccessoArea = { azione: 'entra' } | { azione: 'rimanda'; verso: stri
 /** La pagina dove un negozio non ancora approvato vede l'attesa o il rifiuto. */
 export const PAGINA_ATTESA_NEGOZIO = '/seller/dashboard';
 
+/** Il preventivo dei servizi: aperto anche al negozio in revisione (modalità demo, 24/11/2026). */
+export const PERCORSO_PREVENTIVO = '/seller/preventivo';
+
+/**
+ * Le parti del pannello aperte al negozio in revisione (modalità demo, 24/11/2026): il preventivo, e i
+ * prodotti, che prepara subito (Nicola: «Sì, li prepara subito») e restano invisibili finché il
+ * negozio non è in vetrina.
+ */
+export const PERCORSI_IN_REVISIONE = [PERCORSO_PREVENTIVO, '/seller/products'] as const;
+
+/** Dentro i prodotti, le pagine fatte solo di strumenti che si attivano con l'approvazione (collaudo del 24/11). */
+const PERCORSI_SOLO_DA_APPROVATO = ['/seller/products/ai-batch'] as const;
+
+export function percorsoInRevisione(pathname: string): boolean {
+  const p = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  if (PERCORSI_SOLO_DA_APPROVATO.some((base) => p === base || p.startsWith(`${base}/`))) return false;
+  return PERCORSI_IN_REVISIONE.some((base) => p === base || p.startsWith(`${base}/`));
+}
+
 /**
  * ONDATA 10 — «RUOLO SBAGLIATO» E «NON ANCORA APPROVATO» NON SONO LA STESSA COSA.
  *
@@ -277,5 +296,9 @@ export function decidiAccessoArea(stato: {
   if (role === 'admin' || approved) return { azione: 'entra' };
   const percorso = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (role === 'seller' && percorso === PAGINA_ATTESA_NEGOZIO) return { azione: 'entra' };
+  // 24/11/2026 — Modalità demo: il preventivo (col pagamento) e i prodotti si aprono anche a chi è
+  // in revisione. Il layout lo mostra solo a chi è «in attesa»; le rotte lo ricontrollano
+  // (withSellerAnchePendingRateLimit). Rifiutati e sospesi vedono la loro schermata.
+  if (role === 'seller' && percorsoInRevisione(percorso)) return { azione: 'entra' };
   return fuori;
 }
