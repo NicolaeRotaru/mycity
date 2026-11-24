@@ -6,7 +6,7 @@
 -- COSA FA.
 --  1. Crea il negozio di sistema «SDG Agenzia», come il negozio «MyCity» (seeds/007): UUID fisso
 --     (SDG_SELLER_ID in lib/products/sdgSeller.ts), utente auth fittizio che non entra mai (email
---     .local, nessuna password, bandito per sempre), profilo venditore approvato,
+--     .local, nessuna password, bloccato per 100 anni), profilo venditore approvato,
 --     business_type 'altro', dettaglio «Agenzia: web, marketing, foto e video».
 --  2. Mette nella sua vetrina i tre abbonamenti: Base 300 €, Business 500 €, Premium 999 € al mese.
 --     Nome, prezzo e descrizione sono quelli di lib/agenzia/prodotti-sdg.ts (dal listino FASCE);
@@ -39,7 +39,8 @@ BEGIN
   -- L'utente auth fittizio. Su Supabase vero auth.users ha tutte le colonne di GoTrue, e i token
   -- vuoti devono essere '' e non NULL (con NULL GoTrue si rompe: vedi seeds/005). Sul database di
   -- prova delle migrazioni (tests/sql/harness) la tabella è ridotta: lì si scrivono solo le colonne
-  -- che ci sono. Nessuna password (encrypted_password vuota: nessuna parola apre) e bandito per sempre: non entra mai.
+  -- che ci sono. Nessuna password (encrypted_password vuota: nessuna parola apre) e bloccato per 100 anni (non «infinity»: GoTrue
+  -- non saprebbe leggerlo, collaudo del 24/11): non entra mai.
   IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = sdg_uuid) THEN
     IF EXISTS (SELECT 1 FROM information_schema.columns
                WHERE table_schema = 'auth' AND table_name = 'users' AND column_name = 'instance_id') THEN
@@ -66,7 +67,7 @@ BEGIN
           false, now(), now(),
           NULL, NULL, '', '', NULL,
           '', 0,
-          'infinity'::timestamptz, '', NULL, false
+          now() + interval '100 years', '', NULL, false
         )
       $ins$ USING sdg_uuid, sdg_email;
     ELSE
