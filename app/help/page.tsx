@@ -56,8 +56,8 @@ const TOPICS = [
   {
     icon: Bike,
     title: 'Diventa rider',
-    desc: 'Lavora con noi consegnando ordini in città.',
-    href: '/contact',
+    desc: 'Lavora con noi consegnando ordini in città. Ti candidi dal sito.',
+    href: '/lavora-con-noi',
   },
 ];
 
@@ -99,6 +99,14 @@ export default function HelpPage() {
           );
         })}
       </div>
+
+      {/* 24/11/2026 — Chi ha già un account cliente non può rifare l'iscrizione da fattorino con la stessa email:
+          la strada è scriverci dal modulo contatti, e la pagina lo dice. */}
+      <p id="gia-cliente-rider" className="mb-10 text-sm leading-relaxed text-ink-600 [overflow-wrap:anywhere]">
+        Hai già un account cliente e vuoi diventare rider?{' '}
+        <Link href="/contact" className="font-bold text-primary-700 hover:underline">Scrivici dal modulo contatti</Link>{' '}
+        con l’email del tuo account: ti diciamo come candidarti senza rifare l’iscrizione.
+      </p>
 
       {/* Contact options */}
       <div className="bg-cream-50 border border-cream-300 rounded-2xl p-6">
